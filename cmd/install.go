@@ -12,21 +12,30 @@ import (
 
 // installCmd represents the install command
 
-func addInstallCmd(rootCmd *cobra.Command) {
-	var installCmd = &cobra.Command{
-		Use:   "install",
-		Short: "A brief description of your command",
-		Long: `A longer description that spans multiple lines and likely contains examples
-		and usage of using your command. For example:
+type Install struct {
+	cmd *cobra.Command
+}
 
-		Cobra is a CLI library for Go that empowers applications.
-		This application is a tool to generate the needed files
-		to quickly create a Cobra application.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("install called")
+func (i *Install) Run(_ *cobra.Command, args []string) {
+	fmt.Println("install called")
+}
+
+func addInstallCmd(rootCmd *cobra.Command) {
+	install := Install{
+		cmd:  &cobra.Command{
+			Use:   "install",
+			Short: "A brief description of your command",
+			Long: `A longer description that spans multiple lines and likely contains examples
+			and usage of using your command. For example:
+
+			Cobra is a CLI library for Go that empowers applications.
+			This application is a tool to generate the needed files
+			to quickly create a Cobra application.`,
 		},
 	}
-	rootCmd.AddCommand(installCmd)
+	install.cmd.Run = install.Run
+
+	rootCmd.AddCommand(install.cmd)
 
 	// Here you will define your flags and configuration settings.
 
