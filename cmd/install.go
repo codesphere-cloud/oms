@@ -1,6 +1,5 @@
 /*
 Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
@@ -9,8 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 )
-
-// installCmd represents the install command
 
 type Install struct {
 	cmd *cobra.Command
@@ -22,7 +19,7 @@ func (i *Install) Run(_ *cobra.Command, args []string) {
 
 func addInstallCmd(rootCmd *cobra.Command) {
 	install := Install{
-		cmd:  &cobra.Command{
+		cmd: &cobra.Command{
 			Use:   "install",
 			Short: "A brief description of your command",
 			Long: `A longer description that spans multiple lines and likely contains examples
@@ -35,15 +32,6 @@ func addInstallCmd(rootCmd *cobra.Command) {
 	}
 	install.cmd.Run = install.Run
 
+	addInstallCodesphereCmd(install.cmd)
 	rootCmd.AddCommand(install.cmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// installCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// installCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

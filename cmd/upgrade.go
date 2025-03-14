@@ -1,6 +1,5 @@
 /*
 Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
@@ -10,31 +9,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// upgradeCmd represents the upgrade command
+type Upgrade struct {
+	cmd *cobra.Command
+}
+
+func (i *Upgrade) Run(_ *cobra.Command, args []string) {
+	fmt.Println("upgrade called")
+}
 
 func addUpgradeCmd(rootCmd *cobra.Command) {
-	var upgradeCmd = &cobra.Command{
-		Use:   "upgrade",
-		Short: "A brief description of your command",
-		Long: `A longer description that spans multiple lines and likely contains examples
-		and usage of using your command. For example:
+	upgrade := Upgrade{
+		cmd: &cobra.Command{
+			Use:   "upgrade",
+			Short: "A brief description of your command",
+			Long: `A longer description that spans multiple lines and likely contains examples
+			and usage of using your command. For example:
 
-		Cobra is a CLI library for Go that empowers applications.
-		This application is a tool to generate the needed files
-		to quickly create a Cobra application.`,
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println("upgrade called")
+			Cobra is a CLI library for Go that empowers applications.
+			This application is a tool to generate the needed files
+			to quickly create a Cobra application.`,
 		},
 	}
-	rootCmd.AddCommand(upgradeCmd)
+	upgrade.cmd.Run = upgrade.Run
 
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// upgradeCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// upgradeCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	addUpgradeCodesphereCmd(upgrade.cmd)
+	rootCmd.AddCommand(upgrade.cmd)
 }
