@@ -1,7 +1,7 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
+Copyright © 2025 Codesphere Inc.
 */
-package cmd
+package cli
 
 import (
 	"fmt"
@@ -10,18 +10,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type InstallCodesphere struct {
+type ListCodesphere struct {
 	cmd        *cobra.Command
 	Codesphere cs.Codesphere
 }
 
-func (i *InstallCodesphere) Run(_ *cobra.Command, args []string) {
-	fmt.Println("install codesphere called")
-	fmt.Println(i.Codesphere)
+func (l *ListCodesphere) Run(_ *cobra.Command, args []string) {
+	fmt.Println("list codesphere called")
+	fmt.Println(l.Codesphere)
 }
 
-func addInstallCodesphereCmd(installCmd *cobra.Command) {
-	installCodesphere := InstallCodesphere{
+func addListCodesphereCmd(listCmd *cobra.Command) {
+	listCodesphere := ListCodesphere{
 		cmd: &cobra.Command{
 			Use:   "codesphere",
 			Short: "A brief description of your command",
@@ -33,8 +33,7 @@ func addInstallCodesphereCmd(installCmd *cobra.Command) {
 		to quickly create a Cobra application.`,
 		},
 	}
-	installCodesphere.cmd.Run = installCodesphere.Run
-	ParseCodesphereFlags(&installCodesphere.Codesphere, installCodesphere.cmd)
-
-	installCmd.AddCommand(installCodesphere.cmd)
+	listCodesphere.cmd.Run = listCodesphere.Run
+	ParseCodesphereFlags(&listCodesphere.Codesphere, listCodesphere.cmd)
+	listCmd.AddCommand(listCodesphere.cmd)
 }

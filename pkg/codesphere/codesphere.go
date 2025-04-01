@@ -1,3 +1,7 @@
+/*
+Copyright © 2025 Codesphere Inc.
+*/
+
 package cs
 
 import "fmt"

@@ -1,7 +1,7 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
+Copyright © 2025 Codesphere Inc.
 */
-package cmd
+package cli
 
 import (
 	"fmt"
@@ -9,18 +9,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type Install struct {
+type Upgrade struct {
 	cmd *cobra.Command
 }
 
-func (i *Install) Run(_ *cobra.Command, args []string) {
-	fmt.Println("install called")
+func (i *Upgrade) Run(_ *cobra.Command, args []string) {
+	fmt.Println("upgrade called")
 }
 
-func addInstallCmd(rootCmd *cobra.Command) {
-	install := Install{
+func addUpgradeCmd(rootCmd *cobra.Command) {
+	upgrade := Upgrade{
 		cmd: &cobra.Command{
-			Use:   "install",
+			Use:   "upgrade",
 			Short: "A brief description of your command",
 			Long: `A longer description that spans multiple lines and likely contains examples
 			and usage of using your command. For example:
@@ -30,8 +30,8 @@ func addInstallCmd(rootCmd *cobra.Command) {
 			to quickly create a Cobra application.`,
 		},
 	}
-	install.cmd.Run = install.Run
+	upgrade.cmd.Run = upgrade.Run
 
-	addInstallCodesphereCmd(install.cmd)
-	rootCmd.AddCommand(install.cmd)
+	addUpgradeCodesphereCmd(upgrade.cmd)
+	rootCmd.AddCommand(upgrade.cmd)
 }

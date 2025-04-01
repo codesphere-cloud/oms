@@ -1,7 +1,7 @@
 /*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
+Copyright © 2025 Codesphere Inc.
 */
-package cmd
+package cli
 
 import (
 	"os"
