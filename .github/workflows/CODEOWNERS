@@ -1,0 +1,9 @@
+# For more information about the Codesphere teams see: https://github.com/orgs/codesphere-cloud/teams
+#
+# add users to groups at: https://github.com/orgs/codesphere-cloud/teams/dev/teams
+# new groups should have dev as parent (or else one of the subgroups)
+#
+# IMPORTANT: only add groups as owners (below); never individual users.
+
+# Global owners.
+* @codesphere-cloud/sig-oms
