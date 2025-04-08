@@ -1,6 +1,6 @@
-build cli:
+build-cli:
 	go build -v -o ./bin/oms-cli ./cmd/cli
 
-build service:
+build-service:
 	go build -v -o ./bin/oms-svc ./cmd/service
 

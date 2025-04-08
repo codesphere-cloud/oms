@@ -22,7 +22,7 @@ jobs:
           go-version: '1.24'
 
       - name: Build
-        run: make build cli
+        run: make build-cli
 
       - name: Test
         run: go test -v ./cmd/cli
