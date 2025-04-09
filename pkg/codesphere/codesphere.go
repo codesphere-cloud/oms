@@ -2,7 +2,7 @@
 Copyright © 2025 Codesphere Inc.
 */
 
-package cs
+package codesphere
 
 import "fmt"
 
