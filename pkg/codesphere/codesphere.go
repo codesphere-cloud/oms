@@ -1,4 +1,8 @@
-package cs
+/*
+Copyright © 2025 Codesphere Inc.
+*/
+
+package codesphere
 
 import "fmt"
 
