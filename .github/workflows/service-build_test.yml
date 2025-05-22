@@ -25,4 +25,4 @@ jobs:
         run: make build-service
 
       - name: Test
-        run: go test -v ./cmd/service
+        run: make test-service

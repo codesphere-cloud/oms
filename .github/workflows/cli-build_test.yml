@@ -25,4 +25,4 @@ jobs:
         run: make build-cli
 
       - name: Test
-        run: go test -v ./cmd/cli
+        run: make test-cli
