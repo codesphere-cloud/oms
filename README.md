@@ -1,3 +1,6 @@
+![CLI GitHub Workflow Status](https://github.com/codesphere-cloud/oms/actions/workflows/service-build_test.yml/badge.svg)
+![Service GitHub Workflow Status](https://github.com/codesphere-cloud/oms/actions/workflows/cli-build_test.yml/badge.svg)
+
 # Operations Management System - OMS
 
 This repository contains the source for the operations management system. It
