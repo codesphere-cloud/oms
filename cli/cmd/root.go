@@ -38,6 +38,7 @@ to quickly create a Cobra application.`,
 
 	// Add child commands here
 	AddInstallCmd(rootCmd)
+	AddCopyCmd(rootCmd)
 
 	err := rootCmd.Execute()
 	if err != nil {

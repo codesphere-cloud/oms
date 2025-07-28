@@ -31,3 +31,11 @@ endif
 
 generate: install-build-deps
 	go generate ./...
+
+run-ssh-container:
+	docker run -v ./key.pub:/root/key.pub -p 10022:22 --rm -ti --entrypoint="/bin/sh" --name codesphere-host \
+		testcontainers/sshd:1.2.0 -c \
+		"mkdir -p /root/.ssh && cp /root/key.pub /root/.ssh/authorized_keys && chmod 700 /root/.ssh && chmod 644 /root/.ssh/authorized_keys && /usr/sbin/sshd -D -o PermitRootLogin=yes -o AddressFamily=inet -o GatewayPorts=yes -o AllowAgentForwarding=yes -o AllowTcpForwarding=yes -o KexAlgorithms=+diffie-hellman-group1-sha1 -o HostkeyAlgorithms=+ssh-rsa"
+
+stop-ssh-container:
+	docker stop codesphere-host
