@@ -6,7 +6,8 @@ build-cli:
 build-service:
 	cd service && go build -v && mv service ../oms-service
 
-test: test-cli test-service
+test:
+	go test -count=1 -v ./...
 
 test-cli:
 	# -count=1 to disable caching test results
@@ -30,4 +31,5 @@ ifeq (, $(shell which golangci-lint))
 endif
 
 generate: install-build-deps
+	mockery
 	go generate ./...

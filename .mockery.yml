@@ -1,0 +1,28 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+all: false
+dir: "{{.InterfaceDir}}"
+force-file-write: true
+filename: "mocks.go"
+formatter: gofmt
+log-level: info
+structname: "{{.Mock}}{{.InterfaceName}}"
+pkgname: "{{.SrcPackageName}}"
+recursive: false
+require-template-schema-exists: true
+template: testify
+template-schema: "{{.Template}}.schema.json"
+packages:
+  github.com/codesphere-cloud/oms/internal/env:
+    config:
+      all: true
+    interfaces:
+  github.com/codesphere-cloud/oms/internal/portal:
+    config:
+      all: true
+    interfaces:
+  github.com/codesphere-cloud/oms/internal/util:
+    config:
+      all: true
+    interfaces:
