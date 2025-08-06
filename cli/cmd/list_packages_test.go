@@ -16,17 +16,18 @@ import (
 var _ = Describe("ListPackages", func() {
 
 	var (
-		mockTableWriter util.MockTableWriter
+		mockTableWriter *util.MockTableWriter
 		c               cmd.ListBuildsCmd
 		internal        bool
 		buildDate       time.Time
 	)
-	BeforeEach(func() {
+	JustBeforeEach(func() {
+		mockTableWriter = util.NewMockTableWriter(GinkgoT())
 		c = cmd.ListBuildsCmd{
 			Opts: cmd.ListBuildsOpts{
 				Internal: internal,
 			},
-			TableWriter: &mockTableWriter,
+			TableWriter: mockTableWriter,
 		}
 
 		buildDate, _ = time.Parse("2006-01-02", "2025-05-01")

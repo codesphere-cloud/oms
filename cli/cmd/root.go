@@ -28,6 +28,7 @@ func Execute() {
 	}
 	AddInstallCmd(rootCmd)
 	AddListCmd(rootCmd, opts)
+	AddDownloadCmd(rootCmd, opts)
 
 	err := rootCmd.Execute()
 	if err != nil {
