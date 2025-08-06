@@ -16,20 +16,33 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+type FakeWriter struct {
+	bytes.Buffer
+}
+
+var _ io.Writer = (*FakeWriter)(nil)
+
+func NewFakeWriter() *FakeWriter {
+	return &FakeWriter{}
+}
+
 var _ = Describe("PortalClient", func() {
 	var (
 		client         portal.PortalClient
-		mockEnv        env.MockEnv
-		mockHttpClient portal.MockHttpClient
+		mockEnv        *env.MockEnv
+		mockHttpClient *portal.MockHttpClient
 		status         int
 		apiUrl         string
 		getUrl         url.URL
 		getResponse    []byte
 	)
 	BeforeEach(func() {
+		mockEnv = env.NewMockEnv(GinkgoT())
+		mockHttpClient = portal.NewMockHttpClient(GinkgoT())
+
 		client = portal.PortalClient{
-			Env:        &mockEnv,
-			HttpClient: &mockHttpClient,
+			Env:        mockEnv,
+			HttpClient: mockHttpClient,
 		}
 		status = http.StatusOK
 		apiUrl = "fake-portal.com"
@@ -37,8 +50,13 @@ var _ = Describe("PortalClient", func() {
 		mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
 		mockEnv.EXPECT().GetOmsPortalApiKey().Return("fake-api-key", nil)
 	})
-	Describe("Get", func() {
-		BeforeEach(func() {
+	AfterEach(func() {
+		mockEnv.AssertExpectations(GinkgoT())
+		mockHttpClient.AssertExpectations(GinkgoT())
+	})
+
+	Describe("GetBody", func() {
+		JustBeforeEach(func() {
 			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 				func(req *http.Request) (*http.Response, error) {
 					getUrl = *req.URL
@@ -51,7 +69,7 @@ var _ = Describe("PortalClient", func() {
 
 		Context("when path starts with a /", func() {
 			It("Executes a request against the right URL", func() {
-				_, status, err := client.Get("/api/fake")
+				_, status, err := client.GetBody("/api/fake")
 				Expect(status).To(Equal(status))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
@@ -60,7 +78,7 @@ var _ = Describe("PortalClient", func() {
 
 		Context("when path does not with a /", func() {
 			It("Executes a request against the right URL", func() {
-				_, status, err := client.Get("api/fake")
+				_, status, err := client.GetBody("api/fake")
 				Expect(status).To(Equal(status))
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
@@ -69,6 +87,16 @@ var _ = Describe("PortalClient", func() {
 	})
 
 	Describe("ListCodespherePackages", func() {
+		JustBeforeEach(func() {
+			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+				func(req *http.Request) (*http.Response, error) {
+					getUrl = *req.URL
+					return &http.Response{
+						StatusCode: status,
+						Body:       io.NopCloser(bytes.NewReader(getResponse)),
+					}, nil
+				})
+		})
 		Context("when the request suceeds", func() {
 			var expectedResult portal.CodesphereBuilds
 			BeforeEach(func() {
@@ -104,11 +132,104 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns the builds ordered by date", func() {
-				packages, err := client.ListCodespherePackages()
+				packages, err := client.ListCodesphereBuilds()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
 			})
+		})
+	})
+
+	Describe("GetCodesphereBuildByVersion", func() {
+		var (
+			lastBuild, firstBuild time.Time
+		)
+		JustBeforeEach(func() {
+			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+				func(req *http.Request) (*http.Response, error) {
+					getUrl = *req.URL
+					return &http.Response{
+						StatusCode: status,
+						Body:       io.NopCloser(bytes.NewReader(getResponse)),
+					}, nil
+				})
+		})
+		BeforeEach(func() {
+			firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
+			lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
+
+			getPackagesResponse := portal.CodesphereBuilds{
+				Builds: []portal.CodesphereBuild{
+					{
+						Hash:    "lastBuild",
+						Date:    lastBuild,
+						Version: "1.42.0",
+					},
+					{
+						Hash:    "firstBuild",
+						Date:    firstBuild,
+						Version: "1.42.1",
+					},
+				},
+			}
+			getResponse, _ = json.Marshal(getPackagesResponse)
+		})
+
+		Context("When the build is included", func() {
+			It("returns the build", func() {
+				expectedResult := portal.CodesphereBuild{
+					Hash:    "lastBuild",
+					Date:    lastBuild,
+					Version: "1.42.0",
+				}
+				packages, err := client.GetCodesphereBuildByVersion("1.42.0")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(packages).To(Equal(expectedResult))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
+			})
+		})
+
+		Context("When the build is not included", func() {
+			It("returns an error and an empty build", func() {
+				expectedResult := portal.CodesphereBuild{}
+				packages, err := client.GetCodesphereBuildByVersion("1.42.3")
+				Expect(err).To(MatchError("version 1.42.3 not found"))
+				Expect(packages).To(Equal(expectedResult))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
+			})
+		})
+	})
+
+	Describe("DownloadBuildArtifact", func() {
+		var (
+			build            portal.CodesphereBuild
+			downloadResponse string
+		)
+		BeforeEach(func() {
+			buildDate, _ := time.Parse("2006-01-02", "2025-05-01")
+
+			downloadResponse = "fake-file-contents"
+
+			build = portal.CodesphereBuild{
+				Date: buildDate,
+			}
+
+			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+				func(req *http.Request) (*http.Response, error) {
+					getUrl = *req.URL
+					return &http.Response{
+						StatusCode: status,
+						Body:       io.NopCloser(bytes.NewReader([]byte(downloadResponse))),
+					}, nil
+				})
+		})
+
+		It("downloads the build", func() {
+			fakeWriter := NewFakeWriter()
+			err := client.DownloadBuildArtifact(build, fakeWriter)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fakeWriter.String()).To(Equal(downloadResponse))
+			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
 		})
 	})
 })

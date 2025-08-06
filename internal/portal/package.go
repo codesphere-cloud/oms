@@ -19,5 +19,5 @@ type CodesphereBuild struct {
 type Artifact struct {
 	Md5Sum   string `json:"md5sum"`
 	Filename string `json:"filename"`
-	Name     string `json:"-"`
+	Name     string `json:"name"`
 }

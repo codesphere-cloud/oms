@@ -24,7 +24,7 @@ type ListBuildsOpts struct {
 
 func (c *ListBuildsCmd) RunE(_ *cobra.Command, args []string) error {
 	p := portal.NewPortalClient()
-	packages, err := p.ListCodespherePackages()
+	packages, err := p.ListCodesphereBuilds()
 	if err != nil {
 		return fmt.Errorf("failed to list codesphere packages: %w", err)
 	}
