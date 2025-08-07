@@ -54,3 +54,15 @@ git push origin "$NEWTAG"
 echo "Triggering release of version $NEWTAG"
 go install github.com/goreleaser/goreleaser/v2@latest
 goreleaser release --clean
+
+cd dist
+for ARCH in darwin_arm64 darwin_amd64 linux_amd64 linux_arm64; do
+  tar cf $ARCH.tar.gz *$ARCH*/* CHANGELOG.md
+done
+cd ..
+
+echo "RELEASE_VERSION=$NEWTAG" >> $GITHUB_ENV
+
+# Hash length fixed to 10 characters to get deterministic folder names
+FOLDER="$(git rev-parse --short=10 HEAD)"
+echo "FOLDER=$FOLDER" >> $GITHUB_ENV
