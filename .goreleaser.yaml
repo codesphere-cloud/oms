@@ -10,7 +10,6 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
-      - windows
       - darwin
     goarch:
     - amd64
@@ -18,13 +17,17 @@ builds:
     - arm
     main: ./cli
     binary: oms-cli
+    ldflags:
+    - -s -w
+    - -X github.com/codesphere-cloud/oms/internal/version.version={{.Version}}
+    - -X github.com/codesphere-cloud/oms/internal/version.commit={{.Commit}}
+    - -X github.com/codesphere-cloud/oms/internal/version.date={{.Date}}
 
   - id: service
     env:
       - CGO_ENABLED=0
     goos:
       - linux
-      - windows
       - darwin
     goarch:
     - amd64
@@ -32,6 +35,11 @@ builds:
     - arm
     main: ./service
     binary: oms-service
+    ldflags:
+    - -s -w
+    - -X github.com/codesphere-cloud/oms/internal/version.version={{.Version}}
+    - -X github.com/codesphere-cloud/oms/internal/version.commit={{.Commit}}
+    - -X github.com/codesphere-cloud/oms/internal/version.date={{.Date}}
 
 changelog:
   sort: asc
@@ -43,7 +51,10 @@ changelog:
       - "^chore"
 
 archives:
-- formats: binary
+- formats:
+    - binary
+    - tar.gz
+  name_template: "{{.Os}}_{{.Arch}}"
 
 release:
   footer: >-

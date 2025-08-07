@@ -26,7 +26,7 @@ func Execute() {
 			This command can be used to run common tasks related to managing codesphere installations,
 			like downloading new versions.`),
 	}
-	AddInstallCmd(rootCmd)
+	AddVersionCmd(rootCmd)
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
 
