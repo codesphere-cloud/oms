@@ -26,11 +26,13 @@ jobs:
 
       - name: Sign in to Google Cloud
         uses: google-github-actions/auth@v2
+        if: env.RELEASE_VERSION != ''
         with:
           credentials_json: ${{ secrets.GOOGLE_BUCKET_CREDS_JSON }}
 
       - name: Upload archive to Google Bucket
         uses: 'google-github-actions/upload-cloud-storage@v2'
+        if: env.RELEASE_VERSION != ''
         with:
           path: dist
           glob: '*.tar.gz'
