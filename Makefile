@@ -33,3 +33,8 @@ endif
 generate: install-build-deps
 	mockery
 	go generate ./...
+
+VERSION ?= "0.0.0"
+release-local:
+	rm -rf dist
+	/bin/bash -c "goreleaser --skip=validate,announce,publish -f <(sed s/{{.Version}}/$(VERSION)/g < .goreleaser.yaml)"

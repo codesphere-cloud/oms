@@ -26,3 +26,11 @@ packages:
     config:
       all: true
     interfaces:
+  github.com/codesphere-cloud/oms/internal/version:
+    config:
+      all: true
+    interfaces:
+  github.com/codesphere-cloud/oms/cli/cmd:
+    config:
+      all: true
+    interfaces:

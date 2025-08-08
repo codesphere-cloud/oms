@@ -18,7 +18,7 @@ var _ = Describe("ListPackages", func() {
 		c              cmd.DownloadPackageCmd
 		filename       string
 		version        string
-		build          portal.CodesphereBuild
+		build          portal.Build
 		mockPortal     *portal.MockPortal
 		mockFileWriter *util.MockFileWriter
 	)
@@ -36,7 +36,7 @@ var _ = Describe("ListPackages", func() {
 			},
 			FileWriter: mockFileWriter,
 		}
-		build = portal.CodesphereBuild{
+		build = portal.Build{
 			Version: version,
 			Artifacts: []portal.Artifact{
 				{Filename: filename},
@@ -51,7 +51,7 @@ var _ = Describe("ListPackages", func() {
 
 	Context("File exists", func() {
 		It("Downloads the correct artifact to the correct output file", func() {
-			expectedBuildToDownload := portal.CodesphereBuild{
+			expectedBuildToDownload := portal.Build{
 				Version: version,
 				Artifacts: []portal.Artifact{
 					{Filename: filename},
@@ -60,7 +60,7 @@ var _ = Describe("ListPackages", func() {
 
 			fakeFile := os.NewFile(uintptr(0), filename)
 			mockFileWriter.EXPECT().Create(version+"-"+filename).Return(fakeFile, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(expectedBuildToDownload, mock.Anything).Return(nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything).Return(nil)
 			err := c.DownloadBuild(mockPortal, build, filename)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -69,7 +69,7 @@ var _ = Describe("ListPackages", func() {
 	Context("File doesn't exist in build", func() {
 		It("Returns an error", func() {
 			err := c.DownloadBuild(mockPortal, build, "installer-lite.tar.gz")
-			Expect(err).To(MatchError("can't find artifact installer-lite.tar.gz in version " + version))
+			Expect(err).To(MatchError("failed to find artifact in package: artifact not found: installer-lite.tar.gz"))
 		})
 	})
 })

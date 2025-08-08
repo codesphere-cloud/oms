@@ -24,7 +24,7 @@ type ListBuildsOpts struct {
 
 func (c *ListBuildsCmd) RunE(_ *cobra.Command, args []string) error {
 	p := portal.NewPortalClient()
-	packages, err := p.ListCodesphereBuilds()
+	packages, err := p.ListBuilds(portal.CodesphereProduct)
 	if err != nil {
 		return fmt.Errorf("failed to list codesphere packages: %w", err)
 	}
@@ -51,7 +51,7 @@ func AddListPackagesCmd(list *cobra.Command, opts GlobalOptions) {
 	list.AddCommand(builds.cmd)
 }
 
-func (c *ListBuildsCmd) PrintPackagesTable(packages portal.CodesphereBuilds) {
+func (c *ListBuildsCmd) PrintPackagesTable(packages portal.Builds) {
 	c.TableWriter.AppendHeader(table.Row{"Int", "Version", "Build Date", "Hash", "Artifacts"})
 
 	for _, build := range packages.Builds {

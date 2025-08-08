@@ -9,24 +9,32 @@ var (
 	arch    string = "unknown"
 )
 
+type Version interface {
+	Version() string
+	Commit() string
+	BuildDate() string
+	Os() string
+	Arch() string
+}
+
 type Build struct{}
 
-func Version() string {
+func (b *Build) Version() string {
 	return version
 }
 
-func Commit() string {
+func (b *Build) Commit() string {
 	return commit
 }
 
-func BuildDate() string {
+func (b *Build) BuildDate() string {
 	return date
 }
 
-func Os() string {
+func (b *Build) Os() string {
 	return os
 }
 
-func Arch() string {
+func (b *Build) Arch() string {
 	return arch
 }

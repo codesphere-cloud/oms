@@ -35,8 +35,10 @@ var _ = Describe("PortalClient", func() {
 		apiUrl         string
 		getUrl         url.URL
 		getResponse    []byte
+		product        portal.Product
 	)
 	BeforeEach(func() {
+		product = portal.CodesphereProduct
 		mockEnv = env.NewMockEnv(GinkgoT())
 		mockHttpClient = portal.NewMockHttpClient(GinkgoT())
 
@@ -98,13 +100,13 @@ var _ = Describe("PortalClient", func() {
 				})
 		})
 		Context("when the request suceeds", func() {
-			var expectedResult portal.CodesphereBuilds
+			var expectedResult portal.Builds
 			BeforeEach(func() {
 				firstBuild, _ := time.Parse("2006-01-02", "2025-04-02")
 				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
 
-				getPackagesResponse := portal.CodesphereBuilds{
-					Builds: []portal.CodesphereBuild{
+				getPackagesResponse := portal.Builds{
+					Builds: []portal.Build{
 						{
 							Hash: "lastBuild",
 							Date: lastBuild,
@@ -117,8 +119,8 @@ var _ = Describe("PortalClient", func() {
 				}
 				getResponse, _ = json.Marshal(getPackagesResponse)
 
-				expectedResult = portal.CodesphereBuilds{
-					Builds: []portal.CodesphereBuild{
+				expectedResult = portal.Builds{
+					Builds: []portal.Build{
 						{
 							Hash: "firstBuild",
 							Date: firstBuild,
@@ -132,7 +134,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns the builds ordered by date", func() {
-				packages, err := client.ListCodesphereBuilds()
+				packages, err := client.ListBuilds(portal.CodesphereProduct)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
@@ -158,8 +160,8 @@ var _ = Describe("PortalClient", func() {
 			firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
 			lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
 
-			getPackagesResponse := portal.CodesphereBuilds{
-				Builds: []portal.CodesphereBuild{
+			getPackagesResponse := portal.Builds{
+				Builds: []portal.Build{
 					{
 						Hash:    "lastBuild",
 						Date:    lastBuild,
@@ -177,7 +179,7 @@ var _ = Describe("PortalClient", func() {
 
 		Context("When the build is included", func() {
 			It("returns the build", func() {
-				expectedResult := portal.CodesphereBuild{
+				expectedResult := portal.Build{
 					Hash:    "lastBuild",
 					Date:    lastBuild,
 					Version: "1.42.0",
@@ -191,7 +193,7 @@ var _ = Describe("PortalClient", func() {
 
 		Context("When the build is not included", func() {
 			It("returns an error and an empty build", func() {
-				expectedResult := portal.CodesphereBuild{}
+				expectedResult := portal.Build{}
 				packages, err := client.GetCodesphereBuildByVersion("1.42.3")
 				Expect(err).To(MatchError("version 1.42.3 not found"))
 				Expect(packages).To(Equal(expectedResult))
@@ -202,7 +204,7 @@ var _ = Describe("PortalClient", func() {
 
 	Describe("DownloadBuildArtifact", func() {
 		var (
-			build            portal.CodesphereBuild
+			build            portal.Build
 			downloadResponse string
 		)
 		BeforeEach(func() {
@@ -210,7 +212,7 @@ var _ = Describe("PortalClient", func() {
 
 			downloadResponse = "fake-file-contents"
 
-			build = portal.CodesphereBuild{
+			build = portal.Build{
 				Date: buildDate,
 			}
 
@@ -226,10 +228,79 @@ var _ = Describe("PortalClient", func() {
 
 		It("downloads the build", func() {
 			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(build, fakeWriter)
+			err := client.DownloadBuildArtifact(product, build, fakeWriter)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fakeWriter.String()).To(Equal(downloadResponse))
 			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
+		})
+	})
+
+	Describe("GetLatestOmsBuild", func() {
+		var (
+			lastBuild, firstBuild time.Time
+			getPackagesResponse   portal.Builds
+		)
+		JustBeforeEach(func() {
+			getResponse, _ = json.Marshal(getPackagesResponse)
+			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+				func(req *http.Request) (*http.Response, error) {
+					getUrl = *req.URL
+					return &http.Response{
+						StatusCode: status,
+						Body:       io.NopCloser(bytes.NewReader(getResponse)),
+					}, nil
+				})
+		})
+
+		Context("When the build is included", func() {
+			BeforeEach(func() {
+				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
+				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
+
+				getPackagesResponse = portal.Builds{
+					Builds: []portal.Build{
+						{
+							Hash:    "firstBuild",
+							Date:    firstBuild,
+							Version: "1.42.0",
+						},
+						{
+							Hash:    "lastBuild",
+							Date:    lastBuild,
+							Version: "1.42.1",
+						},
+					},
+				}
+			})
+			It("returns the build", func() {
+				expectedResult := portal.Build{
+					Hash:    "lastBuild",
+					Date:    lastBuild,
+					Version: "1.42.1",
+				}
+				packages, err := client.GetLatestBuild(portal.OmsProduct)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(packages).To(Equal(expectedResult))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+			})
+		})
+
+		Context("When no builds are returned", func() {
+			BeforeEach(func() {
+				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
+				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
+
+				getPackagesResponse = portal.Builds{
+					Builds: []portal.Build{},
+				}
+			})
+			It("returns an error and an empty build", func() {
+				expectedResult := portal.Build{}
+				packages, err := client.GetLatestBuild(portal.OmsProduct)
+				Expect(err).To(MatchError("no builds returned"))
+				Expect(packages).To(Equal(expectedResult))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+			})
 		})
 	})
 })

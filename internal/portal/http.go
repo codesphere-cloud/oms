@@ -3,6 +3,7 @@ package portal
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,7 +16,8 @@ import (
 )
 
 type Portal interface {
-	DownloadBuildArtifact(build CodesphereBuild, file io.Writer) error
+	DownloadBuildArtifact(product Product, build Build, file io.Writer) error
+	GetLatestBuild(product Product) (Build, error)
 }
 
 type PortalClient struct {
@@ -33,6 +35,13 @@ func NewPortalClient() *PortalClient {
 		HttpClient: http.DefaultClient,
 	}
 }
+
+type Product string
+
+const (
+	CodesphereProduct Product = "codesphere"
+	OmsProduct        Product = "oms"
+)
 
 func (c *PortalClient) Get(path string, body []byte) (resp *http.Response, err error) {
 	requestBody := bytes.NewBuffer(body)
@@ -95,8 +104,8 @@ func (c *PortalClient) GetBody(path string) (body []byte, status int, err error)
 	return
 }
 
-func (c *PortalClient) ListCodesphereBuilds() (availablePackages CodesphereBuilds, err error) {
-	res, _, err := c.GetBody("/packages/codesphere")
+func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, err error) {
+	res, _, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
 	if err != nil {
 		err = fmt.Errorf("failed to list packages: %w", err)
 		return
@@ -112,10 +121,10 @@ func (c *PortalClient) ListCodesphereBuilds() (availablePackages CodesphereBuild
 	return
 }
 
-func (c *PortalClient) GetCodesphereBuildByVersion(version string) (CodesphereBuild, error) {
-	packages, err := c.ListCodesphereBuilds()
+func (c *PortalClient) GetCodesphereBuildByVersion(version string) (Build, error) {
+	packages, err := c.ListBuilds(CodesphereProduct)
 	if err != nil {
-		return CodesphereBuild{}, fmt.Errorf("failed to list Codesphere packages: %w", err)
+		return Build{}, fmt.Errorf("failed to list Codesphere packages: %w", err)
 	}
 
 	for _, build := range packages.Builds {
@@ -124,10 +133,10 @@ func (c *PortalClient) GetCodesphereBuildByVersion(version string) (CodesphereBu
 		}
 	}
 
-	return CodesphereBuild{}, fmt.Errorf("version %s not found", version)
+	return Build{}, fmt.Errorf("version %s not found", version)
 }
 
-func compareBuilds(l, r CodesphereBuild) int {
+func compareBuilds(l, r Build) int {
 	if l.Date.Before(r.Date) {
 		return -1
 	}
@@ -137,13 +146,13 @@ func compareBuilds(l, r CodesphereBuild) int {
 	return 1
 }
 
-func (c *PortalClient) DownloadBuildArtifact(build CodesphereBuild, file io.Writer) error {
+func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file io.Writer) error {
 	reqBody, err := json.Marshal(build)
 	if err != nil {
 		return fmt.Errorf("failed to generate request body: %w", err)
 	}
 
-	resp, err := c.Get("/packages/codesphere/download", reqBody)
+	resp, err := c.Get(fmt.Sprintf("/packages/%s/download", product), reqBody)
 	if err != nil {
 		return fmt.Errorf("GET request to download build failed: %w", err)
 	}
@@ -152,13 +161,27 @@ func (c *PortalClient) DownloadBuildArtifact(build CodesphereBuild, file io.Writ
 	// Create a WriteCounter to wrap the output file and report progress.
 	counter := NewWriteCounter(file)
 
-	bytesWritten, err := io.Copy(counter, resp.Body)
+	_, err = io.Copy(counter, resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to copy response body to file: %w", err)
 	}
 
-	log.Printf("\nSuccessfully downloaded %d bytes.\n", bytesWritten)
+	fmt.Println("Download finished successfully.")
 	return nil
+}
+
+func (c *PortalClient) GetLatestBuild(product Product) (Build, error) {
+	packages, err := c.ListBuilds(product)
+	if err != nil {
+		return Build{}, fmt.Errorf("failed to list %s packages: %w", product, err)
+	}
+
+	if len(packages.Builds) == 0 {
+		return Build{}, errors.New("no builds returned")
+	}
+
+	// Builds are always ordered by date, newest build is latest version
+	return packages.Builds[len(packages.Builds)-1], nil
 }
 
 // WriteCounter is a custom io.Writer that counts bytes written and logs progress.
