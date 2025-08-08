@@ -22,6 +22,8 @@ builds:
     - -X github.com/codesphere-cloud/oms/internal/version.version={{.Version}}
     - -X github.com/codesphere-cloud/oms/internal/version.commit={{.Commit}}
     - -X github.com/codesphere-cloud/oms/internal/version.date={{.Date}}
+    - -X github.com/codesphere-cloud/oms/internal/version.os={{.Os}}
+    - -X github.com/codesphere-cloud/oms/internal/version.arch={{.Arch}}
 
   - id: service
     env:
@@ -40,6 +42,8 @@ builds:
     - -X github.com/codesphere-cloud/oms/internal/version.version={{.Version}}
     - -X github.com/codesphere-cloud/oms/internal/version.commit={{.Commit}}
     - -X github.com/codesphere-cloud/oms/internal/version.date={{.Date}}
+    - -X github.com/codesphere-cloud/oms/internal/version.os={{.Os}}
+    - -X github.com/codesphere-cloud/oms/internal/version.arch={{.Arch}}
 
 changelog:
   sort: asc
@@ -51,9 +55,12 @@ changelog:
       - "^chore"
 
 archives:
-- formats:
-    - binary
-    - tar.gz
+- id: bin
+  formats:
+  - binary
+- id: tar
+  formats:
+  - tar.gz
   name_template: "{{.Os}}_{{.Arch}}"
 
 release:

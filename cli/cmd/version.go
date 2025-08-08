@@ -15,9 +15,11 @@ type VersionCmd struct {
 }
 
 func (c *VersionCmd) RunE(_ *cobra.Command, args []string) error {
-	fmt.Printf("Codesphere CLI version: %s\n", version.Version())
+	fmt.Printf("OMS CLI version: %s\n", version.Version())
 	fmt.Printf("Commit: %s\n", version.Commit())
 	fmt.Printf("Build Date: %s\n", version.BuildDate())
+	fmt.Printf("Arch: %s\n", version.Arch())
+	fmt.Printf("OS: %s\n", version.Os())
 
 	return nil
 }
