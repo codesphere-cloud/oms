@@ -2,9 +2,11 @@ package version
 
 // Variables are injected by goreleaser on release
 var (
-	version string = "dev"
+	version string = "0.0.0"
 	commit  string = "none"
 	date    string = "unknown"
+	os      string = "unknown"
+	arch    string = "unknown"
 )
 
 type Build struct{}
@@ -19,4 +21,12 @@ func Commit() string {
 
 func BuildDate() string {
 	return date
+}
+
+func Os() string {
+	return os
+}
+
+func Arch() string {
+	return arch
 }
