@@ -27,6 +27,7 @@ func Execute() {
 			like downloading new versions.`),
 	}
 	AddVersionCmd(rootCmd)
+	AddUpdateCmd(rootCmd)
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
 

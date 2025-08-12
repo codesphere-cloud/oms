@@ -1,14 +1,15 @@
 package portal
 
 import (
+	"fmt"
 	"time"
 )
 
-type CodesphereBuilds struct {
-	Builds []CodesphereBuild `json:"builds"`
+type Builds struct {
+	Builds []Build `json:"builds"`
 }
 
-type CodesphereBuild struct {
+type Build struct {
 	Version   string     `json:"version"`
 	Date      time.Time  `json:"date"`
 	Hash      string     `json:"hash"`
@@ -20,4 +21,22 @@ type Artifact struct {
 	Md5Sum   string `json:"md5sum"`
 	Filename string `json:"filename"`
 	Name     string `json:"name"`
+}
+
+func (b *Build) GetBuildForDownload(filename string) (Build, error) {
+
+	for _, a := range b.Artifacts {
+		if a.Filename != filename {
+			continue
+		}
+
+		// Generate identical build but with only the matching artifact
+		build := *b
+		build.Artifacts = []Artifact{
+			a,
+		}
+		return build, nil
+	}
+
+	return Build{}, fmt.Errorf("artifact not found: %s", filename)
 }

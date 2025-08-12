@@ -61,27 +61,21 @@ func AddDownloadPackageCmd(download *cobra.Command, opts GlobalOptions) {
 	pkg.cmd.RunE = pkg.RunE
 }
 
-func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.CodesphereBuild, filename string) error {
-	for _, art := range build.Artifacts {
-		if art.Filename == filename {
-			fullFilename := build.Version + "-" + art.Filename
-			out, err := c.FileWriter.Create(fullFilename)
-			if err != nil {
-				return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
-			}
-			defer func() { _ = out.Close() }()
-
-			buildWithArtifact := build
-			buildWithArtifact.Artifacts = []portal.Artifact{art}
-
-			err = p.DownloadBuildArtifact(buildWithArtifact, out)
-			if err != nil {
-				return fmt.Errorf("failed to download build: %w", err)
-			}
-			return nil
-		}
-
+func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, filename string) error {
+	download, err := build.GetBuildForDownload(filename)
+	if err != nil {
+		return fmt.Errorf("failed to find artifact in package: %w", err)
 	}
+	fullFilename := build.Version + "-" + filename
+	out, err := c.FileWriter.Create(fullFilename)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
+	}
+	defer func() { _ = out.Close() }()
 
-	return fmt.Errorf("can't find artifact %s in version %s", filename, build.Version)
+	err = p.DownloadBuildArtifact("codesphere", download, out)
+	if err != nil {
+		return fmt.Errorf("failed to download build: %w", err)
+	}
+	return nil
 }

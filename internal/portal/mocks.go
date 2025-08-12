@@ -38,16 +38,16 @@ func (_m *MockPortal) EXPECT() *MockPortal_Expecter {
 }
 
 // DownloadBuildArtifact provides a mock function for the type MockPortal
-func (_mock *MockPortal) DownloadBuildArtifact(build CodesphereBuild, file io.Writer) error {
-	ret := _mock.Called(build, file)
+func (_mock *MockPortal) DownloadBuildArtifact(product Product, build Build, file io.Writer) error {
+	ret := _mock.Called(product, build, file)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DownloadBuildArtifact")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(CodesphereBuild, io.Writer) error); ok {
-		r0 = returnFunc(build, file)
+	if returnFunc, ok := ret.Get(0).(func(Product, Build, io.Writer) error); ok {
+		r0 = returnFunc(product, build, file)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -60,15 +60,16 @@ type MockPortal_DownloadBuildArtifact_Call struct {
 }
 
 // DownloadBuildArtifact is a helper method to define mock.On call
+//   - product
 //   - build
 //   - file
-func (_e *MockPortal_Expecter) DownloadBuildArtifact(build interface{}, file interface{}) *MockPortal_DownloadBuildArtifact_Call {
-	return &MockPortal_DownloadBuildArtifact_Call{Call: _e.mock.On("DownloadBuildArtifact", build, file)}
+func (_e *MockPortal_Expecter) DownloadBuildArtifact(product interface{}, build interface{}, file interface{}) *MockPortal_DownloadBuildArtifact_Call {
+	return &MockPortal_DownloadBuildArtifact_Call{Call: _e.mock.On("DownloadBuildArtifact", product, build, file)}
 }
 
-func (_c *MockPortal_DownloadBuildArtifact_Call) Run(run func(build CodesphereBuild, file io.Writer)) *MockPortal_DownloadBuildArtifact_Call {
+func (_c *MockPortal_DownloadBuildArtifact_Call) Run(run func(product Product, build Build, file io.Writer)) *MockPortal_DownloadBuildArtifact_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(CodesphereBuild), args[1].(io.Writer))
+		run(args[0].(Product), args[1].(Build), args[2].(io.Writer))
 	})
 	return _c
 }
@@ -78,7 +79,61 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) Return(err error) *MockPortal_D
 	return _c
 }
 
-func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(build CodesphereBuild, file io.Writer) error) *MockPortal_DownloadBuildArtifact_Call {
+func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(product Product, build Build, file io.Writer) error) *MockPortal_DownloadBuildArtifact_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetLatestBuild provides a mock function for the type MockPortal
+func (_mock *MockPortal) GetLatestBuild(product Product) (Build, error) {
+	ret := _mock.Called(product)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetLatestBuild")
+	}
+
+	var r0 Build
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(Product) (Build, error)); ok {
+		return returnFunc(product)
+	}
+	if returnFunc, ok := ret.Get(0).(func(Product) Build); ok {
+		r0 = returnFunc(product)
+	} else {
+		r0 = ret.Get(0).(Build)
+	}
+	if returnFunc, ok := ret.Get(1).(func(Product) error); ok {
+		r1 = returnFunc(product)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPortal_GetLatestBuild_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetLatestBuild'
+type MockPortal_GetLatestBuild_Call struct {
+	*mock.Call
+}
+
+// GetLatestBuild is a helper method to define mock.On call
+//   - product
+func (_e *MockPortal_Expecter) GetLatestBuild(product interface{}) *MockPortal_GetLatestBuild_Call {
+	return &MockPortal_GetLatestBuild_Call{Call: _e.mock.On("GetLatestBuild", product)}
+}
+
+func (_c *MockPortal_GetLatestBuild_Call) Run(run func(product Product)) *MockPortal_GetLatestBuild_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(Product))
+	})
+	return _c
+}
+
+func (_c *MockPortal_GetLatestBuild_Call) Return(build Build, err error) *MockPortal_GetLatestBuild_Call {
+	_c.Call.Return(build, err)
+	return _c
+}
+
+func (_c *MockPortal_GetLatestBuild_Call) RunAndReturn(run func(product Product) (Build, error)) *MockPortal_GetLatestBuild_Call {
 	_c.Call.Return(run)
 	return _c
 }

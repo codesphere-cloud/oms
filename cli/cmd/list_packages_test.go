@@ -43,8 +43,8 @@ var _ = Describe("ListPackages", func() {
 				table.Row{"", "1.42", buildDate, "externalBuild", "installer.tar, installer2.tar"},
 			)
 			c.PrintPackagesTable(
-				portal.CodesphereBuilds{
-					Builds: []portal.CodesphereBuild{
+				portal.Builds{
+					Builds: []portal.Build{
 						{
 							Hash:     "externalBuild",
 							Version:  "1.42",
@@ -76,8 +76,8 @@ var _ = Describe("ListPackages", func() {
 				table.Row{"*", "master", buildDate, "internalBuild", "installer.tar, installer2.tar"},
 			)
 			c.PrintPackagesTable(
-				portal.CodesphereBuilds{
-					Builds: []portal.CodesphereBuild{
+				portal.Builds{
+					Builds: []portal.Build{
 						{
 							Hash:     "externalBuild",
 							Version:  "1.42",
