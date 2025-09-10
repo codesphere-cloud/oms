@@ -3,6 +3,7 @@ package portal_test
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -36,8 +37,13 @@ var _ = Describe("PortalClient", func() {
 		getUrl         url.URL
 		getResponse    []byte
 		product        portal.Product
+		apiKey         string
+		apiKeyErr      error
 	)
 	BeforeEach(func() {
+		apiKey = "fake-api-key"
+		apiKeyErr = nil
+
 		product = portal.CodesphereProduct
 		mockEnv = env.NewMockEnv(GinkgoT())
 		mockHttpClient = portal.NewMockHttpClient(GinkgoT())
@@ -48,9 +54,10 @@ var _ = Describe("PortalClient", func() {
 		}
 		status = http.StatusOK
 		apiUrl = "fake-portal.com"
-
+	})
+	JustBeforeEach(func() {
 		mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
-		mockEnv.EXPECT().GetOmsPortalApiKey().Return("fake-api-key", nil)
+		mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr).Maybe()
 	})
 	AfterEach(func() {
 		mockEnv.AssertExpectations(GinkgoT())
@@ -66,7 +73,7 @@ var _ = Describe("PortalClient", func() {
 						StatusCode: status,
 						Body:       io.NopCloser(bytes.NewReader(getResponse)),
 					}, nil
-				})
+				}).Maybe()
 		})
 
 		Context("when path starts with a /", func() {
@@ -83,6 +90,21 @@ var _ = Describe("PortalClient", func() {
 				_, status, err := client.GetBody("api/fake")
 				Expect(status).To(Equal(status))
 				Expect(err).NotTo(HaveOccurred())
+				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
+			})
+		})
+
+		Context("when OMS_PORTAL_API_KEY is unset", func() {
+			BeforeEach(func() {
+				apiKey = ""
+				apiKeyErr = errors.New("fake-error")
+			})
+
+			It("Returns an error", func() {
+				_, status, err := client.GetBody("/api/fake")
+				Expect(status).To(Equal(status))
+				Expect(err).NotTo(BeNil())
+				Expect(err.Error()).To(MatchRegexp(".*fake-error"))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
 			})
 		})

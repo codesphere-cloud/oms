@@ -92,6 +92,10 @@ func (c *PortalClient) Get(path string, body []byte) (resp *http.Response, err e
 
 func (c *PortalClient) GetBody(path string) (body []byte, status int, err error) {
 	resp, err := c.Get(path, []byte{})
+	if err != nil || resp == nil {
+		err = fmt.Errorf("GET failed: %w", err)
+		return
+	}
 	defer func() { _ = resp.Body.Close() }()
 	status = resp.StatusCode
 
