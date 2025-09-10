@@ -45,9 +45,9 @@ func AddUpdateCmd(rootCmd *cobra.Command) {
 func (c *UpdateCmd) SelfUpdate(p portal.Portal) error {
 	currentVersion := semver.MustParse(c.Version.Version())
 
-	latest, err := p.GetLatestBuild(portal.OmsProduct)
+	latest, err := p.GetLatestBuild(portal.OmsProduct, "")
 	if err != nil {
-		return fmt.Errorf("failed to OMS Portal for latest version: %w", err)
+		return fmt.Errorf("failed to query OMS Portal for latest version: %w", err)
 	}
 	latestVersion := semver.MustParse(strings.TrimPrefix(latest.Version, "oms-v"))
 
