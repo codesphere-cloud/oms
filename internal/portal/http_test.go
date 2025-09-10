@@ -195,7 +195,7 @@ var _ = Describe("PortalClient", func() {
 			It("returns an error and an empty build", func() {
 				expectedResult := portal.Build{}
 				packages, err := client.GetCodesphereBuildByVersion("1.42.3")
-				Expect(err).To(MatchError("version 1.42.3 not found"))
+				Expect(err.Error()).To(MatchRegexp(".*version 1.42.3 not found"))
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
 			})
@@ -278,7 +278,7 @@ var _ = Describe("PortalClient", func() {
 					Date:    lastBuild,
 					Version: "1.42.1",
 				}
-				packages, err := client.GetLatestBuild(portal.OmsProduct)
+				packages, err := client.GetLatestBuild(portal.OmsProduct, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
@@ -296,7 +296,7 @@ var _ = Describe("PortalClient", func() {
 			})
 			It("returns an error and an empty build", func() {
 				expectedResult := portal.Build{}
-				packages, err := client.GetLatestBuild(portal.OmsProduct)
+				packages, err := client.GetLatestBuild(portal.OmsProduct, "")
 				Expect(err).To(MatchError("no builds returned"))
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))

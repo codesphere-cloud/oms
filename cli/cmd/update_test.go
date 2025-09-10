@@ -63,7 +63,7 @@ var _ = Describe("Update", func() {
 			mockVersion.EXPECT().Arch().Return("fakearch")
 			mockVersion.EXPECT().Version().Return("0.0.0")
 			mockVersion.EXPECT().Os().Return("fakeos")
-			mockPortal.EXPECT().GetLatestBuild(portal.OmsProduct).Return(latestBuild, nil)
+			mockPortal.EXPECT().GetLatestBuild(portal.OmsProduct, "").Return(latestBuild, nil)
 			mockPortal.EXPECT().DownloadBuildArtifact(portal.OmsProduct, buildToDownload, mock.Anything).RunAndReturn(
 				func(product portal.Product, build portal.Build, file io.Writer) error {
 					embeddedFile, err := testdata.Open("testdata/testcli.tar.gz")
@@ -90,7 +90,7 @@ var _ = Describe("Update", func() {
 
 		It("Detects when current verison is latest version", func() {
 			mockVersion.EXPECT().Version().Return(latestBuild.Version)
-			mockPortal.EXPECT().GetLatestBuild(portal.OmsProduct).Return(latestBuild, nil)
+			mockPortal.EXPECT().GetLatestBuild(portal.OmsProduct, "").Return(latestBuild, nil)
 			err := c.SelfUpdate(mockPortal)
 			Expect(err).NotTo(HaveOccurred())
 		})

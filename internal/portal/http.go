@@ -17,7 +17,7 @@ import (
 
 type Portal interface {
 	DownloadBuildArtifact(product Product, build Build, file io.Writer) error
-	GetLatestBuild(product Product) (Build, error)
+	GetLatestBuild(product Product, version string) (Build, error)
 }
 
 type PortalClient struct {
@@ -122,18 +122,12 @@ func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, er
 }
 
 func (c *PortalClient) GetCodesphereBuildByVersion(version string) (Build, error) {
-	packages, err := c.ListBuilds(CodesphereProduct)
+	latestBuild, err := c.GetLatestBuild(CodesphereProduct, version)
 	if err != nil {
-		return Build{}, fmt.Errorf("failed to list Codesphere packages: %w", err)
+		return Build{}, fmt.Errorf("failed to get latest build for version %s: %w", version, err)
 	}
 
-	for _, build := range packages.Builds {
-		if build.Version == version {
-			return build, nil
-		}
-	}
-
-	return Build{}, fmt.Errorf("version %s not found", version)
+	return latestBuild, nil
 }
 
 func compareBuilds(l, r Build) int {
@@ -170,7 +164,7 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 	return nil
 }
 
-func (c *PortalClient) GetLatestBuild(product Product) (Build, error) {
+func (c *PortalClient) GetLatestBuild(product Product, version string) (Build, error) {
 	packages, err := c.ListBuilds(product)
 	if err != nil {
 		return Build{}, fmt.Errorf("failed to list %s packages: %w", product, err)
@@ -180,8 +174,24 @@ func (c *PortalClient) GetLatestBuild(product Product) (Build, error) {
 		return Build{}, errors.New("no builds returned")
 	}
 
-	// Builds are always ordered by date, newest build is latest version
-	return packages.Builds[len(packages.Builds)-1], nil
+	if version == "" {
+		return packages.Builds[len(packages.Builds)-1], nil
+	}
+
+	matchingPackages := []Build{}
+	for _, build := range packages.Builds {
+		if build.Version == version {
+			// Builds are always ordered by date, newest build is latest version
+			matchingPackages = append(matchingPackages, build)
+		}
+	}
+
+	if len(matchingPackages) == 0 {
+		return Build{}, fmt.Errorf("version %s not found", version)
+	}
+
+	// Builds are always ordered by date, return newest build
+	return matchingPackages[len(matchingPackages)-1], nil
 }
 
 // WriteCounter is a custom io.Writer that counts bytes written and logs progress.

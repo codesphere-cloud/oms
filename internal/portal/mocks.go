@@ -85,8 +85,8 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(product P
 }
 
 // GetLatestBuild provides a mock function for the type MockPortal
-func (_mock *MockPortal) GetLatestBuild(product Product) (Build, error) {
-	ret := _mock.Called(product)
+func (_mock *MockPortal) GetLatestBuild(product Product, version string) (Build, error) {
+	ret := _mock.Called(product, version)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetLatestBuild")
@@ -94,16 +94,16 @@ func (_mock *MockPortal) GetLatestBuild(product Product) (Build, error) {
 
 	var r0 Build
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(Product) (Build, error)); ok {
-		return returnFunc(product)
+	if returnFunc, ok := ret.Get(0).(func(Product, string) (Build, error)); ok {
+		return returnFunc(product, version)
 	}
-	if returnFunc, ok := ret.Get(0).(func(Product) Build); ok {
-		r0 = returnFunc(product)
+	if returnFunc, ok := ret.Get(0).(func(Product, string) Build); ok {
+		r0 = returnFunc(product, version)
 	} else {
 		r0 = ret.Get(0).(Build)
 	}
-	if returnFunc, ok := ret.Get(1).(func(Product) error); ok {
-		r1 = returnFunc(product)
+	if returnFunc, ok := ret.Get(1).(func(Product, string) error); ok {
+		r1 = returnFunc(product, version)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -117,13 +117,14 @@ type MockPortal_GetLatestBuild_Call struct {
 
 // GetLatestBuild is a helper method to define mock.On call
 //   - product
-func (_e *MockPortal_Expecter) GetLatestBuild(product interface{}) *MockPortal_GetLatestBuild_Call {
-	return &MockPortal_GetLatestBuild_Call{Call: _e.mock.On("GetLatestBuild", product)}
+//   - version
+func (_e *MockPortal_Expecter) GetLatestBuild(product interface{}, version interface{}) *MockPortal_GetLatestBuild_Call {
+	return &MockPortal_GetLatestBuild_Call{Call: _e.mock.On("GetLatestBuild", product, version)}
 }
 
-func (_c *MockPortal_GetLatestBuild_Call) Run(run func(product Product)) *MockPortal_GetLatestBuild_Call {
+func (_c *MockPortal_GetLatestBuild_Call) Run(run func(product Product, version string)) *MockPortal_GetLatestBuild_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(Product))
+		run(args[0].(Product), args[1].(string))
 	})
 	return _c
 }
@@ -133,7 +134,7 @@ func (_c *MockPortal_GetLatestBuild_Call) Return(build Build, err error) *MockPo
 	return _c
 }
 
-func (_c *MockPortal_GetLatestBuild_Call) RunAndReturn(run func(product Product) (Build, error)) *MockPortal_GetLatestBuild_Call {
+func (_c *MockPortal_GetLatestBuild_Call) RunAndReturn(run func(product Product, version string) (Build, error)) *MockPortal_GetLatestBuild_Call {
 	_c.Call.Return(run)
 	return _c
 }
