@@ -27,7 +27,7 @@ func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
 	fmt.Printf("Downloading package %s\n", c.Opts.Version)
 
 	p := portal.NewPortalClient()
-	build, err := p.GetCodesphereBuildByVersion(c.Opts.Version)
+	build, err := p.GetBuild(portal.CodesphereProduct, c.Opts.Version)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
 	}

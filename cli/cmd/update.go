@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"strings"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/blang/semver"
 	"github.com/inconshreveable/go-update"
@@ -45,7 +46,7 @@ func AddUpdateCmd(rootCmd *cobra.Command) {
 func (c *UpdateCmd) SelfUpdate(p portal.Portal) error {
 	currentVersion := semver.MustParse(c.Version.Version())
 
-	latest, err := p.GetLatestBuild(portal.OmsProduct, "")
+	latest, err := p.GetBuild(portal.OmsProduct, "")
 	if err != nil {
 		return fmt.Errorf("failed to query OMS Portal for latest version: %w", err)
 	}

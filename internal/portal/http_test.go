@@ -164,66 +164,6 @@ var _ = Describe("PortalClient", func() {
 		})
 	})
 
-	Describe("GetCodesphereBuildByVersion", func() {
-		var (
-			lastBuild, firstBuild time.Time
-		)
-		JustBeforeEach(func() {
-			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
-				func(req *http.Request) (*http.Response, error) {
-					getUrl = *req.URL
-					return &http.Response{
-						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader(getResponse)),
-					}, nil
-				})
-		})
-		BeforeEach(func() {
-			firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
-			lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
-
-			getPackagesResponse := portal.Builds{
-				Builds: []portal.Build{
-					{
-						Hash:    "lastBuild",
-						Date:    lastBuild,
-						Version: "1.42.0",
-					},
-					{
-						Hash:    "firstBuild",
-						Date:    firstBuild,
-						Version: "1.42.1",
-					},
-				},
-			}
-			getResponse, _ = json.Marshal(getPackagesResponse)
-		})
-
-		Context("When the build is included", func() {
-			It("returns the build", func() {
-				expectedResult := portal.Build{
-					Hash:    "lastBuild",
-					Date:    lastBuild,
-					Version: "1.42.0",
-				}
-				packages, err := client.GetCodesphereBuildByVersion("1.42.0")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
-			})
-		})
-
-		Context("When the build is not included", func() {
-			It("returns an error and an empty build", func() {
-				expectedResult := portal.Build{}
-				packages, err := client.GetCodesphereBuildByVersion("1.42.3")
-				Expect(err.Error()).To(MatchRegexp(".*version 1.42.3 not found"))
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
-			})
-		})
-	})
-
 	Describe("DownloadBuildArtifact", func() {
 		var (
 			build            portal.Build
@@ -300,7 +240,7 @@ var _ = Describe("PortalClient", func() {
 					Date:    lastBuild,
 					Version: "1.42.1",
 				}
-				packages, err := client.GetLatestBuild(portal.OmsProduct, "")
+				packages, err := client.GetBuild(portal.OmsProduct, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
@@ -318,7 +258,7 @@ var _ = Describe("PortalClient", func() {
 			})
 			It("returns an error and an empty build", func() {
 				expectedResult := portal.Build{}
-				packages, err := client.GetLatestBuild(portal.OmsProduct, "")
+				packages, err := client.GetBuild(portal.OmsProduct, "")
 				Expect(err).To(MatchError("no builds returned"))
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))

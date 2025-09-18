@@ -8,6 +8,7 @@ import (
 	mock "github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
+	"time"
 )
 
 // NewMockPortal creates a new instance of MockPortal. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -84,12 +85,12 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(product P
 	return _c
 }
 
-// GetLatestBuild provides a mock function for the type MockPortal
-func (_mock *MockPortal) GetLatestBuild(product Product, version string) (Build, error) {
+// GetBuild provides a mock function for the type MockPortal
+func (_mock *MockPortal) GetBuild(product Product, version string) (Build, error) {
 	ret := _mock.Called(product, version)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetLatestBuild")
+		panic("no return value specified for GetBuild")
 	}
 
 	var r0 Build
@@ -110,31 +111,178 @@ func (_mock *MockPortal) GetLatestBuild(product Product, version string) (Build,
 	return r0, r1
 }
 
-// MockPortal_GetLatestBuild_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetLatestBuild'
-type MockPortal_GetLatestBuild_Call struct {
+// MockPortal_GetBuild_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBuild'
+type MockPortal_GetBuild_Call struct {
 	*mock.Call
 }
 
-// GetLatestBuild is a helper method to define mock.On call
+// GetBuild is a helper method to define mock.On call
 //   - product
 //   - version
-func (_e *MockPortal_Expecter) GetLatestBuild(product interface{}, version interface{}) *MockPortal_GetLatestBuild_Call {
-	return &MockPortal_GetLatestBuild_Call{Call: _e.mock.On("GetLatestBuild", product, version)}
+func (_e *MockPortal_Expecter) GetBuild(product interface{}, version interface{}) *MockPortal_GetBuild_Call {
+	return &MockPortal_GetBuild_Call{Call: _e.mock.On("GetBuild", product, version)}
 }
 
-func (_c *MockPortal_GetLatestBuild_Call) Run(run func(product Product, version string)) *MockPortal_GetLatestBuild_Call {
+func (_c *MockPortal_GetBuild_Call) Run(run func(product Product, version string)) *MockPortal_GetBuild_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(Product), args[1].(string))
 	})
 	return _c
 }
 
-func (_c *MockPortal_GetLatestBuild_Call) Return(build Build, err error) *MockPortal_GetLatestBuild_Call {
+func (_c *MockPortal_GetBuild_Call) Return(build Build, err error) *MockPortal_GetBuild_Call {
 	_c.Call.Return(build, err)
 	return _c
 }
 
-func (_c *MockPortal_GetLatestBuild_Call) RunAndReturn(run func(product Product, version string) (Build, error)) *MockPortal_GetLatestBuild_Call {
+func (_c *MockPortal_GetBuild_Call) RunAndReturn(run func(product Product, version string) (Build, error)) *MockPortal_GetBuild_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListBuilds provides a mock function for the type MockPortal
+func (_mock *MockPortal) ListBuilds(product Product) (Builds, error) {
+	ret := _mock.Called(product)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBuilds")
+	}
+
+	var r0 Builds
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(Product) (Builds, error)); ok {
+		return returnFunc(product)
+	}
+	if returnFunc, ok := ret.Get(0).(func(Product) Builds); ok {
+		r0 = returnFunc(product)
+	} else {
+		r0 = ret.Get(0).(Builds)
+	}
+	if returnFunc, ok := ret.Get(1).(func(Product) error); ok {
+		r1 = returnFunc(product)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPortal_ListBuilds_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBuilds'
+type MockPortal_ListBuilds_Call struct {
+	*mock.Call
+}
+
+// ListBuilds is a helper method to define mock.On call
+//   - product
+func (_e *MockPortal_Expecter) ListBuilds(product interface{}) *MockPortal_ListBuilds_Call {
+	return &MockPortal_ListBuilds_Call{Call: _e.mock.On("ListBuilds", product)}
+}
+
+func (_c *MockPortal_ListBuilds_Call) Run(run func(product Product)) *MockPortal_ListBuilds_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(Product))
+	})
+	return _c
+}
+
+func (_c *MockPortal_ListBuilds_Call) Return(availablePackages Builds, err error) *MockPortal_ListBuilds_Call {
+	_c.Call.Return(availablePackages, err)
+	return _c
+}
+
+func (_c *MockPortal_ListBuilds_Call) RunAndReturn(run func(product Product) (Builds, error)) *MockPortal_ListBuilds_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RegisterAPIKey provides a mock function for the type MockPortal
+func (_mock *MockPortal) RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error {
+	ret := _mock.Called(owner, organization, role, expiresAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RegisterAPIKey")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, time.Time) error); ok {
+		r0 = returnFunc(owner, organization, role, expiresAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockPortal_RegisterAPIKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RegisterAPIKey'
+type MockPortal_RegisterAPIKey_Call struct {
+	*mock.Call
+}
+
+// RegisterAPIKey is a helper method to define mock.On call
+//   - owner
+//   - organization
+//   - role
+//   - expiresAt
+func (_e *MockPortal_Expecter) RegisterAPIKey(owner interface{}, organization interface{}, role interface{}, expiresAt interface{}) *MockPortal_RegisterAPIKey_Call {
+	return &MockPortal_RegisterAPIKey_Call{Call: _e.mock.On("RegisterAPIKey", owner, organization, role, expiresAt)}
+}
+
+func (_c *MockPortal_RegisterAPIKey_Call) Run(run func(owner string, organization string, role string, expiresAt time.Time)) *MockPortal_RegisterAPIKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string), args[2].(string), args[3].(time.Time))
+	})
+	return _c
+}
+
+func (_c *MockPortal_RegisterAPIKey_Call) Return(err error) *MockPortal_RegisterAPIKey_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockPortal_RegisterAPIKey_Call) RunAndReturn(run func(owner string, organization string, role string, expiresAt time.Time) error) *MockPortal_RegisterAPIKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RevokeAPIKey provides a mock function for the type MockPortal
+func (_mock *MockPortal) RevokeAPIKey(key string) error {
+	ret := _mock.Called(key)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RevokeAPIKey")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(key)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockPortal_RevokeAPIKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RevokeAPIKey'
+type MockPortal_RevokeAPIKey_Call struct {
+	*mock.Call
+}
+
+// RevokeAPIKey is a helper method to define mock.On call
+//   - key
+func (_e *MockPortal_Expecter) RevokeAPIKey(key interface{}) *MockPortal_RevokeAPIKey_Call {
+	return &MockPortal_RevokeAPIKey_Call{Call: _e.mock.On("RevokeAPIKey", key)}
+}
+
+func (_c *MockPortal_RevokeAPIKey_Call) Run(run func(key string)) *MockPortal_RevokeAPIKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockPortal_RevokeAPIKey_Call) Return(err error) *MockPortal_RevokeAPIKey_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockPortal_RevokeAPIKey_Call) RunAndReturn(run func(key string) error) *MockPortal_RevokeAPIKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
