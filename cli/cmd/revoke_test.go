@@ -1,0 +1,62 @@
+package cmd_test
+
+import (
+	"fmt"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
+
+	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/internal/portal"
+)
+
+var _ = Describe("RevokeCmd", func() {
+	var (
+		mockPortal *portal.MockPortal
+		c          cmd.RevokeCmd
+		key        string
+	)
+
+	BeforeEach(func() {
+		mockPortal = portal.NewMockPortal(GinkgoT())
+		key = "test-key"
+		c = cmd.RevokeCmd{
+			Opts: cmd.RevokeOpts{
+				Key: key,
+			},
+		}
+	})
+
+	Context("when revoking API key succeeds", func() {
+		It("returns nil error", func() {
+			mockPortal.EXPECT().RevokeAPIKey(key).Return(nil)
+			err := c.Revoke(mockPortal)
+			Expect(err).To(BeNil())
+		})
+	})
+
+	Context("when revoking API key fails", func() {
+		It("returns error", func() {
+			mockPortal.EXPECT().RevokeAPIKey(key).Return(fmt.Errorf("some error"))
+			err := c.Revoke(mockPortal)
+			Expect(err).To(MatchError(ContainSubstring("failed to revoke API key")))
+		})
+	})
+})
+
+var _ = Describe("AddRevokeCmd", func() {
+	It("adds the revoke command to the parent", func() {
+		parent := &cobra.Command{}
+		opts := cmd.GlobalOptions{}
+		cmd.AddRevokeCmd(parent, opts)
+		found := false
+		for _, c := range parent.Commands() {
+			if c.Use == "revoke" {
+				found = true
+				break
+			}
+		}
+		Expect(found).To(BeTrue())
+	})
+})

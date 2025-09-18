@@ -16,8 +16,11 @@ import (
 )
 
 type Portal interface {
+	ListBuilds(product Product) (availablePackages Builds, err error)
+	GetBuild(product Product, version string) (Build, error)
 	DownloadBuildArtifact(product Product, build Build, file io.Writer) error
-	GetLatestBuild(product Product, version string) (Build, error)
+	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error
+	RevokeAPIKey(key string) error
 }
 
 type PortalClient struct {
@@ -43,7 +46,7 @@ const (
 	OmsProduct        Product = "oms"
 )
 
-func (c *PortalClient) Get(path string, body []byte) (resp *http.Response, err error) {
+func (c *PortalClient) HttpRequest(method string, path string, body []byte) (resp *http.Response, err error) {
 	requestBody := bytes.NewBuffer(body)
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), path)
 	if err != nil {
@@ -56,7 +59,7 @@ func (c *PortalClient) Get(path string, body []byte) (resp *http.Response, err e
 		return
 	}
 
-	req, err := http.NewRequest("GET", url, requestBody)
+	req, err := http.NewRequest(method, url, requestBody)
 	if err != nil {
 		log.Fatalf("Error creating request: %v", err)
 		return
@@ -91,7 +94,7 @@ func (c *PortalClient) Get(path string, body []byte) (resp *http.Response, err e
 }
 
 func (c *PortalClient) GetBody(path string) (body []byte, status int, err error) {
-	resp, err := c.Get(path, []byte{})
+	resp, err := c.HttpRequest(http.MethodGet, path, []byte{})
 	if err != nil || resp == nil {
 		err = fmt.Errorf("GET failed: %w", err)
 		return
@@ -120,55 +123,22 @@ func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, er
 		err = fmt.Errorf("failed to parse list packages response: %w", err)
 		return
 	}
+
+	compareBuilds := func(l, r Build) int {
+		if l.Date.Before(r.Date) {
+			return -1
+		}
+		if l.Date.Equal(r.Date) && l.Internal == r.Internal {
+			return 0
+		}
+		return 1
+	}
 	slices.SortFunc(availablePackages.Builds, compareBuilds)
 
 	return
 }
 
-func (c *PortalClient) GetCodesphereBuildByVersion(version string) (Build, error) {
-	latestBuild, err := c.GetLatestBuild(CodesphereProduct, version)
-	if err != nil {
-		return Build{}, fmt.Errorf("failed to get latest build for version %s: %w", version, err)
-	}
-
-	return latestBuild, nil
-}
-
-func compareBuilds(l, r Build) int {
-	if l.Date.Before(r.Date) {
-		return -1
-	}
-	if l.Date.Equal(r.Date) && l.Internal == r.Internal {
-		return 0
-	}
-	return 1
-}
-
-func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file io.Writer) error {
-	reqBody, err := json.Marshal(build)
-	if err != nil {
-		return fmt.Errorf("failed to generate request body: %w", err)
-	}
-
-	resp, err := c.Get(fmt.Sprintf("/packages/%s/download", product), reqBody)
-	if err != nil {
-		return fmt.Errorf("GET request to download build failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	// Create a WriteCounter to wrap the output file and report progress.
-	counter := NewWriteCounter(file)
-
-	_, err = io.Copy(counter, resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to copy response body to file: %w", err)
-	}
-
-	fmt.Println("Download finished successfully.")
-	return nil
-}
-
-func (c *PortalClient) GetLatestBuild(product Product, version string) (Build, error) {
+func (c *PortalClient) GetBuild(product Product, version string) (Build, error) {
 	packages, err := c.ListBuilds(product)
 	if err != nil {
 		return Build{}, fmt.Errorf("failed to list %s packages: %w", product, err)
@@ -178,7 +148,7 @@ func (c *PortalClient) GetLatestBuild(product Product, version string) (Build, e
 		return Build{}, errors.New("no builds returned")
 	}
 
-	if version == "" {
+	if version == "" || version == "latest" {
 		return packages.Builds[len(packages.Builds)-1], nil
 	}
 
@@ -198,56 +168,82 @@ func (c *PortalClient) GetLatestBuild(product Product, version string) (Build, e
 	return matchingPackages[len(matchingPackages)-1], nil
 }
 
-// WriteCounter is a custom io.Writer that counts bytes written and logs progress.
-type WriteCounter struct {
-	Written     int64
-	LastUpdate  time.Time
-	Writer      io.Writer
-	currentAnim int
-}
-
-// NewWriteCounter creates a new WriteCounter.
-func NewWriteCounter(writer io.Writer) *WriteCounter {
-	return &WriteCounter{
-		Writer:     writer,
-		LastUpdate: time.Now(), // Initialize last update time
-	}
-}
-
-// Write implements the io.Writer interface for WriteCounter.
-func (wc *WriteCounter) Write(p []byte) (int, error) {
-	// Write the bytes to the underlying writer
-	n, err := wc.Writer.Write(p)
+func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file io.Writer) error {
+	reqBody, err := json.Marshal(build)
 	if err != nil {
-		return n, err
+		return fmt.Errorf("failed to generate request body: %w", err)
 	}
 
-	wc.Written += int64(n)
+	resp, err := c.HttpRequest(http.MethodGet, fmt.Sprintf("/packages/%s/download", product), reqBody)
+	if err != nil {
+		return fmt.Errorf("GET request to download build failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
 
-	if time.Since(wc.LastUpdate) >= 100*time.Millisecond {
-		fmt.Printf("\rDownloading... %s transferred %c \033[K", byteCountToHumanReadable(wc.Written), wc.animate())
-		wc.LastUpdate = time.Now()
+	// Create a WriteCounter to wrap the output file and report progress.
+	counter := NewWriteCounter(file)
+
+	_, err = io.Copy(counter, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to copy response body to file: %w", err)
 	}
 
-	return n, nil
+	fmt.Println("Download finished successfully.")
+	return nil
 }
 
-// byteCountToHumanReadable converts a byte count to a human-readable format (e.g., KB, MB, GB).
-func byteCountToHumanReadable(b int64) string {
-	const unit = 1024
-	if b < unit {
-		return fmt.Sprintf("%d B", b)
+func (c *PortalClient) RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error {
+	req := struct {
+		Owner        string    `json:"owner"`
+		Organization string    `json:"organization"`
+		Role         string    `json:"role"`
+		ExpiresAt    time.Time `json:"expires_at"`
+	}{
+		Owner:        owner,
+		Organization: organization,
+		Role:         role,
+		ExpiresAt:    expiresAt,
 	}
-	div, exp := int64(unit), 0
-	for n := b / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("failed to generate request body: %w", err)
 	}
-	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+
+	resp, err := c.HttpRequest(http.MethodPost, "/api/key/register", reqBody)
+	if err != nil {
+		return fmt.Errorf("POST request to register API key failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var newKey string
+	err = json.NewDecoder(resp.Body).Decode(&newKey)
+	if err != nil {
+		return fmt.Errorf("failed to decode response body: %w", err)
+	}
+
+	fmt.Printf("API key for owner %s registered successfully: %s\n", owner, newKey)
+	return nil
 }
 
-func (wc *WriteCounter) animate() byte {
-	anim := "/-\\|"
-	wc.currentAnim = (wc.currentAnim + 1) % len(anim)
-	return anim[wc.currentAnim]
+func (c *PortalClient) RevokeAPIKey(key string) error {
+	req := struct {
+		Key string `json:"key"`
+	}{
+		Key: key,
+	}
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("failed to generate request body: %w", err)
+	}
+
+	resp, err := c.HttpRequest(http.MethodPost, "/api/key/revoke", reqBody)
+	if err != nil {
+		return fmt.Errorf("POST request to revoke API key failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	fmt.Println("API key revoked successfully")
+	return nil
 }

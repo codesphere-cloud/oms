@@ -1,6 +1,5 @@
 /*
 Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-
 */
 package cmd
 
@@ -51,4 +50,3 @@ to quickly create a Cobra application.`,
 	// Add child commands here
 	// AddCephChildCmd(ceph.cmd)
 }
-
