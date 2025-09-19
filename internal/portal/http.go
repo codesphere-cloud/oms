@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -17,7 +18,7 @@ import (
 
 type Portal interface {
 	ListBuilds(product Product) (availablePackages Builds, err error)
-	GetBuild(product Product, version string) (Build, error)
+	GetBuild(product Product, version string, hash string) (Build, error)
 	DownloadBuildArtifact(product Product, build Build, file io.Writer) error
 	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error
 	RevokeAPIKey(key string) error
@@ -138,7 +139,7 @@ func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, er
 	return
 }
 
-func (c *PortalClient) GetBuild(product Product, version string) (Build, error) {
+func (c *PortalClient) GetBuild(product Product, version string, hash string) (Build, error) {
 	packages, err := c.ListBuilds(product)
 	if err != nil {
 		return Build{}, fmt.Errorf("failed to list %s packages: %w", product, err)
@@ -149,14 +150,16 @@ func (c *PortalClient) GetBuild(product Product, version string) (Build, error) 
 	}
 
 	if version == "" || version == "latest" {
+		// Builds are always ordered by date, newest build is latest version
 		return packages.Builds[len(packages.Builds)-1], nil
 	}
 
 	matchingPackages := []Build{}
 	for _, build := range packages.Builds {
 		if build.Version == version {
-			// Builds are always ordered by date, newest build is latest version
-			matchingPackages = append(matchingPackages, build)
+			if len(hash) == 0 || strings.HasPrefix(hash, build.Hash) {
+				matchingPackages = append(matchingPackages, build)
+			}
 		}
 	}
 

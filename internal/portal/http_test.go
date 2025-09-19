@@ -240,7 +240,73 @@ var _ = Describe("PortalClient", func() {
 					Date:    lastBuild,
 					Version: "1.42.1",
 				}
-				packages, err := client.GetBuild(portal.OmsProduct, "")
+				packages, err := client.GetBuild(portal.OmsProduct, "", "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(packages).To(Equal(expectedResult))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+			})
+		})
+
+		Context("When the build with version is included", func() {
+			BeforeEach(func() {
+				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
+				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
+
+				getPackagesResponse = portal.Builds{
+					Builds: []portal.Build{
+						{
+							Hash:    "firstBuild",
+							Date:    firstBuild,
+							Version: "1.42.0",
+						},
+						{
+							Hash:    "lastBuild",
+							Date:    lastBuild,
+							Version: "1.42.1",
+						},
+					},
+				}
+			})
+			It("returns the build", func() {
+				expectedResult := portal.Build{
+					Hash:    "lastBuild",
+					Date:    lastBuild,
+					Version: "1.42.1",
+				}
+				packages, err := client.GetBuild(portal.OmsProduct, "1.42.1", "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(packages).To(Equal(expectedResult))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+			})
+		})
+
+		Context("When the build with version and hash is included", func() {
+			BeforeEach(func() {
+				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
+				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
+
+				getPackagesResponse = portal.Builds{
+					Builds: []portal.Build{
+						{
+							Hash:    "firstBuild",
+							Date:    firstBuild,
+							Version: "1.42.0",
+						},
+						{
+							Hash:    "lastBuild",
+							Date:    lastBuild,
+							Version: "1.42.1",
+						},
+					},
+				}
+			})
+			It("returns the build", func() {
+				expectedResult := portal.Build{
+					Hash:    "lastBuild",
+					Date:    lastBuild,
+					Version: "1.42.1",
+				}
+				packages, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuild")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
@@ -258,7 +324,7 @@ var _ = Describe("PortalClient", func() {
 			})
 			It("returns an error and an empty build", func() {
 				expectedResult := portal.Build{}
-				packages, err := client.GetBuild(portal.OmsProduct, "")
+				packages, err := client.GetBuild(portal.OmsProduct, "", "")
 				Expect(err).To(MatchError("no builds returned"))
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))

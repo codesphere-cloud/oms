@@ -24,7 +24,6 @@ type Artifact struct {
 }
 
 func (b *Build) GetBuildForDownload(filename string) (Build, error) {
-
 	for _, a := range b.Artifacts {
 		if a.Filename != filename {
 			continue
