@@ -86,8 +86,8 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(product P
 }
 
 // GetBuild provides a mock function for the type MockPortal
-func (_mock *MockPortal) GetBuild(product Product, version string) (Build, error) {
-	ret := _mock.Called(product, version)
+func (_mock *MockPortal) GetBuild(product Product, version string, hash string) (Build, error) {
+	ret := _mock.Called(product, version, hash)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetBuild")
@@ -95,16 +95,16 @@ func (_mock *MockPortal) GetBuild(product Product, version string) (Build, error
 
 	var r0 Build
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(Product, string) (Build, error)); ok {
-		return returnFunc(product, version)
+	if returnFunc, ok := ret.Get(0).(func(Product, string, string) (Build, error)); ok {
+		return returnFunc(product, version, hash)
 	}
-	if returnFunc, ok := ret.Get(0).(func(Product, string) Build); ok {
-		r0 = returnFunc(product, version)
+	if returnFunc, ok := ret.Get(0).(func(Product, string, string) Build); ok {
+		r0 = returnFunc(product, version, hash)
 	} else {
 		r0 = ret.Get(0).(Build)
 	}
-	if returnFunc, ok := ret.Get(1).(func(Product, string) error); ok {
-		r1 = returnFunc(product, version)
+	if returnFunc, ok := ret.Get(1).(func(Product, string, string) error); ok {
+		r1 = returnFunc(product, version, hash)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -119,13 +119,14 @@ type MockPortal_GetBuild_Call struct {
 // GetBuild is a helper method to define mock.On call
 //   - product
 //   - version
-func (_e *MockPortal_Expecter) GetBuild(product interface{}, version interface{}) *MockPortal_GetBuild_Call {
-	return &MockPortal_GetBuild_Call{Call: _e.mock.On("GetBuild", product, version)}
+//   - hash
+func (_e *MockPortal_Expecter) GetBuild(product interface{}, version interface{}, hash interface{}) *MockPortal_GetBuild_Call {
+	return &MockPortal_GetBuild_Call{Call: _e.mock.On("GetBuild", product, version, hash)}
 }
 
-func (_c *MockPortal_GetBuild_Call) Run(run func(product Product, version string)) *MockPortal_GetBuild_Call {
+func (_c *MockPortal_GetBuild_Call) Run(run func(product Product, version string, hash string)) *MockPortal_GetBuild_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(Product), args[1].(string))
+		run(args[0].(Product), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -135,7 +136,7 @@ func (_c *MockPortal_GetBuild_Call) Return(build Build, err error) *MockPortal_G
 	return _c
 }
 
-func (_c *MockPortal_GetBuild_Call) RunAndReturn(run func(product Product, version string) (Build, error)) *MockPortal_GetBuild_Call {
+func (_c *MockPortal_GetBuild_Call) RunAndReturn(run func(product Product, version string, hash string) (Build, error)) *MockPortal_GetBuild_Call {
 	_c.Call.Return(run)
 	return _c
 }
