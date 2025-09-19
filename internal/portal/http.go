@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -156,7 +157,7 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 	matchingPackages := []Build{}
 	for _, build := range packages.Builds {
 		if build.Version == version {
-			if len(hash) == 0 || build.Hash == hash {
+			if len(hash) == 0 || strings.HasPrefix(hash, build.Hash) {
 				matchingPackages = append(matchingPackages, build)
 			}
 		}
