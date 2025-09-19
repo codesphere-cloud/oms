@@ -20,6 +20,7 @@ type DownloadPackageCmd struct {
 type DownloadPackageOpts struct {
 	GlobalOptions
 	Version  string
+	Hash     string
 	Filename string
 }
 
@@ -27,7 +28,7 @@ func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
 	fmt.Printf("Downloading package %s\n", c.Opts.Version)
 
 	p := portal.NewPortalClient()
-	build, err := p.GetBuild(portal.CodesphereProduct, c.Opts.Version)
+	build, err := p.GetBuild(portal.CodesphereProduct, c.Opts.Version, c.Opts.Hash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
 	}
@@ -55,6 +56,7 @@ func AddDownloadPackageCmd(download *cobra.Command, opts GlobalOptions) {
 		FileWriter: util.NewFilesystemWriter(),
 	}
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Version, "version", "V", "", "Codesphere version to download")
+	pkg.cmd.Flags().StringVarP(&pkg.Opts.Hash, "hash", "H", "", "Codesphere version to download")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer.tar.gz", "Specify artifact to download")
 	download.AddCommand(pkg.cmd)
 
