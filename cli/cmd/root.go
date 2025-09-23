@@ -31,6 +31,10 @@ func Execute() {
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
 
+	// OMS API key management commands
+	AddRegisterCmd(rootCmd, opts)
+	AddRevokeCmd(rootCmd, opts)
+
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)

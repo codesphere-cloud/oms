@@ -83,7 +83,7 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 		fmt.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")
 	}
 	var respBody []byte
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode >= 300 {
 		if resp.Body != nil {
 			respBody, _ = io.ReadAll(resp.Body)
 		}
@@ -213,7 +213,7 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 		return fmt.Errorf("failed to generate request body: %w", err)
 	}
 
-	resp, err := c.HttpRequest(http.MethodPost, "/api/key/register", reqBody)
+	resp, err := c.HttpRequest(http.MethodPost, "/key/register", reqBody)
 	if err != nil {
 		return fmt.Errorf("POST request to register API key failed: %w", err)
 	}
@@ -241,7 +241,7 @@ func (c *PortalClient) RevokeAPIKey(key string) error {
 		return fmt.Errorf("failed to generate request body: %w", err)
 	}
 
-	resp, err := c.HttpRequest(http.MethodPost, "/api/key/revoke", reqBody)
+	resp, err := c.HttpRequest(http.MethodPost, "/key/revoke", reqBody)
 	if err != nil {
 		return fmt.Errorf("POST request to revoke API key failed: %w", err)
 	}
