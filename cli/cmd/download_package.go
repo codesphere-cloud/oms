@@ -54,7 +54,7 @@ func AddDownloadPackageCmd(download *cobra.Command, opts GlobalOptions) {
 				To list available packages, run oms list packages.`),
 			Example: io.FormatExampleCommands("download package", []io.Example{
 				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
-				{Cmd: "--version 1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
+				{Cmd: "--version codesphere-v1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
 			}),
 		},
 		FileWriter: util.NewFilesystemWriter(),
