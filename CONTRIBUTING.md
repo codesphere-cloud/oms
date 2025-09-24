@@ -127,6 +127,6 @@ By contributing to Codesphere OMS, you agree that your contributions will be lic
 
 ## Community
 
-Connect with the community and ask questions by joining our mailing list: [cs-go@codesphere.com](mailto:cs-go@codesphere.com).
+Connect with the community and ask questions by joining our mailing list: [oms@codesphere.com](mailto:oms@codesphere.com).
 
 Thank you for your interest in contributing to Codesphere OMS!

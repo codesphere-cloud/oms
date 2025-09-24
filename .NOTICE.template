@@ -2,7 +2,7 @@ Codesphere Go SDK & CLI
 Copyright (c) Codesphere Inc.
 
 This project includes code licensed under the following terms:
-{{ range . }} {{ if eq .Name "github.com/codesphere-cloud/cs-go" }} {{ continue }} {{ end }}
+{{ range . }} {{ if eq .Name "github.com/codesphere-cloud/oms" }} {{ continue }} {{ end }}
 ----------
 Module: {{ .Name }}
 Version: {{ .Version }}
