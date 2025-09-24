@@ -42,3 +42,7 @@ func (b *Build) Os() string {
 func (b *Build) Arch() string {
 	return arch
 }
+
+func (b *Build) BinName() string {
+	return binName
+}
