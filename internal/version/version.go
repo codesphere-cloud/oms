@@ -1,3 +1,6 @@
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package version
 
 // Variables are injected by goreleaser on release
@@ -7,6 +10,7 @@ var (
 	date    string = "unknown"
 	os      string = "unknown"
 	arch    string = "unknown"
+	binName string = "oms-cli"
 )
 
 type Version interface {
@@ -37,4 +41,8 @@ func (b *Build) Os() string {
 
 func (b *Build) Arch() string {
 	return arch
+}
+
+func (b *Build) BinName() string {
+	return binName
 }
