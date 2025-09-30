@@ -17,7 +17,7 @@ import (
 type DownloadPackageCmd struct {
 	cmd        *cobra.Command
 	Opts       DownloadPackageOpts
-	FileWriter util.FileWriter
+	FileWriter util.FileIO
 }
 
 type DownloadPackageOpts struct {

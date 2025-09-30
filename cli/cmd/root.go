@@ -4,6 +4,7 @@ Copyright © 2025 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"log"
 	"os"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -29,11 +30,15 @@ func GetRootCmd() *cobra.Command {
 	AddUpdateCmd(rootCmd)
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
+	AddBetaCmd(rootCmd, &opts)
 	return rootCmd
 }
 
 // Execute executes the root command. This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	//Disable printing timestamps on log lines
+	log.SetFlags(0)
+
 	err := GetRootCmd().Execute()
 	if err != nil {
 		os.Exit(1)
