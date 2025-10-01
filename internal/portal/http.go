@@ -228,7 +228,9 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 		return fmt.Errorf("failed to decode response body: %w", err)
 	}
 
-	fmt.Printf("API key for owner %s registered successfully: %s\n", owner, newKey)
+	fmt.Println("API key registered successfully!")
+	fmt.Printf("Owner: %s\nOrganisation: %s\nKey: %s\n", owner, organization, newKey)
+
 	return nil
 }
 
@@ -250,6 +252,7 @@ func (c *PortalClient) RevokeAPIKey(key string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	fmt.Println("API key revoked successfully")
+	fmt.Println("API key revoked successfully!")
+
 	return nil
 }
