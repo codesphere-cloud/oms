@@ -167,7 +167,7 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 	}
 
 	if len(matchingPackages) == 0 {
-		return Build{}, fmt.Errorf("version %s not found", version)
+		return Build{}, fmt.Errorf("version '%s' with hash '%s' not found", version, hash)
 	}
 
 	// Builds are always ordered by date, return newest build
