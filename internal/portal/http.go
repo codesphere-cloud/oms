@@ -236,7 +236,7 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 
 func (c *PortalClient) RevokeAPIKey(key string) error {
 	req := struct {
-		Key string `json:"key"`
+		Key string `json:"api_key"`
 	}{
 		Key: key,
 	}
