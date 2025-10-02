@@ -28,7 +28,11 @@ type DownloadPackageOpts struct {
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
-	fmt.Printf("Downloading package %s\n", c.Opts.Version)
+	if c.Opts.Hash != "" {
+		fmt.Printf("Downloading package '%s' with hash '%s'\n", c.Opts.Version, c.Opts.Hash)
+	} else {
+		fmt.Printf("Downloading package '%s'\n", c.Opts.Version)
+	}
 
 	p := portal.NewPortalClient()
 	build, err := p.GetBuild(portal.CodesphereProduct, c.Opts.Version, c.Opts.Hash)
@@ -52,8 +56,8 @@ func AddDownloadPackageCmd(download *cobra.Command, opts GlobalOptions) {
 			Long: io.Long(`Download a specific version of a Codesphere package
 				To list available packages, run oms list packages.`),
 			Example: io.FormatExampleCommands("download package", []io.Example{
-				{Cmd: "--version 1.55.0", Desc: "Download Codesphere version 1.55.0"},
-				{Cmd: "--version 1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
+				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
+				{Cmd: "--version codesphere-v1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
 			}),
 		},
 		FileWriter: util.NewFilesystemWriter(),
