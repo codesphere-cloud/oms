@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"log"
 	"path"
 
 	"github.com/spf13/cobra"
@@ -11,6 +12,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
+	"github.com/codesphere-cloud/oms/internal/tmpl"
 )
 
 // ExtendBaseimageCmd represents the baseimage command
@@ -21,8 +23,9 @@ type ExtendBaseimageCmd struct {
 
 type ExtendBaseimageOpts struct {
 	*GlobalOptions
-	Package string
-	Force   bool
+	Package    string
+	Dockerfile string
+	Force      bool
 }
 
 const baseimagePath = "./codesphere/images"
@@ -44,6 +47,19 @@ func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
 
 	extractedBaseImagePath := p.GetDependencyPath(baseImageTarPath)
 	d := system.NewDockerEngine()
+
+	imagenames, err := d.GetImageNames(p.FileIO, extractedBaseImagePath)
+	if err != nil || len(imagenames) == 0 {
+		return fmt.Errorf("failed to read image tags: %w", err)
+	}
+	fmt.Println(imagenames)
+
+	err = tmpl.GenerateDockerfile(p.FileIO, c.Opts.Dockerfile, imagenames[0])
+	if err != nil {
+		return fmt.Errorf("failed to generate dockerfile: %w", err)
+	}
+
+	log.Printf("Loading container image from package into local docker daemon: %s", extractedBaseImagePath)
 	err = d.LoadLocalContainerImage(extractedBaseImagePath)
 	if err != nil {
 		return fmt.Errorf("failed to load baseimage file %s: %w", baseImageTarPath, err)
@@ -66,6 +82,7 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
 		Opts: &ExtendBaseimageOpts{GlobalOptions: opts},
 	}
 	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from")
+	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Dockerfile, "dockerfile", "d", "Dockerfile", "Output Dockerfile to generate for extending the base image")
 	baseimage.cmd.Flags().BoolVarP(&baseimage.Opts.Force, "force", "f", false, "Enforce package extraction")
 	extend.AddCommand(baseimage.cmd)
 	baseimage.cmd.RunE = baseimage.RunE

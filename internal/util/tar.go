@@ -33,6 +33,19 @@ func getCleanTargetPath(destDir string, header *tar.Header) (string, error) {
 	return targetPath, nil
 }
 
+func openTar(filename string, fileIo FileIO) (*tar.Reader, error) {
+	log.Printf("Opening archive: %s", filename)
+	file, err := fileIo.Open(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open archive: %w", err)
+	}
+	bufferedFile := bufio.NewReader(file)
+
+	log.Println("Reading TAR archive contents...")
+	tr := tar.NewReader(bufferedFile)
+	return tr, nil
+}
+
 func openTarGz(filename string, fileIo FileIO) (*tar.Reader, error) {
 	log.Printf("Opening archive: %s", filename)
 	file, err := fileIo.Open(filename)
@@ -91,17 +104,28 @@ func extractEntry(header *tar.Header, targetPath string, fileIo FileIO, tr *tar.
 	return nil
 }
 
-// ExtractTarGz takes a path to a .tar.gz file and extracts its contents
-// to the specified destination directory.
 func ExtractTarGzSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string) error {
 	destDir = filepath.Clean(destDir)
 	tr, err := openTarGz(archiveFile, fileIo)
 	if err != nil {
 		return err
 	}
+	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir)
+}
+func ExtractTarSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string) error {
+	destDir = filepath.Clean(destDir)
+	tr, err := openTar(archiveFile, fileIo)
+	if err != nil {
+		return err
+	}
+	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir)
+}
 
+// ExtractTarGz takes a path to a .tar.gz file and extracts its contents
+// to the specified destination directory.
+func extractTarSingleFile(fileIo FileIO, tr *tar.Reader, fileToExtract, destDir string) error {
 	if fileToExtract != "" {
-		fmt.Printf("Extracting %s from %s\n", fileToExtract, archiveFile)
+		fmt.Printf("Extracting %s from archive\n", fileToExtract)
 	}
 
 	for {
@@ -128,6 +152,14 @@ func ExtractTarGzSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir s
 		if err != nil {
 			return err
 		}
+
+		if fileToExtract != "" {
+			log.Printf("File %s extracted to %s", fileToExtract, targetPath)
+			return nil
+		}
+	}
+	if fileToExtract != "" {
+		return fmt.Errorf("file %s not found in archive", fileToExtract)
 	}
 	return nil
 }
