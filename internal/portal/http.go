@@ -222,14 +222,14 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	var newKey string
-	err = json.NewDecoder(resp.Body).Decode(&newKey)
+	newKey := &ApiKey{}
+	err = json.NewDecoder(resp.Body).Decode(newKey)
 	if err != nil {
 		return fmt.Errorf("failed to decode response body: %w", err)
 	}
 
 	fmt.Println("API key registered successfully!")
-	fmt.Printf("Owner: %s\nOrganisation: %s\nKey: %s\n", owner, organization, newKey)
+	fmt.Printf("Owner: %s\nOrganisation: %s\nKey: %s\n", newKey.Owner, newKey.Organization, newKey.ApiKey)
 
 	return nil
 }
