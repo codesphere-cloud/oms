@@ -17,7 +17,7 @@ fi
 echo $LIST
 LOG=$(git log "$LIST"  --pretty=format:%s)
 BREAK=$(grep -e '!' >/dev/null <<< "$LOG"; echo $?)
-FEAT=$(grep -e '^feat' >/dev/null <<< "$LOG"; echo $?)
+FEAT=$(grep -e '^(feat|update)' >/dev/null <<< "$LOG"; echo $?)
 FIX=$(grep -e '^fix' >/dev/null <<< "$LOG"; echo $?)
 
 echo "Latest tag: $TAG"
