@@ -4,7 +4,7 @@ import "time"
 
 type ApiKey struct {
 	RID          string    `json:"rid"`
-	ApiKey       string    `json:"api_key"`
+	ApiKey       string    `json:"apiKey"`
 	Owner        string    `json:"owner"`
 	Organization string    `json:"organization"`
 	Role         string    `json:"role"`

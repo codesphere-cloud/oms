@@ -237,7 +237,7 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 
 func (c *PortalClient) RevokeAPIKey(keyId string) error {
 	req := struct {
-		KeyID string `json:"key_id"`
+		KeyID string `json:"keyId"`
 	}{
 		KeyID: keyId,
 	}
@@ -260,8 +260,8 @@ func (c *PortalClient) RevokeAPIKey(keyId string) error {
 
 func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
 	req := struct {
-		Key       string    `json:"key"`
-		ExpiresAt time.Time `json:"expires_at"`
+		Key       string    `json:"keyId"`
+		ExpiresAt time.Time `json:"expiresAt"`
 	}{
 		Key:       key,
 		ExpiresAt: expiresAt,
