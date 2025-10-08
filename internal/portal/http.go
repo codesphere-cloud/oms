@@ -234,11 +234,11 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 	return nil
 }
 
-func (c *PortalClient) RevokeAPIKey(key string) error {
+func (c *PortalClient) RevokeAPIKey(keyId string) error {
 	req := struct {
-		Key string `json:"api_key"`
+		KeyID string `json:"key_id"`
 	}{
-		Key: key,
+		KeyID: keyId,
 	}
 
 	reqBody, err := json.Marshal(req)
