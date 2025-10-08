@@ -223,21 +223,23 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	var newKey string
-	err = json.NewDecoder(resp.Body).Decode(&newKey)
+	newKey := &ApiKey{}
+	err = json.NewDecoder(resp.Body).Decode(newKey)
 	if err != nil {
 		return fmt.Errorf("failed to decode response body: %w", err)
 	}
 
-	fmt.Printf("API key for owner %s registered successfully: %s\n", owner, newKey)
+	fmt.Println("API key registered successfully!")
+	fmt.Printf("Owner: %s\nOrganisation: %s\nKey: %s\n", newKey.Owner, newKey.Organization, newKey.ApiKey)
+
 	return nil
 }
 
-func (c *PortalClient) RevokeAPIKey(key string) error {
+func (c *PortalClient) RevokeAPIKey(keyId string) error {
 	req := struct {
-		Key string `json:"key"`
+		KeyID string `json:"key_id"`
 	}{
-		Key: key,
+		KeyID: keyId,
 	}
 
 	reqBody, err := json.Marshal(req)
@@ -251,7 +253,8 @@ func (c *PortalClient) RevokeAPIKey(key string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	fmt.Println("API key revoked successfully")
+	fmt.Println("API key revoked successfully!")
+
 	return nil
 }
 
