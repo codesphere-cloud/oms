@@ -49,13 +49,13 @@ var _ = Describe("RevokeCmd", func() {
 })
 
 var _ = Describe("AddRevokeAPIKeyCmd", func() {
-	It("adds the revoke command to the parent", func() {
+	It("adds the api-key command to the parent", func() {
 		parent := &cobra.Command{}
 		opts := cmd.GlobalOptions{}
 		cmd.AddRevokeAPIKeyCmd(parent, opts)
 		found := false
 		for _, c := range parent.Commands() {
-			if c.Use == "revoke" {
+			if c.Use == "api-key" {
 				found = true
 				break
 			}
