@@ -71,14 +71,20 @@ type MockFileWriter_Create_Call struct {
 }
 
 // Create is a helper method to define mock.On call
-//   - filename
+//   - filename string
 func (_e *MockFileWriter_Expecter) Create(filename interface{}) *MockFileWriter_Create_Call {
 	return &MockFileWriter_Create_Call{Call: _e.mock.On("Create", filename)}
 }
 
 func (_c *MockFileWriter_Create_Call) Run(run func(filename string)) *MockFileWriter_Create_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -137,8 +143,8 @@ type MockTableWriter_AppendHeader_Call struct {
 }
 
 // AppendHeader is a helper method to define mock.On call
-//   - row
-//   - configs
+//   - row table.Row
+//   - configs ...table.RowConfig
 func (_e *MockTableWriter_Expecter) AppendHeader(row interface{}, configs ...interface{}) *MockTableWriter_AppendHeader_Call {
 	return &MockTableWriter_AppendHeader_Call{Call: _e.mock.On("AppendHeader",
 		append([]interface{}{row}, configs...)...)}
@@ -146,13 +152,20 @@ func (_e *MockTableWriter_Expecter) AppendHeader(row interface{}, configs ...int
 
 func (_c *MockTableWriter_AppendHeader_Call) Run(run func(row table.Row, configs ...table.RowConfig)) *MockTableWriter_AppendHeader_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]table.RowConfig, len(args)-1)
-		for i, a := range args[1:] {
-			if a != nil {
-				variadicArgs[i] = a.(table.RowConfig)
-			}
+		var arg0 table.Row
+		if args[0] != nil {
+			arg0 = args[0].(table.Row)
 		}
-		run(args[0].(table.Row), variadicArgs...)
+		var arg1 []table.RowConfig
+		var variadicArgs []table.RowConfig
+		if len(args) > 1 {
+			variadicArgs = args[1].([]table.RowConfig)
+		}
+		arg1 = variadicArgs
+		run(
+			arg0,
+			arg1...,
+		)
 	})
 	return _c
 }
@@ -184,8 +197,8 @@ type MockTableWriter_AppendRow_Call struct {
 }
 
 // AppendRow is a helper method to define mock.On call
-//   - row
-//   - configs
+//   - row table.Row
+//   - configs ...table.RowConfig
 func (_e *MockTableWriter_Expecter) AppendRow(row interface{}, configs ...interface{}) *MockTableWriter_AppendRow_Call {
 	return &MockTableWriter_AppendRow_Call{Call: _e.mock.On("AppendRow",
 		append([]interface{}{row}, configs...)...)}
@@ -193,13 +206,20 @@ func (_e *MockTableWriter_Expecter) AppendRow(row interface{}, configs ...interf
 
 func (_c *MockTableWriter_AppendRow_Call) Run(run func(row table.Row, configs ...table.RowConfig)) *MockTableWriter_AppendRow_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]table.RowConfig, len(args)-1)
-		for i, a := range args[1:] {
-			if a != nil {
-				variadicArgs[i] = a.(table.RowConfig)
-			}
+		var arg0 table.Row
+		if args[0] != nil {
+			arg0 = args[0].(table.Row)
 		}
-		run(args[0].(table.Row), variadicArgs...)
+		var arg1 []table.RowConfig
+		var variadicArgs []table.RowConfig
+		if len(args) > 1 {
+			variadicArgs = args[1].([]table.RowConfig)
+		}
+		arg1 = variadicArgs
+		run(
+			arg0,
+			arg1...,
+		)
 	})
 	return _c
 }

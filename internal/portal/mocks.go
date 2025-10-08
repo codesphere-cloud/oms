@@ -61,16 +61,32 @@ type MockPortal_DownloadBuildArtifact_Call struct {
 }
 
 // DownloadBuildArtifact is a helper method to define mock.On call
-//   - product
-//   - build
-//   - file
+//   - product Product
+//   - build Build
+//   - file io.Writer
 func (_e *MockPortal_Expecter) DownloadBuildArtifact(product interface{}, build interface{}, file interface{}) *MockPortal_DownloadBuildArtifact_Call {
 	return &MockPortal_DownloadBuildArtifact_Call{Call: _e.mock.On("DownloadBuildArtifact", product, build, file)}
 }
 
 func (_c *MockPortal_DownloadBuildArtifact_Call) Run(run func(product Product, build Build, file io.Writer)) *MockPortal_DownloadBuildArtifact_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(Product), args[1].(Build), args[2].(io.Writer))
+		var arg0 Product
+		if args[0] != nil {
+			arg0 = args[0].(Product)
+		}
+		var arg1 Build
+		if args[1] != nil {
+			arg1 = args[1].(Build)
+		}
+		var arg2 io.Writer
+		if args[2] != nil {
+			arg2 = args[2].(io.Writer)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -117,16 +133,32 @@ type MockPortal_GetBuild_Call struct {
 }
 
 // GetBuild is a helper method to define mock.On call
-//   - product
-//   - version
-//   - hash
+//   - product Product
+//   - version string
+//   - hash string
 func (_e *MockPortal_Expecter) GetBuild(product interface{}, version interface{}, hash interface{}) *MockPortal_GetBuild_Call {
 	return &MockPortal_GetBuild_Call{Call: _e.mock.On("GetBuild", product, version, hash)}
 }
 
 func (_c *MockPortal_GetBuild_Call) Run(run func(product Product, version string, hash string)) *MockPortal_GetBuild_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(Product), args[1].(string), args[2].(string))
+		var arg0 Product
+		if args[0] != nil {
+			arg0 = args[0].(Product)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -173,14 +205,20 @@ type MockPortal_ListBuilds_Call struct {
 }
 
 // ListBuilds is a helper method to define mock.On call
-//   - product
+//   - product Product
 func (_e *MockPortal_Expecter) ListBuilds(product interface{}) *MockPortal_ListBuilds_Call {
 	return &MockPortal_ListBuilds_Call{Call: _e.mock.On("ListBuilds", product)}
 }
 
 func (_c *MockPortal_ListBuilds_Call) Run(run func(product Product)) *MockPortal_ListBuilds_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(Product))
+		var arg0 Product
+		if args[0] != nil {
+			arg0 = args[0].(Product)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -218,17 +256,38 @@ type MockPortal_RegisterAPIKey_Call struct {
 }
 
 // RegisterAPIKey is a helper method to define mock.On call
-//   - owner
-//   - organization
-//   - role
-//   - expiresAt
+//   - owner string
+//   - organization string
+//   - role string
+//   - expiresAt time.Time
 func (_e *MockPortal_Expecter) RegisterAPIKey(owner interface{}, organization interface{}, role interface{}, expiresAt interface{}) *MockPortal_RegisterAPIKey_Call {
 	return &MockPortal_RegisterAPIKey_Call{Call: _e.mock.On("RegisterAPIKey", owner, organization, role, expiresAt)}
 }
 
 func (_c *MockPortal_RegisterAPIKey_Call) Run(run func(owner string, organization string, role string, expiresAt time.Time)) *MockPortal_RegisterAPIKey_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string), args[3].(time.Time))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 time.Time
+		if args[3] != nil {
+			arg3 = args[3].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
 	})
 	return _c
 }
@@ -266,14 +325,20 @@ type MockPortal_RevokeAPIKey_Call struct {
 }
 
 // RevokeAPIKey is a helper method to define mock.On call
-//   - key
+//   - key string
 func (_e *MockPortal_Expecter) RevokeAPIKey(key interface{}) *MockPortal_RevokeAPIKey_Call {
 	return &MockPortal_RevokeAPIKey_Call{Call: _e.mock.On("RevokeAPIKey", key)}
 }
 
 func (_c *MockPortal_RevokeAPIKey_Call) Run(run func(key string)) *MockPortal_RevokeAPIKey_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -284,6 +349,63 @@ func (_c *MockPortal_RevokeAPIKey_Call) Return(err error) *MockPortal_RevokeAPIK
 }
 
 func (_c *MockPortal_RevokeAPIKey_Call) RunAndReturn(run func(key string) error) *MockPortal_RevokeAPIKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateAPIKey provides a mock function for the type MockPortal
+func (_mock *MockPortal) UpdateAPIKey(key string, expiresAt time.Time) error {
+	ret := _mock.Called(key, expiresAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateAPIKey")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time) error); ok {
+		r0 = returnFunc(key, expiresAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockPortal_UpdateAPIKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateAPIKey'
+type MockPortal_UpdateAPIKey_Call struct {
+	*mock.Call
+}
+
+// UpdateAPIKey is a helper method to define mock.On call
+//   - key string
+//   - expiresAt time.Time
+func (_e *MockPortal_Expecter) UpdateAPIKey(key interface{}, expiresAt interface{}) *MockPortal_UpdateAPIKey_Call {
+	return &MockPortal_UpdateAPIKey_Call{Call: _e.mock.On("UpdateAPIKey", key, expiresAt)}
+}
+
+func (_c *MockPortal_UpdateAPIKey_Call) Run(run func(key string, expiresAt time.Time)) *MockPortal_UpdateAPIKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 time.Time
+		if args[1] != nil {
+			arg1 = args[1].(time.Time)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockPortal_UpdateAPIKey_Call) Return(err error) *MockPortal_UpdateAPIKey_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockPortal_UpdateAPIKey_Call) RunAndReturn(run func(key string, expiresAt time.Time) error) *MockPortal_UpdateAPIKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -349,14 +471,20 @@ type MockHttpClient_Do_Call struct {
 }
 
 // Do is a helper method to define mock.On call
-//   - request
+//   - request *http.Request
 func (_e *MockHttpClient_Expecter) Do(request interface{}) *MockHttpClient_Do_Call {
 	return &MockHttpClient_Do_Call{Call: _e.mock.On("Do", request)}
 }
 
 func (_c *MockHttpClient_Do_Call) Run(run func(request *http.Request)) *MockHttpClient_Do_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*http.Request))
+		var arg0 *http.Request
+		if args[0] != nil {
+			arg0 = args[0].(*http.Request)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
