@@ -19,6 +19,7 @@ import (
 type ExtendBaseimageCmd struct {
 	cmd  *cobra.Command
 	Opts *ExtendBaseimageOpts
+	Env  env.Env
 }
 
 type ExtendBaseimageOpts struct {
@@ -36,9 +37,39 @@ func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
 		return errors.New("required option package not set")
 	}
 
-	workdir := env.NewEnv().GetOmsWorkdir()
+	workdir := c.Env.GetOmsWorkdir()
 	p := installer.NewPackage(workdir, c.Opts.Package)
 
+	err := c.ExtendBaseimage(p, args)
+	if err != nil {
+		return fmt.Errorf("failed to extend baseimage: %w", err)
+	}
+
+	return nil
+}
+
+func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
+	baseimage := ExtendBaseimageCmd{
+		cmd: &cobra.Command{
+			Use:   "baseimage",
+			Short: "Extend Codesphere's workspace base image for customization",
+			Long: io.Long(`Loads the baseimage from Codesphere package and generates a Dockerfile based on it.
+				This enables you to extend Codesphere's base image with specific dependencies.
+
+				To use the custom base image, you need to push the resulting image to your container registry and
+				reference it in your install-config for the Codesphere installation process to pick it up and include it in Codesphere`),
+		},
+		Opts: &ExtendBaseimageOpts{GlobalOptions: opts},
+		Env:  env.NewEnv(),
+	}
+	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from")
+	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Dockerfile, "dockerfile", "d", "Dockerfile", "Output Dockerfile to generate for extending the base image")
+	baseimage.cmd.Flags().BoolVarP(&baseimage.Opts.Force, "force", "f", false, "Enforce package extraction")
+	extend.AddCommand(baseimage.cmd)
+	baseimage.cmd.RunE = baseimage.RunE
+}
+
+func (c *ExtendBaseimageCmd) ExtendBaseimage(p *installer.Package, args []string) error {
 	baseImageTarPath := path.Join(baseimagePath, defaultBaseimage)
 	err := p.ExtractDependency(baseImageTarPath, c.Opts.Force)
 	if err != nil {
@@ -66,24 +97,4 @@ func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
-	baseimage := ExtendBaseimageCmd{
-		cmd: &cobra.Command{
-			Use:   "baseimage",
-			Short: "Extend Codesphere's workspace base image for customization",
-			Long: io.Long(`Loads the baseimage from Codesphere package and generates a Dockerfile based on it.
-				This enables you to extend Codesphere's base image with specific dependencies.
-
-				To use the custom base image, you need to push the resulting image to your container registry and
-				reference it in your install-config for the Codesphere installation process to pick it up and include it in Codesphere`),
-		},
-		Opts: &ExtendBaseimageOpts{GlobalOptions: opts},
-	}
-	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from")
-	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Dockerfile, "dockerfile", "d", "Dockerfile", "Output Dockerfile to generate for extending the base image")
-	baseimage.cmd.Flags().BoolVarP(&baseimage.Opts.Force, "force", "f", false, "Enforce package extraction")
-	extend.AddCommand(baseimage.cmd)
-	baseimage.cmd.RunE = baseimage.RunE
 }
