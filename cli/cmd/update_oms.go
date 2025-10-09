@@ -33,7 +33,7 @@ type UpdateOmsCmd struct {
 	Updater OMSUpdater
 }
 
-func addOmsUpdateCmd(parentCmd *cobra.Command) {
+func AddOmsUpdateCmd(parentCmd *cobra.Command) {
 	cmdState := &UpdateOmsCmd{
 		Version: &version.Build{},
 		Updater: &OMSSelfUpdater{},

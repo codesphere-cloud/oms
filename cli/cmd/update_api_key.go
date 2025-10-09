@@ -22,7 +22,7 @@ type UpdateAPIKeyOpts struct {
 	ExpiresAtStr string
 }
 
-func addApiKeyUpdateCmd(parentCmd *cobra.Command) {
+func AddApiKeyUpdateCmd(parentCmd *cobra.Command) {
 	cmdState := &UpdateAPIKeyCmd{
 		Opts: UpdateAPIKeyOpts{},
 	}

@@ -31,8 +31,8 @@ func AddUpdateCmd(rootCmd *cobra.Command, opts GlobalOptions) {
 	updateCmd.cmd.RunE = updateCmd.RunE
 
 	AddDownloadPackageCmd(updateCmd.cmd, opts)
-	addOmsUpdateCmd(updateCmd.cmd)
-	addApiKeyUpdateCmd(updateCmd.cmd)
+	AddOmsUpdateCmd(updateCmd.cmd)
+	AddApiKeyUpdateCmd(updateCmd.cmd)
 
 	rootCmd.AddCommand(updateCmd.cmd)
 }
