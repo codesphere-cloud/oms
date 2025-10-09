@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/portal"
+	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -40,8 +41,8 @@ func addApiKeyUpdateCmd(parentCmd *cobra.Command) {
 	apiKeyCmd.Flags().StringVarP(&cmdState.Opts.APIKeyID, "id", "i", "", "The ID of the API key to update")
 	apiKeyCmd.Flags().StringVarP(&cmdState.Opts.ExpiresAtStr, "valid-to", "v", "", "The new expiration date (RFC3339 format)")
 
-	_ = apiKeyCmd.MarkFlagRequired("id")
-	_ = apiKeyCmd.MarkFlagRequired("valid-to")
+	util.MarkFlagRequired(apiKeyCmd, "id")
+	util.MarkFlagRequired(apiKeyCmd, "valid-to")
 
 	parentCmd.AddCommand(apiKeyCmd)
 }
