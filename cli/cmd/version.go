@@ -1,10 +1,10 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
-	"fmt"
+	"log"
 
 	v "github.com/codesphere-cloud/oms/internal/version"
 	"github.com/spf13/cobra"
@@ -16,11 +16,11 @@ type VersionCmd struct {
 
 func (c *VersionCmd) RunE(_ *cobra.Command, args []string) error {
 	version := v.Build{}
-	fmt.Printf("OMS CLI version: %s\n", version.Version())
-	fmt.Printf("Commit: %s\n", version.Commit())
-	fmt.Printf("Build Date: %s\n", version.BuildDate())
-	fmt.Printf("Arch: %s\n", version.Arch())
-	fmt.Printf("OS: %s\n", version.Os())
+	log.Printf("OMS CLI version: %s\n", version.Version())
+	log.Printf("Commit: %s\n", version.Commit())
+	log.Printf("Build Date: %s\n", version.BuildDate())
+	log.Printf("Arch: %s\n", version.Arch())
+	log.Printf("OS: %s\n", version.Os())
 
 	return nil
 }

@@ -1,10 +1,11 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
 
-*/
 package main
 
-import "github.com/codesphere-cloud/oms/cli/cmd"
+import (
+	"github.com/codesphere-cloud/oms/cli/cmd"
+)
 
 func main() {
 	cmd.Execute()

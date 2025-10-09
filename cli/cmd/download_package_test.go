@@ -23,14 +23,14 @@ var _ = Describe("ListPackages", func() {
 		version        string
 		build          portal.Build
 		mockPortal     *portal.MockPortal
-		mockFileWriter *util.MockFileWriter
+		mockFileWriter *util.MockFileIO
 	)
 
 	BeforeEach(func() {
 		filename = "installer.tar.gz"
 		version = "codesphere-1.42.0"
 		mockPortal = portal.NewMockPortal(GinkgoT())
-		mockFileWriter = util.NewMockFileWriter(GinkgoT())
+		mockFileWriter = util.NewMockFileIO(GinkgoT())
 
 		c = cmd.DownloadPackageCmd{
 			Opts: cmd.DownloadPackageOpts{

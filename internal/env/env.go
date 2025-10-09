@@ -11,6 +11,7 @@ import (
 type Env interface {
 	GetOmsPortalApiKey() (string, error)
 	GetOmsPortalApi() string
+	GetOmsWorkdir() string
 }
 
 type Environment struct {
@@ -26,6 +27,14 @@ func (e *Environment) GetOmsPortalApiKey() (string, error) {
 		return "", errors.New("OMS_PORTAL_API_KEY env var required, but not set")
 	}
 	return apiToken, nil
+}
+
+func (e *Environment) GetOmsWorkdir() string {
+	workdir := os.Getenv("OMS_WORKDIR")
+	if workdir == "" {
+		return "./oms-workdir"
+	}
+	return workdir
 }
 
 func (e *Environment) GetOmsPortalApi() string {

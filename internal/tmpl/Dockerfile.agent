@@ -1,0 +1,11 @@
+FROM {{.BaseImage}}
+
+### Uncomment lines and add dependencies as necessary ###
+### Install Dependencies as root ###
+USER root
+
+### Run apt-get update, install specified packages, and clean up the cache. ###
+#RUN apt-get update && apt-get install -y golang && rm -rf /var/lib/apt/lists/* ###
+
+### Switch to Non-Root User ###
+USER user
