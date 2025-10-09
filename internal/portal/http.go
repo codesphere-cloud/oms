@@ -25,6 +25,7 @@ type Portal interface {
 	DownloadBuildArtifact(product Product, build Build, file io.Writer) error
 	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error
 	RevokeAPIKey(key string) error
+	ListAPIKeys() ([]ApiKey, error)
 }
 
 type PortalClient struct {
@@ -255,4 +256,18 @@ func (c *PortalClient) RevokeAPIKey(keyId string) error {
 	fmt.Println("API key revoked successfully!")
 
 	return nil
+}
+
+func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
+	res, _, err := c.GetBody("/keys")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list api keys: %w", err)
+	}
+
+	var keys []ApiKey
+	if err := json.Unmarshal(res, &keys); err != nil {
+		return nil, fmt.Errorf("failed to parse api keys response: %w", err)
+	}
+
+	return keys, nil
 }
