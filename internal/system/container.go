@@ -1,3 +1,6 @@
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package system
 
 import (
@@ -72,7 +75,6 @@ func (d *DockerEngine) GetImageNames(fileIo util.FileIO, imagefile string) ([]st
 	}
 
 	for _, manifest := range index.Manifests {
-		fmt.Println(manifest)
 		name := manifest.Annotations["io.containerd.image.name"]
 		if name == "" {
 			continue

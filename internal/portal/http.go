@@ -82,8 +82,8 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		fmt.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
-		fmt.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")
+		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
+		log.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")
 	}
 	var respBody []byte
 	if resp.StatusCode != http.StatusOK {
@@ -194,7 +194,7 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 		return fmt.Errorf("failed to copy response body to file: %w", err)
 	}
 
-	fmt.Println("Download finished successfully.")
+	log.Println("Download finished successfully.")
 	return nil
 }
 
@@ -228,7 +228,7 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 		return fmt.Errorf("failed to decode response body: %w", err)
 	}
 
-	fmt.Printf("API key for owner %s registered successfully: %s\n", owner, newKey)
+	log.Printf("API key for owner %s registered successfully: %s\n", owner, newKey)
 	return nil
 }
 
@@ -250,6 +250,6 @@ func (c *PortalClient) RevokeAPIKey(key string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	fmt.Println("API key revoked successfully")
+	log.Println("API key revoked successfully")
 	return nil
 }

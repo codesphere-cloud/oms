@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
@@ -28,7 +29,7 @@ type DownloadPackageOpts struct {
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
-	fmt.Printf("Downloading package %s\n", c.Opts.Version)
+	log.Printf("Downloading package %s\n", c.Opts.Version)
 
 	p := portal.NewPortalClient()
 	build, err := p.GetBuild(portal.CodesphereProduct, c.Opts.Version, c.Opts.Hash)

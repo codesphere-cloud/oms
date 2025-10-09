@@ -4,8 +4,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
 )
@@ -13,14 +11,6 @@ import (
 // DownloadCmd represents the download command
 type DownloadCmd struct {
 	cmd *cobra.Command
-}
-
-func (c *DownloadCmd) RunE(_ *cobra.Command, args []string) error {
-	//Command execution goes here
-
-	fmt.Printf("running %s", c.cmd.Use)
-
-	return nil
 }
 
 func AddDownloadCmd(rootCmd *cobra.Command, opts GlobalOptions) {
@@ -33,7 +23,6 @@ func AddDownloadCmd(rootCmd *cobra.Command, opts GlobalOptions) {
 		},
 	}
 	rootCmd.AddCommand(download.cmd)
-	download.cmd.RunE = download.RunE
 
 	AddDownloadPackageCmd(download.cmd, opts)
 }

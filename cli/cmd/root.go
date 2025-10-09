@@ -1,6 +1,6 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (

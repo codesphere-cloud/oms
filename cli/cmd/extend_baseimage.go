@@ -1,3 +1,6 @@
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
@@ -83,7 +86,7 @@ func (c *ExtendBaseimageCmd) ExtendBaseimage(p *installer.Package, args []string
 	if err != nil || len(imagenames) == 0 {
 		return fmt.Errorf("failed to read image tags: %w", err)
 	}
-	fmt.Println(imagenames)
+	log.Println(imagenames)
 
 	err = tmpl.GenerateDockerfile(p.FileIO, c.Opts.Dockerfile, imagenames[0])
 	if err != nil {

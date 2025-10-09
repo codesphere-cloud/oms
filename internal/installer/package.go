@@ -1,7 +1,11 @@
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package installer
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"strings"
@@ -37,7 +41,7 @@ func (p *Package) Extract(force bool) error {
 		return fmt.Errorf("failed to figure out if package %s is already extracted in %s: %w", p.Filename, workDir, err)
 	}
 	if alreadyExtracted && !force {
-		fmt.Println("skipping extraction, package already unpacked. Use force option to overwrite.")
+		log.Println("skipping extraction, package already unpacked. Use force option to overwrite.")
 		return nil
 	}
 
@@ -57,7 +61,7 @@ func (p *Package) ExtractDependency(file string, force bool) error {
 	workDir := p.getWorkDir()
 
 	if p.FileIO.Exists(p.GetDependencyPath(file)) && !force {
-		fmt.Println("skipping extraction, dependency already unpacked. Use force option to overwrite.")
+		log.Println("skipping extraction, dependency already unpacked. Use force option to overwrite.")
 		return nil
 	}
 

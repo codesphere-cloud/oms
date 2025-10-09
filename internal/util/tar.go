@@ -21,18 +21,20 @@ func ExtractTarGz(fileIo FileIO, filename, destDir string) error {
 	return ExtractTarGzSingleFile(fileIo, filename, "", destDir)
 }
 
+// getCleanTargetPath constructs a clean target path for extraction and ensures
+// that it is within the specified destination directory to prevent path traversal attacks.
 func getCleanTargetPath(destDir string, header *tar.Header) (string, error) {
 	targetPath := filepath.Clean(filepath.Join(destDir, header.Name))
 	relPath, err := filepath.Rel(destDir, targetPath)
 
 	// Ensure target dir is inside destDir
 	if err != nil || relPath == ".." || strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) {
-		// Return error, this tar cannot be extracted to a relative dir inside destDir
 		return "", fmt.Errorf("failed to extract %s: target directory outside destination directory %s", header.Name, destDir)
 	}
 	return targetPath, nil
 }
 
+// openTar opens a .tar file and returns a tar.Reader to read its contents.
 func openTar(filename string, fileIo FileIO) (*tar.Reader, error) {
 	log.Printf("Opening archive: %s", filename)
 	file, err := fileIo.Open(filename)
@@ -46,6 +48,7 @@ func openTar(filename string, fileIo FileIO) (*tar.Reader, error) {
 	return tr, nil
 }
 
+// openTarGz opens a .tar.gz file and returns a tar.Reader to read its contents.
 func openTarGz(filename string, fileIo FileIO) (*tar.Reader, error) {
 	log.Printf("Opening archive: %s", filename)
 	file, err := fileIo.Open(filename)
@@ -64,6 +67,7 @@ func openTarGz(filename string, fileIo FileIO) (*tar.Reader, error) {
 	return tr, nil
 }
 
+// extractEntry extracts a single tar.Header entry to the targetPath using the provided tar.Reader.
 func extractEntry(header *tar.Header, targetPath string, fileIo FileIO, tr *tar.Reader) error {
 	switch header.Typeflag {
 	case tar.TypeDir:
@@ -104,6 +108,7 @@ func extractEntry(header *tar.Header, targetPath string, fileIo FileIO, tr *tar.
 	return nil
 }
 
+// ExtractTarGzSingleFile extracts a single specified file from a .tar.gz archive to the destination directory.
 func ExtractTarGzSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string) error {
 	destDir = filepath.Clean(destDir)
 	tr, err := openTarGz(archiveFile, fileIo)
@@ -112,6 +117,8 @@ func ExtractTarGzSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir s
 	}
 	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir)
 }
+
+// ExtractTarSingleFile extracts a single specified file from a .tar archive to the destination directory.
 func ExtractTarSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string) error {
 	destDir = filepath.Clean(destDir)
 	tr, err := openTar(archiveFile, fileIo)
@@ -121,16 +128,14 @@ func ExtractTarSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir str
 	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir)
 }
 
-// ExtractTarGz takes a path to a .tar.gz file and extracts its contents
-// to the specified destination directory.
+// extractTarSingleFile extracts a single specified file from a tar.Reader to the destination directory.
 func extractTarSingleFile(fileIo FileIO, tr *tar.Reader, fileToExtract, destDir string) error {
 	if fileToExtract != "" {
-		fmt.Printf("Extracting %s from archive\n", fileToExtract)
+		log.Printf("Extracting %s from archive\n", fileToExtract)
 	}
 
 	for {
 		header, err := tr.Next()
-
 		if err == io.EOF {
 			break
 		}
