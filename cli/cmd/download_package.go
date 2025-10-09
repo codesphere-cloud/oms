@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
@@ -17,7 +18,7 @@ import (
 type DownloadPackageCmd struct {
 	cmd        *cobra.Command
 	Opts       DownloadPackageOpts
-	FileWriter util.FileWriter
+	FileWriter util.FileIO
 }
 
 type DownloadPackageOpts struct {
@@ -28,10 +29,10 @@ type DownloadPackageOpts struct {
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
-	if c.Opts.Hash != "" {
-		fmt.Printf("Downloading package '%s' with hash '%s'\n", c.Opts.Version, c.Opts.Hash)
+  if c.Opts.Hash != "" {
+		log.Printf("Downloading package '%s' with hash '%s'\n", c.Opts.Version, c.Opts.Hash)
 	} else {
-		fmt.Printf("Downloading package '%s'\n", c.Opts.Version)
+		log.Printf("Downloading package '%s'\n", c.Opts.Version)
 	}
 
 	p := portal.NewPortalClient()

@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"log"
 	"strings"
 
 	"golang.org/x/sync/errgroup"
@@ -55,10 +56,11 @@ func (c *UpdateCmd) SelfUpdate(p portal.Portal) error {
 	}
 	latestVersion := semver.MustParse(strings.TrimPrefix(latest.Version, "oms-v"))
 
-	fmt.Printf("current version: %v\n", currentVersion)
-	fmt.Printf("latest version: %v\n", latestVersion)
+	log.Printf("Current version: %v\n", currentVersion)
+	log.Printf("Latest version: %v\n", latestVersion)
+
 	if latestVersion.Equals(currentVersion) {
-		fmt.Println("Current OMS CLI is already the latest version", c.Version.Version())
+		log.Println("Current OMS CLI is already the latest version", c.Version.Version())
 		return nil
 	}
 
@@ -100,7 +102,7 @@ func (c *UpdateCmd) SelfUpdate(p portal.Portal) error {
 		return err
 	}
 
-	fmt.Println("Update finished successfully.")
+	log.Println("Update finished successfully.")
 	return nil
 }
 

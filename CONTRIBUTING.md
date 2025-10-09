@@ -24,7 +24,7 @@ This project currently uses a fork of cobra-cli with locally-scoped variables: h
 Please use it to add new commands to the OMS CLI like following:
 
 ```
-cobra-cli add -c false -L -d cli -p install component
+cobra-cli add --copyright=false -L -d cli -p install component
 ```
 
 Run the generated `AddInstallComponent()` function in the parent `cli/cmd/install.go` to add the subcommand.
