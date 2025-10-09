@@ -17,16 +17,16 @@ import (
 var _ = Describe("RevokeCmd", func() {
 	var (
 		mockPortal *portal.MockPortal
-		c          cmd.RevokeCmd
+		c          cmd.RevokeAPIKeyCmd
 		key        string
 	)
 
 	BeforeEach(func() {
 		mockPortal = portal.NewMockPortal(GinkgoT())
 		key = "test-key"
-		c = cmd.RevokeCmd{
-			Opts: cmd.RevokeOpts{
-				Key: key,
+		c = cmd.RevokeAPIKeyCmd{
+			Opts: cmd.RevokeAPIKeyOpts{
+				ID: key,
 			},
 		}
 	})
@@ -48,14 +48,14 @@ var _ = Describe("RevokeCmd", func() {
 	})
 })
 
-var _ = Describe("AddRevokeCmd", func() {
-	It("adds the revoke command to the parent", func() {
+var _ = Describe("AddRevokeAPIKeyCmd", func() {
+	It("adds the api-key command to the parent", func() {
 		parent := &cobra.Command{}
 		opts := cmd.GlobalOptions{}
-		cmd.AddRevokeCmd(parent, opts)
+		cmd.AddRevokeAPIKeyCmd(parent, opts)
 		found := false
 		for _, c := range parent.Commands() {
-			if c.Use == "revoke" {
+			if c.Use == "api-key" {
 				found = true
 				break
 			}
