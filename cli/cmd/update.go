@@ -23,8 +23,8 @@ func AddUpdateCmd(rootCmd *cobra.Command, opts GlobalOptions) {
 	updateCmd := UpdateCmd{
 		cmd: &cobra.Command{
 			Use:   "update",
-			Short: "Update various resources",
-			Long:  `Updates various resources such as the OMS CLI or API keys.`,
+			Short: "Update OMS related resources",
+			Long:  `Updates resources, e.g. OMS or OMS API keys.`,
 		},
 	}
 
