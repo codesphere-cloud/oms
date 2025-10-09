@@ -29,7 +29,9 @@ var _ = Describe("GenerateDockerfile", func() {
 
 	AfterEach(func() {
 		if tempDir != "" {
-			os.RemoveAll(tempDir)
+			defer func() {
+				_ = os.RemoveAll(tempDir)
+			}()
 		}
 		if mockFileIO != nil {
 			mockFileIO.AssertExpectations(GinkgoT())

@@ -25,13 +25,19 @@ func createTestTarGz(filename string, files map[string][]byte) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	gzWriter := gzip.NewWriter(file)
-	defer gzWriter.Close()
+	defer func() {
+		_ = gzWriter.Close()
+	}()
 
 	tarWriter := tar.NewWriter(gzWriter)
-	defer tarWriter.Close()
+	defer func() {
+		_ = tarWriter.Close()
+	}()
 
 	for name, content := range files {
 		header := &tar.Header{
@@ -112,13 +118,19 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 		It("successfully extracts mocked package file", func() {
 			tempDir, err := os.MkdirTemp("", "oms-test-*")
 			Expect(err).To(BeNil())
-			defer os.RemoveAll(tempDir)
+			defer func() {
+				err := os.RemoveAll(tempDir)
+				Expect(err).To(BeNil())
+			}()
 
 			origWd, err := os.Getwd()
 			Expect(err).To(BeNil())
 			err = os.Chdir(tempDir)
 			Expect(err).To(BeNil())
-			defer os.Chdir(origWd)
+			defer func() {
+				err := os.Chdir(origWd)
+				Expect(err).To(BeNil())
+			}()
 
 			depsFile := "deps.tar.gz"
 			depsFiles := map[string][]byte{
