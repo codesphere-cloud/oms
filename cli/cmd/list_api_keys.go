@@ -49,7 +49,7 @@ func (c *ListAPIKeysCmd) PrintKeysTable(keys []portal.ApiKey) {
 	c.TableWriter.AppendHeader(table.Row{"ID", "Owner", "Organization", "Role", "Created", "Expires"})
 
 	for _, k := range keys {
-		c.TableWriter.AppendRow(table.Row{k.RID, k.Owner, k.Organization, k.Role, k.CreatedAt, k.ExpiresAt})
+		c.TableWriter.AppendRow(table.Row{k.KeyID, k.Owner, k.Organization, k.Role, k.CreatedAt, k.ExpiresAt})
 	}
 
 	c.TableWriter.Render()
