@@ -281,6 +281,7 @@ func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
 
 	fmt.Println("API key updated successfully")
 	return nil
+}
 
 func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
 	res, _, err := c.GetBody("/keys")

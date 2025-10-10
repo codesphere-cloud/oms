@@ -59,20 +59,14 @@ type MockOMSUpdater_Apply_Call struct {
 }
 
 // Apply is a helper method to define mock.On call
-//   - update io.Reader
+//   - update
 func (_e *MockOMSUpdater_Expecter) Apply(update interface{}) *MockOMSUpdater_Apply_Call {
 	return &MockOMSUpdater_Apply_Call{Call: _e.mock.On("Apply", update)}
 }
 
 func (_c *MockOMSUpdater_Apply_Call) Run(run func(update io.Reader)) *MockOMSUpdater_Apply_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 io.Reader
-		if args[0] != nil {
-			arg0 = args[0].(io.Reader)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(io.Reader))
 	})
 	return _c
 }
