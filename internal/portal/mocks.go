@@ -5,11 +5,10 @@
 package portal
 
 import (
+	mock "github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
 	"time"
-
-	mock "github.com/stretchr/testify/mock"
 )
 
 // NewMockPortal creates a new instance of MockPortal. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -142,32 +141,6 @@ func (_c *MockPortal_GetBuild_Call) RunAndReturn(run func(product Product, versi
 	return _c
 }
 
-// ListBuilds provides a mock function for the type MockPortal
-func (_mock *MockPortal) ListBuilds(product Product) (Builds, error) {
-	ret := _mock.Called(product)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListBuilds")
-	}
-
-	var r0 Builds
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(Product) (Builds, error)); ok {
-		return returnFunc(product)
-	}
-	if returnFunc, ok := ret.Get(0).(func(Product) Builds); ok {
-		r0 = returnFunc(product)
-	} else {
-		r0 = ret.Get(0).(Builds)
-	}
-	if returnFunc, ok := ret.Get(1).(func(Product) error); ok {
-		r1 = returnFunc(product)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
 // ListAPIKeys provides a mock function for the type MockPortal
 func (_mock *MockPortal) ListAPIKeys() ([]ApiKey, error) {
 	ret := _mock.Called()
@@ -184,7 +157,9 @@ func (_mock *MockPortal) ListAPIKeys() ([]ApiKey, error) {
 	if returnFunc, ok := ret.Get(0).(func() []ApiKey); ok {
 		r0 = returnFunc()
 	} else {
-		r0 = ret.Get(0).([]ApiKey)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]ApiKey)
+		}
 	}
 	if returnFunc, ok := ret.Get(1).(func() error); ok {
 		r1 = returnFunc()
@@ -211,14 +186,40 @@ func (_c *MockPortal_ListAPIKeys_Call) Run(run func()) *MockPortal_ListAPIKeys_C
 	return _c
 }
 
-func (_c *MockPortal_ListAPIKeys_Call) Return(keys []ApiKey, err error) *MockPortal_ListAPIKeys_Call {
-	_c.Call.Return(keys, err)
+func (_c *MockPortal_ListAPIKeys_Call) Return(apiKeys []ApiKey, err error) *MockPortal_ListAPIKeys_Call {
+	_c.Call.Return(apiKeys, err)
 	return _c
 }
 
 func (_c *MockPortal_ListAPIKeys_Call) RunAndReturn(run func() ([]ApiKey, error)) *MockPortal_ListAPIKeys_Call {
 	_c.Call.Return(run)
 	return _c
+}
+
+// ListBuilds provides a mock function for the type MockPortal
+func (_mock *MockPortal) ListBuilds(product Product) (Builds, error) {
+	ret := _mock.Called(product)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListBuilds")
+	}
+
+	var r0 Builds
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(Product) (Builds, error)); ok {
+		return returnFunc(product)
+	}
+	if returnFunc, ok := ret.Get(0).(func(Product) Builds); ok {
+		r0 = returnFunc(product)
+	} else {
+		r0 = ret.Get(0).(Builds)
+	}
+	if returnFunc, ok := ret.Get(1).(func(Product) error); ok {
+		r1 = returnFunc(product)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // MockPortal_ListBuilds_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBuilds'
@@ -338,6 +339,52 @@ func (_c *MockPortal_RevokeAPIKey_Call) Return(err error) *MockPortal_RevokeAPIK
 }
 
 func (_c *MockPortal_RevokeAPIKey_Call) RunAndReturn(run func(key string) error) *MockPortal_RevokeAPIKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateAPIKey provides a mock function for the type MockPortal
+func (_mock *MockPortal) UpdateAPIKey(key string, expiresAt time.Time) error {
+	ret := _mock.Called(key, expiresAt)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateAPIKey")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, time.Time) error); ok {
+		r0 = returnFunc(key, expiresAt)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockPortal_UpdateAPIKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateAPIKey'
+type MockPortal_UpdateAPIKey_Call struct {
+	*mock.Call
+}
+
+// UpdateAPIKey is a helper method to define mock.On call
+//   - key
+//   - expiresAt
+func (_e *MockPortal_Expecter) UpdateAPIKey(key interface{}, expiresAt interface{}) *MockPortal_UpdateAPIKey_Call {
+	return &MockPortal_UpdateAPIKey_Call{Call: _e.mock.On("UpdateAPIKey", key, expiresAt)}
+}
+
+func (_c *MockPortal_UpdateAPIKey_Call) Run(run func(key string, expiresAt time.Time)) *MockPortal_UpdateAPIKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(time.Time))
+	})
+	return _c
+}
+
+func (_c *MockPortal_UpdateAPIKey_Call) Return(err error) *MockPortal_UpdateAPIKey_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockPortal_UpdateAPIKey_Call) RunAndReturn(run func(key string, expiresAt time.Time) error) *MockPortal_UpdateAPIKey_Call {
 	_c.Call.Return(run)
 	return _c
 }

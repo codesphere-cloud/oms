@@ -27,7 +27,7 @@ func GetRootCmd() *cobra.Command {
 			like downloading new versions.`),
 	}
 	AddVersionCmd(rootCmd)
-	AddUpdateCmd(rootCmd)
+	AddUpdateCmd(rootCmd, opts)
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
 	AddBetaCmd(rootCmd, &opts)
