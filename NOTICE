@@ -14,13 +14,7 @@ Module: github.com/codesphere-cloud/cs-go/pkg/io
 Version: v0.10.1
 License: Apache-2.0
 License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.10.1/LICENSE
- 
-----------
-Module: github.com/codesphere-cloud/oms
-Version: Unknown
-License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/oms/blob/HEAD/LICENSE
- 
+   
 ----------
 Module: github.com/cpuguy83/go-md2man/v2/md2man
 Version: v2.0.6

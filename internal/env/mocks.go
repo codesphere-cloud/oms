@@ -131,3 +131,47 @@ func (_c *MockEnv_GetOmsPortalApiKey_Call) RunAndReturn(run func() (string, erro
 	_c.Call.Return(run)
 	return _c
 }
+
+// GetOmsWorkdir provides a mock function for the type MockEnv
+func (_mock *MockEnv) GetOmsWorkdir() string {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOmsWorkdir")
+	}
+
+	var r0 string
+	if returnFunc, ok := ret.Get(0).(func() string); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	return r0
+}
+
+// MockEnv_GetOmsWorkdir_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOmsWorkdir'
+type MockEnv_GetOmsWorkdir_Call struct {
+	*mock.Call
+}
+
+// GetOmsWorkdir is a helper method to define mock.On call
+func (_e *MockEnv_Expecter) GetOmsWorkdir() *MockEnv_GetOmsWorkdir_Call {
+	return &MockEnv_GetOmsWorkdir_Call{Call: _e.mock.On("GetOmsWorkdir")}
+}
+
+func (_c *MockEnv_GetOmsWorkdir_Call) Run(run func()) *MockEnv_GetOmsWorkdir_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockEnv_GetOmsWorkdir_Call) Return(s string) *MockEnv_GetOmsWorkdir_Call {
+	_c.Call.Return(s)
+	return _c
+}
+
+func (_c *MockEnv_GetOmsWorkdir_Call) RunAndReturn(run func() string) *MockEnv_GetOmsWorkdir_Call {
+	_c.Call.Return(run)
+	return _c
+}

@@ -5,10 +5,11 @@
 package portal
 
 import (
-	mock "github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
 	"time"
+
+	mock "github.com/stretchr/testify/mock"
 )
 
 // NewMockPortal creates a new instance of MockPortal. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -197,6 +198,59 @@ func (_mock *MockPortal) ListBuilds(product Product) (Builds, error) {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
+}
+
+// ListAPIKeys provides a mock function for the type MockPortal
+func (_mock *MockPortal) ListAPIKeys() ([]ApiKey, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListAPIKeys")
+	}
+
+	var r0 []ApiKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]ApiKey, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []ApiKey); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).([]ApiKey)
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPortal_ListAPIKeys_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAPIKeys'
+type MockPortal_ListAPIKeys_Call struct {
+	*mock.Call
+}
+
+// ListAPIKeys is a helper method to define mock.On call
+func (_e *MockPortal_Expecter) ListAPIKeys() *MockPortal_ListAPIKeys_Call {
+	return &MockPortal_ListAPIKeys_Call{Call: _e.mock.On("ListAPIKeys")}
+}
+
+func (_c *MockPortal_ListAPIKeys_Call) Run(run func()) *MockPortal_ListAPIKeys_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockPortal_ListAPIKeys_Call) Return(keys []ApiKey, err error) *MockPortal_ListAPIKeys_Call {
+	_c.Call.Return(keys, err)
+	return _c
+}
+
+func (_c *MockPortal_ListAPIKeys_Call) RunAndReturn(run func() ([]ApiKey, error)) *MockPortal_ListAPIKeys_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // MockPortal_ListBuilds_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListBuilds'

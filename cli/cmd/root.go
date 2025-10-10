@@ -1,9 +1,10 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package cmd
 
 import (
+	"log"
 	"os"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -29,6 +30,7 @@ func GetRootCmd() *cobra.Command {
 	AddUpdateCmd(rootCmd, opts)
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
+	AddBetaCmd(rootCmd, &opts)
 
 	// OMS API key management commands
 	AddRegisterCmd(rootCmd, opts)
@@ -39,6 +41,9 @@ func GetRootCmd() *cobra.Command {
 
 // Execute executes the root command. This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	//Disable printing timestamps on log lines
+	log.SetFlags(0)
+
 	err := GetRootCmd().Execute()
 	if err != nil {
 		os.Exit(1)

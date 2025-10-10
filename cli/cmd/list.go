@@ -23,4 +23,5 @@ func AddListCmd(rootCmd *cobra.Command, opts GlobalOptions) {
 	}
 	rootCmd.AddCommand(list.cmd)
 	AddListPackagesCmd(list.cmd, opts)
+	AddListAPIKeysCmd(list.cmd, opts)
 }
