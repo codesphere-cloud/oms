@@ -5,8 +5,8 @@
 package cmd
 
 import (
+	"github.com/blang/semver"
 	mock "github.com/stretchr/testify/mock"
-	"io"
 )
 
 // NewMockOMSUpdater creates a new instance of MockOMSUpdater. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -36,47 +36,63 @@ func (_m *MockOMSUpdater) EXPECT() *MockOMSUpdater_Expecter {
 	return &MockOMSUpdater_Expecter{mock: &_m.Mock}
 }
 
-// Apply provides a mock function for the type MockOMSUpdater
-func (_mock *MockOMSUpdater) Apply(update io.Reader) error {
-	ret := _mock.Called(update)
+// Update provides a mock function for the type MockOMSUpdater
+func (_mock *MockOMSUpdater) Update(v semver.Version, repo string) (semver.Version, string, error) {
+	ret := _mock.Called(v, repo)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Apply")
+		panic("no return value specified for Update")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(io.Reader) error); ok {
-		r0 = returnFunc(update)
-	} else {
-		r0 = ret.Error(0)
+	var r0 semver.Version
+	var r1 string
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(semver.Version, string) (semver.Version, string, error)); ok {
+		return returnFunc(v, repo)
 	}
-	return r0
+	if returnFunc, ok := ret.Get(0).(func(semver.Version, string) semver.Version); ok {
+		r0 = returnFunc(v, repo)
+	} else {
+		r0 = ret.Get(0).(semver.Version)
+	}
+	if returnFunc, ok := ret.Get(1).(func(semver.Version, string) string); ok {
+		r1 = returnFunc(v, repo)
+	} else {
+		r1 = ret.Get(1).(string)
+	}
+	if returnFunc, ok := ret.Get(2).(func(semver.Version, string) error); ok {
+		r2 = returnFunc(v, repo)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
 }
 
-// MockOMSUpdater_Apply_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Apply'
-type MockOMSUpdater_Apply_Call struct {
+// MockOMSUpdater_Update_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Update'
+type MockOMSUpdater_Update_Call struct {
 	*mock.Call
 }
 
-// Apply is a helper method to define mock.On call
-//   - update
-func (_e *MockOMSUpdater_Expecter) Apply(update interface{}) *MockOMSUpdater_Apply_Call {
-	return &MockOMSUpdater_Apply_Call{Call: _e.mock.On("Apply", update)}
+// Update is a helper method to define mock.On call
+//   - v
+//   - repo
+func (_e *MockOMSUpdater_Expecter) Update(v interface{}, repo interface{}) *MockOMSUpdater_Update_Call {
+	return &MockOMSUpdater_Update_Call{Call: _e.mock.On("Update", v, repo)}
 }
 
-func (_c *MockOMSUpdater_Apply_Call) Run(run func(update io.Reader)) *MockOMSUpdater_Apply_Call {
+func (_c *MockOMSUpdater_Update_Call) Run(run func(v semver.Version, repo string)) *MockOMSUpdater_Update_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(io.Reader))
+		run(args[0].(semver.Version), args[1].(string))
 	})
 	return _c
 }
 
-func (_c *MockOMSUpdater_Apply_Call) Return(err error) *MockOMSUpdater_Apply_Call {
-	_c.Call.Return(err)
+func (_c *MockOMSUpdater_Update_Call) Return(version semver.Version, s string, err error) *MockOMSUpdater_Update_Call {
+	_c.Call.Return(version, s, err)
 	return _c
 }
 
-func (_c *MockOMSUpdater_Apply_Call) RunAndReturn(run func(update io.Reader) error) *MockOMSUpdater_Apply_Call {
+func (_c *MockOMSUpdater_Update_Call) RunAndReturn(run func(v semver.Version, repo string) (semver.Version, string, error)) *MockOMSUpdater_Update_Call {
 	_c.Call.Return(run)
 	return _c
 }
