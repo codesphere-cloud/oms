@@ -25,6 +25,7 @@ type Portal interface {
 	DownloadBuildArtifact(product Product, build Build, file io.Writer) error
 	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error
 	RevokeAPIKey(key string) error
+	UpdateAPIKey(key string, expiresAt time.Time) error
 	ListAPIKeys() ([]ApiKey, error)
 }
 
@@ -237,7 +238,7 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 
 func (c *PortalClient) RevokeAPIKey(keyId string) error {
 	req := struct {
-		KeyID string `json:"key_id"`
+		KeyID string `json:"keyId"`
 	}{
 		KeyID: keyId,
 	}
@@ -255,6 +256,30 @@ func (c *PortalClient) RevokeAPIKey(keyId string) error {
 
 	log.Println("API key revoked successfully!")
 
+	return nil
+}
+
+func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
+	req := struct {
+		Key       string    `json:"keyId"`
+		ExpiresAt time.Time `json:"expiresAt"`
+	}{
+		Key:       key,
+		ExpiresAt: expiresAt,
+	}
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("failed to generate request body: %w", err)
+	}
+
+	resp, err := c.HttpRequest(http.MethodPost, "/key/update", reqBody)
+	if err != nil {
+		return fmt.Errorf("POST request to update API key failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	fmt.Println("API key updated successfully")
 	return nil
 }
 

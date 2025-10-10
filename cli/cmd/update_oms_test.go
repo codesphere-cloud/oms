@@ -30,16 +30,16 @@ var _ = Describe("Update", func() {
 	var (
 		mockPortal      *portal.MockPortal
 		mockVersion     *version.MockVersion
-		mockUpdater     *cmd.MockUpdater
+		mockUpdater     *cmd.MockOMSUpdater
 		latestBuild     portal.Build
 		buildToDownload portal.Build
-		c               cmd.UpdateCmd
+		c               cmd.UpdateOmsCmd
 	)
 
 	BeforeEach(func() {
 		mockPortal = portal.NewMockPortal(GinkgoT())
 		mockVersion = version.NewMockVersion(GinkgoT())
-		mockUpdater = cmd.NewMockUpdater(GinkgoT())
+		mockUpdater = cmd.NewMockOMSUpdater(GinkgoT())
 
 		latestBuild = portal.Build{
 			Version: "0.0.42",
@@ -55,7 +55,7 @@ var _ = Describe("Update", func() {
 				{Filename: "fakeos_fakearch.tar.gz"},
 			},
 		}
-		c = cmd.UpdateCmd{
+		c = cmd.UpdateOmsCmd{
 			Version: mockVersion,
 			Updater: mockUpdater,
 		}
