@@ -190,7 +190,7 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 
 	// Create a WriteCounter to wrap the output file and report progress, unless quiet is requested.
 	// Default behavior: report progress. Quiet callers should pass true for quiet.
-	var writer io.Writer = file
+	writer := file
 	if !quiet {
 		writer = NewWriteCounter(file)
 	}
