@@ -36,6 +36,7 @@ var _ = Describe("ListPackages", func() {
 			Opts: cmd.DownloadPackageOpts{
 				Version:  version,
 				Filename: filename,
+				Quiet:    false,
 			},
 			FileWriter: mockFileWriter,
 		}
@@ -63,7 +64,7 @@ var _ = Describe("ListPackages", func() {
 
 			fakeFile := os.NewFile(uintptr(0), filename)
 			mockFileWriter.EXPECT().Create(version+"-"+filename).Return(fakeFile, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything).Return(nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, false).Return(nil)
 			err := c.DownloadBuild(mockPortal, build, filename)
 			Expect(err).NotTo(HaveOccurred())
 		})

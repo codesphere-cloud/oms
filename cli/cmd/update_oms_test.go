@@ -67,8 +67,8 @@ var _ = Describe("Update", func() {
 			mockVersion.EXPECT().Version().Return("0.0.0")
 			mockVersion.EXPECT().Os().Return("fakeos")
 			mockPortal.EXPECT().GetBuild(portal.OmsProduct, "", "").Return(latestBuild, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.OmsProduct, buildToDownload, mock.Anything).RunAndReturn(
-				func(product portal.Product, build portal.Build, file io.Writer) error {
+			mockPortal.EXPECT().DownloadBuildArtifact(portal.OmsProduct, buildToDownload, mock.Anything, false).RunAndReturn(
+				func(product portal.Product, build portal.Build, file io.Writer, quiet bool) error {
 					embeddedFile, err := testdata.Open("testdata/testcli.tar.gz")
 					if err != nil {
 						Expect(err).NotTo(HaveOccurred())

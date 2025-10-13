@@ -80,7 +80,7 @@ func (c *UpdateOmsCmd) SelfUpdate(p portal.Portal) error {
 	eg := errgroup.Group{}
 	eg.Go(func() error {
 		defer func() { _ = writer.Close() }()
-		err = p.DownloadBuildArtifact(portal.OmsProduct, download, writer)
+		err = p.DownloadBuildArtifact(portal.OmsProduct, download, writer, false)
 		if err != nil {
 			return fmt.Errorf("failed to download latest OMS package: %w", err)
 		}

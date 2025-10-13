@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -28,6 +29,29 @@ var _ io.Writer = (*FakeWriter)(nil)
 
 func NewFakeWriter() *FakeWriter {
 	return &FakeWriter{}
+}
+
+// slowReader splits the data into chunks and sleeps between reads to simulate chunked download
+type slowReader struct {
+	data []byte
+	pos  int
+}
+
+func (s *slowReader) Read(p []byte) (int, error) {
+	if s.pos >= len(s.data) {
+		return 0, io.EOF
+	}
+
+	// chunk size
+	chunk := 5
+	n := min(copy(p, s.data[s.pos:]), chunk)
+
+	// simulate delay for subsequent chunks so WriteCounter can trigger an update
+	if s.pos > 0 {
+		time.Sleep(150 * time.Millisecond)
+	}
+	s.pos += n
+	return n, nil
 }
 
 var _ = Describe("PortalClient", func() {
@@ -186,17 +210,41 @@ var _ = Describe("PortalClient", func() {
 					getUrl = *req.URL
 					return &http.Response{
 						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader([]byte(downloadResponse))),
+						Body:       io.NopCloser(&slowReader{data: []byte(downloadResponse)}),
 					}, nil
 				})
 		})
 
 		It("downloads the build", func() {
 			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter)
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fakeWriter.String()).To(Equal(downloadResponse))
 			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
+		})
+
+		It("emits progress logs when not quiet", func() {
+			var logBuf bytes.Buffer
+			prev := log.Writer()
+			log.SetOutput(&logBuf)
+			defer log.SetOutput(prev)
+
+			fakeWriter := NewFakeWriter()
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuf.String()).To(ContainSubstring("Downloading..."))
+		})
+
+		It("does not emit progress logs when quiet", func() {
+			var logBuf bytes.Buffer
+			prev := log.Writer()
+			log.SetOutput(&logBuf)
+			defer log.SetOutput(prev)
+
+			fakeWriter := NewFakeWriter()
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuf.String()).NotTo(ContainSubstring("Downloading..."))
 		})
 	})
 
