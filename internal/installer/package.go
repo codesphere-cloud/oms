@@ -30,7 +30,7 @@ func NewPackage(omsWorkdir, filename string) *Package {
 }
 
 func (p *Package) Extract(force bool) error {
-	workDir := p.getWorkDir()
+	workDir := p.GetWorkDir()
 	err := os.MkdirAll(p.OmsWorkdir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to ensure workdir exists: %w", err)
@@ -58,7 +58,7 @@ func (p *Package) ExtractDependency(file string, force bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
 	}
-	workDir := p.getWorkDir()
+	workDir := p.GetWorkDir()
 
 	if p.FileIO.Exists(p.GetDependencyPath(file)) && !force {
 		log.Println("skipping extraction, dependency already unpacked. Use force option to overwrite.")
@@ -84,11 +84,11 @@ func (p *Package) alreadyExtracted(dir string) (bool, error) {
 	return isDir, nil
 }
 
-func (p *Package) getWorkDir() string {
+func (p *Package) GetWorkDir() string {
 	return path.Join(p.OmsWorkdir, strings.ReplaceAll(p.Filename, ".tar.gz", ""))
 }
 
 func (p *Package) GetDependencyPath(filename string) string {
-	workDir := p.getWorkDir()
+	workDir := p.GetWorkDir()
 	return path.Join(workDir, depsDir, filename)
 }
