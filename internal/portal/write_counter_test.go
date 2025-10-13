@@ -21,7 +21,7 @@ func TestWriteCounterEmitsProgress(t *testing.T) {
 	wc := NewWriteCounter(&underlying)
 
 	// force an update by setting LastUpdate sufficiently in the past
-	wc.LastUpdate = time.Now().Add(-200 * time.Millisecond)
+	wc.LastUpdate = time.Now().Add(-time.Second)
 
 	_, err := wc.Write([]byte("hello world"))
 	if err != nil {

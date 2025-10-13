@@ -48,7 +48,7 @@ func (s *slowReader) Read(p []byte) (int, error) {
 
 	// simulate delay for subsequent chunks so WriteCounter can trigger an update
 	if s.pos > 0 {
-		time.Sleep(150 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 	s.pos += n
 	return n, nil

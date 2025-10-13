@@ -190,12 +190,12 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 
 	// Create a WriteCounter to wrap the output file and report progress, unless quiet is requested.
 	// Default behavior: report progress. Quiet callers should pass true for quiet.
-	writer := file
+	counter := file
 	if !quiet {
-		writer = NewWriteCounter(file)
+		counter = NewWriteCounter(file)
 	}
 
-	_, err = io.Copy(writer, resp.Body)
+	_, err = io.Copy(counter, resp.Body)
 	if err != nil {
 		return fmt.Errorf("failed to copy response body to file: %w", err)
 	}
