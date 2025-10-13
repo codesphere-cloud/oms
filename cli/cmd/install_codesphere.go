@@ -41,7 +41,7 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
 
 	err := c.ExtractAndInstall(p, args)
 	if err != nil {
-		return fmt.Errorf("failed to extend baseimage: %w", err)
+		return fmt.Errorf("failed to extract and install package: %w", err)
 	}
 
 	return nil
@@ -93,7 +93,8 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(p *installer.Package, args []st
 
 	log.Printf("Using Node.js executable: %s", nodeDir)
 	log.Println("Starting private cloud installer script...")
-	out, err := exec.Command(nodeDir, args...).Output()
+	installerScript := "./" + p.GetWorkDir() + "/private-cloud-installer.js"
+	out, err := exec.Command(nodeDir, append([]string{installerScript}, args...)...).Output()
 	if err != nil {
 		return fmt.Errorf("failed to run installer script: %w", err)
 	}
