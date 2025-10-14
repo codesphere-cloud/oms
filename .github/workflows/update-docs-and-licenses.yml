@@ -24,19 +24,26 @@ jobs:
         with:
           # on push to main, use main; on PR, check out the PR head
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
       - name: Update docs & licenses
         run: |
           ./hack/update-docs-and-licenses.sh
 
-      - name: Amend last commit with auto-generated changes
+      - name: Commit and push auto-generated changes
         run: |
           if [ -n "$(git status --porcelain)" ]; then
-            git config --local user.email "action@github.com"
-            git config --local user.name "GitHub Action"
+            # Configure git user for the commit
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            
+            # Add all changes
             git add .
-            git commit --amend --no-edit --signoff
-            git push --force-with-lease origin ${{ github.event.pull_request.head.ref || github.ref_name }}
+            
+            # Create a new commit WITH signoff for DCO
+            git commit --signoff -m "chore(docs): Auto-update docs and licenses"
+            
+            # Push the new commit to the branch
+            git push
+          else
+            echo "No changes to commit."
           fi
