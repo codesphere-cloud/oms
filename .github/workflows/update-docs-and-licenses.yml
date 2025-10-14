@@ -37,6 +37,6 @@ jobs:
             git config --local user.email "action@github.com"
             git config --local user.name "GitHub Action"
             git add .
-            git commit --amend --no-edit
+            git commit --amend --no-edit --signoff
             git push --force-with-lease origin ${{ github.event.pull_request.head.ref || github.ref_name }}
           fi
