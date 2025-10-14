@@ -15,10 +15,10 @@ oms download package [flags]
 
 ```
 # Download Codesphere version 1.55.0
-$ /tmp/go-build1053731249/b001/exe/main download package --version codesphere-v1.55.0
+$ /tmp/go-build3887606042/b001/exe/main download package --version codesphere-v1.55.0
 
 # Download lite package of Codesphere version 1.55.0
-$ /tmp/go-build1053731249/b001/exe/main download package --version codesphere-v1.55.0 --file installer-lite.tar.gz
+$ /tmp/go-build3887606042/b001/exe/main download package --version codesphere-v1.55.0 --file installer-lite.tar.gz
 ```
 
 ### Options
