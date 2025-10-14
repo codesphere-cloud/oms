@@ -33,4 +33,4 @@ else
     exit 2
 fi
 
-echo "Done."
+echo "Done!"
