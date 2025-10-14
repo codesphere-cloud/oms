@@ -5,9 +5,10 @@
 package util
 
 import (
+	"os"
+
 	"github.com/jedib0t/go-pretty/v6/table"
 	mock "github.com/stretchr/testify/mock"
-	"os"
 )
 
 // NewMockFileIO creates a new instance of MockFileIO. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
