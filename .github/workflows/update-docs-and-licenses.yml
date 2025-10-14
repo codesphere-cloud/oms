@@ -1,0 +1,42 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Auto-Update Docs & Licenses'
+
+permissions:
+  contents: write
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches:
+      - main
+
+jobs:
+  update-files:
+    # skip runs triggered by the bot's own commit to avoid loops
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # on push to main, use main; on PR, check out the PR head
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Update docs & licenses
+        run: |
+          ./hack/update-docs-and-licenses.sh
+
+      - name: Amend last commit with auto-generated changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add .
+            git commit --amend --no-edit --signoff
+            git push --force-with-lease origin ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fi
