@@ -42,4 +42,4 @@ jobs:
           message: 'chore(docs): Auto-update docs and licenses'
           
           # Adds a sign-off to the commit message for DCO
-          signoff: true
+          commit: '--signoff'
