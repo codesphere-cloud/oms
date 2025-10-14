@@ -25,12 +25,18 @@ jobs:
           # on push to main, use main; on PR, check out the PR head
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Update docs & licenses
         run: |
           ./hack/update-docs-and-licenses.sh
 
-      - name: Commit and push changes
-        uses: EndBug/add-and-commit@v9
-        with:
-          message: "auto(docs): update docs and licenses"
+      - name: Amend last commit with auto-generated changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action"
+            git add .
+            git commit --amend --no-edit
+            git push --force-with-lease origin ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fi
