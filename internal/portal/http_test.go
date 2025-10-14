@@ -37,6 +37,8 @@ type slowReader struct {
 	pos  int
 }
 
+var slowReaderSleep = func(d time.Duration) { time.Sleep(d) }
+
 func (s *slowReader) Read(p []byte) (int, error) {
 	if s.pos >= len(s.data) {
 		return 0, io.EOF
@@ -48,7 +50,7 @@ func (s *slowReader) Read(p []byte) (int, error) {
 
 	// simulate delay for subsequent chunks so WriteCounter can trigger an update
 	if s.pos > 0 {
-		time.Sleep(50 * time.Millisecond)
+		slowReaderSleep(50 * time.Millisecond)
 	}
 	s.pos += n
 	return n, nil
@@ -196,6 +198,19 @@ var _ = Describe("PortalClient", func() {
 			build            portal.Build
 			downloadResponse string
 		)
+
+		var _origSlowReaderSleep = slowReaderSleep
+
+		BeforeEach(func() {
+			// override to avoid real delays in tests
+			slowReaderSleep = func(d time.Duration) { /* no-op for tests */ }
+		})
+
+		AfterEach(func() {
+			// restore original behavior
+			slowReaderSleep = _origSlowReaderSleep
+		})
+
 		BeforeEach(func() {
 			buildDate, _ := time.Parse("2006-01-02", "2025-05-01")
 
