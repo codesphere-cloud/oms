@@ -9,9 +9,6 @@ permissions:
 on:
   pull_request:
     types: [opened, synchronize]
-  push:
-    branches:
-      - main
 
 jobs:
   update-files:
@@ -37,16 +34,16 @@ jobs:
       - name: Commit and push auto-generated changes
         run: |
           if [ -n "$(git status --porcelain)" ]; then
-            # Configure git user for the commit
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            
+            # Use PR author's login/email as the commit author
+            AUTHOR_NAME="${{ github.event.pull_request.user.login }}"
+            AUTHOR_EMAIL="${{ github.event.pull_request.user.email }}"
+
             # Add all changes
             git add .
-            
-            # Create a new commit WITH signoff for DCO
-            git commit --signoff -m "chore(docs): Auto-update docs and licenses"
-            
+
+            # Create a new commit WITH signoff for DCO and set the author
+            git commit --signoff --author "$AUTHOR_NAME <$AUTHOR_EMAIL>" -m "chore(docs): Auto-update docs and licenses"
+
             # Push the new commit to the branch
             git push
           else
