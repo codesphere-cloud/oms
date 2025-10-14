@@ -4,7 +4,7 @@
 package cmd
 
 import (
-	"fmt"
+	"log"
 
 	"github.com/codesphere-cloud/oms/internal/tmpl"
 	"github.com/spf13/cobra"
@@ -15,13 +15,13 @@ type LicensesCmd struct {
 }
 
 func (c *LicensesCmd) RunE(_ *cobra.Command, args []string) error {
-	fmt.Println("OMS License:")
-	fmt.Println(tmpl.License())
+	log.Println("OMS License:")
+	log.Println(tmpl.License())
 
-	fmt.Println("=================================")
+	log.Println("=================================")
 
-	fmt.Println("Open source components included:")
-	fmt.Println(tmpl.Notice())
+	log.Println("Open source components included:")
+	log.Println(tmpl.Notice())
 
 	return nil
 }
