@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/blang/semver"
 	"github.com/rhysd/go-github-selfupdate/selfupdate"
@@ -15,9 +16,13 @@ import (
 
 const GitHubRepo = "codesphere-cloud/oms"
 
-type OMSUpdater func(v semver.Version, repo string) (semver.Version, string, error)
+type OMSUpdater interface {
+	Update(v semver.Version, repo string) (semver.Version, string, error)
+}
 
-var OMSSelfUpdater OMSUpdater = func(v semver.Version, repo string) (semver.Version, string, error) {
+type OMSSelfUpdater struct{}
+
+func (s *OMSSelfUpdater) Update(v semver.Version, repo string) (semver.Version, string, error) {
 	latest, err := selfupdate.UpdateSelf(v, repo)
 	if err != nil {
 		return v, "", err
@@ -34,7 +39,7 @@ type UpdateOmsCmd struct {
 func AddOmsUpdateCmd(parentCmd *cobra.Command) {
 	cmdState := &UpdateOmsCmd{
 		Version: &version.Build{},
-		Updater: OMSSelfUpdater,
+		Updater: &OMSSelfUpdater{},
 	}
 
 	omsCmd := &cobra.Command{
@@ -49,18 +54,18 @@ func AddOmsUpdateCmd(parentCmd *cobra.Command) {
 }
 func (c *UpdateOmsCmd) SelfUpdate() error {
 	v := semver.MustParse(c.Version.Version())
-	latestVersion, releaseNotes, err := c.Updater(v, GitHubRepo)
+	latestVersion, releaseNotes, err := c.Updater.Update(v, GitHubRepo)
 	if err != nil {
 		return fmt.Errorf("update failed: %w", err)
 	}
 
 	if latestVersion.Equals(v) {
-		fmt.Println("Current OMS CLI is the latest version", c.Version.Version())
+		log.Println("Current OMS CLI is the latest version", c.Version.Version())
 		return nil
 	}
 
-	fmt.Printf("Successfully updated from %s to %s\n", v.String(), latestVersion.String())
-	fmt.Println("Release notes:\n", releaseNotes)
+	log.Printf("Successfully updated from %s to %s\n", v.String(), latestVersion.String())
+	log.Println("Release notes:\n", releaseNotes)
 
 	return nil
 }

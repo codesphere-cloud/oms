@@ -31,13 +31,9 @@ var _ = Describe("Update", func() {
 	BeforeEach(func() {
 		mockVersion = version.NewMockVersion(GinkgoT())
 		mockGit = &mockOMSUpdater{}
-		// GitUpdate is a function type; forward calls to the testify mock.
-		gitFunc := func(v semver.Version, repo string) (semver.Version, string, error) {
-			return mockGit.Update(v, repo)
-		}
 		c = cmd.UpdateOmsCmd{
 			Version: mockVersion,
-			Updater: gitFunc,
+			Updater: mockGit,
 		}
 	})
 
