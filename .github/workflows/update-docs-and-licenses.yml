@@ -32,20 +32,14 @@ jobs:
           ./hack/update-docs-and-licenses.sh
 
       - name: Commit and push auto-generated changes
-        run: |
-          if [ -n "$(git status --porcelain)" ]; then
-            # Use PR author's login/email as the commit author
-            AUTHOR_NAME="${{ github.event.pull_request.user.login }}"
-            AUTHOR_EMAIL="${{ github.event.pull_request.user.email }}"
-
-            # Add all changes
-            git add .
-
-            # Create a new commit WITH signoff for DCO and set the author
-            git commit --signoff --author "$AUTHOR_NAME <$AUTHOR_EMAIL>" -m "chore(docs): Auto-update docs and licenses"
-
-            # Push the new commit to the branch
-            git push
-          else
-            echo "No changes to commit."
-          fi
+        uses: EndBug/add-and-commit@v9
+        with:
+          # Use the PR author's identity for the commit
+          author_name: ${{ github.event.pull_request.user.login }}
+          author_email: ${{ github.event.pull_request.user.id }}+${{ github.event.pull_request.user.login }}@users.noreply.github.com
+          
+          # Commit message
+          message: 'chore(docs): Auto-update docs and licenses'
+          
+          # Adds a sign-off to the commit message for DCO
+          signoff: true
