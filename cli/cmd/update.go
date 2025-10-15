@@ -4,7 +4,7 @@
 package cmd
 
 import (
-	"fmt"
+	"log"
 
 	"github.com/spf13/cobra"
 )
@@ -14,7 +14,7 @@ type UpdateCmd struct {
 }
 
 func (c *UpdateCmd) RunE(_ *cobra.Command, args []string) error {
-	fmt.Printf("running %s", c.cmd.Use)
+	log.Printf("running %s", c.cmd.Use)
 
 	return nil
 }
