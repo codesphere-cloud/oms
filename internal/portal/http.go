@@ -23,7 +23,7 @@ type Portal interface {
 	ListBuilds(product Product) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
 	DownloadBuildArtifact(product Product, build Build, file io.Writer) error
-	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error
+	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)
 	RevokeAPIKey(key string) error
 	UpdateAPIKey(key string, expiresAt time.Time) error
 	ListAPIKeys() ([]ApiKey, error)
@@ -200,7 +200,7 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 	return nil
 }
 
-func (c *PortalClient) RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error {
+func (c *PortalClient) RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error) {
 	req := struct {
 		Owner        string    `json:"owner"`
 		Organization string    `json:"organization"`
@@ -215,25 +215,25 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 
 	reqBody, err := json.Marshal(req)
 	if err != nil {
-		return fmt.Errorf("failed to generate request body: %w", err)
+		return nil, fmt.Errorf("failed to generate request body: %w", err)
 	}
 
 	resp, err := c.HttpRequest(http.MethodPost, "/key/register", reqBody)
 	if err != nil {
-		return fmt.Errorf("POST request to register API key failed: %w", err)
+		return nil, fmt.Errorf("POST request to register API key failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	newKey := &ApiKey{}
 	err = json.NewDecoder(resp.Body).Decode(newKey)
 	if err != nil {
-		return fmt.Errorf("failed to decode response body: %w", err)
+		return nil, fmt.Errorf("failed to decode response body: %w", err)
 	}
 
 	log.Println("API key registered successfully!")
 	log.Printf("Owner: %s\nOrganisation: %s\nKey: %s\n", newKey.Owner, newKey.Organization, newKey.ApiKey)
 
-	return nil
+	return newKey, nil
 }
 
 func (c *PortalClient) RevokeAPIKey(keyId string) error {

@@ -27,25 +27,26 @@ type RegisterOpts struct {
 
 func (c *RegisterCmd) RunE(_ *cobra.Command, args []string) error {
 	p := portal.NewPortalClient()
-	return c.Register(p)
+	_, err := c.Register(p)
+	return err
 }
 
-func (c *RegisterCmd) Register(p portal.Portal) error {
+func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
 	var err error
 	var expiresAt time.Time
 	if c.Opts.ExpiresAt != "" {
 		expiresAt, err = time.Parse(time.RFC3339, c.Opts.ExpiresAt)
 		if err != nil {
-			return fmt.Errorf("failed to parse expiration date: %w", err)
+			return nil, fmt.Errorf("failed to parse expiration date: %w", err)
 		}
 	}
 
-	err = p.RegisterAPIKey(c.Opts.Owner, c.Opts.Organization, c.Opts.Role, expiresAt)
+	newKey, err := p.RegisterAPIKey(c.Opts.Owner, c.Opts.Organization, c.Opts.Role, expiresAt)
 	if err != nil {
-		return fmt.Errorf("failed to register API key: %w", err)
+		return nil, fmt.Errorf("failed to register API key: %w", err)
 	}
 
-	return nil
+	return newKey, nil
 }
 
 func AddRegisterCmd(list *cobra.Command, opts GlobalOptions) {
