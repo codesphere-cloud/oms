@@ -7,8 +7,9 @@ require (
 	github.com/codesphere-cloud/cs-go v0.6.1
 	github.com/inconshreveable/go-update v0.0.0-20160112193335-8152e7eb6ccf
 	github.com/jedib0t/go-pretty/v6 v6.6.8
-	github.com/onsi/ginkgo/v2 v2.25.3
+	github.com/onsi/ginkgo/v2 v2.26.0
 	github.com/onsi/gomega v1.38.2
+	github.com/rhysd/go-github-selfupdate v1.2.0
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.17.0
@@ -33,7 +34,6 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/rhysd/go-github-selfupdate v1.2.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
@@ -43,6 +43,7 @@ require (
 	github.com/ulikunitz/xz v0.5.5 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	golang.org/x/mod v0.28.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20181106182150-f42d05182288 // indirect
 	golang.org/x/sys v0.36.0 // indirect
