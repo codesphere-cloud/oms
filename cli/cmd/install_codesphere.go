@@ -51,8 +51,9 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere := InstallCodesphereCmd{
 		cmd: &cobra.Command{
 			Use:   "codesphere",
-			Short: "Coming soon: Install a Codesphere instance",
-			Long:  io.Long(`Coming soon: Install a Codesphere instance`),
+			Short: "Install a Codesphere instance",
+			Long: io.Long(`Install a Codesphere instance with the provided package, configuration file, and private key.
+			Uses the private-cloud-installer.js script included in the package to perform the installation.`),
 		},
 		Opts: &InstallCodesphereOpts{GlobalOptions: opts},
 		Env:  env.NewEnv(),

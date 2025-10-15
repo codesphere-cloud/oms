@@ -352,8 +352,8 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 
 		Expect(codesphereCmd).NotTo(BeNil())
 		Expect(codesphereCmd.Use).To(Equal("codesphere"))
-		Expect(codesphereCmd.Short).To(Equal("Coming soon: Install a Codesphere instance"))
-		Expect(codesphereCmd.Long).To(ContainSubstring("Coming soon: Install a Codesphere instance"))
+		Expect(codesphereCmd.Short).To(Equal("Install a Codesphere instance"))
+		Expect(codesphereCmd.Long).To(ContainSubstring("Uses the private-cloud-installer.js script included in the package to perform the installation."))
 		Expect(codesphereCmd.RunE).NotTo(BeNil())
 
 		// Check flags
