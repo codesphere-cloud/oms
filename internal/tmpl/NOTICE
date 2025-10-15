@@ -1,0 +1,120 @@
+Codesphere Go SDK & CLI
+Copyright (c) Codesphere Inc.
+
+This project includes code licensed under the following terms:
+ 
+----------
+Module: github.com/blang/semver
+Version: v3.5.1
+License: MIT
+License URL: https://github.com/blang/semver/blob/v3.5.1/LICENSE
+ 
+----------
+Module: github.com/codesphere-cloud/cs-go/pkg/io
+Version: v0.10.1
+License: Apache-2.0
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.10.1/LICENSE
+   
+----------
+Module: github.com/cpuguy83/go-md2man/v2/md2man
+Version: v2.0.6
+License: MIT
+License URL: https://github.com/cpuguy83/go-md2man/blob/v2.0.6/LICENSE.md
+ 
+----------
+Module: github.com/davecgh/go-spew/spew
+Version: v1.1.2-0.20180830191138-d8f796af33cc
+License: ISC
+License URL: https://github.com/davecgh/go-spew/blob/d8f796af33cc/LICENSE
+ 
+----------
+Module: github.com/inconshreveable/go-update
+Version: v0.0.0-20160112193335-8152e7eb6ccf
+License: Apache-2.0
+License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/LICENSE
+ 
+----------
+Module: github.com/inconshreveable/go-update/internal/binarydist
+Version: v0.0.0-20160112193335-8152e7eb6ccf
+License: MIT
+License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/internal/binarydist/License
+ 
+----------
+Module: github.com/inconshreveable/go-update/internal/osext
+Version: v0.0.0-20160112193335-8152e7eb6ccf
+License: BSD-3-Clause
+License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/internal/osext/LICENSE
+ 
+----------
+Module: github.com/jedib0t/go-pretty/v6
+Version: v6.6.7
+License: MIT
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.6.7/LICENSE
+ 
+----------
+Module: github.com/mattn/go-runewidth
+Version: v0.0.16
+License: MIT
+License URL: https://github.com/mattn/go-runewidth/blob/v0.0.16/LICENSE
+ 
+----------
+Module: github.com/pmezard/go-difflib/difflib
+Version: v1.0.1-0.20181226105442-5d4384ee4fb2
+License: BSD-3-Clause
+License URL: https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE
+ 
+----------
+Module: github.com/rivo/uniseg
+Version: v0.4.7
+License: MIT
+License URL: https://github.com/rivo/uniseg/blob/v0.4.7/LICENSE.txt
+ 
+----------
+Module: github.com/russross/blackfriday/v2
+Version: v2.1.0
+License: BSD-2-Clause
+License URL: https://github.com/russross/blackfriday/blob/v2.1.0/LICENSE.txt
+ 
+----------
+Module: github.com/spf13/cobra
+Version: v1.9.1
+License: Apache-2.0
+License URL: https://github.com/spf13/cobra/blob/v1.9.1/LICENSE.txt
+ 
+----------
+Module: github.com/spf13/pflag
+Version: v1.0.6
+License: BSD-3-Clause
+License URL: https://github.com/spf13/pflag/blob/v1.0.6/LICENSE
+ 
+----------
+Module: github.com/stretchr/objx
+Version: v0.5.2
+License: MIT
+License URL: https://github.com/stretchr/objx/blob/v0.5.2/LICENSE
+ 
+----------
+Module: github.com/stretchr/testify
+Version: v1.10.0
+License: MIT
+License URL: https://github.com/stretchr/testify/blob/v1.10.0/LICENSE
+ 
+----------
+Module: golang.org/x/sync/errgroup
+Version: v0.16.0
+License: BSD-3-Clause
+License URL: https://cs.opensource.google/go/x/sync/+/v0.16.0:LICENSE
+ 
+----------
+Module: golang.org/x/text
+Version: v0.28.0
+License: BSD-3-Clause
+License URL: https://cs.opensource.google/go/x/text/+/v0.28.0:LICENSE
+ 
+----------
+Module: gopkg.in/yaml.v3
+Version: v3.0.1
+License: MIT
+License URL: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
+
+
