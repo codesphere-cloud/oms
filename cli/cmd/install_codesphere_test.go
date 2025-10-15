@@ -374,7 +374,7 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 		Expect(privKeyFlag).NotTo(BeNil())
 		Expect(privKeyFlag.Shorthand).To(Equal("k"))
 
-		skipStepFlag := codesphereCmd.Flags().Lookup("skip-step")
+		skipStepFlag := codesphereCmd.Flags().Lookup("skip-steps")
 		Expect(skipStepFlag).NotTo(BeNil())
 		Expect(skipStepFlag.Shorthand).To(Equal("s"))
 	})

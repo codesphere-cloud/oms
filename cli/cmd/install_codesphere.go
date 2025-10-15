@@ -28,11 +28,11 @@ type InstallCodesphereCmd struct {
 
 type InstallCodesphereOpts struct {
 	*GlobalOptions
-	Package  string
-	Force    bool
-	Config   string
-	PrivKey  string
-	SkipStep string
+	Package   string
+	Force     bool
+	Config    string
+	PrivKey   string
+	SkipSteps []string
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
@@ -61,7 +61,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere.cmd.Flags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
 	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Config, "config", "c", "", "Configuration file for the private cloud installer")
 	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Private key file for the installation")
-	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.SkipStep, "skip-step", "s", "", "Skip specific installation steps")
+	codesphere.cmd.Flags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Skip specific installation steps")
 
 	util.MarkFlagRequired(codesphere.cmd, "package")
 	util.MarkFlagRequired(codesphere.cmd, "config")
@@ -109,8 +109,10 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(p *installer.Package, goos stri
 
 	// Build command
 	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", c.Opts.Config, "--privKey", c.Opts.PrivKey}
-	if c.Opts.SkipStep != "" {
-		cmdArgs = append(cmdArgs, "--skipStep", c.Opts.SkipStep)
+	if len(c.Opts.SkipSteps) > 0 {
+		for _, step := range c.Opts.SkipSteps {
+			cmdArgs = append(cmdArgs, "--skipStep", step)
+		}
 	}
 
 	cmd := exec.Command(nodePath, cmdArgs...)
