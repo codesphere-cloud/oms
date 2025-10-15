@@ -4,7 +4,6 @@
 package cmd_test
 
 import (
-	"fmt"
 	"os"
 	"runtime"
 
@@ -45,52 +44,45 @@ var _ = Describe("InstallCodesphereCmd", func() {
 	})
 
 	Context("RunE method", func() {
-		It("fails when package is empty", func() {
-			c.Opts.Package = ""
-			err := c.RunE(nil, []string{})
-			Expect(err).To(MatchError("required option package not set"))
-		})
-
 		It("calls GetOmsWorkdir and fails on non-linux platform", func() {
 			c.Opts.Package = "test-package.tar.gz"
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
 			err := c.RunE(nil, []string{})
 
-			// On non-Linux platforms, should fail with platform error
+			Expect(err).To(HaveOccurred())
 			if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-				Expect(err).To(HaveOccurred())
+				// Should fail with platform error on non-Linux platform
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
+			} else {
+				// On Linux amd64, it should fail on package extraction since the package doesn't exist
+				Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
 			}
 		})
 	})
 
 	Context("ExtractAndInstall method", func() {
-		It("fails on non-Linux amd64 platforms", func() {
+		It("fails on non-linux amd64 platforms", func() {
 			pkg := &installer.Package{
 				OmsWorkdir: "/test/workdir",
 				Filename:   "test-package.tar.gz",
 				FileIO:     &util.FilesystemWriter{},
 			}
 
-			err := c.ExtractAndInstall(pkg, []string{})
+			// Test with Windows platform
+			err := c.ExtractAndInstall(pkg, "windows", "amd64")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
+			Expect(err.Error()).To(ContainSubstring("windows/amd64"))
 
-			// Should always fail on non-Linux amd64 platforms
-			if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
-				Expect(err.Error()).To(ContainSubstring(fmt.Sprintf("Current platform: %s/%s", runtime.GOOS, runtime.GOARCH)))
-			}
+			// Test with ARM64 architecture
+			err = c.ExtractAndInstall(pkg, "linux", "arm64")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
+			Expect(err.Error()).To(ContainSubstring("linux/arm64"))
 		})
 
-		Context("when on Linux amd64 (mocked)", func() {
-			BeforeEach(func() {
-				// Skip these tests if not on Linux amd64 since we can't easily mock runtime.GOOS
-				if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-					Skip("Skipping Linux-specific tests on non-Linux platform")
-				}
-			})
-
+		Context("when on Linux amd64", func() {
 			It("fails when package extraction fails", func() {
 				pkg := &installer.Package{
 					OmsWorkdir: "/test/workdir",
@@ -98,9 +90,173 @@ var _ = Describe("InstallCodesphereCmd", func() {
 					FileIO:     &util.FilesystemWriter{},
 				}
 
-				err := c.ExtractAndInstall(pkg, []string{})
+				err := c.ExtractAndInstall(pkg, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
+			})
+
+			It("fails when deps.tar.gz is missing from package", func() {
+				tempDir, err := os.MkdirTemp("", "oms-test-*")
+				Expect(err).To(BeNil())
+				defer func() {
+					err := os.RemoveAll(tempDir)
+					Expect(err).To(BeNil())
+				}()
+
+				origWd, err := os.Getwd()
+				Expect(err).To(BeNil())
+				err = os.Chdir(tempDir)
+				Expect(err).To(BeNil())
+				defer func() {
+					err := os.Chdir(origWd)
+					Expect(err).To(BeNil())
+				}()
+
+				// Create package without deps.tar.gz
+				testPackageFile := "test-package.tar.gz"
+				packageFiles := map[string][]byte{
+					"node":                       []byte("fake node binary"),
+					"private-cloud-installer.js": []byte("console.log('installer');"),
+					"kubectl":                    []byte("fake kubectl binary"),
+					// deps.tar.gz missing
+				}
+				err = createTestTarGz(testPackageFile, packageFiles)
+				Expect(err).To(BeNil())
+
+				c.Opts.Force = true
+				pkg := &installer.Package{
+					OmsWorkdir: tempDir,
+					Filename:   testPackageFile,
+					FileIO:     &util.FilesystemWriter{},
+				}
+
+				err = c.ExtractAndInstall(pkg, "linux", "amd64")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("deps.tar.gz not found in package"))
+			})
+
+			It("fails when private-cloud-installer.js is missing from package", func() {
+				tempDir, err := os.MkdirTemp("", "oms-test-*")
+				Expect(err).To(BeNil())
+				defer func() {
+					err := os.RemoveAll(tempDir)
+					Expect(err).To(BeNil())
+				}()
+
+				origWd, err := os.Getwd()
+				Expect(err).To(BeNil())
+				err = os.Chdir(tempDir)
+				Expect(err).To(BeNil())
+				defer func() {
+					err := os.Chdir(origWd)
+					Expect(err).To(BeNil())
+				}()
+
+				// Create package without private-cloud-installer.js
+				testPackageFile := "test-package.tar.gz"
+				packageFiles := map[string][]byte{
+					"deps.tar.gz": []byte("fake deps archive"),
+					"node":        []byte("fake node binary"),
+					"kubectl":     []byte("fake kubectl binary"),
+					// private-cloud-installer.js missing
+				}
+				err = createTestTarGz(testPackageFile, packageFiles)
+				Expect(err).To(BeNil())
+
+				c.Opts.Force = true
+				pkg := &installer.Package{
+					OmsWorkdir: tempDir,
+					Filename:   testPackageFile,
+					FileIO:     &util.FilesystemWriter{},
+				}
+
+				err = c.ExtractAndInstall(pkg, "linux", "amd64")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("private-cloud-installer.js not found in package"))
+			})
+
+			It("fails when node executable is missing from package", func() {
+				tempDir, err := os.MkdirTemp("", "oms-test-*")
+				Expect(err).To(BeNil())
+				defer func() {
+					err := os.RemoveAll(tempDir)
+					Expect(err).To(BeNil())
+				}()
+
+				origWd, err := os.Getwd()
+				Expect(err).To(BeNil())
+				err = os.Chdir(tempDir)
+				Expect(err).To(BeNil())
+				defer func() {
+					err := os.Chdir(origWd)
+					Expect(err).To(BeNil())
+				}()
+
+				// Create package without node executable
+				testPackageFile := "test-package.tar.gz"
+				packageFiles := map[string][]byte{
+					"deps.tar.gz":                []byte("fake deps archive"),
+					"private-cloud-installer.js": []byte("console.log('installer');"),
+					"kubectl":                    []byte("fake kubectl binary"),
+					// node missing
+				}
+				err = createTestTarGz(testPackageFile, packageFiles)
+				Expect(err).To(BeNil())
+
+				c.Opts.Force = true
+				pkg := &installer.Package{
+					OmsWorkdir: tempDir,
+					Filename:   testPackageFile,
+					FileIO:     &util.FilesystemWriter{},
+				}
+
+				err = c.ExtractAndInstall(pkg, "linux", "amd64")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("node executable not found in package"))
+			})
+
+			It("successfully extracts package with all required files but fails on execution", func() {
+				tempDir, err := os.MkdirTemp("", "oms-test-*")
+				Expect(err).To(BeNil())
+				defer func() {
+					err := os.RemoveAll(tempDir)
+					Expect(err).To(BeNil())
+				}()
+
+				origWd, err := os.Getwd()
+				Expect(err).To(BeNil())
+				err = os.Chdir(tempDir)
+				Expect(err).To(BeNil())
+				defer func() {
+					err := os.Chdir(origWd)
+					Expect(err).To(BeNil())
+				}()
+
+				// Create complete package with all required files
+				testPackageFile := "test-package.tar.gz"
+				packageFiles := map[string][]byte{
+					"deps.tar.gz":                []byte("fake deps archive"),
+					"node":                       []byte("fake node binary that will fail to execute"),
+					"private-cloud-installer.js": []byte("console.log('installer');"),
+					"kubectl":                    []byte("fake kubectl binary"),
+				}
+				err = createTestTarGz(testPackageFile, packageFiles)
+				Expect(err).To(BeNil())
+
+				c.Opts.Force = true
+				pkg := &installer.Package{
+					OmsWorkdir: tempDir,
+					Filename:   testPackageFile,
+					FileIO:     &util.FilesystemWriter{},
+				}
+
+				err = c.ExtractAndInstall(pkg, "linux", "amd64")
+				Expect(err).To(HaveOccurred())
+				// Should fail when trying to chmod or execute the fake node binary
+				Expect(err.Error()).To(SatisfyAny(
+					ContainSubstring("failed to make node executable"),
+					ContainSubstring("failed to run installer script"),
+				))
 			})
 		})
 	})
@@ -209,6 +365,18 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 		Expect(forceFlag).NotTo(BeNil())
 		Expect(forceFlag.Shorthand).To(Equal("f"))
 		Expect(forceFlag.DefValue).To(Equal("false"))
+
+		configFlag := codesphereCmd.Flags().Lookup("config")
+		Expect(configFlag).NotTo(BeNil())
+		Expect(configFlag.Shorthand).To(Equal("c"))
+
+		privKeyFlag := codesphereCmd.Flags().Lookup("priv-key")
+		Expect(privKeyFlag).NotTo(BeNil())
+		Expect(privKeyFlag.Shorthand).To(Equal("k"))
+
+		skipStepFlag := codesphereCmd.Flags().Lookup("skip-step")
+		Expect(skipStepFlag).NotTo(BeNil())
+		Expect(skipStepFlag.Shorthand).To(Equal("s"))
 	})
 })
 

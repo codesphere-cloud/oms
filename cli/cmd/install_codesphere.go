@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -27,19 +27,18 @@ type InstallCodesphereCmd struct {
 
 type InstallCodesphereOpts struct {
 	*GlobalOptions
-	Package string
-	Force   bool
+	Package  string
+	Force    bool
+	Config   string
+	PrivKey  string
+	SkipStep string
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
-	if c.Opts.Package == "" {
-		return errors.New("required option package not set")
-	}
-
 	workdir := c.Env.GetOmsWorkdir()
 	p := installer.NewPackage(workdir, c.Opts.Package)
 
-	err := c.ExtractAndInstall(p, args)
+	err := c.ExtractAndInstall(p, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return fmt.Errorf("failed to extract and install package: %w", err)
 	}
@@ -57,15 +56,23 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 		Opts: &InstallCodesphereOpts{GlobalOptions: opts},
 		Env:  env.NewEnv(),
 	}
-	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from")
+	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from")
 	codesphere.cmd.Flags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
+	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Config, "config", "c", "", "Configuration file for the private cloud installer")
+	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Private key file for the installation")
+	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.SkipStep, "skip-step", "s", "", "Skip specific installation steps")
+
+	util.MarkFlagRequired(codesphere.cmd, "package")
+	util.MarkFlagRequired(codesphere.cmd, "config")
+	util.MarkFlagRequired(codesphere.cmd, "priv-key")
+
 	install.AddCommand(codesphere.cmd)
 	codesphere.cmd.RunE = codesphere.RunE
 }
 
-func (c *InstallCodesphereCmd) ExtractAndInstall(p *installer.Package, args []string) error {
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", runtime.GOOS, runtime.GOARCH)
+func (c *InstallCodesphereCmd) ExtractAndInstall(p *installer.Package, goos string, goarch string) error {
+	if goos != "linux" || goarch != "amd64" {
+		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", goos, goarch)
 	}
 
 	err := p.Extract(c.Opts.Force)
@@ -78,6 +85,9 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(p *installer.Package, args []st
 		return fmt.Errorf("failed to list available files: %w", err)
 	}
 
+	if !slices.Contains(foundFiles, "deps.tar.gz") {
+		return fmt.Errorf("deps.tar.gz not found in package")
+	}
 	if !slices.Contains(foundFiles, "private-cloud-installer.js") {
 		return fmt.Errorf("private-cloud-installer.js not found in package")
 	}
@@ -85,21 +95,33 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(p *installer.Package, args []st
 		return fmt.Errorf("node executable not found in package")
 	}
 
-	nodeDir := "./" + p.GetWorkDir() + "/node"
-	err = os.Chmod(nodeDir, 0755)
+	nodePath := "./" + p.GetWorkDir() + "/node"
+	err = os.Chmod(nodePath, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to make node executable: %w", err)
 	}
 
-	log.Printf("Using Node.js executable: %s", nodeDir)
+	log.Printf("Using Node.js executable: %s", nodePath)
 	log.Println("Starting private cloud installer script...")
-	installerScript := "./" + p.GetWorkDir() + "/private-cloud-installer.js"
-	out, err := exec.Command(nodeDir, append([]string{installerScript}, args...)...).Output()
+	installerPath := "./" + p.GetWorkDir() + "/private-cloud-installer.js"
+	archivePath := "./" + p.GetWorkDir() + "/deps.tar.gz"
+
+	// Build command
+	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", c.Opts.Config, "--privKey", c.Opts.PrivKey}
+	if c.Opts.SkipStep != "" {
+		cmdArgs = append(cmdArgs, "--skipStep", c.Opts.SkipStep)
+	}
+
+	cmd := exec.Command(nodePath, cmdArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("failed to run installer script: %w", err)
 	}
-	fmt.Println(string(out))
-	fmt.Println("Private cloud installer script finished.")
+	log.Println("Private cloud installer script finished.")
 
 	return nil
 }
