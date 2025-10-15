@@ -29,6 +29,8 @@ func NewPackage(omsWorkdir, filename string) *Package {
 	}
 }
 
+// Extract extracts the package tar.gz file into its working directory.
+// If force is true, it will overwrite existing files.
 func (p *Package) Extract(force bool) error {
 	workDir := p.GetWorkDir()
 	err := os.MkdirAll(p.OmsWorkdir, 0755)
@@ -53,6 +55,7 @@ func (p *Package) Extract(force bool) error {
 	return nil
 }
 
+// ExtractDependency extracts a specific dependency file from the deps.tar.gz archive within the package.
 func (p *Package) ExtractDependency(file string, force bool) error {
 	err := p.Extract(force)
 	if err != nil {
@@ -84,10 +87,13 @@ func (p *Package) alreadyExtracted(dir string) (bool, error) {
 	return isDir, nil
 }
 
+// GetWorkDir returns the working directory path for the package
+// by joining the OmsWorkdir and the filename (without the .tar.gz extension).
 func (p *Package) GetWorkDir() string {
 	return path.Join(p.OmsWorkdir, strings.ReplaceAll(p.Filename, ".tar.gz", ""))
 }
 
+// GetDependencyPath returns the full path to a dependency file within the package's deps directory.
 func (p *Package) GetDependencyPath(filename string) string {
 	workDir := p.GetWorkDir()
 	return path.Join(workDir, depsDir, filename)

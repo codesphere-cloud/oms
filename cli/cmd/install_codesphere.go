@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"slices"
 
@@ -95,7 +96,7 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(p *installer.Package, goos stri
 		return fmt.Errorf("node executable not found in package")
 	}
 
-	nodePath := "./" + p.GetWorkDir() + "/node"
+	nodePath := filepath.Join(".", p.GetWorkDir(), "node")
 	err = os.Chmod(nodePath, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to make node executable: %w", err)
@@ -103,8 +104,8 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(p *installer.Package, goos stri
 
 	log.Printf("Using Node.js executable: %s", nodePath)
 	log.Println("Starting private cloud installer script...")
-	installerPath := "./" + p.GetWorkDir() + "/private-cloud-installer.js"
-	archivePath := "./" + p.GetWorkDir() + "/deps.tar.gz"
+	installerPath := filepath.Join(".", p.GetWorkDir(), "private-cloud-installer.js")
+	archivePath := filepath.Join(".", p.GetWorkDir(), "deps.tar.gz")
 
 	// Build command
 	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", c.Opts.Config, "--privKey", c.Opts.PrivKey}
