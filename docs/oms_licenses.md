@@ -1,19 +1,19 @@
-## oms version
+## oms licenses
 
-Print version
+Print license information
 
 ### Synopsis
 
-Print current version of OMS.
+Print information about the OMS license and open source licenses of dependencies.
 
 ```
-oms version [flags]
+oms licenses [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for version
+  -h, --help   help for licenses
 ```
 
 ### SEE ALSO

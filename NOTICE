@@ -17,10 +17,16 @@ License URL: https://github.com/clipperhouse/uax29/blob/v2.2.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go/pkg/io
-Version: v0.11.1
+Version: v0.6.1
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.11.1/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.6.1/LICENSE
    
+----------
+Module: github.com/codesphere-cloud/oms/internal/tmpl
+Version: Unknown
+License: Apache-2.0
+License URL: https://github.com/codesphere-cloud/oms/blob/HEAD/internal/tmpl/LICENSE
+ 
 ----------
 Module: github.com/cpuguy83/go-md2man/v2/md2man
 Version: v2.0.7
@@ -32,6 +38,18 @@ Module: github.com/davecgh/go-spew/spew
 Version: v1.1.2-0.20180830191138-d8f796af33cc
 License: ISC
 License URL: https://github.com/davecgh/go-spew/blob/d8f796af33cc/LICENSE
+ 
+----------
+Module: github.com/google/go-github/github
+Version: v17.0.0
+License: BSD-3-Clause
+License URL: https://github.com/google/go-github/blob/v17.0.0/LICENSE
+ 
+----------
+Module: github.com/google/go-querystring/query
+Version: v1.0.0
+License: BSD-3-Clause
+License URL: https://github.com/google/go-querystring/blob/v1.0.0/LICENSE
  
 ----------
 Module: github.com/inconshreveable/go-update
@@ -70,6 +88,12 @@ License: BSD-3-Clause
 License URL: https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE
  
 ----------
+Module: github.com/rhysd/go-github-selfupdate/selfupdate
+Version: v1.2.0
+License: MIT
+License URL: https://github.com/rhysd/go-github-selfupdate/blob/v1.2.0/LICENSE
+ 
+----------
 Module: github.com/russross/blackfriday/v2
 Version: v2.1.0
 License: BSD-2-Clause
@@ -100,10 +124,28 @@ License: MIT
 License URL: https://github.com/stretchr/testify/blob/v1.11.1/LICENSE
  
 ----------
-Module: golang.org/x/sync/errgroup
-Version: v0.17.0
+Module: github.com/tcnksm/go-gitconfig
+Version: v0.1.2
+License: MIT
+License URL: https://github.com/tcnksm/go-gitconfig/blob/v0.1.2/LICENSE
+ 
+----------
+Module: github.com/ulikunitz/xz
+Version: v0.5.5
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sync/+/v0.17.0:LICENSE
+License URL: https://github.com/ulikunitz/xz/blob/v0.5.5/LICENSE
+ 
+----------
+Module: golang.org/x/net/context/ctxhttp
+Version: v0.44.0
+License: BSD-3-Clause
+License URL: https://cs.opensource.google/go/x/net/+/v0.44.0:LICENSE
+ 
+----------
+Module: golang.org/x/oauth2
+Version: v0.0.0-20181106182150-f42d05182288
+License: BSD-3-Clause
+License URL: https://cs.opensource.google/go/x/oauth2/+/f42d0518:LICENSE
  
 ----------
 Module: golang.org/x/text
