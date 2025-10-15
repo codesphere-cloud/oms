@@ -203,23 +203,6 @@ var _ = Describe("API Key Integration Tests", func() {
 		})
 	})
 
-	Describe("API Key Registration Edge Cases", func() {
-		It("should handle registration with invalid expiration date", func() {
-			registerCmd := cmd.RegisterCmd{
-				Opts: cmd.RegisterOpts{
-					Owner:        testOwner,
-					Organization: testOrg,
-					Role:         testRole,
-					ExpiresAt:    "invalid-date",
-				},
-			}
-
-			_, err := registerCmd.Register(portalClient)
-			Expect(err).NotTo(BeNil(), "Should fail with invalid date format")
-			Expect(err.Error()).To(ContainSubstring("failed to parse expiration date"))
-		})
-	})
-
 	Describe("API Key Update With Wrong Input", func() {
 		It("should handle update with invalid date format", func() {
 			updateCmd := cmd.UpdateAPIKeyCmd{

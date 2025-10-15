@@ -27,8 +27,16 @@ type RegisterOpts struct {
 
 func (c *RegisterCmd) RunE(_ *cobra.Command, args []string) error {
 	p := portal.NewPortalClient()
-	_, err := c.Register(p)
-	return err
+	newKey, err := c.Register(p)
+	if err != nil {
+		return err
+	}
+
+	if newKey != nil {
+		fmt.Printf("API key registered successfully!\nOwner: %s\nOrganisation: %s\nKey: %s\n", newKey.Owner, newKey.Organization, newKey.ApiKey)
+	}
+
+	return nil
 }
 
 func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {

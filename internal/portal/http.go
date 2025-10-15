@@ -230,9 +230,6 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 		return nil, fmt.Errorf("failed to decode response body: %w", err)
 	}
 
-	log.Println("API key registered successfully!")
-	log.Printf("Owner: %s\nOrganisation: %s\nKey: %s\n", newKey.Owner, newKey.Organization, newKey.ApiKey)
-
 	return newKey, nil
 }
 
