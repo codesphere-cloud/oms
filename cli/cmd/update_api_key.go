@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/portal"
@@ -39,7 +40,7 @@ func AddApiKeyUpdateCmd(parentCmd *cobra.Command) {
 	}
 
 	apiKeyCmd.Flags().StringVarP(&cmdState.Opts.APIKeyID, "id", "i", "", "The ID of the API key to update")
-	apiKeyCmd.Flags().StringVarP(&cmdState.Opts.ExpiresAtStr, "valid-to", "v", "", "The new expiration date in RFC3339 format (e.g., \"2025-12-31T23:59:59Z\")")
+	apiKeyCmd.Flags().StringVar(&cmdState.Opts.ExpiresAtStr, "valid-to", "", "The new expiration date in RFC3339 format (e.g., \"2025-12-31T23:59:59Z\")")
 
 	util.MarkFlagRequired(apiKeyCmd, "id")
 	util.MarkFlagRequired(apiKeyCmd, "valid-to")
@@ -58,6 +59,6 @@ func (c *UpdateAPIKeyCmd) UpdateAPIKey(p portal.Portal) error {
 		return fmt.Errorf("failed to update API key: %w", err)
 	}
 
-	fmt.Printf("Successfully updated API key '%s' with new expiration date %s.\n", c.Opts.APIKeyID, expiresAt.Format(time.RFC1123))
+	log.Printf("Successfully updated API key '%s' with new expiration date %s.\n", c.Opts.APIKeyID, expiresAt.Format(time.RFC1123))
 	return nil
 }

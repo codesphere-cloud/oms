@@ -283,7 +283,7 @@ func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	fmt.Println("API key updated successfully")
+	log.Println("API key updated successfully")
 	return nil
 }
 
