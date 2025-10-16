@@ -4,9 +4,10 @@
 package util_test
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"io"
-
-	"embed"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -14,17 +15,9 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// I didn't find a good way to do this in memory without just reversing the code under test.
-// While this is not ideal, at least it doesn't read from file during the test run but during compilation.
-//
-//go:generate mkdir -p testdata/test
-//go:generate sh -c "echo some text > testdata/file1.txt"
-//go:generate sh -c "echo some more text > testdata/test/file2.txt"
-//go:generate sh -c "cd testdata && tar cfz testdata1.tar.gz file1.txt test/file2.txt"
-//go:embed testdata/testdata1.tar.gz
-var testdata1 embed.FS
-
-// this just reflects what's in the tar but doesn't influence the actual contents.
+// Build the .tar.gz in-memory during test setup using the local fileContents map.
+// This avoids reading from disk or using embed during tests.
+// This map reflects the content that will be written into the tar archive.
 var fileContents = map[string]string{
 	"file1.txt":      "some text\n",
 	"test/file2.txt": "some more text\n",
@@ -34,9 +27,33 @@ var _ = Describe("Tar", func() {
 		archiveIn io.Reader
 	)
 	BeforeEach(func() {
-		var err error
-		archiveIn, err = testdata1.Open("testdata/testdata1.tar.gz")
-		Expect(err).Error().NotTo(HaveOccurred())
+		// Create an in-memory tar.gz containing the embedded files.
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
+		tw := tar.NewWriter(gz)
+
+		// Helper to add a file to the tar archive using the in-memory `fileContents` map.
+		add := func(name, key string) {
+			dataStr, ok := fileContents[key]
+			Expect(ok).To(BeTrue(), "missing test data for %s", key)
+			data := []byte(dataStr)
+			hdr := &tar.Header{
+				Name: name,
+				Mode: 0600,
+				Size: int64(len(data)),
+			}
+			Expect(tw.WriteHeader(hdr)).To(Succeed())
+			_, err := tw.Write(data)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		add("file1.txt", "file1.txt")
+		add("test/file2.txt", "test/file2.txt")
+
+		Expect(tw.Close()).To(Succeed())
+		Expect(gz.Close()).To(Succeed())
+
+		archiveIn = bytes.NewReader(buf.Bytes())
 	})
 
 	Describe("StreamFileFromGzip", func() {
