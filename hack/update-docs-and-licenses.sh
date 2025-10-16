@@ -3,34 +3,26 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
-IFS=$'\n\t'
 
-here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-root=$(cd "$here/.." && pwd)
+repo_root=${1:-$(pwd)}
 
-echo "Working directory: $root"
+if [[ ! -f "$repo_root/Makefile" ]]; then
+    echo "ERROR: Makefile not found in $repo_root." >&2
+    exit 2
+fi
 
-cd "$root"
+echo "Working directory: $repo_root"
+cd "$repo_root"
 
-echo "1/2: Generating docs"
-if command -v make >/dev/null 2>&1; then
-    echo "Running 'make docs'"
-    make docs
-    echo "Docs generated into: $root/docs"
-else
+if ! command -v make >/dev/null 2>&1; then
     echo "ERROR: 'make' not found in PATH. Install make and retry." >&2
     exit 2
 fi
 
-echo "2/2: Generating licenses via Makefile target 'generate-license'"
+echo "Running 'make docs'"
+make docs
 
-if command -v make >/dev/null 2>&1; then
-    echo "Running 'make generate-license'"
-    make generate-license
-    echo "NOTICE and license headers generated/updated"
-else
-    echo "ERROR: 'make' not found in PATH. Install make and retry." >&2
-    exit 2
-fi
+echo "Running 'make generate-license'"
+make generate-license
 
 echo "Done!"
