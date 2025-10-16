@@ -21,7 +21,7 @@ import (
 //go:generate sh -c "echo some text > testdata/file1.txt"
 //go:generate sh -c "echo some more text > testdata/test/file2.txt"
 //go:generate sh -c "cd testdata && tar cfz testdata1.tar.gz file1.txt test/file2.txt"
-//go:embed testdata
+//go:embed testdata/testdata1.tar.gz
 var testdata1 embed.FS
 
 // this just reflects what's in the tar but doesn't influence the actual contents.
