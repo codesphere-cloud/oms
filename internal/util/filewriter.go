@@ -14,6 +14,7 @@ type FileIO interface {
 	Create(filename string) (*os.File, error)
 	IsDirectory(filename string) (bool, error)
 	Exists(filename string) bool
+	ReadDir(dirname string) ([]os.DirEntry, error)
 }
 
 type FilesystemWriter struct{}
@@ -53,6 +54,10 @@ func (fs *FilesystemWriter) MkdirAll(path string, perm os.FileMode) error {
 
 func (fs *FilesystemWriter) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	return os.OpenFile(name, flag, perm)
+}
+
+func (fs *FilesystemWriter) ReadDir(dirname string) ([]os.DirEntry, error) {
+	return os.ReadDir(dirname)
 }
 
 type ClosableFile interface {
