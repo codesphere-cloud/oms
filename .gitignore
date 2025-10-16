@@ -32,5 +32,4 @@ dist/
 oms-workdir/
 
 # Ignore internal util testdata fixtures
-internal/util/testdata/**
-!internal/util/testdata/.gitkeep
+internal/util/testdata/testdata1.tar.gz
