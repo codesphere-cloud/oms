@@ -7,6 +7,7 @@ import (
 	"io"
 
 	"embed"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -19,7 +20,7 @@ import (
 //go:generate mkdir -p testdata/test
 //go:generate sh -c "echo some text > testdata/file1.txt"
 //go:generate sh -c "echo some more text > testdata/test/file2.txt"
-//go:generate sh -c "cd testdata && tar cfz testdata1.tar.gz file1.txt file2.txt"
+//go:generate sh -c "cd testdata && tar cfz testdata1.tar.gz file1.txt test/file2.txt"
 //go:embed testdata
 var testdata1 embed.FS
 
