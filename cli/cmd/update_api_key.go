@@ -40,7 +40,7 @@ func AddApiKeyUpdateCmd(parentCmd *cobra.Command) {
 	}
 
 	apiKeyCmd.Flags().StringVarP(&cmdState.Opts.APIKeyID, "id", "i", "", "The ID of the API key to update")
-	apiKeyCmd.Flags().StringVarP(&cmdState.Opts.ExpiresAtStr, "valid-to", "v", "", "The new expiration date in RFC3339 format (e.g., \"2025-12-31T23:59:59Z\")")
+	apiKeyCmd.Flags().StringVar(&cmdState.Opts.ExpiresAtStr, "valid-to", "", "The new expiration date in RFC3339 format (e.g., \"2025-12-31T23:59:59Z\")")
 
 	util.MarkFlagRequired(apiKeyCmd, "id")
 	util.MarkFlagRequired(apiKeyCmd, "valid-to")
