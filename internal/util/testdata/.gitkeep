@@ -1,0 +1,1 @@
+# Keep the testdata directory in git, but ignore its generated/large contents

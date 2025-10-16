@@ -31,5 +31,6 @@ oms-service
 dist/
 oms-workdir/
 
-# Ignore internal util testdata fixtures (kept out of the repository index)
-internal/util/testdata/
+# Ignore internal util testdata fixtures
+internal/util/testdata/**
+!internal/util/testdata/.gitkeep
