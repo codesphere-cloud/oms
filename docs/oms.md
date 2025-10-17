@@ -19,6 +19,7 @@ like downloading new versions.
 
 * [oms beta](oms_beta.md)	 - Commands for early testing
 * [oms download](oms_download.md)	 - Download resources available through OMS
+* [oms install](oms_install.md)	 - Coming soon: Install Codesphere and other components
 * [oms licenses](oms_licenses.md)	 - Print license information
 * [oms list](oms_list.md)	 - List resources available through OMS
 * [oms register](oms_register.md)	 - Register a new API key
