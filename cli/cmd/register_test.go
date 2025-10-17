@@ -44,15 +44,17 @@ var _ = Describe("RegisterCmd", func() {
 	Context("when expiration date is valid", func() {
 		It("registers the API key successfully", func() {
 			parsedTime, _ := time.Parse(time.RFC3339, expiresAt)
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, parsedTime).Return(nil)
-			err := c.Register(mockPortal)
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, parsedTime).Return(&portal.ApiKey{}, nil)
+			ak, err := c.Register(mockPortal)
 			Expect(err).To(BeNil())
+			Expect(ak).NotTo(BeNil())
 		})
 
 		It("returns error if Register fails", func() {
 			parsedTime, _ := time.Parse(time.RFC3339, expiresAt)
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, parsedTime).Return(fmt.Errorf("some error"))
-			err := c.Register(mockPortal)
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, parsedTime).Return((*portal.ApiKey)(nil), fmt.Errorf("some error"))
+			ak, err := c.Register(mockPortal)
+			Expect(ak).To(BeNil())
 			Expect(err).To(MatchError(ContainSubstring("failed to register API key")))
 		})
 	})
@@ -62,7 +64,8 @@ var _ = Describe("RegisterCmd", func() {
 			c.Opts.ExpiresAt = "invalid-date"
 		})
 		It("returns error for invalid expiration date", func() {
-			err := c.Register(mockPortal)
+			ak, err := c.Register(mockPortal)
+			Expect(ak).To(BeNil())
 			Expect(err).To(MatchError(ContainSubstring("failed to parse expiration date")))
 		})
 	})

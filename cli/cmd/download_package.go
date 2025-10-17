@@ -29,7 +29,7 @@ type DownloadPackageOpts struct {
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
-  if c.Opts.Hash != "" {
+	if c.Opts.Hash != "" {
 		log.Printf("Downloading package '%s' with hash '%s'\n", c.Opts.Version, c.Opts.Hash)
 	} else {
 		log.Printf("Downloading package '%s'\n", c.Opts.Version)
