@@ -1,0 +1,85 @@
+# Clean Lima configuration for OMS development
+vmType: "qemu"
+os: "Linux"
+arch: "x86_64"
+
+# Ubuntu 24.04 LTS
+images:
+- location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
+  arch: "x86_64"
+
+# Resources
+cpus: 4
+memory: "8GiB"
+disk: "60GiB"
+
+# Mount your OMS project
+mounts:
+- location: "."
+  mountPoint: "/home/user/oms"
+  writable: true
+
+# Ports and SSH
+ssh:
+  localPort: 60022
+  loadDotSSHPubKeys: true
+portForwards:
+- guestPort: 8080
+  hostPort: 8080
+
+# containerd
+containerd:
+  system: false
+  user: false
+
+# Install Docker and Go
+provision:
+- mode: system
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    
+    # Update packages
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    
+    # Install Docker
+    curl -fsSL https://get.docker.com | sh
+    systemctl disable --now docker
+    apt-get install -y uidmap dbus-user-session
+    
+- mode: user
+  script: |
+    #!/bin/bash
+    set -eux -o pipefail
+    
+    # Install Docker in rootless mode
+    dockerd-rootless-setuptool.sh install
+    
+    # Install Go 1.24 and build tools
+    sudo apt update
+    sudo apt install golang-go
+    sudo apt-get install -y make git
+    
+    # Set up the OMS project
+    cd /home/user/oms
+    export PATH=$PATH:/usr/local/go/bin
+    go mod download
+    cd cli && go build -a -buildvcs=false && mv cli ../oms-cli
+
+message: |
+  Your OMS development environment is ready!
+  
+  To access it:
+  ------
+  limactl shell lima-oms
+  cd /home/user/oms
+  ./oms-cli --help
+  ------
+
+  To install Codesphere eg.:
+  ------
+  ./oms-cli install codesphere --package codesphere-v1.66.0-installer --config config.yaml --priv-key ./path-to-private-key
+  ------
+
+  Go 1.24 and Docker are installed and ready to use.
