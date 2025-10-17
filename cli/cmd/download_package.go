@@ -29,7 +29,7 @@ type DownloadPackageOpts struct {
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
-  if c.Opts.Hash != "" {
+	if c.Opts.Hash != "" {
 		log.Printf("Downloading package '%s' with hash '%s'\n", c.Opts.Version, c.Opts.Hash)
 	} else {
 		log.Printf("Downloading package '%s'\n", c.Opts.Version)
@@ -56,10 +56,10 @@ func AddDownloadPackageCmd(download *cobra.Command, opts GlobalOptions) {
 			Short: "Download a codesphere package",
 			Long: io.Long(`Download a specific version of a Codesphere package
 				To list available packages, run oms list packages.`),
-			Example: io.FormatExampleCommands("download package", []io.Example{
+			Example: formatExamplesWithBinary("download package", []io.Example{
 				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
-			}),
+			}, "oms-cli"),
 		},
 		FileWriter: util.NewFilesystemWriter(),
 	}

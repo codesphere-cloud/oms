@@ -5,7 +5,6 @@ package main
 
 import (
 	"log"
-	"os"
 
 	oms "github.com/codesphere-cloud/oms/cli/cmd"
 	"github.com/spf13/cobra/doc"
@@ -13,9 +12,12 @@ import (
 
 func main() {
 	// to ensure the stable binary name is used and not the temporary path
-	os.Args[0] = "oms-cli"
+	root := oms.GetRootCmd()
+	if root != nil {
+		root.Use = "oms-cli"
+	}
 
-	err := doc.GenMarkdownTree(oms.GetRootCmd(), "docs")
+	err := doc.GenMarkdownTree(root, "docs")
 	if err != nil {
 		log.Fatal(err)
 	}
