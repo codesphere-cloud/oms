@@ -1,19 +1,19 @@
-## oms list packages
+## oms list api-keys
 
-List available packages
+List API keys
 
 ### Synopsis
 
-List packages available for download via the OMS portal.
+List API keys registered in the OMS portal.
 
 ```
-oms list packages [flags]
+oms list api-keys [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for packages
+  -h, --help   help for api-keys
 ```
 
 ### SEE ALSO
