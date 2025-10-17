@@ -352,6 +352,62 @@ func (_c *MockFileIO_OpenFile_Call) RunAndReturn(run func(name string, flag int,
 	return _c
 }
 
+// ReadDir provides a mock function for the type MockFileIO
+func (_mock *MockFileIO) ReadDir(dirname string) ([]os.DirEntry, error) {
+	ret := _mock.Called(dirname)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReadDir")
+	}
+
+	var r0 []os.DirEntry
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]os.DirEntry, error)); ok {
+		return returnFunc(dirname)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []os.DirEntry); ok {
+		r0 = returnFunc(dirname)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]os.DirEntry)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(dirname)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockFileIO_ReadDir_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReadDir'
+type MockFileIO_ReadDir_Call struct {
+	*mock.Call
+}
+
+// ReadDir is a helper method to define mock.On call
+//   - dirname
+func (_e *MockFileIO_Expecter) ReadDir(dirname interface{}) *MockFileIO_ReadDir_Call {
+	return &MockFileIO_ReadDir_Call{Call: _e.mock.On("ReadDir", dirname)}
+}
+
+func (_c *MockFileIO_ReadDir_Call) Run(run func(dirname string)) *MockFileIO_ReadDir_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockFileIO_ReadDir_Call) Return(vs []os.DirEntry, err error) *MockFileIO_ReadDir_Call {
+	_c.Call.Return(vs, err)
+	return _c
+}
+
+func (_c *MockFileIO_ReadDir_Call) RunAndReturn(run func(dirname string) ([]os.DirEntry, error)) *MockFileIO_ReadDir_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockClosableFile creates a new instance of MockClosableFile. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockClosableFile(t interface {

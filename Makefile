@@ -59,3 +59,10 @@ docs:
 generate-license: generate
 	go-licenses report --template .NOTICE.template  ./... > NOTICE
 	copywrite headers apply
+
+run-lima:
+	limactl start ./hack/lima-oms.yaml
+
+stop-lima:
+	limactl stop lima-oms
+	limactl delete lima-oms
