@@ -174,8 +174,6 @@ var _ = Describe("PortalClient", func() {
 			downloadResponse string
 		)
 
-		// No artificial sleeps needed for the slowReader in tests.
-
 		BeforeEach(func() {
 			buildDate, _ := time.Parse("2006-01-02", "2025-05-01")
 
