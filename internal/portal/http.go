@@ -22,7 +22,7 @@ import (
 type Portal interface {
 	ListBuilds(product Product) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
-	DownloadBuildArtifact(product Product, build Build, file io.Writer) error
+	DownloadBuildArtifact(product Product, build Build, file io.Writer, quiet bool) error
 	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error
 	RevokeAPIKey(key string) error
 	UpdateAPIKey(key string, expiresAt time.Time) error
@@ -176,7 +176,7 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 	return matchingPackages[len(matchingPackages)-1], nil
 }
 
-func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file io.Writer) error {
+func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file io.Writer, quiet bool) error {
 	reqBody, err := json.Marshal(build)
 	if err != nil {
 		return fmt.Errorf("failed to generate request body: %w", err)
@@ -188,8 +188,12 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	// Create a WriteCounter to wrap the output file and report progress.
-	counter := NewWriteCounter(file)
+	// Create a WriteCounter to wrap the output file and report progress, unless quiet is requested.
+	// Default behavior: report progress. Quiet callers should pass true for quiet.
+	counter := file
+	if !quiet {
+		counter = NewWriteCounter(file)
+	}
 
 	_, err = io.Copy(counter, resp.Body)
 	if err != nil {
