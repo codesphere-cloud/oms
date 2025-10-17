@@ -31,31 +31,6 @@ func NewFakeWriter() *FakeWriter {
 	return &FakeWriter{}
 }
 
-// slowReader splits the data into chunks and sleeps between reads to simulate chunked download
-type slowReader struct {
-	data []byte
-	pos  int
-}
-
-var slowReaderSleep = func(d time.Duration) { time.Sleep(d) }
-
-func (s *slowReader) Read(p []byte) (int, error) {
-	if s.pos >= len(s.data) {
-		return 0, io.EOF
-	}
-
-	// chunk size
-	chunk := 5
-	n := min(copy(p, s.data[s.pos:]), chunk)
-
-	// simulate delay for subsequent chunks so WriteCounter can trigger an update
-	if s.pos > 0 {
-		slowReaderSleep(50 * time.Millisecond)
-	}
-	s.pos += n
-	return n, nil
-}
-
 var _ = Describe("PortalClient", func() {
 	var (
 		client         portal.PortalClient
@@ -199,17 +174,7 @@ var _ = Describe("PortalClient", func() {
 			downloadResponse string
 		)
 
-		var _origSlowReaderSleep = slowReaderSleep
-
-		BeforeEach(func() {
-			// override to avoid real delays in tests
-			slowReaderSleep = func(d time.Duration) { /* no-op for tests */ }
-		})
-
-		AfterEach(func() {
-			// restore original behavior
-			slowReaderSleep = _origSlowReaderSleep
-		})
+		// No artificial sleeps needed for the slowReader in tests.
 
 		BeforeEach(func() {
 			buildDate, _ := time.Parse("2006-01-02", "2025-05-01")
@@ -225,7 +190,7 @@ var _ = Describe("PortalClient", func() {
 					getUrl = *req.URL
 					return &http.Response{
 						StatusCode: status,
-						Body:       io.NopCloser(&slowReader{data: []byte(downloadResponse)}),
+						Body:       io.NopCloser(bytes.NewReader([]byte(downloadResponse))),
 					}, nil
 				})
 		})
