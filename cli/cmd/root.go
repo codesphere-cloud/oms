@@ -26,11 +26,15 @@ func GetRootCmd() *cobra.Command {
 			This command can be used to run common tasks related to managing codesphere installations,
 			like downloading new versions.`),
 	}
+	// General commands
 	AddVersionCmd(rootCmd)
+	AddBetaCmd(rootCmd, &opts)
 	AddUpdateCmd(rootCmd, opts)
+
+	// Package commands
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
-	AddBetaCmd(rootCmd, &opts)
+	AddInstallCmd(rootCmd, &opts)
 	AddLicensesCmd(rootCmd)
 
 	// OMS API key management commands
