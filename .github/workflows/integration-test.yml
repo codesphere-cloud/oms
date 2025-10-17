@@ -25,13 +25,3 @@ jobs:
           OMS_PORTAL_API_KEY: ${{ secrets.OMS_PORTAL_API_KEY }}
           OMS_PORTAL_API: ${{ secrets.OMS_PORTAL_API }}
         run: make test-integration
-
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-test-results
-          path: |
-            **/*test*.xml
-            **/*test*.json
-          retention-days: 30
