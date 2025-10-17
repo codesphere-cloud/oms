@@ -19,6 +19,7 @@ $ oms-cli download package --version codesphere-v1.55.0
 
 # Download lite package of Codesphere version 1.55.0
 $ oms-cli download package --version codesphere-v1.55.0 --file installer-lite.tar.gz
+
 ```
 
 ### Options
