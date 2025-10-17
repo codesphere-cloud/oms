@@ -13,7 +13,7 @@ import (
 
 func main() {
 	// to ensure the stable binary name is used and not the temporary path
-	os.Args[0] = "oms"
+	os.Args[0] = "oms-cli"
 
 	err := doc.GenMarkdownTree(oms.GetRootCmd(), "docs")
 	if err != nil {
