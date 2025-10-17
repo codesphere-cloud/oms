@@ -11,10 +11,11 @@ import (
 )
 
 func main() {
-	// to ensure the stable binary name is used and not the temporary path
+	// Ensure the generated docs use the stable project command name.
+	// The Makefile expects docs/oms.md, so keep the root command Use as "oms".
 	root := oms.GetRootCmd()
 	if root != nil {
-		root.Use = "oms-cli"
+		root.Use = "oms"
 	}
 
 	err := doc.GenMarkdownTree(root, "docs")
