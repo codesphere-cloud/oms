@@ -4,11 +4,6 @@
 
 set -euo pipefail
 
-repo_root=${1:-$(pwd)}
-
-echo "Working directory: $repo_root"
-cd "$repo_root"
-
 echo "Running 'make docs'"
 make docs
 
