@@ -6,6 +6,7 @@ package portal
 import (
 	"fmt"
 	"io"
+	"log"
 	"time"
 )
 
@@ -37,7 +38,8 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	wc.Written += int64(n)
 
 	if time.Since(wc.LastUpdate) >= 100*time.Millisecond {
-		fmt.Printf("\rDownloading... %s transferred %c \033[K", byteCountToHumanReadable(wc.Written), wc.animate())
+		// We need to use the log package so callers/tests that redirect log output will capture progress messages correctly.
+		log.Printf("Downloading... %s transferred %c", byteCountToHumanReadable(wc.Written), wc.animate())
 		wc.LastUpdate = time.Now()
 	}
 
