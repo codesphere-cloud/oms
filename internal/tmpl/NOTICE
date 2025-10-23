@@ -17,9 +17,9 @@ License URL: https://github.com/clipperhouse/uax29/blob/v2.2.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go/pkg/io
-Version: v0.11.1
+Version: v0.13.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.11.1/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.13.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -131,9 +131,9 @@ License URL: https://github.com/tcnksm/go-gitconfig/blob/v0.1.2/LICENSE
  
 ----------
 Module: github.com/ulikunitz/xz
-Version: v0.5.14
+Version: v0.5.15
 License: BSD-3-Clause
-License URL: https://github.com/ulikunitz/xz/blob/v0.5.14/LICENSE
+License URL: https://github.com/ulikunitz/xz/blob/v0.5.15/LICENSE
  
 ----------
 Module: golang.org/x/crypto
