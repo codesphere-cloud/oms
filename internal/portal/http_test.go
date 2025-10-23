@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -172,6 +173,7 @@ var _ = Describe("PortalClient", func() {
 			build            portal.Build
 			downloadResponse string
 		)
+
 		BeforeEach(func() {
 			buildDate, _ := time.Parse("2006-01-02", "2025-05-01")
 
@@ -193,10 +195,34 @@ var _ = Describe("PortalClient", func() {
 
 		It("downloads the build", func() {
 			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter)
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fakeWriter.String()).To(Equal(downloadResponse))
 			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
+		})
+
+		It("emits progress logs when not quiet", func() {
+			var logBuf bytes.Buffer
+			prev := log.Writer()
+			log.SetOutput(&logBuf)
+			defer log.SetOutput(prev)
+
+			fakeWriter := NewFakeWriter()
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuf.String()).To(ContainSubstring("Downloading..."))
+		})
+
+		It("does not emit progress logs when quiet", func() {
+			var logBuf bytes.Buffer
+			prev := log.Writer()
+			log.SetOutput(&logBuf)
+			defer log.SetOutput(prev)
+
+			fakeWriter := NewFakeWriter()
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, true)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logBuf.String()).NotTo(ContainSubstring("Downloading..."))
 		})
 	})
 
