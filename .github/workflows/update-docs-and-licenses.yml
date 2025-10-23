@@ -1,0 +1,45 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: 'Auto-Update Docs & Licenses'
+
+permissions:
+  contents: write
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  update-files:
+    # skip runs triggered by the bot's own commit to avoid loops
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          # on push to main, use main; on PR, check out the PR head
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.2'
+
+      - name: Update docs & licenses
+        run: |
+          ./hack/update-docs-and-licenses.sh
+
+      - name: Commit and push auto-generated changes
+        uses: EndBug/add-and-commit@v9
+        with:
+          # Use the PR author's identity for the commit
+          author_name: ${{ github.event.pull_request.user.login }}
+          author_email: ${{ github.event.pull_request.user.id }}+${{ github.event.pull_request.user.login }}@users.noreply.github.com
+          
+          # Commit message
+          message: 'chore(docs): Auto-update docs and licenses'
+          
+          # Adds a sign-off to the commit message for DCO
+          commit: '--signoff'
