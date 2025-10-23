@@ -6,7 +6,6 @@ package portal
 import (
 	"fmt"
 	"io"
-	"log"
 	"time"
 )
 
@@ -21,8 +20,9 @@ type WriteCounter struct {
 // NewWriteCounter creates a new WriteCounter.
 func NewWriteCounter(writer io.Writer) *WriteCounter {
 	return &WriteCounter{
-		Writer:     writer,
-		LastUpdate: time.Now(), // Initialize last update time
+		Writer: writer,
+		// Initialize to zero so the first Write triggers an immediate log
+		LastUpdate: time.Time{},
 	}
 }
 
@@ -37,7 +37,7 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	wc.Written += int64(n)
 
 	if time.Since(wc.LastUpdate) >= 100*time.Millisecond {
-		log.Printf("\rDownloading... %s transferred %c \033[K", byteCountToHumanReadable(wc.Written), wc.animate())
+		fmt.Printf("\rDownloading... %s transferred %c \033[K", byteCountToHumanReadable(wc.Written), wc.animate())
 		wc.LastUpdate = time.Now()
 	}
 
