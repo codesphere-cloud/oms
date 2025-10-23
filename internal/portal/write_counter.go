@@ -20,8 +20,9 @@ type WriteCounter struct {
 // NewWriteCounter creates a new WriteCounter.
 func NewWriteCounter(writer io.Writer) *WriteCounter {
 	return &WriteCounter{
-		Writer:     writer,
-		LastUpdate: time.Now(), // Initialize last update time
+		Writer: writer,
+		// Initialize to zero so the first Write triggers an immediate log
+		LastUpdate: time.Time{},
 	}
 }
 
