@@ -38,7 +38,10 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	wc.Written += int64(n)
 
 	if time.Since(wc.LastUpdate) >= 100*time.Millisecond {
-		fmt.Fprintf(log.Writer(), "\rDownloading... %s transferred %c \033[K", byteCountToHumanReadable(wc.Written), wc.animate())
+		_, err = fmt.Fprintf(log.Writer(), "\rDownloading... %s transferred %c \033[K", byteCountToHumanReadable(wc.Written), wc.animate())
+		if err != nil {
+			log.Printf("error writing progress: %v", err)
+		}
 		wc.LastUpdate = time.Now()
 	}
 
