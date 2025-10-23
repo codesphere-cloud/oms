@@ -52,7 +52,7 @@ git tag "$NEWTAG"
 git push origin "$NEWTAG"
 
 echo "Triggering release of version $NEWTAG"
-go install github.com/goreleaser/goreleaser/v2@latest
+make install-build-deps
 goreleaser release --clean
 
 echo "RELEASE_VERSION=$NEWTAG" >> $GITHUB_ENV
