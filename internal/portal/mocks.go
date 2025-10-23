@@ -252,20 +252,31 @@ func (_c *MockPortal_ListBuilds_Call) RunAndReturn(run func(product Product) (Bu
 }
 
 // RegisterAPIKey provides a mock function for the type MockPortal
-func (_mock *MockPortal) RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) error {
+func (_mock *MockPortal) RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error) {
 	ret := _mock.Called(owner, organization, role, expiresAt)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RegisterAPIKey")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, string, time.Time) error); ok {
+	var r0 *ApiKey
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, time.Time) (*ApiKey, error)); ok {
+		return returnFunc(owner, organization, role, expiresAt)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, time.Time) *ApiKey); ok {
 		r0 = returnFunc(owner, organization, role, expiresAt)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*ApiKey)
+		}
 	}
-	return r0
+	if returnFunc, ok := ret.Get(1).(func(string, string, string, time.Time) error); ok {
+		r1 = returnFunc(owner, organization, role, expiresAt)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // MockPortal_RegisterAPIKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RegisterAPIKey'
@@ -289,12 +300,12 @@ func (_c *MockPortal_RegisterAPIKey_Call) Run(run func(owner string, organizatio
 	return _c
 }
 
-func (_c *MockPortal_RegisterAPIKey_Call) Return(err error) *MockPortal_RegisterAPIKey_Call {
-	_c.Call.Return(err)
+func (_c *MockPortal_RegisterAPIKey_Call) Return(apiKey *ApiKey, err error) *MockPortal_RegisterAPIKey_Call {
+	_c.Call.Return(apiKey, err)
 	return _c
 }
 
-func (_c *MockPortal_RegisterAPIKey_Call) RunAndReturn(run func(owner string, organization string, role string, expiresAt time.Time) error) *MockPortal_RegisterAPIKey_Call {
+func (_c *MockPortal_RegisterAPIKey_Call) RunAndReturn(run func(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)) *MockPortal_RegisterAPIKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
