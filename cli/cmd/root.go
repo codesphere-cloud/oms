@@ -4,10 +4,12 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/spf13/cobra"
 )
 
@@ -25,6 +27,29 @@ func GetRootCmd() *cobra.Command {
 
 			This command can be used to run common tasks related to managing codesphere installations,
 			like downloading new versions.`),
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			apiKey := os.Getenv("OMS_PORTAL_API_KEY")
+
+			if len(apiKey) == 22 {
+				fmt.Fprintf(os.Stderr, "Warning: You used an old API key format.\n")
+				fmt.Fprintf(os.Stderr, "Attempting to upgrade to the new format...\n\n")
+
+				portalClient := portal.NewPortalClient()
+				newApiKey, err := portalClient.GetApiKeyByHeader(apiKey)
+
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Error: Failed to upgrade old API key: %v\n", err)
+					return
+				}
+
+				os.Setenv("OMS_PORTAL_API_KEY", newApiKey)
+				opts.OmsPortalApiKey = newApiKey
+
+				fmt.Fprintf(os.Stderr, "Successfully upgraded API key to new format!\n")
+				fmt.Fprintf(os.Stderr, "Please update your environment variable:\n\n")
+				fmt.Fprintf(os.Stderr, "  export OMS_PORTAL_API_KEY='%s'\n\n", newApiKey)
+			}
+		},
 	}
 	// General commands
 	AddVersionCmd(rootCmd)
