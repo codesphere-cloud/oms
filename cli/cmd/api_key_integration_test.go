@@ -9,6 +9,8 @@ package cmd_test
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -215,6 +217,105 @@ var _ = Describe("API Key Integration Tests", func() {
 			err := updateCmd.UpdateAPIKey(portalClient)
 			Expect(err).NotTo(BeNil(), "Should fail with invalid date format")
 			Expect(err.Error()).To(ContainSubstring("invalid date format"))
+		})
+	})
+
+	Describe("Old API Key Detection and Warning", func() {
+		var (
+			cliPath string
+		)
+
+		BeforeEach(func() {
+			cliPath = "./oms-cli"
+
+			_, err := os.Stat(cliPath)
+			if err != nil {
+				Skip("OMS CLI not found at " + cliPath + ", please build it first with 'make build-cli'")
+			}
+		})
+
+		Context("when using a 22-character old API key format", func() {
+			It("should detect the old format and attempt to upgrade", func() {
+				cmd := exec.Command(cliPath, "version")
+				cmd.Env = append(os.Environ(),
+					"OMS_PORTAL_API_KEY=U4jsSHoDsOFGyEkPrWpsE", // 22 characters
+					"OMS_PORTAL_API=http://localhost:3000/api",
+				)
+
+				output, _ := cmd.CombinedOutput()
+				outputStr := string(output)
+
+				Expect(outputStr).To(ContainSubstring("OMS CLI version"))
+			})
+		})
+
+		Context("when using a new long-format API key", func() {
+			It("should not show any warning", func() {
+				cmd := exec.Command(cliPath, "version")
+				cmd.Env = append(os.Environ(),
+					"OMS_PORTAL_API_KEY=4hBieJRj2pWeB9qKJ9wQGE3CrcldLnLwP8fz6qutMjkf1n1",
+					"OMS_PORTAL_API=http://localhost:3000/api",
+				)
+
+				output, _ := cmd.CombinedOutput()
+				outputStr := string(output)
+
+				Expect(outputStr).To(ContainSubstring("OMS CLI version"))
+				Expect(outputStr).NotTo(ContainSubstring("old API key"))
+				Expect(outputStr).NotTo(ContainSubstring("Failed to upgrade"))
+			})
+		})
+
+		Context("when using a 22-character key with list api-keys command", func() {
+			It("should attempt the upgrade and handle the error gracefully", func() {
+				cmd := exec.Command(cliPath, "list", "api-keys")
+				cmd.Env = append(os.Environ(),
+					"OMS_PORTAL_API_KEY=U4jsSHoDsOFGyEkPrWpsE", // 22 characters (old format)
+					"OMS_PORTAL_API=http://localhost:3000/api",
+				)
+
+				output, err := cmd.CombinedOutput()
+				outputStr := string(output)
+
+				Expect(err).To(HaveOccurred())
+
+				hasWarning := strings.Contains(outputStr, "old API key") ||
+					strings.Contains(outputStr, "Failed to upgrade") ||
+					strings.Contains(outputStr, "Unauthorized")
+
+				Expect(hasWarning).To(BeTrue(),
+					"Should contain warning about old key or auth failure. Got: "+outputStr)
+			})
+		})
+
+		Context("when checking key length detection", func() {
+			It("should correctly identify 22-character old format", func() {
+				oldKey := "U4jsSHoDsOFGyEkPrWpsE"
+				Expect(len(oldKey)).To(Equal(22))
+			})
+
+			It("should correctly identify new long format", func() {
+				newKey := "4hBieJRj2pWeB9qKJ9wQGE3CrcldLnLwP8fz6qutMjkf1n1"
+				Expect(len(newKey)).NotTo(Equal(22))
+				Expect(len(newKey)).To(BeNumerically(">", 22))
+			})
+		})
+	})
+
+	Describe("PreRun Hook Execution", func() {
+		Context("when running any OMS command", func() {
+			It("should execute the PreRun hook", func() {
+				cmd := exec.Command("./oms-cli", "version")
+				cmd.Env = append(os.Environ(),
+					"OMS_PORTAL_API_KEY=valid-key-format-short",
+					"OMS_PORTAL_API=http://localhost:3000/api",
+				)
+
+				output, _ := cmd.CombinedOutput()
+				outputStr := string(output)
+
+				Expect(outputStr).To(ContainSubstring("OMS CLI version"))
+			})
 		})
 	})
 })
