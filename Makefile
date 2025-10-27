@@ -39,15 +39,18 @@ endif
 ifeq (, $(shell which copywrite))
 	go install github.com/hashicorp/copywrite@v0.22.0
 endif
+ifeq (, $(shell which goreleaser))
+	go install github.com/goreleaser/goreleaser/v2@v2.11.2
+endif
 
 generate: install-build-deps
 	mockery
 	go generate ./...
 
 VERSION ?= "0.0.0"
-release-local:
+release-local: install-build-deps
 	rm -rf dist
-	/bin/bash -c "goreleaser --skip=validate,announce,publish -f <(sed s/{{.Version}}/$(VERSION)/g < .goreleaser.yaml)"
+	/bin/bash -c "goreleaser --snapshot --skip=validate,announce,publish -f <(sed s/{{.Version}}/$(VERSION)/g < .goreleaser.yaml)"
 
 .PHONY: docs
 docs:
