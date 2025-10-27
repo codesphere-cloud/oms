@@ -42,7 +42,10 @@ func GetRootCmd() *cobra.Command {
 					return
 				}
 
-				os.Setenv("OMS_PORTAL_API_KEY", newApiKey)
+				if err := os.Setenv("OMS_PORTAL_API_KEY", newApiKey); err != nil {
+					fmt.Fprintf(os.Stderr, "Error: Failed to set environment variable: %v\n", err)
+					return
+				}
 				opts.OmsPortalApiKey = newApiKey
 
 				fmt.Fprintf(os.Stderr, "Successfully upgraded API key to new format!\n")
