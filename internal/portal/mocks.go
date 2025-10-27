@@ -86,6 +86,60 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(product P
 	return _c
 }
 
+// GetApiKeyByHeader provides a mock function for the type MockPortal
+func (_mock *MockPortal) GetApiKeyByHeader(oldKey string) (string, error) {
+	ret := _mock.Called(oldKey)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetApiKeyByHeader")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (string, error)); ok {
+		return returnFunc(oldKey)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) string); ok {
+		r0 = returnFunc(oldKey)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(oldKey)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPortal_GetApiKeyByHeader_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetApiKeyByHeader'
+type MockPortal_GetApiKeyByHeader_Call struct {
+	*mock.Call
+}
+
+// GetApiKeyByHeader is a helper method to define mock.On call
+//   - oldKey
+func (_e *MockPortal_Expecter) GetApiKeyByHeader(oldKey interface{}) *MockPortal_GetApiKeyByHeader_Call {
+	return &MockPortal_GetApiKeyByHeader_Call{Call: _e.mock.On("GetApiKeyByHeader", oldKey)}
+}
+
+func (_c *MockPortal_GetApiKeyByHeader_Call) Run(run func(oldKey string)) *MockPortal_GetApiKeyByHeader_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockPortal_GetApiKeyByHeader_Call) Return(s string, err error) *MockPortal_GetApiKeyByHeader_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockPortal_GetApiKeyByHeader_Call) RunAndReturn(run func(oldKey string) (string, error)) *MockPortal_GetApiKeyByHeader_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetBuild provides a mock function for the type MockPortal
 func (_mock *MockPortal) GetBuild(product Product, version string, hash string) (Build, error) {
 	ret := _mock.Called(product, version, hash)
