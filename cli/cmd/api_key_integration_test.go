@@ -303,9 +303,22 @@ var _ = Describe("API Key Integration Tests", func() {
 	})
 
 	Describe("PreRun Hook Execution", func() {
+		var (
+			cliPath string
+		)
+
+		BeforeEach(func() {
+			cliPath = "./oms-cli"
+
+			_, err := os.Stat(cliPath)
+			if err != nil {
+				Skip("OMS CLI not found at " + cliPath + ", please build it first with 'make build-cli'")
+			}
+		})
+
 		Context("when running any OMS command", func() {
 			It("should execute the PreRun hook", func() {
-				cmd := exec.Command("./oms-cli", "version")
+				cmd := exec.Command(cliPath, "version")
 				cmd.Env = append(os.Environ(),
 					"OMS_PORTAL_API_KEY=valid-key-format-short",
 					"OMS_PORTAL_API=http://localhost:3000/api",
