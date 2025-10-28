@@ -195,6 +195,7 @@ func (c *InstallCodesphereCmd) ListPackageContents(pm installer.PackageManager) 
 	return foundFiles, nil
 }
 
+// ExtractRootImageName extracts the root image name from a bomRef string.
 func (c *InstallCodesphereCmd) ExtractRootImageName(bomRef string) string {
 	parts := strings.Split(bomRef, ":")
 	if len(parts) < 2 {

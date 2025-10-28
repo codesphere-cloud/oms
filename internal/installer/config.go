@@ -28,7 +28,7 @@ func (c *Config) ParseConfigYaml(configPath string) (files.RootConfig, error) {
 	var rootConfig files.RootConfig
 	err := rootConfig.ParseConfig(configPath)
 	if err != nil {
-		return rootConfig, fmt.Errorf("failed to extract config.yaml: %w", err)
+		return rootConfig, fmt.Errorf("failed to parse config.yaml: %w", err)
 	}
 
 	return rootConfig, nil
