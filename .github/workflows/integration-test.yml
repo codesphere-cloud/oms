@@ -1,0 +1,27 @@
+name: Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_call:
+
+jobs:
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Run Integration Tests
+        env:
+          OMS_PORTAL_API_KEY: ${{ secrets.OMS_PORTAL_API_KEY }}
+          OMS_PORTAL_API: ${{ secrets.OMS_PORTAL_API }}
+        run: make test-integration

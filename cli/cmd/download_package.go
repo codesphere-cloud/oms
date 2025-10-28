@@ -26,10 +26,11 @@ type DownloadPackageOpts struct {
 	Version  string
 	Hash     string
 	Filename string
+	Quiet    bool
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
-  if c.Opts.Hash != "" {
+	if c.Opts.Hash != "" {
 		log.Printf("Downloading package '%s' with hash '%s'\n", c.Opts.Version, c.Opts.Hash)
 	} else {
 		log.Printf("Downloading package '%s'\n", c.Opts.Version)
@@ -56,16 +57,17 @@ func AddDownloadPackageCmd(download *cobra.Command, opts GlobalOptions) {
 			Short: "Download a codesphere package",
 			Long: io.Long(`Download a specific version of a Codesphere package
 				To list available packages, run oms list packages.`),
-			Example: io.FormatExampleCommands("download package", []io.Example{
+			Example: formatExamplesWithBinary("download package", []io.Example{
 				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
-			}),
+			}, "oms-cli"),
 		},
 		FileWriter: util.NewFilesystemWriter(),
 	}
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Version, "version", "V", "", "Codesphere version to download")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Hash, "hash", "H", "", "Hash of the version to download if multiple builds exist for the same version")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer.tar.gz", "Specify artifact to download")
+	pkg.cmd.Flags().BoolVarP(&pkg.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
 	download.AddCommand(pkg.cmd)
 
 	pkg.cmd.RunE = pkg.RunE
@@ -83,7 +85,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	}
 	defer func() { _ = out.Close() }()
 
-	err = p.DownloadBuildArtifact("codesphere", download, out)
+	err = p.DownloadBuildArtifact("codesphere", download, out, c.Opts.Quiet)
 	if err != nil {
 		return fmt.Errorf("failed to download build: %w", err)
 	}

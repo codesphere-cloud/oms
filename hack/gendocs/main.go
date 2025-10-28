@@ -11,7 +11,11 @@ import (
 )
 
 func main() {
-	err := doc.GenMarkdownTree(oms.GetRootCmd(), "docs")
+	// Ensure the generated docs use the stable project command name.
+	root := oms.GetRootCmd()
+	root.Use = "oms-cli"
+
+	err := doc.GenMarkdownTree(root, "docs")
 	if err != nil {
 		log.Fatal(err)
 	}
