@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -41,9 +42,11 @@ func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	workdir := c.Env.GetOmsWorkdir()
-	p := installer.NewPackage(workdir, c.Opts.Package)
+	pm := installer.NewPackage(workdir, c.Opts.Package)
+	cm := installer.NewConfig()
+	im := system.NewImage(context.Background())
 
-	err := c.ExtendBaseimage(p, args)
+	err := c.ExtendBaseimage(pm, cm, im, args)
 	if err != nil {
 		return fmt.Errorf("failed to extend baseimage: %w", err)
 	}
@@ -72,29 +75,33 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
 	baseimage.cmd.RunE = baseimage.RunE
 }
 
-func (c *ExtendBaseimageCmd) ExtendBaseimage(p *installer.Package, args []string) error {
+func (c *ExtendBaseimageCmd) ExtendBaseimage(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager, args []string) error {
 	baseImageTarPath := path.Join(baseimagePath, defaultBaseimage)
-	err := p.ExtractDependency(baseImageTarPath, c.Opts.Force)
+	err := pm.ExtractDependency(baseImageTarPath, c.Opts.Force)
 	if err != nil {
 		return fmt.Errorf("failed to extract package to workdir: %w", err)
 	}
 
-	extractedBaseImagePath := p.GetDependencyPath(baseImageTarPath)
-	d := system.NewDockerEngine()
+	extractedBaseImagePath := pm.GetDependencyPath(baseImageTarPath)
 
-	imagenames, err := d.GetImageNames(p.FileIO, extractedBaseImagePath)
+	index, err := cm.ExtractOciImageIndex(baseImageTarPath)
+	if err != nil {
+		return fmt.Errorf("failed to extract OCI image index: %w", err)
+	}
+
+	imagenames, err := index.ExtractImageNames()
 	if err != nil || len(imagenames) == 0 {
 		return fmt.Errorf("failed to read image tags: %w", err)
 	}
 	log.Println(imagenames)
 
-	err = tmpl.GenerateDockerfile(p.FileIO, c.Opts.Dockerfile, imagenames[0])
+	err = tmpl.GenerateDockerfile(pm.FileIO(), c.Opts.Dockerfile, imagenames[0])
 	if err != nil {
 		return fmt.Errorf("failed to generate dockerfile: %w", err)
 	}
 
 	log.Printf("Loading container image from package into local docker daemon: %s", extractedBaseImagePath)
-	err = d.LoadLocalContainerImage(extractedBaseImagePath)
+	err = im.LoadImage(extractedBaseImagePath)
 	if err != nil {
 		return fmt.Errorf("failed to load baseimage file %s: %w", baseImageTarPath, err)
 	}

@@ -4,9 +4,7 @@
 package cmd_test
 
 import (
-	"archive/tar"
-	"compress/gzip"
-	"fmt"
+	"errors"
 	"os"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -16,48 +14,10 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
-
-// Helper function to create a test tar.gz file with binary data
-func createTestTarGz(filename string, files map[string][]byte) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = file.Close()
-	}()
-
-	gzWriter := gzip.NewWriter(file)
-	defer func() {
-		_ = gzWriter.Close()
-	}()
-
-	tarWriter := tar.NewWriter(gzWriter)
-	defer func() {
-		_ = tarWriter.Close()
-	}()
-
-	for name, content := range files {
-		header := &tar.Header{
-			Name: name,
-			Size: int64(len(content)),
-			Mode: 0644,
-		}
-		err := tarWriter.WriteHeader(header)
-		if err != nil {
-			return fmt.Errorf("failed to write header for file %q to tar: %w", name, err)
-		}
-
-		_, err = tarWriter.Write(content)
-		if err != nil {
-			return fmt.Errorf("failed to write file %q to tar: %w", name, err)
-		}
-	}
-
-	return nil
-}
 
 var _ = Describe("ExtendBaseimageCmd", func() {
 	var (
@@ -103,61 +63,132 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 	})
 
 	Context("ExtendBaseimage method", func() {
-		It("fails when package extraction fails due to missing package file", func() {
-			pkg := &installer.Package{
-				OmsWorkdir: "/test/workdir",
-				Filename:   "non-existent-package.tar.gz",
-				FileIO:     &util.FilesystemWriter{},
-			}
+		It("fails when package manager extraction fails", func() {
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+			mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+			mockImageManager := system.NewMockImageManager(GinkgoT())
 
-			err := c.ExtendBaseimage(pkg, []string{})
+			mockPackageManager.EXPECT().ExtractDependency("codesphere/images/workspace-agent-24.04.tar", false).Return(errors.New("extraction failed"))
+
+			err := c.ExtendBaseimage(mockPackageManager, mockConfigManager, mockImageManager, []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
 		})
 
-		It("successfully extracts mocked package file", func() {
-			tempDir, err := os.MkdirTemp("", "oms-test-*")
-			Expect(err).To(BeNil())
-			defer func() {
-				err := os.RemoveAll(tempDir)
-				Expect(err).To(BeNil())
-			}()
+		It("fails when config manager fails to extract OCI image index", func() {
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+			mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+			mockImageManager := system.NewMockImageManager(GinkgoT())
 
-			origWd, err := os.Getwd()
-			Expect(err).To(BeNil())
-			err = os.Chdir(tempDir)
-			Expect(err).To(BeNil())
-			defer func() {
-				err := os.Chdir(origWd)
-				Expect(err).To(BeNil())
-			}()
+			mockPackageManager.EXPECT().ExtractDependency("codesphere/images/workspace-agent-24.04.tar", false).Return(nil)
+			mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/workspace-agent-24.04.tar").Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar")
+			mockConfigManager.EXPECT().ExtractOciImageIndex("codesphere/images/workspace-agent-24.04.tar").Return(files.OCIImageIndex{}, errors.New("failed to extract index"))
 
-			depsFile := "deps.tar.gz"
-			depsFiles := map[string][]byte{
-				"codesphere/images/workspace-agent-24.04.tar": []byte("fake container image content"),
+			err := c.ExtendBaseimage(mockPackageManager, mockConfigManager, mockImageManager, []string{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to extract OCI image index"))
+		})
+
+		It("fails when OCI image index has no image names", func() {
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+			mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+			mockImageManager := system.NewMockImageManager(GinkgoT())
+
+			// Create empty OCI index that will return no image names
+			ociIndex := files.OCIImageIndex{
+				Manifests: []files.ManifestEntry{},
 			}
-			err = createTestTarGz(depsFile, depsFiles)
-			Expect(err).To(BeNil())
-			depsContent, err := os.ReadFile(depsFile)
-			Expect(err).To(BeNil())
+			mockPackageManager.EXPECT().ExtractDependency("codesphere/images/workspace-agent-24.04.tar", false).Return(nil)
+			mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/workspace-agent-24.04.tar").Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar")
+			mockConfigManager.EXPECT().ExtractOciImageIndex("codesphere/images/workspace-agent-24.04.tar").Return(ociIndex, nil)
 
-			testPackageFile := "test-package.tar.gz"
-			packageFiles := map[string][]byte{
-				"deps.tar.gz": depsContent,
-			}
-			err = createTestTarGz(testPackageFile, packageFiles)
-			Expect(err).To(BeNil())
-
-			c.Opts.Force = true
-
-			pkg := &installer.Package{
-				OmsWorkdir: tempDir,
-				Filename:   testPackageFile,
-				FileIO:     &util.FilesystemWriter{},
-			}
-			err = c.ExtendBaseimage(pkg, []string{})
+			err := c.ExtendBaseimage(mockPackageManager, mockConfigManager, mockImageManager, []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to read image tags"))
+		})
+
+		It("fails when image manager fails to load image", func() {
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+			mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+			mockImageManager := system.NewMockImageManager(GinkgoT())
+			mockFileIO := util.NewMockFileIO(GinkgoT())
+
+			// Create OCI index with valid image names
+			ociIndex := files.OCIImageIndex{
+				Manifests: []files.ManifestEntry{
+					{
+						Annotations: map[string]string{
+							"io.containerd.image.name": "ubuntu:24.04-base",
+						},
+					},
+				},
+			}
+			mockPackageManager.EXPECT().ExtractDependency("codesphere/images/workspace-agent-24.04.tar", false).Return(nil)
+			mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/workspace-agent-24.04.tar").Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar")
+			mockConfigManager.EXPECT().ExtractOciImageIndex("codesphere/images/workspace-agent-24.04.tar").Return(ociIndex, nil)
+			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+
+			// Create a temporary file for the Dockerfile generation to work with
+			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
+			Expect(err).To(BeNil())
+			defer os.Remove(tempFile.Name())
+			defer tempFile.Close()
+
+			// Mock Dockerfile generation
+			mockFileIO.EXPECT().Create("Dockerfile").Return(tempFile, nil)
+			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(errors.New("load failed"))
+
+			err = c.ExtendBaseimage(mockPackageManager, mockConfigManager, mockImageManager, []string{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to load baseimage file"))
+		})
+
+		It("uses force flag when extracting dependencies", func() {
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+			mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+			mockImageManager := system.NewMockImageManager(GinkgoT())
+
+			c.Opts.Force = true
+			mockPackageManager.EXPECT().ExtractDependency("codesphere/images/workspace-agent-24.04.tar", true).Return(errors.New("extraction failed"))
+
+			err := c.ExtendBaseimage(mockPackageManager, mockConfigManager, mockImageManager, []string{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
+		})
+
+		It("successfully completes workflow until dockerfile generation", func() {
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+			mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+			mockImageManager := system.NewMockImageManager(GinkgoT())
+			mockFileIO := util.NewMockFileIO(GinkgoT())
+
+			// Create OCI index with valid image names
+			ociIndex := files.OCIImageIndex{
+				Manifests: []files.ManifestEntry{
+					{
+						Annotations: map[string]string{
+							"io.containerd.image.name": "ubuntu:24.04-base",
+						},
+					},
+				},
+			}
+			mockPackageManager.EXPECT().ExtractDependency("codesphere/images/workspace-agent-24.04.tar", false).Return(nil)
+			mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/workspace-agent-24.04.tar").Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar")
+			mockConfigManager.EXPECT().ExtractOciImageIndex("codesphere/images/workspace-agent-24.04.tar").Return(ociIndex, nil)
+			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+
+			// Create a temporary file for the Dockerfile generation to work with
+			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
+			Expect(err).To(BeNil())
+			defer os.Remove(tempFile.Name())
+			defer tempFile.Close()
+
+			// Mock Dockerfile generation
+			mockFileIO.EXPECT().Create("Dockerfile").Return(tempFile, nil)
+			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(nil)
+
+			err = c.ExtendBaseimage(mockPackageManager, mockConfigManager, mockImageManager, []string{})
+			Expect(err).To(BeNil())
 		})
 	})
 })

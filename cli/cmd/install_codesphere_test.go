@@ -4,6 +4,7 @@
 package cmd_test
 
 import (
+	"errors"
 	"os"
 	"runtime"
 
@@ -14,6 +15,8 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -46,9 +49,19 @@ var _ = Describe("InstallCodesphereCmd", func() {
 	Context("RunE method", func() {
 		It("calls GetOmsWorkdir and fails on non-linux platform", func() {
 			c.Opts.Package = "test-package.tar.gz"
+
+			tempConfigFile, err := os.CreateTemp("", "test-config.yaml")
+			Expect(err).To(BeNil())
+			defer os.Remove(tempConfigFile.Name())
+
+			_, err = tempConfigFile.WriteString("codesphere:\n  deployConfig:\n    images: {}\n")
+			Expect(err).To(BeNil())
+			tempConfigFile.Close()
+
+			c.Opts.Config = tempConfigFile.Name()
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err := c.RunE(nil, []string{})
+			err = c.RunE(nil, []string{})
 
 			Expect(err).To(HaveOccurred())
 			if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
@@ -56,254 +69,275 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 			} else {
 				// On Linux amd64, it should fail on package extraction since the package doesn't exist
-				Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
+				Expect(err.Error()).To(ContainSubstring("failed to extract and install package"))
 			}
 		})
 	})
 
 	Context("ExtractAndInstall method", func() {
 		It("fails on non-linux amd64 platforms", func() {
-			pkg := &installer.Package{
-				OmsWorkdir: "/test/workdir",
-				Filename:   "test-package.tar.gz",
-				FileIO:     &util.FilesystemWriter{},
-			}
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+			mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+			mockImageManager := system.NewMockImageManager(GinkgoT())
 
 			// Test with Windows platform
-			err := c.ExtractAndInstall(pkg, "windows", "amd64")
+			err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "windows", "amd64")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 			Expect(err.Error()).To(ContainSubstring("windows/amd64"))
 
 			// Test with ARM64 architecture
-			err = c.ExtractAndInstall(pkg, "linux", "arm64")
+			err = c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "arm64")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 			Expect(err.Error()).To(ContainSubstring("linux/arm64"))
 		})
 
 		Context("when on Linux amd64", func() {
-			It("fails when package extraction fails", func() {
-				pkg := &installer.Package{
-					OmsWorkdir: "/test/workdir",
-					Filename:   "non-existent-package.tar.gz",
-					FileIO:     &util.FilesystemWriter{},
-				}
+			It("fails when config parsing fails", func() {
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
 
-				err := c.ExtractAndInstall(pkg, "linux", "amd64")
+				c.Opts.Config = "invalid-config.yaml"
+				mockConfigManager.EXPECT().ParseConfigYaml("invalid-config.yaml").Return(files.RootConfig{}, errors.New("config parse error"))
+
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to extract config.yaml"))
+			})
+
+			It("fails when package extraction fails", func() {
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+
+				c.Opts.Config = "valid-config.yaml"
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(files.RootConfig{}, nil)
+				mockPackageManager.EXPECT().Extract(false).Return(errors.New("extraction failed"))
+
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
 			})
 
+			It("fails when package listing fails", func() {
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockFileIO := util.NewMockFileIO(GinkgoT())
+
+				c.Opts.Config = "valid-config.yaml"
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(files.RootConfig{}, nil)
+				mockPackageManager.EXPECT().Extract(false).Return(nil)
+				mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+				mockFileIO.EXPECT().Exists("/test/workdir/package").Return(false)
+
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to list available files"))
+			})
+
 			It("fails when deps.tar.gz is missing from package", func() {
-				tempDir, err := os.MkdirTemp("", "oms-test-*")
-				Expect(err).To(BeNil())
-				defer func() {
-					err := os.RemoveAll(tempDir)
-					Expect(err).To(BeNil())
-				}()
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockFileIO := util.NewMockFileIO(GinkgoT())
 
-				origWd, err := os.Getwd()
-				Expect(err).To(BeNil())
-				err = os.Chdir(tempDir)
-				Expect(err).To(BeNil())
-				defer func() {
-					err := os.Chdir(origWd)
-					Expect(err).To(BeNil())
-				}()
+				c.Opts.Config = "valid-config.yaml"
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(files.RootConfig{}, nil)
+				mockPackageManager.EXPECT().Extract(false).Return(nil)
+				mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+				mockFileIO.EXPECT().Exists("/test/workdir/package").Return(true)
 
-				// Create package without deps.tar.gz
-				testPackageFile := "test-package.tar.gz"
-				packageFiles := map[string][]byte{
-					"node":                       []byte("fake node binary"),
-					"private-cloud-installer.js": []byte("console.log('installer');"),
-					"kubectl":                    []byte("fake kubectl binary"),
-					// deps.tar.gz missing
+				// Create mock directory entries without deps.tar.gz
+				mockEntries := []os.DirEntry{
+					&MockDirEntry{name: "node", isDir: false},
+					&MockDirEntry{name: "private-cloud-installer.js", isDir: false},
+					&MockDirEntry{name: "kubectl", isDir: false},
 				}
-				err = createTestTarGz(testPackageFile, packageFiles)
-				Expect(err).To(BeNil())
+				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
-				c.Opts.Force = true
-				pkg := &installer.Package{
-					OmsWorkdir: tempDir,
-					Filename:   testPackageFile,
-					FileIO:     &util.FilesystemWriter{},
-				}
-
-				err = c.ExtractAndInstall(pkg, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("deps.tar.gz not found in package"))
 			})
 
 			It("fails when private-cloud-installer.js is missing from package", func() {
-				tempDir, err := os.MkdirTemp("", "oms-test-*")
-				Expect(err).To(BeNil())
-				defer func() {
-					err := os.RemoveAll(tempDir)
-					Expect(err).To(BeNil())
-				}()
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockFileIO := util.NewMockFileIO(GinkgoT())
 
-				origWd, err := os.Getwd()
-				Expect(err).To(BeNil())
-				err = os.Chdir(tempDir)
-				Expect(err).To(BeNil())
-				defer func() {
-					err := os.Chdir(origWd)
-					Expect(err).To(BeNil())
-				}()
+				c.Opts.Config = "valid-config.yaml"
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(files.RootConfig{}, nil)
+				mockPackageManager.EXPECT().Extract(false).Return(nil)
+				mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+				mockFileIO.EXPECT().Exists("/test/workdir/package").Return(true)
 
-				// Create package without private-cloud-installer.js
-				testPackageFile := "test-package.tar.gz"
-				packageFiles := map[string][]byte{
-					"deps.tar.gz": []byte("fake deps archive"),
-					"node":        []byte("fake node binary"),
-					"kubectl":     []byte("fake kubectl binary"),
-					// private-cloud-installer.js missing
+				// Create mock directory entries without private-cloud-installer.js
+				mockEntries := []os.DirEntry{
+					&MockDirEntry{name: "deps.tar.gz", isDir: false},
+					&MockDirEntry{name: "node", isDir: false},
+					&MockDirEntry{name: "kubectl", isDir: false},
 				}
-				err = createTestTarGz(testPackageFile, packageFiles)
-				Expect(err).To(BeNil())
+				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
-				c.Opts.Force = true
-				pkg := &installer.Package{
-					OmsWorkdir: tempDir,
-					Filename:   testPackageFile,
-					FileIO:     &util.FilesystemWriter{},
-				}
-
-				err = c.ExtractAndInstall(pkg, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("private-cloud-installer.js not found in package"))
 			})
 
 			It("fails when node executable is missing from package", func() {
-				tempDir, err := os.MkdirTemp("", "oms-test-*")
-				Expect(err).To(BeNil())
-				defer func() {
-					err := os.RemoveAll(tempDir)
-					Expect(err).To(BeNil())
-				}()
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockFileIO := util.NewMockFileIO(GinkgoT())
 
-				origWd, err := os.Getwd()
-				Expect(err).To(BeNil())
-				err = os.Chdir(tempDir)
-				Expect(err).To(BeNil())
-				defer func() {
-					err := os.Chdir(origWd)
-					Expect(err).To(BeNil())
-				}()
+				c.Opts.Config = "valid-config.yaml"
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(files.RootConfig{}, nil)
+				mockPackageManager.EXPECT().Extract(false).Return(nil)
+				mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+				mockFileIO.EXPECT().Exists("/test/workdir/package").Return(true)
 
-				// Create package without node executable
-				testPackageFile := "test-package.tar.gz"
-				packageFiles := map[string][]byte{
-					"deps.tar.gz":                []byte("fake deps archive"),
-					"private-cloud-installer.js": []byte("console.log('installer');"),
-					"kubectl":                    []byte("fake kubectl binary"),
-					// node missing
+				// Create mock directory entries without node executable
+				mockEntries := []os.DirEntry{
+					&MockDirEntry{name: "deps.tar.gz", isDir: false},
+					&MockDirEntry{name: "private-cloud-installer.js", isDir: false},
+					&MockDirEntry{name: "kubectl", isDir: false},
 				}
-				err = createTestTarGz(testPackageFile, packageFiles)
-				Expect(err).To(BeNil())
+				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
-				c.Opts.Force = true
-				pkg := &installer.Package{
-					OmsWorkdir: tempDir,
-					Filename:   testPackageFile,
-					FileIO:     &util.FilesystemWriter{},
-				}
-
-				err = c.ExtractAndInstall(pkg, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("node executable not found in package"))
 			})
 
-			It("successfully extracts package with all required files but fails on execution", func() {
-				tempDir, err := os.MkdirTemp("", "oms-test-*")
-				Expect(err).To(BeNil())
-				defer func() {
-					err := os.RemoveAll(tempDir)
-					Expect(err).To(BeNil())
-				}()
+			It("successfully validates all required files but fails on execution", func() {
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockFileIO := util.NewMockFileIO(GinkgoT())
 
-				origWd, err := os.Getwd()
-				Expect(err).To(BeNil())
-				err = os.Chdir(tempDir)
-				Expect(err).To(BeNil())
-				defer func() {
-					err := os.Chdir(origWd)
-					Expect(err).To(BeNil())
-				}()
+				c.Opts.Config = "valid-config.yaml"
+				c.Opts.PrivKey = "test-key.pem"
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(files.RootConfig{}, nil)
+				mockPackageManager.EXPECT().Extract(false).Return(nil)
+				mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+				mockFileIO.EXPECT().Exists("/test/workdir/package").Return(true)
 
-				// Create complete package with all required files
-				testPackageFile := "test-package.tar.gz"
-				packageFiles := map[string][]byte{
-					"deps.tar.gz":                []byte("fake deps archive"),
-					"node":                       []byte("fake node binary that will fail to execute"),
-					"private-cloud-installer.js": []byte("console.log('installer');"),
-					"kubectl":                    []byte("fake kubectl binary"),
+				// Create complete mock directory entries with all required files
+				mockEntries := []os.DirEntry{
+					&MockDirEntry{name: "deps.tar.gz", isDir: false},
+					&MockDirEntry{name: "node", isDir: false},
+					&MockDirEntry{name: "private-cloud-installer.js", isDir: false},
+					&MockDirEntry{name: "kubectl", isDir: false},
 				}
-				err = createTestTarGz(testPackageFile, packageFiles)
-				Expect(err).To(BeNil())
+				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
-				c.Opts.Force = true
-				pkg := &installer.Package{
-					OmsWorkdir: tempDir,
-					Filename:   testPackageFile,
-					FileIO:     &util.FilesystemWriter{},
-				}
-
-				err = c.ExtractAndInstall(pkg, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
-				// Should fail when trying to chmod or execute the fake node binary
-				Expect(err.Error()).To(SatisfyAny(
-					ContainSubstring("failed to make node executable"),
-					ContainSubstring("failed to run installer script"),
-				))
+				// Should fail when trying to make fake node executable
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to make node executable"))
+			})
+
+			It("successfully builds and pushes custom workspace images", func() {
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockFileIO := util.NewMockFileIO(GinkgoT())
+
+				c.Opts.Config = "valid-config.yaml"
+				c.Opts.PrivKey = "test-key.pem"
+
+				// Create config with workspace dockerfiles
+				config := files.RootConfig{
+					Codesphere: files.CodesphereConfig{
+						DeployConfig: files.DeployConfig{
+							Images: map[string]files.ImageConfig{
+								"ubuntu-24.04": {
+									Flavors: map[string]files.FlavorConfig{
+										"default": {
+											Image: files.ImageRef{
+												BomRef:     "docker.io/library/ubuntu:24.04",
+												Dockerfile: "workspace.Dockerfile",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(config, nil)
+				mockPackageManager.EXPECT().Extract(false).Return(nil)
+				mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+				mockFileIO.EXPECT().Exists("/test/workdir/package").Return(true)
+
+				// Create complete mock directory entries with all required files
+				mockEntries := []os.DirEntry{
+					&MockDirEntry{name: "deps.tar.gz", isDir: false},
+					&MockDirEntry{name: "node", isDir: false},
+					&MockDirEntry{name: "private-cloud-installer.js", isDir: false},
+					&MockDirEntry{name: "kubectl", isDir: false},
+				}
+				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
+
+				mockPackageManager.EXPECT().ExtractDependency("bom.json", false).Return(nil)
+				mockPackageManager.EXPECT().ExtractDependency("codesphere/images/ubuntu.tar", false).Return(nil)
+				mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/ubuntu.tar").Return("/test/workdir/deps/codesphere/images/ubuntu.tar")
+				mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/ubuntu.tar").Return(nil)
+				mockImageManager.EXPECT().BuildImage("workspace.Dockerfile", "ubuntu", ".").Return(nil)
+
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				// Should fail when trying to make fake node executable
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to make node executable"))
 			})
 		})
 	})
 
 	Context("listPackageContents method", func() {
 		It("fails when work directory doesn't exist", func() {
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockFileIO := util.NewMockFileIO(GinkgoT())
-			pkg := &installer.Package{
-				OmsWorkdir: "/test/workdir",
-				Filename:   "test-package.tar.gz",
-				FileIO:     mockFileIO,
-			}
 
-			mockFileIO.EXPECT().Exists("/test/workdir/test-package").Return(false)
+			mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
+			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+			mockFileIO.EXPECT().Exists("/test/workdir/package").Return(false)
 
-			filenames, err := c.ListPackageContents(pkg)
+			filenames, err := c.ListPackageContents(mockPackageManager)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("work dir not found"))
 			Expect(filenames).To(BeNil())
-			mockFileIO.AssertExpectations(GinkgoT())
 		})
 
 		It("fails when ReadDir fails", func() {
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockFileIO := util.NewMockFileIO(GinkgoT())
-			pkg := &installer.Package{
-				OmsWorkdir: "/test/workdir",
-				Filename:   "test-package.tar.gz",
-				FileIO:     mockFileIO,
-			}
 
-			mockFileIO.EXPECT().Exists("/test/workdir/test-package").Return(true)
-			mockFileIO.EXPECT().ReadDir("/test/workdir/test-package").Return(nil, os.ErrPermission)
+			mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
+			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+			mockFileIO.EXPECT().Exists("/test/workdir/package").Return(true)
+			mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(nil, os.ErrPermission)
 
-			filenames, err := c.ListPackageContents(pkg)
+			filenames, err := c.ListPackageContents(mockPackageManager)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to read directory contents"))
 			Expect(filenames).To(BeNil())
-			mockFileIO.AssertExpectations(GinkgoT())
 		})
 
 		It("successfully lists package contents", func() {
+			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockFileIO := util.NewMockFileIO(GinkgoT())
-			pkg := &installer.Package{
-				OmsWorkdir: "/test/workdir",
-				Filename:   "test-package.tar.gz",
-				FileIO:     mockFileIO,
-			}
 
 			// Create mock directory entries
 			mockEntries := []os.DirEntry{
@@ -313,17 +347,18 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				&MockDirEntry{name: "kubectl", isDir: false},
 			}
 
-			mockFileIO.EXPECT().Exists("/test/workdir/test-package").Return(true)
-			mockFileIO.EXPECT().ReadDir("/test/workdir/test-package").Return(mockEntries, nil)
+			mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
+			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+			mockFileIO.EXPECT().Exists("/test/workdir/package").Return(true)
+			mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
-			filenames, err := c.ListPackageContents(pkg)
+			filenames, err := c.ListPackageContents(mockPackageManager)
 			Expect(err).To(BeNil())
 			Expect(filenames).To(HaveLen(4))
 			Expect(filenames).To(ContainElement("deps.tar.gz"))
 			Expect(filenames).To(ContainElement("node"))
 			Expect(filenames).To(ContainElement("private-cloud-installer.js"))
 			Expect(filenames).To(ContainElement("kubectl"))
-			mockFileIO.AssertExpectations(GinkgoT())
 		})
 	})
 })

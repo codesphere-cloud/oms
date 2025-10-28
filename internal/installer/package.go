@@ -15,18 +15,31 @@ import (
 
 const depsDir = "deps"
 
+type PackageManager interface {
+	FileIO() util.FileIO
+	Extract(force bool) error
+	ExtractDependency(file string, force bool) error
+	GetWorkDir() string
+	GetDependencyPath(filename string) string
+}
+
 type Package struct {
 	OmsWorkdir string
 	Filename   string
-	FileIO     util.FileIO
+	fileIO     util.FileIO
 }
 
 func NewPackage(omsWorkdir, filename string) *Package {
 	return &Package{
 		Filename:   filename,
 		OmsWorkdir: omsWorkdir,
-		FileIO:     &util.FilesystemWriter{},
+		fileIO:     &util.FilesystemWriter{},
 	}
+}
+
+// FileIO returns the FileIO interface used by the package.
+func (p *Package) FileIO() util.FileIO {
+	return p.fileIO
 }
 
 // Extract extracts the package tar.gz file into its working directory.
@@ -47,7 +60,7 @@ func (p *Package) Extract(force bool) error {
 		return nil
 	}
 
-	err = util.ExtractTarGz(p.FileIO, p.Filename, workDir)
+	err = util.ExtractTarGz(p.fileIO, p.Filename, workDir)
 	if err != nil {
 		return fmt.Errorf("failed to extract package %s to %s: %w", p.Filename, workDir, err)
 	}
@@ -63,12 +76,12 @@ func (p *Package) ExtractDependency(file string, force bool) error {
 	}
 	workDir := p.GetWorkDir()
 
-	if p.FileIO.Exists(p.GetDependencyPath(file)) && !force {
+	if p.fileIO.Exists(p.GetDependencyPath(file)) && !force {
 		log.Println("skipping extraction, dependency already unpacked. Use force option to overwrite.")
 		return nil
 	}
 
-	err = util.ExtractTarGzSingleFile(p.FileIO, path.Join(workDir, "deps.tar.gz"), file, path.Join(workDir, depsDir))
+	err = util.ExtractTarGzSingleFile(p.fileIO, path.Join(workDir, "deps.tar.gz"), file, path.Join(workDir, depsDir))
 	if err != nil {
 		return fmt.Errorf("failed to extract dependency %s from deps archive to %s: %w", file, workDir, err)
 	}
@@ -77,10 +90,10 @@ func (p *Package) ExtractDependency(file string, force bool) error {
 }
 
 func (p *Package) alreadyExtracted(dir string) (bool, error) {
-	if !p.FileIO.Exists(dir) {
+	if !p.fileIO.Exists(dir) {
 		return false, nil
 	}
-	isDir, err := p.FileIO.IsDirectory(dir)
+	isDir, err := p.fileIO.IsDirectory(dir)
 	if err != nil {
 		return false, fmt.Errorf("failed to determine if %s is a folder: %w", dir, err)
 	}
