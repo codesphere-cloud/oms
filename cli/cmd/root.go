@@ -35,6 +35,7 @@ func GetRootCmd() *cobra.Command {
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
 	AddInstallCmd(rootCmd, &opts)
+	AddInitCmd(rootCmd, &opts)
 	AddLicensesCmd(rootCmd)
 
 	// OMS API key management commands
