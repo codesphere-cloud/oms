@@ -13,7 +13,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
-	"github.com/codesphere-cloud/oms/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -25,15 +24,16 @@ type BuildImagesCmd struct {
 }
 
 type BuildImagesOpts struct {
-	*GlobalOptions
+	GlobalOptions
 	Config string
 }
 
 func (c *BuildImagesCmd) RunE(_ *cobra.Command, args []string) error {
+	pm := installer.NewPackage(c.Env.GetOmsWorkdir(), c.Opts.Config)
 	cm := installer.NewConfig()
 	im := system.NewImage(context.Background())
 
-	err := c.BuildAndPushImages(cm, im)
+	err := c.BuildAndPushImages(pm, cm, im)
 	if err != nil {
 		return fmt.Errorf("failed to build and push images: %w", err)
 	}
@@ -41,7 +41,7 @@ func (c *BuildImagesCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddBuildImagesCmd(build *cobra.Command, opts *GlobalOptions) {
+func AddBuildImagesCmd(build *cobra.Command, opts GlobalOptions) {
 	buildImages := BuildImagesCmd{
 		cmd: &cobra.Command{
 			Use:   "images",
@@ -61,7 +61,7 @@ func AddBuildImagesCmd(build *cobra.Command, opts *GlobalOptions) {
 	buildImages.cmd.RunE = buildImages.RunE
 }
 
-func (c *BuildImagesCmd) BuildAndPushImages(cm installer.ConfigManager, im system.ImageManager) error {
+func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager) error {
 	config, err := cm.ParseConfigYaml(c.Opts.Config)
 	if err != nil {
 		return fmt.Errorf("failed to parse config: %w", err)
@@ -74,8 +74,10 @@ func (c *BuildImagesCmd) BuildAndPushImages(cm installer.ConfigManager, im syste
 		return fmt.Errorf("registry server not defined in the config")
 	}
 
-	v := &version.Build{}
-	codesphereVersion := v.Version()
+	codesphereVersion, err := pm.GetCodesphereVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get codesphere version from package: %w", err)
+	}
 
 	for imageName, imageConfig := range config.Codesphere.DeployConfig.Images {
 		for flavorName, flavorConfig := range imageConfig.Flavors {

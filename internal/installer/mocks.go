@@ -37,60 +37,6 @@ func (_m *MockConfigManager) EXPECT() *MockConfigManager_Expecter {
 	return &MockConfigManager_Expecter{mock: &_m.Mock}
 }
 
-// ExtractOciImageIndex provides a mock function for the type MockConfigManager
-func (_mock *MockConfigManager) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error) {
-	ret := _mock.Called(imagefile)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ExtractOciImageIndex")
-	}
-
-	var r0 files.OCIImageIndex
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) (files.OCIImageIndex, error)); ok {
-		return returnFunc(imagefile)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string) files.OCIImageIndex); ok {
-		r0 = returnFunc(imagefile)
-	} else {
-		r0 = ret.Get(0).(files.OCIImageIndex)
-	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(imagefile)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockConfigManager_ExtractOciImageIndex_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ExtractOciImageIndex'
-type MockConfigManager_ExtractOciImageIndex_Call struct {
-	*mock.Call
-}
-
-// ExtractOciImageIndex is a helper method to define mock.On call
-//   - imagefile
-func (_e *MockConfigManager_Expecter) ExtractOciImageIndex(imagefile interface{}) *MockConfigManager_ExtractOciImageIndex_Call {
-	return &MockConfigManager_ExtractOciImageIndex_Call{Call: _e.mock.On("ExtractOciImageIndex", imagefile)}
-}
-
-func (_c *MockConfigManager_ExtractOciImageIndex_Call) Run(run func(imagefile string)) *MockConfigManager_ExtractOciImageIndex_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
-	})
-	return _c
-}
-
-func (_c *MockConfigManager_ExtractOciImageIndex_Call) Return(oCIImageIndex files.OCIImageIndex, err error) *MockConfigManager_ExtractOciImageIndex_Call {
-	_c.Call.Return(oCIImageIndex, err)
-	return _c
-}
-
-func (_c *MockConfigManager_ExtractOciImageIndex_Call) RunAndReturn(run func(imagefile string) (files.OCIImageIndex, error)) *MockConfigManager_ExtractOciImageIndex_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // ParseConfigYaml provides a mock function for the type MockConfigManager
 func (_mock *MockConfigManager) ParseConfigYaml(configPath string) (files.RootConfig, error) {
 	ret := _mock.Called(configPath)
@@ -263,6 +209,60 @@ func (_c *MockPackageManager_ExtractDependency_Call) RunAndReturn(run func(file 
 	return _c
 }
 
+// ExtractOciImageIndex provides a mock function for the type MockPackageManager
+func (_mock *MockPackageManager) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error) {
+	ret := _mock.Called(imagefile)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ExtractOciImageIndex")
+	}
+
+	var r0 files.OCIImageIndex
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (files.OCIImageIndex, error)); ok {
+		return returnFunc(imagefile)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) files.OCIImageIndex); ok {
+		r0 = returnFunc(imagefile)
+	} else {
+		r0 = ret.Get(0).(files.OCIImageIndex)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(imagefile)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPackageManager_ExtractOciImageIndex_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ExtractOciImageIndex'
+type MockPackageManager_ExtractOciImageIndex_Call struct {
+	*mock.Call
+}
+
+// ExtractOciImageIndex is a helper method to define mock.On call
+//   - imagefile
+func (_e *MockPackageManager_Expecter) ExtractOciImageIndex(imagefile interface{}) *MockPackageManager_ExtractOciImageIndex_Call {
+	return &MockPackageManager_ExtractOciImageIndex_Call{Call: _e.mock.On("ExtractOciImageIndex", imagefile)}
+}
+
+func (_c *MockPackageManager_ExtractOciImageIndex_Call) Run(run func(imagefile string)) *MockPackageManager_ExtractOciImageIndex_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockPackageManager_ExtractOciImageIndex_Call) Return(oCIImageIndex files.OCIImageIndex, err error) *MockPackageManager_ExtractOciImageIndex_Call {
+	_c.Call.Return(oCIImageIndex, err)
+	return _c
+}
+
+func (_c *MockPackageManager_ExtractOciImageIndex_Call) RunAndReturn(run func(imagefile string) (files.OCIImageIndex, error)) *MockPackageManager_ExtractOciImageIndex_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FileIO provides a mock function for the type MockPackageManager
 func (_mock *MockPackageManager) FileIO() util.FileIO {
 	ret := _mock.Called()
@@ -309,6 +309,59 @@ func (_c *MockPackageManager_FileIO_Call) RunAndReturn(run func() util.FileIO) *
 	return _c
 }
 
+// GetCodesphereVersion provides a mock function for the type MockPackageManager
+func (_mock *MockPackageManager) GetCodesphereVersion() (string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetCodesphereVersion")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() string); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPackageManager_GetCodesphereVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetCodesphereVersion'
+type MockPackageManager_GetCodesphereVersion_Call struct {
+	*mock.Call
+}
+
+// GetCodesphereVersion is a helper method to define mock.On call
+func (_e *MockPackageManager_Expecter) GetCodesphereVersion() *MockPackageManager_GetCodesphereVersion_Call {
+	return &MockPackageManager_GetCodesphereVersion_Call{Call: _e.mock.On("GetCodesphereVersion")}
+}
+
+func (_c *MockPackageManager_GetCodesphereVersion_Call) Run(run func()) *MockPackageManager_GetCodesphereVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockPackageManager_GetCodesphereVersion_Call) Return(s string, err error) *MockPackageManager_GetCodesphereVersion_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockPackageManager_GetCodesphereVersion_Call) RunAndReturn(run func() (string, error)) *MockPackageManager_GetCodesphereVersion_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetDependencyPath provides a mock function for the type MockPackageManager
 func (_mock *MockPackageManager) GetDependencyPath(filename string) string {
 	ret := _mock.Called(filename)
@@ -350,6 +403,67 @@ func (_c *MockPackageManager_GetDependencyPath_Call) Return(s string) *MockPacka
 }
 
 func (_c *MockPackageManager_GetDependencyPath_Call) RunAndReturn(run func(filename string) string) *MockPackageManager_GetDependencyPath_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetImagePathAndName provides a mock function for the type MockPackageManager
+func (_mock *MockPackageManager) GetImagePathAndName(baseimage string, force bool) (string, string, error) {
+	ret := _mock.Called(baseimage, force)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetImagePathAndName")
+	}
+
+	var r0 string
+	var r1 string
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string, bool) (string, string, error)); ok {
+		return returnFunc(baseimage, force)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, bool) string); ok {
+		r0 = returnFunc(baseimage, force)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, bool) string); ok {
+		r1 = returnFunc(baseimage, force)
+	} else {
+		r1 = ret.Get(1).(string)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string, bool) error); ok {
+		r2 = returnFunc(baseimage, force)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockPackageManager_GetImagePathAndName_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetImagePathAndName'
+type MockPackageManager_GetImagePathAndName_Call struct {
+	*mock.Call
+}
+
+// GetImagePathAndName is a helper method to define mock.On call
+//   - baseimage
+//   - force
+func (_e *MockPackageManager_Expecter) GetImagePathAndName(baseimage interface{}, force interface{}) *MockPackageManager_GetImagePathAndName_Call {
+	return &MockPackageManager_GetImagePathAndName_Call{Call: _e.mock.On("GetImagePathAndName", baseimage, force)}
+}
+
+func (_c *MockPackageManager_GetImagePathAndName_Call) Run(run func(baseimage string, force bool)) *MockPackageManager_GetImagePathAndName_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(bool))
+	})
+	return _c
+}
+
+func (_c *MockPackageManager_GetImagePathAndName_Call) Return(s string, s1 string, err error) *MockPackageManager_GetImagePathAndName_Call {
+	_c.Call.Return(s, s1, err)
+	return _c
+}
+
+func (_c *MockPackageManager_GetImagePathAndName_Call) RunAndReturn(run func(baseimage string, force bool) (string, string, error)) *MockPackageManager_GetImagePathAndName_Call {
 	_c.Call.Return(run)
 	return _c
 }

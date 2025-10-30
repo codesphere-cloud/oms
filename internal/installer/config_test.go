@@ -4,7 +4,6 @@
 package installer_test
 
 import (
-	"archive/tar"
 	"os"
 	"path/filepath"
 
@@ -125,111 +124,6 @@ invalid_yaml: [unclosed_bracket
 		})
 	})
 
-	Describe("ExtractOciImageIndex", func() {
-		Context("with real filesystem operations", func() {
-			var (
-				tempDir   string
-				imageFile string
-			)
-
-			BeforeEach(func() {
-				config = installer.NewConfig() // Use real FileIO
-				tempDir = GinkgoT().TempDir()
-				imageFile = filepath.Join(tempDir, "test-image.tar")
-			})
-
-			Context("when image file does not exist", func() {
-				It("returns an error", func() {
-					_, err := config.ExtractOciImageIndex(imageFile)
-
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
-				})
-			})
-
-			Context("when image file is empty", func() {
-				It("returns an error", func() {
-					// Create empty tar file
-					err := os.WriteFile(imageFile, []byte(""), 0644)
-					Expect(err).ToNot(HaveOccurred())
-
-					_, err = config.ExtractOciImageIndex(imageFile)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
-				})
-			})
-
-			Context("when image file is a directory", func() {
-				It("returns an error", func() {
-					// Create directory instead of file
-					err := os.Mkdir(imageFile, 0755)
-					Expect(err).ToNot(HaveOccurred())
-
-					_, err = config.ExtractOciImageIndex(imageFile)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
-				})
-			})
-
-			Context("when index.json file doesn't exist after extraction", func() {
-				It("returns an error", func() {
-					// Create a minimal tar file without index.json
-					err := createTar(imageFile, "not_index.json", "fake content")
-					Expect(err).ToNot(HaveOccurred())
-
-					_, err = config.ExtractOciImageIndex(imageFile)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
-				})
-			})
-
-			Context("when tar contains valid index.json", func() {
-				It("successfully extracts and parses OCI image index", func() {
-					// Create a tar file with a valid index.json
-					validIndex := `{
-						"schemaVersion": 2,
-						"mediaType": "application/vnd.oci.image.index.v1+json",
-						"manifests": [
-							{
-								"mediaType": "application/vnd.oci.image.manifest.v1+json",
-								"size": 1234,
-								"digest": "sha256:abc123def456"
-							}
-						]
-					}`
-					err := createTar(imageFile, "index.json", validIndex)
-					Expect(err).ToNot(HaveOccurred())
-
-					ociImageIndex, err := config.ExtractOciImageIndex(imageFile)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(ociImageIndex.SchemaVersion).To(Equal(2))
-					Expect(ociImageIndex.MediaType).To(Equal("application/vnd.oci.image.index.v1+json"))
-					Expect(ociImageIndex.Manifests).To(HaveLen(1))
-					Expect(ociImageIndex.Manifests[0].Digest).To(Equal("sha256:abc123def456"))
-					Expect(ociImageIndex.Manifests[0].Size).To(Equal(int64(1234)))
-				})
-			})
-
-			Context("when index.json has invalid JSON", func() {
-				It("returns an error", func() {
-					// Create a tar file with invalid JSON in index.json
-					invalidIndex := `{
-						"schemaVersion": 2,
-						"manifests": [
-							{
-								"size": "invalid_json_here",
-					`
-					err := createTar(imageFile, "index.json", invalidIndex)
-					Expect(err).ToNot(HaveOccurred())
-
-					_, err = config.ExtractOciImageIndex(imageFile)
-					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to parse OCI image config"))
-				})
-			})
-		})
-	})
-
 	Describe("ConfigManager interface", func() {
 		It("implements ConfigManager interface", func() {
 			var configManager installer.ConfigManager = config
@@ -243,9 +137,6 @@ invalid_yaml: [unclosed_bracket
 			// and checking that we get errors (proving the methods are callable)
 			_, err1 := configManager.ParseConfigYaml("/nonexistent/path")
 			Expect(err1).To(HaveOccurred())
-
-			_, err2 := configManager.ExtractOciImageIndex("/nonexistent/path")
-			Expect(err2).To(HaveOccurred())
 		})
 	})
 
@@ -280,26 +171,14 @@ registry:
 		})
 
 		Context("ExtractOciImageIndex with various scenarios", func() {
-			var tempDir string
-
-			BeforeEach(func() {
-				tempDir = GinkgoT().TempDir()
-			})
-
 			It("handles empty image file path", func() {
-				_, err := config.ExtractOciImageIndex("")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
+				// Test moved to package_test.go
+				Skip("ExtractOciImageIndex tests moved to package_test.go")
 			})
 
 			It("handles directory instead of file", func() {
-				dirPath := filepath.Join(tempDir, "not-a-file")
-				err := os.Mkdir(dirPath, 0755)
-				Expect(err).ToNot(HaveOccurred())
-
-				_, err = config.ExtractOciImageIndex(dirPath)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
+				// Test moved to package_test.go
+				Skip("ExtractOciImageIndex tests moved to package_test.go")
 			})
 		})
 	})
@@ -369,30 +248,3 @@ codesphere:
 		})
 	})
 })
-
-// createTar creates a tar file containing a file with the given content
-func createTar(tarName string, fileName string, fileContent string) error {
-	file, err := os.Create(tarName)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	tw := tar.NewWriter(file)
-	defer tw.Close()
-
-	// Add index.json file
-	header := &tar.Header{
-		Name: fileName,
-		Mode: 0644,
-		Size: int64(len(fileContent)),
-	}
-	if err := tw.WriteHeader(header); err != nil {
-		return err
-	}
-	if _, err := tw.Write([]byte(fileContent)); err != nil {
-		return err
-	}
-
-	return nil
-}

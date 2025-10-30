@@ -5,7 +5,6 @@ package installer
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -17,7 +16,6 @@ type Config struct {
 
 type ConfigManager interface {
 	ParseConfigYaml(configPath string) (files.RootConfig, error)
-	ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error)
 }
 
 func NewConfig() *Config {
@@ -35,20 +33,4 @@ func (c *Config) ParseConfigYaml(configPath string) (files.RootConfig, error) {
 	}
 
 	return rootConfig, nil
-}
-
-// ExtractOciImageIndex extracts and parses the OCI image index from the given image file path.
-func (c *Config) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error) {
-	var ociImageIndex files.OCIImageIndex
-	err := util.ExtractTarSingleFile(c.FileIO, imagefile, "index.json", filepath.Dir(imagefile))
-	if err != nil {
-		return ociImageIndex, fmt.Errorf("failed to extract index.json: %w", err)
-	}
-
-	err = ociImageIndex.ParseOCIImageConfig(imagefile)
-	if err != nil {
-		return ociImageIndex, fmt.Errorf("failed to parse OCI image config: %w", err)
-	}
-
-	return ociImageIndex, nil
 }

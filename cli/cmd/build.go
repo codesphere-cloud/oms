@@ -13,7 +13,7 @@ type BuildCmd struct {
 	cmd *cobra.Command
 }
 
-func AddBuildCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddBuildCmd(rootCmd *cobra.Command, opts GlobalOptions) {
 	build := BuildCmd{
 		cmd: &cobra.Command{
 			Use:   "build",
@@ -21,6 +21,8 @@ func AddBuildCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Long:  io.Long(`Build and push container images to a registry using the provided configuration.`),
 		},
 	}
-	rootCmd.AddCommand(build.cmd)
 	AddBuildImagesCmd(build.cmd, opts)
+	AddBuildImageCmd(build.cmd, opts)
+
+	rootCmd.AddCommand(build.cmd)
 }

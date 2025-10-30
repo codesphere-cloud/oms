@@ -13,7 +13,7 @@ type InstallCmd struct {
 	cmd *cobra.Command
 }
 
-func AddInstallCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddInstallCmd(rootCmd *cobra.Command, opts GlobalOptions) {
 	install := InstallCmd{
 		cmd: &cobra.Command{
 			Use:   "install",

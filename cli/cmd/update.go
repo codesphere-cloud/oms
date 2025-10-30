@@ -33,6 +33,7 @@ func AddUpdateCmd(rootCmd *cobra.Command, opts GlobalOptions) {
 	AddDownloadPackageCmd(updateCmd.cmd, opts)
 	AddOmsUpdateCmd(updateCmd.cmd)
 	AddApiKeyUpdateCmd(updateCmd.cmd)
+	AddUpdateDockerfileCmd(updateCmd.cmd, opts)
 
 	rootCmd.AddCommand(updateCmd.cmd)
 }

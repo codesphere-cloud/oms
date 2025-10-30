@@ -28,14 +28,14 @@ func GetRootCmd() *cobra.Command {
 	}
 	// General commands
 	AddVersionCmd(rootCmd)
-	AddBetaCmd(rootCmd, &opts)
+	AddBetaCmd(rootCmd, opts)
 	AddUpdateCmd(rootCmd, opts)
 
 	// Package commands
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
-	AddInstallCmd(rootCmd, &opts)
-	AddBuildCmd(rootCmd, &opts)
+	AddInstallCmd(rootCmd, opts)
+	AddBuildCmd(rootCmd, opts)
 	AddLicensesCmd(rootCmd)
 
 	// OMS API key management commands

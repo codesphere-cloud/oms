@@ -32,7 +32,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		globalOpts = cmd.GlobalOptions{}
 		opts = &cmd.InstallCodesphereOpts{
-			GlobalOptions: &globalOpts,
+			GlobalOptions: globalOpts,
 			Package:       "codesphere-v1.66.0-installer.tar.gz",
 			Force:         false,
 		}
@@ -295,12 +295,14 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager.EXPECT().ExtractDependency("codesphere/images/ubuntu.tar", false).Return(nil)
 				mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/ubuntu.tar").Return("/test/workdir/deps/codesphere/images/ubuntu.tar")
 				mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/ubuntu.tar").Return(nil)
-				mockImageManager.EXPECT().BuildImage("workspace.Dockerfile", "ubuntu", ".").Return(nil)
+
+				// Mock for reading the Dockerfile
+				mockFileIO.EXPECT().Open("workspace.Dockerfile").Return(nil, errors.New("dockerfile not found"))
 
 				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
-				// Should fail when trying to make fake node executable
+				// Should fail when trying to read the dockerfile
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to make node executable"))
+				Expect(err.Error()).To(ContainSubstring("dockerfile not found"))
 			})
 		})
 	})
@@ -366,12 +368,12 @@ var _ = Describe("InstallCodesphereCmd", func() {
 var _ = Describe("AddInstallCodesphereCmd", func() {
 	var (
 		parentCmd  *cobra.Command
-		globalOpts *cmd.GlobalOptions
+		globalOpts cmd.GlobalOptions
 	)
 
 	BeforeEach(func() {
 		parentCmd = &cobra.Command{Use: "install"}
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = cmd.GlobalOptions{}
 	})
 
 	It("adds the codesphere command with correct properties and flags", func() {

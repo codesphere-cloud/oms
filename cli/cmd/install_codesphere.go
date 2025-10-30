@@ -31,7 +31,7 @@ type InstallCodesphereCmd struct {
 }
 
 type InstallCodesphereOpts struct {
-	*GlobalOptions
+	GlobalOptions
 	Package   string
 	Force     bool
 	Config    string
@@ -53,7 +53,7 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
+func AddInstallCodesphereCmd(install *cobra.Command, opts GlobalOptions) {
 	codesphere := InstallCodesphereCmd{
 		cmd: &cobra.Command{
 			Use:   "codesphere",
@@ -75,6 +75,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(codesphere.cmd, "priv-key")
 
 	install.AddCommand(codesphere.cmd)
+
 	codesphere.cmd.RunE = codesphere.RunE
 }
 
@@ -130,6 +131,27 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 				return fmt.Errorf("failed to load workspace image from Dockerfile %s: %w", dockerfile, err)
 			}
 			log.Printf("Loaded root image '%s'", extractedImagePath)
+
+			// TODO: This is duplicated from update_dockerfile.go, refactor into shared function
+			dockerfileFile, err := pm.FileIO().Open(dockerfile)
+			if err != nil {
+				return fmt.Errorf("failed to open dockerfile %s: %w", dockerfile, err)
+			}
+			defer util.CloseFileIgnoreError(dockerfileFile)
+
+			dockerfileManager := util.NewDockerfileManager()
+			updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, rootImageName)
+			if err != nil {
+				return fmt.Errorf("failed to update FROM statement: %w", err)
+			}
+
+			err = pm.FileIO().WriteFile(dockerfile, []byte(updatedContent), 0644)
+			if err != nil {
+				return fmt.Errorf("failed to write updated dockerfile: %w", err)
+			}
+
+			log.Printf("Successfully updated FROM statement in %s to use %s", dockerfile, rootImageName)
+			// TODO: End duplicated code
 
 			dockerfileName := filepath.Base(dockerfile)
 			dockerfileDir := filepath.Dir(dockerfile)
