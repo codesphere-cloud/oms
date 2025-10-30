@@ -164,7 +164,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			err := c.BuildAndPushImages(mockPackageManager, mockConfigManager, mockImageManager)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("registry server not defined in the config"))
+			Expect(err.Error()).To(ContainSubstring("registry server (property registry.server) not defined in the config"))
 		})
 
 		It("skips flavors without dockerfile", func() {

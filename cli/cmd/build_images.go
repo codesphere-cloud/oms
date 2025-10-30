@@ -71,7 +71,7 @@ func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm inst
 		return fmt.Errorf("no images defined in the config")
 	}
 	if len(config.Registry.Server) == 0 {
-		return fmt.Errorf("registry server not defined in the config")
+		return fmt.Errorf("registry server (property registry.server) not defined in the config, please specify a valid registry to which the image shall be pushed")
 	}
 
 	codesphereVersion, err := pm.GetCodesphereVersion()
