@@ -27,64 +27,49 @@ func NewImage(ctx context.Context) *Image {
 }
 
 func isCommandAvailable(name string) bool {
-	cmd := exec.Command("command", "-v", name)
+	cmd := exec.Command(name, "-v")
 	if err := cmd.Run(); err != nil {
 		return false
 	}
 	return true
 }
 
-func (c *Image) LoadImage(imageTarPath string) error {
-	var cmd *exec.Cmd
-	if isCommandAvailable("docker") {
-		cmd = exec.CommandContext(c.ctx, "docker", "load", "-i", imageTarPath)
-	} else if isCommandAvailable("podman") {
-		cmd = exec.CommandContext(c.ctx, "podman", "load", "-i", imageTarPath)
-	} else {
-		return fmt.Errorf("neither 'docker' nor 'podman' command is available")
-	}
-
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
+func (i *Image) LoadImage(imageTarPath string) error {
+	err := i.runCommand("", "load", "-i", imageTarPath)
 	if err != nil {
-		return fmt.Errorf("load failed with exit status %w", err)
+		return fmt.Errorf("load failed: %w", err)
 	}
-
 	return nil
 }
 
-func (c *Image) BuildImage(dockerfile string, tag string, buildContext string) error {
-	var cmd *exec.Cmd
-	if isCommandAvailable("docker") {
-		cmd = exec.CommandContext(c.ctx, "docker", "build", "-f", dockerfile, "-t", tag, ".")
-	} else if isCommandAvailable("podman") {
-		cmd = exec.CommandContext(c.ctx, "podman", "build", "-f", dockerfile, "-t", tag, ".")
-	} else {
-		return fmt.Errorf("neither 'docker' nor 'podman' command is available")
-	}
-
-	cmd.Dir = buildContext
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Run()
+func (i *Image) BuildImage(dockerfile string, tag string, buildContext string) error {
+	err := i.runCommand(buildContext, "build", "-f", dockerfile, "-t", tag, ".")
 	if err != nil {
-		return fmt.Errorf("build failed with exit status %w", err)
+		return fmt.Errorf("build failed: %w", err)
 	}
-
 	return nil
 }
 
-func (c *Image) PushImage(tag string) error {
+func (i *Image) PushImage(tag string) error {
+	err := i.runCommand("", "push", tag)
+	if err != nil {
+		return fmt.Errorf("push failed: %w", err)
+	}
+	return nil
+}
+
+func (i *Image) runCommand(cmdDir string, args ...string) error {
 	var cmd *exec.Cmd
 	if isCommandAvailable("docker") {
-		cmd = exec.CommandContext(c.ctx, "docker", "push", tag)
+		cmd = exec.CommandContext(i.ctx, "docker", args...)
 	} else if isCommandAvailable("podman") {
-		cmd = exec.CommandContext(c.ctx, "podman", "push", tag)
+		cmd = exec.CommandContext(i.ctx, "podman", args...)
 	} else {
 		return fmt.Errorf("neither 'docker' nor 'podman' command is available")
+	}
+
+	if cmdDir != "" {
+		cmd.Dir = cmdDir
 	}
 
 	cmd.Stdout = os.Stdout
@@ -92,7 +77,7 @@ func (c *Image) PushImage(tag string) error {
 
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("push failed with exit status %w", err)
+		return fmt.Errorf("command failed with exit status %w", err)
 	}
 
 	return nil
