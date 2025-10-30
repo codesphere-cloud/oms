@@ -47,7 +47,7 @@ func AddBuildImagesCmd(build *cobra.Command, opts GlobalOptions) {
 			Use:   "images",
 			Short: "Build and push container images",
 			Long: io.Long(`Build and push container images based on the configuration file.
-			Extracts necessary images configuration to get the bomRef and processes them.`),
+			Extracts necessary image configurations from the provided install config and the downloaded package.`),
 		},
 		Opts: &BuildImagesOpts{GlobalOptions: opts},
 		Env:  env.NewEnv(),
