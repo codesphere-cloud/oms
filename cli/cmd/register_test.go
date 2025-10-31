@@ -74,7 +74,7 @@ var _ = Describe("RegisterCmd", func() {
 var _ = Describe("AddRegisterCmd", func() {
 	It("adds the register command to the parent", func() {
 		parent := &cobra.Command{}
-		opts := cmd.GlobalOptions{}
+		opts := &cmd.GlobalOptions{}
 		cmd.AddRegisterCmd(parent, opts)
 		found := false
 		for _, c := range parent.Commands() {

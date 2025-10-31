@@ -22,7 +22,7 @@ type DownloadPackageCmd struct {
 }
 
 type DownloadPackageOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	Version  string
 	Hash     string
 	Filename string
@@ -50,7 +50,7 @@ func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddDownloadPackageCmd(download *cobra.Command, opts GlobalOptions) {
+func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 	pkg := DownloadPackageCmd{
 		cmd: &cobra.Command{
 			Use:   "package",

@@ -12,7 +12,7 @@ type ListCmd struct {
 	cmd *cobra.Command
 }
 
-func AddListCmd(rootCmd *cobra.Command, opts GlobalOptions) {
+func AddListCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	list := ListCmd{
 		cmd: &cobra.Command{
 			Use:   "list",

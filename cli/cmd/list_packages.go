@@ -21,7 +21,7 @@ type ListBuildsCmd struct {
 }
 
 type ListBuildsOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	Internal bool
 }
 
@@ -36,7 +36,7 @@ func (c *ListBuildsCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddListPackagesCmd(list *cobra.Command, opts GlobalOptions) {
+func AddListPackagesCmd(list *cobra.Command, opts *GlobalOptions) {
 	builds := ListBuildsCmd{
 		cmd: &cobra.Command{
 			Use:   "packages",

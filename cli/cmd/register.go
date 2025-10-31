@@ -18,7 +18,7 @@ type RegisterCmd struct {
 }
 
 type RegisterOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	Owner        string
 	Organization string
 	Role         string
@@ -57,7 +57,7 @@ func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
 	return newKey, nil
 }
 
-func AddRegisterCmd(list *cobra.Command, opts GlobalOptions) {
+func AddRegisterCmd(list *cobra.Command, opts *GlobalOptions) {
 	c := RegisterCmd{
 		cmd: &cobra.Command{
 			Use:   "register",

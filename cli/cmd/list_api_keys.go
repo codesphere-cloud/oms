@@ -30,7 +30,7 @@ func (c *ListAPIKeysCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddListAPIKeysCmd(list *cobra.Command, opts GlobalOptions) {
+func AddListAPIKeysCmd(list *cobra.Command, opts *GlobalOptions) {
 	c := ListAPIKeysCmd{
 		cmd: &cobra.Command{
 			Use:   "api-keys",

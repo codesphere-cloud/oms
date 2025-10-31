@@ -18,7 +18,7 @@ type UpdateAPIKeyCmd struct {
 }
 
 type UpdateAPIKeyOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	APIKeyID     string
 	ExpiresAtStr string
 }
