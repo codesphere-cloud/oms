@@ -18,7 +18,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-const sampleDockerfileContent = `FROM ubuntu:20.04
+const sampleDockerfileContent = `FROM workspace-agent:20.04
 RUN apt-get update && apt-get install -y curl
 WORKDIR /app
 COPY . .
@@ -318,6 +318,6 @@ var _ = Describe("AddUpdateDockerfileCmd", func() {
 		forceFlag := dockerfileCmd.Flags().Lookup("force")
 		Expect(forceFlag).NotTo(BeNil())
 		Expect(forceFlag.Shorthand).To(Equal("f"))
-		Expect(forceFlag.Usage).To(ContainSubstring("Force update even if Dockerfile already exists"))
+		Expect(forceFlag.Usage).To(ContainSubstring("Force re-extraction of the package"))
 	})
 })

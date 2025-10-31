@@ -71,7 +71,7 @@ codesphere:
 				_, err := config.ParseConfigYaml(nonExistentFile)
 
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to extract config.yaml"))
+				Expect(err.Error()).To(ContainSubstring("failed to parse config.yaml"))
 			})
 		})
 
@@ -103,7 +103,7 @@ invalid_yaml: [unclosed_bracket
 
 				_, err = config.ParseConfigYaml(tempConfigFile)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to extract config.yaml"))
+				Expect(err.Error()).To(ContainSubstring("failed to parse config.yaml"))
 			})
 		})
 

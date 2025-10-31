@@ -26,26 +26,23 @@ func (dm *Dockerfile) UpdateFromStatement(dockerfile io.Reader, baseImage string
 		return "", fmt.Errorf("error reading dockerfile: %w", err)
 	}
 
-	// Regex to match FROM statements and capture parts separately
-	// Group 1: whitespace + FROM + whitespace
-	// Group 2: image name until AS or end of line (also replaces --platform if present)
-	// Group 3: AS + alias (optional)
-	fromRegex := regexp.MustCompile(`(?i)^(\s*FROM\s+)\S+(\s+AS\s+\S+)?(.*)$`)
+	// Regex to match FROM statements that contain workspace-agent
+	fromRegex := regexp.MustCompile(`(?i)(.*FROM\s+).*workspace-agent[^\s]*(.*)`)
 
-	updated := false
 	lines := strings.Split(string(content), "\n")
+	lastMatchIndex := -1
+
 	for i, line := range lines {
-		newLine := fromRegex.ReplaceAllString(line, fmt.Sprintf("${1}%s${2}", baseImage))
-		if newLine != line {
-			lines[i] = newLine
-			updated = true
-			break
+		if fromRegex.MatchString(line) {
+			lastMatchIndex = i
 		}
 	}
-
-	if !updated {
-		return "", fmt.Errorf("no FROM statement found in dockerfile")
+	if lastMatchIndex == -1 {
+		return "", fmt.Errorf("no FROM statement with workspace-agent found in dockerfile")
 	}
+
+	newLine := fromRegex.ReplaceAllString(lines[lastMatchIndex], "${1}"+baseImage+"${2}")
+	lines[lastMatchIndex] = strings.TrimRight(newLine, " \t")
 
 	return strings.Join(lines, "\n"), nil
 }
