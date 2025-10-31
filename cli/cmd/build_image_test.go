@@ -20,13 +20,13 @@ var _ = Describe("BuildImageCmd", func() {
 	var (
 		c          cmd.BuildImageCmd
 		opts       cmd.BuildImageOpts
-		globalOpts cmd.GlobalOptions
+		globalOpts *cmd.GlobalOptions
 		mockEnv    *env.MockEnv
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		globalOpts = cmd.GlobalOptions{}
+		globalOpts = &cmd.GlobalOptions{}
 		opts = cmd.BuildImageOpts{
 			GlobalOptions: globalOpts,
 			Dockerfile:    "Dockerfile",
@@ -125,12 +125,12 @@ var _ = Describe("BuildImageCmd", func() {
 var _ = Describe("AddBuildImageCmd", func() {
 	var (
 		parentCmd  *cobra.Command
-		globalOpts cmd.GlobalOptions
+		globalOpts *cmd.GlobalOptions
 	)
 
 	BeforeEach(func() {
 		parentCmd = &cobra.Command{Use: "build"}
-		globalOpts = cmd.GlobalOptions{}
+		globalOpts = &cmd.GlobalOptions{}
 	})
 
 	It("adds the image command with correct properties and flags", func() {

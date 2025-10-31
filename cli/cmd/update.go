@@ -19,7 +19,7 @@ func (c *UpdateCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddUpdateCmd(rootCmd *cobra.Command, opts GlobalOptions) {
+func AddUpdateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	updateCmd := UpdateCmd{
 		cmd: &cobra.Command{
 			Use:   "update",

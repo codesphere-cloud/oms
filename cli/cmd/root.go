@@ -17,7 +17,7 @@ type GlobalOptions struct {
 
 // GetRootCmd adds all child commands to the root command and sets flags appropriately.
 func GetRootCmd() *cobra.Command {
-	opts := GlobalOptions{}
+	opts := &GlobalOptions{}
 	rootCmd := &cobra.Command{
 		Use:   "oms",
 		Short: "Codesphere Operations Management System (OMS)",

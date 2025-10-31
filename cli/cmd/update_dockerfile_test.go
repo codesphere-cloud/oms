@@ -28,13 +28,13 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 	var (
 		c          cmd.UpdateDockerfileCmd
 		opts       cmd.UpdateDockerfileOpts
-		globalOpts cmd.GlobalOptions
+		globalOpts *cmd.GlobalOptions
 		mockEnv    *env.MockEnv
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		globalOpts = cmd.GlobalOptions{}
+		globalOpts = &cmd.GlobalOptions{}
 		opts = cmd.UpdateDockerfileOpts{
 			GlobalOptions: globalOpts,
 			Package:       "codesphere-v1.68.0.tar.gz",
@@ -273,12 +273,12 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 var _ = Describe("AddUpdateDockerfileCmd", func() {
 	var (
 		parentCmd  *cobra.Command
-		globalOpts cmd.GlobalOptions
+		globalOpts *cmd.GlobalOptions
 	)
 
 	BeforeEach(func() {
 		parentCmd = &cobra.Command{Use: "update"}
-		globalOpts = cmd.GlobalOptions{}
+		globalOpts = &cmd.GlobalOptions{}
 	})
 
 	It("adds the dockerfile command with correct properties and flags", func() {

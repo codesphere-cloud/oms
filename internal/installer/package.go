@@ -135,14 +135,13 @@ func (p *Package) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, e
 }
 
 const baseimagePath = "./codesphere/images"
-const defaultBaseimage = "workspace-agent-24.04.tar"
 
 func (p *Package) GetImagePathAndName(baseimage string, force bool) (string, string, error) {
 	if baseimage == "" {
-		baseimage = defaultBaseimage
+		return "", "", fmt.Errorf("baseimage not specified")
 	}
 
-	baseImageTarPath := path.Join(baseimagePath, defaultBaseimage)
+	baseImageTarPath := path.Join(baseimagePath, baseimage)
 	err := p.ExtractDependency(baseImageTarPath, force)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to extract package to workdir: %w", err)

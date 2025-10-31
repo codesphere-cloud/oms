@@ -13,7 +13,7 @@ type BuildCmd struct {
 	cmd *cobra.Command
 }
 
-func AddBuildCmd(rootCmd *cobra.Command, opts GlobalOptions) {
+func AddBuildCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	build := BuildCmd{
 		cmd: &cobra.Command{
 			Use:   "build",

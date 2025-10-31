@@ -21,7 +21,7 @@ type BuildImageCmd struct {
 }
 
 type BuildImageOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	Dockerfile string
 	Package    string
 	Registry   string
@@ -34,7 +34,7 @@ func (c *BuildImageCmd) RunE(cmd *cobra.Command, args []string) error {
 	return c.BuildImage(pm, im)
 }
 
-func AddBuildImageCmd(parentCmd *cobra.Command, opts GlobalOptions) {
+func AddBuildImageCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	imageCmd := &BuildImageCmd{
 		cmd: &cobra.Command{
 			Use:   "image",

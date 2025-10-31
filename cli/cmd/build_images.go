@@ -24,7 +24,7 @@ type BuildImagesCmd struct {
 }
 
 type BuildImagesOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	Config string
 }
 
@@ -41,7 +41,7 @@ func (c *BuildImagesCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddBuildImagesCmd(build *cobra.Command, opts GlobalOptions) {
+func AddBuildImagesCmd(build *cobra.Command, opts *GlobalOptions) {
 	buildImages := BuildImagesCmd{
 		cmd: &cobra.Command{
 			Use:   "images",

@@ -24,13 +24,13 @@ var _ = Describe("InstallCodesphereCmd", func() {
 	var (
 		c          cmd.InstallCodesphereCmd
 		opts       *cmd.InstallCodesphereOpts
-		globalOpts cmd.GlobalOptions
+		globalOpts *cmd.GlobalOptions
 		mockEnv    *env.MockEnv
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		globalOpts = cmd.GlobalOptions{}
+		globalOpts = &cmd.GlobalOptions{}
 		opts = &cmd.InstallCodesphereOpts{
 			GlobalOptions: globalOpts,
 			Package:       "codesphere-v1.66.0-installer.tar.gz",
@@ -368,12 +368,12 @@ var _ = Describe("InstallCodesphereCmd", func() {
 var _ = Describe("AddInstallCodesphereCmd", func() {
 	var (
 		parentCmd  *cobra.Command
-		globalOpts cmd.GlobalOptions
+		globalOpts *cmd.GlobalOptions
 	)
 
 	BeforeEach(func() {
 		parentCmd = &cobra.Command{Use: "install"}
-		globalOpts = cmd.GlobalOptions{}
+		globalOpts = &cmd.GlobalOptions{}
 	})
 
 	It("adds the codesphere command with correct properties and flags", func() {

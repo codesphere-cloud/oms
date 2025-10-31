@@ -21,7 +21,7 @@ type UpdateDockerfileCmd struct {
 }
 
 type UpdateDockerfileOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	Package    string
 	Dockerfile string
 	Baseimage  string
@@ -45,7 +45,7 @@ func (c *UpdateDockerfileCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddUpdateDockerfileCmd(parentCmd *cobra.Command, opts GlobalOptions) {
+func AddUpdateDockerfileCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	dockerfileCmd := &UpdateDockerfileCmd{
 		cmd: &cobra.Command{
 			Use:   "dockerfile",
@@ -66,8 +66,8 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 
 	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Dockerfile, "dockerfile", "d", "", "Path to the Dockerfile to update (required)")
 	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Package, "package", "p", "", "Path to the Codesphere package (required)")
-	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Baseimage, "baseimage", "b", "", "Name of the base image to use (required)")
-	dockerfileCmd.cmd.Flags().BoolVarP(&dockerfileCmd.Opts.Force, "force", "f", false, "Force update even if Dockerfile already exists")
+	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04.tar", "Name of the base image to use (required)")
+	dockerfileCmd.cmd.Flags().BoolVarP(&dockerfileCmd.Opts.Force, "force", "f", false, "Force re-extraction of the package")
 
 	util.MarkFlagRequired(dockerfileCmd.cmd, "dockerfile")
 	util.MarkFlagRequired(dockerfileCmd.cmd, "package")

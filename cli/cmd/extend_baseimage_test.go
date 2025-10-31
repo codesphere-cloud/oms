@@ -22,13 +22,13 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 	var (
 		c          cmd.ExtendBaseimageCmd
 		opts       *cmd.ExtendBaseimageOpts
-		globalOpts cmd.GlobalOptions
+		globalOpts *cmd.GlobalOptions
 		mockEnv    *env.MockEnv
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		globalOpts = cmd.GlobalOptions{}
+		globalOpts = &cmd.GlobalOptions{}
 		opts = &cmd.ExtendBaseimageOpts{
 			GlobalOptions: globalOpts,
 			Dockerfile:    "Dockerfile",
@@ -153,12 +153,12 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 var _ = Describe("AddExtendBaseimageCmd", func() {
 	var (
 		parentCmd  *cobra.Command
-		globalOpts cmd.GlobalOptions
+		globalOpts *cmd.GlobalOptions
 	)
 
 	BeforeEach(func() {
 		parentCmd = &cobra.Command{Use: "extend"}
-		globalOpts = cmd.GlobalOptions{}
+		globalOpts = &cmd.GlobalOptions{}
 	})
 
 	It("adds the baseimage command with correct properties and flags", func() {

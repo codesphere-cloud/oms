@@ -31,7 +31,7 @@ type InstallCodesphereCmd struct {
 }
 
 type InstallCodesphereOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	Package   string
 	Force     bool
 	Config    string
@@ -53,7 +53,7 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddInstallCodesphereCmd(install *cobra.Command, opts GlobalOptions) {
+func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere := InstallCodesphereCmd{
 		cmd: &cobra.Command{
 			Use:   "codesphere",

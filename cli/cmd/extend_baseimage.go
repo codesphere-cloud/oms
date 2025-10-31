@@ -26,7 +26,7 @@ type ExtendBaseimageCmd struct {
 }
 
 type ExtendBaseimageOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	Package    string
 	Dockerfile string
 	Baseimage  string
@@ -50,7 +50,7 @@ func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddExtendBaseimageCmd(extend *cobra.Command, opts GlobalOptions) {
+func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
 	baseimage := ExtendBaseimageCmd{
 		cmd: &cobra.Command{
 			Use:   "baseimage",
@@ -66,7 +66,7 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts GlobalOptions) {
 	}
 	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from")
 	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Dockerfile, "dockerfile", "d", "Dockerfile", "Output Dockerfile to generate for extending the base image")
-	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Baseimage, "baseimage", "b", "", "Base image file name inside the package to extend (default: 'workspace-agent-24.04.tar')")
+	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04.tar", "Base image file name inside the package to extend (default: 'workspace-agent-24.04.tar')")
 	baseimage.cmd.Flags().BoolVarP(&baseimage.Opts.Force, "force", "f", false, "Enforce package extraction")
 
 	extend.AddCommand(baseimage.cmd)

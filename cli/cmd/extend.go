@@ -13,7 +13,7 @@ type ExtendCmd struct {
 	cmd *cobra.Command
 }
 
-func AddExtendCmd(rootCmd *cobra.Command, opts GlobalOptions) {
+func AddExtendCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	extend := ExtendCmd{
 		cmd: &cobra.Command{
 			Use:   "extend",

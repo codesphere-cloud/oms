@@ -12,7 +12,7 @@ type BetaCmd struct {
 	cmd *cobra.Command
 }
 
-func AddBetaCmd(rootCmd *cobra.Command, opts GlobalOptions) {
+func AddBetaCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	beta := BetaCmd{
 		cmd: &cobra.Command{
 			Use:   "beta",
