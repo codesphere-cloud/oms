@@ -66,7 +66,7 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 
 	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Dockerfile, "dockerfile", "d", "", "Path to the Dockerfile to update (required)")
 	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Package, "package", "p", "", "Path to the Codesphere package (required)")
-	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04", "Name of the base image to use (required)")
+	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04", "Name of the base image to use")
 	dockerfileCmd.cmd.Flags().BoolVarP(&dockerfileCmd.Opts.Force, "force", "f", false, "Force re-extraction of the package")
 
 	util.MarkFlagRequired(dockerfileCmd.cmd, "dockerfile")
