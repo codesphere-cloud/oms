@@ -26,6 +26,7 @@ type BuildImagesCmd struct {
 type BuildImagesOpts struct {
 	*GlobalOptions
 	Config string
+	Force  bool
 }
 
 func (c *BuildImagesCmd) RunE(_ *cobra.Command, args []string) error {
@@ -53,6 +54,7 @@ func AddBuildImagesCmd(build *cobra.Command, opts *GlobalOptions) {
 		Env:  env.NewEnv(),
 	}
 	buildImages.cmd.Flags().StringVarP(&buildImages.Opts.Config, "config", "c", "", "Path to the configuration YAML file")
+	buildImages.cmd.Flags().BoolVarP(&buildImages.Opts.Force, "force", "f", false, "Force new unpacking of the package even if already extracted")
 
 	util.MarkFlagRequired(buildImages.cmd, "config")
 
@@ -72,6 +74,11 @@ func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm inst
 	}
 	if len(config.Registry.Server) == 0 {
 		return fmt.Errorf("registry server (property registry.server) not defined in the config, please specify a valid registry to which the image shall be pushed")
+	}
+
+	err = pm.Extract(c.Opts.Force)
+	if err != nil {
+		return fmt.Errorf("failed to extract package: %w", err)
 	}
 
 	codesphereVersion, err := pm.GetCodesphereVersion()
