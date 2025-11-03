@@ -4,10 +4,10 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
-	"path"
 
 	"github.com/spf13/cobra"
 
@@ -29,11 +29,9 @@ type ExtendBaseimageOpts struct {
 	*GlobalOptions
 	Package    string
 	Dockerfile string
+	Baseimage  string
 	Force      bool
 }
-
-const baseimagePath = "./codesphere/images"
-const defaultBaseimage = "workspace-agent-24.04.tar"
 
 func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
 	if c.Opts.Package == "" {
@@ -41,9 +39,10 @@ func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	workdir := c.Env.GetOmsWorkdir()
-	p := installer.NewPackage(workdir, c.Opts.Package)
+	pm := installer.NewPackage(workdir, c.Opts.Package)
+	im := system.NewImage(context.Background())
 
-	err := c.ExtendBaseimage(p, args)
+	err := c.ExtendBaseimage(pm, im)
 	if err != nil {
 		return fmt.Errorf("failed to extend baseimage: %w", err)
 	}
@@ -67,36 +66,35 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
 	}
 	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from")
 	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Dockerfile, "dockerfile", "d", "Dockerfile", "Output Dockerfile to generate for extending the base image")
+	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04", "Base image file name inside the package to extend (default: 'workspace-agent-24.04')")
 	baseimage.cmd.Flags().BoolVarP(&baseimage.Opts.Force, "force", "f", false, "Enforce package extraction")
+
 	extend.AddCommand(baseimage.cmd)
+
 	baseimage.cmd.RunE = baseimage.RunE
 }
 
-func (c *ExtendBaseimageCmd) ExtendBaseimage(p *installer.Package, args []string) error {
-	baseImageTarPath := path.Join(baseimagePath, defaultBaseimage)
-	err := p.ExtractDependency(baseImageTarPath, c.Opts.Force)
+func (c *ExtendBaseimageCmd) ExtendBaseimage(pm installer.PackageManager, im system.ImageManager) error {
+	imageName, err := pm.GetBaseimageName(c.Opts.Baseimage)
 	if err != nil {
-		return fmt.Errorf("failed to extract package to workdir: %w", err)
+		return fmt.Errorf("failed to get image name: %w", err)
 	}
 
-	extractedBaseImagePath := p.GetDependencyPath(baseImageTarPath)
-	d := system.NewDockerEngine()
-
-	imagenames, err := d.GetImageNames(p.FileIO, extractedBaseImagePath)
-	if err != nil || len(imagenames) == 0 {
-		return fmt.Errorf("failed to read image tags: %w", err)
+	imagePath, err := pm.GetBaseimagePath(c.Opts.Baseimage, c.Opts.Force)
+	if err != nil {
+		return fmt.Errorf("failed to get image path: %w", err)
 	}
-	log.Println(imagenames)
 
-	err = tmpl.GenerateDockerfile(p.FileIO, c.Opts.Dockerfile, imagenames[0])
+	err = tmpl.GenerateDockerfile(pm.FileIO(), c.Opts.Dockerfile, imageName)
 	if err != nil {
 		return fmt.Errorf("failed to generate dockerfile: %w", err)
 	}
 
-	log.Printf("Loading container image from package into local docker daemon: %s", extractedBaseImagePath)
-	err = d.LoadLocalContainerImage(extractedBaseImagePath)
+	log.Printf("Loading container image from package into local docker daemon: %s", imagePath)
+
+	err = im.LoadImage(imagePath)
 	if err != nil {
-		return fmt.Errorf("failed to load baseimage file %s: %w", baseImageTarPath, err)
+		return fmt.Errorf("failed to load baseimage file %s: %w", imagePath, err)
 	}
 
 	return nil
