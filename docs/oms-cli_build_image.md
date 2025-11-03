@@ -22,6 +22,7 @@ $ oms-cli build image --dockerfile baseimage/Dockerfile --package codesphere-v1.
 
 ```
   -d, --dockerfile string   Path to the Dockerfile to build (required)
+  -f, --force               Force new unpacking of the package even if already extracted
   -h, --help                help for image
   -p, --package string      Path to the Codesphere package (required)
   -r, --registry string     Registry URL to push to (e.g., my-registry.com/my-image) (required)
