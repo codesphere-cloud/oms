@@ -363,13 +363,13 @@ func createTestTarGzPackage(filename string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer util.CloseFileIgnoreError(file)
 
 	gzw := gzip.NewWriter(file)
-	defer gzw.Close()
+	defer func() { _ = gzw.Close() }()
 
 	tw := tar.NewWriter(gzw)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	// Add a test file
 	content := "test content"
@@ -394,13 +394,13 @@ func createTestTarGzPackageWithDeps(filename string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer util.CloseFileIgnoreError(file)
 
 	gzw := gzip.NewWriter(file)
-	defer gzw.Close()
+	defer func() { _ = gzw.Close() }()
 
 	tw := tar.NewWriter(gzw)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	// Add main content
 	mainContent := "main package content"
@@ -444,13 +444,13 @@ func createComplexTestPackage(filename string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer util.CloseFileIgnoreError(file)
 
 	gzw := gzip.NewWriter(file)
-	defer gzw.Close()
+	defer func() { _ = gzw.Close() }()
 
 	tw := tar.NewWriter(gzw)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	// Add main content
 	mainContent := "complex main package content"
@@ -702,10 +702,10 @@ func createTar(tarName string, fileName string, fileContent string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer util.CloseFileIgnoreError(file)
 
 	tw := tar.NewWriter(file)
-	defer tw.Close()
+	defer func() { _ = tw.Close() }()
 
 	// Add the specified file
 	header := &tar.Header{

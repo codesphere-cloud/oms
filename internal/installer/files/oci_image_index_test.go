@@ -74,7 +74,7 @@ var _ = Describe("OciImageIndex", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 	})
 
 	Describe("ParseOCIImageConfig", func() {

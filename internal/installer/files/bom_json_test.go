@@ -83,7 +83,7 @@ var _ = Describe("BomJson", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 	})
 
 	Describe("ParseBomConfig", func() {

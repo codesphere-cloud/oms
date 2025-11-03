@@ -103,8 +103,8 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			// Create a temporary file for the Dockerfile generation to work with
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
-			defer os.Remove(tempFile.Name())
-			defer tempFile.Close()
+			defer func() { _ = os.Remove(tempFile.Name()) }()
+			defer func() { _ = tempFile.Close() }()
 
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04-base", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
@@ -137,8 +137,8 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			// Create a temporary file for the Dockerfile generation to work with
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
-			defer os.Remove(tempFile.Name())
-			defer tempFile.Close()
+			defer func() { _ = os.Remove(tempFile.Name()) }()
+			defer func() { _ = tempFile.Close() }()
 
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04-base", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)

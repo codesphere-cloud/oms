@@ -146,7 +146,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
-			tempFile.Seek(0, 0)
+			_, _ = tempFile.Seek(0, 0)
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = ""
@@ -179,7 +179,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
-			tempFile.Seek(0, 0)
+			_, _ = tempFile.Seek(0, 0)
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = ""
@@ -211,7 +211,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
-			tempFile.Seek(0, 0)
+			_, _ = tempFile.Seek(0, 0)
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = "workspace-agent-20.04.tar"
@@ -243,7 +243,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
 			// Reset file position to beginning
-			tempFile.Seek(0, 0)
+			_, _ = tempFile.Seek(0, 0)
 
 			c.Opts.Dockerfile = "custom/Dockerfile"
 			c.Opts.Baseimage = "workspace-agent-24.04.tar"

@@ -79,11 +79,11 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			tempConfigFile, err := os.CreateTemp("", "test-config.yaml")
 			Expect(err).To(BeNil())
-			defer os.Remove(tempConfigFile.Name())
+			defer func() { _ = os.Remove(tempConfigFile.Name()) }()
 
 			_, err = tempConfigFile.WriteString(validConfigYaml)
 			Expect(err).To(BeNil())
-			tempConfigFile.Close()
+			_ = tempConfigFile.Close()
 
 			c.Opts.Config = tempConfigFile.Name()
 

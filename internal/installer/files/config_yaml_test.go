@@ -76,7 +76,7 @@ codesphere:
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tempDir)
+		_ = os.RemoveAll(tempDir)
 	})
 
 	Describe("ParseConfig", func() {
