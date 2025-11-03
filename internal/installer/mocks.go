@@ -309,6 +309,115 @@ func (_c *MockPackageManager_FileIO_Call) RunAndReturn(run func() util.FileIO) *
 	return _c
 }
 
+// GetBaseimageName provides a mock function for the type MockPackageManager
+func (_mock *MockPackageManager) GetBaseimageName(baseimage string) (string, error) {
+	ret := _mock.Called(baseimage)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBaseimageName")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (string, error)); ok {
+		return returnFunc(baseimage)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) string); ok {
+		r0 = returnFunc(baseimage)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(baseimage)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPackageManager_GetBaseimageName_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBaseimageName'
+type MockPackageManager_GetBaseimageName_Call struct {
+	*mock.Call
+}
+
+// GetBaseimageName is a helper method to define mock.On call
+//   - baseimage
+func (_e *MockPackageManager_Expecter) GetBaseimageName(baseimage interface{}) *MockPackageManager_GetBaseimageName_Call {
+	return &MockPackageManager_GetBaseimageName_Call{Call: _e.mock.On("GetBaseimageName", baseimage)}
+}
+
+func (_c *MockPackageManager_GetBaseimageName_Call) Run(run func(baseimage string)) *MockPackageManager_GetBaseimageName_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockPackageManager_GetBaseimageName_Call) Return(s string, err error) *MockPackageManager_GetBaseimageName_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockPackageManager_GetBaseimageName_Call) RunAndReturn(run func(baseimage string) (string, error)) *MockPackageManager_GetBaseimageName_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetBaseimagePath provides a mock function for the type MockPackageManager
+func (_mock *MockPackageManager) GetBaseimagePath(baseimage string, force bool) (string, error) {
+	ret := _mock.Called(baseimage, force)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetBaseimagePath")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, bool) (string, error)); ok {
+		return returnFunc(baseimage, force)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, bool) string); ok {
+		r0 = returnFunc(baseimage, force)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, bool) error); ok {
+		r1 = returnFunc(baseimage, force)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPackageManager_GetBaseimagePath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBaseimagePath'
+type MockPackageManager_GetBaseimagePath_Call struct {
+	*mock.Call
+}
+
+// GetBaseimagePath is a helper method to define mock.On call
+//   - baseimage
+//   - force
+func (_e *MockPackageManager_Expecter) GetBaseimagePath(baseimage interface{}, force interface{}) *MockPackageManager_GetBaseimagePath_Call {
+	return &MockPackageManager_GetBaseimagePath_Call{Call: _e.mock.On("GetBaseimagePath", baseimage, force)}
+}
+
+func (_c *MockPackageManager_GetBaseimagePath_Call) Run(run func(baseimage string, force bool)) *MockPackageManager_GetBaseimagePath_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(bool))
+	})
+	return _c
+}
+
+func (_c *MockPackageManager_GetBaseimagePath_Call) Return(s string, err error) *MockPackageManager_GetBaseimagePath_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockPackageManager_GetBaseimagePath_Call) RunAndReturn(run func(baseimage string, force bool) (string, error)) *MockPackageManager_GetBaseimagePath_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetCodesphereVersion provides a mock function for the type MockPackageManager
 func (_mock *MockPackageManager) GetCodesphereVersion() (string, error) {
 	ret := _mock.Called()
@@ -403,67 +512,6 @@ func (_c *MockPackageManager_GetDependencyPath_Call) Return(s string) *MockPacka
 }
 
 func (_c *MockPackageManager_GetDependencyPath_Call) RunAndReturn(run func(filename string) string) *MockPackageManager_GetDependencyPath_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GetImagePathAndName provides a mock function for the type MockPackageManager
-func (_mock *MockPackageManager) GetImagePathAndName(baseimage string, force bool) (string, string, error) {
-	ret := _mock.Called(baseimage, force)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetImagePathAndName")
-	}
-
-	var r0 string
-	var r1 string
-	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(string, bool) (string, string, error)); ok {
-		return returnFunc(baseimage, force)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string, bool) string); ok {
-		r0 = returnFunc(baseimage, force)
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-	if returnFunc, ok := ret.Get(1).(func(string, bool) string); ok {
-		r1 = returnFunc(baseimage, force)
-	} else {
-		r1 = ret.Get(1).(string)
-	}
-	if returnFunc, ok := ret.Get(2).(func(string, bool) error); ok {
-		r2 = returnFunc(baseimage, force)
-	} else {
-		r2 = ret.Error(2)
-	}
-	return r0, r1, r2
-}
-
-// MockPackageManager_GetImagePathAndName_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetImagePathAndName'
-type MockPackageManager_GetImagePathAndName_Call struct {
-	*mock.Call
-}
-
-// GetImagePathAndName is a helper method to define mock.On call
-//   - baseimage
-//   - force
-func (_e *MockPackageManager_Expecter) GetImagePathAndName(baseimage interface{}, force interface{}) *MockPackageManager_GetImagePathAndName_Call {
-	return &MockPackageManager_GetImagePathAndName_Call{Call: _e.mock.On("GetImagePathAndName", baseimage, force)}
-}
-
-func (_c *MockPackageManager_GetImagePathAndName_Call) Run(run func(baseimage string, force bool)) *MockPackageManager_GetImagePathAndName_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(bool))
-	})
-	return _c
-}
-
-func (_c *MockPackageManager_GetImagePathAndName_Call) Return(s string, s1 string, err error) *MockPackageManager_GetImagePathAndName_Call {
-	_c.Call.Return(s, s1, err)
-	return _c
-}
-
-func (_c *MockPackageManager_GetImagePathAndName_Call) RunAndReturn(run func(baseimage string, force bool) (string, string, error)) *MockPackageManager_GetImagePathAndName_Call {
 	_c.Call.Return(run)
 	return _c
 }

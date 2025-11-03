@@ -55,8 +55,8 @@ func AddUpdateDockerfileCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 This command extracts the base image from a Codesphere package and updates the FROM statement
 in the specified Dockerfile to use that base image. The base image is loaded into the local Docker daemon so it can be used for building.`,
 			Example: formatExamplesWithBinary("update dockerfile", []io.Example{
-				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz", Desc: "Update Dockerfile to use the default base image from the package (workspace-agent-24.04.tar)"},
-				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz --baseimage workspace-agent-20.04.tar", Desc: "Update Dockerfile to use the workspace-agent-20.04.tar base image from the package"},
+				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz", Desc: "Update Dockerfile to use the default base image from the package (workspace-agent-24.04)"},
+				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz --baseimage workspace-agent-20.04.tar", Desc: "Update Dockerfile to use the workspace-agent-20.04 base image from the package"},
 			}, "oms-cli"),
 			Args: cobra.ExactArgs(0),
 		},
@@ -66,7 +66,7 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 
 	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Dockerfile, "dockerfile", "d", "", "Path to the Dockerfile to update (required)")
 	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Package, "package", "p", "", "Path to the Codesphere package (required)")
-	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04.tar", "Name of the base image to use (required)")
+	dockerfileCmd.cmd.Flags().StringVarP(&dockerfileCmd.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04", "Name of the base image to use (required)")
 	dockerfileCmd.cmd.Flags().BoolVarP(&dockerfileCmd.Opts.Force, "force", "f", false, "Force re-extraction of the package")
 
 	util.MarkFlagRequired(dockerfileCmd.cmd, "dockerfile")
@@ -78,11 +78,25 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 }
 
 func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im system.ImageManager, args []string) error {
-	imagePath, imageName, err := pm.GetImagePathAndName(c.Opts.Baseimage, c.Opts.Force)
+	imageName, err := pm.GetBaseimageName(c.Opts.Baseimage)
 	if err != nil {
 		return fmt.Errorf("failed to get image name: %w", err)
 	}
 
+	imagePath, err := pm.GetBaseimagePath(c.Opts.Baseimage, c.Opts.Force)
+	if err != nil {
+		return fmt.Errorf("failed to get image path: %w", err)
+	}
+
+	log.Printf("Loading container image from package into local docker daemon: %s", imagePath)
+
+	// Loading image before updating the Dockerfile to ensure it's available for builds
+	err = im.LoadImage(imagePath)
+	if err != nil {
+		return fmt.Errorf("failed to load baseimage file %s: %w", imagePath, err)
+	}
+
+	// Update dockerfile FROM statement
 	dockerfileFile, err := pm.FileIO().Open(c.Opts.Dockerfile)
 	if err != nil {
 		return fmt.Errorf("failed to open dockerfile %s: %w", c.Opts.Dockerfile, err)
@@ -101,12 +115,6 @@ func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im s
 	}
 
 	log.Printf("Successfully updated FROM statement in %s to use %s", c.Opts.Dockerfile, imageName)
-	log.Printf("Loading container image from package into local docker daemon: %s", imagePath)
-
-	err = im.LoadImage(imagePath)
-	if err != nil {
-		return fmt.Errorf("failed to load baseimage file %s: %w", imagePath, err)
-	}
 
 	return nil
 }

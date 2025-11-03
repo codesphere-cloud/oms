@@ -66,7 +66,7 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
 	}
 	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from")
 	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Dockerfile, "dockerfile", "d", "Dockerfile", "Output Dockerfile to generate for extending the base image")
-	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04.tar", "Base image file name inside the package to extend (default: 'workspace-agent-24.04.tar')")
+	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04", "Base image file name inside the package to extend (default: 'workspace-agent-24.04')")
 	baseimage.cmd.Flags().BoolVarP(&baseimage.Opts.Force, "force", "f", false, "Enforce package extraction")
 
 	extend.AddCommand(baseimage.cmd)
@@ -75,9 +75,14 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *ExtendBaseimageCmd) ExtendBaseimage(pm installer.PackageManager, im system.ImageManager) error {
-	imagePath, imageName, err := pm.GetImagePathAndName(c.Opts.Baseimage, c.Opts.Force)
+	imageName, err := pm.GetBaseimageName(c.Opts.Baseimage)
 	if err != nil {
 		return fmt.Errorf("failed to get image name: %w", err)
+	}
+
+	imagePath, err := pm.GetBaseimagePath(c.Opts.Baseimage, c.Opts.Force)
+	if err != nil {
+		return fmt.Errorf("failed to get image path: %w", err)
 	}
 
 	err = tmpl.GenerateDockerfile(pm.FileIO(), c.Opts.Dockerfile, imageName)

@@ -24,7 +24,8 @@ type PackageManager interface {
 	Extract(force bool) error
 	ExtractDependency(file string, force bool) error
 	ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error)
-	GetImagePathAndName(baseimage string, force bool) (string, string, error)
+	GetBaseimageName(baseimage string) (string, error)
+	GetBaseimagePath(baseimage string, force bool) (string, error)
 	GetCodesphereVersion() (string, error)
 }
 
@@ -134,39 +135,54 @@ func (p *Package) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, e
 	return ociImageIndex, nil
 }
 
+func (p *Package) GetBaseimageName(baseimage string) (string, error) {
+	if baseimage == "" {
+		return "", fmt.Errorf("baseimage not specified")
+	}
+
+	bomJson := files.BomConfig{}
+	err := bomJson.ParseBomConfig(p.GetDependencyPath("bom.json"))
+	if err != nil {
+		return "", fmt.Errorf("failed to load bom.json: %w", err)
+	}
+
+	containerImages, err := bomJson.GetCodesphereContainerImages()
+	if err != nil {
+		return "", fmt.Errorf("failed to get codesphere container images from bom.json: %w", err)
+	}
+
+	imageName, exists := containerImages[baseimage]
+	if !exists {
+		return "", fmt.Errorf("baseimage %s not found in bom.json", baseimage)
+	}
+
+	return imageName, nil
+}
+
 const baseimagePath = "./codesphere/images"
 
-func (p *Package) GetImagePathAndName(baseimage string, force bool) (string, string, error) {
+func (p *Package) GetBaseimagePath(baseimage string, force bool) (string, error) {
 	if baseimage == "" {
-		return "", "", fmt.Errorf("baseimage not specified")
+		return "", fmt.Errorf("baseimage not specified")
+	}
+
+	if !strings.HasSuffix(baseimage, ".tar") {
+		baseimage = baseimage + ".tar"
 	}
 
 	baseImageTarPath := path.Join(baseimagePath, baseimage)
 	err := p.ExtractDependency(baseImageTarPath, force)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to extract package to workdir: %w", err)
+		return "", fmt.Errorf("failed to extract package to workdir: %w", err)
 	}
 
 	baseimagePath := p.GetDependencyPath(baseImageTarPath)
-	index, err := p.ExtractOciImageIndex(baseimagePath)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to extract OCI image index: %w", err)
-	}
 
-	imagenames, err := index.ExtractImageNames()
-	if err != nil || len(imagenames) == 0 {
-		return "", "", fmt.Errorf("failed to read image tags: %w", err)
-	}
-
-	log.Printf("Extracted image names: %s", strings.Join(imagenames, ", "))
-
-	baseimageName := imagenames[0]
-
-	return baseimagePath, baseimageName, nil
+	return baseimagePath, nil
 }
 
 func (p *Package) GetCodesphereVersion() (string, error) {
-	_, imageName, err := p.GetImagePathAndName("", false)
+	imageName, err := p.GetBaseimageName("workspace-agent-24.04")
 	if err != nil {
 		return "", fmt.Errorf("failed to get Codesphere version from package: %w", err)
 	}
