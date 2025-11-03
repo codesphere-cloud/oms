@@ -182,14 +182,32 @@ func (p *Package) GetBaseimagePath(baseimage string, force bool) (string, error)
 }
 
 func (p *Package) GetCodesphereVersion() (string, error) {
-	imageName, err := p.GetBaseimageName("workspace-agent-24.04")
+	bomJson := files.BomConfig{}
+	err := bomJson.ParseBomConfig(p.GetDependencyPath("bom.json"))
 	if err != nil {
-		return "", fmt.Errorf("failed to get Codesphere version from package: %w", err)
+		return "", fmt.Errorf("failed to load bom.json: %w", err)
 	}
 
-	parts := strings.Split(imageName, ":")
+	containerImages, err := bomJson.GetCodesphereContainerImages()
+	if err != nil {
+		return "", fmt.Errorf("failed to get codesphere container images from bom.json: %w", err)
+	}
+
+	containerImage := ""
+	for _, image := range containerImages {
+		if strings.Contains(image, "codesphere-v") {
+			containerImage = image
+			break
+		}
+	}
+
+	if containerImage == "" {
+		return "", fmt.Errorf("no container images found in bom.json")
+	}
+
+	parts := strings.Split(containerImage, ":")
 	if len(parts) < 2 {
-		return "", fmt.Errorf("invalid image name format: %s", imageName)
+		return "", fmt.Errorf("invalid image name format: %s", containerImage)
 	}
 
 	return parts[len(parts)-1], nil

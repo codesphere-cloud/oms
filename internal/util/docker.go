@@ -32,20 +32,18 @@ func (dm *Dockerfile) UpdateFromStatement(dockerfile io.Reader, baseImage string
 	// Regex to match FROM statements that contain workspace-agent
 	fromRegex := regexp.MustCompile(`(?i)(.*FROM\s+).*workspace-agent[^\s]*(.*)`)
 
+	updated := false
 	lines := strings.Split(string(content), "\n")
-	lastMatchIndex := -1
-
 	for i, line := range lines {
 		if fromRegex.MatchString(line) {
-			lastMatchIndex = i
+			lines[i] = fromRegex.ReplaceAllString(line, "${1}"+baseImage+"${2}")
+			updated = true
 		}
 	}
-	if lastMatchIndex == -1 {
+
+	if !updated {
 		return "", fmt.Errorf("no FROM statement with workspace-agent found in dockerfile")
 	}
-
-	newLine := fromRegex.ReplaceAllString(lines[lastMatchIndex], "${1}"+baseImage+"${2}")
-	lines[lastMatchIndex] = strings.TrimRight(newLine, " \t")
 
 	return strings.Join(lines, "\n"), nil
 }
