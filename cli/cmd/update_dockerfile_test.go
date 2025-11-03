@@ -140,8 +140,8 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
 			DeferCleanup(func() {
-				tempFile.Close()
-				os.Remove(tempFile.Name())
+				_ = tempFile.Close()
+				_ = os.Remove(tempFile.Name())
 			})
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
@@ -173,8 +173,8 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
 			DeferCleanup(func() {
-				tempFile.Close()
-				os.Remove(tempFile.Name())
+				_ = tempFile.Close()
+				_ = os.Remove(tempFile.Name())
 			})
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
@@ -205,8 +205,8 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
 			DeferCleanup(func() {
-				tempFile.Close()
-				os.Remove(tempFile.Name())
+				_ = tempFile.Close()
+				_ = os.Remove(tempFile.Name())
 			})
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())
@@ -237,8 +237,8 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
 			DeferCleanup(func() {
-				tempFile.Close()
-				os.Remove(tempFile.Name())
+				_ = tempFile.Close()
+				_ = os.Remove(tempFile.Name())
 			})
 			_, err = tempFile.WriteString(sampleDockerfileContent)
 			Expect(err).To(BeNil())

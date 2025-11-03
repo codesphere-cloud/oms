@@ -52,7 +52,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 
 			tempConfigFile, err := os.CreateTemp("", "test-config.yaml")
 			Expect(err).To(BeNil())
-			defer os.Remove(tempConfigFile.Name())
+			defer func() { _ = os.Remove(tempConfigFile.Name()) }()
 
 			_, err = tempConfigFile.WriteString("codesphere:\n  deployConfig:\n    images: {}\n")
 			Expect(err).To(BeNil())
