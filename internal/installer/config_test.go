@@ -169,18 +169,6 @@ registry:
 				Expect(err).ToNot(HaveOccurred())
 			})
 		})
-
-		Context("ExtractOciImageIndex with various scenarios", func() {
-			It("handles empty image file path", func() {
-				// Test moved to package_test.go
-				Skip("ExtractOciImageIndex tests moved to package_test.go")
-			})
-
-			It("handles directory instead of file", func() {
-				// Test moved to package_test.go
-				Skip("ExtractOciImageIndex tests moved to package_test.go")
-			})
-		})
 	})
 
 	Describe("Integration scenarios", func() {

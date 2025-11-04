@@ -25,4 +25,5 @@ func AddDownloadCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	rootCmd.AddCommand(download.cmd)
 
 	AddDownloadPackageCmd(download.cmd, opts)
+	AddDownloadK0sCmd(download.cmd, opts)
 }

@@ -5,15 +5,12 @@ package portal_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"net/http"
-	"net/url"
-	"time"
+	"strings"
 
-	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/stretchr/testify/mock"
 
@@ -21,343 +18,365 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-type FakeWriter struct {
-	bytes.Buffer
-}
-
-var _ io.Writer = (*FakeWriter)(nil)
-
-func NewFakeWriter() *FakeWriter {
-	return &FakeWriter{}
-}
-
-var _ = Describe("PortalClient", func() {
+var _ = Describe("HttpWrapper", func() {
 	var (
-		client         portal.PortalClient
-		mockEnv        *env.MockEnv
+		httpWrapper    *portal.HttpWrapper
 		mockHttpClient *portal.MockHttpClient
-		status         int
-		apiUrl         string
-		getUrl         url.URL
-		getResponse    []byte
-		product        portal.Product
-		apiKey         string
-		apiKeyErr      error
+		testUrl        string
+		testMethod     string
+		testBody       io.Reader
+		response       *http.Response
+		responseBody   []byte
+		responseError  error
 	)
+
 	BeforeEach(func() {
-		apiKey = "fake-api-key"
-		apiKeyErr = nil
-
-		product = portal.CodesphereProduct
-		mockEnv = env.NewMockEnv(GinkgoT())
 		mockHttpClient = portal.NewMockHttpClient(GinkgoT())
-
-		client = portal.PortalClient{
-			Env:        mockEnv,
+		httpWrapper = &portal.HttpWrapper{
 			HttpClient: mockHttpClient,
 		}
-		status = http.StatusOK
-		apiUrl = "fake-portal.com"
+		testUrl = "https://test.example.com/api/endpoint"
+		testMethod = "GET"
+		testBody = nil
+		responseBody = []byte("test response body")
+		responseError = nil
 	})
-	JustBeforeEach(func() {
-		mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
-		mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr).Maybe()
-	})
+
 	AfterEach(func() {
-		mockEnv.AssertExpectations(GinkgoT())
 		mockHttpClient.AssertExpectations(GinkgoT())
 	})
 
-	Describe("GetBody", func() {
-		JustBeforeEach(func() {
-			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
-				func(req *http.Request) (*http.Response, error) {
-					getUrl = *req.URL
-					return &http.Response{
-						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader(getResponse)),
-					}, nil
-				}).Maybe()
+	Describe("NewHttpWrapper", func() {
+		It("creates a new HttpWrapper with default client", func() {
+			wrapper := portal.NewHttpWrapper()
+			Expect(wrapper).ToNot(BeNil())
+			Expect(wrapper.HttpClient).ToNot(BeNil())
 		})
+	})
 
-		Context("when path starts with a /", func() {
-			It("Executes a request against the right URL", func() {
-				_, status, err := client.GetBody("/api/fake")
-				Expect(status).To(Equal(status))
-				Expect(err).NotTo(HaveOccurred())
-				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
+	Describe("Request", func() {
+		Context("when making a successful GET request", func() {
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
+				}
+
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == testMethod
+				})).Return(response, responseError)
+			})
+
+			It("returns the response body", func() {
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(Equal(responseBody))
 			})
 		})
 
-		Context("when path does not with a /", func() {
-			It("Executes a request against the right URL", func() {
-				_, status, err := client.GetBody("api/fake")
-				Expect(status).To(Equal(status))
-				Expect(err).NotTo(HaveOccurred())
-				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
-			})
-		})
-
-		Context("when OMS_PORTAL_API_KEY is unset", func() {
+		Context("when making a POST request with body", func() {
 			BeforeEach(func() {
-				apiKey = ""
-				apiKeyErr = errors.New("fake-error")
+				testMethod = "POST"
+				testBody = strings.NewReader("test post data")
 			})
 
-			It("Returns an error", func() {
-				_, status, err := client.GetBody("/api/fake")
-				Expect(status).To(Equal(status))
-				Expect(err).NotTo(BeNil())
-				Expect(err.Error()).To(MatchRegexp(".*fake-error"))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
+				}
+
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == testMethod
+				})).Return(response, responseError)
+			})
+
+			It("returns the response body", func() {
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(Equal(responseBody))
+			})
+		})
+
+		Context("when the HTTP client returns an error", func() {
+			BeforeEach(func() {
+				responseError = errors.New("network connection failed")
+			})
+
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
+				}
+
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == testMethod
+				})).Return(response, responseError)
+			})
+
+			It("returns an error", func() {
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to send request"))
+				Expect(err.Error()).To(ContainSubstring("network connection failed"))
+				Expect(result).To(Equal([]byte{}))
+			})
+		})
+
+		Context("when the response status code indicates an error", func() {
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
+				}
+
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == testMethod
+				})).Return(response, responseError)
+			})
+
+			It("returns an error", func() {
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed request with status: 400"))
+				Expect(result).To(Equal([]byte{}))
+			})
+		})
+
+		Context("when reading the response body fails", func() {
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       &FailingReader{},
+				}
+
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == testMethod
+				})).Return(response, responseError)
+			})
+
+			It("returns an error", func() {
+				result, err := httpWrapper.Request(testUrl, testMethod, testBody)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to read response body"))
+				Expect(result).To(Equal([]byte{}))
 			})
 		})
 	})
 
-	Describe("ListCodespherePackages", func() {
-		JustBeforeEach(func() {
-			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
-				func(req *http.Request) (*http.Response, error) {
-					getUrl = *req.URL
-					return &http.Response{
-						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader(getResponse)),
-					}, nil
-				})
-		})
-		Context("when the request suceeds", func() {
-			var expectedResult portal.Builds
-			BeforeEach(func() {
-				firstBuild, _ := time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
-
-				getPackagesResponse := portal.Builds{
-					Builds: []portal.Build{
-						{
-							Hash: "lastBuild",
-							Date: lastBuild,
-						},
-						{
-							Hash: "firstBuild",
-							Date: firstBuild,
-						},
-					},
+	Describe("Get", func() {
+		Context("when making a successful request", func() {
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
 				}
-				getResponse, _ = json.Marshal(getPackagesResponse)
 
-				expectedResult = portal.Builds{
-					Builds: []portal.Build{
-						{
-							Hash: "firstBuild",
-							Date: firstBuild,
-						},
-						{
-							Hash: "lastBuild",
-							Date: lastBuild,
-						},
-					},
-				}
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == "GET"
+				})).Return(response, responseError)
 			})
 
-			It("returns the builds ordered by date", func() {
-				packages, err := client.ListBuilds(portal.CodesphereProduct)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
+			It("returns the response body", func() {
+				result, err := httpWrapper.Get(testUrl)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result).To(Equal(responseBody))
+			})
+		})
+
+		Context("when the request fails", func() {
+			BeforeEach(func() {
+				responseError = errors.New("DNS resolution failed")
+			})
+
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
+				}
+
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == "GET"
+				})).Return(response, responseError)
+			})
+
+			It("returns an error", func() {
+				result, err := httpWrapper.Get(testUrl)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to send request"))
+				Expect(err.Error()).To(ContainSubstring("DNS resolution failed"))
+				Expect(result).To(Equal([]byte{}))
 			})
 		})
 	})
 
-	Describe("DownloadBuildArtifact", func() {
+	Describe("Download", func() {
 		var (
-			build            portal.Build
-			downloadResponse string
+			testWriter      *TestWriter
+			downloadContent string
+			quiet           bool
 		)
 
 		BeforeEach(func() {
-			buildDate, _ := time.Parse("2006-01-02", "2025-05-01")
-
-			downloadResponse = "fake-file-contents"
-
-			build = portal.Build{
-				Date: buildDate,
-			}
-
-			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
-				func(req *http.Request) (*http.Response, error) {
-					getUrl = *req.URL
-					return &http.Response{
-						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader([]byte(downloadResponse))),
-					}, nil
-				})
+			testWriter = NewTestWriter()
+			downloadContent = "file content to download"
+			quiet = false
 		})
 
-		It("downloads the build", func() {
-			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, false)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(fakeWriter.String()).To(Equal(downloadResponse))
-			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
+		Context("when downloading successfully", func() {
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(downloadContent)),
+				}
+
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == "GET"
+				})).Return(response, responseError)
+			})
+
+			It("downloads content and shows progress", func() {
+				// Capture log output to verify progress is shown
+				var logBuf bytes.Buffer
+				prev := log.Writer()
+				log.SetOutput(&logBuf)
+				defer log.SetOutput(prev)
+
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(testWriter.String()).To(Equal(downloadContent))
+				Expect(logBuf.String()).To(ContainSubstring("Downloading..."))
+				Expect(logBuf.String()).To(ContainSubstring("Download finished successfully"))
+			})
+
+			It("downloads content without showing progress", func() {
+				quiet = true // Set quiet to true to suppress progress output
+
+				var logBuf bytes.Buffer
+				prev := log.Writer()
+				log.SetOutput(&logBuf)
+				defer log.SetOutput(prev)
+
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(testWriter.String()).To(Equal(downloadContent))
+				Expect(logBuf.String()).To(Not(ContainSubstring("Downloading...")))
+				Expect(logBuf.String()).To(ContainSubstring("Download finished successfully"))
+			})
 		})
 
-		It("emits progress logs when not quiet", func() {
-			var logBuf bytes.Buffer
-			prev := log.Writer()
-			log.SetOutput(&logBuf)
-			defer log.SetOutput(prev)
-
-			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, false)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuf.String()).To(ContainSubstring("Downloading..."))
-		})
-
-		It("does not emit progress logs when quiet", func() {
-			var logBuf bytes.Buffer
-			prev := log.Writer()
-			log.SetOutput(&logBuf)
-			defer log.SetOutput(prev)
-
-			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, true)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuf.String()).NotTo(ContainSubstring("Downloading..."))
-		})
-	})
-
-	Describe("GetLatestOmsBuild", func() {
-		var (
-			lastBuild, firstBuild time.Time
-			getPackagesResponse   portal.Builds
-		)
-		JustBeforeEach(func() {
-			getResponse, _ = json.Marshal(getPackagesResponse)
-			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
-				func(req *http.Request) (*http.Response, error) {
-					getUrl = *req.URL
-					return &http.Response{
-						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader(getResponse)),
-					}, nil
-				})
-		})
-
-		Context("When the build is included", func() {
+		Context("when the HTTP client returns an error", func() {
 			BeforeEach(func() {
-				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
-
-				getPackagesResponse = portal.Builds{
-					Builds: []portal.Build{
-						{
-							Hash:    "firstBuild",
-							Date:    firstBuild,
-							Version: "1.42.0",
-						},
-						{
-							Hash:    "lastBuild",
-							Date:    lastBuild,
-							Version: "1.42.1",
-						},
-					},
-				}
+				responseError = errors.New("connection timeout")
 			})
-			It("returns the build", func() {
-				expectedResult := portal.Build{
-					Hash:    "lastBuild",
-					Date:    lastBuild,
-					Version: "1.42.1",
+
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(downloadContent)),
 				}
-				packages, err := client.GetBuild(portal.OmsProduct, "", "")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == "GET"
+				})).Return(response, responseError)
+			})
+
+			It("returns an error", func() {
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to send request"))
+				Expect(err.Error()).To(ContainSubstring("connection timeout"))
+				Expect(testWriter.String()).To(BeEmpty())
 			})
 		})
 
-		Context("When the build with version is included", func() {
-			BeforeEach(func() {
-				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
+		Context("when the server returns an error status", func() {
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusForbidden,
+					Body:       io.NopCloser(strings.NewReader("Access denied")),
+				}
 
-				getPackagesResponse = portal.Builds{
-					Builds: []portal.Build{
-						{
-							Hash:    "firstBuild",
-							Date:    firstBuild,
-							Version: "1.42.0",
-						},
-						{
-							Hash:    "lastBuild",
-							Date:    lastBuild,
-							Version: "1.42.1",
-						},
-					},
-				}
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == "GET"
+				})).Return(response, responseError)
 			})
-			It("returns the build", func() {
-				expectedResult := portal.Build{
-					Hash:    "lastBuild",
-					Date:    lastBuild,
-					Version: "1.42.1",
-				}
-				packages, err := client.GetBuild(portal.OmsProduct, "1.42.1", "")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+
+			It("returns an error", func() {
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to get body: 403"))
+				Expect(testWriter.String()).To(BeEmpty())
 			})
 		})
 
-		Context("When the build with version and hash is included", func() {
-			BeforeEach(func() {
-				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
+		Context("when copying the response body fails", func() {
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       &FailingReader{},
+				}
 
-				getPackagesResponse = portal.Builds{
-					Builds: []portal.Build{
-						{
-							Hash:    "firstBuild",
-							Date:    firstBuild,
-							Version: "1.42.0",
-						},
-						{
-							Hash:    "lastBuild",
-							Date:    lastBuild,
-							Version: "1.42.1",
-						},
-					},
-				}
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == "GET"
+				})).Return(response, responseError)
 			})
-			It("returns the build", func() {
-				expectedResult := portal.Build{
-					Hash:    "lastBuild",
-					Date:    lastBuild,
-					Version: "1.42.1",
-				}
-				packages, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuild")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+
+			It("returns an error", func() {
+				err := httpWrapper.Download(testUrl, testWriter, quiet)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to copy response body to file"))
+				Expect(err.Error()).To(ContainSubstring("simulated read error"))
 			})
 		})
 
-		Context("When no builds are returned", func() {
-			BeforeEach(func() {
-				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
-
-				getPackagesResponse = portal.Builds{
-					Builds: []portal.Build{},
+		Context("when the writer fails", func() {
+			JustBeforeEach(func() {
+				response = &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader(downloadContent)),
 				}
+
+				mockHttpClient.EXPECT().Do(mock.MatchedBy(func(req *http.Request) bool {
+					return req.URL.String() == testUrl && req.Method == "GET"
+				})).Return(response, responseError)
 			})
-			It("returns an error and an empty build", func() {
-				expectedResult := portal.Build{}
-				packages, err := client.GetBuild(portal.OmsProduct, "", "")
-				Expect(err).To(MatchError("no builds returned"))
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+
+			It("handles write errors gracefully", func() {
+				// Use a failing writer
+				failingWriter := &FailingWriter{}
+
+				err := httpWrapper.Download(testUrl, failingWriter, quiet)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to copy response body to file"))
 			})
 		})
 	})
 })
+
+// Helper types for testing
+type TestWriter struct {
+	bytes.Buffer
+}
+
+var _ io.Writer = (*TestWriter)(nil)
+
+func NewTestWriter() *TestWriter {
+	return &TestWriter{}
+}
+
+type FailingReader struct{}
+
+func (fr *FailingReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("simulated read error")
+}
+
+func (fr *FailingReader) Close() error {
+	return nil
+}
+
+type FailingWriter struct{}
+
+func (fw *FailingWriter) Write(p []byte) (n int, err error) {
+	return 0, errors.New("simulated write error")
+}
