@@ -103,7 +103,11 @@ var _ = Describe("Package", func() {
 			BeforeEach(func() {
 				// Create the package tar.gz file
 				packagePath := filepath.Join(tempDir, filename)
-				err := createTestTarGzPackage(packagePath)
+				err := createTestPackage(packagePath, PackageFiles{
+					MainFiles: map[string]string{
+						"test-file.txt": "test content",
+					},
+				})
 				Expect(err).ToNot(HaveOccurred())
 				pkg.Filename = packagePath
 			})
@@ -178,7 +182,14 @@ var _ = Describe("Package", func() {
 			BeforeEach(func() {
 				// Create the package tar.gz file with deps.tar.gz inside
 				packagePath = filepath.Join(tempDir, filename)
-				err := createTestTarGzPackageWithDeps(packagePath)
+				err := createTestPackage(packagePath, PackageFiles{
+					MainFiles: map[string]string{
+						"main-file.txt": "main package content",
+					},
+					DepsFiles: map[string]string{
+						"test-dep.txt": "dependency content",
+					},
+				})
 				Expect(err).ToNot(HaveOccurred())
 				pkg.Filename = packagePath
 			})
@@ -272,7 +283,11 @@ var _ = Describe("Package", func() {
 			It("handles empty workdir", func() {
 				pkg.OmsWorkdir = ""
 				packagePath := filepath.Join(tempDir, filename)
-				err := createTestTarGzPackage(packagePath)
+				err := createTestPackage(packagePath, PackageFiles{
+					MainFiles: map[string]string{
+						"test-file.txt": "test content",
+					},
+				})
 				Expect(err).ToNot(HaveOccurred())
 				pkg.Filename = packagePath
 
@@ -286,7 +301,14 @@ var _ = Describe("Package", func() {
 		Context("ExtractDependency with various scenarios", func() {
 			It("handles empty dependency filename", func() {
 				packagePath := filepath.Join(tempDir, filename)
-				err := createTestTarGzPackageWithDeps(packagePath)
+				err := createTestPackage(packagePath, PackageFiles{
+					MainFiles: map[string]string{
+						"main-file.txt": "main package content",
+					},
+					DepsFiles: map[string]string{
+						"test-dep.txt": "dependency content",
+					},
+				})
 				Expect(err).ToNot(HaveOccurred())
 				pkg.Filename = packagePath
 
@@ -318,7 +340,16 @@ var _ = Describe("Package", func() {
 
 			BeforeEach(func() {
 				packagePath = filepath.Join(tempDir, "complete-package.tar.gz")
-				err := createComplexTestPackage(packagePath)
+				err := createTestPackage(packagePath, PackageFiles{
+					MainFiles: map[string]string{
+						"main-content.txt": "complex main package content",
+					},
+					DepsFiles: map[string]string{
+						"dep1.txt":        "dependency 1 content",
+						"dep2.txt":        "dependency 2 content",
+						"subdep/dep3.txt": "sub dependency 3 content",
+					},
+				})
 				Expect(err).ToNot(HaveOccurred())
 				pkg.Filename = packagePath
 			})
@@ -354,216 +385,6 @@ var _ = Describe("Package", func() {
 		})
 	})
 })
-
-// Helper functions for creating test tar.gz files
-
-// createTestTarGzPackage creates a simple tar.gz package for testing
-func createTestTarGzPackage(filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer util.CloseFileIgnoreError(file)
-
-	gzw := gzip.NewWriter(file)
-	defer func() { _ = gzw.Close() }()
-
-	tw := tar.NewWriter(gzw)
-	defer func() { _ = tw.Close() }()
-
-	// Add a test file
-	content := "test content"
-	header := &tar.Header{
-		Name: "test-file.txt",
-		Mode: 0644,
-		Size: int64(len(content)),
-	}
-	if err := tw.WriteHeader(header); err != nil {
-		return err
-	}
-	if _, err := tw.Write([]byte(content)); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// createTestTarGzPackageWithDeps creates a tar.gz package containing a deps.tar.gz file
-func createTestTarGzPackageWithDeps(filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer util.CloseFileIgnoreError(file)
-
-	gzw := gzip.NewWriter(file)
-	defer func() { _ = gzw.Close() }()
-
-	tw := tar.NewWriter(gzw)
-	defer func() { _ = tw.Close() }()
-
-	// Add main content
-	mainContent := "main package content"
-	header := &tar.Header{
-		Name: "main-file.txt",
-		Mode: 0644,
-		Size: int64(len(mainContent)),
-	}
-	if err := tw.WriteHeader(header); err != nil {
-		return err
-	}
-	if _, err := tw.Write([]byte(mainContent)); err != nil {
-		return err
-	}
-
-	// Create deps.tar.gz content in memory
-	depsContent, err := createDepsArchive()
-	if err != nil {
-		return err
-	}
-
-	// Add deps.tar.gz file
-	depsHeader := &tar.Header{
-		Name: "deps.tar.gz",
-		Mode: 0644,
-		Size: int64(len(depsContent)),
-	}
-	if err := tw.WriteHeader(depsHeader); err != nil {
-		return err
-	}
-	if _, err := tw.Write(depsContent); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// createComplexTestPackage creates a complex package for integration testing
-func createComplexTestPackage(filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer util.CloseFileIgnoreError(file)
-
-	gzw := gzip.NewWriter(file)
-	defer func() { _ = gzw.Close() }()
-
-	tw := tar.NewWriter(gzw)
-	defer func() { _ = tw.Close() }()
-
-	// Add main content
-	mainContent := "complex main package content"
-	header := &tar.Header{
-		Name: "main-content.txt",
-		Mode: 0644,
-		Size: int64(len(mainContent)),
-	}
-	if err := tw.WriteHeader(header); err != nil {
-		return err
-	}
-	if _, err := tw.Write([]byte(mainContent)); err != nil {
-		return err
-	}
-
-	// Create complex deps.tar.gz content
-	depsContent, err := createComplexDepsArchive()
-	if err != nil {
-		return err
-	}
-
-	// Add deps.tar.gz file
-	depsHeader := &tar.Header{
-		Name: "deps.tar.gz",
-		Mode: 0644,
-		Size: int64(len(depsContent)),
-	}
-	if err := tw.WriteHeader(depsHeader); err != nil {
-		return err
-	}
-	if _, err := tw.Write(depsContent); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// createDepsArchive creates a deps.tar.gz archive content in memory
-func createDepsArchive() ([]byte, error) {
-	var buf []byte
-	gzw := gzip.NewWriter(&bytesBuffer{data: &buf})
-	tw := tar.NewWriter(gzw)
-
-	// Add test dependency
-	depContent := "dependency content"
-	header := &tar.Header{
-		Name: "test-dep.txt",
-		Mode: 0644,
-		Size: int64(len(depContent)),
-	}
-	if err := tw.WriteHeader(header); err != nil {
-		return nil, err
-	}
-	if _, err := tw.Write([]byte(depContent)); err != nil {
-		return nil, err
-	}
-
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	if err := gzw.Close(); err != nil {
-		return nil, err
-	}
-
-	return buf, nil
-}
-
-// createComplexDepsArchive creates a complex deps.tar.gz archive with multiple files
-func createComplexDepsArchive() ([]byte, error) {
-	var buf []byte
-	gzw := gzip.NewWriter(&bytesBuffer{data: &buf})
-	tw := tar.NewWriter(gzw)
-
-	// Add multiple dependencies
-	deps := map[string]string{
-		"dep1.txt":        "dependency 1 content",
-		"dep2.txt":        "dependency 2 content",
-		"subdep/dep3.txt": "sub dependency 3 content",
-	}
-
-	for name, content := range deps {
-		header := &tar.Header{
-			Name: name,
-			Mode: 0644,
-			Size: int64(len(content)),
-		}
-		if err := tw.WriteHeader(header); err != nil {
-			return nil, err
-		}
-		if _, err := tw.Write([]byte(content)); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	if err := gzw.Close(); err != nil {
-		return nil, err
-	}
-
-	return buf, nil
-}
-
-// bytesBuffer is a simple buffer that implements io.Writer for creating in-memory archives
-type bytesBuffer struct {
-	data *[]byte
-}
-
-func (b *bytesBuffer) Write(p []byte) (n int, err error) {
-	*b.data = append(*b.data, p...)
-	return len(p), nil
-}
 
 // Tests for ExtractOciImageIndex (moved from config_test.go)
 var _ = Describe("Package ExtractOciImageIndex", func() {
@@ -696,6 +517,389 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 	})
 })
 
+// Tests for GetBaseimageName
+var _ = Describe("Package GetBaseimageName", func() {
+	var (
+		pkg     *installer.Package
+		tempDir string
+	)
+
+	BeforeEach(func() {
+		tempDir = GinkgoT().TempDir()
+		omsWorkdir := filepath.Join(tempDir, "oms-workdir")
+		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz")
+	})
+
+	Describe("GetBaseimageName", func() {
+		Context("when baseimage parameter is empty", func() {
+			It("returns an error", func() {
+				_, err := pkg.GetBaseimageName("")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("baseimage not specified"))
+			})
+		})
+
+		Context("when bom.json file does not exist", func() {
+			It("returns an error", func() {
+				_, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
+			})
+		})
+
+		Context("when bom.json exists but is invalid", func() {
+			BeforeEach(func() {
+				// Create invalid bom.json
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte("invalid json"), 0644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns an error", func() {
+				_, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
+			})
+		})
+
+		Context("when bom.json exists but codesphere component is missing", func() {
+			BeforeEach(func() {
+				// Create bom.json without codesphere component
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomContent := `{
+					"components": {
+						"docker": {
+							"files": {}
+						}
+					}
+				}`
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns an error", func() {
+				_, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to get codesphere container images from bom.json"))
+			})
+		})
+
+		Context("when baseimage is not found in bom.json", func() {
+			BeforeEach(func() {
+				// Create bom.json with codesphere component but without the requested baseimage
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomContent := `{
+					"components": {
+						"codesphere": {
+							"containerImages": {
+								"workspace-agent-20.04": "ghcr.io/codesphere-cloud/workspace-agent-20.04:v1.0.0"
+							}
+						}
+					}
+				}`
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns an error", func() {
+				_, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("baseimage workspace-agent-24.04 not found in bom.json"))
+			})
+		})
+
+		Context("when baseimage exists in bom.json", func() {
+			BeforeEach(func() {
+				// Create valid bom.json with the requested baseimage
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomContent := `{
+					"components": {
+						"codesphere": {
+							"containerImages": {
+								"workspace-agent-24.04": "ghcr.io/codesphere-cloud/workspace-agent-24.04:codesphere-v1.66.0",
+								"workspace-agent-20.04": "ghcr.io/codesphere-cloud/workspace-agent-20.04:codesphere-v1.65.0"
+							}
+						}
+					}
+				}`
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns the correct image name", func() {
+				imageName, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(imageName).To(Equal("ghcr.io/codesphere-cloud/workspace-agent-24.04:codesphere-v1.66.0"))
+			})
+
+			It("returns the correct image name for different baseimage", func() {
+				imageName, err := pkg.GetBaseimageName("workspace-agent-20.04")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(imageName).To(Equal("ghcr.io/codesphere-cloud/workspace-agent-20.04:codesphere-v1.65.0"))
+			})
+		})
+	})
+})
+
+// Tests for GetBaseimagePath
+var _ = Describe("Package GetBaseimagePath", func() {
+	var (
+		pkg     *installer.Package
+		tempDir string
+	)
+
+	BeforeEach(func() {
+		tempDir = GinkgoT().TempDir()
+		omsWorkdir := filepath.Join(tempDir, "oms-workdir")
+		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz")
+	})
+
+	Describe("GetBaseimagePath", func() {
+		Context("when baseimage parameter is empty", func() {
+			It("returns an error", func() {
+				_, err := pkg.GetBaseimagePath("", false)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("baseimage not specified"))
+			})
+		})
+
+		Context("when ExtractDependency fails", func() {
+			It("returns an error", func() {
+				// Try to extract non-existent dependency
+				_, err := pkg.GetBaseimagePath("nonexistent-image", false)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
+			})
+		})
+
+		Context("with successful dependency extraction", func() {
+			BeforeEach(func() {
+				// Create the main package with deps.tar.gz
+				packagePath := filepath.Join(tempDir, "test-package.tar.gz")
+				err := createTestPackage(packagePath, PackageFiles{
+					MainFiles: map[string]string{
+						"main-file.txt": "main package content",
+					},
+					DepsFiles: map[string]string{
+						"./codesphere/images/workspace-agent-24.04.tar": "fake image content",
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+				pkg.Filename = packagePath
+			})
+
+			It("returns correct path for baseimage without .tar extension", func() {
+				path, err := pkg.GetBaseimagePath("workspace-agent-24.04", false)
+				Expect(err).NotTo(HaveOccurred())
+
+				expectedPath := pkg.GetDependencyPath("./codesphere/images/workspace-agent-24.04.tar")
+				Expect(path).To(Equal(expectedPath))
+			})
+
+			It("returns correct path for baseimage with .tar extension", func() {
+				path, err := pkg.GetBaseimagePath("workspace-agent-24.04.tar", false)
+				Expect(err).NotTo(HaveOccurred())
+
+				expectedPath := pkg.GetDependencyPath("./codesphere/images/workspace-agent-24.04.tar")
+				Expect(path).To(Equal(expectedPath))
+			})
+
+			It("uses force parameter correctly", func() {
+				// First extraction
+				_, err := pkg.GetBaseimagePath("workspace-agent-24.04", false)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Second extraction with force
+				path, err := pkg.GetBaseimagePath("workspace-agent-24.04", true)
+				Expect(err).NotTo(HaveOccurred())
+
+				expectedPath := pkg.GetDependencyPath("./codesphere/images/workspace-agent-24.04.tar")
+				Expect(path).To(Equal(expectedPath))
+			})
+		})
+	})
+})
+
+// Tests for GetCodesphereVersion
+var _ = Describe("Package GetCodesphereVersion", func() {
+	var (
+		pkg     *installer.Package
+		tempDir string
+	)
+
+	BeforeEach(func() {
+		tempDir = GinkgoT().TempDir()
+		omsWorkdir := filepath.Join(tempDir, "oms-workdir")
+		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz")
+	})
+
+	Describe("GetCodesphereVersion", func() {
+		Context("when bom.json file does not exist", func() {
+			It("returns an error", func() {
+				_, err := pkg.GetCodesphereVersion()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
+			})
+		})
+
+		Context("when bom.json exists but is invalid", func() {
+			BeforeEach(func() {
+				// Create invalid bom.json
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte("invalid json"), 0644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns an error", func() {
+				_, err := pkg.GetCodesphereVersion()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
+			})
+		})
+
+		Context("when bom.json exists but codesphere component is missing", func() {
+			BeforeEach(func() {
+				// Create bom.json without codesphere component
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomContent := `{
+					"components": {
+						"docker": {
+							"files": {}
+						}
+					}
+				}`
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns an error", func() {
+				_, err := pkg.GetCodesphereVersion()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to get codesphere container images from bom.json"))
+			})
+		})
+
+		Context("when no container images with codesphere-v exist", func() {
+			BeforeEach(func() {
+				// Create bom.json with images but no codesphere-v versions
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomContent := `{
+					"components": {
+						"codesphere": {
+							"containerImages": {
+								"workspace-agent-24.04": "ghcr.io/codesphere-cloud/workspace-agent-24.04:v1.0.0",
+								"auth-service": "ghcr.io/codesphere-cloud/auth-service:latest"
+							}
+						}
+					}
+				}`
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns an error", func() {
+				_, err := pkg.GetCodesphereVersion()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("no container images found in bom.json"))
+			})
+		})
+
+		Context("when container images exist but have invalid format", func() {
+			BeforeEach(func() {
+				// Create bom.json with images that have invalid format (no colon)
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomContent := `{
+					"components": {
+						"codesphere": {
+							"containerImages": {
+								"workspace-agent-24.04": "invalid-image-format-without-colon-codesphere-v1.66.0"
+							}
+						}
+					}
+				}`
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns an error", func() {
+				_, err := pkg.GetCodesphereVersion()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("invalid image name format"))
+			})
+		})
+
+		Context("when valid codesphere versions exist", func() {
+			BeforeEach(func() {
+				// Create bom.json with multiple different versions (should pick the first one found)
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomContent := `{
+					"components": {
+						"codesphere": {
+							"containerImages": {
+								"workspace-agent-24.04": "ghcr.io/codesphere-cloud/workspace-agent-24.04:codesphere-v1.66.0",
+								"auth-service": "ghcr.io/codesphere-cloud/auth-service:codesphere-v1.65.0"
+							}
+						}
+					}
+				}`
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("returns a valid codesphere version", func() {
+				version, err := pkg.GetCodesphereVersion()
+				Expect(err).NotTo(HaveOccurred())
+				// Should return one of the codesphere versions (depends on map iteration order)
+				Expect(version).To(Or(Equal("codesphere-v1.66.0"), Equal("codesphere-v1.65.0")))
+			})
+		})
+	})
+})
+
+// Helper functions for creating test tar.gz files
+
+// PackageFiles represents files to include in a test package
+type PackageFiles struct {
+	MainFiles map[string]string // filename -> content
+	DepsFiles map[string]string // filename -> content for deps.tar.gz
+}
+
 // createTar creates a tar file containing a file with the given content
 func createTar(tarName string, fileName string, fileContent string) error {
 	file, err := os.Create(tarName)
@@ -707,7 +911,6 @@ func createTar(tarName string, fileName string, fileContent string) error {
 	tw := tar.NewWriter(file)
 	defer func() { _ = tw.Close() }()
 
-	// Add the specified file
 	header := &tar.Header{
 		Name: fileName,
 		Mode: 0644,
@@ -721,4 +924,96 @@ func createTar(tarName string, fileName string, fileContent string) error {
 	}
 
 	return nil
+}
+
+// createTarGz creates a deps.tar.gz archive content in memory
+func createTarGz(files map[string]string) ([]byte, error) {
+	var buf []byte
+	gzw := gzip.NewWriter(&bytesBuffer{data: &buf})
+	tw := tar.NewWriter(gzw)
+
+	for name, content := range files {
+		header := &tar.Header{
+			Name: name,
+			Mode: 0644,
+			Size: int64(len(content)),
+		}
+		if err := tw.WriteHeader(header); err != nil {
+			return nil, err
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	if err := gzw.Close(); err != nil {
+		return nil, err
+	}
+
+	return buf, nil
+}
+
+// createTestPackage creates a tar.gz package with the specified files
+func createTestPackage(filename string, files PackageFiles) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer util.CloseFileIgnoreError(file)
+
+	gzw := gzip.NewWriter(file)
+	defer func() { _ = gzw.Close() }()
+
+	tw := tar.NewWriter(gzw)
+	defer func() { _ = tw.Close() }()
+
+	// Add main files
+	for name, content := range files.MainFiles {
+		header := &tar.Header{
+			Name: name,
+			Mode: 0644,
+			Size: int64(len(content)),
+		}
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			return err
+		}
+	}
+
+	// Add deps.tar.gz if dependency files are specified
+	if len(files.DepsFiles) > 0 {
+		depsContent, err := createTarGz(files.DepsFiles)
+		if err != nil {
+			return err
+		}
+
+		depsHeader := &tar.Header{
+			Name: "deps.tar.gz",
+			Mode: 0644,
+			Size: int64(len(depsContent)),
+		}
+		if err := tw.WriteHeader(depsHeader); err != nil {
+			return err
+		}
+		if _, err := tw.Write(depsContent); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// bytesBuffer is a simple buffer that implements io.Writer for creating in-memory archives
+type bytesBuffer struct {
+	data *[]byte
+}
+
+func (b *bytesBuffer) Write(p []byte) (n int, err error) {
+	*b.data = append(*b.data, p...)
+	return len(p), nil
 }

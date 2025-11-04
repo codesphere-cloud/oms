@@ -28,6 +28,7 @@ type BuildImageOpts struct {
 	Dockerfile string
 	Package    string
 	Registry   string
+	Force      bool
 }
 
 func (c *BuildImageCmd) RunE(cmd *cobra.Command, args []string) error {
@@ -55,6 +56,7 @@ func AddBuildImageCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	imageCmd.cmd.Flags().StringVarP(&imageCmd.Opts.Dockerfile, "dockerfile", "d", "", "Path to the Dockerfile to build (required)")
 	imageCmd.cmd.Flags().StringVarP(&imageCmd.Opts.Package, "package", "p", "", "Path to the Codesphere package (required)")
 	imageCmd.cmd.Flags().StringVarP(&imageCmd.Opts.Registry, "registry", "r", "", "Registry URL to push to (e.g., my-registry.com/my-image) (required)")
+	imageCmd.cmd.Flags().BoolVarP(&imageCmd.Opts.Force, "force", "f", false, "Force new unpacking of the package even if already extracted")
 
 	util.MarkFlagRequired(imageCmd.cmd, "dockerfile")
 	util.MarkFlagRequired(imageCmd.cmd, "package")
@@ -67,6 +69,11 @@ func AddBuildImageCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 
 // AddBuildImageCmd adds the build image command to the parent command
 func (c *BuildImageCmd) BuildImage(pm installer.PackageManager, im system.ImageManager) error {
+	err := pm.Extract(c.Opts.Force)
+	if err != nil {
+		return fmt.Errorf("failed to extract package: %w", err)
+	}
+
 	codesphereVersion, err := pm.GetCodesphereVersion()
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere version from package: %w", err)
