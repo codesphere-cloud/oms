@@ -186,8 +186,10 @@ var _ = Describe("K0s", func() {
 				// Create a mock file for the test
 				mockFile, err := os.CreateTemp("", "k0s-test")
 				Expect(err).ToNot(HaveOccurred())
-				defer os.Remove(mockFile.Name())
-				defer mockFile.Close()
+				defer func() {
+					_ = os.Remove(mockFile.Name())
+				}()
+				defer util.CloseFileIgnoreError(mockFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(mockFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", mockFile, false).Return(errors.New("download failed"))
