@@ -87,6 +87,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			c.Opts.Baseimage = "workspace-agent-24.04.tar"
 			c.Opts.Force = false
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("workspace-agent-24.04.tar").Return("", errors.New("failed to extract image"))
 
 			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, []string{})
@@ -103,6 +104,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			c.Opts.Baseimage = ""
 			c.Opts.Force = false
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(nil)
@@ -122,6 +124,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			c.Opts.Baseimage = ""
 			c.Opts.Force = false
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(errors.New("load failed"))
@@ -152,6 +155,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			c.Opts.Baseimage = ""
 			c.Opts.Force = false
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(nil)
@@ -185,6 +189,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			c.Opts.Baseimage = ""
 			c.Opts.Force = false
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
@@ -217,6 +222,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			c.Opts.Baseimage = "workspace-agent-20.04.tar"
 			c.Opts.Force = true
 
+			mockPackageManager.EXPECT().Extract(true).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("workspace-agent-20.04.tar").Return("ubuntu:20.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("workspace-agent-20.04.tar", true).Return("/test/workdir/deps/codesphere/images/workspace-agent-20.04.tar", nil)
 			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
@@ -249,6 +255,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			c.Opts.Baseimage = "workspace-agent-24.04.tar"
 			c.Opts.Force = false
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("workspace-agent-24.04.tar").Return("registry.example.com/workspace-agent:24.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("workspace-agent-24.04.tar", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)

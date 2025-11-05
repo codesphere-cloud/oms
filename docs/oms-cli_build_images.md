@@ -15,6 +15,7 @@ oms-cli build images [flags]
 
 ```
   -c, --config string   Path to the configuration YAML file
+  -f, --force           Force new unpacking of the package even if already extracted
   -h, --help            help for images
 ```
 

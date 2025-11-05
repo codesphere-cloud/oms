@@ -66,6 +66,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("", errors.New("failed to get image name: extraction failed"))
 
 			err := c.ExtendBaseimage(mockPackageManager, mockImageManager)
@@ -77,6 +78,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("", errors.New("failed to extract OCI image index: index extraction failed"))
 
 			err := c.ExtendBaseimage(mockPackageManager, mockImageManager)
@@ -88,6 +90,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("", errors.New("failed to read image tags: no image names found"))
 
 			err := c.ExtendBaseimage(mockPackageManager, mockImageManager)
@@ -106,6 +109,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			defer func() { _ = os.Remove(tempFile.Name()) }()
 			defer func() { _ = tempFile.Close() }()
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04-base", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
@@ -122,6 +126,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
 			c.Opts.Force = true
+			mockPackageManager.EXPECT().Extract(true).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("", errors.New("failed to extract package to workdir: extraction failed"))
 
 			err := c.ExtendBaseimage(mockPackageManager, mockImageManager)
@@ -140,6 +145,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			defer func() { _ = os.Remove(tempFile.Name()) }()
 			defer func() { _ = tempFile.Close() }()
 
+			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04-base", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
