@@ -120,7 +120,8 @@ func (k *K0s) Install(configPath string, force bool) error {
 	}
 
 	log.Println("k0s installed successfully in single-node mode.")
-	log.Println("You can start it using 'sudo ./k0s start'")
+	log.Printf("You can start it using 'sudo %v/k0s start'", workdir)
+	log.Printf("You can check the status using 'sudo %v/k0s status'", workdir)
 
 	return nil
 }
