@@ -117,7 +117,7 @@ var _ = Describe("K0s", func() {
 				// Create a real file for the test
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
-				defer realFile.Close()
+				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
@@ -154,7 +154,7 @@ var _ = Describe("K0s", func() {
 				// Create a real file for the test
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
-				defer realFile.Close()
+				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
@@ -205,7 +205,7 @@ var _ = Describe("K0s", func() {
 
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
-				defer realFile.Close()
+				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
@@ -238,7 +238,7 @@ var _ = Describe("K0s", func() {
 				// Create a real file for the test
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
-				defer realFile.Close()
+				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)

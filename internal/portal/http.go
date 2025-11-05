@@ -37,7 +37,9 @@ func (c *HttpWrapper) Request(url string, method string, body io.Reader) (respon
 	if err != nil {
 		return []byte{}, fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return []byte{}, fmt.Errorf("failed request with status: %d", resp.StatusCode)
@@ -65,7 +67,9 @@ func (c *HttpWrapper) Download(url string, file io.Writer, quiet bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to send request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("failed to get body: %d", resp.StatusCode)
