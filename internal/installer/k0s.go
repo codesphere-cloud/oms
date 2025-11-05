@@ -70,7 +70,7 @@ func (k *K0s) Download(force bool, quiet bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to create k0s binary file: %w", err)
 	}
-	defer file.Close()
+	defer util.CloseFileIgnoreError(file)
 
 	// Download using the portal Http wrapper with WriteCounter
 	log.Printf("Downloading k0s version %s", version)
