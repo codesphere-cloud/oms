@@ -238,7 +238,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			It("should detect the old format and attempt to upgrade", func() {
 				cmd := exec.Command(cliPath, "version")
 				cmd.Env = append(os.Environ(),
-					"OMS_PORTAL_API_KEY=U4jsSHoDsOFGyEkPrWpsE", // 22 characters
+					"OMS_PORTAL_API_KEY=fakeapikeywith22charsa", // 22 characters
 					"OMS_PORTAL_API=http://localhost:3000/api",
 				)
 
@@ -270,7 +270,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			It("should attempt the upgrade and handle the error gracefully", func() {
 				cmd := exec.Command(cliPath, "list", "api-keys")
 				cmd.Env = append(os.Environ(),
-					"OMS_PORTAL_API_KEY=U4jsSHoDsOFGyEkPrWpsE", // 22 characters (old format)
+					"OMS_PORTAL_API_KEY=fakeapikeywith22charsa", // 22 characters (old format)
 					"OMS_PORTAL_API=http://localhost:3000/api",
 				)
 
@@ -290,7 +290,7 @@ var _ = Describe("API Key Integration Tests", func() {
 
 		Context("when checking key length detection", func() {
 			It("should correctly identify 22-character old format", func() {
-				oldKey := "U4jsSHoDsOFGyEkPrWpsE"
+				oldKey := "fakeapikeywith22charsa"
 				Expect(len(oldKey)).To(Equal(22))
 			})
 

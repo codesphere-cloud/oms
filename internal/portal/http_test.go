@@ -363,15 +363,17 @@ var _ = Describe("PortalClient", func() {
 
 	Describe("GetApiKeyByHeader", func() {
 		var (
-			oldApiKey     string
-			newApiKey     string
-			responseBody  []byte
-			requestHeader string
+			oldApiKey      string
+			keyId          string
+			expectedNewKey string
+			responseBody   []byte
+			requestHeader  string
 		)
 
 		BeforeEach(func() {
 			oldApiKey = "old-key-format-1234"
-			newApiKey = "new-key-format-very-long-string-12345678"
+			keyId = "test-key-id-12345"
+			expectedNewKey = keyId + oldApiKey
 			requestHeader = ""
 
 			mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
@@ -380,7 +382,7 @@ var _ = Describe("PortalClient", func() {
 		Context("when the request succeeds", func() {
 			BeforeEach(func() {
 				response := map[string]string{
-					"apiKey": newApiKey,
+					"keyId": keyId,
 				}
 				responseBody, _ = json.Marshal(response)
 
@@ -398,7 +400,7 @@ var _ = Describe("PortalClient", func() {
 			It("returns the new API key", func() {
 				result, err := client.GetApiKeyByHeader(oldApiKey)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(newApiKey))
+				Expect(result).To(Equal(expectedNewKey))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/key"))
 				Expect(requestHeader).To(Equal(oldApiKey))
 			})
@@ -468,7 +470,7 @@ var _ = Describe("PortalClient", func() {
 			})
 		})
 
-		Context("when the response is missing the apiKey field", func() {
+		Context("when the response is missing the keyId field", func() {
 			BeforeEach(func() {
 				response := map[string]string{
 					"someOtherField": "value",
@@ -484,10 +486,10 @@ var _ = Describe("PortalClient", func() {
 					})
 			})
 
-			It("returns an empty string", func() {
+			It("returns only the old key", func() {
 				result, err := client.GetApiKeyByHeader(oldApiKey)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(""))
+				Expect(result).To(Equal(oldApiKey))
 			})
 		})
 

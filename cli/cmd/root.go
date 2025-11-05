@@ -48,7 +48,6 @@ func GetRootCmd() *cobra.Command {
 				}
 				opts.OmsPortalApiKey = newApiKey
 
-				fmt.Fprintf(os.Stderr, "Successfully upgraded API key to new format!\n")
 				fmt.Fprintf(os.Stderr, "Please update your environment variable:\n\n")
 				fmt.Fprintf(os.Stderr, "  export OMS_PORTAL_API_KEY='%s'\n\n", newApiKey)
 			}

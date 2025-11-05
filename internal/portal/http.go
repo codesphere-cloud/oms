@@ -325,12 +325,12 @@ func (c *PortalClient) GetApiKeyByHeader(oldKey string) (string, error) {
 	}
 
 	var result struct {
-		ApiKey string `json:"apiKey"`
+		KeyID string `json:"keyId"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return result.ApiKey, nil
+	return result.KeyID + oldKey, nil
 }

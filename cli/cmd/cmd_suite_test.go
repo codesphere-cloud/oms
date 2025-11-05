@@ -44,8 +44,9 @@ var _ = Describe("RootCmd", func() {
 	Describe("PreRun hook with old API key", func() {
 		Context("when API key is 22 characters (old format)", func() {
 			It("attempts to upgrade the key via GetApiKeyByHeader", func() {
-				oldKey := "U4jsSHoDsOFGyEkPrWpsE" // 22 characters
-				newKey := "new-long-api-key-format-very-long-string"
+				oldKey := "fakeapikeywith22charsa" // 22 characters
+				keyId := "test-key-id-12345"
+				expectedNewKey := keyId + oldKey
 
 				Expect(os.Setenv("OMS_PORTAL_API_KEY", oldKey)).NotTo(HaveOccurred())
 				Expect(os.Setenv("OMS_PORTAL_API", "http://test-portal.com/api")).NotTo(HaveOccurred())
@@ -58,7 +59,7 @@ var _ = Describe("RootCmd", func() {
 						Expect(req.URL.Path).To(ContainSubstring("/key"))
 
 						response := map[string]string{
-							"apiKey": newKey,
+							"keyId": keyId,
 						}
 						body, _ := json.Marshal(response)
 						return &http.Response{
@@ -74,7 +75,7 @@ var _ = Describe("RootCmd", func() {
 
 				result, err := portalClient.GetApiKeyByHeader(oldKey)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal(newKey))
+				Expect(result).To(Equal(expectedNewKey))
 
 				Expect(os.Unsetenv("OMS_PORTAL_API_KEY")).NotTo(HaveOccurred())
 				Expect(os.Unsetenv("OMS_PORTAL_API")).NotTo(HaveOccurred())
