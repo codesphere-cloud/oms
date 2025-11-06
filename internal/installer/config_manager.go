@@ -26,6 +26,7 @@ type InstallConfigManager interface {
 	ValidateInstallConfig() []string
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
+	GetVault() *files.InstallVault
 	CollectInteractively() error
 	// Output
 	GenerateSecrets() error
@@ -182,6 +183,10 @@ func (g *InstallConfig) GetInstallConfig() *files.RootConfig {
 	return g.Config
 }
 
+func (g *InstallConfig) GetVault() *files.InstallVault {
+	return g.Vault
+}
+
 func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool) error {
 	if g.Config == nil {
 		return fmt.Errorf("no configuration provided - config is nil")
@@ -294,9 +299,7 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 	}
 
 	if secret, ok := secretsMap["postgresReplicaServerKeyPem"]; ok && secret.File != nil {
-		if g.Config.Postgres.Replica != nil {
-			g.Config.Postgres.Replica.PrivateKey = secret.File.Content
-		}
+		g.Config.Postgres.ReplicaPrivateKey = secret.File.Content
 	}
 
 	// PostgreSQL user passwords
@@ -326,6 +329,14 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 
 	if secret, ok := secretsMap["domainAuthPublicKey"]; ok && secret.File != nil {
 		g.Config.Codesphere.DomainAuthPublicKey = secret.File.Content
+	}
+
+	if secret, ok := secretsMap["registryUsername"]; ok && secret.Fields != nil {
+		g.Config.Registry.Username = secret.Fields.Password
+	}
+
+	if secret, ok := secretsMap["registryPassword"]; ok && secret.Fields != nil {
+		g.Config.Registry.Password = secret.Fields.Password
 	}
 
 	return nil
