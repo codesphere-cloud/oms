@@ -5,111 +5,73 @@ package cmd
 
 import (
 	"os"
-	"strings"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-func TestIsValidIP(t *testing.T) {
-	tests := []struct {
-		name  string
-		ip    string
-		valid bool
-	}{
-		{"valid IPv4", "192.168.1.1", true},
-		{"valid IPv6", "2001:db8::1", true},
-		{"invalid IP", "not-an-ip", false},
-		{"empty string", "", false},
-		{"partial IP", "192.168", false},
-		{"localhost", "127.0.0.1", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := isValidIP(tt.ip)
-			if result != tt.valid {
-				t.Errorf("isValidIP(%q) = %v, want %v", tt.ip, result, tt.valid)
-			}
-		})
-	}
-}
-
-func TestApplyProfile(t *testing.T) {
-	tests := []struct {
-		name            string
-		profile         string
-		wantErr         bool
-		checkDatacenter string
-	}{
-		{"dev profile", "dev", false, "dev"},
-		{"development profile", "development", false, "dev"},
-		{"prod profile", "prod", false, "production"},
-		{"production profile", "production", false, "production"},
-		{"minimal profile", "minimal", false, "minimal"},
-		{"invalid profile", "invalid", true, ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cmd := &InitInstallConfigCmd{
+var _ = Describe("ApplyProfile", func() {
+	DescribeTable("profile application",
+		func(profile string, wantErr bool, checkDatacenter string) {
+			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{
-					Profile: tt.profile,
+					Profile: profile,
 				},
 			}
 
-			err := cmd.applyProfile()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("applyProfile() error = %v, wantErr %v", err, tt.wantErr)
+			err := c.applyProfile()
+			if wantErr {
+				Expect(err).To(HaveOccurred())
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(c.Opts.DatacenterName).To(Equal(checkDatacenter))
 			}
-
-			if !tt.wantErr && cmd.Opts.DatacenterName != tt.checkDatacenter {
-				t.Errorf("DatacenterName = %s, want %s", cmd.Opts.DatacenterName, tt.checkDatacenter)
-			}
-		})
-	}
-}
-
-func TestApplyDevProfile(t *testing.T) {
-	cmd := &InitInstallConfigCmd{
-		Opts: &InitInstallConfigOpts{
-			Profile: "dev",
 		},
-	}
+		Entry("dev profile", "dev", false, "dev"),
+		Entry("development profile", "development", false, "dev"),
+		Entry("prod profile", "prod", false, "production"),
+		Entry("production profile", "production", false, "production"),
+		Entry("minimal profile", "minimal", false, "minimal"),
+		Entry("invalid profile", "invalid", true, ""),
+	)
 
-	err := cmd.applyProfile()
-	if err != nil {
-		t.Fatalf("applyProfile failed: %v", err)
-	}
+	Context("dev profile details", func() {
+		It("sets correct dev profile configuration", func() {
+			c := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					Profile: "dev",
+				},
+			}
 
-	if cmd.Opts.DatacenterID != 1 {
-		t.Errorf("DatacenterID = %d, want 1", cmd.Opts.DatacenterID)
-	}
-	if cmd.Opts.DatacenterName != "dev" {
-		t.Errorf("DatacenterName = %s, want dev", cmd.Opts.DatacenterName)
-	}
-	if cmd.Opts.PostgresMode != "install" {
-		t.Errorf("PostgresMode = %s, want install", cmd.Opts.PostgresMode)
-	}
-	if cmd.Opts.K8sManaged != true {
-		t.Error("K8sManaged should be true for dev profile")
-	}
-}
+			err := c.applyProfile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(c.Opts.DatacenterID).To(Equal(1))
+			Expect(c.Opts.DatacenterName).To(Equal("dev"))
+			Expect(c.Opts.PostgresMode).To(Equal("install"))
+			Expect(c.Opts.K8sManaged).To(BeTrue())
+		})
+	})
+})
 
-func TestValidateConfig(t *testing.T) {
-	configFile, err := os.CreateTemp("", "config-*.yaml")
-	if err != nil {
-		t.Fatalf("Failed to create temp config file: %v", err)
-	}
-	defer func() { _ = os.Remove(configFile.Name()) }()
+var _ = Describe("ValidateConfig", func() {
+	var (
+		configFile  *os.File
+		vaultFile   *os.File
+		validConfig string
+		validVault  string
+	)
 
-	vaultFile, err := os.CreateTemp("", "vault-*.yaml")
-	if err != nil {
-		t.Fatalf("Failed to create temp vault file: %v", err)
-	}
-	defer func() { _ = os.Remove(vaultFile.Name()) }()
+	BeforeEach(func() {
+		var err error
+		configFile, err = os.CreateTemp("", "config-*.yaml")
+		Expect(err).NotTo(HaveOccurred())
 
-	validConfig := `dataCenter:
+		vaultFile, err = os.CreateTemp("", "vault-*.yaml")
+		Expect(err).NotTo(HaveOccurred())
+
+		validConfig = `dataCenter:
   id: 1
   name: test
   city: Berlin
@@ -177,7 +139,7 @@ codesphere:
         onDemand: true
 `
 
-	validVault := `secrets:
+		validVault = `secrets:
   - name: cephSshPrivateKey
     file:
       name: id_rsa
@@ -195,44 +157,42 @@ codesphere:
       name: key.pem
       content: "-----BEGIN PUBLIC KEY-----\nDOMAIN-PUB\n-----END PUBLIC KEY-----"
 `
+	})
 
-	if _, err := configFile.WriteString(validConfig); err != nil {
-		t.Fatalf("Failed to write config: %v", err)
-	}
-	if err := configFile.Close(); err != nil {
-		t.Fatalf("Failed to close config file: %v", err)
-	}
+	AfterEach(func() {
+		_ = os.Remove(configFile.Name())
+		_ = os.Remove(vaultFile.Name())
+	})
 
-	if _, err := vaultFile.WriteString(validVault); err != nil {
-		t.Fatalf("Failed to write vault: %v", err)
-	}
-	if err := vaultFile.Close(); err != nil {
-		t.Fatalf("Failed to close vault file: %v", err)
-	}
+	Context("valid configuration", func() {
+		It("validates successfully", func() {
+			_, err := configFile.WriteString(validConfig)
+			Expect(err).NotTo(HaveOccurred())
+			err = configFile.Close()
+			Expect(err).NotTo(HaveOccurred())
 
-	cmd := &InitInstallConfigCmd{
-		Opts: &InitInstallConfigOpts{
-			ConfigFile:   configFile.Name(),
-			VaultFile:    vaultFile.Name(),
-			ValidateOnly: true,
-		},
-		FileWriter: util.NewFilesystemWriter(),
-	}
+			_, err = vaultFile.WriteString(validVault)
+			Expect(err).NotTo(HaveOccurred())
+			err = vaultFile.Close()
+			Expect(err).NotTo(HaveOccurred())
 
-	err = cmd.validateConfig()
-	if err != nil {
-		t.Errorf("validateConfig() failed for valid config: %v", err)
-	}
-}
+			c := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					ConfigFile:   configFile.Name(),
+					VaultFile:    vaultFile.Name(),
+					ValidateOnly: true,
+				},
+				FileWriter: util.NewFilesystemWriter(),
+			}
 
-func TestValidateConfigInvalidDatacenter(t *testing.T) {
-	configFile, err := os.CreateTemp("", "config-*.yaml")
-	if err != nil {
-		t.Fatalf("Failed to create temp config file: %v", err)
-	}
-	defer func() { _ = os.Remove(configFile.Name()) }()
+			err = c.validateConfig()
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 
-	invalidConfig := `dataCenter:
+	Context("invalid datacenter", func() {
+		It("fails validation", func() {
+			invalidConfig := `dataCenter:
   id: 0
   name: ""
 secrets:
@@ -262,35 +222,27 @@ codesphere:
     workspacePlans: {}
 `
 
-	if _, err := configFile.WriteString(invalidConfig); err != nil {
-		t.Fatalf("Failed to write config: %v", err)
-	}
-	if err := configFile.Close(); err != nil {
-		t.Fatalf("Failed to close config file: %v", err)
-	}
+			_, err := configFile.WriteString(invalidConfig)
+			Expect(err).NotTo(HaveOccurred())
+			err = configFile.Close()
+			Expect(err).NotTo(HaveOccurred())
 
-	cmd := &InitInstallConfigCmd{
-		Opts: &InitInstallConfigOpts{
-			ConfigFile:   configFile.Name(),
-			ValidateOnly: true,
-		},
-		FileWriter: util.NewFilesystemWriter(),
-	}
+			c := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					ConfigFile:   configFile.Name(),
+					ValidateOnly: true,
+				},
+				FileWriter: util.NewFilesystemWriter(),
+			}
 
-	err = cmd.validateConfig()
-	if err == nil {
-		t.Error("validateConfig() should fail for invalid config")
-	}
-}
+			err = c.validateConfig()
+			Expect(err).To(HaveOccurred())
+		})
+	})
 
-func TestValidateConfigInvalidIP(t *testing.T) {
-	configFile, err := os.CreateTemp("", "config-*.yaml")
-	if err != nil {
-		t.Fatalf("Failed to create temp config file: %v", err)
-	}
-	defer func() { _ = os.Remove(configFile.Name()) }()
-
-	configWithInvalidIP := `dataCenter:
+	Context("invalid IP address", func() {
+		It("fails validation", func() {
+			configWithInvalidIP := `dataCenter:
   id: 1
   name: test
   city: Berlin
@@ -331,26 +283,21 @@ codesphere:
     workspacePlans: {}
 `
 
-	if _, err := configFile.WriteString(configWithInvalidIP); err != nil {
-		t.Fatalf("Failed to write config: %v", err)
-	}
-	if err := configFile.Close(); err != nil {
-		t.Fatalf("Failed to close config file: %v", err)
-	}
+			_, err := configFile.WriteString(configWithInvalidIP)
+			Expect(err).NotTo(HaveOccurred())
+			err = configFile.Close()
+			Expect(err).NotTo(HaveOccurred())
 
-	cmd := &InitInstallConfigCmd{
-		Opts: &InitInstallConfigOpts{
-			ConfigFile:   configFile.Name(),
-			ValidateOnly: true,
-		},
-		FileWriter: util.NewFilesystemWriter(),
-	}
+			c := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					ConfigFile:   configFile.Name(),
+					ValidateOnly: true,
+				},
+				FileWriter: util.NewFilesystemWriter(),
+			}
 
-	err = cmd.validateConfig()
-	if err == nil {
-		t.Error("validateConfig() should fail for invalid IP address")
-	}
-	if err != nil && !strings.Contains(err.Error(), "invalid") {
-		t.Logf("Got error: %v", err)
-	}
-}
+			err = c.validateConfig()
+			Expect(err).To(HaveOccurred())
+		})
+	})
+})

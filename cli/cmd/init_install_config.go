@@ -5,19 +5,20 @@ package cmd
 
 import (
 	"fmt"
-	"net"
+	"io"
 	"strings"
 
-	"github.com/codesphere-cloud/cs-go/pkg/io"
+	csio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
 type InitInstallConfigCmd struct {
 	cmd        *cobra.Command
 	Opts       *InitInstallConfigOpts
 	FileWriter util.FileIO
+	Generator  *installer.ConfigGenerator
 }
 
 type InitInstallConfigOpts struct {
@@ -29,7 +30,7 @@ type InitInstallConfigOpts struct {
 	Profile        string
 	ValidateOnly   bool
 	WithComments   bool
-	NonInteractive bool
+	Interactive    bool
 	GenerateKeys   bool
 	SecretsBaseDir string
 
@@ -50,7 +51,7 @@ type InitInstallConfigOpts struct {
 	PostgresExternal    string
 
 	CephSubnet string
-	CephHosts  []CephHostConfig
+	CephHosts  []installer.CephHostConfig
 
 	K8sManaged      bool
 	K8sAPIServer    string
@@ -66,7 +67,7 @@ type InitInstallConfigOpts struct {
 	ClusterPublicGatewayIPs  []string
 
 	MetalLBEnabled bool
-	MetalLBPools   []MetalLBPool
+	MetalLBPools   []installer.MetalLBPool
 
 	CodesphereDomain                  string
 	CodespherePublicIP                string
@@ -82,347 +83,7 @@ type InitInstallConfigOpts struct {
 	CodesphereWorkspacePlanMaxReplica int
 }
 
-type CephHostConfig struct {
-	Hostname  string
-	IPAddress string
-	IsMaster  bool
-}
-
-type MetalLBPool struct {
-	Name        string
-	IPAddresses []string
-}
-
-type Gen0Config struct {
-	DataCenter             DataCenterConfig              `yaml:"dataCenter"`
-	Secrets                SecretsConfig                 `yaml:"secrets"`
-	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
-	Postgres               PostgresConfig                `yaml:"postgres"`
-	Ceph                   CephConfig                    `yaml:"ceph"`
-	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
-	Cluster                ClusterConfig                 `yaml:"cluster"`
-	MetalLB                *MetalLBConfig                `yaml:"metallb,omitempty"`
-	Codesphere             CodesphereConfig              `yaml:"codesphere"`
-	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
-}
-
-type DataCenterConfig struct {
-	ID          int    `yaml:"id"`
-	Name        string `yaml:"name"`
-	City        string `yaml:"city"`
-	CountryCode string `yaml:"countryCode"`
-}
-
-type SecretsConfig struct {
-	BaseDir string `yaml:"baseDir"`
-}
-
-type RegistryConfig struct {
-	Server              string `yaml:"server"`
-	ReplaceImagesInBom  bool   `yaml:"replaceImagesInBom"`
-	LoadContainerImages bool   `yaml:"loadContainerImages"`
-}
-
-type PostgresConfig struct {
-	CACertPem     string                 `yaml:"caCertPem,omitempty"`
-	Primary       *PostgresPrimaryConfig `yaml:"primary,omitempty"`
-	Replica       *PostgresReplicaConfig `yaml:"replica,omitempty"`
-	ServerAddress string                 `yaml:"serverAddress,omitempty"`
-}
-
-type PostgresPrimaryConfig struct {
-	SSLConfig SSLConfig `yaml:"sslConfig"`
-	IP        string    `yaml:"ip"`
-	Hostname  string    `yaml:"hostname"`
-}
-
-type PostgresReplicaConfig struct {
-	IP        string    `yaml:"ip"`
-	Name      string    `yaml:"name"`
-	SSLConfig SSLConfig `yaml:"sslConfig"`
-}
-
-type SSLConfig struct {
-	ServerCertPem string `yaml:"serverCertPem"`
-}
-
-type CephConfig struct {
-	CsiKubeletDir string     `yaml:"csiKubeletDir,omitempty"`
-	CephAdmSSHKey CephSSHKey `yaml:"cephAdmSshKey"`
-	NodesSubnet   string     `yaml:"nodesSubnet"`
-	Hosts         []CephHost `yaml:"hosts"`
-	OSDs          []CephOSD  `yaml:"osds"`
-}
-
-type CephSSHKey struct {
-	PublicKey string `yaml:"publicKey"`
-}
-
-type CephHost struct {
-	Hostname  string `yaml:"hostname"`
-	IPAddress string `yaml:"ipAddress"`
-	IsMaster  bool   `yaml:"isMaster"`
-}
-
-type CephOSD struct {
-	SpecID      string          `yaml:"specId"`
-	Placement   CephPlacement   `yaml:"placement"`
-	DataDevices CephDataDevices `yaml:"dataDevices"`
-	DBDevices   CephDBDevices   `yaml:"dbDevices"`
-}
-
-type CephPlacement struct {
-	HostPattern string `yaml:"host_pattern"`
-}
-
-type CephDataDevices struct {
-	Size  string `yaml:"size"`
-	Limit int    `yaml:"limit"`
-}
-
-type CephDBDevices struct {
-	Size  string `yaml:"size"`
-	Limit int    `yaml:"limit"`
-}
-
-type KubernetesConfig struct {
-	ManagedByCodesphere bool      `yaml:"managedByCodesphere"`
-	APIServerHost       string    `yaml:"apiServerHost,omitempty"`
-	ControlPlanes       []K8sNode `yaml:"controlPlanes,omitempty"`
-	Workers             []K8sNode `yaml:"workers,omitempty"`
-	PodCIDR             string    `yaml:"podCidr,omitempty"`
-	ServiceCIDR         string    `yaml:"serviceCidr,omitempty"`
-}
-
-type K8sNode struct {
-	IPAddress string `yaml:"ipAddress"`
-}
-
-type ClusterConfig struct {
-	Certificates  ClusterCertificates `yaml:"certificates"`
-	Monitoring    *MonitoringConfig   `yaml:"monitoring,omitempty"`
-	Gateway       GatewayConfig       `yaml:"gateway"`
-	PublicGateway GatewayConfig       `yaml:"publicGateway"`
-}
-
-type ClusterCertificates struct {
-	CA CAConfig `yaml:"ca"`
-}
-
-type CAConfig struct {
-	Algorithm   string `yaml:"algorithm"`
-	KeySizeBits int    `yaml:"keySizeBits"`
-	CertPem     string `yaml:"certPem"`
-}
-
-type GatewayConfig struct {
-	ServiceType string            `yaml:"serviceType"`
-	Annotations map[string]string `yaml:"annotations,omitempty"`
-	IPAddresses []string          `yaml:"ipAddresses,omitempty"`
-}
-
-type MetalLBConfig struct {
-	Enabled bool             `yaml:"enabled"`
-	Pools   []MetalLBPoolDef `yaml:"pools"`
-	L2      []MetalLBL2      `yaml:"l2,omitempty"`
-	BGP     []MetalLBBGP     `yaml:"bgp,omitempty"`
-}
-
-type MetalLBPoolDef struct {
-	Name        string   `yaml:"name"`
-	IPAddresses []string `yaml:"ipAddresses"`
-}
-
-type MetalLBL2 struct {
-	Name          string              `yaml:"name"`
-	Pools         []string            `yaml:"pools"`
-	NodeSelectors []map[string]string `yaml:"nodeSelectors,omitempty"`
-}
-
-type MetalLBBGP struct {
-	Name          string              `yaml:"name"`
-	Pools         []string            `yaml:"pools"`
-	Config        MetalLBBGPConfig    `yaml:"config"`
-	NodeSelectors []map[string]string `yaml:"nodeSelectors,omitempty"`
-}
-
-type MetalLBBGPConfig struct {
-	MyASN       int    `yaml:"myASN"`
-	PeerASN     int    `yaml:"peerASN"`
-	PeerAddress string `yaml:"peerAddress"`
-	BFDProfile  string `yaml:"bfdProfile,omitempty"`
-}
-
-type CodesphereConfig struct {
-	Domain                     string                 `yaml:"domain"`
-	WorkspaceHostingBaseDomain string                 `yaml:"workspaceHostingBaseDomain"`
-	PublicIP                   string                 `yaml:"publicIp"`
-	CustomDomains              CustomDomainsConfig    `yaml:"customDomains"`
-	DNSServers                 []string               `yaml:"dnsServers"`
-	Experiments                []string               `yaml:"experiments"`
-	ExtraCAPem                 string                 `yaml:"extraCaPem,omitempty"`
-	ExtraWorkspaceEnvVars      map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
-	ExtraWorkspaceFiles        []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
-	WorkspaceImages            *WorkspaceImagesConfig `yaml:"workspaceImages,omitempty"`
-	DeployConfig               DeployConfig           `yaml:"deployConfig"`
-	Plans                      PlansConfig            `yaml:"plans"`
-	UnderprovisionFactors      *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
-	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
-	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
-}
-
-type CustomDomainsConfig struct {
-	CNameBaseDomain string `yaml:"cNameBaseDomain"`
-}
-
-type ExtraWorkspaceFile struct {
-	Path    string `yaml:"path"`
-	Content string `yaml:"content"`
-}
-
-type WorkspaceImagesConfig struct {
-	Agent    *ImageRef `yaml:"agent,omitempty"`
-	AgentGpu *ImageRef `yaml:"agentGpu,omitempty"`
-	Server   *ImageRef `yaml:"server,omitempty"`
-	VPN      *ImageRef `yaml:"vpn,omitempty"`
-}
-
-type ImageRef struct {
-	BomRef string `yaml:"bomRef"`
-}
-
-type DeployConfig struct {
-	Images map[string]DeployImage `yaml:"images"`
-}
-
-type DeployImage struct {
-	Name           string                  `yaml:"name"`
-	SupportedUntil string                  `yaml:"supportedUntil"`
-	Flavors        map[string]DeployFlavor `yaml:"flavors"`
-}
-
-type DeployFlavor struct {
-	Image ImageRef    `yaml:"image"`
-	Pool  map[int]int `yaml:"pool"`
-}
-
-type PlansConfig struct {
-	HostingPlans   map[int]HostingPlan   `yaml:"hostingPlans"`
-	WorkspacePlans map[int]WorkspacePlan `yaml:"workspacePlans"`
-}
-
-type HostingPlan struct {
-	CPUTenth      int `yaml:"cpuTenth"`
-	GPUParts      int `yaml:"gpuParts"`
-	MemoryMb      int `yaml:"memoryMb"`
-	StorageMb     int `yaml:"storageMb"`
-	TempStorageMb int `yaml:"tempStorageMb"`
-}
-
-type WorkspacePlan struct {
-	Name          string `yaml:"name"`
-	HostingPlanID int    `yaml:"hostingPlanId"`
-	MaxReplicas   int    `yaml:"maxReplicas"`
-	OnDemand      bool   `yaml:"onDemand"`
-}
-
-type UnderprovisionFactors struct {
-	CPU    float64 `yaml:"cpu"`
-	Memory float64 `yaml:"memory"`
-}
-
-type GitProvidersConfig struct {
-	GitHub      *GitProviderConfig `yaml:"github,omitempty"`
-	GitLab      *GitProviderConfig `yaml:"gitlab,omitempty"`
-	Bitbucket   *GitProviderConfig `yaml:"bitbucket,omitempty"`
-	AzureDevOps *GitProviderConfig `yaml:"azureDevOps,omitempty"`
-}
-
-type GitProviderConfig struct {
-	Enabled bool        `yaml:"enabled"`
-	URL     string      `yaml:"url"`
-	API     APIConfig   `yaml:"api"`
-	OAuth   OAuthConfig `yaml:"oauth"`
-}
-
-type APIConfig struct {
-	BaseURL string `yaml:"baseUrl"`
-}
-
-type OAuthConfig struct {
-	Issuer                string `yaml:"issuer"`
-	AuthorizationEndpoint string `yaml:"authorizationEndpoint"`
-	TokenEndpoint         string `yaml:"tokenEndpoint"`
-	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
-	Scope                 string `yaml:"scope,omitempty"`
-}
-
-type ManagedServiceConfig struct {
-	Name          string                 `yaml:"name"`
-	API           ManagedServiceAPI      `yaml:"api"`
-	Author        string                 `yaml:"author"`
-	Category      string                 `yaml:"category"`
-	ConfigSchema  map[string]interface{} `yaml:"configSchema"`
-	DetailsSchema map[string]interface{} `yaml:"detailsSchema"`
-	SecretsSchema map[string]interface{} `yaml:"secretsSchema"`
-	Description   string                 `yaml:"description"`
-	DisplayName   string                 `yaml:"displayName"`
-	IconURL       string                 `yaml:"iconUrl"`
-	Plans         []ServicePlan          `yaml:"plans"`
-	Version       string                 `yaml:"version"`
-}
-
-type ManagedServiceAPI struct {
-	Endpoint string `yaml:"endpoint"`
-}
-
-type ServicePlan struct {
-	ID          int                  `yaml:"id"`
-	Description string               `yaml:"description"`
-	Name        string               `yaml:"name"`
-	Parameters  map[string]PlanParam `yaml:"parameters"`
-}
-
-type PlanParam struct {
-	PricedAs string                 `yaml:"pricedAs"`
-	Schema   map[string]interface{} `yaml:"schema"`
-}
-
-type ManagedServiceBackendsConfig struct {
-	Postgres map[string]interface{} `yaml:"postgres,omitempty"`
-}
-
-type MonitoringConfig struct {
-	Prometheus *PrometheusConfig `yaml:"prometheus,omitempty"`
-}
-
-type PrometheusConfig struct {
-	RemoteWrite *RemoteWriteConfig `yaml:"remoteWrite,omitempty"`
-}
-
-type RemoteWriteConfig struct {
-	Enabled     bool   `yaml:"enabled"`
-	ClusterName string `yaml:"clusterName,omitempty"`
-}
-
-type Gen0Vault struct {
-	Secrets []SecretEntry `yaml:"secrets"`
-}
-
-type SecretEntry struct {
-	Name   string        `yaml:"name"`
-	File   *SecretFile   `yaml:"file,omitempty"`
-	Fields *SecretFields `yaml:"fields,omitempty"`
-}
-
-type SecretFile struct {
-	Name    string `yaml:"name"`
-	Content string `yaml:"content"`
-}
-
-type SecretFields struct {
-	Password string `yaml:"password"`
-}
+// only other function would be CreateConfig(cg *ConfigGenerator) error
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	if c.Opts.ValidateOnly {
@@ -439,31 +100,74 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	fmt.Println("This wizard will help you create config.yaml and prod.vault.yaml for Codesphere installation.")
 	fmt.Println()
 
-	if err := c.collectConfiguration(); err != nil {
+	// to function toconfigopts
+	configOpts := &installer.ConfigOptions{
+		DatacenterID:          c.Opts.DatacenterID,
+		DatacenterName:        c.Opts.DatacenterName,
+		DatacenterCity:        c.Opts.DatacenterCity,
+		DatacenterCountryCode: c.Opts.DatacenterCountryCode,
+
+		RegistryServer:            c.Opts.RegistryServer,
+		RegistryReplaceImages:     c.Opts.RegistryReplaceImages,
+		RegistryLoadContainerImgs: c.Opts.RegistryLoadContainerImgs,
+
+		PostgresMode:        c.Opts.PostgresMode,
+		PostgresPrimaryIP:   c.Opts.PostgresPrimaryIP,
+		PostgresPrimaryHost: c.Opts.PostgresPrimaryHost,
+		PostgresReplicaIP:   c.Opts.PostgresReplicaIP,
+		PostgresReplicaName: c.Opts.PostgresReplicaName,
+		PostgresExternal:    c.Opts.PostgresExternal,
+
+		CephSubnet: c.Opts.CephSubnet,
+		CephHosts:  c.Opts.CephHosts,
+
+		K8sManaged:      c.Opts.K8sManaged,
+		K8sAPIServer:    c.Opts.K8sAPIServer,
+		K8sControlPlane: c.Opts.K8sControlPlane,
+		K8sWorkers:      c.Opts.K8sWorkers,
+		K8sExternalHost: c.Opts.K8sExternalHost,
+		K8sPodCIDR:      c.Opts.K8sPodCIDR,
+		K8sServiceCIDR:  c.Opts.K8sServiceCIDR,
+
+		ClusterGatewayType:       c.Opts.ClusterGatewayType,
+		ClusterGatewayIPs:        c.Opts.ClusterGatewayIPs,
+		ClusterPublicGatewayType: c.Opts.ClusterPublicGatewayType,
+		ClusterPublicGatewayIPs:  c.Opts.ClusterPublicGatewayIPs,
+
+		MetalLBEnabled: c.Opts.MetalLBEnabled,
+		MetalLBPools:   c.Opts.MetalLBPools,
+
+		CodesphereDomain:                  c.Opts.CodesphereDomain,
+		CodespherePublicIP:                c.Opts.CodespherePublicIP,
+		CodesphereWorkspaceBaseDomain:     c.Opts.CodesphereWorkspaceBaseDomain,
+		CodesphereCustomDomainBaseDomain:  c.Opts.CodesphereCustomDomainBaseDomain,
+		CodesphereDNSServers:              c.Opts.CodesphereDNSServers,
+		CodesphereWorkspaceImageBomRef:    c.Opts.CodesphereWorkspaceImageBomRef,
+		CodesphereHostingPlanCPU:          c.Opts.CodesphereHostingPlanCPU,
+		CodesphereHostingPlanMemory:       c.Opts.CodesphereHostingPlanMemory,
+		CodesphereHostingPlanStorage:      c.Opts.CodesphereHostingPlanStorage,
+		CodesphereHostingPlanTempStorage:  c.Opts.CodesphereHostingPlanTempStorage,
+		CodesphereWorkspacePlanName:       c.Opts.CodesphereWorkspacePlanName,
+		CodesphereWorkspacePlanMaxReplica: c.Opts.CodesphereWorkspacePlanMaxReplica,
+
+		SecretsBaseDir: c.Opts.SecretsBaseDir,
+	}
+
+	config, err := c.Generator.CollectConfiguration(configOpts)
+	if err != nil {
 		return fmt.Errorf("failed to collect configuration: %w", err)
 	}
 
-	var generatedSecrets *GeneratedSecrets
-	if c.Opts.GenerateKeys {
-		fmt.Println("\nGenerating SSH keys and certificates...")
-		var err error
-		generatedSecrets, err = c.generateSecrets()
-		if err != nil {
-			return fmt.Errorf("failed to generate secrets: %w", err)
-		}
-		fmt.Println("Keys and certificates generated successfully")
-	}
-
-	config := c.buildGen0Config(generatedSecrets)
-	configYAML, err := yaml.Marshal(config)
+	configYAML, err := installer.MarshalConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config.yaml: %w", err)
 	}
 
 	if c.Opts.WithComments {
-		configYAML = c.addConfigComments(configYAML)
+		configYAML = installer.AddConfigComments(configYAML)
 	}
 
+	// todo function fo config and vault
 	configFile, err := c.FileWriter.Create(c.Opts.ConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
@@ -476,14 +180,14 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 
 	fmt.Printf("\nConfiguration file created: %s\n", c.Opts.ConfigFile)
 
-	vault := c.buildGen0Vault(generatedSecrets)
-	vaultYAML, err := yaml.Marshal(vault)
+	vault := config.ExtractVault()
+	vaultYAML, err := installer.MarshalVault(vault)
 	if err != nil {
 		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
 	}
 
 	if c.Opts.WithComments {
-		vaultYAML = c.addVaultComments(vaultYAML)
+		vaultYAML = installer.AddVaultComments(vaultYAML)
 	}
 
 	vaultFile, err := c.FileWriter.Create(c.Opts.VaultFile)
@@ -502,10 +206,8 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	fmt.Println("Configuration files successfully generated!")
 	fmt.Println(strings.Repeat("=", 70))
 
-	if c.Opts.GenerateKeys {
-		fmt.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
-		fmt.Println("   Keep the vault file secure and encrypt it with SOPS before storing.")
-	}
+	fmt.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
+	fmt.Println("   Keep the vault file secure and encrypt it with SOPS before storing.")
 
 	fmt.Println("\nNext steps:")
 	fmt.Println("1. Review the generated config.yaml and prod.vault.yaml")
@@ -514,7 +216,7 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	fmt.Println("4. Encrypt the vault file:")
 	fmt.Printf("   age-keygen -y age_key.txt  # Get public key\n")
 	fmt.Printf("   sops --encrypt --age <PUBLIC_KEY> --in-place %s\n", c.Opts.VaultFile)
-	fmt.Println("5. Run the Gen0 installer with these configuration files")
+	fmt.Println("5. Run the Codesphere installer with these configuration files")
 	fmt.Println()
 
 	return nil
@@ -531,7 +233,7 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.PostgresPrimaryIP = "127.0.0.1"
 		c.Opts.PostgresPrimaryHost = "localhost"
 		c.Opts.CephSubnet = "127.0.0.1/32"
-		c.Opts.CephHosts = []CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
+		c.Opts.CephHosts = []installer.CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
 		c.Opts.K8sManaged = true
 		c.Opts.K8sAPIServer = "127.0.0.1"
 		c.Opts.K8sControlPlane = []string{"127.0.0.1"}
@@ -549,7 +251,7 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.CodesphereHostingPlanTempStorage = 1024
 		c.Opts.CodesphereWorkspacePlanName = "Standard Developer"
 		c.Opts.CodesphereWorkspacePlanMaxReplica = 3
-		c.Opts.NonInteractive = true
+		c.Opts.Interactive = false
 		c.Opts.GenerateKeys = true
 		c.Opts.SecretsBaseDir = "/root/secrets"
 		fmt.Println("Applied 'dev' profile: single-node development setup")
@@ -565,7 +267,7 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.PostgresReplicaIP = "10.50.0.3"
 		c.Opts.PostgresReplicaName = "replica1"
 		c.Opts.CephSubnet = "10.53.101.0/24"
-		c.Opts.CephHosts = []CephHostConfig{
+		c.Opts.CephHosts = []installer.CephHostConfig{
 			{Hostname: "ceph-node-0", IPAddress: "10.53.101.2", IsMaster: true},
 			{Hostname: "ceph-node-1", IPAddress: "10.53.101.3", IsMaster: false},
 			{Hostname: "ceph-node-2", IPAddress: "10.53.101.4", IsMaster: false},
@@ -600,7 +302,7 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.PostgresPrimaryIP = "127.0.0.1"
 		c.Opts.PostgresPrimaryHost = "localhost"
 		c.Opts.CephSubnet = "127.0.0.1/32"
-		c.Opts.CephHosts = []CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
+		c.Opts.CephHosts = []installer.CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
 		c.Opts.K8sManaged = true
 		c.Opts.K8sAPIServer = "127.0.0.1"
 		c.Opts.K8sControlPlane = []string{"127.0.0.1"}
@@ -618,7 +320,7 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.CodesphereHostingPlanTempStorage = 1024
 		c.Opts.CodesphereWorkspacePlanName = "Standard Developer"
 		c.Opts.CodesphereWorkspacePlanMaxReplica = 1
-		c.Opts.NonInteractive = true
+		c.Opts.Interactive = false
 		c.Opts.GenerateKeys = true
 		c.Opts.SecretsBaseDir = "/root/secrets"
 		fmt.Println("Applied 'minimal' profile: minimal single-node setup")
@@ -640,46 +342,17 @@ func (c *InitInstallConfigCmd) validateConfig() error {
 	}
 	defer util.CloseFileIgnoreError(configFile)
 
-	var config Gen0Config
-	decoder := yaml.NewDecoder(configFile)
-	if err := decoder.Decode(&config); err != nil {
+	configData, err := io.ReadAll(configFile)
+	if err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	config, err := installer.UnmarshalConfig(configData)
+	if err != nil {
 		return fmt.Errorf("failed to parse config.yaml: %w", err)
 	}
 
-	errors := []string{}
-
-	if config.DataCenter.ID == 0 {
-		errors = append(errors, "datacenter ID is required")
-	}
-	if config.DataCenter.Name == "" {
-		errors = append(errors, "datacenter name is required")
-	}
-
-	if len(config.Ceph.Hosts) == 0 {
-		errors = append(errors, "at least one Ceph host is required")
-	}
-	for _, host := range config.Ceph.Hosts {
-		if !isValidIP(host.IPAddress) {
-			errors = append(errors, fmt.Sprintf("invalid Ceph host IP: %s", host.IPAddress))
-		}
-	}
-
-	if config.Kubernetes.ManagedByCodesphere {
-		if len(config.Kubernetes.ControlPlanes) == 0 {
-			errors = append(errors, "at least one K8s control plane node is required")
-		}
-	} else {
-		if config.Kubernetes.PodCIDR == "" {
-			errors = append(errors, "pod CIDR is required for external Kubernetes")
-		}
-		if config.Kubernetes.ServiceCIDR == "" {
-			errors = append(errors, "service CIDR is required for external Kubernetes")
-		}
-	}
-
-	if config.Codesphere.Domain == "" {
-		errors = append(errors, "Codesphere domain is required")
-	}
+	errors := installer.ValidateConfig(config)
 
 	if c.Opts.VaultFile != "" {
 		fmt.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
@@ -689,20 +362,16 @@ func (c *InitInstallConfigCmd) validateConfig() error {
 		} else {
 			defer util.CloseFileIgnoreError(vaultFile)
 
-			var vault Gen0Vault
-			vaultDecoder := yaml.NewDecoder(vaultFile)
-			if err := vaultDecoder.Decode(&vault); err != nil {
-				errors = append(errors, fmt.Sprintf("failed to parse vault.yaml: %v", err))
+			vaultData, err := io.ReadAll(vaultFile)
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("failed to read vault.yaml: %v", err))
 			} else {
-				requiredSecrets := []string{"cephSshPrivateKey", "selfSignedCaKeyPem", "domainAuthPrivateKey", "domainAuthPublicKey"}
-				foundSecrets := make(map[string]bool)
-				for _, secret := range vault.Secrets {
-					foundSecrets[secret.Name] = true
-				}
-				for _, required := range requiredSecrets {
-					if !foundSecrets[required] {
-						errors = append(errors, fmt.Sprintf("required secret missing: %s", required))
-					}
+				vault, err := installer.UnmarshalVault(vaultData)
+				if err != nil {
+					errors = append(errors, fmt.Sprintf("failed to parse vault.yaml: %v", err))
+				} else {
+					vaultErrors := installer.ValidateVault(vault)
+					errors = append(errors, vaultErrors...)
 				}
 			}
 		}
@@ -720,27 +389,26 @@ func (c *InitInstallConfigCmd) validateConfig() error {
 	return nil
 }
 
-func isValidIP(ip string) bool {
-	return net.ParseIP(ip) != nil
-}
-
 func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	c := InitInstallConfigCmd{
 		cmd: &cobra.Command{
 			Use:   "install-config",
-			Short: "Initialize Codesphere Gen0 installer configuration files",
-			Long: io.Long(`Initialize config.yaml and prod.vault.yaml for the Codesphere Gen0 installer.
+			Short: "Initialize Codesphere installer configuration files",
+			Long: csio.Long(`Initialize config.yaml and prod.vault.yaml for the Codesphere installer.
 			
 			This command generates two files:
 			- config.yaml: Main configuration (infrastructure, networking, plans)
 			- prod.vault.yaml: Secrets file (keys, certificates, passwords)
 			
+			Note: When --interactive=true (default), all other configuration flags are ignored 
+			and you will be prompted for all settings interactively.
+			
 			Supports configuration profiles for common scenarios:
 			- dev: Single-node development setup
 			- production: HA multi-node setup
 			- minimal: Minimal testing setup`),
-			Example: formatExamplesWithBinary("init install-config", []io.Example{
-				{Cmd: "-c config.yaml -v prod.vault.yaml", Desc: "Create Gen0 config files interactively"},
+			Example: formatExamplesWithBinary("init install-config", []csio.Example{
+				{Cmd: "-c config.yaml -v prod.vault.yaml", Desc: "Create config files interactively"},
 				{Cmd: "--profile dev -c config.yaml -v prod.vault.yaml", Desc: "Use dev profile with defaults"},
 				{Cmd: "--profile production -c config.yaml -v prod.vault.yaml", Desc: "Use production profile"},
 				{Cmd: "--validate -c config.yaml -v prod.vault.yaml", Desc: "Validate existing configuration files"},
@@ -750,13 +418,15 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 		FileWriter: util.NewFilesystemWriter(),
 	}
 
+	c.Generator = installer.NewConfigGenerator(c.Opts.Interactive)
+
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
 	c.cmd.Flags().StringVarP(&c.Opts.VaultFile, "vault", "v", "prod.vault.yaml", "Output file path for prod.vault.yaml")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
 	c.cmd.Flags().BoolVar(&c.Opts.ValidateOnly, "validate", false, "Validate existing config files instead of creating new ones")
 	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
-	c.cmd.Flags().BoolVar(&c.Opts.NonInteractive, "non-interactive", false, "Use default values without prompting")
+	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (when true, other config flags are ignored)")
 	c.cmd.Flags().BoolVar(&c.Opts.GenerateKeys, "generate-keys", true, "Generate SSH keys and certificates")
 	c.cmd.Flags().StringVar(&c.Opts.SecretsBaseDir, "secrets-dir", "/root/secrets", "Secrets base directory")
 
@@ -773,6 +443,10 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 
 	util.MarkFlagRequired(c.cmd, "config")
 	util.MarkFlagRequired(c.cmd, "vault")
+
+	c.cmd.PreRun = func(cmd *cobra.Command, args []string) {
+		c.Generator.Interactive = c.Opts.Interactive
+	}
 
 	c.cmd.RunE = c.RunE
 	init.AddCommand(c.cmd)
