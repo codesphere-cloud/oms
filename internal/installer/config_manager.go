@@ -26,6 +26,7 @@ type InstallConfigManager interface {
 	ValidateInstallConfig() []string
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
+	GetVault() *files.InstallVault
 	CollectInteractively() error
 	// Output
 	GenerateSecrets() error
@@ -180,6 +181,10 @@ func (g *InstallConfig) ValidateVault() []string {
 
 func (g *InstallConfig) GetInstallConfig() *files.RootConfig {
 	return g.Config
+}
+
+func (g *InstallConfig) GetVault() *files.InstallVault {
+	return g.Vault
 }
 
 func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool) error {
