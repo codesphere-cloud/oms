@@ -7,19 +7,20 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"gopkg.in/yaml.v3"
 )
 
 type InstallConfigManager interface {
-	CollectConfiguration(opts *ConfigOptions) (*InstallConfigContent, error)
+	CollectConfiguration(opts *files.ConfigOptions) (*files.RootConfig, error)
 	WriteConfigAndVault(configPath, vaultPath string, withComments bool) error
 }
 
 type InstallConfig struct {
 	Interactive bool
-	configOpts  *ConfigOptions
-	config      *InstallConfigContent
+	configOpts  *files.ConfigOptions
+	config      *files.RootConfig
 	fileIO      util.FileIO
 }
 
@@ -30,7 +31,7 @@ func NewConfigGenerator(interactive bool) InstallConfigManager {
 	}
 }
 
-func (g *InstallConfig) CollectConfiguration(opts *ConfigOptions) (*InstallConfigContent, error) {
+func (g *InstallConfig) CollectConfiguration(opts *files.ConfigOptions) (*files.RootConfig, error) {
 	g.configOpts = opts
 
 	collectedOpts, err := g.collectConfig()
@@ -52,61 +53,61 @@ func (g *InstallConfig) CollectConfiguration(opts *ConfigOptions) (*InstallConfi
 	return config, nil
 }
 
-func (g *InstallConfig) convertConfig(collected *collectedConfig) (*InstallConfigContent, error) {
-	config := &InstallConfigContent{
-		DataCenter: DataCenterConfig{
-			ID:          collected.dcID,
-			Name:        collected.dcName,
-			City:        collected.dcCity,
-			CountryCode: collected.dcCountry,
+func (g *InstallConfig) convertConfig(collected *files.CollectedConfig) (*files.RootConfig, error) {
+	config := &files.RootConfig{
+		DataCenter: files.DataCenterConfig{
+			ID:          collected.DcID,
+			Name:        collected.DcName,
+			City:        collected.DcCity,
+			CountryCode: collected.DcCountry,
 		},
-		Secrets: SecretsConfig{
-			BaseDir: collected.secretsBaseDir,
+		Secrets: files.SecretsConfig{
+			BaseDir: collected.SecretsBaseDir,
 		},
 	}
 
-	if collected.registryServer != "" {
-		config.Registry = &RegistryConfig{
-			Server:              collected.registryServer,
-			ReplaceImagesInBom:  collected.registryReplaceImages,
-			LoadContainerImages: collected.registryLoadContainerImgs,
+	if collected.RegistryServer != "" {
+		config.Registry = files.RegistryConfig{
+			Server:              collected.RegistryServer,
+			ReplaceImagesInBom:  collected.RegistryReplaceImages,
+			LoadContainerImages: collected.RegistryLoadContainerImgs,
 		}
 	}
 
-	if collected.pgMode == "install" {
-		config.Postgres = PostgresConfig{
-			Primary: &PostgresPrimaryConfig{
-				IP:       collected.pgPrimaryIP,
-				Hostname: collected.pgPrimaryHost,
+	if collected.PgMode == "install" {
+		config.Postgres = files.PostgresConfig{
+			Primary: &files.PostgresPrimaryConfig{
+				IP:       collected.PgPrimaryIP,
+				Hostname: collected.PgPrimaryHost,
 			},
 		}
 
-		if collected.pgReplicaIP != "" {
-			config.Postgres.Replica = &PostgresReplicaConfig{
-				IP:   collected.pgReplicaIP,
-				Name: collected.pgReplicaName,
+		if collected.PgReplicaIP != "" {
+			config.Postgres.Replica = &files.PostgresReplicaConfig{
+				IP:   collected.PgReplicaIP,
+				Name: collected.PgReplicaName,
 			}
 		}
 	} else {
-		config.Postgres = PostgresConfig{
-			ServerAddress: collected.pgExternal,
+		config.Postgres = files.PostgresConfig{
+			ServerAddress: collected.PgExternal,
 		}
 	}
 
-	config.Ceph = CephConfig{
-		NodesSubnet: collected.cephSubnet,
-		Hosts:       collected.cephHosts,
-		OSDs: []CephOSD{
+	config.Ceph = files.CephConfig{
+		NodesSubnet: collected.CephSubnet,
+		Hosts:       collected.CephHosts,
+		OSDs: []files.CephOSD{
 			{
 				SpecID: "default",
-				Placement: CephPlacement{
+				Placement: files.CephPlacement{
 					HostPattern: "*",
 				},
-				DataDevices: CephDataDevices{
+				DataDevices: files.CephDataDevices{
 					Size:  "240G:300G",
 					Limit: 1,
 				},
-				DBDevices: CephDBDevices{
+				DBDevices: files.CephDBDevices{
 					Size:  "120G:150G",
 					Limit: 1,
 				},
@@ -114,69 +115,69 @@ func (g *InstallConfig) convertConfig(collected *collectedConfig) (*InstallConfi
 		},
 	}
 
-	config.Kubernetes = KubernetesConfig{
-		ManagedByCodesphere: collected.k8sManaged,
+	config.Kubernetes = files.KubernetesConfig{
+		ManagedByCodesphere: collected.K8sManaged,
 	}
 
-	if collected.k8sManaged {
-		config.Kubernetes.APIServerHost = collected.k8sAPIServer
-		config.Kubernetes.ControlPlanes = make([]K8sNode, len(collected.k8sControlPlane))
-		for i, ip := range collected.k8sControlPlane {
-			config.Kubernetes.ControlPlanes[i] = K8sNode{IPAddress: ip}
+	if collected.K8sManaged {
+		config.Kubernetes.APIServerHost = collected.K8sAPIServer
+		config.Kubernetes.ControlPlanes = make([]files.K8sNode, len(collected.K8sControlPlane))
+		for i, ip := range collected.K8sControlPlane {
+			config.Kubernetes.ControlPlanes[i] = files.K8sNode{IPAddress: ip}
 		}
-		config.Kubernetes.Workers = make([]K8sNode, len(collected.k8sWorkers))
-		for i, ip := range collected.k8sWorkers {
-			config.Kubernetes.Workers[i] = K8sNode{IPAddress: ip}
+		config.Kubernetes.Workers = make([]files.K8sNode, len(collected.K8sWorkers))
+		for i, ip := range collected.K8sWorkers {
+			config.Kubernetes.Workers[i] = files.K8sNode{IPAddress: ip}
 		}
-		config.Kubernetes.needsKubeConfig = false
+		config.Kubernetes.NeedsKubeConfig = false
 	} else {
-		config.Kubernetes.PodCIDR = collected.k8sPodCIDR
-		config.Kubernetes.ServiceCIDR = collected.k8sServiceCIDR
-		config.Kubernetes.needsKubeConfig = true
+		config.Kubernetes.PodCIDR = collected.K8sPodCIDR
+		config.Kubernetes.ServiceCIDR = collected.K8sServiceCIDR
+		config.Kubernetes.NeedsKubeConfig = true
 	}
 
-	config.Cluster = ClusterConfig{
-		Certificates: ClusterCertificates{
-			CA: CAConfig{
+	config.Cluster = files.ClusterConfig{
+		Certificates: files.ClusterCertificates{
+			CA: files.CAConfig{
 				Algorithm:   "RSA",
 				KeySizeBits: 2048,
 			},
 		},
-		Gateway: GatewayConfig{
-			ServiceType: collected.gatewayType,
-			IPAddresses: collected.gatewayIPs,
+		Gateway: files.GatewayConfig{
+			ServiceType: collected.GatewayType,
+			IPAddresses: collected.GatewayIPs,
 		},
-		PublicGateway: GatewayConfig{
-			ServiceType: collected.publicGatewayType,
-			IPAddresses: collected.publicGatewayIPs,
+		PublicGateway: files.GatewayConfig{
+			ServiceType: collected.PublicGatewayType,
+			IPAddresses: collected.PublicGatewayIPs,
 		},
 	}
 
-	if collected.metalLBEnabled {
-		config.MetalLB = &MetalLBConfig{
+	if collected.MetalLBEnabled {
+		config.MetalLB = &files.MetalLBConfig{
 			Enabled: true,
-			Pools:   collected.metalLBPools,
+			Pools:   collected.MetalLBPools,
 		}
 	}
 
-	config.Codesphere = CodesphereConfig{
-		Domain:                     collected.codesphereDomain,
-		WorkspaceHostingBaseDomain: collected.workspaceDomain,
-		PublicIP:                   collected.publicIP,
-		CustomDomains: CustomDomainsConfig{
-			CNameBaseDomain: collected.customDomain,
+	config.Codesphere = files.CodesphereConfig{
+		Domain:                     collected.CodesphereDomain,
+		WorkspaceHostingBaseDomain: collected.WorkspaceDomain,
+		PublicIP:                   collected.PublicIP,
+		CustomDomains: files.CustomDomainsConfig{
+			CNameBaseDomain: collected.CustomDomain,
 		},
-		DNSServers:  collected.dnsServers,
+		DNSServers:  collected.DnsServers,
 		Experiments: []string{},
-		DeployConfig: DeployConfig{
-			Images: map[string]DeployImage{
+		DeployConfig: files.DeployConfig{
+			Images: map[string]files.ImageConfig{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",
 					SupportedUntil: "2028-05-31",
-					Flavors: map[string]DeployFlavor{
+					Flavors: map[string]files.FlavorConfig{
 						"default": {
-							Image: ImageRef{
-								BomRef: collected.workspaceImageBomRef,
+							Image: files.ImageRef{
+								BomRef: collected.WorkspaceImageBomRef,
 							},
 							Pool: map[int]int{1: 1},
 						},
@@ -184,28 +185,28 @@ func (g *InstallConfig) convertConfig(collected *collectedConfig) (*InstallConfi
 				},
 			},
 		},
-		Plans: PlansConfig{
-			HostingPlans: map[int]HostingPlan{
+		Plans: files.PlansConfig{
+			HostingPlans: map[int]files.HostingPlan{
 				1: {
-					CPUTenth:      collected.hostingPlanCPU,
+					CPUTenth:      collected.HostingPlanCPU,
 					GPUParts:      0,
-					MemoryMb:      collected.hostingPlanMemory,
-					StorageMb:     collected.hostingPlanStorage,
-					TempStorageMb: collected.hostingPlanTempStorage,
+					MemoryMb:      collected.HostingPlanMemory,
+					StorageMb:     collected.HostingPlanStorage,
+					TempStorageMb: collected.HostingPlanTempStorage,
 				},
 			},
-			WorkspacePlans: map[int]WorkspacePlan{
+			WorkspacePlans: map[int]files.WorkspacePlan{
 				1: {
-					Name:          collected.workspacePlanName,
+					Name:          collected.WorkspacePlanName,
 					HostingPlanID: 1,
-					MaxReplicas:   collected.workspacePlanMaxReplica,
+					MaxReplicas:   collected.WorkspacePlanMaxReplica,
 					OnDemand:      true,
 				},
 			},
 		},
 	}
 
-	config.ManagedServiceBackends = &ManagedServiceBackendsConfig{
+	config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{
 		Postgres: make(map[string]interface{}),
 	}
 
@@ -283,7 +284,7 @@ func AddVaultComments(yamlData []byte) []byte {
 	return append([]byte(header), yamlData...)
 }
 
-func ValidateConfig(config *InstallConfigContent) []string {
+func ValidateConfig(config *files.RootConfig) []string {
 	errors := []string{}
 
 	if config.DataCenter.ID == 0 {
@@ -322,7 +323,7 @@ func ValidateConfig(config *InstallConfigContent) []string {
 	return errors
 }
 
-func ValidateVault(vault *InstallVault) []string {
+func ValidateVault(vault *files.InstallVault) []string {
 	errors := []string{}
 	requiredSecrets := []string{"cephSshPrivateKey", "selfSignedCaKeyPem", "domainAuthPrivateKey", "domainAuthPublicKey"}
 	foundSecrets := make(map[string]bool)
@@ -344,22 +345,22 @@ func IsValidIP(ip string) bool {
 	return net.ParseIP(ip) != nil
 }
 
-func MarshalConfig(config *InstallConfigContent) ([]byte, error) {
+func MarshalConfig(config *files.RootConfig) ([]byte, error) {
 	return yaml.Marshal(config)
 }
 
-func MarshalVault(vault *InstallVault) ([]byte, error) {
+func MarshalVault(vault *files.InstallVault) ([]byte, error) {
 	return yaml.Marshal(vault)
 }
 
-func UnmarshalConfig(data []byte) (*InstallConfigContent, error) {
-	var config InstallConfigContent
+func UnmarshalConfig(data []byte) (*files.RootConfig, error) {
+	var config files.RootConfig
 	err := yaml.Unmarshal(data, &config)
 	return &config, err
 }
 
-func UnmarshalVault(data []byte) (*InstallVault, error) {
-	var vault InstallVault
+func UnmarshalVault(data []byte) (*files.InstallVault, error) {
+	var vault files.InstallVault
 	err := yaml.Unmarshal(data, &vault)
 	return &vault, err
 }

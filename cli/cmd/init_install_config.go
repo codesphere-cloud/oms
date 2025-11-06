@@ -10,6 +10,7 @@ import (
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -51,7 +52,7 @@ type InitInstallConfigOpts struct {
 	PostgresExternal    string
 
 	CephSubnet string
-	CephHosts  []installer.CephHostConfig
+	CephHosts  []files.CephHostConfig
 
 	K8sManaged      bool
 	K8sAPIServer    string
@@ -67,7 +68,7 @@ type InitInstallConfigOpts struct {
 	ClusterPublicGatewayIPs  []string
 
 	MetalLBEnabled bool
-	MetalLBPools   []installer.MetalLBPool
+	MetalLBPools   []files.MetalLBPool
 
 	CodesphereDomain                  string
 	CodespherePublicIP                string
@@ -84,7 +85,7 @@ type InitInstallConfigOpts struct {
 }
 
 // TODO: Implement this function that should be the only function in RunE
-// func (c *InitInstallConfigCmd) CreateConfig(icm installer.InstallConfigManager) error {
+// func (c *InitInstallConfigCmd) CreateConfig(icm files.InstallConfigManager) error {
 // 	if c.Opts.Interactive {
 // 		_, err := icm.CollectConfiguration(c.cmd)
 // 		if err != nil {
@@ -138,8 +139,8 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func (c *InitInstallConfigCmd) buildConfigOptions() *installer.ConfigOptions {
-	return &installer.ConfigOptions{
+func (c *InitInstallConfigCmd) buildConfigOptions() *files.ConfigOptions {
+	return &files.ConfigOptions{
 		DatacenterID:          c.Opts.DatacenterID,
 		DatacenterName:        c.Opts.DatacenterName,
 		DatacenterCity:        c.Opts.DatacenterCity,
@@ -222,7 +223,7 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.PostgresPrimaryIP = "127.0.0.1"
 		c.Opts.PostgresPrimaryHost = "localhost"
 		c.Opts.CephSubnet = "127.0.0.1/32"
-		c.Opts.CephHosts = []installer.CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
+		c.Opts.CephHosts = []files.CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
 		c.Opts.K8sManaged = true
 		c.Opts.K8sAPIServer = "127.0.0.1"
 		c.Opts.K8sControlPlane = []string{"127.0.0.1"}
@@ -256,7 +257,7 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.PostgresReplicaIP = "10.50.0.3"
 		c.Opts.PostgresReplicaName = "replica1"
 		c.Opts.CephSubnet = "10.53.101.0/24"
-		c.Opts.CephHosts = []installer.CephHostConfig{
+		c.Opts.CephHosts = []files.CephHostConfig{
 			{Hostname: "ceph-node-0", IPAddress: "10.53.101.2", IsMaster: true},
 			{Hostname: "ceph-node-1", IPAddress: "10.53.101.3", IsMaster: false},
 			{Hostname: "ceph-node-2", IPAddress: "10.53.101.4", IsMaster: false},
@@ -291,7 +292,7 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.PostgresPrimaryIP = "127.0.0.1"
 		c.Opts.PostgresPrimaryHost = "localhost"
 		c.Opts.CephSubnet = "127.0.0.1/32"
-		c.Opts.CephHosts = []installer.CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
+		c.Opts.CephHosts = []files.CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
 		c.Opts.K8sManaged = true
 		c.Opts.K8sAPIServer = "127.0.0.1"
 		c.Opts.K8sControlPlane = []string{"127.0.0.1"}

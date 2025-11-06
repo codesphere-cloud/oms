@@ -4,51 +4,54 @@
 package installer
 
 import (
+	"strings"
+
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("ExtractVault", func() {
 	It("extracts all secrets from config into vault format", func() {
-		config := &InstallConfigContent{
-			Postgres: PostgresConfig{
+		config := &files.RootConfig{
+			Postgres: files.PostgresConfig{
 				CACertPem:        "-----BEGIN CERTIFICATE-----\nPG-CA\n-----END CERTIFICATE-----",
-				caCertPrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-CA-KEY\n-----END RSA PRIVATE KEY-----",
-				adminPassword:    "admin-pass-123",
-				replicaPassword:  "replica-pass-456",
-				Primary: &PostgresPrimaryConfig{
-					SSLConfig: SSLConfig{
+				CaCertPrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-CA-KEY\n-----END RSA PRIVATE KEY-----",
+				AdminPassword:    "admin-pass-123",
+				ReplicaPassword:  "replica-pass-456",
+				Primary: &files.PostgresPrimaryConfig{
+					SSLConfig: files.SSLConfig{
 						ServerCertPem: "-----BEGIN CERTIFICATE-----\nPG-PRIMARY\n-----END CERTIFICATE-----",
 					},
 					IP:         "10.50.0.2",
 					Hostname:   "pg-primary",
-					privateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-PRIMARY-KEY\n-----END RSA PRIVATE KEY-----",
+					PrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-PRIMARY-KEY\n-----END RSA PRIVATE KEY-----",
 				},
-				Replica: &PostgresReplicaConfig{
+				Replica: &files.PostgresReplicaConfig{
 					IP:   "10.50.0.3",
 					Name: "replica1",
-					SSLConfig: SSLConfig{
+					SSLConfig: files.SSLConfig{
 						ServerCertPem: "-----BEGIN CERTIFICATE-----\nPG-REPLICA\n-----END CERTIFICATE-----",
 					},
-					privateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-REPLICA-KEY\n-----END RSA PRIVATE KEY-----",
+					PrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-REPLICA-KEY\n-----END RSA PRIVATE KEY-----",
 				},
-				userPasswords: map[string]string{
+				UserPasswords: map[string]string{
 					"auth":       "auth-pass",
 					"deployment": "deploy-pass",
 				},
 			},
-			Ceph: CephConfig{
-				sshPrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nCEPH-SSH\n-----END RSA PRIVATE KEY-----",
+			Ceph: files.CephConfig{
+				SshPrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nCEPH-SSH\n-----END RSA PRIVATE KEY-----",
 			},
-			Cluster: ClusterConfig{
-				ingressCAKey: "-----BEGIN RSA PRIVATE KEY-----\nINGRESS-CA-KEY\n-----END RSA PRIVATE KEY-----",
+			Cluster: files.ClusterConfig{
+				IngressCAKey: "-----BEGIN RSA PRIVATE KEY-----\nINGRESS-CA-KEY\n-----END RSA PRIVATE KEY-----",
 			},
-			Codesphere: CodesphereConfig{
-				domainAuthPrivateKey: "-----BEGIN EC PRIVATE KEY-----\nDOMAIN-AUTH-PRIV\n-----END EC PRIVATE KEY-----",
-				domainAuthPublicKey:  "-----BEGIN PUBLIC KEY-----\nDOMAIN-AUTH-PUB\n-----END PUBLIC KEY-----",
+			Codesphere: files.CodesphereConfig{
+				DomainAuthPrivateKey: "-----BEGIN EC PRIVATE KEY-----\nDOMAIN-AUTH-PRIV\n-----END EC PRIVATE KEY-----",
+				DomainAuthPublicKey:  "-----BEGIN PUBLIC KEY-----\nDOMAIN-AUTH-PUB\n-----END PUBLIC KEY-----",
 			},
-			Kubernetes: KubernetesConfig{
-				needsKubeConfig: true,
+			Kubernetes: files.KubernetesConfig{
+				NeedsKubeConfig: true,
 			},
 		}
 
@@ -115,13 +118,13 @@ var _ = Describe("ExtractVault", func() {
 	})
 
 	It("does not include kubeconfig for managed k8s", func() {
-		config := &InstallConfigContent{
-			Kubernetes: KubernetesConfig{
-				needsKubeConfig: false,
+		config := &files.RootConfig{
+			Kubernetes: files.KubernetesConfig{
+				NeedsKubeConfig: false,
 			},
-			Codesphere: CodesphereConfig{
-				domainAuthPrivateKey: "test-key",
-				domainAuthPublicKey:  "test-pub",
+			Codesphere: files.CodesphereConfig{
+				DomainAuthPrivateKey: "test-key",
+				DomainAuthPublicKey:  "test-pub",
 			},
 		}
 
@@ -143,14 +146,14 @@ var _ = Describe("ExtractVault", func() {
 			userPasswords[service] = service + "-pass"
 		}
 
-		config := &InstallConfigContent{
-			Postgres: PostgresConfig{
-				Primary:       &PostgresPrimaryConfig{},
-				userPasswords: userPasswords,
+		config := &files.RootConfig{
+			Postgres: files.PostgresConfig{
+				Primary:       &files.PostgresPrimaryConfig{},
+				UserPasswords: userPasswords,
 			},
-			Codesphere: CodesphereConfig{
-				domainAuthPrivateKey: "test",
-				domainAuthPublicKey:  "test",
+			Codesphere: files.CodesphereConfig{
+				DomainAuthPrivateKey: "test",
+				DomainAuthPublicKey:  "test",
 			},
 		}
 
@@ -160,10 +163,10 @@ var _ = Describe("ExtractVault", func() {
 			foundUser := false
 			foundPass := false
 			for _, secret := range vault.Secrets {
-				if secret.Name == "postgresUser"+Capitalize(service) {
+				if secret.Name == "postgresUser"+capitalize(service) {
 					foundUser = true
 				}
-				if secret.Name == "postgresPassword"+Capitalize(service) {
+				if secret.Name == "postgresPassword"+capitalize(service) {
 					foundPass = true
 					Expect(secret.Fields.Password).To(Equal(service + "-pass"))
 				}
@@ -173,3 +176,11 @@ var _ = Describe("ExtractVault", func() {
 		}
 	})
 })
+
+func capitalize(s string) string {
+	if s == "" {
+		return ""
+	}
+	s = strings.ReplaceAll(s, "_", "")
+	return strings.ToUpper(s[:1]) + s[1:]
+}

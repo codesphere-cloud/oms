@@ -3,7 +3,11 @@
 
 package installer
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/codesphere-cloud/oms/internal/installer/files"
+)
 
 func collectField[T any](optValue T, isEmpty func(T) bool, promptFunc func() T) T {
 	if !isEmpty(optValue) {
@@ -40,10 +44,12 @@ func (g *InstallConfig) collectChoice(prompter *Prompter, optValue, prompt strin
 	})
 }
 
-func (g *InstallConfig) collectConfig() (*collectedConfig, error) {
+func (g *InstallConfig) collectConfig() (*files.CollectedConfig, error) {
 	prompter := NewPrompter(g.Interactive)
 	opts := g.configOpts
-	collected := &collectedConfig{}
+	collected := &files.CollectedConfig{}
+
+	// TODO: no sub functions after they are simplifies and interactive is removed and the if else are simplified
 
 	g.collectDatacenterConfig(prompter, opts, collected)
 	g.collectRegistryConfig(prompter, opts, collected)
@@ -57,147 +63,148 @@ func (g *InstallConfig) collectConfig() (*collectedConfig, error) {
 	return collected, nil
 }
 
-func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter, opts *ConfigOptions, collected *collectedConfig) {
+func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("=== Datacenter Configuration ===")
-	collected.dcID = g.collectInt(prompter, opts.DatacenterID, "Datacenter ID", 1)
-	collected.dcName = g.collectString(prompter, opts.DatacenterName, "Datacenter name", "main")
-	collected.dcCity = g.collectString(prompter, opts.DatacenterCity, "Datacenter city", "Karlsruhe")
-	collected.dcCountry = g.collectString(prompter, opts.DatacenterCountryCode, "Country code", "DE")
-	collected.secretsBaseDir = g.collectString(prompter, opts.SecretsBaseDir, "Secrets base directory", "/root/secrets")
+	collected.DcID = g.collectInt(prompter, opts.DatacenterID, "Datacenter ID", 1)
+	collected.DcName = g.collectString(prompter, opts.DatacenterName, "Datacenter name", "main")
+	collected.DcCity = g.collectString(prompter, opts.DatacenterCity, "Datacenter city", "Karlsruhe")
+	collected.DcCountry = g.collectString(prompter, opts.DatacenterCountryCode, "Country code", "DE")
+	collected.SecretsBaseDir = g.collectString(prompter, opts.SecretsBaseDir, "Secrets base directory", "/root/secrets")
 }
 
-func (g *InstallConfig) collectRegistryConfig(prompter *Prompter, opts *ConfigOptions, collected *collectedConfig) {
+func (g *InstallConfig) collectRegistryConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("\n=== Container Registry Configuration ===")
-	collected.registryServer = g.collectString(prompter, opts.RegistryServer, "Container registry server (e.g., ghcr.io, leave empty to skip)", "")
-	if collected.registryServer != "" {
-		collected.registryReplaceImages = opts.RegistryReplaceImages
-		collected.registryLoadContainerImgs = opts.RegistryLoadContainerImgs
+	collected.RegistryServer = g.collectString(prompter, opts.RegistryServer, "Container registry server (e.g., ghcr.io, leave empty to skip)", "")
+	if collected.RegistryServer != "" {
+		collected.RegistryReplaceImages = opts.RegistryReplaceImages
+		collected.RegistryLoadContainerImgs = opts.RegistryLoadContainerImgs
 		if g.Interactive {
-			collected.registryReplaceImages = prompter.Bool("Replace images in BOM", true)
-			collected.registryLoadContainerImgs = prompter.Bool("Load container images from installer", false)
+			collected.RegistryReplaceImages = prompter.Bool("Replace images in BOM", true)
+			collected.RegistryLoadContainerImgs = prompter.Bool("Load container images from installer", false)
 		}
 	}
 }
 
-func (g *InstallConfig) collectPostgresConfig(prompter *Prompter, opts *ConfigOptions, collected *collectedConfig) {
+func (g *InstallConfig) collectPostgresConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("\n=== PostgreSQL Configuration ===")
-	collected.pgMode = g.collectChoice(prompter, opts.PostgresMode, "PostgreSQL setup", []string{"install", "external"}, "install")
+	collected.PgMode = g.collectChoice(prompter, opts.PostgresMode, "PostgreSQL setup", []string{"install", "external"}, "install")
 
-	if collected.pgMode == "install" {
-		collected.pgPrimaryIP = g.collectString(prompter, opts.PostgresPrimaryIP, "Primary PostgreSQL server IP", "10.50.0.2")
-		collected.pgPrimaryHost = g.collectString(prompter, opts.PostgresPrimaryHost, "Primary PostgreSQL hostname", "pg-primary-node")
+	if collected.PgMode == "install" {
+		collected.PgPrimaryIP = g.collectString(prompter, opts.PostgresPrimaryIP, "Primary PostgreSQL server IP", "10.50.0.2")
+		collected.PgPrimaryHost = g.collectString(prompter, opts.PostgresPrimaryHost, "Primary PostgreSQL hostname", "pg-primary-node")
 
 		if g.Interactive {
 			hasReplica := prompter.Bool("Configure PostgreSQL replica", true)
 			if hasReplica {
-				collected.pgReplicaIP = g.collectString(prompter, opts.PostgresReplicaIP, "Replica PostgreSQL server IP", "10.50.0.3")
-				collected.pgReplicaName = g.collectString(prompter, opts.PostgresReplicaName, "Replica name (lowercase alphanumeric + underscore only)", "replica1")
+				collected.PgReplicaIP = g.collectString(prompter, opts.PostgresReplicaIP, "Replica PostgreSQL server IP", "10.50.0.3")
+				collected.PgReplicaName = g.collectString(prompter, opts.PostgresReplicaName, "Replica name (lowercase alphanumeric + underscore only)", "replica1")
 			}
 		} else {
-			collected.pgReplicaIP = opts.PostgresReplicaIP
-			collected.pgReplicaName = opts.PostgresReplicaName
+			collected.PgReplicaIP = opts.PostgresReplicaIP
+			collected.PgReplicaName = opts.PostgresReplicaName
 		}
 	} else {
-		collected.pgExternal = g.collectString(prompter, opts.PostgresExternal, "External PostgreSQL server address", "postgres.example.com:5432")
+		collected.PgExternal = g.collectString(prompter, opts.PostgresExternal, "External PostgreSQL server address", "postgres.example.com:5432")
 	}
 }
 
-func (g *InstallConfig) collectCephConfig(prompter *Prompter, opts *ConfigOptions, collected *collectedConfig) {
+func (g *InstallConfig) collectCephConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("\n=== Ceph Configuration ===")
-	collected.cephSubnet = g.collectString(prompter, opts.CephSubnet, "Ceph nodes subnet (CIDR)", "10.53.101.0/24")
+	collected.CephSubnet = g.collectString(prompter, opts.CephSubnet, "Ceph nodes subnet (CIDR)", "10.53.101.0/24")
 
 	if len(opts.CephHosts) == 0 {
 		numHosts := prompter.Int("Number of Ceph hosts", 3)
-		collected.cephHosts = make([]CephHost, numHosts)
+		collected.CephHosts = make([]files.CephHost, numHosts)
 		for i := 0; i < numHosts; i++ {
 			fmt.Printf("\nCeph Host %d:\n", i+1)
-			collected.cephHosts[i].Hostname = prompter.String("  Hostname (as shown by 'hostname' command)", fmt.Sprintf("ceph-node-%d", i))
-			collected.cephHosts[i].IPAddress = prompter.String("  IP address", fmt.Sprintf("10.53.101.%d", i+2))
-			collected.cephHosts[i].IsMaster = (i == 0)
+			collected.CephHosts[i].Hostname = prompter.String("  Hostname (as shown by 'hostname' command)", fmt.Sprintf("ceph-node-%d", i))
+			collected.CephHosts[i].IPAddress = prompter.String("  IP address", fmt.Sprintf("10.53.101.%d", i+2))
+			collected.CephHosts[i].IsMaster = (i == 0)
 		}
 	} else {
-		collected.cephHosts = make([]CephHost, len(opts.CephHosts))
+		collected.CephHosts = make([]files.CephHost, len(opts.CephHosts))
 		for i, host := range opts.CephHosts {
-			collected.cephHosts[i] = CephHost(host)
+			collected.CephHosts[i] = files.CephHost(host)
 		}
 	}
 }
 
-func (g *InstallConfig) collectK8sConfig(prompter *Prompter, opts *ConfigOptions, collected *collectedConfig) {
+func (g *InstallConfig) collectK8sConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("\n=== Kubernetes Configuration ===")
-	collected.k8sManaged = opts.K8sManaged
+	collected.K8sManaged = opts.K8sManaged
 	if g.Interactive {
-		collected.k8sManaged = prompter.Bool("Use Codesphere-managed Kubernetes (k0s)", true)
+		collected.K8sManaged = prompter.Bool("Use Codesphere-managed Kubernetes (k0s)", true)
 	}
 
-	if collected.k8sManaged {
-		collected.k8sAPIServer = g.collectString(prompter, opts.K8sAPIServer, "Kubernetes API server host (LB/DNS/IP)", "10.50.0.2")
-		collected.k8sControlPlane = g.collectStringSlice(prompter, opts.K8sControlPlane, "Control plane IP addresses (comma-separated)", []string{"10.50.0.2"})
-		collected.k8sWorkers = g.collectStringSlice(prompter, opts.K8sWorkers, "Worker node IP addresses (comma-separated)", []string{"10.50.0.2", "10.50.0.3", "10.50.0.4"})
+	if collected.K8sManaged {
+		collected.K8sAPIServer = g.collectString(prompter, opts.K8sAPIServer, "Kubernetes API server host (LB/DNS/IP)", "10.50.0.2")
+		collected.K8sControlPlane = g.collectStringSlice(prompter, opts.K8sControlPlane, "Control plane IP addresses (comma-separated)", []string{"10.50.0.2"})
+		collected.K8sWorkers = g.collectStringSlice(prompter, opts.K8sWorkers, "Worker node IP addresses (comma-separated)", []string{"10.50.0.2", "10.50.0.3", "10.50.0.4"})
 	} else {
-		collected.k8sPodCIDR = g.collectString(prompter, opts.K8sPodCIDR, "Pod CIDR of external cluster", "100.96.0.0/11")
-		collected.k8sServiceCIDR = g.collectString(prompter, opts.K8sServiceCIDR, "Service CIDR of external cluster", "100.64.0.0/13")
+		collected.K8sPodCIDR = g.collectString(prompter, opts.K8sPodCIDR, "Pod CIDR of external cluster", "100.96.0.0/11")
+		collected.K8sServiceCIDR = g.collectString(prompter, opts.K8sServiceCIDR, "Service CIDR of external cluster", "100.64.0.0/13")
 		fmt.Println("Note: You'll need to provide kubeconfig in the vault file for external Kubernetes")
 	}
 }
 
-func (g *InstallConfig) collectGatewayConfig(prompter *Prompter, opts *ConfigOptions, collected *collectedConfig) {
+func (g *InstallConfig) collectGatewayConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
+	// TODO: in ifs
 	fmt.Println("\n=== Cluster Gateway Configuration ===")
-	collected.gatewayType = g.collectChoice(prompter, opts.ClusterGatewayType, "Gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
-	if collected.gatewayType == "ExternalIP" {
-		collected.gatewayIPs = g.collectStringSlice(prompter, opts.ClusterGatewayIPs, "Gateway IP addresses (comma-separated)", []string{"10.51.0.2", "10.51.0.3"})
+	collected.GatewayType = g.collectChoice(prompter, opts.ClusterGatewayType, "Gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
+	if collected.GatewayType == "ExternalIP" {
+		collected.GatewayIPs = g.collectStringSlice(prompter, opts.ClusterGatewayIPs, "Gateway IP addresses (comma-separated)", []string{"10.51.0.2", "10.51.0.3"})
 	} else {
-		collected.gatewayIPs = opts.ClusterGatewayIPs
+		collected.GatewayIPs = opts.ClusterGatewayIPs
 	}
 
-	collected.publicGatewayType = g.collectChoice(prompter, opts.ClusterPublicGatewayType, "Public gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
-	if collected.publicGatewayType == "ExternalIP" {
-		collected.publicGatewayIPs = g.collectStringSlice(prompter, opts.ClusterPublicGatewayIPs, "Public gateway IP addresses (comma-separated)", []string{"10.52.0.2", "10.52.0.3"})
+	collected.PublicGatewayType = g.collectChoice(prompter, opts.ClusterPublicGatewayType, "Public gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
+	if collected.PublicGatewayType == "ExternalIP" {
+		collected.PublicGatewayIPs = g.collectStringSlice(prompter, opts.ClusterPublicGatewayIPs, "Public gateway IP addresses (comma-separated)", []string{"10.52.0.2", "10.52.0.3"})
 	} else {
-		collected.publicGatewayIPs = opts.ClusterPublicGatewayIPs
+		collected.PublicGatewayIPs = opts.ClusterPublicGatewayIPs
 	}
 }
 
-func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter, opts *ConfigOptions, collected *collectedConfig) {
+func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("\n=== MetalLB Configuration (Optional) ===")
 	if g.Interactive {
-		collected.metalLBEnabled = prompter.Bool("Enable MetalLB", false)
-		if collected.metalLBEnabled {
+		collected.MetalLBEnabled = prompter.Bool("Enable MetalLB", false)
+		if collected.MetalLBEnabled {
 			numPools := prompter.Int("Number of MetalLB IP pools", 1)
-			collected.metalLBPools = make([]MetalLBPoolDef, numPools)
+			collected.MetalLBPools = make([]files.MetalLBPoolDef, numPools)
 			for i := 0; i < numPools; i++ {
 				fmt.Printf("\nMetalLB Pool %d:\n", i+1)
 				poolName := prompter.String("  Pool name", fmt.Sprintf("pool-%d", i+1))
 				poolIPs := prompter.StringSlice("  IP addresses/ranges (comma-separated)", []string{"10.10.10.100-10.10.10.200"})
-				collected.metalLBPools[i] = MetalLBPoolDef{
+				collected.MetalLBPools[i] = files.MetalLBPoolDef{
 					Name:        poolName,
 					IPAddresses: poolIPs,
 				}
 			}
 		}
 	} else if opts.MetalLBEnabled {
-		collected.metalLBEnabled = true
-		collected.metalLBPools = make([]MetalLBPoolDef, len(opts.MetalLBPools))
+		collected.MetalLBEnabled = true
+		collected.MetalLBPools = make([]files.MetalLBPoolDef, len(opts.MetalLBPools))
 		for i, pool := range opts.MetalLBPools {
-			collected.metalLBPools[i] = MetalLBPoolDef(pool)
+			collected.MetalLBPools[i] = files.MetalLBPoolDef(pool)
 		}
 	}
 }
 
-func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter, opts *ConfigOptions, collected *collectedConfig) {
+func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("\n=== Codesphere Application Configuration ===")
-	collected.codesphereDomain = g.collectString(prompter, opts.CodesphereDomain, "Main Codesphere domain", "codesphere.yourcompany.com")
-	collected.workspaceDomain = g.collectString(prompter, opts.CodesphereWorkspaceBaseDomain, "Workspace base domain (*.domain should point to public gateway)", "ws.yourcompany.com")
-	collected.publicIP = g.collectString(prompter, opts.CodespherePublicIP, "Primary public IP for workspaces", "")
-	collected.customDomain = g.collectString(prompter, opts.CodesphereCustomDomainBaseDomain, "Custom domain CNAME base", "custom.yourcompany.com")
-	collected.dnsServers = g.collectStringSlice(prompter, opts.CodesphereDNSServers, "DNS servers (comma-separated)", []string{"1.1.1.1", "8.8.8.8"})
+	collected.CodesphereDomain = g.collectString(prompter, opts.CodesphereDomain, "Main Codesphere domain", "codesphere.yourcompany.com")
+	collected.WorkspaceDomain = g.collectString(prompter, opts.CodesphereWorkspaceBaseDomain, "Workspace base domain (*.domain should point to public gateway)", "ws.yourcompany.com")
+	collected.PublicIP = g.collectString(prompter, opts.CodespherePublicIP, "Primary public IP for workspaces", "")
+	collected.CustomDomain = g.collectString(prompter, opts.CodesphereCustomDomainBaseDomain, "Custom domain CNAME base", "custom.yourcompany.com")
+	collected.DnsServers = g.collectStringSlice(prompter, opts.CodesphereDNSServers, "DNS servers (comma-separated)", []string{"1.1.1.1", "8.8.8.8"})
 
 	fmt.Println("\n=== Workspace Plans Configuration ===")
-	collected.workspaceImageBomRef = g.collectString(prompter, opts.CodesphereWorkspaceImageBomRef, "Workspace agent image BOM reference", "workspace-agent-24.04")
-	collected.hostingPlanCPU = g.collectInt(prompter, opts.CodesphereHostingPlanCPU, "Hosting plan CPU (tenths, e.g., 10 = 1 core)", 10)
-	collected.hostingPlanMemory = g.collectInt(prompter, opts.CodesphereHostingPlanMemory, "Hosting plan memory (MB)", 2048)
-	collected.hostingPlanStorage = g.collectInt(prompter, opts.CodesphereHostingPlanStorage, "Hosting plan storage (MB)", 20480)
-	collected.hostingPlanTempStorage = g.collectInt(prompter, opts.CodesphereHostingPlanTempStorage, "Hosting plan temp storage (MB)", 1024)
-	collected.workspacePlanName = g.collectString(prompter, opts.CodesphereWorkspacePlanName, "Workspace plan name", "Standard Developer")
-	collected.workspacePlanMaxReplica = g.collectInt(prompter, opts.CodesphereWorkspacePlanMaxReplica, "Max replicas per workspace", 3)
+	collected.WorkspaceImageBomRef = g.collectString(prompter, opts.CodesphereWorkspaceImageBomRef, "Workspace agent image BOM reference", "workspace-agent-24.04")
+	collected.HostingPlanCPU = g.collectInt(prompter, opts.CodesphereHostingPlanCPU, "Hosting plan CPU (tenths, e.g., 10 = 1 core)", 10)
+	collected.HostingPlanMemory = g.collectInt(prompter, opts.CodesphereHostingPlanMemory, "Hosting plan memory (MB)", 2048)
+	collected.HostingPlanStorage = g.collectInt(prompter, opts.CodesphereHostingPlanStorage, "Hosting plan storage (MB)", 20480)
+	collected.HostingPlanTempStorage = g.collectInt(prompter, opts.CodesphereHostingPlanTempStorage, "Hosting plan temp storage (MB)", 1024)
+	collected.WorkspacePlanName = g.collectString(prompter, opts.CodesphereWorkspacePlanName, "Workspace plan name", "Standard Developer")
+	collected.WorkspacePlanMaxReplica = g.collectInt(prompter, opts.CodesphereWorkspacePlanMaxReplica, "Max replicas per workspace", 3)
 }

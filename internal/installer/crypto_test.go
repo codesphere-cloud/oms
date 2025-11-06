@@ -6,17 +6,11 @@ package installer
 import (
 	"crypto/x509"
 	"encoding/pem"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"golang.org/x/crypto/ssh"
 )
-
-func TestInstaller(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Installer Suite")
-}
 
 var _ = Describe("GenerateSSHKeyPair", func() {
 	It("generates a valid SSH key pair", func() {

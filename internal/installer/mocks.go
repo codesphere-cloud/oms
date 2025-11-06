@@ -119,26 +119,26 @@ func (_m *MockInstallConfigManager) EXPECT() *MockInstallConfigManager_Expecter 
 }
 
 // CollectConfiguration provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) CollectConfiguration(opts *ConfigOptions) (*InstallConfigContent, error) {
+func (_mock *MockInstallConfigManager) CollectConfiguration(opts *files.ConfigOptions) (*files.RootConfig, error) {
 	ret := _mock.Called(opts)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CollectConfiguration")
 	}
 
-	var r0 *InstallConfigContent
+	var r0 *files.RootConfig
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(*ConfigOptions) (*InstallConfigContent, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(*files.ConfigOptions) (*files.RootConfig, error)); ok {
 		return returnFunc(opts)
 	}
-	if returnFunc, ok := ret.Get(0).(func(*ConfigOptions) *InstallConfigContent); ok {
+	if returnFunc, ok := ret.Get(0).(func(*files.ConfigOptions) *files.RootConfig); ok {
 		r0 = returnFunc(opts)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*InstallConfigContent)
+			r0 = ret.Get(0).(*files.RootConfig)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(*ConfigOptions) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(*files.ConfigOptions) error); ok {
 		r1 = returnFunc(opts)
 	} else {
 		r1 = ret.Error(1)
@@ -157,19 +157,19 @@ func (_e *MockInstallConfigManager_Expecter) CollectConfiguration(opts interface
 	return &MockInstallConfigManager_CollectConfiguration_Call{Call: _e.mock.On("CollectConfiguration", opts)}
 }
 
-func (_c *MockInstallConfigManager_CollectConfiguration_Call) Run(run func(opts *ConfigOptions)) *MockInstallConfigManager_CollectConfiguration_Call {
+func (_c *MockInstallConfigManager_CollectConfiguration_Call) Run(run func(opts *files.ConfigOptions)) *MockInstallConfigManager_CollectConfiguration_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*ConfigOptions))
+		run(args[0].(*files.ConfigOptions))
 	})
 	return _c
 }
 
-func (_c *MockInstallConfigManager_CollectConfiguration_Call) Return(installConfigContent *InstallConfigContent, err error) *MockInstallConfigManager_CollectConfiguration_Call {
-	_c.Call.Return(installConfigContent, err)
+func (_c *MockInstallConfigManager_CollectConfiguration_Call) Return(rootConfig *files.RootConfig, err error) *MockInstallConfigManager_CollectConfiguration_Call {
+	_c.Call.Return(rootConfig, err)
 	return _c
 }
 
-func (_c *MockInstallConfigManager_CollectConfiguration_Call) RunAndReturn(run func(opts *ConfigOptions) (*InstallConfigContent, error)) *MockInstallConfigManager_CollectConfiguration_Call {
+func (_c *MockInstallConfigManager_CollectConfiguration_Call) RunAndReturn(run func(opts *files.ConfigOptions) (*files.RootConfig, error)) *MockInstallConfigManager_CollectConfiguration_Call {
 	_c.Call.Return(run)
 	return _c
 }
