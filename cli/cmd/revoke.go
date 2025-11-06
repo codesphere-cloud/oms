@@ -12,7 +12,7 @@ type RevokeCmd struct {
 	cmd *cobra.Command
 }
 
-func AddRevokeCmd(rootCmd *cobra.Command, opts GlobalOptions) {
+func AddRevokeCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	revoke := RevokeCmd{
 		cmd: &cobra.Command{
 			Use:   "revoke",
