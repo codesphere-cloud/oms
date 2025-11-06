@@ -93,6 +93,53 @@ func (_c *MockFileIO_Create_Call) RunAndReturn(run func(filename string) (*os.Fi
 	return _c
 }
 
+// CreateAndWrite provides a mock function for the type MockFileIO
+func (_mock *MockFileIO) CreateAndWrite(filePath string, data []byte, fileType string) error {
+	ret := _mock.Called(filePath, data, fileType)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateAndWrite")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []byte, string) error); ok {
+		r0 = returnFunc(filePath, data, fileType)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockFileIO_CreateAndWrite_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateAndWrite'
+type MockFileIO_CreateAndWrite_Call struct {
+	*mock.Call
+}
+
+// CreateAndWrite is a helper method to define mock.On call
+//   - filePath
+//   - data
+//   - fileType
+func (_e *MockFileIO_Expecter) CreateAndWrite(filePath interface{}, data interface{}, fileType interface{}) *MockFileIO_CreateAndWrite_Call {
+	return &MockFileIO_CreateAndWrite_Call{Call: _e.mock.On("CreateAndWrite", filePath, data, fileType)}
+}
+
+func (_c *MockFileIO_CreateAndWrite_Call) Run(run func(filePath string, data []byte, fileType string)) *MockFileIO_CreateAndWrite_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].([]byte), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockFileIO_CreateAndWrite_Call) Return(err error) *MockFileIO_CreateAndWrite_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockFileIO_CreateAndWrite_Call) RunAndReturn(run func(filePath string, data []byte, fileType string) error) *MockFileIO_CreateAndWrite_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Exists provides a mock function for the type MockFileIO
 func (_mock *MockFileIO) Exists(filename string) bool {
 	ret := _mock.Called(filename)

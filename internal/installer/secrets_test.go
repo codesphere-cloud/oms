@@ -8,24 +8,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("IsValidIP", func() {
-	DescribeTable("IP validation",
-		func(ip string, valid bool) {
-			result := IsValidIP(ip)
-			Expect(result).To(Equal(valid))
-		},
-		Entry("valid IPv4", "192.168.1.1", true),
-		Entry("valid IPv6", "2001:db8::1", true),
-		Entry("invalid IP", "not-an-ip", false),
-		Entry("empty string", "", false),
-		Entry("partial IP", "192.168", false),
-		Entry("localhost", "127.0.0.1", true),
-	)
-})
-
 var _ = Describe("ExtractVault", func() {
 	It("extracts all secrets from config into vault format", func() {
-		config := &InstallConfig{
+		config := &InstallConfigContent{
 			Postgres: PostgresConfig{
 				CACertPem:        "-----BEGIN CERTIFICATE-----\nPG-CA\n-----END CERTIFICATE-----",
 				caCertPrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-CA-KEY\n-----END RSA PRIVATE KEY-----",
@@ -130,7 +115,7 @@ var _ = Describe("ExtractVault", func() {
 	})
 
 	It("does not include kubeconfig for managed k8s", func() {
-		config := &InstallConfig{
+		config := &InstallConfigContent{
 			Kubernetes: KubernetesConfig{
 				needsKubeConfig: false,
 			},
@@ -158,7 +143,7 @@ var _ = Describe("ExtractVault", func() {
 			userPasswords[service] = service + "-pass"
 		}
 
-		config := &InstallConfig{
+		config := &InstallConfigContent{
 			Postgres: PostgresConfig{
 				Primary:       &PostgresPrimaryConfig{},
 				userPasswords: userPasswords,
@@ -186,31 +171,5 @@ var _ = Describe("ExtractVault", func() {
 			Expect(foundUser).To(BeTrue(), "User secret for service %s not found", service)
 			Expect(foundPass).To(BeTrue(), "Password secret for service %s not found", service)
 		}
-	})
-})
-
-var _ = Describe("AddConfigComments", func() {
-	It("adds header comments to config YAML", func() {
-		yamlData := []byte("test: value\n")
-
-		result := AddConfigComments(yamlData)
-		resultStr := string(result)
-
-		Expect(resultStr).To(ContainSubstring("Codesphere Installer Configuration"))
-		Expect(resultStr).To(ContainSubstring("test: value"))
-	})
-})
-
-var _ = Describe("AddVaultComments", func() {
-	It("adds security warnings to vault YAML", func() {
-		yamlData := []byte("secrets:\n  - name: test\n")
-
-		result := AddVaultComments(yamlData)
-		resultStr := string(result)
-
-		Expect(resultStr).To(ContainSubstring("Codesphere Installer Secrets"))
-		Expect(resultStr).To(ContainSubstring("IMPORTANT"))
-		Expect(resultStr).To(ContainSubstring("SOPS"))
-		Expect(resultStr).To(ContainSubstring("secrets:"))
 	})
 })

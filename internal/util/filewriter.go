@@ -4,6 +4,7 @@
 package util
 
 import (
+	"fmt"
 	"os"
 )
 
@@ -15,6 +16,7 @@ type FileIO interface {
 	IsDirectory(filename string) (bool, error)
 	Exists(filename string) bool
 	ReadDir(dirname string) ([]os.DirEntry, error)
+	CreateAndWrite(filePath string, data []byte, fileType string) error
 }
 
 type FilesystemWriter struct{}
@@ -25,6 +27,21 @@ func NewFilesystemWriter() *FilesystemWriter {
 
 func (fs *FilesystemWriter) Create(filename string) (*os.File, error) {
 	return os.Create(filename)
+}
+
+func (fs *FilesystemWriter) CreateAndWrite(filePath string, data []byte, fileType string) error {
+	file, err := fs.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create %s file: %w", fileType, err)
+	}
+	defer CloseFileIgnoreError(file)
+
+	if _, err = file.Write(data); err != nil {
+		return fmt.Errorf("failed to write %s file: %w", fileType, err)
+	}
+
+	fmt.Printf("\n%s file created: %s\n", fileType, filePath)
+	return nil
 }
 
 func (fs *FilesystemWriter) Open(filename string) (*os.File, error) {

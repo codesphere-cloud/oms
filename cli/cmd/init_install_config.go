@@ -18,7 +18,7 @@ type InitInstallConfigCmd struct {
 	cmd        *cobra.Command
 	Opts       *InitInstallConfigOpts
 	FileWriter util.FileIO
-	Generator  *installer.ConfigGenerator
+	Generator  installer.InstallConfigManager
 }
 
 type InitInstallConfigOpts struct {
@@ -83,7 +83,29 @@ type InitInstallConfigOpts struct {
 	CodesphereWorkspacePlanMaxReplica int
 }
 
-// only other function would be CreateConfig(cg *ConfigGenerator) error
+// TODO: Implement this function that should be the only function in RunE
+// func (c *InitInstallConfigCmd) CreateConfig(icm installer.InstallConfigManager) error {
+// 	if c.Opts.Interactive {
+// 		_, err := icm.CollectConfiguration(c.cmd)
+// 		if err != nil {
+// 			return fmt.Errorf("failed to collect configuration: %w", err)
+// 		}
+
+// 		icm.SetConfig(c.buildConfigOptions())
+// 	} else {
+// 		icm.SetConfig(c.buildConfigOptions())
+// 	}
+
+// 	// icm.ApplyProfile(c.Opts.Profile)
+
+// 	// Create secrets
+
+// 	// Write config file
+
+// 	// Write vault file
+
+// 	return nil
+// }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	if c.Opts.ValidateOnly {
@@ -100,8 +122,24 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	fmt.Println("This wizard will help you create config.yaml and prod.vault.yaml for Codesphere installation.")
 	fmt.Println()
 
-	// to function toconfigopts
-	configOpts := &installer.ConfigOptions{
+	configOpts := c.buildConfigOptions()
+
+	_, err := c.Generator.CollectConfiguration(configOpts)
+	if err != nil {
+		return fmt.Errorf("failed to collect configuration: %w", err)
+	}
+
+	if err := c.Generator.WriteConfigAndVault(c.Opts.ConfigFile, c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+		return err
+	}
+
+	c.printSuccessMessage()
+
+	return nil
+}
+
+func (c *InitInstallConfigCmd) buildConfigOptions() *installer.ConfigOptions {
+	return &installer.ConfigOptions{
 		DatacenterID:          c.Opts.DatacenterID,
 		DatacenterName:        c.Opts.DatacenterName,
 		DatacenterCity:        c.Opts.DatacenterCity,
@@ -152,56 +190,9 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 
 		SecretsBaseDir: c.Opts.SecretsBaseDir,
 	}
+}
 
-	config, err := c.Generator.CollectConfiguration(configOpts)
-	if err != nil {
-		return fmt.Errorf("failed to collect configuration: %w", err)
-	}
-
-	configYAML, err := installer.MarshalConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config.yaml: %w", err)
-	}
-
-	if c.Opts.WithComments {
-		configYAML = installer.AddConfigComments(configYAML)
-	}
-
-	// todo function fo config and vault
-	configFile, err := c.FileWriter.Create(c.Opts.ConfigFile)
-	if err != nil {
-		return fmt.Errorf("failed to create config file: %w", err)
-	}
-	defer util.CloseFileIgnoreError(configFile)
-
-	if _, err = configFile.Write(configYAML); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	fmt.Printf("\nConfiguration file created: %s\n", c.Opts.ConfigFile)
-
-	vault := config.ExtractVault()
-	vaultYAML, err := installer.MarshalVault(vault)
-	if err != nil {
-		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
-	}
-
-	if c.Opts.WithComments {
-		vaultYAML = installer.AddVaultComments(vaultYAML)
-	}
-
-	vaultFile, err := c.FileWriter.Create(c.Opts.VaultFile)
-	if err != nil {
-		return fmt.Errorf("failed to create vault file: %w", err)
-	}
-	defer util.CloseFileIgnoreError(vaultFile)
-
-	if _, err = vaultFile.Write(vaultYAML); err != nil {
-		return fmt.Errorf("failed to write vault file: %w", err)
-	}
-
-	fmt.Printf("Secrets file created: %s\n", c.Opts.VaultFile)
-
+func (c *InitInstallConfigCmd) printSuccessMessage() {
 	fmt.Println("\n" + strings.Repeat("=", 70))
 	fmt.Println("Configuration files successfully generated!")
 	fmt.Println(strings.Repeat("=", 70))
@@ -218,8 +209,6 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	fmt.Printf("   sops --encrypt --age <PUBLIC_KEY> --in-place %s\n", c.Opts.VaultFile)
 	fmt.Println("5. Run the Codesphere installer with these configuration files")
 	fmt.Println()
-
-	return nil
 }
 
 func (c *InitInstallConfigCmd) applyProfile() error {
@@ -418,8 +407,6 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 		FileWriter: util.NewFilesystemWriter(),
 	}
 
-	c.Generator = installer.NewConfigGenerator(c.Opts.Interactive)
-
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
 	c.cmd.Flags().StringVarP(&c.Opts.VaultFile, "vault", "v", "prod.vault.yaml", "Output file path for prod.vault.yaml")
 
@@ -445,7 +432,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(c.cmd, "vault")
 
 	c.cmd.PreRun = func(cmd *cobra.Command, args []string) {
-		c.Generator.Interactive = c.Opts.Interactive
+		c.Generator = installer.NewConfigGenerator(c.Opts.Interactive)
 	}
 
 	c.cmd.RunE = c.RunE
