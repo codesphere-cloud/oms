@@ -67,6 +67,10 @@ type RegistryConfig struct {
 	Server              string `yaml:"server"`
 	ReplaceImagesInBom  bool   `yaml:"replaceImagesInBom"`
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
+
+	// Stored separately in vault
+	Username string `yaml:"-"`
+	Password string `yaml:"-"`
 }
 
 type PostgresConfig struct {
@@ -77,10 +81,11 @@ type PostgresConfig struct {
 	ServerAddress string                 `yaml:"serverAddress,omitempty"`
 
 	// Stored separately in vault
-	CaCertPrivateKey string            `yaml:"-"`
-	AdminPassword    string            `yaml:"-"`
-	ReplicaPassword  string            `yaml:"-"`
-	UserPasswords    map[string]string `yaml:"-"`
+	CaCertPrivateKey  string            `yaml:"-"`
+	AdminPassword     string            `yaml:"-"`
+	ReplicaPassword   string            `yaml:"-"`
+	ReplicaPrivateKey string            `yaml:"-"`
+	UserPasswords     map[string]string `yaml:"-"`
 }
 
 type PostgresPrimaryConfig struct {
@@ -95,8 +100,6 @@ type PostgresReplicaConfig struct {
 	IP        string    `yaml:"ip"`
 	Name      string    `yaml:"name"`
 	SSLConfig SSLConfig `yaml:"sslConfig"`
-
-	PrivateKey string `yaml:"-"`
 }
 
 type SSLConfig struct {
@@ -514,26 +517,22 @@ func (c *RootConfig) addPostgresSecrets(vault *InstallVault) {
 		})
 	}
 
-	if c.Postgres.Replica != nil {
-		if c.Postgres.ReplicaPassword != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: "postgresReplicaPassword",
-				Fields: &SecretFields{
-					Password: c.Postgres.ReplicaPassword,
-				},
-			})
-		}
-
-		if c.Postgres.Replica.PrivateKey != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: "postgresReplicaServerKeyPem",
-				File: &SecretFile{
-					Name:    "replica.key",
-					Content: c.Postgres.Replica.PrivateKey,
-				},
-			})
-		}
+	if c.Postgres.ReplicaPassword != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "postgresReplicaPassword",
+			Fields: &SecretFields{
+				Password: c.Postgres.ReplicaPassword,
+			},
+		})
 	}
+
+	vault.Secrets = append(vault.Secrets, SecretEntry{
+		Name: "postgresReplicaServerKeyPem",
+		File: &SecretFile{
+			Name:    "replica.key",
+			Content: c.Postgres.ReplicaPrivateKey,
+		},
+	})
 
 	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace"}
 	for _, service := range services {
@@ -569,13 +568,13 @@ func (c *RootConfig) addRegistrySecrets(vault *InstallVault) {
 			SecretEntry{
 				Name: "registryUsername",
 				Fields: &SecretFields{
-					Password: "YOUR_REGISTRY_USERNAME",
+					Password: c.Registry.Username,
 				},
 			},
 			SecretEntry{
 				Name: "registryPassword",
 				Fields: &SecretFields{
-					Password: "YOUR_REGISTRY_PASSWORD",
+					Password: c.Registry.Password,
 				},
 			},
 		)

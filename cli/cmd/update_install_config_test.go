@@ -223,7 +223,7 @@ codesphere:
 			config := icg.GetInstallConfig()
 			Expect(config.Postgres.Replica.IP).To(Equal("10.10.0.7"))
 			Expect(config.Postgres.Replica.Name).To(Equal("new_replica"))
-			Expect(config.Postgres.Replica.PrivateKey).NotTo(BeEmpty())
+			Expect(config.Postgres.ReplicaPrivateKey).NotTo(BeEmpty())
 			Expect(config.Postgres.Replica.SSLConfig.ServerCertPem).NotTo(BeEmpty())
 		})
 	})
@@ -248,7 +248,7 @@ codesphere:
 			Expect(config.Kubernetes.PodCIDR).To(Equal("10.244.0.0/16"))
 
 			Expect(config.Postgres.Primary.PrivateKey).NotTo(BeEmpty())
-			Expect(config.Postgres.Replica.PrivateKey).NotTo(BeEmpty())
+			Expect(config.Postgres.ReplicaPrivateKey).NotTo(BeEmpty())
 		})
 	})
 
