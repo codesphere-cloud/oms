@@ -377,6 +377,62 @@ func (_c *MockFileIO_Open_Call) RunAndReturn(run func(filename string) (*os.File
 	return _c
 }
 
+// OpenAppend provides a mock function for the type MockFileIO
+func (_mock *MockFileIO) OpenAppend(filename string) (*os.File, error) {
+	ret := _mock.Called(filename)
+
+	if len(ret) == 0 {
+		panic("no return value specified for OpenAppend")
+	}
+
+	var r0 *os.File
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (*os.File, error)); ok {
+		return returnFunc(filename)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) *os.File); ok {
+		r0 = returnFunc(filename)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*os.File)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(filename)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockFileIO_OpenAppend_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'OpenAppend'
+type MockFileIO_OpenAppend_Call struct {
+	*mock.Call
+}
+
+// OpenAppend is a helper method to define mock.On call
+//   - filename
+func (_e *MockFileIO_Expecter) OpenAppend(filename interface{}) *MockFileIO_OpenAppend_Call {
+	return &MockFileIO_OpenAppend_Call{Call: _e.mock.On("OpenAppend", filename)}
+}
+
+func (_c *MockFileIO_OpenAppend_Call) Run(run func(filename string)) *MockFileIO_OpenAppend_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockFileIO_OpenAppend_Call) Return(file *os.File, err error) *MockFileIO_OpenAppend_Call {
+	_c.Call.Return(file, err)
+	return _c
+}
+
+func (_c *MockFileIO_OpenAppend_Call) RunAndReturn(run func(filename string) (*os.File, error)) *MockFileIO_OpenAppend_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // OpenFile provides a mock function for the type MockFileIO
 func (_mock *MockFileIO) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	ret := _mock.Called(name, flag, perm)

@@ -22,7 +22,7 @@ import (
 type Portal interface {
 	ListBuilds(product Product) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
-	DownloadBuildArtifact(product Product, build Build, file io.Writer, quiet bool) error
+	DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error
 	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)
 	RevokeAPIKey(key string) error
 	UpdateAPIKey(key string, expiresAt time.Time) error
@@ -52,27 +52,11 @@ const (
 	OmsProduct        Product = "oms"
 )
 
-func (c *PortalClient) HttpRequest(method string, path string, body []byte) (resp *http.Response, err error) {
-	requestBody := bytes.NewBuffer(body)
-	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), path)
-	if err != nil {
-		err = fmt.Errorf("failed to get generate URL: %w", err)
-		return
-	}
+func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Response, err error) {
 	apiKey, err := c.Env.GetOmsPortalApiKey()
 	if err != nil {
 		err = fmt.Errorf("failed to get API Key: %w", err)
 		return
-	}
-
-	req, err := http.NewRequest(method, url, requestBody)
-	if err != nil {
-		log.Fatalf("Error creating request: %v", err)
-		return
-	}
-
-	if len(body) > 0 {
-		req.Header.Set("Content-Type", "application/json")
 	}
 
 	req.Header.Set("X-API-Key", apiKey)
@@ -97,6 +81,25 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 	}
 
 	return
+}
+
+func (c *PortalClient) HttpRequest(method string, path string, body []byte) (resp *http.Response, err error) {
+	requestBody := bytes.NewBuffer(body)
+	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), path)
+	if err != nil {
+		err = fmt.Errorf("failed to get generate URL: %w", err)
+		return
+	}
+
+	req, err := http.NewRequest(method, url, requestBody)
+	if err != nil {
+		log.Fatalf("Error creating request: %v", err)
+		return
+	}
+	if len(body) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	return c.AuthorizedHttpRequest(req)
 }
 
 func (c *PortalClient) GetBody(path string) (body []byte, status int, err error) {
@@ -176,13 +179,29 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 	return matchingPackages[len(matchingPackages)-1], nil
 }
 
-func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file io.Writer, quiet bool) error {
+func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error {
 	reqBody, err := json.Marshal(build)
 	if err != nil {
 		return fmt.Errorf("failed to generate request body: %w", err)
 	}
 
-	resp, err := c.HttpRequest(http.MethodGet, fmt.Sprintf("/packages/%s/download", product), reqBody)
+	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), fmt.Sprintf("/packages/%s/download", product))
+	if err != nil {
+		return fmt.Errorf("failed to get generate URL: %w", err)
+	}
+	bodyReader := bytes.NewBuffer(reqBody)
+	req, err := http.NewRequest(http.MethodGet, url, bodyReader)
+	if err != nil {
+		return fmt.Errorf("failed to create GET request to download build: %w", err)
+	}
+	if startByte > 0 {
+		log.Printf("Resuming download of existing file at byte %d\n", startByte)
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", startByte))
+	}
+
+	// Download the file from startByte to allow resuming
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.AuthorizedHttpRequest(req)
 	if err != nil {
 		return fmt.Errorf("GET request to download build failed: %w", err)
 	}

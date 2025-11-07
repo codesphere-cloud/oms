@@ -39,16 +39,16 @@ func (_m *MockPortal) EXPECT() *MockPortal_Expecter {
 }
 
 // DownloadBuildArtifact provides a mock function for the type MockPortal
-func (_mock *MockPortal) DownloadBuildArtifact(product Product, build Build, file io.Writer, quiet bool) error {
-	ret := _mock.Called(product, build, file, quiet)
+func (_mock *MockPortal) DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error {
+	ret := _mock.Called(product, build, file, startByte, quiet)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DownloadBuildArtifact")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(Product, Build, io.Writer, bool) error); ok {
-		r0 = returnFunc(product, build, file, quiet)
+	if returnFunc, ok := ret.Get(0).(func(Product, Build, io.Writer, int, bool) error); ok {
+		r0 = returnFunc(product, build, file, startByte, quiet)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -64,14 +64,15 @@ type MockPortal_DownloadBuildArtifact_Call struct {
 //   - product
 //   - build
 //   - file
+//   - startByte
 //   - quiet
-func (_e *MockPortal_Expecter) DownloadBuildArtifact(product interface{}, build interface{}, file interface{}, quiet interface{}) *MockPortal_DownloadBuildArtifact_Call {
-	return &MockPortal_DownloadBuildArtifact_Call{Call: _e.mock.On("DownloadBuildArtifact", product, build, file, quiet)}
+func (_e *MockPortal_Expecter) DownloadBuildArtifact(product interface{}, build interface{}, file interface{}, startByte interface{}, quiet interface{}) *MockPortal_DownloadBuildArtifact_Call {
+	return &MockPortal_DownloadBuildArtifact_Call{Call: _e.mock.On("DownloadBuildArtifact", product, build, file, startByte, quiet)}
 }
 
-func (_c *MockPortal_DownloadBuildArtifact_Call) Run(run func(product Product, build Build, file io.Writer, quiet bool)) *MockPortal_DownloadBuildArtifact_Call {
+func (_c *MockPortal_DownloadBuildArtifact_Call) Run(run func(product Product, build Build, file io.Writer, startByte int, quiet bool)) *MockPortal_DownloadBuildArtifact_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(Product), args[1].(Build), args[2].(io.Writer), args[3].(bool))
+		run(args[0].(Product), args[1].(Build), args[2].(io.Writer), args[3].(int), args[4].(bool))
 	})
 	return _c
 }
@@ -81,7 +82,7 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) Return(err error) *MockPortal_D
 	return _c
 }
 
-func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(product Product, build Build, file io.Writer, quiet bool) error) *MockPortal_DownloadBuildArtifact_Call {
+func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(product Product, build Build, file io.Writer, startByte int, quiet bool) error) *MockPortal_DownloadBuildArtifact_Call {
 	_c.Call.Return(run)
 	return _c
 }

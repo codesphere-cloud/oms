@@ -10,6 +10,7 @@ import (
 type FileIO interface {
 	Create(filename string) (*os.File, error)
 	Open(filename string) (*os.File, error)
+	OpenAppend(filename string) (*os.File, error)
 	Exists(filename string) bool
 	IsDirectory(filename string) (bool, error)
 	MkdirAll(path string, perm os.FileMode) error
@@ -30,6 +31,10 @@ func (fs *FilesystemWriter) Create(filename string) (*os.File, error) {
 
 func (fs *FilesystemWriter) Open(filename string) (*os.File, error) {
 	return os.Open(filename)
+}
+
+func (fs *FilesystemWriter) OpenAppend(filename string) (*os.File, error) {
+	return os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
 }
 
 func (fs *FilesystemWriter) Exists(path string) bool {
