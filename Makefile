@@ -56,7 +56,7 @@ release-local: install-build-deps
 docs:
 	rm -rf docs
 	mkdir docs
-	go run -ldflags="-X 'github.com/codesphere-cloud/oms/internal/version.binName=oms-cli'" hack/gendocs/main.go 
+	go run -ldflags="-X 'github.com/codesphere-cloud/oms/internal/version.binName=oms-cli'" hack/gendocs/main.go
 	cp docs/oms-cli.md docs/README.md
 
 generate-license: generate
