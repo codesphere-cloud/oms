@@ -44,25 +44,6 @@ func (g *InstallConfig) collectChoice(prompter *Prompter, optValue, prompt strin
 	})
 }
 
-func (g *InstallConfig) collectConfig() (*files.CollectedConfig, error) {
-	prompter := NewPrompter(g.Interactive)
-	opts := g.configOpts
-	collected := &files.CollectedConfig{}
-
-	// TODO: no sub functions after they are simplifies and interactive is removed and the if else are simplified
-
-	g.collectDatacenterConfig(prompter, opts, collected)
-	g.collectRegistryConfig(prompter, opts, collected)
-	g.collectPostgresConfig(prompter, opts, collected)
-	g.collectCephConfig(prompter, opts, collected)
-	g.collectK8sConfig(prompter, opts, collected)
-	g.collectGatewayConfig(prompter, opts, collected)
-	g.collectMetalLBConfig(prompter, opts, collected)
-	g.collectCodesphereConfig(prompter, opts, collected)
-
-	return collected, nil
-}
-
 func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("=== Datacenter Configuration ===")
 	collected.DcID = g.collectInt(prompter, opts.DatacenterID, "Datacenter ID", 1)
@@ -76,12 +57,8 @@ func (g *InstallConfig) collectRegistryConfig(prompter *Prompter, opts *files.Co
 	fmt.Println("\n=== Container Registry Configuration ===")
 	collected.RegistryServer = g.collectString(prompter, opts.RegistryServer, "Container registry server (e.g., ghcr.io, leave empty to skip)", "")
 	if collected.RegistryServer != "" {
-		collected.RegistryReplaceImages = opts.RegistryReplaceImages
-		collected.RegistryLoadContainerImgs = opts.RegistryLoadContainerImgs
-		if g.Interactive {
-			collected.RegistryReplaceImages = prompter.Bool("Replace images in BOM", true)
-			collected.RegistryLoadContainerImgs = prompter.Bool("Load container images from installer", false)
-		}
+		collected.RegistryReplaceImages = prompter.Bool("Replace images in BOM", opts.RegistryReplaceImages)
+		collected.RegistryLoadContainerImgs = prompter.Bool("Load container images from installer", opts.RegistryLoadContainerImgs)
 	}
 }
 
@@ -93,15 +70,10 @@ func (g *InstallConfig) collectPostgresConfig(prompter *Prompter, opts *files.Co
 		collected.PgPrimaryIP = g.collectString(prompter, opts.PostgresPrimaryIP, "Primary PostgreSQL server IP", "10.50.0.2")
 		collected.PgPrimaryHost = g.collectString(prompter, opts.PostgresPrimaryHost, "Primary PostgreSQL hostname", "pg-primary-node")
 
-		if g.Interactive {
-			hasReplica := prompter.Bool("Configure PostgreSQL replica", true)
-			if hasReplica {
-				collected.PgReplicaIP = g.collectString(prompter, opts.PostgresReplicaIP, "Replica PostgreSQL server IP", "10.50.0.3")
-				collected.PgReplicaName = g.collectString(prompter, opts.PostgresReplicaName, "Replica name (lowercase alphanumeric + underscore only)", "replica1")
-			}
-		} else {
-			collected.PgReplicaIP = opts.PostgresReplicaIP
-			collected.PgReplicaName = opts.PostgresReplicaName
+		hasReplica := prompter.Bool("Configure PostgreSQL replica", opts.PostgresReplicaIP != "")
+		if hasReplica {
+			collected.PgReplicaIP = g.collectString(prompter, opts.PostgresReplicaIP, "Replica PostgreSQL server IP", "10.50.0.3")
+			collected.PgReplicaName = g.collectString(prompter, opts.PostgresReplicaName, "Replica name (lowercase alphanumeric + underscore only)", "replica1")
 		}
 	} else {
 		collected.PgExternal = g.collectString(prompter, opts.PostgresExternal, "External PostgreSQL server address", "postgres.example.com:5432")
@@ -131,10 +103,7 @@ func (g *InstallConfig) collectCephConfig(prompter *Prompter, opts *files.Config
 
 func (g *InstallConfig) collectK8sConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("\n=== Kubernetes Configuration ===")
-	collected.K8sManaged = opts.K8sManaged
-	if g.Interactive {
-		collected.K8sManaged = prompter.Bool("Use Codesphere-managed Kubernetes (k0s)", true)
-	}
+	collected.K8sManaged = prompter.Bool("Use Codesphere-managed Kubernetes (k0s)", opts.K8sManaged)
 
 	if collected.K8sManaged {
 		collected.K8sAPIServer = g.collectString(prompter, opts.K8sAPIServer, "Kubernetes API server host (LB/DNS/IP)", "10.50.0.2")
@@ -148,45 +117,50 @@ func (g *InstallConfig) collectK8sConfig(prompter *Prompter, opts *files.ConfigO
 }
 
 func (g *InstallConfig) collectGatewayConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
-	// TODO: in ifs
 	fmt.Println("\n=== Cluster Gateway Configuration ===")
 	collected.GatewayType = g.collectChoice(prompter, opts.ClusterGatewayType, "Gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
 	if collected.GatewayType == "ExternalIP" {
 		collected.GatewayIPs = g.collectStringSlice(prompter, opts.ClusterGatewayIPs, "Gateway IP addresses (comma-separated)", []string{"10.51.0.2", "10.51.0.3"})
-	} else {
-		collected.GatewayIPs = opts.ClusterGatewayIPs
 	}
 
 	collected.PublicGatewayType = g.collectChoice(prompter, opts.ClusterPublicGatewayType, "Public gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
 	if collected.PublicGatewayType == "ExternalIP" {
 		collected.PublicGatewayIPs = g.collectStringSlice(prompter, opts.ClusterPublicGatewayIPs, "Public gateway IP addresses (comma-separated)", []string{"10.52.0.2", "10.52.0.3"})
-	} else {
-		collected.PublicGatewayIPs = opts.ClusterPublicGatewayIPs
 	}
 }
 
 func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
 	fmt.Println("\n=== MetalLB Configuration (Optional) ===")
-	if g.Interactive {
-		collected.MetalLBEnabled = prompter.Bool("Enable MetalLB", false)
-		if collected.MetalLBEnabled {
-			numPools := prompter.Int("Number of MetalLB IP pools", 1)
-			collected.MetalLBPools = make([]files.MetalLBPoolDef, numPools)
-			for i := 0; i < numPools; i++ {
-				fmt.Printf("\nMetalLB Pool %d:\n", i+1)
-				poolName := prompter.String("  Pool name", fmt.Sprintf("pool-%d", i+1))
-				poolIPs := prompter.StringSlice("  IP addresses/ranges (comma-separated)", []string{"10.10.10.100-10.10.10.200"})
-				collected.MetalLBPools[i] = files.MetalLBPoolDef{
-					Name:        poolName,
-					IPAddresses: poolIPs,
-				}
-			}
+
+	collected.MetalLBEnabled = prompter.Bool("Enable MetalLB", opts.MetalLBEnabled)
+
+	if collected.MetalLBEnabled {
+		defaultNumPools := len(opts.MetalLBPools)
+		if defaultNumPools == 0 {
+			defaultNumPools = 1
 		}
-	} else if opts.MetalLBEnabled {
-		collected.MetalLBEnabled = true
-		collected.MetalLBPools = make([]files.MetalLBPoolDef, len(opts.MetalLBPools))
-		for i, pool := range opts.MetalLBPools {
-			collected.MetalLBPools[i] = files.MetalLBPoolDef(pool)
+		numPools := prompter.Int("Number of MetalLB IP pools", defaultNumPools)
+
+		collected.MetalLBPools = make([]files.MetalLBPoolDef, numPools)
+		for i := 0; i < numPools; i++ {
+			fmt.Printf("\nMetalLB Pool %d:\n", i+1)
+
+			defaultName := fmt.Sprintf("pool-%d", i+1)
+			var defaultIPs []string
+			if i < len(opts.MetalLBPools) {
+				defaultName = opts.MetalLBPools[i].Name
+				defaultIPs = opts.MetalLBPools[i].IPAddresses
+			}
+			if len(defaultIPs) == 0 {
+				defaultIPs = []string{"10.10.10.100-10.10.10.200"}
+			}
+
+			poolName := prompter.String("  Pool name", defaultName)
+			poolIPs := prompter.StringSlice("  IP addresses/ranges (comma-separated)", defaultIPs)
+			collected.MetalLBPools[i] = files.MetalLBPoolDef{
+				Name:        poolName,
+				IPAddresses: poolIPs,
+			}
 		}
 	}
 }

@@ -13,44 +13,60 @@ import (
 )
 
 type InstallConfigManager interface {
-	CollectConfiguration(opts *files.ConfigOptions) (*files.RootConfig, error)
-	WriteConfigAndVault(configPath, vaultPath string, withComments bool) error
+	CollectInteractively() (*files.CollectedConfig, error)
+
+	CollectFromOptions(opts *files.ConfigOptions) (*files.CollectedConfig, error)
+
+	ConvertToConfig(collected *files.CollectedConfig) (*files.RootConfig, error)
+
+	GenerateSecrets(config *files.RootConfig) error
+
+	WriteConfig(config *files.RootConfig, configPath string, withComments bool) error
+
+	WriteVault(config *files.RootConfig, vaultPath string, withComments bool) error
 }
 
 type InstallConfig struct {
-	Interactive bool
-	configOpts  *files.ConfigOptions
-	config      *files.RootConfig
-	fileIO      util.FileIO
+	fileIO util.FileIO
 }
 
-func NewConfigGenerator(interactive bool) InstallConfigManager {
+func NewConfigGenerator() InstallConfigManager {
 	return &InstallConfig{
-		Interactive: interactive,
-		fileIO:      &util.FilesystemWriter{},
+		fileIO: &util.FilesystemWriter{},
 	}
 }
 
-func (g *InstallConfig) CollectConfiguration(opts *files.ConfigOptions) (*files.RootConfig, error) {
-	g.configOpts = opts
+func (g *InstallConfig) CollectInteractively() (*files.CollectedConfig, error) {
+	prompter := NewPrompter(true)
+	collected := &files.CollectedConfig{}
+	g.collectAllConfigs(prompter, &files.ConfigOptions{}, collected)
+	return collected, nil
+}
 
-	collectedOpts, err := g.collectConfig()
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect configuration: %w", err)
-	}
+func (g *InstallConfig) CollectFromOptions(opts *files.ConfigOptions) (*files.CollectedConfig, error) {
+	prompter := NewPrompter(false)
+	collected := &files.CollectedConfig{}
+	g.collectAllConfigs(prompter, opts, collected)
+	return collected, nil
+}
 
-	config, err := g.convertConfig(collectedOpts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert configuration: %w", err)
-	}
+func (g *InstallConfig) collectAllConfigs(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
+	g.collectDatacenterConfig(prompter, opts, collected)
+	g.collectRegistryConfig(prompter, opts, collected)
+	g.collectPostgresConfig(prompter, opts, collected)
+	g.collectCephConfig(prompter, opts, collected)
+	g.collectK8sConfig(prompter, opts, collected)
+	g.collectGatewayConfig(prompter, opts, collected)
+	g.collectMetalLBConfig(prompter, opts, collected)
+	g.collectCodesphereConfig(prompter, opts, collected)
+}
 
-	if err := g.generateSecrets(config); err != nil {
-		return nil, fmt.Errorf("failed to generate secrets: %w", err)
-	}
+func (g *InstallConfig) ConvertToConfig(collected *files.CollectedConfig) (*files.RootConfig, error) {
+	return g.convertConfig(collected)
+}
 
-	g.config = config
-
-	return config, nil
+func (g *InstallConfig) GenerateSecrets(config *files.RootConfig) error {
+	return g.generateSecrets(config)
 }
 
 func (g *InstallConfig) convertConfig(collected *files.CollectedConfig) (*files.RootConfig, error) {
@@ -213,12 +229,12 @@ func (g *InstallConfig) convertConfig(collected *files.CollectedConfig) (*files.
 	return config, nil
 }
 
-func (g *InstallConfig) WriteConfigAndVault(configPath, vaultPath string, withComments bool) error {
-	if g.config == nil {
-		return fmt.Errorf("no configuration collected - call CollectConfiguration first")
+func (g *InstallConfig) WriteConfig(config *files.RootConfig, configPath string, withComments bool) error {
+	if config == nil {
+		return fmt.Errorf("no configuration provided - config is nil")
 	}
 
-	configYAML, err := MarshalConfig(g.config)
+	configYAML, err := MarshalConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config.yaml: %w", err)
 	}
@@ -231,7 +247,15 @@ func (g *InstallConfig) WriteConfigAndVault(configPath, vaultPath string, withCo
 		return err
 	}
 
-	vault := g.config.ExtractVault()
+	return nil
+}
+
+func (g *InstallConfig) WriteVault(config *files.RootConfig, vaultPath string, withComments bool) error {
+	if config == nil {
+		return fmt.Errorf("no configuration provided - config is nil")
+	}
+
+	vault := config.ExtractVault()
 	vaultYAML, err := MarshalVault(vault)
 	if err != nil {
 		return fmt.Errorf("failed to marshal vault.yaml: %w", err)

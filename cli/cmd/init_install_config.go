@@ -84,30 +84,6 @@ type InitInstallConfigOpts struct {
 	CodesphereWorkspacePlanMaxReplica int
 }
 
-// TODO: Implement this function that should be the only function in RunE
-// func (c *InitInstallConfigCmd) CreateConfig(icm files.InstallConfigManager) error {
-// 	if c.Opts.Interactive {
-// 		_, err := icm.CollectConfiguration(c.cmd)
-// 		if err != nil {
-// 			return fmt.Errorf("failed to collect configuration: %w", err)
-// 		}
-
-// 		icm.SetConfig(c.buildConfigOptions())
-// 	} else {
-// 		icm.SetConfig(c.buildConfigOptions())
-// 	}
-
-// 	// icm.ApplyProfile(c.Opts.Profile)
-
-// 	// Create secrets
-
-// 	// Write config file
-
-// 	// Write vault file
-
-// 	return nil
-// }
-
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	if c.Opts.ValidateOnly {
 		return c.validateConfig()
@@ -119,24 +95,58 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Println("Welcome to OMS!")
-	fmt.Println("This wizard will help you create config.yaml and prod.vault.yaml for Codesphere installation.")
-	fmt.Println()
+	c.printWelcomeMessage()
 
-	configOpts := c.buildConfigOptions()
-
-	_, err := c.Generator.CollectConfiguration(configOpts)
-	if err != nil {
-		return fmt.Errorf("failed to collect configuration: %w", err)
-	}
-
-	if err := c.Generator.WriteConfigAndVault(c.Opts.ConfigFile, c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+	if err := c.createConfig(); err != nil {
 		return err
 	}
 
 	c.printSuccessMessage()
 
 	return nil
+}
+
+func (c *InitInstallConfigCmd) createConfig() error {
+	collected, err := c.collectConfiguration()
+	if err != nil {
+		return err
+	}
+
+	config, err := c.Generator.ConvertToConfig(collected)
+	if err != nil {
+		return fmt.Errorf("failed to convert configuration: %w", err)
+	}
+
+	if err := c.Generator.GenerateSecrets(config); err != nil {
+		return fmt.Errorf("failed to generate secrets: %w", err)
+	}
+
+	if err := c.Generator.WriteConfig(config, c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	if err := c.Generator.WriteVault(config, c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+		return fmt.Errorf("failed to write vault file: %w", err)
+	}
+
+	return nil
+}
+
+func (c *InitInstallConfigCmd) collectConfiguration() (*files.CollectedConfig, error) {
+	var collected *files.CollectedConfig
+	var err error
+
+	if c.Opts.Interactive {
+		collected, err = c.Generator.CollectInteractively()
+	} else {
+		configOpts := c.buildConfigOptions()
+		collected, err = c.Generator.CollectFromOptions(configOpts)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to collect configuration: %w", err)
+	}
+
+	return collected, nil
 }
 
 func (c *InitInstallConfigCmd) buildConfigOptions() *files.ConfigOptions {
@@ -193,6 +203,12 @@ func (c *InitInstallConfigCmd) buildConfigOptions() *files.ConfigOptions {
 	}
 }
 
+func (c *InitInstallConfigCmd) printWelcomeMessage() {
+	fmt.Println("Welcome to OMS!")
+	fmt.Println("This wizard will help you create config.yaml and prod.vault.yaml for Codesphere installation.")
+	fmt.Println()
+}
+
 func (c *InitInstallConfigCmd) printSuccessMessage() {
 	fmt.Println("\n" + strings.Repeat("=", 70))
 	fmt.Println("Configuration files successfully generated!")
@@ -241,7 +257,6 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.CodesphereHostingPlanTempStorage = 1024
 		c.Opts.CodesphereWorkspacePlanName = "Standard Developer"
 		c.Opts.CodesphereWorkspacePlanMaxReplica = 3
-		c.Opts.Interactive = false
 		c.Opts.GenerateKeys = true
 		c.Opts.SecretsBaseDir = "/root/secrets"
 		fmt.Println("Applied 'dev' profile: single-node development setup")
@@ -310,7 +325,6 @@ func (c *InitInstallConfigCmd) applyProfile() error {
 		c.Opts.CodesphereHostingPlanTempStorage = 1024
 		c.Opts.CodesphereWorkspacePlanName = "Standard Developer"
 		c.Opts.CodesphereWorkspacePlanMaxReplica = 1
-		c.Opts.Interactive = false
 		c.Opts.GenerateKeys = true
 		c.Opts.SecretsBaseDir = "/root/secrets"
 		fmt.Println("Applied 'minimal' profile: minimal single-node setup")
@@ -433,7 +447,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(c.cmd, "vault")
 
 	c.cmd.PreRun = func(cmd *cobra.Command, args []string) {
-		c.Generator = installer.NewConfigGenerator(c.Opts.Interactive)
+		c.Generator = installer.NewConfigGenerator()
 	}
 
 	c.cmd.RunE = c.RunE
