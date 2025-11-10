@@ -17,9 +17,9 @@ import (
 )
 
 type K0sManager interface {
-	BinaryExists() bool
-	Download(force bool, quiet bool) error
-	Install(configPath string, force bool) error
+	GetLatestVersion() (string, error)
+	Download(version string, force bool, quiet bool) (string, error)
+	Install(configPath string, k0sPath string, force bool) error
 }
 
 type K0s struct {
@@ -40,38 +40,36 @@ func NewK0s(hw portal.Http, env env.Env, fw util.FileIO) K0sManager {
 	}
 }
 
-func (k *K0s) BinaryExists() bool {
-	workdir := k.Env.GetOmsWorkdir()
-	k0sPath := filepath.Join(workdir, "k0s")
-	return k.FileWriter.Exists(k0sPath)
-}
-
-func (k *K0s) Download(force bool, quiet bool) error {
-	if k.Goos != "linux" || k.Goarch != "amd64" {
-		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
-	}
-
-	// Get the latest k0s version
+func (k *K0s) GetLatestVersion() (string, error) {
 	versionBytes, err := k.Http.Get("https://docs.k0sproject.io/stable.txt")
 	if err != nil {
-		return fmt.Errorf("failed to fetch version info: %w", err)
+		return "", fmt.Errorf("failed to fetch version info: %w", err)
 	}
 
 	version := strings.TrimSpace(string(versionBytes))
 	if version == "" {
-		return fmt.Errorf("version info is empty, cannot proceed with download")
+		return "", fmt.Errorf("version info is empty, cannot proceed with download")
+	}
+
+	return version, nil
+}
+
+// Download downloads the k0s binary for the specified version and saves it to the OMS workdir.
+func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
+	if k.Goos != "linux" || k.Goarch != "amd64" {
+		return "", fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
 	}
 
 	// Check if k0s binary already exists and create destination file
 	workdir := k.Env.GetOmsWorkdir()
 	k0sPath := filepath.Join(workdir, "k0s")
-	if k.BinaryExists() && !force {
-		return fmt.Errorf("k0s binary already exists at %s. Use --force to overwrite", k0sPath)
+	if k.FileWriter.Exists(k0sPath) && !force {
+		return "", fmt.Errorf("k0s binary already exists at %s. Use --force to overwrite", k0sPath)
 	}
 
 	file, err := k.FileWriter.Create(k0sPath)
 	if err != nil {
-		return fmt.Errorf("failed to create k0s binary file: %w", err)
+		return "", fmt.Errorf("failed to create k0s binary file: %w", err)
 	}
 	defer util.CloseFileIgnoreError(file)
 
@@ -81,32 +79,30 @@ func (k *K0s) Download(force bool, quiet bool) error {
 	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0s/releases/download/%s/k0s-%s-%s", version, version, k.Goarch)
 	err = k.Http.Download(downloadURL, file, quiet)
 	if err != nil {
-		return fmt.Errorf("failed to download k0s binary: %w", err)
+		return "", fmt.Errorf("failed to download k0s binary: %w", err)
 	}
 
 	// Make the binary executable
 	err = os.Chmod(k0sPath, 0755)
 	if err != nil {
-		return fmt.Errorf("failed to make k0s binary executable: %w", err)
+		return "", fmt.Errorf("failed to make k0s binary executable: %w", err)
 	}
 
 	log.Printf("k0s binary downloaded and made executable at '%s'", k0sPath)
 
-	return nil
+	return k0sPath, nil
 }
 
-func (k *K0s) Install(configPath string, force bool) error {
+func (k *K0s) Install(configPath string, k0sPath string, force bool) error {
 	if k.Goos != "linux" || k.Goarch != "amd64" {
-		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
+		return fmt.Errorf("k0s installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
 	}
 
-	workdir := k.Env.GetOmsWorkdir()
-	k0sPath := filepath.Join(workdir, "k0s")
-	if !k.BinaryExists() {
+	if !k.FileWriter.Exists(k0sPath) {
 		return fmt.Errorf("k0s binary does not exist in '%s', please download first", k0sPath)
 	}
 
-	args := []string{"./k0s", "install", "controller"}
+	args := []string{k0sPath, "install", "controller"}
 	if configPath != "" {
 		args = append(args, "--config", configPath)
 	} else {
@@ -117,14 +113,18 @@ func (k *K0s) Install(configPath string, force bool) error {
 		args = append(args, "--force")
 	}
 
-	err := util.RunCommand("sudo", args, workdir)
+	err := util.RunCommand("sudo", args, "")
 	if err != nil {
 		return fmt.Errorf("failed to install k0s: %w", err)
 	}
 
-	log.Println("k0s installed successfully in single-node mode.")
-	log.Printf("You can start it using 'sudo %v/k0s start'", workdir)
-	log.Printf("You can check the status using 'sudo %v/k0s status'", workdir)
+	if configPath != "" {
+		log.Println("k0s installed successfully with provided configuration.")
+	} else {
+		log.Println("k0s installed successfully in single-node mode.")
+	}
+	log.Printf("You can start it using 'sudo %v start'", k0sPath)
+	log.Printf("You can check the status using 'sudo %v status'", k0sPath)
 
 	return nil
 }

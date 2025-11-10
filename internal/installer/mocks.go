@@ -118,65 +118,30 @@ func (_m *MockK0sManager) EXPECT() *MockK0sManager_Expecter {
 	return &MockK0sManager_Expecter{mock: &_m.Mock}
 }
 
-// BinaryExists provides a mock function for the type MockK0sManager
-func (_mock *MockK0sManager) BinaryExists() bool {
-	ret := _mock.Called()
-
-	if len(ret) == 0 {
-		panic("no return value specified for BinaryExists")
-	}
-
-	var r0 bool
-	if returnFunc, ok := ret.Get(0).(func() bool); ok {
-		r0 = returnFunc()
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-	return r0
-}
-
-// MockK0sManager_BinaryExists_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BinaryExists'
-type MockK0sManager_BinaryExists_Call struct {
-	*mock.Call
-}
-
-// BinaryExists is a helper method to define mock.On call
-func (_e *MockK0sManager_Expecter) BinaryExists() *MockK0sManager_BinaryExists_Call {
-	return &MockK0sManager_BinaryExists_Call{Call: _e.mock.On("BinaryExists")}
-}
-
-func (_c *MockK0sManager_BinaryExists_Call) Run(run func()) *MockK0sManager_BinaryExists_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run()
-	})
-	return _c
-}
-
-func (_c *MockK0sManager_BinaryExists_Call) Return(b bool) *MockK0sManager_BinaryExists_Call {
-	_c.Call.Return(b)
-	return _c
-}
-
-func (_c *MockK0sManager_BinaryExists_Call) RunAndReturn(run func() bool) *MockK0sManager_BinaryExists_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // Download provides a mock function for the type MockK0sManager
-func (_mock *MockK0sManager) Download(force bool, quiet bool) error {
-	ret := _mock.Called(force, quiet)
+func (_mock *MockK0sManager) Download(version string, force bool, quiet bool) (string, error) {
+	ret := _mock.Called(version, force, quiet)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Download")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(bool, bool) error); ok {
-		r0 = returnFunc(force, quiet)
-	} else {
-		r0 = ret.Error(0)
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, bool, bool) (string, error)); ok {
+		return returnFunc(version, force, quiet)
 	}
-	return r0
+	if returnFunc, ok := ret.Get(0).(func(string, bool, bool) string); ok {
+		r0 = returnFunc(version, force, quiet)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, bool, bool) error); ok {
+		r1 = returnFunc(version, force, quiet)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // MockK0sManager_Download_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Download'
@@ -185,40 +150,94 @@ type MockK0sManager_Download_Call struct {
 }
 
 // Download is a helper method to define mock.On call
+//   - version
 //   - force
 //   - quiet
-func (_e *MockK0sManager_Expecter) Download(force interface{}, quiet interface{}) *MockK0sManager_Download_Call {
-	return &MockK0sManager_Download_Call{Call: _e.mock.On("Download", force, quiet)}
+func (_e *MockK0sManager_Expecter) Download(version interface{}, force interface{}, quiet interface{}) *MockK0sManager_Download_Call {
+	return &MockK0sManager_Download_Call{Call: _e.mock.On("Download", version, force, quiet)}
 }
 
-func (_c *MockK0sManager_Download_Call) Run(run func(force bool, quiet bool)) *MockK0sManager_Download_Call {
+func (_c *MockK0sManager_Download_Call) Run(run func(version string, force bool, quiet bool)) *MockK0sManager_Download_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(bool), args[1].(bool))
+		run(args[0].(string), args[1].(bool), args[2].(bool))
 	})
 	return _c
 }
 
-func (_c *MockK0sManager_Download_Call) Return(err error) *MockK0sManager_Download_Call {
-	_c.Call.Return(err)
+func (_c *MockK0sManager_Download_Call) Return(s string, err error) *MockK0sManager_Download_Call {
+	_c.Call.Return(s, err)
 	return _c
 }
 
-func (_c *MockK0sManager_Download_Call) RunAndReturn(run func(force bool, quiet bool) error) *MockK0sManager_Download_Call {
+func (_c *MockK0sManager_Download_Call) RunAndReturn(run func(version string, force bool, quiet bool) (string, error)) *MockK0sManager_Download_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetLatestVersion provides a mock function for the type MockK0sManager
+func (_mock *MockK0sManager) GetLatestVersion() (string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetLatestVersion")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() string); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockK0sManager_GetLatestVersion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetLatestVersion'
+type MockK0sManager_GetLatestVersion_Call struct {
+	*mock.Call
+}
+
+// GetLatestVersion is a helper method to define mock.On call
+func (_e *MockK0sManager_Expecter) GetLatestVersion() *MockK0sManager_GetLatestVersion_Call {
+	return &MockK0sManager_GetLatestVersion_Call{Call: _e.mock.On("GetLatestVersion")}
+}
+
+func (_c *MockK0sManager_GetLatestVersion_Call) Run(run func()) *MockK0sManager_GetLatestVersion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockK0sManager_GetLatestVersion_Call) Return(s string, err error) *MockK0sManager_GetLatestVersion_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockK0sManager_GetLatestVersion_Call) RunAndReturn(run func() (string, error)) *MockK0sManager_GetLatestVersion_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Install provides a mock function for the type MockK0sManager
-func (_mock *MockK0sManager) Install(configPath string, force bool) error {
-	ret := _mock.Called(configPath, force)
+func (_mock *MockK0sManager) Install(configPath string, k0sPath string, force bool) error {
+	ret := _mock.Called(configPath, k0sPath, force)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Install")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, bool) error); ok {
-		r0 = returnFunc(configPath, force)
+	if returnFunc, ok := ret.Get(0).(func(string, string, bool) error); ok {
+		r0 = returnFunc(configPath, k0sPath, force)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -232,14 +251,15 @@ type MockK0sManager_Install_Call struct {
 
 // Install is a helper method to define mock.On call
 //   - configPath
+//   - k0sPath
 //   - force
-func (_e *MockK0sManager_Expecter) Install(configPath interface{}, force interface{}) *MockK0sManager_Install_Call {
-	return &MockK0sManager_Install_Call{Call: _e.mock.On("Install", configPath, force)}
+func (_e *MockK0sManager_Expecter) Install(configPath interface{}, k0sPath interface{}, force interface{}) *MockK0sManager_Install_Call {
+	return &MockK0sManager_Install_Call{Call: _e.mock.On("Install", configPath, k0sPath, force)}
 }
 
-func (_c *MockK0sManager_Install_Call) Run(run func(configPath string, force bool)) *MockK0sManager_Install_Call {
+func (_c *MockK0sManager_Install_Call) Run(run func(configPath string, k0sPath string, force bool)) *MockK0sManager_Install_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(bool))
+		run(args[0].(string), args[1].(string), args[2].(bool))
 	})
 	return _c
 }
@@ -249,7 +269,7 @@ func (_c *MockK0sManager_Install_Call) Return(err error) *MockK0sManager_Install
 	return _c
 }
 
-func (_c *MockK0sManager_Install_Call) RunAndReturn(run func(configPath string, force bool) error) *MockK0sManager_Install_Call {
+func (_c *MockK0sManager_Install_Call) RunAndReturn(run func(configPath string, k0sPath string, force bool) error) *MockK0sManager_Install_Call {
 	_c.Call.Return(run)
 	return _c
 }
