@@ -84,11 +84,11 @@ var _ = Describe("BuildImageCmd", func() {
 
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("codesphere-v1.66.0", nil)
-			mockImageManager.EXPECT().BuildImage("Dockerfile", "my-registry.com/my-image:codesphere-v1.66.0", ".").Return(errors.New("build failed"))
+			mockImageManager.EXPECT().BuildAndPushImage("Dockerfile", "my-registry.com/my-image:codesphere-v1.66.0", ".").Return(errors.New("build failed"))
 
 			err := c.BuildImage(mockPackageManager, mockImageManager)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to build image"))
+			Expect(err.Error()).To(ContainSubstring("failed to build and push image"))
 		})
 
 		It("fails when image push fails", func() {
@@ -100,12 +100,11 @@ var _ = Describe("BuildImageCmd", func() {
 
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("codesphere-v1.66.0", nil)
-			mockImageManager.EXPECT().BuildImage("Dockerfile", "my-registry.com/my-image:codesphere-v1.66.0", ".").Return(nil)
-			mockImageManager.EXPECT().PushImage("my-registry.com/my-image:codesphere-v1.66.0").Return(errors.New("push failed"))
+			mockImageManager.EXPECT().BuildAndPushImage("Dockerfile", "my-registry.com/my-image:codesphere-v1.66.0", ".").Return(errors.New("push failed"))
 
 			err := c.BuildImage(mockPackageManager, mockImageManager)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to push image"))
+			Expect(err.Error()).To(ContainSubstring("failed to build and push image"))
 		})
 
 		It("successfully builds and pushes image", func() {
@@ -117,8 +116,7 @@ var _ = Describe("BuildImageCmd", func() {
 
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("codesphere-v1.66.0", nil)
-			mockImageManager.EXPECT().BuildImage("Dockerfile", "my-registry.com/my-image:codesphere-v1.66.0", ".").Return(nil)
-			mockImageManager.EXPECT().PushImage("my-registry.com/my-image:codesphere-v1.66.0").Return(nil)
+			mockImageManager.EXPECT().BuildAndPushImage("Dockerfile", "my-registry.com/my-image:codesphere-v1.66.0", ".").Return(nil)
 
 			err := c.BuildImage(mockPackageManager, mockImageManager)
 			Expect(err).To(BeNil())

@@ -35,6 +35,53 @@ func (_m *MockImageManager) EXPECT() *MockImageManager_Expecter {
 	return &MockImageManager_Expecter{mock: &_m.Mock}
 }
 
+// BuildAndPushImage provides a mock function for the type MockImageManager
+func (_mock *MockImageManager) BuildAndPushImage(dockerfile string, tag string, buildContext string) error {
+	ret := _mock.Called(dockerfile, tag, buildContext)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BuildAndPushImage")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string) error); ok {
+		r0 = returnFunc(dockerfile, tag, buildContext)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockImageManager_BuildAndPushImage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BuildAndPushImage'
+type MockImageManager_BuildAndPushImage_Call struct {
+	*mock.Call
+}
+
+// BuildAndPushImage is a helper method to define mock.On call
+//   - dockerfile
+//   - tag
+//   - buildContext
+func (_e *MockImageManager_Expecter) BuildAndPushImage(dockerfile interface{}, tag interface{}, buildContext interface{}) *MockImageManager_BuildAndPushImage_Call {
+	return &MockImageManager_BuildAndPushImage_Call{Call: _e.mock.On("BuildAndPushImage", dockerfile, tag, buildContext)}
+}
+
+func (_c *MockImageManager_BuildAndPushImage_Call) Run(run func(dockerfile string, tag string, buildContext string)) *MockImageManager_BuildAndPushImage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string), args[2].(string))
+	})
+	return _c
+}
+
+func (_c *MockImageManager_BuildAndPushImage_Call) Return(err error) *MockImageManager_BuildAndPushImage_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockImageManager_BuildAndPushImage_Call) RunAndReturn(run func(dockerfile string, tag string, buildContext string) error) *MockImageManager_BuildAndPushImage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // BuildImage provides a mock function for the type MockImageManager
 func (_mock *MockImageManager) BuildImage(dockerfile string, tag string, buildContext string) error {
 	ret := _mock.Called(dockerfile, tag, buildContext)

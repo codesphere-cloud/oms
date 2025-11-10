@@ -79,15 +79,16 @@ var _ = Describe("InstallCodesphereCmd", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockConfigManager := installer.NewMockConfigManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
+			dockerfileManager := util.NewDockerfileManager()
 
 			// Test with Windows platform
-			err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "windows", "amd64")
+			err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, dockerfileManager, "windows", "amd64")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 			Expect(err.Error()).To(ContainSubstring("windows/amd64"))
 
 			// Test with ARM64 architecture
-			err = c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "arm64")
+			err = c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, dockerfileManager, "linux", "arm64")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 			Expect(err.Error()).To(ContainSubstring("linux/arm64"))
@@ -98,11 +99,12 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
 				mockImageManager := system.NewMockImageManager(GinkgoT())
+				dockerfileManager := util.NewDockerfileManager()
 
 				c.Opts.Config = "invalid-config.yaml"
 				mockConfigManager.EXPECT().ParseConfigYaml("invalid-config.yaml").Return(files.RootConfig{}, errors.New("config parse error"))
 
-				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, dockerfileManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to extract config.yaml"))
 			})
@@ -111,12 +113,13 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
 				mockImageManager := system.NewMockImageManager(GinkgoT())
+				dockerfileManager := util.NewDockerfileManager()
 
 				c.Opts.Config = "valid-config.yaml"
 				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(files.RootConfig{}, nil)
 				mockPackageManager.EXPECT().Extract(false).Return(errors.New("extraction failed"))
 
-				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, dockerfileManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
 			})
@@ -125,6 +128,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
 				mockImageManager := system.NewMockImageManager(GinkgoT())
+				dockerfileManager := util.NewDockerfileManager()
 				mockFileIO := util.NewMockFileIO(GinkgoT())
 
 				c.Opts.Config = "valid-config.yaml"
@@ -134,7 +138,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
 				mockFileIO.EXPECT().Exists("/test/workdir/package").Return(false)
 
-				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, dockerfileManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to list available files"))
 			})
@@ -143,6 +147,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
 				mockImageManager := system.NewMockImageManager(GinkgoT())
+				dockerfileManager := util.NewDockerfileManager()
 				mockFileIO := util.NewMockFileIO(GinkgoT())
 
 				c.Opts.Config = "valid-config.yaml"
@@ -160,7 +165,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				}
 				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
-				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, dockerfileManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("deps.tar.gz not found in package"))
 			})
@@ -169,6 +174,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
 				mockImageManager := system.NewMockImageManager(GinkgoT())
+				dockerfileManager := util.NewDockerfileManager()
 				mockFileIO := util.NewMockFileIO(GinkgoT())
 
 				c.Opts.Config = "valid-config.yaml"
@@ -186,7 +192,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				}
 				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
-				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, dockerfileManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("private-cloud-installer.js not found in package"))
 			})
@@ -195,6 +201,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
 				mockImageManager := system.NewMockImageManager(GinkgoT())
+				dockerfileManager := util.NewDockerfileManager()
 				mockFileIO := util.NewMockFileIO(GinkgoT())
 
 				c.Opts.Config = "valid-config.yaml"
@@ -212,7 +219,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				}
 				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
-				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, dockerfileManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("node executable not found in package"))
 			})
@@ -221,6 +228,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
 				mockImageManager := system.NewMockImageManager(GinkgoT())
+				dockerfileManager := util.NewDockerfileManager()
 				mockFileIO := util.NewMockFileIO(GinkgoT())
 
 				c.Opts.Config = "valid-config.yaml"
@@ -240,7 +248,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				}
 				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
-				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, dockerfileManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				// Should fail when trying to make fake node executable
 				Expect(err).To(HaveOccurred())
@@ -251,6 +259,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
 				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockDockerfileManager := util.NewMockDockerfileManager(GinkgoT())
 				mockFileIO := util.NewMockFileIO(GinkgoT())
 
 				c.Opts.Config = "valid-config.yaml"
@@ -295,11 +304,9 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager.EXPECT().ExtractDependency("codesphere/images/ubuntu.tar", false).Return(nil)
 				mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/ubuntu.tar").Return("/test/workdir/deps/codesphere/images/ubuntu.tar")
 				mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/ubuntu.tar").Return(nil)
+				mockDockerfileManager.EXPECT().UpdateFromStatement("workspace.Dockerfile", "ubuntu").Return(errors.New("failed to update FROM statement: failed to open dockerfile workspace.Dockerfile: dockerfile not found"))
 
-				// Mock for reading the Dockerfile
-				mockFileIO.EXPECT().Open("workspace.Dockerfile").Return(nil, errors.New("dockerfile not found"))
-
-				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, mockDockerfileManager, "linux", "amd64")
 				// Should fail when trying to read the dockerfile
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("dockerfile not found"))

@@ -96,14 +96,9 @@ func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm inst
 
 			targetImage := fmt.Sprintf("%s/%s-%s:%s", config.Registry.Server, imageName, flavorName, codesphereVersion)
 
-			err := im.BuildImage(flavorConfig.Image.Dockerfile, targetImage, ".")
+			err = im.BuildAndPushImage(flavorConfig.Image.Dockerfile, targetImage, ".")
 			if err != nil {
-				return fmt.Errorf("failed to build image %s: %w", targetImage, err)
-			}
-
-			err = im.PushImage(targetImage)
-			if err != nil {
-				return fmt.Errorf("failed to push image %s: %w", targetImage, err)
+				return fmt.Errorf("failed to build workspace image from Dockerfile %s: %w", flavorConfig.Image.Dockerfile, err)
 			}
 
 			log.Printf("Successfully built and pushed image: %s", targetImage)

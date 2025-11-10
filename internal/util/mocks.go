@@ -7,7 +7,6 @@ package util
 import (
 	"github.com/jedib0t/go-pretty/v6/table"
 	mock "github.com/stretchr/testify/mock"
-	"io"
 	"os"
 )
 
@@ -39,29 +38,20 @@ func (_m *MockDockerfileManager) EXPECT() *MockDockerfileManager_Expecter {
 }
 
 // UpdateFromStatement provides a mock function for the type MockDockerfileManager
-func (_mock *MockDockerfileManager) UpdateFromStatement(dockerfile io.Reader, baseImage string) (string, error) {
+func (_mock *MockDockerfileManager) UpdateFromStatement(dockerfile string, baseImage string) error {
 	ret := _mock.Called(dockerfile, baseImage)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateFromStatement")
 	}
 
-	var r0 string
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(io.Reader, string) (string, error)); ok {
-		return returnFunc(dockerfile, baseImage)
-	}
-	if returnFunc, ok := ret.Get(0).(func(io.Reader, string) string); ok {
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
 		r0 = returnFunc(dockerfile, baseImage)
 	} else {
-		r0 = ret.Get(0).(string)
+		r0 = ret.Error(0)
 	}
-	if returnFunc, ok := ret.Get(1).(func(io.Reader, string) error); ok {
-		r1 = returnFunc(dockerfile, baseImage)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
+	return r0
 }
 
 // MockDockerfileManager_UpdateFromStatement_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateFromStatement'
@@ -76,19 +66,19 @@ func (_e *MockDockerfileManager_Expecter) UpdateFromStatement(dockerfile interfa
 	return &MockDockerfileManager_UpdateFromStatement_Call{Call: _e.mock.On("UpdateFromStatement", dockerfile, baseImage)}
 }
 
-func (_c *MockDockerfileManager_UpdateFromStatement_Call) Run(run func(dockerfile io.Reader, baseImage string)) *MockDockerfileManager_UpdateFromStatement_Call {
+func (_c *MockDockerfileManager_UpdateFromStatement_Call) Run(run func(dockerfile string, baseImage string)) *MockDockerfileManager_UpdateFromStatement_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(io.Reader), args[1].(string))
+		run(args[0].(string), args[1].(string))
 	})
 	return _c
 }
 
-func (_c *MockDockerfileManager_UpdateFromStatement_Call) Return(s string, err error) *MockDockerfileManager_UpdateFromStatement_Call {
-	_c.Call.Return(s, err)
+func (_c *MockDockerfileManager_UpdateFromStatement_Call) Return(err error) *MockDockerfileManager_UpdateFromStatement_Call {
+	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockDockerfileManager_UpdateFromStatement_Call) RunAndReturn(run func(dockerfile io.Reader, baseImage string) (string, error)) *MockDockerfileManager_UpdateFromStatement_Call {
+func (_c *MockDockerfileManager_UpdateFromStatement_Call) RunAndReturn(run func(dockerfile string, baseImage string) error) *MockDockerfileManager_UpdateFromStatement_Call {
 	_c.Call.Return(run)
 	return _c
 }

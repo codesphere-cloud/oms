@@ -44,8 +44,9 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
 	pm := installer.NewPackage(workdir, c.Opts.Package)
 	cm := installer.NewConfig()
 	im := system.NewImage(context.Background())
+	dm := util.NewDockerfileManager()
 
-	err := c.ExtractAndInstall(pm, cm, im, runtime.GOOS, runtime.GOARCH)
+	err := c.ExtractAndInstall(pm, cm, im, dm, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
 		return fmt.Errorf("failed to extract and install package: %w", err)
 	}
@@ -79,7 +80,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere.cmd.RunE = codesphere.RunE
 }
 
-func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager, goos string, goarch string) error {
+func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager, dm util.DockerfileManager, goos string, goarch string) error {
 	if goos != "linux" || goarch != "amd64" {
 		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", goos, goarch)
 	}
@@ -132,30 +133,15 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 			}
 			log.Printf("Loaded root image '%s'", extractedImagePath)
 
-			// TODO: This is duplicated from update_dockerfile.go, refactor into shared function
-			dockerfileFile, err := pm.FileIO().Open(dockerfile)
-			if err != nil {
-				return fmt.Errorf("failed to open dockerfile %s: %w", dockerfile, err)
-			}
-			defer util.CloseFileIgnoreError(dockerfileFile)
-
-			dockerfileManager := util.NewDockerfileManager()
-			updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, rootImageName)
+			err := dm.UpdateFromStatement(dockerfile, rootImageName)
 			if err != nil {
 				return fmt.Errorf("failed to update FROM statement: %w", err)
 			}
-
-			err = pm.FileIO().WriteFile(dockerfile, []byte(updatedContent), 0644)
-			if err != nil {
-				return fmt.Errorf("failed to write updated dockerfile: %w", err)
-			}
-
 			log.Printf("Successfully updated FROM statement in %s to use %s", dockerfile, rootImageName)
-			// TODO: End duplicated code
 
 			dockerfileName := filepath.Base(dockerfile)
 			dockerfileDir := filepath.Dir(dockerfile)
-			err = im.BuildImage(dockerfileName, rootImageName, dockerfileDir)
+			err = im.BuildAndPushImage(dockerfileName, rootImageName, dockerfileDir)
 			if err != nil {
 				return fmt.Errorf("failed to build workspace image from Dockerfile %s: %w", dockerfile, err)
 			}

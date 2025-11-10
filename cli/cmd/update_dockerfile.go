@@ -39,8 +39,9 @@ func (c *UpdateDockerfileCmd) RunE(_ *cobra.Command, args []string) error {
 	workdir := c.Env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, c.Opts.Package)
 	im := system.NewImage(context.Background())
+	dm := util.NewDockerfileManager()
 
-	err := c.UpdateDockerfile(pm, im, args)
+	err := c.UpdateDockerfile(pm, im, dm, args)
 	if err != nil {
 		return fmt.Errorf("failed to update dockerfile: %w", err)
 	}
@@ -80,7 +81,7 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 	dockerfileCmd.cmd.RunE = dockerfileCmd.RunE
 }
 
-func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im system.ImageManager, args []string) error {
+func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im system.ImageManager, dm util.DockerfileManager, args []string) error {
 	err := pm.Extract(c.Opts.Force)
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
@@ -104,22 +105,9 @@ func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im s
 		return fmt.Errorf("failed to load baseimage file %s: %w", imagePath, err)
 	}
 
-	// Update dockerfile FROM statement
-	dockerfileFile, err := pm.FileIO().Open(c.Opts.Dockerfile)
-	if err != nil {
-		return fmt.Errorf("failed to open dockerfile %s: %w", c.Opts.Dockerfile, err)
-	}
-	defer util.CloseFileIgnoreError(dockerfileFile)
-
-	dockerfileManager := util.NewDockerfileManager()
-	updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, imageName)
+	err = dm.UpdateFromStatement(c.Opts.Dockerfile, imageName)
 	if err != nil {
 		return fmt.Errorf("failed to update FROM statement: %w", err)
-	}
-
-	err = pm.FileIO().WriteFile(c.Opts.Dockerfile, []byte(updatedContent), 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write updated dockerfile: %w", err)
 	}
 
 	log.Printf("Successfully updated FROM statement in %s to use %s", c.Opts.Dockerfile, imageName)

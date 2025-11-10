@@ -236,11 +236,11 @@ var _ = Describe("BuildImagesCmd", func() {
 			mockConfigManager.EXPECT().ParseConfigYaml("config-with-dockerfile.yaml").Return(configWithDockerfile, nil)
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("1.0.0", nil)
-			mockImageManager.EXPECT().BuildImage("Dockerfile", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(errors.New("build failed"))
+			mockImageManager.EXPECT().BuildAndPushImage("Dockerfile", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(errors.New("build failed"))
 
 			err := c.BuildAndPushImages(mockPackageManager, mockConfigManager, mockImageManager)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to build image"))
+			Expect(err.Error()).To(ContainSubstring("failed to build workspace image from Dockerfile"))
 		})
 
 		It("fails when image push fails", func() {
@@ -275,12 +275,11 @@ var _ = Describe("BuildImagesCmd", func() {
 			mockConfigManager.EXPECT().ParseConfigYaml("config-with-dockerfile.yaml").Return(configWithDockerfile, nil)
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("1.0.0", nil)
-			mockImageManager.EXPECT().BuildImage("Dockerfile", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(nil)
-			mockImageManager.EXPECT().PushImage("registry.example.com/my-ubuntu-24.04-default:1.0.0").Return(errors.New("push failed"))
+			mockImageManager.EXPECT().BuildAndPushImage("Dockerfile", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(errors.New("push failed"))
 
 			err := c.BuildAndPushImages(mockPackageManager, mockConfigManager, mockImageManager)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to push image"))
+			Expect(err.Error()).To(ContainSubstring("failed to build workspace image from Dockerfile"))
 		})
 
 		It("successfully builds and pushes single image", func() {
@@ -315,8 +314,7 @@ var _ = Describe("BuildImagesCmd", func() {
 			mockConfigManager.EXPECT().ParseConfigYaml("config-with-dockerfile.yaml").Return(configWithDockerfile, nil)
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("1.0.0", nil)
-			mockImageManager.EXPECT().BuildImage("Dockerfile", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(nil)
-			mockImageManager.EXPECT().PushImage("registry.example.com/my-ubuntu-24.04-default:1.0.0").Return(nil)
+			mockImageManager.EXPECT().BuildAndPushImage("Dockerfile", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(nil)
 
 			err := c.BuildAndPushImages(mockPackageManager, mockConfigManager, mockImageManager)
 			Expect(err).To(BeNil())
@@ -374,16 +372,13 @@ var _ = Describe("BuildImagesCmd", func() {
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("1.0.0", nil)
 
 			// Expect calls for my-ubuntu-24.04 default flavor
-			mockImageManager.EXPECT().BuildImage("Dockerfile.default", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(nil)
-			mockImageManager.EXPECT().PushImage("registry.example.com/my-ubuntu-24.04-default:1.0.0").Return(nil)
+			mockImageManager.EXPECT().BuildAndPushImage("Dockerfile.default", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(nil)
 
 			// Expect calls for my-ubuntu-24.04 minimal flavor
-			mockImageManager.EXPECT().BuildImage("Dockerfile.minimal", "registry.example.com/my-ubuntu-24.04-minimal:1.0.0", ".").Return(nil)
-			mockImageManager.EXPECT().PushImage("registry.example.com/my-ubuntu-24.04-minimal:1.0.0").Return(nil)
+			mockImageManager.EXPECT().BuildAndPushImage("Dockerfile.minimal", "registry.example.com/my-ubuntu-24.04-minimal:1.0.0", ".").Return(nil)
 
 			// Expect calls for my-alpine-3.18 default flavor
-			mockImageManager.EXPECT().BuildImage("Dockerfile.alpine", "registry.example.com/my-alpine-3.18-default:1.0.0", ".").Return(nil)
-			mockImageManager.EXPECT().PushImage("registry.example.com/my-alpine-3.18-default:1.0.0").Return(nil)
+			mockImageManager.EXPECT().BuildAndPushImage("Dockerfile.alpine", "registry.example.com/my-alpine-3.18-default:1.0.0", ".").Return(nil)
 
 			err := c.BuildAndPushImages(mockPackageManager, mockConfigManager, mockImageManager)
 			Expect(err).To(BeNil())

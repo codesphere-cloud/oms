@@ -18,6 +18,7 @@ type ImageManager interface {
 	LoadImage(imageTarPath string) error
 	BuildImage(dockerfile string, tag string, buildContext string) error
 	PushImage(tag string) error
+	BuildAndPushImage(dockerfile string, tag string, buildContext string) error
 }
 
 func NewImage(ctx context.Context) *Image {
@@ -55,6 +56,20 @@ func (i *Image) PushImage(tag string) error {
 	if err != nil {
 		return fmt.Errorf("push failed: %w", err)
 	}
+	return nil
+}
+
+func (i *Image) BuildAndPushImage(dockerfile string, tag string, buildContext string) error {
+	err := i.BuildImage(dockerfile, tag, buildContext)
+	if err != nil {
+		return fmt.Errorf("failed to build image: %w", err)
+	}
+
+	err = i.PushImage(tag)
+	if err != nil {
+		return fmt.Errorf("failed to push image: %w", err)
+	}
+
 	return nil
 }
 

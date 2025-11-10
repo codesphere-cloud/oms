@@ -12,21 +12,31 @@ import (
 
 // DockerfileManager provides functionality to parse and modify Dockerfiles
 type DockerfileManager interface {
-	UpdateFromStatement(dockerfile io.Reader, baseImage string) (string, error)
+	UpdateFromStatement(dockerfile string, baseImage string) error
 }
 
-type Dockerfile struct{}
+type Dockerfile struct {
+	fileIO FileIO
+}
 
 // NewDockerfileManager creates a new instance of DockerfileManager
 func NewDockerfileManager() DockerfileManager {
-	return &Dockerfile{}
+	return &Dockerfile{
+		fileIO: NewFilesystemWriter(),
+	}
 }
 
 // UpdateFromStatement updates the FROM statement in a Dockerfile with a new base image
-func (dm *Dockerfile) UpdateFromStatement(dockerfile io.Reader, baseImage string) (string, error) {
-	content, err := io.ReadAll(dockerfile)
+func (dm *Dockerfile) UpdateFromStatement(dockerfile string, baseImage string) error {
+	file, err := dm.fileIO.Open(dockerfile)
 	if err != nil {
-		return "", fmt.Errorf("error reading dockerfile: %w", err)
+		return fmt.Errorf("failed to open dockerfile %s: %w", dockerfile, err)
+	}
+	defer CloseFileIgnoreError(file)
+
+	content, err := io.ReadAll(file)
+	if err != nil {
+		return fmt.Errorf("error reading dockerfile: %w", err)
 	}
 
 	// Regex to match FROM statements that contain workspace-agent
@@ -42,8 +52,13 @@ func (dm *Dockerfile) UpdateFromStatement(dockerfile io.Reader, baseImage string
 	}
 
 	if !updated {
-		return "", fmt.Errorf("no FROM statement with workspace-agent found in dockerfile")
+		return fmt.Errorf("no FROM statement with workspace-agent found in dockerfile")
 	}
 
-	return strings.Join(lines, "\n"), nil
+	err = dm.fileIO.WriteFile(dockerfile, []byte(strings.Join(lines, "\n")), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write updated dockerfile: %w", err)
+	}
+
+	return nil
 }

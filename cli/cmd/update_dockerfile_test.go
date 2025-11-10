@@ -5,7 +5,6 @@ package cmd_test
 
 import (
 	"errors"
-	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -17,12 +16,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
-
-const sampleDockerfileContent = `FROM workspace-agent:20.04
-RUN apt-get update && apt-get install -y curl
-WORKDIR /app
-COPY . .
-CMD ["./start.sh"]`
 
 var _ = Describe("UpdateDockerfileCmd", func() {
 	var (
@@ -83,6 +76,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("fails when package manager fails to get image path and name", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
+			dockerfileManager := util.NewDockerfileManager()
 
 			c.Opts.Baseimage = "workspace-agent-24.04.tar"
 			c.Opts.Force = false
@@ -90,7 +84,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("workspace-agent-24.04.tar").Return("", errors.New("failed to extract image"))
 
-			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, []string{})
+			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, dockerfileManager, []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to get image name"))
 		})
@@ -98,7 +92,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("fails when dockerfile cannot be opened", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
+			mockDockerfileManager := util.NewMockDockerfileManager(GinkgoT())
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = ""
@@ -108,10 +102,9 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(nil)
-			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
-			mockFileIO.EXPECT().Open("Dockerfile").Return(nil, errors.New("file not found"))
+			mockDockerfileManager.EXPECT().UpdateFromStatement("Dockerfile", "ubuntu:24.04").Return(errors.New("failed to open dockerfile Dockerfile: file not found"))
 
-			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, []string{})
+			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, mockDockerfileManager, []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to open dockerfile"))
 		})
@@ -119,6 +112,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("fails when image manager fails to load image", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
+			dockerfileManager := util.NewDockerfileManager()
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = ""
@@ -129,7 +123,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(errors.New("load failed"))
 
-			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, []string{})
+			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, dockerfileManager, []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load baseimage file"))
 		})
@@ -137,19 +131,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("fails when writing updated dockerfile fails", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
-
-			// Create a temporary file for the Dockerfile
-			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
-			Expect(err).To(BeNil())
-			DeferCleanup(func() {
-				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
-			})
-			_, err = tempFile.WriteString(sampleDockerfileContent)
-			Expect(err).To(BeNil())
-			// Reset file position to beginning
-			_, _ = tempFile.Seek(0, 0)
+			mockDockerfileManager := util.NewMockDockerfileManager(GinkgoT())
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = ""
@@ -159,11 +141,9 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(nil)
-			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
-			mockFileIO.EXPECT().Open("Dockerfile").Return(tempFile, nil)
-			mockFileIO.EXPECT().WriteFile("Dockerfile", []byte("FROM ubuntu:24.04\nRUN apt-get update && apt-get install -y curl\nWORKDIR /app\nCOPY . .\nCMD [\"./start.sh\"]"), os.FileMode(0644)).Return(errors.New("write failed"))
+			mockDockerfileManager.EXPECT().UpdateFromStatement("Dockerfile", "ubuntu:24.04").Return(errors.New("failed to write updated dockerfile: write failed"))
 
-			err = c.UpdateDockerfile(mockPackageManager, mockImageManager, []string{})
+			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, mockDockerfileManager, []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to write updated dockerfile"))
 		})
@@ -171,19 +151,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("successfully updates dockerfile and loads image", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
-
-			// Create a temporary file for the Dockerfile
-			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
-			Expect(err).To(BeNil())
-			DeferCleanup(func() {
-				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
-			})
-			_, err = tempFile.WriteString(sampleDockerfileContent)
-			Expect(err).To(BeNil())
-			// Reset file position to beginning
-			_, _ = tempFile.Seek(0, 0)
+			mockDockerfileManager := util.NewMockDockerfileManager(GinkgoT())
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = ""
@@ -192,31 +160,17 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
-			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
-			mockFileIO.EXPECT().Open("Dockerfile").Return(tempFile, nil)
-			mockFileIO.EXPECT().WriteFile("Dockerfile", []byte("FROM ubuntu:24.04\nRUN apt-get update && apt-get install -y curl\nWORKDIR /app\nCOPY . .\nCMD [\"./start.sh\"]"), os.FileMode(0644)).Return(nil)
+			mockDockerfileManager.EXPECT().UpdateFromStatement("Dockerfile", "ubuntu:24.04").Return(nil)
 			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(nil)
 
-			err = c.UpdateDockerfile(mockPackageManager, mockImageManager, []string{})
+			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, mockDockerfileManager, []string{})
 			Expect(err).To(BeNil())
 		})
 
 		It("uses force flag when extracting dependencies", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
-
-			// Create a temporary file for the Dockerfile
-			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
-			Expect(err).To(BeNil())
-			DeferCleanup(func() {
-				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
-			})
-			_, err = tempFile.WriteString(sampleDockerfileContent)
-			Expect(err).To(BeNil())
-			// Reset file position to beginning
-			_, _ = tempFile.Seek(0, 0)
+			mockDockerfileManager := util.NewMockDockerfileManager(GinkgoT())
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = "workspace-agent-20.04.tar"
@@ -225,31 +179,17 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockPackageManager.EXPECT().Extract(true).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("workspace-agent-20.04.tar").Return("ubuntu:20.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("workspace-agent-20.04.tar", true).Return("/test/workdir/deps/codesphere/images/workspace-agent-20.04.tar", nil)
-			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
-			mockFileIO.EXPECT().Open("Dockerfile").Return(tempFile, nil)
-			mockFileIO.EXPECT().WriteFile("Dockerfile", []byte("FROM ubuntu:20.04\nRUN apt-get update && apt-get install -y curl\nWORKDIR /app\nCOPY . .\nCMD [\"./start.sh\"]"), os.FileMode(0644)).Return(nil)
+			mockDockerfileManager.EXPECT().UpdateFromStatement("Dockerfile", "ubuntu:20.04").Return(nil)
 			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-20.04.tar").Return(nil)
 
-			err = c.UpdateDockerfile(mockPackageManager, mockImageManager, []string{})
+			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, mockDockerfileManager, []string{})
 			Expect(err).To(BeNil())
 		})
 
 		It("handles different base image names correctly", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
-
-			// Create a temporary file for the Dockerfile
-			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
-			Expect(err).To(BeNil())
-			DeferCleanup(func() {
-				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
-			})
-			_, err = tempFile.WriteString(sampleDockerfileContent)
-			Expect(err).To(BeNil())
-			// Reset file position to beginning
-			_, _ = tempFile.Seek(0, 0)
+			mockDockerfileManager := util.NewMockDockerfileManager(GinkgoT())
 
 			c.Opts.Dockerfile = "custom/Dockerfile"
 			c.Opts.Baseimage = "workspace-agent-24.04.tar"
@@ -258,12 +198,10 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
 			mockPackageManager.EXPECT().GetBaseimageName("workspace-agent-24.04.tar").Return("registry.example.com/workspace-agent:24.04", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("workspace-agent-24.04.tar", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
-			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
-			mockFileIO.EXPECT().Open("custom/Dockerfile").Return(tempFile, nil)
-			mockFileIO.EXPECT().WriteFile("custom/Dockerfile", []byte("FROM registry.example.com/workspace-agent:24.04\nRUN apt-get update && apt-get install -y curl\nWORKDIR /app\nCOPY . .\nCMD [\"./start.sh\"]"), os.FileMode(0644)).Return(nil)
+			mockDockerfileManager.EXPECT().UpdateFromStatement("custom/Dockerfile", "registry.example.com/workspace-agent:24.04").Return(nil)
 			mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar").Return(nil)
 
-			err = c.UpdateDockerfile(mockPackageManager, mockImageManager, []string{})
+			err := c.UpdateDockerfile(mockPackageManager, mockImageManager, mockDockerfileManager, []string{})
 			Expect(err).To(BeNil())
 		})
 	})
