@@ -16,6 +16,7 @@ import (
 )
 
 const depsDir = "deps"
+const depsTar = "deps.tar.gz"
 
 type PackageManager interface {
 	FileIO() util.FileIO
@@ -35,7 +36,7 @@ type Package struct {
 	fileIO     util.FileIO
 }
 
-func NewPackage(omsWorkdir, filename string) *Package {
+func NewPackage(omsWorkdir, filename string) PackageManager {
 	return &Package{
 		Filename:   filename,
 		OmsWorkdir: omsWorkdir,
@@ -93,6 +94,15 @@ func (p *Package) Extract(force bool) error {
 	err = util.ExtractTarGz(p.fileIO, p.Filename, workDir)
 	if err != nil {
 		return fmt.Errorf("failed to extract package %s to %s: %w", p.Filename, workDir, err)
+	}
+
+	depsArchivePath := path.Join(workDir, depsTar)
+	if p.fileIO.Exists(depsArchivePath) {
+		depsTargetDir := path.Join(workDir, depsDir)
+		err = util.ExtractTarGz(p.fileIO, depsArchivePath, depsTargetDir)
+		if err != nil {
+			return fmt.Errorf("failed to extract deps.tar.gz to %s: %w", depsTargetDir, err)
+		}
 	}
 
 	return nil

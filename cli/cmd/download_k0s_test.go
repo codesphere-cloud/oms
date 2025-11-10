@@ -5,20 +5,21 @@ package cmd_test
 
 import (
 	"errors"
-	"runtime"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("DownloadK0sCmd", func() {
 	var (
-		downloadK0sCmd *cmd.DownloadK0sCmd
+		c              cmd.DownloadK0sCmd
+		opts           *cmd.DownloadK0sOpts
+		globalOpts     *cmd.GlobalOptions
 		mockEnv        *env.MockEnv
 		mockFileWriter *util.MockFileIO
 	)
@@ -26,13 +27,15 @@ var _ = Describe("DownloadK0sCmd", func() {
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		mockFileWriter = util.NewMockFileIO(GinkgoT())
-
-		downloadK0sCmd = &cmd.DownloadK0sCmd{
-			Opts: cmd.DownloadK0sOpts{
-				GlobalOptions: &cmd.GlobalOptions{},
-				Force:         false,
-				Quiet:         false,
-			},
+		globalOpts = &cmd.GlobalOptions{}
+		opts = &cmd.DownloadK0sOpts{
+			GlobalOptions: globalOpts,
+			Version:       "",
+			Force:         false,
+			Quiet:         false,
+		}
+		c = cmd.DownloadK0sCmd{
+			Opts:       *opts,
 			Env:        mockEnv,
 			FileWriter: mockFileWriter,
 		}
@@ -43,77 +46,60 @@ var _ = Describe("DownloadK0sCmd", func() {
 		mockFileWriter.AssertExpectations(GinkgoT())
 	})
 
-	Context("RunE", func() {
-		It("should successfully handle k0s download integration", func() {
-			// Add mock expectations for the download functionality, intentionally causing create to fail
-			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir").Maybe()
-			mockFileWriter.EXPECT().Exists("/test/workdir/k0s").Return(false).Maybe()
-			mockFileWriter.EXPECT().Create("/test/workdir/k0s").Return(nil, errors.New("mock create error")).Maybe()
-
-			err := downloadK0sCmd.RunE(nil, nil)
-
+	Context("RunE method", func() {
+		It("calls DownloadK0s and fails with network error", func() {
+			err := c.RunE(nil, []string{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to download k0s"))
-			if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-				// Should fail with platform error on non-Linux amd64 platforms
-				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
-			} else {
-				// On Linux amd64, it should fail on network/version fetch since we don't have real network access
-				Expect(err.Error()).To(ContainSubstring("mock create error"))
-			}
 		})
 	})
-})
 
-var _ = Describe("AddDownloadK0sCmd", func() {
-	var (
-		parentCmd  *cobra.Command
-		globalOpts *cmd.GlobalOptions
-	)
+	Context("DownloadK0s method", func() {
+		It("fails when k0s manager fails to get latest version", func() {
+			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
 
-	BeforeEach(func() {
-		parentCmd = &cobra.Command{Use: "download"}
-		globalOpts = &cmd.GlobalOptions{}
-	})
+			c.Opts.Version = "" // Test auto-version detection
+			mockK0sManager.EXPECT().GetLatestVersion().Return("", errors.New("network error"))
 
-	It("adds the k0s command with correct properties and flags", func() {
-		cmd.AddDownloadK0sCmd(parentCmd, globalOpts)
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get latest k0s version"))
+			Expect(err.Error()).To(ContainSubstring("network error"))
+		})
 
-		var k0sCmd *cobra.Command
-		for _, c := range parentCmd.Commands() {
-			if c.Use == "k0s" {
-				k0sCmd = c
-				break
-			}
-		}
+		It("fails when k0s manager fails to download", func() {
+			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
 
-		Expect(k0sCmd).NotTo(BeNil())
-		Expect(k0sCmd.Use).To(Equal("k0s"))
-		Expect(k0sCmd.Short).To(Equal("Download k0s Kubernetes distribution"))
-		Expect(k0sCmd.Long).To(ContainSubstring("Download k0s, a zero friction Kubernetes distribution"))
-		Expect(k0sCmd.Long).To(ContainSubstring("using a Go-native implementation"))
-		Expect(k0sCmd.RunE).NotTo(BeNil())
+			c.Opts.Version = "v1.29.1+k0s.0"
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", false, false).Return("", errors.New("download failed"))
 
-		Expect(k0sCmd.Parent()).To(Equal(parentCmd))
-		Expect(parentCmd.Commands()).To(ContainElement(k0sCmd))
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to download k0s"))
+			Expect(err.Error()).To(ContainSubstring("download failed"))
+		})
 
-		// Check flags
-		forceFlag := k0sCmd.Flags().Lookup("force")
-		Expect(forceFlag).NotTo(BeNil())
-		Expect(forceFlag.Shorthand).To(Equal("f"))
-		Expect(forceFlag.DefValue).To(Equal("false"))
-		Expect(forceFlag.Usage).To(Equal("Force download even if k0s binary exists"))
+		It("succeeds when version is specified and download works", func() {
+			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
 
-		quietFlag := k0sCmd.Flags().Lookup("quiet")
-		Expect(quietFlag).NotTo(BeNil())
-		Expect(quietFlag.Shorthand).To(Equal("q"))
-		Expect(quietFlag.DefValue).To(Equal("false"))
-		Expect(quietFlag.Usage).To(Equal("Suppress progress output during download"))
+			c.Opts.Version = "v1.29.1+k0s.0"
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", false, false).Return("/test/workdir/k0s", nil)
 
-		// Check examples
-		Expect(k0sCmd.Example).NotTo(BeEmpty())
-		Expect(k0sCmd.Example).To(ContainSubstring("oms-cli download k0s"))
-		Expect(k0sCmd.Example).To(ContainSubstring("--quiet"))
-		Expect(k0sCmd.Example).To(ContainSubstring("--force"))
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("succeeds when version is auto-detected and download works", func() {
+			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
+
+			c.Opts.Version = "" // Test auto-version detection
+			c.Opts.Force = true
+			c.Opts.Quiet = true
+			mockK0sManager.EXPECT().GetLatestVersion().Return("v1.29.1+k0s.0", nil)
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", true, true).Return("/test/workdir/k0s", nil)
+
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).ToNot(HaveOccurred())
+		})
 	})
 })

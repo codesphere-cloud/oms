@@ -25,23 +25,19 @@ type InstallK0sCmd struct {
 
 type InstallK0sOpts struct {
 	*GlobalOptions
-	Config string
-	Force  bool
+	Version string
+	Package string
+	Config  string
+	Force   bool
 }
 
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	hw := portal.NewHttpWrapper()
 	env := c.Env
+	pm := installer.NewPackage(env.GetOmsWorkdir(), c.Opts.Package)
 	k0s := installer.NewK0s(hw, env, c.FileWriter)
 
-	if !k0s.BinaryExists() || c.Opts.Force {
-		err := k0s.Download(c.Opts.Force, false)
-		if err != nil {
-			return fmt.Errorf("failed to download k0s: %w", err)
-		}
-	}
-
-	err := k0s.Install(c.Opts.Config, c.Opts.Force)
+	err := c.InstallK0s(pm, k0s)
 	if err != nil {
 		return fmt.Errorf("failed to install k0s: %w", err)
 	}
@@ -54,11 +50,15 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 		cmd: &cobra.Command{
 			Use:   "k0s",
 			Short: "Install k0s Kubernetes distribution",
-			Long: packageio.Long(`Install k0s, a zero friction Kubernetes distribution, 
-				using a Go-native implementation. This will download the k0s 
-				binary directly to the OMS workdir, if not already present, and install it.`),
+			Long: packageio.Long(`Install k0s either from the package or by downloading it.
+			This will either download the k0s binary directly to the OMS workdir, if not already present, and install it
+			or load the k0s binary from the provided package file and install it.
+			If no version is specified, the latest version will be downloaded.
+			If no install config is provided, k0s will be installed with the '--single' flag.`),
 			Example: formatExamplesWithBinary("install k0s", []packageio.Example{
 				{Cmd: "", Desc: "Install k0s using the Go-native implementation"},
+				{Cmd: "--version <version>", Desc: "Version of k0s to install"},
+				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from"},
 				{Cmd: "--config <path>", Desc: "Path to k0s configuration file, if not set k0s will be installed with the '--single' flag"},
 				{Cmd: "--force", Desc: "Force new download and installation even if k0s binary exists or is already installed"},
 			}, "oms-cli"),
@@ -67,10 +67,34 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 		Env:        env.NewEnv(),
 		FileWriter: util.NewFilesystemWriter(),
 	}
+	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to install")
+	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from")
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Config, "config", "c", "", "Path to k0s configuration file")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 
 	install.AddCommand(k0s.cmd)
 
 	k0s.cmd.RunE = k0s.RunE
+}
+
+const defaultK0sPath = "kubernetes/files/k0s"
+
+func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager) error {
+	// Default dependency path for k0s binary within package
+	k0sPath := pm.GetDependencyPath(defaultK0sPath)
+
+	var err error
+	if c.Opts.Package == "" {
+		k0sPath, err = k0s.Download(c.Opts.Version, c.Opts.Force, false)
+		if err != nil {
+			return fmt.Errorf("failed to download k0s: %w", err)
+		}
+	}
+
+	err = k0s.Install(c.Opts.Config, k0sPath, c.Opts.Force)
+	if err != nil {
+		return fmt.Errorf("failed to install k0s: %w", err)
+	}
+
+	return nil
 }

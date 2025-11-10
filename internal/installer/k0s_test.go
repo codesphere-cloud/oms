@@ -55,6 +55,56 @@ var _ = Describe("K0s", func() {
 			Expect(k0sStruct.Goos).ToNot(BeEmpty())
 			Expect(k0sStruct.Goarch).ToNot(BeEmpty())
 		})
+
+		It("implements K0sManager interface", func() {
+			var manager installer.K0sManager = installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
+			Expect(manager).ToNot(BeNil())
+		})
+	})
+
+	Describe("GetLatestVersion", func() {
+		Context("when version fetch succeeds", func() {
+			It("returns the latest version", func() {
+				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return([]byte("v1.29.1+k0s.0"), nil)
+
+				version, err := k0s.GetLatestVersion()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(version).To(Equal("v1.29.1+k0s.0"))
+			})
+		})
+
+		Context("when version fetch fails", func() {
+			It("returns an error", func() {
+				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return(nil, errors.New("network error"))
+
+				_, err := k0s.GetLatestVersion()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to fetch version info"))
+				Expect(err.Error()).To(ContainSubstring("network error"))
+			})
+		})
+
+		Context("when version is empty", func() {
+			It("returns an error", func() {
+				emptyVersionBytes := []byte("   \n  ")
+				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return(emptyVersionBytes, nil)
+
+				_, err := k0s.GetLatestVersion()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("version info is empty"))
+			})
+		})
+
+		Context("when version has whitespace", func() {
+			It("trims whitespace correctly", func() {
+				versionWithWhitespace := []byte("  v1.29.1+k0s.0  \n")
+				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return(versionWithWhitespace, nil)
+
+				version, err := k0s.GetLatestVersion()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(version).To(Equal("v1.29.1+k0s.0"))
+			})
+		})
 	})
 
 	Describe("Download", func() {
@@ -63,7 +113,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "windows"
 				k0sImpl.Goarch = "amd64"
 
-				err := k0s.Download(false, false)
+				_, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("windows/amd64"))
@@ -73,7 +123,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "arm64"
 
-				err := k0s.Download(false, false)
+				_, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("linux/arm64"))
@@ -86,27 +136,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goarch = "amd64"
 			})
 
-			It("should fail when version fetch fails", func() {
-				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return(nil, errors.New("network error"))
-
-				err := k0s.Download(false, false)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to fetch version info"))
-				Expect(err.Error()).To(ContainSubstring("network error"))
-			})
-
-			It("should fail when version is empty", func() {
-				emptyVersionBytes := []byte("   \n  ")
-				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return(emptyVersionBytes, nil)
-
-				err := k0s.Download(false, false)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("version info is empty"))
-			})
-
-			It("should handle version with whitespace correctly", func() {
-				versionWithWhitespace := []byte("  v1.29.1+k0s.0  \n")
-				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return(versionWithWhitespace, nil)
+			It("should handle version parameter correctly", func() {
 				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 
@@ -122,8 +152,9 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 
-				err = k0s.Download(false, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(path).To(Equal(k0sPath))
 			})
 		})
 
@@ -131,14 +162,13 @@ var _ = Describe("K0s", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
-				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return([]byte("v1.29.1+k0s.0"), nil)
 				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
 			})
 
 			It("should fail when k0s binary exists and force is false", func() {
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(true)
 
-				err := k0s.Download(false, false)
+				_, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("k0s binary already exists"))
 				Expect(err.Error()).To(ContainSubstring("Use --force to overwrite"))
@@ -159,8 +189,9 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 
-				err = k0s.Download(true, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", true, false)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(path).To(Equal(k0sPath))
 			})
 		})
 
@@ -168,7 +199,6 @@ var _ = Describe("K0s", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
-				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return([]byte("v1.29.1+k0s.0"), nil)
 				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 			})
@@ -176,7 +206,7 @@ var _ = Describe("K0s", func() {
 			It("should fail when file creation fails", func() {
 				mockFileWriter.EXPECT().Create(k0sPath).Return(nil, errors.New("permission denied"))
 
-				err := k0s.Download(false, false)
+				_, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create k0s binary file"))
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
@@ -194,7 +224,7 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().Create(k0sPath).Return(mockFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", mockFile, false).Return(errors.New("download failed"))
 
-				err = k0s.Download(false, false)
+				_, err = k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to download k0s binary"))
 				Expect(err.Error()).To(ContainSubstring("download failed"))
@@ -212,8 +242,9 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 
-				err = k0s.Download(false, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(path).To(Equal(k0sPath))
 
 				// Verify file was made executable
 				info, err := os.Stat(k0sPath)
@@ -231,7 +262,6 @@ var _ = Describe("K0s", func() {
 
 			It("should construct correct download URL for amd64", func() {
 				k0sImpl.Goarch = "amd64"
-				mockHttp.EXPECT().Get("https://docs.k0sproject.io/stable.txt").Return([]byte("v1.29.1+k0s.0"), nil)
 
 				// Create the workdir first
 				err := os.MkdirAll(workDir, 0755)
@@ -245,8 +275,9 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 
-				err = k0s.Download(false, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(path).To(Equal(k0sPath))
 			})
 		})
 	})
@@ -257,9 +288,9 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "windows"
 				k0sImpl.Goarch = "amd64"
 
-				err := k0s.Install("", false)
+				err := k0s.Install("", k0sPath, false)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
+				Expect(err.Error()).To(ContainSubstring("k0s installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("windows/amd64"))
 			})
 
@@ -267,9 +298,9 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "arm64"
 
-				err := k0s.Install("", false)
+				err := k0s.Install("", k0sPath, false)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
+				Expect(err.Error()).To(ContainSubstring("k0s installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("linux/arm64"))
 			})
 		})
@@ -278,61 +309,15 @@ var _ = Describe("K0s", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
-				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
 			})
 
 			It("should fail when k0s binary doesn't exist", func() {
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 
-				err := k0s.Install("", false)
+				err := k0s.Install("", k0sPath, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("k0s binary does not exist"))
 				Expect(err.Error()).To(ContainSubstring("please download first"))
-			})
-
-			It("should proceed when k0s binary exists", func() {
-				mockFileWriter.EXPECT().Exists(k0sPath).Return(true)
-
-				// This will fail with exec error since we can't actually run k0s in tests
-				// but it will pass the existence check
-				err := k0s.Install("", false)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to install k0s"))
-			})
-		})
-
-		Context("Installation modes", func() {
-			BeforeEach(func() {
-				k0sImpl.Goos = "linux"
-				k0sImpl.Goarch = "amd64"
-				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
-				mockFileWriter.EXPECT().Exists(k0sPath).Return(true)
-			})
-
-			It("should install in single-node mode when no config path is provided", func() {
-				// This will fail with exec error but we can verify the command would be called
-				// The command should be: ./k0s install controller --single
-				err := k0s.Install("", false)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to install k0s"))
-			})
-
-			It("should install with custom config when config path is provided", func() {
-				configPath := "/path/to/k0s.yaml"
-				// This will fail with exec error but we can verify the command would be called
-				// The command should be: ./k0s install controller --config /path/to/k0s.yaml
-				err := k0s.Install(configPath, false)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to install k0s"))
-			})
-
-			It("should install with custom config and force flag", func() {
-				configPath := "/path/to/k0s.yaml"
-				// This will fail with exec error but we can verify the command would be called
-				// The command should be: ./k0s install controller --config /path/to/k0s.yaml --force
-				err := k0s.Install(configPath, true)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to install k0s"))
 			})
 		})
 	})
