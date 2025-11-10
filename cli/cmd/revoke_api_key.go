@@ -18,7 +18,7 @@ type RevokeAPIKeyCmd struct {
 }
 
 type RevokeAPIKeyOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	ID string
 }
 
@@ -36,7 +36,7 @@ func (c *RevokeAPIKeyCmd) Revoke(p portal.Portal) error {
 	return nil
 }
 
-func AddRevokeAPIKeyCmd(list *cobra.Command, opts GlobalOptions) {
+func AddRevokeAPIKeyCmd(list *cobra.Command, opts *GlobalOptions) {
 	c := RevokeAPIKeyCmd{
 		cmd: &cobra.Command{
 			Use:   "api-key",

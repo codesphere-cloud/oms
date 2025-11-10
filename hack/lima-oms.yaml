@@ -50,7 +50,11 @@ provision:
     curl -fsSL https://get.docker.com | sh
     systemctl disable --now docker
     apt-get install -y uidmap dbus-user-session
-    
+
+    # Install Go and build tools
+    apt-get update
+    apt-get install -y golang-go make git
+
 - mode: user
   script: |
     #!/bin/bash
@@ -58,11 +62,6 @@ provision:
     
     # Install Docker in rootless mode
     dockerd-rootless-setuptool.sh install
-    
-    # Install Go 1.24 and build tools
-    sudo apt update
-    sudo apt install golang-go
-    sudo apt-get install -y make git
     
     # Set up the OMS project
     cd /home/user/oms

@@ -13,7 +13,7 @@ type DownloadCmd struct {
 	cmd *cobra.Command
 }
 
-func AddDownloadCmd(rootCmd *cobra.Command, opts GlobalOptions) {
+func AddDownloadCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	download := DownloadCmd{
 		cmd: &cobra.Command{
 			Use:   "download",

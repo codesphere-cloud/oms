@@ -8,12 +8,14 @@ import (
 )
 
 type FileIO interface {
+	Create(filename string) (*os.File, error)
+	Open(filename string) (*os.File, error)
+	OpenAppend(filename string) (*os.File, error)
+	Exists(filename string) bool
+	IsDirectory(filename string) (bool, error)
 	MkdirAll(path string, perm os.FileMode) error
 	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
-	Open(filename string) (*os.File, error)
-	Create(filename string) (*os.File, error)
-	IsDirectory(filename string) (bool, error)
-	Exists(filename string) bool
+	WriteFile(filename string, data []byte, perm os.FileMode) error
 	ReadDir(dirname string) ([]os.DirEntry, error)
 }
 
@@ -29,6 +31,10 @@ func (fs *FilesystemWriter) Create(filename string) (*os.File, error) {
 
 func (fs *FilesystemWriter) Open(filename string) (*os.File, error) {
 	return os.Open(filename)
+}
+
+func (fs *FilesystemWriter) OpenAppend(filename string) (*os.File, error) {
+	return os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
 }
 
 func (fs *FilesystemWriter) Exists(path string) bool {
@@ -54,6 +60,10 @@ func (fs *FilesystemWriter) MkdirAll(path string, perm os.FileMode) error {
 
 func (fs *FilesystemWriter) OpenFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	return os.OpenFile(name, flag, perm)
+}
+
+func (fs *FilesystemWriter) WriteFile(filename string, data []byte, perm os.FileMode) error {
+	return os.WriteFile(filename, data, perm)
 }
 
 func (fs *FilesystemWriter) ReadDir(dirname string) ([]os.DirEntry, error) {

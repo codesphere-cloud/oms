@@ -19,7 +19,7 @@ func (c *UpdateCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddUpdateCmd(rootCmd *cobra.Command, opts GlobalOptions) {
+func AddUpdateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	updateCmd := UpdateCmd{
 		cmd: &cobra.Command{
 			Use:   "update",
@@ -33,6 +33,7 @@ func AddUpdateCmd(rootCmd *cobra.Command, opts GlobalOptions) {
 	AddDownloadPackageCmd(updateCmd.cmd, opts)
 	AddOmsUpdateCmd(updateCmd.cmd)
 	AddApiKeyUpdateCmd(updateCmd.cmd)
+	AddUpdateDockerfileCmd(updateCmd.cmd, opts)
 
 	rootCmd.AddCommand(updateCmd.cmd)
 }

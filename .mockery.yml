@@ -18,7 +18,15 @@ packages:
     config:
       all: true
     interfaces:
+  github.com/codesphere-cloud/oms/internal/installer:
+    config:
+      all: true
+    interfaces:
   github.com/codesphere-cloud/oms/internal/portal:
+    config:
+      all: true
+    interfaces:
+  github.com/codesphere-cloud/oms/internal/system:
     config:
       all: true
     interfaces:

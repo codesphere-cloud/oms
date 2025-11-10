@@ -22,7 +22,7 @@ type DownloadPackageCmd struct {
 }
 
 type DownloadPackageOpts struct {
-	GlobalOptions
+	*GlobalOptions
 	Version  string
 	Hash     string
 	Filename string
@@ -50,7 +50,7 @@ func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddDownloadPackageCmd(download *cobra.Command, opts GlobalOptions) {
+func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 	pkg := DownloadPackageCmd{
 		cmd: &cobra.Command{
 			Use:   "package",
@@ -79,13 +79,22 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 		return fmt.Errorf("failed to find artifact in package: %w", err)
 	}
 	fullFilename := build.Version + "-" + filename
-	out, err := c.FileWriter.Create(fullFilename)
+	out, err := c.FileWriter.OpenAppend(fullFilename)
 	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
+		out, err = c.FileWriter.Create(fullFilename)
+		if err != nil {
+			return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
+		}
 	}
 	defer func() { _ = out.Close() }()
 
-	err = p.DownloadBuildArtifact("codesphere", download, out, c.Opts.Quiet)
+	// get already downloaded file size of fullFilename
+	fileSize := 0
+	fileInfo, err := out.Stat()
+	if err == nil {
+		fileSize = int(fileInfo.Size())
+	}
+	err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet)
 	if err != nil {
 		return fmt.Errorf("failed to download build: %w", err)
 	}
