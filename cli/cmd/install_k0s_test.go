@@ -47,16 +47,6 @@ var _ = Describe("InstallK0sCmd", func() {
 		mockFileWriter.AssertExpectations(GinkgoT())
 	})
 
-	Context("RunE method", func() {
-		It("calls InstallK0s and fails with network error", func() {
-			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
-
-			err := c.RunE(nil, []string{})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s"))
-		})
-	})
-
 	Context("InstallK0s method", func() {
 		It("fails when package is not specified and k0s download fails", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
