@@ -57,7 +57,7 @@ var _ = Describe("K0s", func() {
 		})
 
 		It("implements K0sManager interface", func() {
-			var manager installer.K0sManager = installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
+			var manager = installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
 			Expect(manager).ToNot(BeNil())
 		})
 	})
