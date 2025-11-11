@@ -39,6 +39,7 @@ var _ = Describe("PortalClient", func() {
 		status         int
 		apiUrl         string
 		getUrl         url.URL
+		headers        http.Header
 		getResponse    []byte
 		product        portal.Product
 		apiKey         string
@@ -186,6 +187,7 @@ var _ = Describe("PortalClient", func() {
 			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 				func(req *http.Request) (*http.Response, error) {
 					getUrl = *req.URL
+					headers = req.Header
 					return &http.Response{
 						StatusCode: status,
 						Body:       io.NopCloser(bytes.NewReader([]byte(downloadResponse))),
@@ -195,8 +197,17 @@ var _ = Describe("PortalClient", func() {
 
 		It("downloads the build", func() {
 			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, false)
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, 0, false)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(fakeWriter.String()).To(Equal(downloadResponse))
+			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
+		})
+
+		It("resumes the build", func() {
+			fakeWriter := NewFakeWriter()
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, 42, false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(headers.Get("Range")).To(Equal("bytes=42-"))
 			Expect(fakeWriter.String()).To(Equal(downloadResponse))
 			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
 		})
@@ -208,7 +219,7 @@ var _ = Describe("PortalClient", func() {
 			defer log.SetOutput(prev)
 
 			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, false)
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, 0, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuf.String()).To(ContainSubstring("Downloading..."))
 		})
@@ -220,7 +231,7 @@ var _ = Describe("PortalClient", func() {
 			defer log.SetOutput(prev)
 
 			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, true)
+			err := client.DownloadBuildArtifact(product, build, fakeWriter, 0, true)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(logBuf.String()).NotTo(ContainSubstring("Downloading..."))
 		})
