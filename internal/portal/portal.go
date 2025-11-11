@@ -52,6 +52,7 @@ const (
 	OmsProduct        Product = "oms"
 )
 
+// AuthorizedHttpRequest sends a HTTP request with the necessary authorization headers.
 func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Response, err error) {
 	apiKey, err := c.Env.GetOmsPortalApiKey()
 	if err != nil {
@@ -83,6 +84,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 	return
 }
 
+// HttpRequest sends an unauthorized HTTP request to the portal API with the specified method, path, and body.
 func (c *PortalClient) HttpRequest(method string, path string, body []byte) (resp *http.Response, err error) {
 	requestBody := bytes.NewBuffer(body)
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), path)
@@ -102,6 +104,7 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 	return c.AuthorizedHttpRequest(req)
 }
 
+// GetBody sends a GET request to the specified path and returns the response body and status code.
 func (c *PortalClient) GetBody(path string) (body []byte, status int, err error) {
 	resp, err := c.HttpRequest(http.MethodGet, path, []byte{})
 	if err != nil || resp == nil {
@@ -120,6 +123,7 @@ func (c *PortalClient) GetBody(path string) (body []byte, status int, err error)
 	return
 }
 
+// ListBuilds retrieves the list of available builds for the specified product.
 func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, err error) {
 	res, _, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
 	if err != nil {
@@ -147,6 +151,7 @@ func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, er
 	return
 }
 
+// GetBuild retrieves a specific build for the given product, version, and hash.
 func (c *PortalClient) GetBuild(product Product, version string, hash string) (Build, error) {
 	packages, err := c.ListBuilds(product)
 	if err != nil {
@@ -179,6 +184,7 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 	return matchingPackages[len(matchingPackages)-1], nil
 }
 
+// DownloadBuildArtifact downloads the build artifact for the specified product and build.
 func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error {
 	reqBody, err := json.Marshal(build)
 	if err != nil {
@@ -223,6 +229,7 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 	return nil
 }
 
+// RegisterAPIKey registers a new API key with the specified parameters.
 func (c *PortalClient) RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error) {
 	req := struct {
 		Owner        string    `json:"owner"`
@@ -256,6 +263,7 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 	return newKey, nil
 }
 
+// RevokeAPIKey revokes the API key with the specified key ID.
 func (c *PortalClient) RevokeAPIKey(keyId string) error {
 	req := struct {
 		KeyID string `json:"keyId"`
@@ -279,6 +287,7 @@ func (c *PortalClient) RevokeAPIKey(keyId string) error {
 	return nil
 }
 
+// UpdateAPIKey updates the expiration date of the specified API key.
 func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
 	req := struct {
 		Key       string    `json:"keyId"`
@@ -303,6 +312,7 @@ func (c *PortalClient) UpdateAPIKey(key string, expiresAt time.Time) error {
 	return nil
 }
 
+// ListAPIKeys retrieves the list of API keys.
 func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
 	res, _, err := c.GetBody("/keys")
 	if err != nil {
