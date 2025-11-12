@@ -6,6 +6,7 @@ package installer
 import (
 	"fmt"
 	"net"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -13,41 +14,298 @@ import (
 )
 
 type InstallConfigManager interface {
-	CollectInteractively() (*files.CollectedConfig, error)
+	CollectInteractively() error
 
-	CollectFromOptions(opts *files.ConfigOptions) (*files.CollectedConfig, error)
+	SetConfig(config *files.RootConfig)
 
-	ConvertToConfig(collected *files.CollectedConfig) (*files.RootConfig, error)
+	SetProfileValues(profile string) error
 
-	GenerateSecrets(config *files.RootConfig) error
+	Validate() error
 
-	WriteConfig(config *files.RootConfig, configPath string, withComments bool) error
+	GenerateSecrets() error
 
-	WriteVault(config *files.RootConfig, vaultPath string, withComments bool) error
+	WriteInstallConfig(configPath string, withComments bool) error
+
+	WriteVault(vaultPath string, withComments bool) error
 }
 
 type InstallConfig struct {
 	fileIO util.FileIO
+	config *files.RootConfig
 }
 
 func NewConfigGenerator() InstallConfigManager {
 	return &InstallConfig{
 		fileIO: &util.FilesystemWriter{},
+		config: nil,
 	}
 }
 
-func (g *InstallConfig) CollectInteractively() (*files.CollectedConfig, error) {
+func (g *InstallConfig) CollectInteractively() error {
 	prompter := NewPrompter(true)
 	collected := &files.CollectedConfig{}
 	g.collectAllConfigs(prompter, &files.ConfigOptions{}, collected)
-	return collected, nil
+
+	config, err := g.convertConfig(collected)
+	if err != nil {
+		return fmt.Errorf("failed to convert configuration: %w", err)
+	}
+
+	g.config = config
+	return nil
 }
 
-func (g *InstallConfig) CollectFromOptions(opts *files.ConfigOptions) (*files.CollectedConfig, error) {
-	prompter := NewPrompter(false)
-	collected := &files.CollectedConfig{}
-	g.collectAllConfigs(prompter, opts, collected)
-	return collected, nil
+func (g *InstallConfig) SetConfig(config *files.RootConfig) {
+	g.config = config
+}
+
+func (g *InstallConfig) SetProfileValues(profile string) error {
+	if profile == "" {
+		return nil
+	}
+
+	if g.config == nil {
+		return fmt.Errorf("config not set, cannot apply profile")
+	}
+
+	return nil
+}
+
+func (g *InstallConfig) Validate() error {
+	if g.config == nil {
+		return fmt.Errorf("config not set, cannot validate")
+	}
+
+	errors := ValidateConfig(g.config)
+	if len(errors) > 0 {
+		var errMsg strings.Builder
+		errMsg.WriteString("configuration validation failed:\n")
+		for _, err := range errors {
+			errMsg.WriteString(fmt.Sprintf("  - %s\n", err))
+		}
+		return fmt.Errorf("%s", errMsg.String())
+	}
+
+	return nil
+}
+
+func (g *InstallConfig) GenerateSecrets() error {
+	if g.config == nil {
+		return fmt.Errorf("config not set, cannot generate secrets")
+	}
+	return g.generateSecrets(g.config)
+}
+
+func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool) error {
+	if g.config == nil {
+		return fmt.Errorf("no configuration provided - config is nil")
+	}
+
+	configYAML, err := MarshalConfig(g.config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config.yaml: %w", err)
+	}
+
+	if withComments {
+		configYAML = AddConfigComments(configYAML)
+	}
+
+	if err := g.fileIO.CreateAndWrite(configPath, configYAML, "Configuration"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
+	if g.config == nil {
+		return fmt.Errorf("no configuration provided - config is nil")
+	}
+
+	vault := g.config.ExtractVault()
+	vaultYAML, err := MarshalVault(vault)
+	if err != nil {
+		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
+	}
+
+	if withComments {
+		vaultYAML = AddVaultComments(vaultYAML)
+	}
+
+	if err := g.fileIO.CreateAndWrite(vaultPath, vaultYAML, "Secrets"); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func FromConfigOptions(opts *files.ConfigOptions) (*files.RootConfig, error) {
+	config := &files.RootConfig{
+		DataCenter: files.DataCenterConfig{
+			ID:          opts.DatacenterID,
+			Name:        opts.DatacenterName,
+			City:        opts.DatacenterCity,
+			CountryCode: opts.DatacenterCountryCode,
+		},
+		Secrets: files.SecretsConfig{
+			BaseDir: opts.SecretsBaseDir,
+		},
+	}
+
+	if opts.RegistryServer != "" {
+		config.Registry = files.RegistryConfig{
+			Server:              opts.RegistryServer,
+			ReplaceImagesInBom:  opts.RegistryReplaceImages,
+			LoadContainerImages: opts.RegistryLoadContainerImgs,
+		}
+	}
+
+	if opts.PostgresMode == "install" {
+		config.Postgres = files.PostgresConfig{
+			Primary: &files.PostgresPrimaryConfig{
+				IP:       opts.PostgresPrimaryIP,
+				Hostname: opts.PostgresPrimaryHost,
+			},
+		}
+
+		if opts.PostgresReplicaIP != "" {
+			config.Postgres.Replica = &files.PostgresReplicaConfig{
+				IP:   opts.PostgresReplicaIP,
+				Name: opts.PostgresReplicaName,
+			}
+		}
+	} else if opts.PostgresExternal != "" {
+		config.Postgres = files.PostgresConfig{
+			ServerAddress: opts.PostgresExternal,
+		}
+	}
+
+	cephHosts := make([]files.CephHost, len(opts.CephHosts))
+	for i, host := range opts.CephHosts {
+		cephHosts[i] = files.CephHost(host)
+	}
+
+	config.Ceph = files.CephConfig{
+		NodesSubnet: opts.CephSubnet,
+		Hosts:       cephHosts,
+		OSDs: []files.CephOSD{
+			{
+				SpecID: "default",
+				Placement: files.CephPlacement{
+					HostPattern: "*",
+				},
+				DataDevices: files.CephDataDevices{
+					Size:  "240G:300G",
+					Limit: 1,
+				},
+				DBDevices: files.CephDBDevices{
+					Size:  "120G:150G",
+					Limit: 1,
+				},
+			},
+		},
+	}
+
+	config.Kubernetes = files.KubernetesConfig{
+		ManagedByCodesphere: opts.K8sManaged,
+	}
+
+	if opts.K8sManaged {
+		config.Kubernetes.APIServerHost = opts.K8sAPIServer
+		config.Kubernetes.ControlPlanes = make([]files.K8sNode, len(opts.K8sControlPlane))
+		for i, ip := range opts.K8sControlPlane {
+			config.Kubernetes.ControlPlanes[i] = files.K8sNode{IPAddress: ip}
+		}
+		config.Kubernetes.Workers = make([]files.K8sNode, len(opts.K8sWorkers))
+		for i, ip := range opts.K8sWorkers {
+			config.Kubernetes.Workers[i] = files.K8sNode{IPAddress: ip}
+		}
+		config.Kubernetes.NeedsKubeConfig = false
+	} else {
+		config.Kubernetes.PodCIDR = opts.K8sPodCIDR
+		config.Kubernetes.ServiceCIDR = opts.K8sServiceCIDR
+		config.Kubernetes.NeedsKubeConfig = true
+	}
+
+	config.Cluster = files.ClusterConfig{
+		Certificates: files.ClusterCertificates{
+			CA: files.CAConfig{
+				Algorithm:   "RSA",
+				KeySizeBits: 2048,
+			},
+		},
+		Gateway: files.GatewayConfig{
+			ServiceType: opts.ClusterGatewayType,
+			IPAddresses: opts.ClusterGatewayIPs,
+		},
+		PublicGateway: files.GatewayConfig{
+			ServiceType: opts.ClusterPublicGatewayType,
+			IPAddresses: opts.ClusterPublicGatewayIPs,
+		},
+	}
+
+	if opts.MetalLBEnabled {
+		pools := make([]files.MetalLBPoolDef, len(opts.MetalLBPools))
+		for i, pool := range opts.MetalLBPools {
+			pools[i] = files.MetalLBPoolDef(pool)
+		}
+		config.MetalLB = &files.MetalLBConfig{
+			Enabled: true,
+			Pools:   pools,
+		}
+	}
+
+	config.Codesphere = files.CodesphereConfig{
+		Domain:                     opts.CodesphereDomain,
+		WorkspaceHostingBaseDomain: opts.CodesphereWorkspaceBaseDomain,
+		PublicIP:                   opts.CodespherePublicIP,
+		CustomDomains: files.CustomDomainsConfig{
+			CNameBaseDomain: opts.CodesphereCustomDomainBaseDomain,
+		},
+		DNSServers:  opts.CodesphereDNSServers,
+		Experiments: []string{},
+		DeployConfig: files.DeployConfig{
+			Images: map[string]files.ImageConfig{
+				"ubuntu-24.04": {
+					Name:           "Ubuntu 24.04",
+					SupportedUntil: "2028-05-31",
+					Flavors: map[string]files.FlavorConfig{
+						"default": {
+							Image: files.ImageRef{
+								BomRef: opts.CodesphereWorkspaceImageBomRef,
+							},
+							Pool: map[int]int{1: 1},
+						},
+					},
+				},
+			},
+		},
+		Plans: files.PlansConfig{
+			HostingPlans: map[int]files.HostingPlan{
+				1: {
+					CPUTenth:      opts.CodesphereHostingPlanCPU,
+					GPUParts:      0,
+					MemoryMb:      opts.CodesphereHostingPlanMemory,
+					StorageMb:     opts.CodesphereHostingPlanStorage,
+					TempStorageMb: opts.CodesphereHostingPlanTempStorage,
+				},
+			},
+			WorkspacePlans: map[int]files.WorkspacePlan{
+				1: {
+					Name:          opts.CodesphereWorkspacePlanName,
+					HostingPlanID: 1,
+					MaxReplicas:   opts.CodesphereWorkspacePlanMaxReplica,
+					OnDemand:      true,
+				},
+			},
+		},
+	}
+
+	config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{
+		Postgres: make(map[string]interface{}),
+	}
+
+	return config, nil
 }
 
 func (g *InstallConfig) collectAllConfigs(prompter *Prompter, opts *files.ConfigOptions, collected *files.CollectedConfig) {
@@ -59,14 +317,6 @@ func (g *InstallConfig) collectAllConfigs(prompter *Prompter, opts *files.Config
 	g.collectGatewayConfig(prompter, opts, collected)
 	g.collectMetalLBConfig(prompter, opts, collected)
 	g.collectCodesphereConfig(prompter, opts, collected)
-}
-
-func (g *InstallConfig) ConvertToConfig(collected *files.CollectedConfig) (*files.RootConfig, error) {
-	return g.convertConfig(collected)
-}
-
-func (g *InstallConfig) GenerateSecrets(config *files.RootConfig) error {
-	return g.generateSecrets(config)
 }
 
 func (g *InstallConfig) convertConfig(collected *files.CollectedConfig) (*files.RootConfig, error) {
@@ -227,49 +477,6 @@ func (g *InstallConfig) convertConfig(collected *files.CollectedConfig) (*files.
 	}
 
 	return config, nil
-}
-
-func (g *InstallConfig) WriteConfig(config *files.RootConfig, configPath string, withComments bool) error {
-	if config == nil {
-		return fmt.Errorf("no configuration provided - config is nil")
-	}
-
-	configYAML, err := MarshalConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config.yaml: %w", err)
-	}
-
-	if withComments {
-		configYAML = AddConfigComments(configYAML)
-	}
-
-	if err := g.fileIO.CreateAndWrite(configPath, configYAML, "Configuration"); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (g *InstallConfig) WriteVault(config *files.RootConfig, vaultPath string, withComments bool) error {
-	if config == nil {
-		return fmt.Errorf("no configuration provided - config is nil")
-	}
-
-	vault := config.ExtractVault()
-	vaultYAML, err := MarshalVault(vault)
-	if err != nil {
-		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
-	}
-
-	if withComments {
-		vaultYAML = AddVaultComments(vaultYAML)
-	}
-
-	if err := g.fileIO.CreateAndWrite(vaultPath, vaultYAML, "Secrets"); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func AddConfigComments(yamlData []byte) []byte {

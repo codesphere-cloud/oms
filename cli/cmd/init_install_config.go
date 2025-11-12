@@ -89,118 +89,163 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 		return c.validateConfig()
 	}
 
+	return c.InitInstallConfig()
+}
+
+func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
+	c := InitInstallConfigCmd{
+		cmd: &cobra.Command{
+			Use:   "install-config",
+			Short: "Initialize Codesphere installer configuration files",
+			Long: csio.Long(`Initialize config.yaml and prod.vault.yaml for the Codesphere installer.
+			
+			This command generates two files:
+			- config.yaml: Main configuration (infrastructure, networking, plans)
+			- prod.vault.yaml: Secrets file (keys, certificates, passwords)
+			
+			Note: When --interactive=true (default), all other configuration flags are ignored 
+			and you will be prompted for all settings interactively.
+			
+			Supports configuration profiles for common scenarios:
+			- dev: Single-node development setup
+			- production: HA multi-node setup
+			- minimal: Minimal testing setup`),
+			Example: formatExamplesWithBinary("init install-config", []csio.Example{
+				{Cmd: "-c config.yaml -v prod.vault.yaml", Desc: "Create config files interactively"},
+				{Cmd: "--profile dev -c config.yaml -v prod.vault.yaml", Desc: "Use dev profile with defaults"},
+				{Cmd: "--profile production -c config.yaml -v prod.vault.yaml", Desc: "Use production profile"},
+				{Cmd: "--validate -c config.yaml -v prod.vault.yaml", Desc: "Validate existing configuration files"},
+			}, "oms-cli"),
+		},
+		Opts:       &InitInstallConfigOpts{GlobalOptions: opts},
+		FileWriter: util.NewFilesystemWriter(),
+	}
+
+	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
+	c.cmd.Flags().StringVarP(&c.Opts.VaultFile, "vault", "v", "prod.vault.yaml", "Output file path for prod.vault.yaml")
+
+	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
+	c.cmd.Flags().BoolVar(&c.Opts.ValidateOnly, "validate", false, "Validate existing config files instead of creating new ones")
+	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
+	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (when true, other config flags are ignored)")
+	c.cmd.Flags().BoolVar(&c.Opts.GenerateKeys, "generate-keys", true, "Generate SSH keys and certificates")
+	c.cmd.Flags().StringVar(&c.Opts.SecretsBaseDir, "secrets-dir", "/root/secrets", "Secrets base directory")
+
+	c.cmd.Flags().IntVar(&c.Opts.DatacenterID, "dc-id", 0, "Datacenter ID")
+	c.cmd.Flags().StringVar(&c.Opts.DatacenterName, "dc-name", "", "Datacenter name")
+
+	c.cmd.Flags().StringVar(&c.Opts.PostgresMode, "postgres-mode", "", "PostgreSQL setup mode (install/external)")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
+
+	c.cmd.Flags().BoolVar(&c.Opts.K8sManaged, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
+	c.cmd.Flags().StringSliceVar(&c.Opts.K8sControlPlane, "k8s-control-plane", []string{}, "K8s control plane IPs (comma-separated)")
+
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
+
+	util.MarkFlagRequired(c.cmd, "config")
+	util.MarkFlagRequired(c.cmd, "vault")
+
+	c.cmd.PreRun = func(cmd *cobra.Command, args []string) {
+		c.Generator = installer.NewConfigGenerator()
+	}
+
+	c.cmd.RunE = c.RunE
+	init.AddCommand(c.cmd)
+}
+
+func (c *InitInstallConfigCmd) InitInstallConfig() error {
+	var err error
+
+	c.printWelcomeMessage()
+
 	if c.Opts.Profile != "" {
 		if err := c.applyProfile(); err != nil {
 			return fmt.Errorf("failed to apply profile: %w", err)
 		}
 	}
 
-	c.printWelcomeMessage()
+	if c.Opts.Interactive {
+		err = c.Generator.CollectInteractively()
+		if err != nil {
+			return fmt.Errorf("failed to collect configuration interactively: %w", err)
+		}
+	} else {
+		config, err := installer.FromConfigOptions(&files.ConfigOptions{
+			DatacenterID:          c.Opts.DatacenterID,
+			DatacenterName:        c.Opts.DatacenterName,
+			DatacenterCity:        c.Opts.DatacenterCity,
+			DatacenterCountryCode: c.Opts.DatacenterCountryCode,
 
-	if err := c.createConfig(); err != nil {
-		return err
+			RegistryServer:            c.Opts.RegistryServer,
+			RegistryReplaceImages:     c.Opts.RegistryReplaceImages,
+			RegistryLoadContainerImgs: c.Opts.RegistryLoadContainerImgs,
+
+			PostgresMode:        c.Opts.PostgresMode,
+			PostgresPrimaryIP:   c.Opts.PostgresPrimaryIP,
+			PostgresPrimaryHost: c.Opts.PostgresPrimaryHost,
+			PostgresReplicaIP:   c.Opts.PostgresReplicaIP,
+			PostgresReplicaName: c.Opts.PostgresReplicaName,
+			PostgresExternal:    c.Opts.PostgresExternal,
+
+			CephSubnet: c.Opts.CephSubnet,
+			CephHosts:  c.Opts.CephHosts,
+
+			K8sManaged:      c.Opts.K8sManaged,
+			K8sAPIServer:    c.Opts.K8sAPIServer,
+			K8sControlPlane: c.Opts.K8sControlPlane,
+			K8sWorkers:      c.Opts.K8sWorkers,
+			K8sExternalHost: c.Opts.K8sExternalHost,
+			K8sPodCIDR:      c.Opts.K8sPodCIDR,
+			K8sServiceCIDR:  c.Opts.K8sServiceCIDR,
+
+			ClusterGatewayType:       c.Opts.ClusterGatewayType,
+			ClusterGatewayIPs:        c.Opts.ClusterGatewayIPs,
+			ClusterPublicGatewayType: c.Opts.ClusterPublicGatewayType,
+			ClusterPublicGatewayIPs:  c.Opts.ClusterPublicGatewayIPs,
+
+			MetalLBEnabled: c.Opts.MetalLBEnabled,
+			MetalLBPools:   c.Opts.MetalLBPools,
+
+			CodesphereDomain:                  c.Opts.CodesphereDomain,
+			CodespherePublicIP:                c.Opts.CodespherePublicIP,
+			CodesphereWorkspaceBaseDomain:     c.Opts.CodesphereWorkspaceBaseDomain,
+			CodesphereCustomDomainBaseDomain:  c.Opts.CodesphereCustomDomainBaseDomain,
+			CodesphereDNSServers:              c.Opts.CodesphereDNSServers,
+			CodesphereWorkspaceImageBomRef:    c.Opts.CodesphereWorkspaceImageBomRef,
+			CodesphereHostingPlanCPU:          c.Opts.CodesphereHostingPlanCPU,
+			CodesphereHostingPlanMemory:       c.Opts.CodesphereHostingPlanMemory,
+			CodesphereHostingPlanStorage:      c.Opts.CodesphereHostingPlanStorage,
+			CodesphereHostingPlanTempStorage:  c.Opts.CodesphereHostingPlanTempStorage,
+			CodesphereWorkspacePlanName:       c.Opts.CodesphereWorkspacePlanName,
+			CodesphereWorkspacePlanMaxReplica: c.Opts.CodesphereWorkspacePlanMaxReplica,
+
+			SecretsBaseDir: c.Opts.SecretsBaseDir,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to build configuration from options: %w", err)
+		}
+		c.Generator.SetConfig(config)
+	}
+
+	if err := c.Generator.Validate(); err != nil {
+		return fmt.Errorf("configuration validation failed: %w", err)
+	}
+
+	if err := c.Generator.GenerateSecrets(); err != nil {
+		return fmt.Errorf("failed to generate secrets: %w", err)
+	}
+
+	if err := c.Generator.WriteInstallConfig(c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	if err := c.Generator.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
 	c.printSuccessMessage()
 
 	return nil
-}
-
-func (c *InitInstallConfigCmd) createConfig() error {
-	collected, err := c.collectConfiguration()
-	if err != nil {
-		return err
-	}
-
-	config, err := c.Generator.ConvertToConfig(collected)
-	if err != nil {
-		return fmt.Errorf("failed to convert configuration: %w", err)
-	}
-
-	if err := c.Generator.GenerateSecrets(config); err != nil {
-		return fmt.Errorf("failed to generate secrets: %w", err)
-	}
-
-	if err := c.Generator.WriteConfig(config, c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
-	}
-
-	if err := c.Generator.WriteVault(config, c.Opts.VaultFile, c.Opts.WithComments); err != nil {
-		return fmt.Errorf("failed to write vault file: %w", err)
-	}
-
-	return nil
-}
-
-func (c *InitInstallConfigCmd) collectConfiguration() (*files.CollectedConfig, error) {
-	var collected *files.CollectedConfig
-	var err error
-
-	if c.Opts.Interactive {
-		collected, err = c.Generator.CollectInteractively()
-	} else {
-		configOpts := c.buildConfigOptions()
-		collected, err = c.Generator.CollectFromOptions(configOpts)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to collect configuration: %w", err)
-	}
-
-	return collected, nil
-}
-
-func (c *InitInstallConfigCmd) buildConfigOptions() *files.ConfigOptions {
-	return &files.ConfigOptions{
-		DatacenterID:          c.Opts.DatacenterID,
-		DatacenterName:        c.Opts.DatacenterName,
-		DatacenterCity:        c.Opts.DatacenterCity,
-		DatacenterCountryCode: c.Opts.DatacenterCountryCode,
-
-		RegistryServer:            c.Opts.RegistryServer,
-		RegistryReplaceImages:     c.Opts.RegistryReplaceImages,
-		RegistryLoadContainerImgs: c.Opts.RegistryLoadContainerImgs,
-
-		PostgresMode:        c.Opts.PostgresMode,
-		PostgresPrimaryIP:   c.Opts.PostgresPrimaryIP,
-		PostgresPrimaryHost: c.Opts.PostgresPrimaryHost,
-		PostgresReplicaIP:   c.Opts.PostgresReplicaIP,
-		PostgresReplicaName: c.Opts.PostgresReplicaName,
-		PostgresExternal:    c.Opts.PostgresExternal,
-
-		CephSubnet: c.Opts.CephSubnet,
-		CephHosts:  c.Opts.CephHosts,
-
-		K8sManaged:      c.Opts.K8sManaged,
-		K8sAPIServer:    c.Opts.K8sAPIServer,
-		K8sControlPlane: c.Opts.K8sControlPlane,
-		K8sWorkers:      c.Opts.K8sWorkers,
-		K8sExternalHost: c.Opts.K8sExternalHost,
-		K8sPodCIDR:      c.Opts.K8sPodCIDR,
-		K8sServiceCIDR:  c.Opts.K8sServiceCIDR,
-
-		ClusterGatewayType:       c.Opts.ClusterGatewayType,
-		ClusterGatewayIPs:        c.Opts.ClusterGatewayIPs,
-		ClusterPublicGatewayType: c.Opts.ClusterPublicGatewayType,
-		ClusterPublicGatewayIPs:  c.Opts.ClusterPublicGatewayIPs,
-
-		MetalLBEnabled: c.Opts.MetalLBEnabled,
-		MetalLBPools:   c.Opts.MetalLBPools,
-
-		CodesphereDomain:                  c.Opts.CodesphereDomain,
-		CodespherePublicIP:                c.Opts.CodespherePublicIP,
-		CodesphereWorkspaceBaseDomain:     c.Opts.CodesphereWorkspaceBaseDomain,
-		CodesphereCustomDomainBaseDomain:  c.Opts.CodesphereCustomDomainBaseDomain,
-		CodesphereDNSServers:              c.Opts.CodesphereDNSServers,
-		CodesphereWorkspaceImageBomRef:    c.Opts.CodesphereWorkspaceImageBomRef,
-		CodesphereHostingPlanCPU:          c.Opts.CodesphereHostingPlanCPU,
-		CodesphereHostingPlanMemory:       c.Opts.CodesphereHostingPlanMemory,
-		CodesphereHostingPlanStorage:      c.Opts.CodesphereHostingPlanStorage,
-		CodesphereHostingPlanTempStorage:  c.Opts.CodesphereHostingPlanTempStorage,
-		CodesphereWorkspacePlanName:       c.Opts.CodesphereWorkspacePlanName,
-		CodesphereWorkspacePlanMaxReplica: c.Opts.CodesphereWorkspacePlanMaxReplica,
-
-		SecretsBaseDir: c.Opts.SecretsBaseDir,
-	}
 }
 
 func (c *InitInstallConfigCmd) printWelcomeMessage() {
@@ -391,65 +436,4 @@ func (c *InitInstallConfigCmd) validateConfig() error {
 
 	fmt.Println("Configuration is valid!")
 	return nil
-}
-
-func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
-	c := InitInstallConfigCmd{
-		cmd: &cobra.Command{
-			Use:   "install-config",
-			Short: "Initialize Codesphere installer configuration files",
-			Long: csio.Long(`Initialize config.yaml and prod.vault.yaml for the Codesphere installer.
-			
-			This command generates two files:
-			- config.yaml: Main configuration (infrastructure, networking, plans)
-			- prod.vault.yaml: Secrets file (keys, certificates, passwords)
-			
-			Note: When --interactive=true (default), all other configuration flags are ignored 
-			and you will be prompted for all settings interactively.
-			
-			Supports configuration profiles for common scenarios:
-			- dev: Single-node development setup
-			- production: HA multi-node setup
-			- minimal: Minimal testing setup`),
-			Example: formatExamplesWithBinary("init install-config", []csio.Example{
-				{Cmd: "-c config.yaml -v prod.vault.yaml", Desc: "Create config files interactively"},
-				{Cmd: "--profile dev -c config.yaml -v prod.vault.yaml", Desc: "Use dev profile with defaults"},
-				{Cmd: "--profile production -c config.yaml -v prod.vault.yaml", Desc: "Use production profile"},
-				{Cmd: "--validate -c config.yaml -v prod.vault.yaml", Desc: "Validate existing configuration files"},
-			}, "oms-cli"),
-		},
-		Opts:       &InitInstallConfigOpts{GlobalOptions: opts},
-		FileWriter: util.NewFilesystemWriter(),
-	}
-
-	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
-	c.cmd.Flags().StringVarP(&c.Opts.VaultFile, "vault", "v", "prod.vault.yaml", "Output file path for prod.vault.yaml")
-
-	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
-	c.cmd.Flags().BoolVar(&c.Opts.ValidateOnly, "validate", false, "Validate existing config files instead of creating new ones")
-	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
-	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (when true, other config flags are ignored)")
-	c.cmd.Flags().BoolVar(&c.Opts.GenerateKeys, "generate-keys", true, "Generate SSH keys and certificates")
-	c.cmd.Flags().StringVar(&c.Opts.SecretsBaseDir, "secrets-dir", "/root/secrets", "Secrets base directory")
-
-	c.cmd.Flags().IntVar(&c.Opts.DatacenterID, "dc-id", 0, "Datacenter ID")
-	c.cmd.Flags().StringVar(&c.Opts.DatacenterName, "dc-name", "", "Datacenter name")
-
-	c.cmd.Flags().StringVar(&c.Opts.PostgresMode, "postgres-mode", "", "PostgreSQL setup mode (install/external)")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
-
-	c.cmd.Flags().BoolVar(&c.Opts.K8sManaged, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
-	c.cmd.Flags().StringSliceVar(&c.Opts.K8sControlPlane, "k8s-control-plane", []string{}, "K8s control plane IPs (comma-separated)")
-
-	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
-
-	util.MarkFlagRequired(c.cmd, "config")
-	util.MarkFlagRequired(c.cmd, "vault")
-
-	c.cmd.PreRun = func(cmd *cobra.Command, args []string) {
-		c.Generator = installer.NewConfigGenerator()
-	}
-
-	c.cmd.RunE = c.RunE
-	init.AddCommand(c.cmd)
 }
