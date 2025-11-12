@@ -11,9 +11,29 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Vault
+type InstallVault struct {
+	Secrets []SecretEntry `yaml:"secrets"`
+}
+
+type SecretEntry struct {
+	Name   string        `yaml:"name"`
+	File   *SecretFile   `yaml:"file,omitempty"`
+	Fields *SecretFields `yaml:"fields,omitempty"`
+}
+
+type SecretFile struct {
+	Name    string `yaml:"name"`
+	Content string `yaml:"content"`
+}
+
+type SecretFields struct {
+	Password string `yaml:"password"`
+}
+
 // RootConfig represents the relevant parts of the configuration file
 type RootConfig struct {
-	DataCenter             DataCenterConfig              `yaml:"dataCenter"`
+	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               RegistryConfig                `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
@@ -25,7 +45,7 @@ type RootConfig struct {
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
 }
 
-type DataCenterConfig struct {
+type DatacenterConfig struct {
 	ID          int    `yaml:"id"`
 	Name        string `yaml:"name"`
 	City        string `yaml:"city"`
@@ -345,77 +365,6 @@ type RemoteWriteConfig struct {
 	ClusterName string `yaml:"clusterName,omitempty"`
 }
 
-type InstallVault struct {
-	Secrets []SecretEntry `yaml:"secrets"`
-}
-
-type SecretEntry struct {
-	Name   string        `yaml:"name"`
-	File   *SecretFile   `yaml:"file,omitempty"`
-	Fields *SecretFields `yaml:"fields,omitempty"`
-}
-
-type SecretFile struct {
-	Name    string `yaml:"name"`
-	Content string `yaml:"content"`
-}
-
-type SecretFields struct {
-	Password string `yaml:"password"`
-}
-
-type ConfigOptions struct {
-	DatacenterID          int
-	DatacenterName        string
-	DatacenterCity        string
-	DatacenterCountryCode string
-
-	RegistryServer            string
-	RegistryReplaceImages     bool
-	RegistryLoadContainerImgs bool
-
-	PostgresMode        string
-	PostgresPrimaryIP   string
-	PostgresPrimaryHost string
-	PostgresReplicaIP   string
-	PostgresReplicaName string
-	PostgresExternal    string
-
-	CephSubnet string
-	CephHosts  []CephHostConfig
-
-	K8sManaged      bool
-	K8sAPIServer    string
-	K8sControlPlane []string
-	K8sWorkers      []string
-	K8sExternalHost string
-	K8sPodCIDR      string
-	K8sServiceCIDR  string
-
-	ClusterGatewayType       string
-	ClusterGatewayIPs        []string
-	ClusterPublicGatewayType string
-	ClusterPublicGatewayIPs  []string
-
-	MetalLBEnabled bool
-	MetalLBPools   []MetalLBPool
-
-	CodesphereDomain                  string
-	CodespherePublicIP                string
-	CodesphereWorkspaceBaseDomain     string
-	CodesphereCustomDomainBaseDomain  string
-	CodesphereDNSServers              []string
-	CodesphereWorkspaceImageBomRef    string
-	CodesphereHostingPlanCPU          int
-	CodesphereHostingPlanMemory       int
-	CodesphereHostingPlanStorage      int
-	CodesphereHostingPlanTempStorage  int
-	CodesphereWorkspacePlanName       string
-	CodesphereWorkspacePlanMaxReplica int
-
-	SecretsBaseDir string
-}
-
 type CephHostConfig struct {
 	Hostname  string
 	IPAddress string
@@ -427,64 +376,7 @@ type MetalLBPool struct {
 	IPAddresses []string
 }
 
-type CollectedConfig struct {
-	// Datacenter
-	DcID           int
-	DcName         string
-	DcCity         string
-	DcCountry      string
-	SecretsBaseDir string
-
-	// Registry
-	RegistryServer            string
-	RegistryReplaceImages     bool
-	RegistryLoadContainerImgs bool
-
-	// PostgreSQL
-	PgMode        string
-	PgPrimaryIP   string
-	PgPrimaryHost string
-	PgReplicaIP   string
-	PgReplicaName string
-	PgExternal    string
-
-	// Ceph
-	CephSubnet string
-	CephHosts  []CephHost
-
-	// Kubernetes
-	K8sManaged      bool
-	K8sAPIServer    string
-	K8sControlPlane []string
-	K8sWorkers      []string
-	K8sPodCIDR      string
-	K8sServiceCIDR  string
-
-	// Cluster Gateway
-	GatewayType       string
-	GatewayIPs        []string
-	PublicGatewayType string
-	PublicGatewayIPs  []string
-
-	// MetalLB
-	MetalLBEnabled bool
-	MetalLBPools   []MetalLBPoolDef
-
-	// Codesphere
-	CodesphereDomain        string
-	WorkspaceDomain         string
-	PublicIP                string
-	CustomDomain            string
-	DnsServers              []string
-	WorkspaceImageBomRef    string
-	HostingPlanCPU          int
-	HostingPlanMemory       int
-	HostingPlanStorage      int
-	HostingPlanTempStorage  int
-	WorkspacePlanName       string
-	WorkspacePlanMaxReplica int
-}
-
+// TODO: remove duplicate marshal function
 func (c *RootConfig) ParseConfig(filePath string) error {
 	configData, err := os.ReadFile(filePath)
 	if err != nil {

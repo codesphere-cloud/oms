@@ -19,7 +19,6 @@ type InitInstallConfigCmd struct {
 	cmd        *cobra.Command
 	Opts       *InitInstallConfigOpts
 	FileWriter util.FileIO
-	Generator  installer.InstallConfigManager
 }
 
 type InitInstallConfigOpts struct {
@@ -85,11 +84,9 @@ type InitInstallConfigOpts struct {
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
-	if c.Opts.ValidateOnly {
-		return c.validateConfig()
-	}
+	icg := installer.NewInstallConfigManager()
 
-	return c.InitInstallConfig()
+	return c.InitInstallConfig(icg)
 }
 
 func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
@@ -145,101 +142,67 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(c.cmd, "config")
 	util.MarkFlagRequired(c.cmd, "vault")
 
-	c.cmd.PreRun = func(cmd *cobra.Command, args []string) {
-		c.Generator = installer.NewConfigGenerator()
-	}
-
 	c.cmd.RunE = c.RunE
 	init.AddCommand(c.cmd)
 }
 
-func (c *InitInstallConfigCmd) InitInstallConfig() error {
-	var err error
+func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {
+	// Validation only mode
+	if c.Opts.ValidateOnly {
+		// TODO: put into validateOnly method
+		err := icg.LoadConfigFromFile(c.Opts.ConfigFile)
+		if err != nil {
+			return fmt.Errorf("failed to load config file: %w", err)
+		}
+
+		err = icg.Validate()
+		if err != nil {
+			return fmt.Errorf("configuration validation failed: %w", err)
+		}
+
+		// err = icg.LoadVaultFromFile(c.Opts.VaultFile)
+		// if err != nil {
+		// 	return fmt.Errorf("failed to load vault file: %w", err)
+		// }
+
+		// err = icg.ValidateVault()
+		// if err != nil {
+		// 	return fmt.Errorf("vault validation failed: %w", err)
+		// }
+
+		return nil
+	}
+
+	// Generate new configuration from either Opts or interactively
+	err := icg.ApplyProfile(c.Opts.Profile)
+	if err != nil {
+		return fmt.Errorf("failed to apply profile: %w", err)
+	}
 
 	c.printWelcomeMessage()
 
-	if c.Opts.Profile != "" {
-		if err := c.applyProfile(); err != nil {
-			return fmt.Errorf("failed to apply profile: %w", err)
-		}
-	}
-
 	if c.Opts.Interactive {
-		err = c.Generator.CollectInteractively()
+		err = icg.CollectInteractively()
 		if err != nil {
 			return fmt.Errorf("failed to collect configuration interactively: %w", err)
 		}
 	} else {
-		config, err := installer.FromConfigOptions(&files.ConfigOptions{
-			DatacenterID:          c.Opts.DatacenterID,
-			DatacenterName:        c.Opts.DatacenterName,
-			DatacenterCity:        c.Opts.DatacenterCity,
-			DatacenterCountryCode: c.Opts.DatacenterCountryCode,
-
-			RegistryServer:            c.Opts.RegistryServer,
-			RegistryReplaceImages:     c.Opts.RegistryReplaceImages,
-			RegistryLoadContainerImgs: c.Opts.RegistryLoadContainerImgs,
-
-			PostgresMode:        c.Opts.PostgresMode,
-			PostgresPrimaryIP:   c.Opts.PostgresPrimaryIP,
-			PostgresPrimaryHost: c.Opts.PostgresPrimaryHost,
-			PostgresReplicaIP:   c.Opts.PostgresReplicaIP,
-			PostgresReplicaName: c.Opts.PostgresReplicaName,
-			PostgresExternal:    c.Opts.PostgresExternal,
-
-			CephSubnet: c.Opts.CephSubnet,
-			CephHosts:  c.Opts.CephHosts,
-
-			K8sManaged:      c.Opts.K8sManaged,
-			K8sAPIServer:    c.Opts.K8sAPIServer,
-			K8sControlPlane: c.Opts.K8sControlPlane,
-			K8sWorkers:      c.Opts.K8sWorkers,
-			K8sExternalHost: c.Opts.K8sExternalHost,
-			K8sPodCIDR:      c.Opts.K8sPodCIDR,
-			K8sServiceCIDR:  c.Opts.K8sServiceCIDR,
-
-			ClusterGatewayType:       c.Opts.ClusterGatewayType,
-			ClusterGatewayIPs:        c.Opts.ClusterGatewayIPs,
-			ClusterPublicGatewayType: c.Opts.ClusterPublicGatewayType,
-			ClusterPublicGatewayIPs:  c.Opts.ClusterPublicGatewayIPs,
-
-			MetalLBEnabled: c.Opts.MetalLBEnabled,
-			MetalLBPools:   c.Opts.MetalLBPools,
-
-			CodesphereDomain:                  c.Opts.CodesphereDomain,
-			CodespherePublicIP:                c.Opts.CodespherePublicIP,
-			CodesphereWorkspaceBaseDomain:     c.Opts.CodesphereWorkspaceBaseDomain,
-			CodesphereCustomDomainBaseDomain:  c.Opts.CodesphereCustomDomainBaseDomain,
-			CodesphereDNSServers:              c.Opts.CodesphereDNSServers,
-			CodesphereWorkspaceImageBomRef:    c.Opts.CodesphereWorkspaceImageBomRef,
-			CodesphereHostingPlanCPU:          c.Opts.CodesphereHostingPlanCPU,
-			CodesphereHostingPlanMemory:       c.Opts.CodesphereHostingPlanMemory,
-			CodesphereHostingPlanStorage:      c.Opts.CodesphereHostingPlanStorage,
-			CodesphereHostingPlanTempStorage:  c.Opts.CodesphereHostingPlanTempStorage,
-			CodesphereWorkspacePlanName:       c.Opts.CodesphereWorkspacePlanName,
-			CodesphereWorkspacePlanMaxReplica: c.Opts.CodesphereWorkspacePlanMaxReplica,
-
-			SecretsBaseDir: c.Opts.SecretsBaseDir,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to build configuration from options: %w", err)
-		}
-		c.Generator.SetConfig(config)
+		c.updateConfigFromOpts(icg.GetConfig())
 	}
 
-	if err := c.Generator.Validate(); err != nil {
+	if err := icg.Validate(); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
-	if err := c.Generator.GenerateSecrets(); err != nil {
+	if err := icg.GenerateSecrets(); err != nil {
 		return fmt.Errorf("failed to generate secrets: %w", err)
 	}
 
-	if err := c.Generator.WriteInstallConfig(c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
+	if err := icg.WriteInstallConfig(c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := c.Generator.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
@@ -273,136 +236,24 @@ func (c *InitInstallConfigCmd) printSuccessMessage() {
 	fmt.Println()
 }
 
-func (c *InitInstallConfigCmd) applyProfile() error {
-	switch strings.ToLower(c.Opts.Profile) {
-	case "dev", "development":
-		c.Opts.DatacenterID = 1
-		c.Opts.DatacenterName = "dev"
-		c.Opts.DatacenterCity = "Karlsruhe"
-		c.Opts.DatacenterCountryCode = "DE"
-		c.Opts.PostgresMode = "install"
-		c.Opts.PostgresPrimaryIP = "127.0.0.1"
-		c.Opts.PostgresPrimaryHost = "localhost"
-		c.Opts.CephSubnet = "127.0.0.1/32"
-		c.Opts.CephHosts = []files.CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
-		c.Opts.K8sManaged = true
-		c.Opts.K8sAPIServer = "127.0.0.1"
-		c.Opts.K8sControlPlane = []string{"127.0.0.1"}
-		c.Opts.K8sWorkers = []string{"127.0.0.1"}
-		c.Opts.ClusterGatewayType = "LoadBalancer"
-		c.Opts.ClusterPublicGatewayType = "LoadBalancer"
-		c.Opts.CodesphereDomain = "codesphere.local"
-		c.Opts.CodesphereWorkspaceBaseDomain = "ws.local"
-		c.Opts.CodesphereCustomDomainBaseDomain = "custom.local"
-		c.Opts.CodesphereDNSServers = []string{"8.8.8.8", "1.1.1.1"}
-		c.Opts.CodesphereWorkspaceImageBomRef = "workspace-agent-24.04"
-		c.Opts.CodesphereHostingPlanCPU = 10
-		c.Opts.CodesphereHostingPlanMemory = 2048
-		c.Opts.CodesphereHostingPlanStorage = 20480
-		c.Opts.CodesphereHostingPlanTempStorage = 1024
-		c.Opts.CodesphereWorkspacePlanName = "Standard Developer"
-		c.Opts.CodesphereWorkspacePlanMaxReplica = 3
-		c.Opts.GenerateKeys = true
-		c.Opts.SecretsBaseDir = "/root/secrets"
-		fmt.Println("Applied 'dev' profile: single-node development setup")
-
-	case "prod", "production":
-		c.Opts.DatacenterID = 1
-		c.Opts.DatacenterName = "production"
-		c.Opts.DatacenterCity = "Karlsruhe"
-		c.Opts.DatacenterCountryCode = "DE"
-		c.Opts.PostgresMode = "install"
-		c.Opts.PostgresPrimaryIP = "10.50.0.2"
-		c.Opts.PostgresPrimaryHost = "pg-primary"
-		c.Opts.PostgresReplicaIP = "10.50.0.3"
-		c.Opts.PostgresReplicaName = "replica1"
-		c.Opts.CephSubnet = "10.53.101.0/24"
-		c.Opts.CephHosts = []files.CephHostConfig{
-			{Hostname: "ceph-node-0", IPAddress: "10.53.101.2", IsMaster: true},
-			{Hostname: "ceph-node-1", IPAddress: "10.53.101.3", IsMaster: false},
-			{Hostname: "ceph-node-2", IPAddress: "10.53.101.4", IsMaster: false},
-		}
-		c.Opts.K8sManaged = true
-		c.Opts.K8sAPIServer = "10.50.0.2"
-		c.Opts.K8sControlPlane = []string{"10.50.0.2"}
-		c.Opts.K8sWorkers = []string{"10.50.0.2", "10.50.0.3", "10.50.0.4"}
-		c.Opts.ClusterGatewayType = "LoadBalancer"
-		c.Opts.ClusterPublicGatewayType = "LoadBalancer"
-		c.Opts.CodesphereDomain = "codesphere.yourcompany.com"
-		c.Opts.CodesphereWorkspaceBaseDomain = "ws.yourcompany.com"
-		c.Opts.CodesphereCustomDomainBaseDomain = "custom.yourcompany.com"
-		c.Opts.CodesphereDNSServers = []string{"1.1.1.1", "8.8.8.8"}
-		c.Opts.CodesphereWorkspaceImageBomRef = "workspace-agent-24.04"
-		c.Opts.CodesphereHostingPlanCPU = 10
-		c.Opts.CodesphereHostingPlanMemory = 2048
-		c.Opts.CodesphereHostingPlanStorage = 20480
-		c.Opts.CodesphereHostingPlanTempStorage = 1024
-		c.Opts.CodesphereWorkspacePlanName = "Standard Developer"
-		c.Opts.CodesphereWorkspacePlanMaxReplica = 3
-		c.Opts.GenerateKeys = true
-		c.Opts.SecretsBaseDir = "/root/secrets"
-		fmt.Println("Applied 'production' profile: HA multi-node setup")
-
-	case "minimal":
-		c.Opts.DatacenterID = 1
-		c.Opts.DatacenterName = "minimal"
-		c.Opts.DatacenterCity = "Karlsruhe"
-		c.Opts.DatacenterCountryCode = "DE"
-		c.Opts.PostgresMode = "install"
-		c.Opts.PostgresPrimaryIP = "127.0.0.1"
-		c.Opts.PostgresPrimaryHost = "localhost"
-		c.Opts.CephSubnet = "127.0.0.1/32"
-		c.Opts.CephHosts = []files.CephHostConfig{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
-		c.Opts.K8sManaged = true
-		c.Opts.K8sAPIServer = "127.0.0.1"
-		c.Opts.K8sControlPlane = []string{"127.0.0.1"}
-		c.Opts.K8sWorkers = []string{}
-		c.Opts.ClusterGatewayType = "LoadBalancer"
-		c.Opts.ClusterPublicGatewayType = "LoadBalancer"
-		c.Opts.CodesphereDomain = "codesphere.local"
-		c.Opts.CodesphereWorkspaceBaseDomain = "ws.local"
-		c.Opts.CodesphereCustomDomainBaseDomain = "custom.local"
-		c.Opts.CodesphereDNSServers = []string{"8.8.8.8"}
-		c.Opts.CodesphereWorkspaceImageBomRef = "workspace-agent-24.04"
-		c.Opts.CodesphereHostingPlanCPU = 10
-		c.Opts.CodesphereHostingPlanMemory = 2048
-		c.Opts.CodesphereHostingPlanStorage = 20480
-		c.Opts.CodesphereHostingPlanTempStorage = 1024
-		c.Opts.CodesphereWorkspacePlanName = "Standard Developer"
-		c.Opts.CodesphereWorkspacePlanMaxReplica = 1
-		c.Opts.GenerateKeys = true
-		c.Opts.SecretsBaseDir = "/root/secrets"
-		fmt.Println("Applied 'minimal' profile: minimal single-node setup")
-
-	default:
-		return fmt.Errorf("unknown profile: %s. Available profiles: dev, production, minimal", c.Opts.Profile)
-	}
-
-	return nil
-}
-
-func (c *InitInstallConfigCmd) validateConfig() error {
+func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) error {
 	fmt.Printf("Validating configuration files...\n")
 
-	fmt.Printf("Reading config file: %s\n", c.Opts.ConfigFile)
-	configFile, err := c.FileWriter.Open(c.Opts.ConfigFile)
-	if err != nil {
-		return fmt.Errorf("failed to open config file: %w", err)
-	}
-	defer util.CloseFileIgnoreError(configFile)
+	// TODO: Check if config file can be empty
+	if c.Opts.ConfigFile != "" {
+		fmt.Printf("Reading config file: %s\n", c.Opts.ConfigFile)
+		err := icg.LoadConfigFromFile(c.Opts.ConfigFile)
+		if err != nil {
+			return fmt.Errorf("failed to load config file: %w", err)
+		}
 
-	configData, err := io.ReadAll(configFile)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
-
-	config, err := installer.UnmarshalConfig(configData)
-	if err != nil {
-		return fmt.Errorf("failed to parse config.yaml: %w", err)
+		err = icg.Validate()
+		if err != nil {
+			return fmt.Errorf("configuration validation failed: %w", err)
+		}
 	}
 
-	errors := installer.ValidateConfig(config)
-
+	var errors []string
 	if c.Opts.VaultFile != "" {
 		fmt.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
 		vaultFile, err := c.FileWriter.Open(c.Opts.VaultFile)
@@ -436,4 +287,155 @@ func (c *InitInstallConfigCmd) validateConfig() error {
 
 	fmt.Println("Configuration is valid!")
 	return nil
+}
+
+func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *files.RootConfig {
+	// Datacenter settings
+	config.Datacenter.ID = c.Opts.DatacenterID
+	config.Datacenter.City = c.Opts.DatacenterCity
+	config.Datacenter.CountryCode = c.Opts.DatacenterCountryCode
+	config.Datacenter.Name = c.Opts.DatacenterName
+
+	// Registry settings
+	config.Registry.LoadContainerImages = c.Opts.RegistryLoadContainerImgs
+	config.Registry.ReplaceImagesInBom = c.Opts.RegistryReplaceImages
+	config.Registry.Server = c.Opts.RegistryServer
+
+	// Postgres settings
+	if c.Opts.PostgresExternal != "" {
+		config.Postgres.ServerAddress = c.Opts.PostgresExternal
+	}
+
+	if c.Opts.PostgresPrimaryHost != "" && c.Opts.PostgresPrimaryIP != "" {
+		if config.Postgres.Primary == nil {
+			// TODO: Mode:        c.Opts.PostgresMode,
+			// TODO: External:    c.Opts.PostgresExternal,
+			config.Postgres.Primary = &files.PostgresPrimaryConfig{
+				Hostname: c.Opts.PostgresPrimaryHost,
+				IP:       c.Opts.PostgresPrimaryIP,
+			}
+		} else {
+			// TODO: Mode:        c.Opts.PostgresMode,
+			// TODO: External:    c.Opts.PostgresExternal,
+			config.Postgres.Primary.Hostname = c.Opts.PostgresPrimaryHost
+			config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
+		}
+	}
+
+	if c.Opts.PostgresReplicaIP != "" && c.Opts.PostgresReplicaName != "" {
+		if config.Postgres.Replica == nil {
+			// TODO: Mode:        c.Opts.PostgresMode,
+			// TODO: External:    c.Opts.PostgresExternal,
+			config.Postgres.Replica = &files.PostgresReplicaConfig{
+				Name: c.Opts.PostgresReplicaName,
+				IP:   c.Opts.PostgresReplicaIP,
+			}
+		} else {
+			// TODO: Mode:        c.Opts.PostgresMode,
+			// TODO: External:    c.Opts.PostgresExternal,
+			config.Postgres.Replica.Name = c.Opts.PostgresReplicaName
+			config.Postgres.Replica.IP = c.Opts.PostgresReplicaIP
+		}
+	}
+
+	// Ceph settings
+	config.Ceph.NodesSubnet = c.Opts.CephSubnet
+	cephHosts := []files.CephHost{}
+	for _, hostCfg := range c.Opts.CephHosts {
+		cephHosts = append(config.Ceph.Hosts, files.CephHost{
+			Hostname:  hostCfg.Hostname,
+			IPAddress: hostCfg.IPAddress,
+			IsMaster:  hostCfg.IsMaster,
+		})
+	}
+	if len(cephHosts) > 0 {
+		config.Ceph.Hosts = cephHosts
+	}
+
+	// Kubernetes settings
+	config.Kubernetes.ManagedByCodesphere = c.Opts.K8sManaged
+	config.Kubernetes.APIServerHost = c.Opts.K8sAPIServer
+	config.Kubernetes.PodCIDR = c.Opts.K8sPodCIDR
+	config.Kubernetes.ServiceCIDR = c.Opts.K8sServiceCIDR
+
+	kubernetesControlPlanes := []files.K8sNode{}
+	for _, ip := range c.Opts.K8sControlPlane {
+		kubernetesControlPlanes = append(kubernetesControlPlanes, files.K8sNode{
+			IPAddress: ip,
+		})
+	}
+	config.Kubernetes.ControlPlanes = kubernetesControlPlanes
+
+	kubernetesWorkers := []files.K8sNode{}
+	for _, ip := range c.Opts.K8sWorkers {
+		kubernetesWorkers = append(kubernetesWorkers, files.K8sNode{
+			IPAddress: ip,
+		})
+	}
+	config.Kubernetes.Workers = kubernetesWorkers
+
+	// Cluster Gateway settings
+	config.Cluster.Gateway.ServiceType = c.Opts.ClusterGatewayType
+	config.Cluster.Gateway.IPAddresses = c.Opts.ClusterGatewayIPs
+	config.Cluster.PublicGateway.ServiceType = c.Opts.ClusterPublicGatewayType
+	config.Cluster.PublicGateway.IPAddresses = c.Opts.ClusterPublicGatewayIPs
+
+	// MetalLB settings
+	if c.Opts.MetalLBEnabled {
+		if config.MetalLB == nil {
+			config.MetalLB = &files.MetalLBConfig{
+				Enabled: c.Opts.MetalLBEnabled,
+				Pools:   []files.MetalLBPoolDef{},
+			}
+		} else {
+			config.MetalLB.Enabled = c.Opts.MetalLBEnabled
+			config.MetalLB.Pools = []files.MetalLBPoolDef{}
+		}
+
+		for _, pool := range c.Opts.MetalLBPools {
+			config.MetalLB.Pools = append(config.MetalLB.Pools, files.MetalLBPoolDef{
+				Name:        pool.Name,
+				IPAddresses: pool.IPAddresses,
+				// TODO: ARPEnabled: pool.ARPEnabled,
+			})
+		}
+	}
+
+	// Codesphere settings
+	config.Codesphere.Domain = c.Opts.CodesphereDomain
+	config.Codesphere.PublicIP = c.Opts.CodespherePublicIP
+	config.Codesphere.WorkspaceHostingBaseDomain = c.Opts.CodesphereWorkspaceBaseDomain
+	config.Codesphere.CustomDomains = files.CustomDomainsConfig{CNameBaseDomain: c.Opts.CodesphereCustomDomainBaseDomain}
+	config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
+
+	if config.Codesphere.WorkspaceImages == nil {
+		config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{}
+	}
+	config.Codesphere.WorkspaceImages.Agent = &files.ImageRef{
+		BomRef: c.Opts.CodesphereWorkspaceImageBomRef,
+	}
+
+	config.Codesphere.Plans = files.PlansConfig{
+		HostingPlans: map[int]files.HostingPlan{
+			1: {
+				CPUTenth:      c.Opts.CodesphereHostingPlanCPU,
+				MemoryMb:      c.Opts.CodesphereHostingPlanMemory,
+				StorageMb:     c.Opts.CodesphereHostingPlanStorage,
+				TempStorageMb: c.Opts.CodesphereHostingPlanTempStorage,
+			},
+		},
+		WorkspacePlans: map[int]files.WorkspacePlan{
+			1: {
+				Name:          c.Opts.CodesphereWorkspacePlanName,
+				HostingPlanID: 1,
+				MaxReplicas:   c.Opts.CodesphereWorkspacePlanMaxReplica,
+				OnDemand:      true,
+			},
+		},
+	}
+
+	// Secrets base dir
+	config.Secrets.BaseDir = c.Opts.SecretsBaseDir
+
+	return config
 }
