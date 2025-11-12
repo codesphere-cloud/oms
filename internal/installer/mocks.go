@@ -118,6 +118,51 @@ func (_m *MockInstallConfigManager) EXPECT() *MockInstallConfigManager_Expecter 
 	return &MockInstallConfigManager_Expecter{mock: &_m.Mock}
 }
 
+// ApplyProfile provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) ApplyProfile(profile string) error {
+	ret := _mock.Called(profile)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ApplyProfile")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(profile)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInstallConfigManager_ApplyProfile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ApplyProfile'
+type MockInstallConfigManager_ApplyProfile_Call struct {
+	*mock.Call
+}
+
+// ApplyProfile is a helper method to define mock.On call
+//   - profile
+func (_e *MockInstallConfigManager_Expecter) ApplyProfile(profile interface{}) *MockInstallConfigManager_ApplyProfile_Call {
+	return &MockInstallConfigManager_ApplyProfile_Call{Call: _e.mock.On("ApplyProfile", profile)}
+}
+
+func (_c *MockInstallConfigManager_ApplyProfile_Call) Run(run func(profile string)) *MockInstallConfigManager_ApplyProfile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_ApplyProfile_Call) Return(err error) *MockInstallConfigManager_ApplyProfile_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInstallConfigManager_ApplyProfile_Call) RunAndReturn(run func(profile string) error) *MockInstallConfigManager_ApplyProfile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CollectInteractively provides a mock function for the type MockInstallConfigManager
 func (_mock *MockInstallConfigManager) CollectInteractively() error {
 	ret := _mock.Called()
@@ -206,81 +251,93 @@ func (_c *MockInstallConfigManager_GenerateSecrets_Call) RunAndReturn(run func()
 	return _c
 }
 
-// SetConfig provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) SetConfig(config *files.RootConfig) {
-	_mock.Called(config)
-	return
+// GetConfig provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) GetConfig() *files.RootConfig {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetConfig")
+	}
+
+	var r0 *files.RootConfig
+	if returnFunc, ok := ret.Get(0).(func() *files.RootConfig); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*files.RootConfig)
+		}
+	}
+	return r0
 }
 
-// MockInstallConfigManager_SetConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetConfig'
-type MockInstallConfigManager_SetConfig_Call struct {
+// MockInstallConfigManager_GetConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetConfig'
+type MockInstallConfigManager_GetConfig_Call struct {
 	*mock.Call
 }
 
-// SetConfig is a helper method to define mock.On call
-//   - config
-func (_e *MockInstallConfigManager_Expecter) SetConfig(config interface{}) *MockInstallConfigManager_SetConfig_Call {
-	return &MockInstallConfigManager_SetConfig_Call{Call: _e.mock.On("SetConfig", config)}
+// GetConfig is a helper method to define mock.On call
+func (_e *MockInstallConfigManager_Expecter) GetConfig() *MockInstallConfigManager_GetConfig_Call {
+	return &MockInstallConfigManager_GetConfig_Call{Call: _e.mock.On("GetConfig")}
 }
 
-func (_c *MockInstallConfigManager_SetConfig_Call) Run(run func(config *files.RootConfig)) *MockInstallConfigManager_SetConfig_Call {
+func (_c *MockInstallConfigManager_GetConfig_Call) Run(run func()) *MockInstallConfigManager_GetConfig_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*files.RootConfig))
+		run()
 	})
 	return _c
 }
 
-func (_c *MockInstallConfigManager_SetConfig_Call) Return() *MockInstallConfigManager_SetConfig_Call {
-	_c.Call.Return()
+func (_c *MockInstallConfigManager_GetConfig_Call) Return(rootConfig *files.RootConfig) *MockInstallConfigManager_GetConfig_Call {
+	_c.Call.Return(rootConfig)
 	return _c
 }
 
-func (_c *MockInstallConfigManager_SetConfig_Call) RunAndReturn(run func(config *files.RootConfig)) *MockInstallConfigManager_SetConfig_Call {
-	_c.Run(run)
+func (_c *MockInstallConfigManager_GetConfig_Call) RunAndReturn(run func() *files.RootConfig) *MockInstallConfigManager_GetConfig_Call {
+	_c.Call.Return(run)
 	return _c
 }
 
-// SetProfileValues provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) SetProfileValues(profile string) error {
-	ret := _mock.Called(profile)
+// LoadConfigFromFile provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) LoadConfigFromFile(configPath string) error {
+	ret := _mock.Called(configPath)
 
 	if len(ret) == 0 {
-		panic("no return value specified for SetProfileValues")
+		panic("no return value specified for LoadConfigFromFile")
 	}
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
-		r0 = returnFunc(profile)
+		r0 = returnFunc(configPath)
 	} else {
 		r0 = ret.Error(0)
 	}
 	return r0
 }
 
-// MockInstallConfigManager_SetProfileValues_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetProfileValues'
-type MockInstallConfigManager_SetProfileValues_Call struct {
+// MockInstallConfigManager_LoadConfigFromFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadConfigFromFile'
+type MockInstallConfigManager_LoadConfigFromFile_Call struct {
 	*mock.Call
 }
 
-// SetProfileValues is a helper method to define mock.On call
-//   - profile
-func (_e *MockInstallConfigManager_Expecter) SetProfileValues(profile interface{}) *MockInstallConfigManager_SetProfileValues_Call {
-	return &MockInstallConfigManager_SetProfileValues_Call{Call: _e.mock.On("SetProfileValues", profile)}
+// LoadConfigFromFile is a helper method to define mock.On call
+//   - configPath
+func (_e *MockInstallConfigManager_Expecter) LoadConfigFromFile(configPath interface{}) *MockInstallConfigManager_LoadConfigFromFile_Call {
+	return &MockInstallConfigManager_LoadConfigFromFile_Call{Call: _e.mock.On("LoadConfigFromFile", configPath)}
 }
 
-func (_c *MockInstallConfigManager_SetProfileValues_Call) Run(run func(profile string)) *MockInstallConfigManager_SetProfileValues_Call {
+func (_c *MockInstallConfigManager_LoadConfigFromFile_Call) Run(run func(configPath string)) *MockInstallConfigManager_LoadConfigFromFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(string))
 	})
 	return _c
 }
 
-func (_c *MockInstallConfigManager_SetProfileValues_Call) Return(err error) *MockInstallConfigManager_SetProfileValues_Call {
+func (_c *MockInstallConfigManager_LoadConfigFromFile_Call) Return(err error) *MockInstallConfigManager_LoadConfigFromFile_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockInstallConfigManager_SetProfileValues_Call) RunAndReturn(run func(profile string) error) *MockInstallConfigManager_SetProfileValues_Call {
+func (_c *MockInstallConfigManager_LoadConfigFromFile_Call) RunAndReturn(run func(configPath string) error) *MockInstallConfigManager_LoadConfigFromFile_Call {
 	_c.Call.Return(run)
 	return _c
 }
