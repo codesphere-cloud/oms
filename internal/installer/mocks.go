@@ -251,12 +251,12 @@ func (_c *MockInstallConfigManager_GenerateSecrets_Call) RunAndReturn(run func()
 	return _c
 }
 
-// GetConfig provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) GetConfig() *files.RootConfig {
+// GetInstallConfig provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) GetInstallConfig() *files.RootConfig {
 	ret := _mock.Called()
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetConfig")
+		panic("no return value specified for GetInstallConfig")
 	}
 
 	var r0 *files.RootConfig
@@ -270,39 +270,39 @@ func (_mock *MockInstallConfigManager) GetConfig() *files.RootConfig {
 	return r0
 }
 
-// MockInstallConfigManager_GetConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetConfig'
-type MockInstallConfigManager_GetConfig_Call struct {
+// MockInstallConfigManager_GetInstallConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetInstallConfig'
+type MockInstallConfigManager_GetInstallConfig_Call struct {
 	*mock.Call
 }
 
-// GetConfig is a helper method to define mock.On call
-func (_e *MockInstallConfigManager_Expecter) GetConfig() *MockInstallConfigManager_GetConfig_Call {
-	return &MockInstallConfigManager_GetConfig_Call{Call: _e.mock.On("GetConfig")}
+// GetInstallConfig is a helper method to define mock.On call
+func (_e *MockInstallConfigManager_Expecter) GetInstallConfig() *MockInstallConfigManager_GetInstallConfig_Call {
+	return &MockInstallConfigManager_GetInstallConfig_Call{Call: _e.mock.On("GetInstallConfig")}
 }
 
-func (_c *MockInstallConfigManager_GetConfig_Call) Run(run func()) *MockInstallConfigManager_GetConfig_Call {
+func (_c *MockInstallConfigManager_GetInstallConfig_Call) Run(run func()) *MockInstallConfigManager_GetInstallConfig_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run()
 	})
 	return _c
 }
 
-func (_c *MockInstallConfigManager_GetConfig_Call) Return(rootConfig *files.RootConfig) *MockInstallConfigManager_GetConfig_Call {
+func (_c *MockInstallConfigManager_GetInstallConfig_Call) Return(rootConfig *files.RootConfig) *MockInstallConfigManager_GetInstallConfig_Call {
 	_c.Call.Return(rootConfig)
 	return _c
 }
 
-func (_c *MockInstallConfigManager_GetConfig_Call) RunAndReturn(run func() *files.RootConfig) *MockInstallConfigManager_GetConfig_Call {
+func (_c *MockInstallConfigManager_GetInstallConfig_Call) RunAndReturn(run func() *files.RootConfig) *MockInstallConfigManager_GetInstallConfig_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// LoadConfigFromFile provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) LoadConfigFromFile(configPath string) error {
+// LoadInstallConfigFromFile provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) LoadInstallConfigFromFile(configPath string) error {
 	ret := _mock.Called(configPath)
 
 	if len(ret) == 0 {
-		panic("no return value specified for LoadConfigFromFile")
+		panic("no return value specified for LoadInstallConfigFromFile")
 	}
 
 	var r0 error
@@ -314,74 +314,167 @@ func (_mock *MockInstallConfigManager) LoadConfigFromFile(configPath string) err
 	return r0
 }
 
-// MockInstallConfigManager_LoadConfigFromFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadConfigFromFile'
-type MockInstallConfigManager_LoadConfigFromFile_Call struct {
+// MockInstallConfigManager_LoadInstallConfigFromFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadInstallConfigFromFile'
+type MockInstallConfigManager_LoadInstallConfigFromFile_Call struct {
 	*mock.Call
 }
 
-// LoadConfigFromFile is a helper method to define mock.On call
+// LoadInstallConfigFromFile is a helper method to define mock.On call
 //   - configPath
-func (_e *MockInstallConfigManager_Expecter) LoadConfigFromFile(configPath interface{}) *MockInstallConfigManager_LoadConfigFromFile_Call {
-	return &MockInstallConfigManager_LoadConfigFromFile_Call{Call: _e.mock.On("LoadConfigFromFile", configPath)}
+func (_e *MockInstallConfigManager_Expecter) LoadInstallConfigFromFile(configPath interface{}) *MockInstallConfigManager_LoadInstallConfigFromFile_Call {
+	return &MockInstallConfigManager_LoadInstallConfigFromFile_Call{Call: _e.mock.On("LoadInstallConfigFromFile", configPath)}
 }
 
-func (_c *MockInstallConfigManager_LoadConfigFromFile_Call) Run(run func(configPath string)) *MockInstallConfigManager_LoadConfigFromFile_Call {
+func (_c *MockInstallConfigManager_LoadInstallConfigFromFile_Call) Run(run func(configPath string)) *MockInstallConfigManager_LoadInstallConfigFromFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(string))
 	})
 	return _c
 }
 
-func (_c *MockInstallConfigManager_LoadConfigFromFile_Call) Return(err error) *MockInstallConfigManager_LoadConfigFromFile_Call {
+func (_c *MockInstallConfigManager_LoadInstallConfigFromFile_Call) Return(err error) *MockInstallConfigManager_LoadInstallConfigFromFile_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockInstallConfigManager_LoadConfigFromFile_Call) RunAndReturn(run func(configPath string) error) *MockInstallConfigManager_LoadConfigFromFile_Call {
+func (_c *MockInstallConfigManager_LoadInstallConfigFromFile_Call) RunAndReturn(run func(configPath string) error) *MockInstallConfigManager_LoadInstallConfigFromFile_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// Validate provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) Validate() error {
-	ret := _mock.Called()
+// LoadVaultFromFile provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) LoadVaultFromFile(vaultPath string) error {
+	ret := _mock.Called(vaultPath)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Validate")
+		panic("no return value specified for LoadVaultFromFile")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func() error); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(vaultPath)
 	} else {
 		r0 = ret.Error(0)
 	}
 	return r0
 }
 
-// MockInstallConfigManager_Validate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Validate'
-type MockInstallConfigManager_Validate_Call struct {
+// MockInstallConfigManager_LoadVaultFromFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadVaultFromFile'
+type MockInstallConfigManager_LoadVaultFromFile_Call struct {
 	*mock.Call
 }
 
-// Validate is a helper method to define mock.On call
-func (_e *MockInstallConfigManager_Expecter) Validate() *MockInstallConfigManager_Validate_Call {
-	return &MockInstallConfigManager_Validate_Call{Call: _e.mock.On("Validate")}
+// LoadVaultFromFile is a helper method to define mock.On call
+//   - vaultPath
+func (_e *MockInstallConfigManager_Expecter) LoadVaultFromFile(vaultPath interface{}) *MockInstallConfigManager_LoadVaultFromFile_Call {
+	return &MockInstallConfigManager_LoadVaultFromFile_Call{Call: _e.mock.On("LoadVaultFromFile", vaultPath)}
 }
 
-func (_c *MockInstallConfigManager_Validate_Call) Run(run func()) *MockInstallConfigManager_Validate_Call {
+func (_c *MockInstallConfigManager_LoadVaultFromFile_Call) Run(run func(vaultPath string)) *MockInstallConfigManager_LoadVaultFromFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_LoadVaultFromFile_Call) Return(err error) *MockInstallConfigManager_LoadVaultFromFile_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInstallConfigManager_LoadVaultFromFile_Call) RunAndReturn(run func(vaultPath string) error) *MockInstallConfigManager_LoadVaultFromFile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ValidateInstallConfig provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) ValidateInstallConfig() []string {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ValidateInstallConfig")
+	}
+
+	var r0 []string
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	return r0
+}
+
+// MockInstallConfigManager_ValidateInstallConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ValidateInstallConfig'
+type MockInstallConfigManager_ValidateInstallConfig_Call struct {
+	*mock.Call
+}
+
+// ValidateInstallConfig is a helper method to define mock.On call
+func (_e *MockInstallConfigManager_Expecter) ValidateInstallConfig() *MockInstallConfigManager_ValidateInstallConfig_Call {
+	return &MockInstallConfigManager_ValidateInstallConfig_Call{Call: _e.mock.On("ValidateInstallConfig")}
+}
+
+func (_c *MockInstallConfigManager_ValidateInstallConfig_Call) Run(run func()) *MockInstallConfigManager_ValidateInstallConfig_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run()
 	})
 	return _c
 }
 
-func (_c *MockInstallConfigManager_Validate_Call) Return(err error) *MockInstallConfigManager_Validate_Call {
-	_c.Call.Return(err)
+func (_c *MockInstallConfigManager_ValidateInstallConfig_Call) Return(strings []string) *MockInstallConfigManager_ValidateInstallConfig_Call {
+	_c.Call.Return(strings)
 	return _c
 }
 
-func (_c *MockInstallConfigManager_Validate_Call) RunAndReturn(run func() error) *MockInstallConfigManager_Validate_Call {
+func (_c *MockInstallConfigManager_ValidateInstallConfig_Call) RunAndReturn(run func() []string) *MockInstallConfigManager_ValidateInstallConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ValidateVault provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) ValidateVault() []string {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ValidateVault")
+	}
+
+	var r0 []string
+	if returnFunc, ok := ret.Get(0).(func() []string); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	return r0
+}
+
+// MockInstallConfigManager_ValidateVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ValidateVault'
+type MockInstallConfigManager_ValidateVault_Call struct {
+	*mock.Call
+}
+
+// ValidateVault is a helper method to define mock.On call
+func (_e *MockInstallConfigManager_Expecter) ValidateVault() *MockInstallConfigManager_ValidateVault_Call {
+	return &MockInstallConfigManager_ValidateVault_Call{Call: _e.mock.On("ValidateVault")}
+}
+
+func (_c *MockInstallConfigManager_ValidateVault_Call) Run(run func()) *MockInstallConfigManager_ValidateVault_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_ValidateVault_Call) Return(strings []string) *MockInstallConfigManager_ValidateVault_Call {
+	_c.Call.Return(strings)
+	return _c
+}
+
+func (_c *MockInstallConfigManager_ValidateVault_Call) RunAndReturn(run func() []string) *MockInstallConfigManager_ValidateVault_Call {
 	_c.Call.Return(run)
 	return _c
 }
