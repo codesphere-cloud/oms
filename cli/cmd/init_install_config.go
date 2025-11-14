@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -164,10 +163,10 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 			return fmt.Errorf("failed to collect configuration interactively: %w", err)
 		}
 	} else {
-		c.updateConfigFromOpts(icg.GetConfig())
+		c.updateConfigFromOpts(icg.GetInstallConfig())
 	}
 
-	if err := icg.Validate(); err != nil {
+	if err := icg.ValidateInstallConfig(); err != nil {
 		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
@@ -216,47 +215,28 @@ func (c *InitInstallConfigCmd) printSuccessMessage() {
 func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) error {
 	fmt.Printf("Validating configuration files...\n")
 
-	fmt.Printf("Reading config file: %s\n", c.Opts.ConfigFile)
-	err := icg.LoadConfigFromFile(c.Opts.ConfigFile)
+	fmt.Printf("Reading install config file: %s\n", c.Opts.ConfigFile)
+	err := icg.LoadInstallConfigFromFile(c.Opts.ConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to load config file: %w", err)
 	}
 
-	err = icg.Validate()
-	if err != nil {
-		return fmt.Errorf("configuration validation failed: %w", err)
+	errors := icg.ValidateInstallConfig()
+	if len(errors) > 0 {
+		return fmt.Errorf("install config validation failed: %s", strings.Join(errors, ", "))
 	}
 
-	var errors []string
 	if c.Opts.VaultFile != "" {
 		fmt.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
-		vaultFile, err := c.FileWriter.Open(c.Opts.VaultFile)
+		err := icg.LoadVaultFromFile(c.Opts.VaultFile)
 		if err != nil {
-			fmt.Printf("Warning: Could not open vault file: %v\n", err)
-		} else {
-			defer util.CloseFileIgnoreError(vaultFile)
-
-			vaultData, err := io.ReadAll(vaultFile)
-			if err != nil {
-				errors = append(errors, fmt.Sprintf("failed to read vault.yaml: %v", err))
-			} else {
-				vault := &files.InstallVault{}
-				if err := vault.Unmarshal(vaultData); err != nil {
-					errors = append(errors, fmt.Sprintf("failed to parse vault.yaml: %v", err))
-				} else {
-					vaultErrors := installer.ValidateVault(vault)
-					errors = append(errors, vaultErrors...)
-				}
-			}
+			return fmt.Errorf("failed to load vault file: %w", err)
 		}
-	}
 
-	if len(errors) > 0 {
-		fmt.Println("Validation failed:")
-		for _, err := range errors {
-			fmt.Printf("  - %s\n", err)
+		vaultErrors := icg.ValidateVault()
+		if len(vaultErrors) > 0 {
+			return fmt.Errorf("vault validation errors: %s", strings.Join(vaultErrors, ", "))
 		}
-		return fmt.Errorf("configuration validation failed with %d error(s)", len(errors))
 	}
 
 	fmt.Println("Configuration is valid!")

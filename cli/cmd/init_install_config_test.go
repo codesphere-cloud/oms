@@ -23,7 +23,7 @@ var _ = Describe("ApplyProfile", func() {
 				Expect(err).To(HaveOccurred())
 			} else {
 				Expect(err).NotTo(HaveOccurred())
-				config := icg.GetConfig()
+				config := icg.GetInstallConfig()
 				Expect(config.Datacenter.Name).To(Equal(checkDatacenterName))
 			}
 		},
@@ -41,7 +41,7 @@ var _ = Describe("ApplyProfile", func() {
 
 			err := icg.ApplyProfile("dev")
 			Expect(err).NotTo(HaveOccurred())
-			config := icg.GetConfig()
+			config := icg.GetInstallConfig()
 			Expect(config.Datacenter.ID).To(Equal(1))
 			Expect(config.Datacenter.Name).To(Equal("dev"))
 			Expect(config.Postgres.Mode).To(Equal("install"))

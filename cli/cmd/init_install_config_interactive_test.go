@@ -22,7 +22,7 @@ var _ = Describe("Interactive profile usage", func() {
 			err := icg.ApplyProfile("dev")
 			Expect(err).NotTo(HaveOccurred())
 
-			config := icg.GetConfig()
+			config := icg.GetInstallConfig()
 
 			// Verify that profile values are set correctly
 			Expect(config.Datacenter.ID).To(Equal(1))
@@ -111,10 +111,10 @@ var _ = Describe("Interactive profile usage", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify config content
-			err = icg.LoadConfigFromFile(configFile.Name())
+			err = icg.LoadInstallConfigFromFile(configFile.Name())
 			Expect(err).NotTo(HaveOccurred())
 
-			config := icg.GetConfig()
+			config := icg.GetInstallConfig()
 			Expect(config.Datacenter.Name).To(Equal("dev"))
 			Expect(config.Codesphere.Domain).To(Equal("codesphere.local"))
 		})
@@ -127,7 +127,7 @@ var _ = Describe("Interactive profile usage", func() {
 			err := icg.ApplyProfile("production")
 			Expect(err).NotTo(HaveOccurred())
 
-			config := icg.GetConfig()
+			config := icg.GetInstallConfig()
 
 			// Verify production-specific values
 			Expect(config.Datacenter.Name).To(Equal("production"))

@@ -9,33 +9,28 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-func (g *InstallConfig) generateSecrets(config *files.RootConfig) error {
+func (g *InstallConfig) GenerateSecrets() error {
 	fmt.Println("Generating domain authentication keys...")
-	domainAuthPub, domainAuthPriv, err := GenerateECDSAKeyPair()
+	var err error
+	g.Config.Codesphere.DomainAuthPublicKey, g.Config.Codesphere.DomainAuthPrivateKey, err = GenerateECDSAKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to generate domain auth keys: %w", err)
 	}
-	config.Codesphere.DomainAuthPublicKey = domainAuthPub
-	config.Codesphere.DomainAuthPrivateKey = domainAuthPriv
 
 	fmt.Println("Generating ingress CA certificate...")
-	ingressCAKey, ingressCACert, err := GenerateCA("Cluster Ingress CA", "DE", "Karlsruhe", "Codesphere")
+	g.Config.Cluster.IngressCAKey, g.Config.Cluster.Certificates.CA.CertPem, err = GenerateCA("Cluster Ingress CA", "DE", "Karlsruhe", "Codesphere")
 	if err != nil {
 		return fmt.Errorf("failed to generate ingress CA: %w", err)
 	}
-	config.Cluster.Certificates.CA.CertPem = ingressCACert
-	config.Cluster.IngressCAKey = ingressCAKey
 
 	fmt.Println("Generating Ceph SSH keys...")
-	cephSSHPub, cephSSHPriv, err := GenerateSSHKeyPair()
+	g.Config.Ceph.CephAdmSSHKey.PublicKey, g.Config.Ceph.SshPrivateKey, err = GenerateSSHKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to generate Ceph SSH keys: %w", err)
 	}
-	config.Ceph.CephAdmSSHKey.PublicKey = cephSSHPub
-	config.Ceph.SshPrivateKey = cephSSHPriv
 
-	if config.Postgres.Primary != nil {
-		if err := g.generatePostgresSecrets(config); err != nil {
+	if g.Config.Postgres.Primary != nil {
+		if err := g.generatePostgresSecrets(g.Config); err != nil {
 			return err
 		}
 	}
@@ -45,41 +40,35 @@ func (g *InstallConfig) generateSecrets(config *files.RootConfig) error {
 
 func (g *InstallConfig) generatePostgresSecrets(config *files.RootConfig) error {
 	fmt.Println("Generating PostgreSQL certificates and passwords...")
-
-	pgCAKey, pgCACert, err := GenerateCA("PostgreSQL CA", "DE", "Karlsruhe", "Codesphere")
+	var err error
+	config.Postgres.CaCertPrivateKey, config.Postgres.CACertPem, err = GenerateCA("PostgreSQL CA", "DE", "Karlsruhe", "Codesphere")
 	if err != nil {
 		return fmt.Errorf("failed to generate PostgreSQL CA: %w", err)
 	}
-	config.Postgres.CACertPem = pgCACert
-	config.Postgres.CaCertPrivateKey = pgCAKey
 
-	pgPrimaryKey, pgPrimaryCert, err := GenerateServerCertificate(
-		pgCAKey,
-		pgCACert,
+	config.Postgres.Primary.PrivateKey, config.Postgres.Primary.SSLConfig.ServerCertPem, err = GenerateServerCertificate(
+		config.Postgres.CaCertPrivateKey,
+		config.Postgres.CACertPem,
 		config.Postgres.Primary.Hostname,
 		[]string{config.Postgres.Primary.IP},
 	)
 	if err != nil {
 		return fmt.Errorf("failed to generate primary PostgreSQL certificate: %w", err)
 	}
-	config.Postgres.Primary.SSLConfig.ServerCertPem = pgPrimaryCert
-	config.Postgres.Primary.PrivateKey = pgPrimaryKey
 
 	config.Postgres.AdminPassword = GeneratePassword(32)
 	config.Postgres.ReplicaPassword = GeneratePassword(32)
 
 	if config.Postgres.Replica != nil {
-		pgReplicaKey, pgReplicaCert, err := GenerateServerCertificate(
-			pgCAKey,
-			pgCACert,
+		config.Postgres.Replica.PrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = GenerateServerCertificate(
+			config.Postgres.CaCertPrivateKey,
+			config.Postgres.CACertPem,
 			config.Postgres.Replica.Name,
 			[]string{config.Postgres.Replica.IP},
 		)
 		if err != nil {
 			return fmt.Errorf("failed to generate replica PostgreSQL certificate: %w", err)
 		}
-		config.Postgres.Replica.SSLConfig.ServerCertPem = pgReplicaCert
-		config.Postgres.Replica.PrivateKey = pgReplicaKey
 	}
 
 	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace"}
