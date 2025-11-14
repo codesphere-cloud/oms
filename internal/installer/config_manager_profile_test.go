@@ -264,9 +264,12 @@ var _ = Describe("ConfigManagerProfile", func() {
 				prodManager := installer.NewInstallConfigManager()
 				minimalManager := installer.NewInstallConfigManager()
 
-				devManager.ApplyProfile(installer.PROFILE_DEV)
-				prodManager.ApplyProfile(installer.PROFILE_PROD)
-				minimalManager.ApplyProfile(installer.PROFILE_MINIMAL)
+				err := devManager.ApplyProfile(installer.PROFILE_DEV)
+				Expect(err).ToNot(HaveOccurred())
+				err = prodManager.ApplyProfile(installer.PROFILE_PROD)
+				Expect(err).ToNot(HaveOccurred())
+				err = minimalManager.ApplyProfile(installer.PROFILE_MINIMAL)
+				Expect(err).ToNot(HaveOccurred())
 
 				Expect(devManager.GetInstallConfig().Datacenter.Name).To(Equal("dev"))
 				Expect(prodManager.GetInstallConfig().Datacenter.Name).To(Equal("production"))
@@ -277,8 +280,10 @@ var _ = Describe("ConfigManagerProfile", func() {
 				devManager := installer.NewInstallConfigManager()
 				prodManager := installer.NewInstallConfigManager()
 
-				devManager.ApplyProfile(installer.PROFILE_DEV)
-				prodManager.ApplyProfile(installer.PROFILE_PROD)
+				err := devManager.ApplyProfile(installer.PROFILE_DEV)
+				Expect(err).ToNot(HaveOccurred())
+				err = prodManager.ApplyProfile(installer.PROFILE_PROD)
+				Expect(err).ToNot(HaveOccurred())
 
 				Expect(prodManager.GetInstallConfig().Postgres.Replica.IP).To(Equal("10.50.0.3"))
 			})
@@ -287,8 +292,10 @@ var _ = Describe("ConfigManagerProfile", func() {
 				devManager := installer.NewInstallConfigManager()
 				prodManager := installer.NewInstallConfigManager()
 
-				devManager.ApplyProfile(installer.PROFILE_DEV)
-				prodManager.ApplyProfile(installer.PROFILE_PROD)
+				err := devManager.ApplyProfile(installer.PROFILE_DEV)
+				Expect(err).ToNot(HaveOccurred())
+				err = prodManager.ApplyProfile(installer.PROFILE_PROD)
+				Expect(err).ToNot(HaveOccurred())
 
 				Expect(devManager.GetInstallConfig().Ceph.Hosts).To(HaveLen(1))
 				Expect(prodManager.GetInstallConfig().Ceph.Hosts).To(HaveLen(3))
@@ -299,9 +306,12 @@ var _ = Describe("ConfigManagerProfile", func() {
 				prodManager := installer.NewInstallConfigManager()
 				minimalManager := installer.NewInstallConfigManager()
 
-				devManager.ApplyProfile(installer.PROFILE_DEV)
-				prodManager.ApplyProfile(installer.PROFILE_PROD)
-				minimalManager.ApplyProfile(installer.PROFILE_MINIMAL)
+				err := devManager.ApplyProfile(installer.PROFILE_DEV)
+				Expect(err).ToNot(HaveOccurred())
+				err = prodManager.ApplyProfile(installer.PROFILE_PROD)
+				Expect(err).ToNot(HaveOccurred())
+				err = minimalManager.ApplyProfile(installer.PROFILE_MINIMAL)
+				Expect(err).ToNot(HaveOccurred())
 
 				Expect(devManager.GetInstallConfig().Kubernetes.Workers).To(HaveLen(1))
 				Expect(prodManager.GetInstallConfig().Kubernetes.Workers).To(HaveLen(3))

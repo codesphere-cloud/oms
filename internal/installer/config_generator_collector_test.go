@@ -89,8 +89,10 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 
 	Describe("Configuration Fields After Collection", func() {
 		BeforeEach(func() {
-			manager.ApplyProfile("prod")
-			manager.CollectInteractively()
+			err := manager.ApplyProfile("prod")
+			Expect(err).ToNot(HaveOccurred())
+			err = manager.CollectInteractively()
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should have datacenter configuration", func() {

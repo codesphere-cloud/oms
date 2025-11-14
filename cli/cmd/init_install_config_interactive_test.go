@@ -80,13 +80,15 @@ var _ = Describe("Interactive profile usage", func() {
 		It("should generate valid config files with profile", func() {
 			configFile, err := os.CreateTemp("", "config-*.yaml")
 			Expect(err).NotTo(HaveOccurred())
-			defer os.Remove(configFile.Name())
-			configFile.Close()
+			defer func() { _ = os.Remove(configFile.Name()) }()
+			err = configFile.Close()
+			Expect(err).NotTo(HaveOccurred())
 
 			vaultFile, err := os.CreateTemp("", "vault-*.yaml")
 			Expect(err).NotTo(HaveOccurred())
-			defer os.Remove(vaultFile.Name())
-			vaultFile.Close()
+			defer func() { _ = os.Remove(vaultFile.Name()) }()
+			err = vaultFile.Close()
+			Expect(err).NotTo(HaveOccurred())
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{
