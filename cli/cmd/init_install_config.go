@@ -39,48 +39,47 @@ type InitInstallConfigOpts struct {
 	DatacenterCity        string
 	DatacenterCountryCode string
 
-	RegistryServer            string
-	RegistryReplaceImages     bool
-	RegistryLoadContainerImgs bool
+	RegistryServer              string
+	RegistryReplaceImagesInBom  bool
+	RegistryLoadContainerImages bool
 
-	PostgresMode        string
-	PostgresPrimaryIP   string
-	PostgresPrimaryHost string
-	PostgresReplicaIP   string
-	PostgresReplicaName string
-	PostgresExternal    string
+	PostgresMode            string
+	PostgresPrimaryIP       string
+	PostgresPrimaryHostname string
+	PostgresReplicaIP       string
+	PostgresReplicaName     string
+	PostgresServerAddress   string
 
-	CephSubnet string
-	CephHosts  []files.CephHostConfig
+	CephNodesSubnet string
+	CephHosts       []files.CephHostConfig
 
-	K8sManaged      bool
-	K8sAPIServer    string
-	K8sControlPlane []string
-	K8sWorkers      []string
-	K8sExternalHost string
-	K8sPodCIDR      string
-	K8sServiceCIDR  string
+	KubernetesManagedByCodesphere bool
+	KubernetesAPIServerHost       string
+	KubernetesControlPlanes       []string
+	KubernetesWorkers             []string
+	KubernetesPodCIDR             string
+	KubernetesServiceCIDR         string
 
-	ClusterGatewayType       string
-	ClusterGatewayIPs        []string
-	ClusterPublicGatewayType string
-	ClusterPublicGatewayIPs  []string
+	ClusterGatewayServiceType       string
+	ClusterGatewayIPAddresses       []string
+	ClusterPublicGatewayServiceType string
+	ClusterPublicGatewayIPAddresses []string
 
 	MetalLBEnabled bool
 	MetalLBPools   []files.MetalLBPool
 
-	CodesphereDomain                  string
-	CodespherePublicIP                string
-	CodesphereWorkspaceBaseDomain     string
-	CodesphereCustomDomainBaseDomain  string
-	CodesphereDNSServers              []string
-	CodesphereWorkspaceImageBomRef    string
-	CodesphereHostingPlanCPU          int
-	CodesphereHostingPlanMemory       int
-	CodesphereHostingPlanStorage      int
-	CodesphereHostingPlanTempStorage  int
-	CodesphereWorkspacePlanName       string
-	CodesphereWorkspacePlanMaxReplica int
+	CodesphereDomain                       string
+	CodespherePublicIP                     string
+	CodesphereWorkspaceHostingBaseDomain   string
+	CodesphereCustomDomainsCNameBaseDomain string
+	CodesphereDNSServers                   []string
+	CodesphereWorkspaceImageBomRef         string
+	CodesphereHostingPlanCPUTenth          int
+	CodesphereHostingPlanMemoryMb          int
+	CodesphereHostingPlanStorageMb         int
+	CodesphereHostingPlanTempStorageMb     int
+	CodesphereWorkspacePlanName            string
+	CodesphereWorkspacePlanMaxReplicas     int
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
@@ -134,8 +133,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.PostgresMode, "postgres-mode", "", "PostgreSQL setup mode (install/external)")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
 
-	c.cmd.Flags().BoolVar(&c.Opts.K8sManaged, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
-	c.cmd.Flags().StringSliceVar(&c.Opts.K8sControlPlane, "k8s-control-plane", []string{}, "K8s control plane IPs (comma-separated)")
+	c.cmd.Flags().BoolVar(&c.Opts.KubernetesManagedByCodesphere, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
+	c.cmd.Flags().StringSliceVar(&c.Opts.KubernetesControlPlanes, "k8s-control-plane", []string{}, "K8s control plane IPs (comma-separated)")
 
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
 
@@ -147,30 +146,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {
-	// Validation only mode
 	if c.Opts.ValidateOnly {
-		// TODO: put into validateOnly method
-		err := icg.LoadConfigFromFile(c.Opts.ConfigFile)
-		if err != nil {
-			return fmt.Errorf("failed to load config file: %w", err)
-		}
-
-		err = icg.Validate()
-		if err != nil {
-			return fmt.Errorf("configuration validation failed: %w", err)
-		}
-
-		// err = icg.LoadVaultFromFile(c.Opts.VaultFile)
-		// if err != nil {
-		// 	return fmt.Errorf("failed to load vault file: %w", err)
-		// }
-
-		// err = icg.ValidateVault()
-		// if err != nil {
-		// 	return fmt.Errorf("vault validation failed: %w", err)
-		// }
-
-		return nil
+		return c.validateOnly(icg)
 	}
 
 	// Generate new configuration from either Opts or interactively
@@ -239,18 +216,15 @@ func (c *InitInstallConfigCmd) printSuccessMessage() {
 func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) error {
 	fmt.Printf("Validating configuration files...\n")
 
-	// TODO: Check if config file can be empty
-	if c.Opts.ConfigFile != "" {
-		fmt.Printf("Reading config file: %s\n", c.Opts.ConfigFile)
-		err := icg.LoadConfigFromFile(c.Opts.ConfigFile)
-		if err != nil {
-			return fmt.Errorf("failed to load config file: %w", err)
-		}
+	fmt.Printf("Reading config file: %s\n", c.Opts.ConfigFile)
+	err := icg.LoadConfigFromFile(c.Opts.ConfigFile)
+	if err != nil {
+		return fmt.Errorf("failed to load config file: %w", err)
+	}
 
-		err = icg.Validate()
-		if err != nil {
-			return fmt.Errorf("configuration validation failed: %w", err)
-		}
+	err = icg.Validate()
+	if err != nil {
+		return fmt.Errorf("configuration validation failed: %w", err)
 	}
 
 	var errors []string
@@ -266,8 +240,8 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 			if err != nil {
 				errors = append(errors, fmt.Sprintf("failed to read vault.yaml: %v", err))
 			} else {
-				vault, err := installer.UnmarshalVault(vaultData)
-				if err != nil {
+				vault := &files.InstallVault{}
+				if err := vault.Unmarshal(vaultData); err != nil {
 					errors = append(errors, fmt.Sprintf("failed to parse vault.yaml: %v", err))
 				} else {
 					vaultErrors := installer.ValidateVault(vault)
@@ -291,94 +265,115 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 
 func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *files.RootConfig {
 	// Datacenter settings
-	config.Datacenter.ID = c.Opts.DatacenterID
-	config.Datacenter.City = c.Opts.DatacenterCity
-	config.Datacenter.CountryCode = c.Opts.DatacenterCountryCode
-	config.Datacenter.Name = c.Opts.DatacenterName
-
-	// Registry settings
-	config.Registry.LoadContainerImages = c.Opts.RegistryLoadContainerImgs
-	config.Registry.ReplaceImagesInBom = c.Opts.RegistryReplaceImages
-	config.Registry.Server = c.Opts.RegistryServer
-
-	// Postgres settings
-	if c.Opts.PostgresExternal != "" {
-		config.Postgres.ServerAddress = c.Opts.PostgresExternal
+	if c.Opts.DatacenterID != 0 {
+		config.Datacenter.ID = c.Opts.DatacenterID
+	}
+	if c.Opts.DatacenterCity != "" {
+		config.Datacenter.City = c.Opts.DatacenterCity
+	}
+	if c.Opts.DatacenterCountryCode != "" {
+		config.Datacenter.CountryCode = c.Opts.DatacenterCountryCode
+	}
+	if c.Opts.DatacenterName != "" {
+		config.Datacenter.Name = c.Opts.DatacenterName
 	}
 
-	if c.Opts.PostgresPrimaryHost != "" && c.Opts.PostgresPrimaryIP != "" {
+	// Registry settings
+	if c.Opts.RegistryServer != "" {
+		config.Registry.LoadContainerImages = c.Opts.RegistryLoadContainerImages
+		config.Registry.ReplaceImagesInBom = c.Opts.RegistryReplaceImagesInBom
+		config.Registry.Server = c.Opts.RegistryServer
+	}
+
+	// Postgres settings
+	if c.Opts.PostgresMode != "" {
+		config.Postgres.Mode = c.Opts.PostgresMode
+	}
+
+	if c.Opts.PostgresServerAddress != "" {
+		config.Postgres.ServerAddress = c.Opts.PostgresServerAddress
+	}
+
+	if c.Opts.PostgresPrimaryHostname != "" && c.Opts.PostgresPrimaryIP != "" {
 		if config.Postgres.Primary == nil {
-			// TODO: Mode:        c.Opts.PostgresMode,
-			// TODO: External:    c.Opts.PostgresExternal,
 			config.Postgres.Primary = &files.PostgresPrimaryConfig{
-				Hostname: c.Opts.PostgresPrimaryHost,
+				Hostname: c.Opts.PostgresPrimaryHostname,
 				IP:       c.Opts.PostgresPrimaryIP,
 			}
 		} else {
-			// TODO: Mode:        c.Opts.PostgresMode,
-			// TODO: External:    c.Opts.PostgresExternal,
-			config.Postgres.Primary.Hostname = c.Opts.PostgresPrimaryHost
+			config.Postgres.Primary.Hostname = c.Opts.PostgresPrimaryHostname
 			config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
 		}
 	}
 
 	if c.Opts.PostgresReplicaIP != "" && c.Opts.PostgresReplicaName != "" {
 		if config.Postgres.Replica == nil {
-			// TODO: Mode:        c.Opts.PostgresMode,
-			// TODO: External:    c.Opts.PostgresExternal,
 			config.Postgres.Replica = &files.PostgresReplicaConfig{
 				Name: c.Opts.PostgresReplicaName,
 				IP:   c.Opts.PostgresReplicaIP,
 			}
 		} else {
-			// TODO: Mode:        c.Opts.PostgresMode,
-			// TODO: External:    c.Opts.PostgresExternal,
 			config.Postgres.Replica.Name = c.Opts.PostgresReplicaName
 			config.Postgres.Replica.IP = c.Opts.PostgresReplicaIP
 		}
 	}
 
 	// Ceph settings
-	config.Ceph.NodesSubnet = c.Opts.CephSubnet
-	cephHosts := []files.CephHost{}
-	for _, hostCfg := range c.Opts.CephHosts {
-		cephHosts = append(config.Ceph.Hosts, files.CephHost{
-			Hostname:  hostCfg.Hostname,
-			IPAddress: hostCfg.IPAddress,
-			IsMaster:  hostCfg.IsMaster,
-		})
+	if c.Opts.CephNodesSubnet != "" {
+		config.Ceph.NodesSubnet = c.Opts.CephNodesSubnet
 	}
-	if len(cephHosts) > 0 {
+	if len(c.Opts.CephHosts) > 0 {
+		cephHosts := []files.CephHost{}
+		for _, hostCfg := range c.Opts.CephHosts {
+			cephHosts = append(cephHosts, files.CephHost(hostCfg))
+		}
 		config.Ceph.Hosts = cephHosts
 	}
 
 	// Kubernetes settings
-	config.Kubernetes.ManagedByCodesphere = c.Opts.K8sManaged
-	config.Kubernetes.APIServerHost = c.Opts.K8sAPIServer
-	config.Kubernetes.PodCIDR = c.Opts.K8sPodCIDR
-	config.Kubernetes.ServiceCIDR = c.Opts.K8sServiceCIDR
-
-	kubernetesControlPlanes := []files.K8sNode{}
-	for _, ip := range c.Opts.K8sControlPlane {
-		kubernetesControlPlanes = append(kubernetesControlPlanes, files.K8sNode{
-			IPAddress: ip,
-		})
+	if c.Opts.KubernetesAPIServerHost != "" {
+		config.Kubernetes.APIServerHost = c.Opts.KubernetesAPIServerHost
 	}
-	config.Kubernetes.ControlPlanes = kubernetesControlPlanes
-
-	kubernetesWorkers := []files.K8sNode{}
-	for _, ip := range c.Opts.K8sWorkers {
-		kubernetesWorkers = append(kubernetesWorkers, files.K8sNode{
-			IPAddress: ip,
-		})
+	if c.Opts.KubernetesPodCIDR != "" {
+		config.Kubernetes.PodCIDR = c.Opts.KubernetesPodCIDR
 	}
-	config.Kubernetes.Workers = kubernetesWorkers
+	if c.Opts.KubernetesServiceCIDR != "" {
+		config.Kubernetes.ServiceCIDR = c.Opts.KubernetesServiceCIDR
+	}
+
+	if len(c.Opts.KubernetesControlPlanes) > 0 {
+		kubernetesControlPlanes := []files.K8sNode{}
+		for _, ip := range c.Opts.KubernetesControlPlanes {
+			kubernetesControlPlanes = append(kubernetesControlPlanes, files.K8sNode{
+				IPAddress: ip,
+			})
+		}
+		config.Kubernetes.ControlPlanes = kubernetesControlPlanes
+	}
+
+	if len(c.Opts.KubernetesWorkers) > 0 {
+		kubernetesWorkers := []files.K8sNode{}
+		for _, ip := range c.Opts.KubernetesWorkers {
+			kubernetesWorkers = append(kubernetesWorkers, files.K8sNode{
+				IPAddress: ip,
+			})
+		}
+		config.Kubernetes.Workers = kubernetesWorkers
+	}
 
 	// Cluster Gateway settings
-	config.Cluster.Gateway.ServiceType = c.Opts.ClusterGatewayType
-	config.Cluster.Gateway.IPAddresses = c.Opts.ClusterGatewayIPs
-	config.Cluster.PublicGateway.ServiceType = c.Opts.ClusterPublicGatewayType
-	config.Cluster.PublicGateway.IPAddresses = c.Opts.ClusterPublicGatewayIPs
+	if c.Opts.ClusterGatewayServiceType != "" {
+		config.Cluster.Gateway.ServiceType = c.Opts.ClusterGatewayServiceType
+	}
+	if len(c.Opts.ClusterGatewayIPAddresses) > 0 {
+		config.Cluster.Gateway.IPAddresses = c.Opts.ClusterGatewayIPAddresses
+	}
+	if c.Opts.ClusterPublicGatewayServiceType != "" {
+		config.Cluster.PublicGateway.ServiceType = c.Opts.ClusterPublicGatewayServiceType
+	}
+	if len(c.Opts.ClusterPublicGatewayIPAddresses) > 0 {
+		config.Cluster.PublicGateway.IPAddresses = c.Opts.ClusterPublicGatewayIPAddresses
+	}
 
 	// MetalLB settings
 	if c.Opts.MetalLBEnabled {
@@ -393,49 +388,63 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 		}
 
 		for _, pool := range c.Opts.MetalLBPools {
-			config.MetalLB.Pools = append(config.MetalLB.Pools, files.MetalLBPoolDef{
-				Name:        pool.Name,
-				IPAddresses: pool.IPAddresses,
-				// TODO: ARPEnabled: pool.ARPEnabled,
-			})
+			config.MetalLB.Pools = append(config.MetalLB.Pools, files.MetalLBPoolDef(pool))
 		}
 	}
 
 	// Codesphere settings
-	config.Codesphere.Domain = c.Opts.CodesphereDomain
-	config.Codesphere.PublicIP = c.Opts.CodespherePublicIP
-	config.Codesphere.WorkspaceHostingBaseDomain = c.Opts.CodesphereWorkspaceBaseDomain
-	config.Codesphere.CustomDomains = files.CustomDomainsConfig{CNameBaseDomain: c.Opts.CodesphereCustomDomainBaseDomain}
-	config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
-
-	if config.Codesphere.WorkspaceImages == nil {
-		config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{}
+	if c.Opts.CodesphereDomain != "" {
+		config.Codesphere.Domain = c.Opts.CodesphereDomain
 	}
-	config.Codesphere.WorkspaceImages.Agent = &files.ImageRef{
-		BomRef: c.Opts.CodesphereWorkspaceImageBomRef,
+	if c.Opts.CodespherePublicIP != "" {
+		config.Codesphere.PublicIP = c.Opts.CodespherePublicIP
+	}
+	if c.Opts.CodesphereWorkspaceHostingBaseDomain != "" {
+		config.Codesphere.WorkspaceHostingBaseDomain = c.Opts.CodesphereWorkspaceHostingBaseDomain
+	}
+	if c.Opts.CodesphereCustomDomainsCNameBaseDomain != "" {
+		config.Codesphere.CustomDomains = files.CustomDomainsConfig{CNameBaseDomain: c.Opts.CodesphereCustomDomainsCNameBaseDomain}
+	}
+	if len(c.Opts.CodesphereDNSServers) > 0 {
+		config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
 	}
 
-	config.Codesphere.Plans = files.PlansConfig{
-		HostingPlans: map[int]files.HostingPlan{
-			1: {
-				CPUTenth:      c.Opts.CodesphereHostingPlanCPU,
-				MemoryMb:      c.Opts.CodesphereHostingPlanMemory,
-				StorageMb:     c.Opts.CodesphereHostingPlanStorage,
-				TempStorageMb: c.Opts.CodesphereHostingPlanTempStorage,
+	if c.Opts.CodesphereWorkspaceImageBomRef != "" {
+		if config.Codesphere.WorkspaceImages == nil {
+			config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{}
+		}
+		config.Codesphere.WorkspaceImages.Agent = &files.ImageRef{
+			BomRef: c.Opts.CodesphereWorkspaceImageBomRef,
+		}
+	}
+
+	// Plans
+	if c.Opts.CodesphereHostingPlanCPUTenth != 0 || c.Opts.CodesphereHostingPlanMemoryMb != 0 ||
+		c.Opts.CodesphereHostingPlanStorageMb != 0 || c.Opts.CodesphereHostingPlanTempStorageMb != 0 {
+		config.Codesphere.Plans = files.PlansConfig{
+			HostingPlans: map[int]files.HostingPlan{
+				1: {
+					CPUTenth:      c.Opts.CodesphereHostingPlanCPUTenth,
+					MemoryMb:      c.Opts.CodesphereHostingPlanMemoryMb,
+					StorageMb:     c.Opts.CodesphereHostingPlanStorageMb,
+					TempStorageMb: c.Opts.CodesphereHostingPlanTempStorageMb,
+				},
 			},
-		},
-		WorkspacePlans: map[int]files.WorkspacePlan{
-			1: {
-				Name:          c.Opts.CodesphereWorkspacePlanName,
-				HostingPlanID: 1,
-				MaxReplicas:   c.Opts.CodesphereWorkspacePlanMaxReplica,
-				OnDemand:      true,
+			WorkspacePlans: map[int]files.WorkspacePlan{
+				1: {
+					Name:          c.Opts.CodesphereWorkspacePlanName,
+					HostingPlanID: 1,
+					MaxReplicas:   c.Opts.CodesphereWorkspacePlanMaxReplicas,
+					OnDemand:      true,
+				},
 			},
-		},
+		}
 	}
 
 	// Secrets base dir
-	config.Secrets.BaseDir = c.Opts.SecretsBaseDir
+	if c.Opts.SecretsBaseDir != "" && c.Opts.SecretsBaseDir != "/root/secrets" {
+		config.Secrets.BaseDir = c.Opts.SecretsBaseDir
+	}
 
 	return config
 }

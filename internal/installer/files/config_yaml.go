@@ -5,7 +5,6 @@ package files
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -14,6 +13,14 @@ import (
 // Vault
 type InstallVault struct {
 	Secrets []SecretEntry `yaml:"secrets"`
+}
+
+func (v *InstallVault) Marshal() ([]byte, error) {
+	return yaml.Marshal(v)
+}
+
+func (v *InstallVault) Unmarshal(data []byte) error {
+	return yaml.Unmarshal(data, v)
 }
 
 type SecretEntry struct {
@@ -63,6 +70,7 @@ type RegistryConfig struct {
 }
 
 type PostgresConfig struct {
+	Mode          string                 `yaml:"mode,omitempty"`
 	CACertPem     string                 `yaml:"caCertPem,omitempty"`
 	Primary       *PostgresPrimaryConfig `yaml:"primary,omitempty"`
 	Replica       *PostgresReplicaConfig `yaml:"replica,omitempty"`
@@ -376,19 +384,14 @@ type MetalLBPool struct {
 	IPAddresses []string
 }
 
-// TODO: remove duplicate marshal function
-func (c *RootConfig) ParseConfig(filePath string) error {
-	configData, err := os.ReadFile(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
-	}
+// Marshal serializes the RootConfig to YAML
+func (c *RootConfig) Marshal() ([]byte, error) {
+	return yaml.Marshal(c)
+}
 
-	err = yaml.Unmarshal(configData, c)
-	if err != nil {
-		return fmt.Errorf("failed to parse YAML config: %w", err)
-	}
-
-	return nil
+// Unmarshal deserializes YAML data into the RootConfig
+func (c *RootConfig) Unmarshal(data []byte) error {
+	return yaml.Unmarshal(data, c)
 }
 
 func (c *RootConfig) ExtractBomRefs() []string {

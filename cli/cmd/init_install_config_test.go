@@ -9,24 +9,22 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("ApplyProfile", func() {
 	DescribeTable("profile application",
-		func(profile string, wantErr bool, checkDatacenter string) {
-			c := &InitInstallConfigCmd{
-				Opts: &InitInstallConfigOpts{
-					Profile: profile,
-				},
-			}
+		func(profile string, wantErr bool, checkDatacenterName string) {
+			icg := installer.NewInstallConfigManager()
 
-			err := c.applyProfile()
+			err := icg.ApplyProfile(profile)
 			if wantErr {
 				Expect(err).To(HaveOccurred())
 			} else {
 				Expect(err).NotTo(HaveOccurred())
-				Expect(c.Opts.DatacenterName).To(Equal(checkDatacenter))
+				config := icg.GetConfig()
+				Expect(config.Datacenter.Name).To(Equal(checkDatacenterName))
 			}
 		},
 		Entry("dev profile", "dev", false, "dev"),
@@ -39,18 +37,15 @@ var _ = Describe("ApplyProfile", func() {
 
 	Context("dev profile details", func() {
 		It("sets correct dev profile configuration", func() {
-			c := &InitInstallConfigCmd{
-				Opts: &InitInstallConfigOpts{
-					Profile: "dev",
-				},
-			}
+			icg := installer.NewInstallConfigManager()
 
-			err := c.applyProfile()
+			err := icg.ApplyProfile("dev")
 			Expect(err).NotTo(HaveOccurred())
-			Expect(c.Opts.DatacenterID).To(Equal(1))
-			Expect(c.Opts.DatacenterName).To(Equal("dev"))
-			Expect(c.Opts.PostgresMode).To(Equal("install"))
-			Expect(c.Opts.K8sManaged).To(BeTrue())
+			config := icg.GetConfig()
+			Expect(config.Datacenter.ID).To(Equal(1))
+			Expect(config.Datacenter.Name).To(Equal("dev"))
+			Expect(config.Postgres.Mode).To(Equal("install"))
+			Expect(config.Kubernetes.ManagedByCodesphere).To(BeTrue())
 		})
 	})
 })
@@ -79,6 +74,7 @@ var _ = Describe("ValidateConfig", func() {
 secrets:
   baseDir: /root/secrets
 postgres:
+  mode: external
   serverAddress: postgres.example.com:5432
 ceph:
   cephAdmSshKey:
@@ -185,7 +181,8 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			err = c.validateConfig()
+			icg := installer.NewInstallConfigManager()
+			err = c.validateOnly(icg)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -235,7 +232,8 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			err = c.validateConfig()
+			icg := installer.NewInstallConfigManager()
+			err = c.validateOnly(icg)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -296,7 +294,8 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			err = c.validateConfig()
+			icg := installer.NewInstallConfigManager()
+			err = c.validateOnly(icg)
 			Expect(err).To(HaveOccurred())
 		})
 	})

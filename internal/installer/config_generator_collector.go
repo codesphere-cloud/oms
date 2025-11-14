@@ -56,6 +56,22 @@ func (g *InstallConfig) collectChoice(prompter *Prompter, prompt string, options
 	})
 }
 
+func k8sNodesToStringSlice(nodes []files.K8sNode) []string {
+	ips := make([]string, len(nodes))
+	for i, node := range nodes {
+		ips[i] = node.IPAddress
+	}
+	return ips
+}
+
+func stringSliceToK8sNodes(ips []string) []files.K8sNode {
+	nodes := make([]files.K8sNode, len(ips))
+	for i, ip := range ips {
+		nodes[i] = files.K8sNode{IPAddress: ip}
+	}
+	return nodes
+}
+
 func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter) {
 	fmt.Println("=== Datacenter Configuration ===")
 	g.Config.Datacenter.ID = g.collectInt(prompter, "Datacenter ID", g.Config.Datacenter.ID)
@@ -76,20 +92,26 @@ func (g *InstallConfig) collectRegistryConfig(prompter *Prompter) {
 
 func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
 	fmt.Println("\n=== PostgreSQL Configuration ===")
-	// // TODO: create mode in generator
-	// g.config.Postgres.Mode = g.collectChoice(prompter, "PostgreSQL setup", []string{"install", "external"}, "install")
+	g.Config.Postgres.Mode = g.collectChoice(prompter, "PostgreSQL setup", []string{"install", "external"}, "install")
 
-	// if g.config.Postgres.Mode == "install" {
-	// 	g.config.Postgres.Primary.IP = g.collectString(prompter, "Primary PostgreSQL server IP", "10.50.0.2")
-	// 	g.config.Postgres.Primary.Hostname = g.collectString(prompter, "Primary PostgreSQL hostname", "pg-primary-node")
-	// 	hasReplica := prompter.Bool("Configure PostgreSQL replica", g.config.Postgres.Replica != nil)
-	// 	if hasReplica {
-	// 		g.config.Postgres.Replica.IP = g.collectString(prompter, "Replica PostgreSQL server IP", "10.50.0.3")
-	// 		g.config.Postgres.Replica.Name = g.collectString(prompter, "Replica name (lowercase alphanumeric + underscore only)", "replica1")
-	// 	}
-	// } else {
-	// 	g.config.Postgres.ServerAddress = g.collectString(prompter, "External PostgreSQL server address", "postgres.example.com:5432")
-	// }
+	if g.Config.Postgres.Mode == "install" {
+		if g.Config.Postgres.Primary == nil {
+			g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{}
+		}
+		g.Config.Postgres.Primary.IP = g.collectString(prompter, "Primary PostgreSQL server IP", "10.50.0.2")
+		g.Config.Postgres.Primary.Hostname = g.collectString(prompter, "Primary PostgreSQL hostname", "pg-primary-node")
+
+		hasReplica := prompter.Bool("Configure PostgreSQL replica", g.Config.Postgres.Replica != nil)
+		if hasReplica {
+			if g.Config.Postgres.Replica == nil {
+				g.Config.Postgres.Replica = &files.PostgresReplicaConfig{}
+			}
+			g.Config.Postgres.Replica.IP = g.collectString(prompter, "Replica PostgreSQL server IP", "10.50.0.3")
+			g.Config.Postgres.Replica.Name = g.collectString(prompter, "Replica name (lowercase alphanumeric + underscore only)", "replica1")
+		}
+	} else {
+		g.Config.Postgres.ServerAddress = g.collectString(prompter, "External PostgreSQL server address", "postgres.example.com:5432")
+	}
 }
 
 func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
@@ -119,12 +141,26 @@ func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
 
 	if g.Config.Kubernetes.ManagedByCodesphere {
 		g.Config.Kubernetes.APIServerHost = g.collectString(prompter, "Kubernetes API server host (LB/DNS/IP)", "10.50.0.2")
-		// TODO: convert existing config params to string array and after collection convert back
-		// g.config.Kubernetes.ControlPlanes = g.collectStringSlice(prompter, "Control plane IP addresses (comma-separated)", []string{"10.50.0.2"})
-		// g.config.Kubernetes.Workers = g.collectStringSlice(prompter, "Worker node IP addresses (comma-separated)", []string{"10.50.0.2", "10.50.0.3", "10.50.0.4"})
+
+		defaultControlPlanes := k8sNodesToStringSlice(g.Config.Kubernetes.ControlPlanes)
+		if len(defaultControlPlanes) == 0 {
+			defaultControlPlanes = []string{"10.50.0.2"}
+		}
+		defaultWorkers := k8sNodesToStringSlice(g.Config.Kubernetes.Workers)
+		if len(defaultWorkers) == 0 {
+			defaultWorkers = []string{"10.50.0.2", "10.50.0.3", "10.50.0.4"}
+		}
+
+		controlPlaneIPs := g.collectStringSlice(prompter, "Control plane IP addresses (comma-separated)", defaultControlPlanes)
+		workerIPs := g.collectStringSlice(prompter, "Worker node IP addresses (comma-separated)", defaultWorkers)
+
+		g.Config.Kubernetes.ControlPlanes = stringSliceToK8sNodes(controlPlaneIPs)
+		g.Config.Kubernetes.Workers = stringSliceToK8sNodes(workerIPs)
+		g.Config.Kubernetes.NeedsKubeConfig = false
 	} else {
 		g.Config.Kubernetes.PodCIDR = g.collectString(prompter, "Pod CIDR of external cluster", "100.96.0.0/11")
 		g.Config.Kubernetes.ServiceCIDR = g.collectString(prompter, "Service CIDR of external cluster", "100.64.0.0/13")
+		g.Config.Kubernetes.NeedsKubeConfig = true
 		fmt.Println("Note: You'll need to provide kubeconfig in the vault file for external Kubernetes")
 	}
 }

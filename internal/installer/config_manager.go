@@ -11,7 +11,6 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
-	"gopkg.in/yaml.v3"
 )
 
 type InstallConfigManager interface {
@@ -52,8 +51,8 @@ func (g *InstallConfig) LoadConfigFromFile(configPath string) error {
 		return fmt.Errorf("failed to read %s: %w", configPath, err)
 	}
 
-	config, err := UnmarshalConfig(data)
-	if err != nil {
+	config := &files.RootConfig{}
+	if err := config.Unmarshal(data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s: %w", configPath, err)
 	}
 
@@ -95,7 +94,7 @@ func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool)
 		return fmt.Errorf("no configuration provided - config is nil")
 	}
 
-	configYAML, err := MarshalConfig(g.Config)
+	configYAML, err := g.Config.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal config.yaml: %w", err)
 	}
@@ -117,7 +116,7 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	}
 
 	vault := g.Config.ExtractVault()
-	vaultYAML, err := MarshalVault(vault)
+	vaultYAML, err := vault.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
 	}
@@ -132,167 +131,6 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 
 	return nil
 }
-
-// TODO: check for needed params in ApplyProfile, then delete
-// func (g *InstallConfig) convertConfig() (*files.RootConfig, error) {
-// 	config := &files.RootConfig{
-// 		Datacenter: files.DatacenterConfig{
-// 			ID:          collected.DcID,
-// 			Name:        collected.DcName,
-// 			City:        collected.DcCity,
-// 			CountryCode: collected.DcCountry,
-// 		},
-// 		Secrets: files.SecretsConfig{
-// 			BaseDir: collected.SecretsBaseDir,
-// 		},
-// 	}
-
-// 	if collected.RegistryServer != "" {
-// 		config.Registry = files.RegistryConfig{
-// 			Server:              collected.RegistryServer,
-// 			ReplaceImagesInBom:  collected.RegistryReplaceImages,
-// 			LoadContainerImages: collected.RegistryLoadContainerImgs,
-// 		}
-// 	}
-
-// 	if collected.PgMode == "install" {
-// 		config.Postgres = files.PostgresConfig{
-// 			Primary: &files.PostgresPrimaryConfig{
-// 				IP:       collected.PgPrimaryIP,
-// 				Hostname: collected.PgPrimaryHost,
-// 			},
-// 		}
-
-// 		if collected.PgReplicaIP != "" {
-// 			config.Postgres.Replica = &files.PostgresReplicaConfig{
-// 				IP:   collected.PgReplicaIP,
-// 				Name: collected.PgReplicaName,
-// 			}
-// 		}
-// 	} else {
-// 		config.Postgres = files.PostgresConfig{
-// 			ServerAddress: collected.PgExternal,
-// 		}
-// 	}
-
-// 	config.Ceph = files.CephConfig{
-// 		NodesSubnet: collected.CephSubnet,
-// 		Hosts:       collected.CephHosts,
-// 		OSDs: []files.CephOSD{
-// 			{
-// 				SpecID: "default",
-// 				Placement: files.CephPlacement{
-// 					HostPattern: "*",
-// 				},
-// 				DataDevices: files.CephDataDevices{
-// 					Size:  "240G:300G",
-// 					Limit: 1,
-// 				},
-// 				DBDevices: files.CephDBDevices{
-// 					Size:  "120G:150G",
-// 					Limit: 1,
-// 				},
-// 			},
-// 		},
-// 	}
-
-// 	config.Kubernetes = files.KubernetesConfig{
-// 		ManagedByCodesphere: collected.K8sManaged,
-// 	}
-
-// 	if collected.K8sManaged {
-// 		config.Kubernetes.APIServerHost = collected.K8sAPIServer
-// 		config.Kubernetes.ControlPlanes = make([]files.K8sNode, len(collected.K8sControlPlane))
-// 		for i, ip := range collected.K8sControlPlane {
-// 			config.Kubernetes.ControlPlanes[i] = files.K8sNode{IPAddress: ip}
-// 		}
-// 		config.Kubernetes.Workers = make([]files.K8sNode, len(collected.K8sWorkers))
-// 		for i, ip := range collected.K8sWorkers {
-// 			config.Kubernetes.Workers[i] = files.K8sNode{IPAddress: ip}
-// 		}
-// 		config.Kubernetes.NeedsKubeConfig = false
-// 	} else {
-// 		config.Kubernetes.PodCIDR = collected.K8sPodCIDR
-// 		config.Kubernetes.ServiceCIDR = collected.K8sServiceCIDR
-// 		config.Kubernetes.NeedsKubeConfig = true
-// 	}
-
-// 	config.Cluster = files.ClusterConfig{
-// 		Certificates: files.ClusterCertificates{
-// 			CA: files.CAConfig{
-// 				Algorithm:   "RSA",
-// 				KeySizeBits: 2048,
-// 			},
-// 		},
-// 		Gateway: files.GatewayConfig{
-// 			ServiceType: collected.GatewayType,
-// 			IPAddresses: collected.GatewayIPs,
-// 		},
-// 		PublicGateway: files.GatewayConfig{
-// 			ServiceType: collected.PublicGatewayType,
-// 			IPAddresses: collected.PublicGatewayIPs,
-// 		},
-// 	}
-
-// 	if collected.MetalLBEnabled {
-// 		config.MetalLB = &files.MetalLBConfig{
-// 			Enabled: true,
-// 			Pools:   collected.MetalLBPools,
-// 		}
-// 	}
-
-// 	config.Codesphere = files.CodesphereConfig{
-// 		Domain:                     collected.CodesphereDomain,
-// 		WorkspaceHostingBaseDomain: collected.WorkspaceDomain,
-// 		PublicIP:                   collected.PublicIP,
-// 		CustomDomains: files.CustomDomainsConfig{
-// 			CNameBaseDomain: collected.CustomDomain,
-// 		},
-// 		DNSServers:  collected.DnsServers,
-// 		Experiments: []string{},
-// 		DeployConfig: files.DeployConfig{
-// 			Images: map[string]files.ImageConfig{
-// 				"ubuntu-24.04": {
-// 					Name:           "Ubuntu 24.04",
-// 					SupportedUntil: "2028-05-31",
-// 					Flavors: map[string]files.FlavorConfig{
-// 						"default": {
-// 							Image: files.ImageRef{
-// 								BomRef: collected.WorkspaceImageBomRef,
-// 							},
-// 							Pool: map[int]int{1: 1},
-// 						},
-// 					},
-// 				},
-// 			},
-// 		},
-// 		Plans: files.PlansConfig{
-// 			HostingPlans: map[int]files.HostingPlan{
-// 				1: {
-// 					CPUTenth:      collected.HostingPlanCPU,
-// 					GPUParts:      0,
-// 					MemoryMb:      collected.HostingPlanMemory,
-// 					StorageMb:     collected.HostingPlanStorage,
-// 					TempStorageMb: collected.HostingPlanTempStorage,
-// 				},
-// 			},
-// 			WorkspacePlans: map[int]files.WorkspacePlan{
-// 				1: {
-// 					Name:          collected.WorkspacePlanName,
-// 					HostingPlanID: 1,
-// 					MaxReplicas:   collected.WorkspacePlanMaxReplica,
-// 					OnDemand:      true,
-// 				},
-// 			},
-// 		},
-// 	}
-
-// 	config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{
-// 		Postgres: make(map[string]interface{}),
-// 	}
-
-// 	return config, nil
-// }
 
 func AddConfigComments(yamlData []byte) []byte {
 	header := `# Codesphere Installer Configuration
@@ -338,6 +176,30 @@ func (g *InstallConfig) ValidateConfig() []string {
 	}
 	if g.Config.Datacenter.Name == "" {
 		errors = append(errors, "datacenter name is required")
+	}
+
+	if g.Config.Postgres.Mode == "" {
+		errors = append(errors, "postgres mode is required (install or external)")
+	} else if g.Config.Postgres.Mode != "install" && g.Config.Postgres.Mode != "external" {
+		errors = append(errors, fmt.Sprintf("invalid postgres mode: %s (must be 'install' or 'external')", g.Config.Postgres.Mode))
+	}
+
+	switch g.Config.Postgres.Mode {
+	case "install":
+		if g.Config.Postgres.Primary == nil {
+			errors = append(errors, "postgres primary configuration is required when mode is 'install'")
+		} else {
+			if g.Config.Postgres.Primary.IP == "" {
+				errors = append(errors, "postgres primary IP is required")
+			}
+			if g.Config.Postgres.Primary.Hostname == "" {
+				errors = append(errors, "postgres primary hostname is required")
+			}
+		}
+	case "external":
+		if g.Config.Postgres.ServerAddress == "" {
+			errors = append(errors, "postgres server address is required when mode is 'external'")
+		}
 	}
 
 	if len(g.Config.Ceph.Hosts) == 0 {
@@ -389,24 +251,4 @@ func ValidateVault(vault *files.InstallVault) []string {
 
 func IsValidIP(ip string) bool {
 	return net.ParseIP(ip) != nil
-}
-
-func MarshalConfig(config *files.RootConfig) ([]byte, error) {
-	return yaml.Marshal(config)
-}
-
-func MarshalVault(vault *files.InstallVault) ([]byte, error) {
-	return yaml.Marshal(vault)
-}
-
-func UnmarshalConfig(data []byte) (*files.RootConfig, error) {
-	var config files.RootConfig
-	err := yaml.Unmarshal(data, &config)
-	return &config, err
-}
-
-func UnmarshalVault(data []byte) (*files.InstallVault, error) {
-	var vault files.InstallVault
-	err := yaml.Unmarshal(data, &vault)
-	return &vault, err
 }
