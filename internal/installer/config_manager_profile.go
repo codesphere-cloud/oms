@@ -55,6 +55,10 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 	}
 	g.Config.Cluster.Gateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
 	g.Config.Cluster.PublicGateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
+	g.Config.MetalLB = &files.MetalLBConfig{
+		Enabled: false,
+		Pools:   []files.MetalLBPoolDef{},
+	}
 	g.Config.Codesphere.Experiments = []string{}
 	g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
 		Agent: &files.ImageRef{

@@ -166,8 +166,9 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		c.updateConfigFromOpts(icg.GetInstallConfig())
 	}
 
-	if err := icg.ValidateInstallConfig(); err != nil {
-		return fmt.Errorf("configuration validation failed: %w", err)
+	errors := icg.ValidateInstallConfig()
+	if len(errors) > 0 {
+		return fmt.Errorf("configuration validation failed: %s", strings.Join(errors, ", "))
 	}
 
 	if err := icg.GenerateSecrets(); err != nil {

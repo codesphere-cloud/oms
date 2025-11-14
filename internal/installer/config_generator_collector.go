@@ -128,8 +128,9 @@ func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
 			g.Config.Ceph.Hosts[i].IsMaster = (i == 0)
 		}
 	} else {
-		g.Config.Ceph.Hosts = make([]files.CephHost, len(g.Config.Ceph.Hosts))
-		for i, host := range g.Config.Ceph.Hosts {
+		existingHosts := g.Config.Ceph.Hosts
+		g.Config.Ceph.Hosts = make([]files.CephHost, len(existingHosts))
+		for i, host := range existingHosts {
 			g.Config.Ceph.Hosts[i] = files.CephHost(host)
 		}
 	}
@@ -223,7 +224,19 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	g.Config.Codesphere.DNSServers = g.collectStringSlice(prompter, "DNS servers (comma-separated)", []string{"1.1.1.1", "8.8.8.8"})
 
 	fmt.Println("\n=== Workspace Plans Configuration ===")
-	g.Config.Codesphere.WorkspaceImages.Agent.BomRef = g.collectString(prompter, "Workspace agent image BOM reference", "workspace-agent-24.04")
+
+	if g.Config.Codesphere.WorkspaceImages == nil {
+		g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{}
+	}
+	if g.Config.Codesphere.WorkspaceImages.Agent == nil {
+		g.Config.Codesphere.WorkspaceImages.Agent = &files.ImageRef{}
+	}
+
+	defaultBomRef := g.Config.Codesphere.WorkspaceImages.Agent.BomRef
+	if defaultBomRef == "" {
+		defaultBomRef = "workspace-agent-24.04"
+	}
+	g.Config.Codesphere.WorkspaceImages.Agent.BomRef = g.collectString(prompter, "Workspace agent image BOM reference", defaultBomRef)
 	hostingPlan := files.HostingPlan{}
 	hostingPlan.CPUTenth = g.collectInt(prompter, "Hosting plan CPU (tenths, e.g., 10 = 1 core)", 10)
 	hostingPlan.MemoryMb = g.collectInt(prompter, "Hosting plan memory (MB)", 2048)
