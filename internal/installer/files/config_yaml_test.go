@@ -84,7 +84,10 @@ codesphere:
 			err := os.WriteFile(configFile, []byte(sampleYaml), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = rootConfig.ParseConfig(configFile)
+			data, err := os.ReadFile(configFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = rootConfig.Unmarshal(data)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(rootConfig.Registry.Server).To(Equal("registry.example.com"))
@@ -108,9 +111,8 @@ codesphere:
 		})
 
 		It("should return error for non-existent file", func() {
-			err := rootConfig.ParseConfig("/non/existent/config.yaml")
+			_, err := os.ReadFile("/non/existent/config.yaml")
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to read config file"))
 		})
 
 		It("should return error for invalid YAML", func() {
@@ -124,16 +126,21 @@ codesphere:
 			err := os.WriteFile(configFile, []byte(invalidYaml), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = rootConfig.ParseConfig(configFile)
+			data, err := os.ReadFile(configFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = rootConfig.Unmarshal(data)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to parse YAML config"))
 		})
 
 		It("should handle empty config file", func() {
 			err := os.WriteFile(configFile, []byte(""), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = rootConfig.ParseConfig(configFile)
+			data, err := os.ReadFile(configFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = rootConfig.Unmarshal(data)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(rootConfig.Registry.Server).To(BeEmpty())
@@ -150,7 +157,10 @@ codesphere:
 			err := os.WriteFile(configFile, []byte(minimalYaml), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = rootConfig.ParseConfig(configFile)
+			data, err := os.ReadFile(configFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = rootConfig.Unmarshal(data)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(rootConfig.Registry.Server).To(Equal("minimal.registry.com"))
@@ -163,7 +173,10 @@ codesphere:
 			err := os.WriteFile(configFile, []byte(sampleYaml), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = rootConfig.ParseConfig(configFile)
+			data, err := os.ReadFile(configFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = rootConfig.Unmarshal(data)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -204,7 +217,10 @@ codesphere:
 			err := os.WriteFile(configFile, []byte(yamlWithoutBomRefs), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = noImagesConfig.ParseConfig(configFile)
+			data, err := os.ReadFile(configFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = noImagesConfig.Unmarshal(data)
 			Expect(err).NotTo(HaveOccurred())
 
 			bomRefs := noImagesConfig.ExtractBomRefs()
@@ -217,7 +233,10 @@ codesphere:
 			err := os.WriteFile(configFile, []byte(sampleYaml), 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = rootConfig.ParseConfig(configFile)
+			data, err := os.ReadFile(configFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = rootConfig.Unmarshal(data)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
