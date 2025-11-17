@@ -27,7 +27,7 @@ $ oms-cli install k0s --version <version>
 $ oms-cli install k0s --package <file>
 
 # Path to k0s configuration file, if not set k0s will be installed with the '--single' flag
-$ oms-cli install k0s --config <path>
+$ oms-cli install k0s --k0s-config <path>
 
 # Force new download and installation even if k0s binary exists or is already installed
 $ oms-cli install k0s --force
@@ -37,11 +37,11 @@ $ oms-cli install k0s --force
 ### Options
 
 ```
-  -c, --config string    Path to k0s configuration file
-  -f, --force            Force new download and installation
-  -h, --help             help for k0s
-  -p, --package string   Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from
-  -v, --version string   Version of k0s to install
+  -f, --force               Force new download and installation
+  -h, --help                help for k0s
+      --k0s-config string   Path to k0s configuration file
+  -p, --package string      Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from
+  -v, --version string      Version of k0s to install
 ```
 
 ### SEE ALSO
