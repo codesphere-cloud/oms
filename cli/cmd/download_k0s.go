@@ -72,15 +72,16 @@ func AddDownloadK0sCmd(download *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
-	if c.Opts.Version == "" {
-		version, err := k0s.GetLatestVersion()
+	version := c.Opts.Version
+	var err error
+	if version == "" {
+		version, err = k0s.GetLatestVersion()
 		if err != nil {
 			return fmt.Errorf("failed to get latest k0s version: %w", err)
 		}
-		c.Opts.Version = version
 	}
 
-	k0sPath, err := k0s.Download(c.Opts.Version, c.Opts.Force, c.Opts.Quiet)
+	k0sPath, err := k0s.Download(version, c.Opts.Force, c.Opts.Quiet)
 	if err != nil {
 		return fmt.Errorf("failed to download k0s: %w", err)
 	}

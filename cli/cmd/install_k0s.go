@@ -59,7 +59,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 				{Cmd: "", Desc: "Install k0s using the Go-native implementation"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install"},
 				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from"},
-				{Cmd: "--config <path>", Desc: "Path to k0s configuration file, if not set k0s will be installed with the '--single' flag"},
+				{Cmd: "--k0s-config <path>", Desc: "Path to k0s configuration file, if not set k0s will be installed with the '--single' flag"},
 				{Cmd: "--force", Desc: "Force new download and installation even if k0s binary exists or is already installed"},
 			}, "oms-cli"),
 		},
@@ -69,7 +69,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to install")
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from")
-	k0s.cmd.Flags().StringVarP(&k0s.Opts.Config, "config", "c", "", "Path to k0s configuration file")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.Config, "k0s-config", "", "Path to k0s configuration file")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 
 	install.AddCommand(k0s.cmd)
