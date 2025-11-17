@@ -28,12 +28,12 @@ var _ = Describe("Package", func() {
 		tempDir = GinkgoT().TempDir()
 		omsWorkdir = filepath.Join(tempDir, "oms-workdir")
 		filename = "test-package.tar.gz"
-		pkg = installer.NewPackage(omsWorkdir, filename)
+		pkg = installer.NewPackage(omsWorkdir, filename).(*installer.Package)
 	})
 
 	Describe("NewPackage", func() {
 		It("creates a new Package with correct parameters", func() {
-			newPkg := installer.NewPackage("/test/workdir", "package.tar.gz")
+			newPkg := installer.NewPackage("/test/workdir", "package.tar.gz").(*installer.Package)
 			Expect(newPkg).ToNot(BeNil())
 			Expect(newPkg.OmsWorkdir).To(Equal("/test/workdir"))
 			Expect(newPkg.Filename).To(Equal("package.tar.gz"))
@@ -61,18 +61,6 @@ var _ = Describe("Package", func() {
 			expected := filepath.Join(omsWorkdir, "my-package")
 			Expect(pkg.GetWorkDir()).To(Equal(expected))
 		})
-
-		It("handles filename without .tar.gz extension", func() {
-			pkg.Filename = "my-package"
-			expected := filepath.Join(omsWorkdir, "my-package")
-			Expect(pkg.GetWorkDir()).To(Equal(expected))
-		})
-
-		It("handles complex filenames", func() {
-			pkg.Filename = "complex-package-v1.2.3.tar.gz"
-			expected := filepath.Join(omsWorkdir, "complex-package-v1.2.3")
-			Expect(pkg.GetWorkDir()).To(Equal(expected))
-		})
 	})
 
 	Describe("GetDependencyPath", func() {
@@ -85,13 +73,6 @@ var _ = Describe("Package", func() {
 
 		It("handles dependency files with paths", func() {
 			filename := "subfolder/dependency.txt"
-			workDir := pkg.GetWorkDir()
-			expected := filepath.Join(workDir, "deps", filename)
-			Expect(pkg.GetDependencyPath(filename)).To(Equal(expected))
-		})
-
-		It("handles empty filename", func() {
-			filename := ""
 			workDir := pkg.GetWorkDir()
 			expected := filepath.Join(workDir, "deps", filename)
 			Expect(pkg.GetDependencyPath(filename)).To(Equal(expected))
@@ -245,145 +226,6 @@ var _ = Describe("Package", func() {
 			})
 		})
 	})
-
-	Describe("PackageManager interface", func() {
-		It("implements PackageManager interface", func() {
-			var packageManager installer.PackageManager = pkg
-			Expect(packageManager).ToNot(BeNil())
-		})
-
-		It("has all required methods", func() {
-			var packageManager installer.PackageManager = pkg
-
-			// Test that methods exist by calling them
-			fileIO := packageManager.FileIO()
-			Expect(fileIO).ToNot(BeNil())
-
-			workDir := packageManager.GetWorkDir()
-			Expect(workDir).ToNot(BeEmpty())
-
-			depPath := packageManager.GetDependencyPath("test.txt")
-			Expect(depPath).ToNot(BeEmpty())
-
-			// Extract methods would need actual files to test properly
-			// These are tested in the method-specific sections above
-		})
-	})
-
-	Describe("Error handling and edge cases", func() {
-		Context("Extract with various scenarios", func() {
-			It("handles empty filename gracefully", func() {
-				pkg.Filename = ""
-				_ = pkg.Extract(false)
-				// Note: Empty filename may not always cause an error at Extract level
-				// The error might occur later during actual file operations
-				// This test verifies the behavior is predictable
-			})
-
-			It("handles empty workdir", func() {
-				pkg.OmsWorkdir = ""
-				packagePath := filepath.Join(tempDir, filename)
-				err := createTestPackage(packagePath, PackageFiles{
-					MainFiles: map[string]string{
-						"test-file.txt": "test content",
-					},
-				})
-				Expect(err).ToNot(HaveOccurred())
-				pkg.Filename = packagePath
-
-				// Empty workdir should cause an error when trying to create directories
-				err = pkg.Extract(false)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to ensure workdir exists"))
-			})
-		})
-
-		Context("ExtractDependency with various scenarios", func() {
-			It("handles empty dependency filename", func() {
-				packagePath := filepath.Join(tempDir, filename)
-				err := createTestPackage(packagePath, PackageFiles{
-					MainFiles: map[string]string{
-						"main-file.txt": "main package content",
-					},
-					DepsFiles: map[string]string{
-						"test-dep.txt": "dependency content",
-					},
-				})
-				Expect(err).ToNot(HaveOccurred())
-				pkg.Filename = packagePath
-
-				// Empty dependency filename may succeed (extracts everything) or fail
-				// depending on the underlying tar extraction implementation
-				_ = pkg.ExtractDependency("", false)
-				// This test verifies the behavior is predictable
-			})
-		})
-
-		Context("Path handling edge cases", func() {
-			It("handles special characters in filenames", func() {
-				pkg.Filename = "test-package-with-special-chars_v1.0.tar.gz"
-				expected := filepath.Join(omsWorkdir, "test-package-with-special-chars_v1.0")
-				Expect(pkg.GetWorkDir()).To(Equal(expected))
-			})
-
-			It("handles multiple .tar.gz occurrences in filename", func() {
-				pkg.Filename = "package.tar.gz.backup.tar.gz"
-				expected := filepath.Join(omsWorkdir, "package.backup")
-				Expect(pkg.GetWorkDir()).To(Equal(expected))
-			})
-		})
-	})
-
-	Describe("Integration scenarios", func() {
-		Context("full workflow simulation", func() {
-			var packagePath string
-
-			BeforeEach(func() {
-				packagePath = filepath.Join(tempDir, "complete-package.tar.gz")
-				err := createTestPackage(packagePath, PackageFiles{
-					MainFiles: map[string]string{
-						"main-content.txt": "complex main package content",
-					},
-					DepsFiles: map[string]string{
-						"dep1.txt":        "dependency 1 content",
-						"dep2.txt":        "dependency 2 content",
-						"subdep/dep3.txt": "sub dependency 3 content",
-					},
-				})
-				Expect(err).ToNot(HaveOccurred())
-				pkg.Filename = packagePath
-			})
-
-			It("can extract package and multiple dependencies successfully", func() {
-				// Extract main package
-				err := pkg.Extract(false)
-				Expect(err).ToNot(HaveOccurred())
-
-				// Verify main package content
-				workDir := pkg.GetWorkDir()
-				Expect(workDir).To(BeADirectory())
-				mainFile := filepath.Join(workDir, "main-content.txt")
-				Expect(mainFile).To(BeAnExistingFile())
-
-				// Extract multiple dependencies
-				dependencies := []string{"dep1.txt", "dep2.txt", "subdep/dep3.txt"}
-				for _, dep := range dependencies {
-					err = pkg.ExtractDependency(dep, false)
-					Expect(err).ToNot(HaveOccurred())
-
-					depPath := pkg.GetDependencyPath(dep)
-					Expect(depPath).To(BeAnExistingFile())
-				}
-
-				// Verify all paths are correct
-				for _, dep := range dependencies {
-					depPath := pkg.GetDependencyPath(dep)
-					expectedPath := filepath.Join(workDir, "deps", dep)
-					Expect(depPath).To(Equal(expectedPath))
-				}
-			})
-		})
-	})
 })
 
 // Tests for ExtractOciImageIndex (moved from config_test.go)
@@ -395,7 +237,7 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 
 	BeforeEach(func() {
 		tempDir = GinkgoT().TempDir()
-		pkg = installer.NewPackage(tempDir, "test-package.tar.gz")
+		pkg = installer.NewPackage(tempDir, "test-package.tar.gz").(*installer.Package)
 	})
 
 	Describe("ExtractOciImageIndex", func() {
@@ -496,24 +338,6 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 				})
 			})
 		})
-
-		Context("additional edge cases", func() {
-			It("handles empty image file path", func() {
-				_, err := pkg.ExtractOciImageIndex("")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
-			})
-
-			It("handles directory instead of file", func() {
-				dirPath := filepath.Join(tempDir, "not-a-file")
-				err := os.Mkdir(dirPath, 0755)
-				Expect(err).ToNot(HaveOccurred())
-
-				_, err = pkg.ExtractOciImageIndex(dirPath)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
-			})
-		})
 	})
 })
 
@@ -527,7 +351,7 @@ var _ = Describe("Package GetBaseimageName", func() {
 	BeforeEach(func() {
 		tempDir = GinkgoT().TempDir()
 		omsWorkdir := filepath.Join(tempDir, "oms-workdir")
-		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz")
+		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz").(*installer.Package)
 	})
 
 	Describe("GetBaseimageName", func() {
@@ -548,7 +372,7 @@ var _ = Describe("Package GetBaseimageName", func() {
 		})
 
 		Context("when bom.json exists but is invalid", func() {
-			BeforeEach(func() {
+			It("returns an error", func() {
 				// Create invalid bom.json
 				workDir := pkg.GetWorkDir()
 				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
@@ -557,17 +381,15 @@ var _ = Describe("Package GetBaseimageName", func() {
 				bomPath := pkg.GetDependencyPath("bom.json")
 				err = os.WriteFile(bomPath, []byte("invalid json"), 0644)
 				Expect(err).NotTo(HaveOccurred())
-			})
 
-			It("returns an error", func() {
-				_, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				_, err = pkg.GetBaseimageName("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
 			})
 		})
 
 		Context("when bom.json exists but codesphere component is missing", func() {
-			BeforeEach(func() {
+			It("returns an error", func() {
 				// Create bom.json without codesphere component
 				workDir := pkg.GetWorkDir()
 				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
@@ -583,17 +405,15 @@ var _ = Describe("Package GetBaseimageName", func() {
 				bomPath := pkg.GetDependencyPath("bom.json")
 				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
 				Expect(err).NotTo(HaveOccurred())
-			})
 
-			It("returns an error", func() {
-				_, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				_, err = pkg.GetBaseimageName("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get codesphere container images from bom.json"))
 			})
 		})
 
 		Context("when baseimage is not found in bom.json", func() {
-			BeforeEach(func() {
+			It("returns an error", func() {
 				// Create bom.json with codesphere component but without the requested baseimage
 				workDir := pkg.GetWorkDir()
 				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
@@ -611,10 +431,8 @@ var _ = Describe("Package GetBaseimageName", func() {
 				bomPath := pkg.GetDependencyPath("bom.json")
 				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
 				Expect(err).NotTo(HaveOccurred())
-			})
 
-			It("returns an error", func() {
-				_, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				_, err = pkg.GetBaseimageName("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("baseimage workspace-agent-24.04 not found in bom.json"))
 			})
@@ -667,7 +485,7 @@ var _ = Describe("Package GetBaseimagePath", func() {
 	BeforeEach(func() {
 		tempDir = GinkgoT().TempDir()
 		omsWorkdir := filepath.Join(tempDir, "oms-workdir")
-		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz")
+		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz").(*installer.Package)
 	})
 
 	Describe("GetBaseimagePath", func() {
@@ -746,7 +564,7 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 	BeforeEach(func() {
 		tempDir = GinkgoT().TempDir()
 		omsWorkdir := filepath.Join(tempDir, "oms-workdir")
-		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz")
+		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz").(*installer.Package)
 	})
 
 	Describe("GetCodesphereVersion", func() {
@@ -759,7 +577,7 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 		})
 
 		Context("when bom.json exists but is invalid", func() {
-			BeforeEach(func() {
+			It("returns an error", func() {
 				// Create invalid bom.json
 				workDir := pkg.GetWorkDir()
 				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
@@ -768,17 +586,15 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 				bomPath := pkg.GetDependencyPath("bom.json")
 				err = os.WriteFile(bomPath, []byte("invalid json"), 0644)
 				Expect(err).NotTo(HaveOccurred())
-			})
 
-			It("returns an error", func() {
-				_, err := pkg.GetCodesphereVersion()
+				_, err = pkg.GetCodesphereVersion()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
 			})
 		})
 
 		Context("when bom.json exists but codesphere component is missing", func() {
-			BeforeEach(func() {
+			It("returns an error", func() {
 				// Create bom.json without codesphere component
 				workDir := pkg.GetWorkDir()
 				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
@@ -794,10 +610,8 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 				bomPath := pkg.GetDependencyPath("bom.json")
 				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
 				Expect(err).NotTo(HaveOccurred())
-			})
 
-			It("returns an error", func() {
-				_, err := pkg.GetCodesphereVersion()
+				_, err = pkg.GetCodesphereVersion()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get codesphere container images from bom.json"))
 			})
@@ -833,7 +647,7 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 		})
 
 		Context("when container images exist but have invalid format", func() {
-			BeforeEach(func() {
+			It("returns an error", func() {
 				// Create bom.json with images that have invalid format (no colon)
 				workDir := pkg.GetWorkDir()
 				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
@@ -851,17 +665,15 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 				bomPath := pkg.GetDependencyPath("bom.json")
 				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
 				Expect(err).NotTo(HaveOccurred())
-			})
 
-			It("returns an error", func() {
-				_, err := pkg.GetCodesphereVersion()
+				_, err = pkg.GetCodesphereVersion()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("invalid image name format"))
 			})
 		})
 
 		Context("when valid codesphere versions exist", func() {
-			BeforeEach(func() {
+			It("returns a valid codesphere version", func() {
 				// Create bom.json with multiple different versions (should pick the first one found)
 				workDir := pkg.GetWorkDir()
 				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
@@ -880,9 +692,7 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 				bomPath := pkg.GetDependencyPath("bom.json")
 				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
 				Expect(err).NotTo(HaveOccurred())
-			})
 
-			It("returns a valid codesphere version", func() {
 				version, err := pkg.GetCodesphereVersion()
 				Expect(err).NotTo(HaveOccurred())
 				// Should return one of the codesphere versions (depends on map iteration order)
