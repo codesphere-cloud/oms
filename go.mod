@@ -4,7 +4,7 @@ go 1.24.2
 
 require (
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/codesphere-cloud/cs-go v0.13.0
+	github.com/codesphere-cloud/cs-go v0.14.0
 	github.com/jedib0t/go-pretty/v6 v6.7.1
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
