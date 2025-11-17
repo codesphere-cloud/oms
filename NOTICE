@@ -137,9 +137,9 @@ License URL: https://github.com/ulikunitz/xz/blob/v0.5.15/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.42.0
+Version: v0.44.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.42.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.44.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
@@ -149,9 +149,9 @@ License URL: https://cs.opensource.google/go/x/oauth2/+/v0.30.0:LICENSE
  
 ----------
 Module: golang.org/x/text
-Version: v0.29.0
+Version: v0.31.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/text/+/v0.29.0:LICENSE
+License URL: https://cs.opensource.google/go/x/text/+/v0.31.0:LICENSE
  
 ----------
 Module: gopkg.in/yaml.v3
