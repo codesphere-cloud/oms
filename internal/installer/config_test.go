@@ -71,7 +71,7 @@ codesphere:
 				_, err := config.ParseConfigYaml(nonExistentFile)
 
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to parse config.yaml"))
+				Expect(err.Error()).To(ContainSubstring("failed to open config file"))
 			})
 		})
 
