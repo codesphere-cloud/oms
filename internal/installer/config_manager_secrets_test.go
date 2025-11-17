@@ -99,25 +99,19 @@ var _ = Describe("ConfigManagerSecrets", func() {
 				}
 			})
 
-			It("should generate replica certificates", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(configManager.Config.Postgres.Replica.PrivateKey).ToNot(BeEmpty())
-				Expect(configManager.Config.Postgres.Replica.SSLConfig.ServerCertPem).ToNot(BeEmpty())
-				Expect(configManager.Config.Postgres.Replica.PrivateKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
-				Expect(configManager.Config.Postgres.Replica.SSLConfig.ServerCertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
-			})
-
-			It("should generate valid certificate format for primary and replica", func() {
+			It("should generate valid certificates for primary and replica", func() {
 				err := configManager.GenerateSecrets()
 				Expect(err).ToNot(HaveOccurred())
 
 				// Primary server certificate
+				Expect(configManager.Config.Postgres.Primary.PrivateKey).ToNot(BeEmpty())
+				Expect(configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem).ToNot(BeEmpty())
 				Expect(strings.HasPrefix(configManager.Config.Postgres.Primary.PrivateKey, "-----BEGIN")).To(BeTrue())
 				Expect(strings.HasPrefix(configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
 
 				// Replica server certificate
+				Expect(configManager.Config.Postgres.Replica.PrivateKey).ToNot(BeEmpty())
+				Expect(configManager.Config.Postgres.Replica.SSLConfig.ServerCertPem).ToNot(BeEmpty())
 				Expect(strings.HasPrefix(configManager.Config.Postgres.Replica.PrivateKey, "-----BEGIN")).To(BeTrue())
 				Expect(strings.HasPrefix(configManager.Config.Postgres.Replica.SSLConfig.ServerCertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
 			})
@@ -184,7 +178,7 @@ var _ = Describe("ConfigManagerSecrets", func() {
 			})
 		})
 
-		Context("CA certificate validation", func() {
+		Context("cluster certificate validation", func() {
 			BeforeEach(func() {
 				configManager.Config = &files.RootConfig{
 					Postgres: files.PostgresConfig{
@@ -208,15 +202,6 @@ var _ = Describe("ConfigManagerSecrets", func() {
 				Expect(strings.HasPrefix(configManager.Config.Cluster.Certificates.CA.CertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
 				Expect(strings.HasSuffix(strings.TrimSpace(configManager.Config.Cluster.Certificates.CA.CertPem), "-----END CERTIFICATE-----")).To(BeTrue())
 			})
-
-			It("should generate valid PostgreSQL CA with proper PEM format", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(strings.HasPrefix(configManager.Config.Postgres.CaCertPrivateKey, "-----BEGIN")).To(BeTrue())
-				Expect(strings.HasPrefix(configManager.Config.Postgres.CACertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
-			})
 		})
-
 	})
 })

@@ -98,8 +98,16 @@ func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
 		if g.Config.Postgres.Primary == nil {
 			g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{}
 		}
-		g.Config.Postgres.Primary.IP = g.collectString(prompter, "Primary PostgreSQL server IP", "10.50.0.2")
-		g.Config.Postgres.Primary.Hostname = g.collectString(prompter, "Primary PostgreSQL hostname", "pg-primary-node")
+		defaultPrimaryIP := g.Config.Postgres.Primary.IP
+		if defaultPrimaryIP == "" {
+			defaultPrimaryIP = "10.50.0.2"
+		}
+		defaultPrimaryHostname := g.Config.Postgres.Primary.Hostname
+		if defaultPrimaryHostname == "" {
+			defaultPrimaryHostname = "pg-primary-node"
+		}
+		g.Config.Postgres.Primary.IP = g.collectString(prompter, "Primary PostgreSQL server IP", defaultPrimaryIP)
+		g.Config.Postgres.Primary.Hostname = g.collectString(prompter, "Primary PostgreSQL hostname", defaultPrimaryHostname)
 
 		hasReplica := prompter.Bool("Configure PostgreSQL replica", g.Config.Postgres.Replica != nil)
 		if hasReplica {
@@ -141,16 +149,17 @@ func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
 	g.Config.Kubernetes.ManagedByCodesphere = prompter.Bool("Use Codesphere-managed Kubernetes (k0s)", g.Config.Kubernetes.ManagedByCodesphere)
 
 	if g.Config.Kubernetes.ManagedByCodesphere {
-		g.Config.Kubernetes.APIServerHost = g.collectString(prompter, "Kubernetes API server host (LB/DNS/IP)", "10.50.0.2")
+		defaultAPIServerHost := g.Config.Kubernetes.APIServerHost
+		if defaultAPIServerHost == "" {
+			defaultAPIServerHost = "10.50.0.2"
+		}
+		g.Config.Kubernetes.APIServerHost = g.collectString(prompter, "Kubernetes API server host (LB/DNS/IP)", defaultAPIServerHost)
 
 		defaultControlPlanes := k8sNodesToStringSlice(g.Config.Kubernetes.ControlPlanes)
 		if len(defaultControlPlanes) == 0 {
 			defaultControlPlanes = []string{"10.50.0.2"}
 		}
 		defaultWorkers := k8sNodesToStringSlice(g.Config.Kubernetes.Workers)
-		if len(defaultWorkers) == 0 {
-			defaultWorkers = []string{"10.50.0.2", "10.50.0.3", "10.50.0.4"}
-		}
 
 		controlPlaneIPs := g.collectStringSlice(prompter, "Control plane IP addresses (comma-separated)", defaultControlPlanes)
 		workerIPs := g.collectStringSlice(prompter, "Worker node IP addresses (comma-separated)", defaultWorkers)
@@ -217,11 +226,27 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 
 func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	fmt.Println("\n=== Codesphere Application Configuration ===")
-	g.Config.Codesphere.Domain = g.collectString(prompter, "Main Codesphere domain", "codesphere.yourcompany.com")
-	g.Config.Codesphere.WorkspaceHostingBaseDomain = g.collectString(prompter, "Workspace base domain (*.domain should point to public gateway)", "ws.yourcompany.com")
+	defaultDomain := g.Config.Codesphere.Domain
+	if defaultDomain == "" {
+		defaultDomain = "codesphere.yourcompany.com"
+	}
+	defaultWorkspaceDomain := g.Config.Codesphere.WorkspaceHostingBaseDomain
+	if defaultWorkspaceDomain == "" {
+		defaultWorkspaceDomain = "ws.yourcompany.com"
+	}
+	defaultCustomDomain := g.Config.Codesphere.CustomDomains.CNameBaseDomain
+	if defaultCustomDomain == "" {
+		defaultCustomDomain = "custom.yourcompany.com"
+	}
+	defaultDNSServers := g.Config.Codesphere.DNSServers
+	if len(defaultDNSServers) == 0 {
+		defaultDNSServers = []string{"1.1.1.1", "8.8.8.8"}
+	}
+	g.Config.Codesphere.Domain = g.collectString(prompter, "Main Codesphere domain", defaultDomain)
+	g.Config.Codesphere.WorkspaceHostingBaseDomain = g.collectString(prompter, "Workspace base domain (*.domain should point to public gateway)", defaultWorkspaceDomain)
 	g.Config.Codesphere.PublicIP = g.collectString(prompter, "Primary public IP for workspaces", "")
-	g.Config.Codesphere.CustomDomains.CNameBaseDomain = g.collectString(prompter, "Custom domain CNAME base", "custom.yourcompany.com")
-	g.Config.Codesphere.DNSServers = g.collectStringSlice(prompter, "DNS servers (comma-separated)", []string{"1.1.1.1", "8.8.8.8"})
+	g.Config.Codesphere.CustomDomains.CNameBaseDomain = g.collectString(prompter, "Custom domain CNAME base", defaultCustomDomain)
+	g.Config.Codesphere.DNSServers = g.collectStringSlice(prompter, "DNS servers (comma-separated)", defaultDNSServers)
 
 	fmt.Println("\n=== Workspace Plans Configuration ===")
 
@@ -246,8 +271,18 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	workspacePlan := files.WorkspacePlan{
 		HostingPlanID: 1,
 	}
-	workspacePlan.Name = g.collectString(prompter, "Workspace plan name", "Standard Developer")
-	workspacePlan.MaxReplicas = g.collectInt(prompter, "Max replicas per workspace", 3)
+	defaultWorkspacePlanName := "Standard Developer"
+	defaultMaxReplicas := 3
+	if existingPlan, ok := g.Config.Codesphere.Plans.WorkspacePlans[1]; ok {
+		if existingPlan.Name != "" {
+			defaultWorkspacePlanName = existingPlan.Name
+		}
+		if existingPlan.MaxReplicas > 0 {
+			defaultMaxReplicas = existingPlan.MaxReplicas
+		}
+	}
+	workspacePlan.Name = g.collectString(prompter, "Workspace plan name", defaultWorkspacePlanName)
+	workspacePlan.MaxReplicas = g.collectInt(prompter, "Max replicas per workspace", defaultMaxReplicas)
 
 	g.Config.Codesphere.Plans = files.PlansConfig{
 		HostingPlans: map[int]files.HostingPlan{

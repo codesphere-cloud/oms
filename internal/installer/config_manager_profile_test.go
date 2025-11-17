@@ -149,11 +149,12 @@ var _ = Describe("ConfigManagerProfile", func() {
 			}
 
 			for _, profile := range profiles {
-				It("should set common configuration for "+profile, func() {
+				It("should set all common properties for "+profile, func() {
 					err := manager.ApplyProfile(profile)
 					Expect(err).ToNot(HaveOccurred())
 
 					config := manager.GetInstallConfig()
+
 					// Datacenter config
 					Expect(config.Datacenter.ID).To(Equal(1))
 					Expect(config.Datacenter.City).To(Equal("Karlsruhe"))
@@ -179,15 +180,7 @@ var _ = Describe("ConfigManagerProfile", func() {
 					Expect(config.MetalLB).ToNot(BeNil())
 					Expect(config.MetalLB.Enabled).To(BeFalse())
 
-					// Secrets
-					Expect(config.Secrets.BaseDir).To(Equal("/root/secrets"))
-				})
-
-				It("should configure Ceph OSDs for "+profile, func() {
-					err := manager.ApplyProfile(profile)
-					Expect(err).ToNot(HaveOccurred())
-
-					config := manager.GetInstallConfig()
+					// Ceph OSDs
 					Expect(config.Ceph.OSDs).To(HaveLen(1))
 					osd := config.Ceph.OSDs[0]
 					Expect(osd.SpecID).To(Equal("default"))
@@ -196,64 +189,42 @@ var _ = Describe("ConfigManagerProfile", func() {
 					Expect(osd.DataDevices.Limit).To(Equal(1))
 					Expect(osd.DBDevices.Size).To(Equal("120G:150G"))
 					Expect(osd.DBDevices.Limit).To(Equal(1))
-				})
 
-				It("should configure workspace images for "+profile, func() {
-					err := manager.ApplyProfile(profile)
-					Expect(err).ToNot(HaveOccurred())
-
-					config := manager.GetInstallConfig()
+					// Workspace images
 					Expect(config.Codesphere.WorkspaceImages).ToNot(BeNil())
 					Expect(config.Codesphere.WorkspaceImages.Agent).ToNot(BeNil())
 					Expect(config.Codesphere.WorkspaceImages.Agent.BomRef).To(Equal("workspace-agent-24.04"))
-				})
 
-				It("should configure deploy config for "+profile, func() {
-					err := manager.ApplyProfile(profile)
-					Expect(err).ToNot(HaveOccurred())
-
-					config := manager.GetInstallConfig()
+					// Deploy config
 					images := config.Codesphere.DeployConfig.Images
 					Expect(images).To(HaveKey("ubuntu-24.04"))
 					ubuntu := images["ubuntu-24.04"]
 					Expect(ubuntu.Name).To(Equal("Ubuntu 24.04"))
 					Expect(ubuntu.SupportedUntil).To(Equal("2028-05-31"))
 					Expect(ubuntu.Flavors).To(HaveKey("default"))
-				})
 
-				It("should configure hosting plans for "+profile, func() {
-					err := manager.ApplyProfile(profile)
-					Expect(err).ToNot(HaveOccurred())
-
-					config := manager.GetInstallConfig()
+					// Hosting plans
 					hostingPlans := config.Codesphere.Plans.HostingPlans
 					Expect(hostingPlans).To(HaveKey(1))
-					plan := hostingPlans[1]
-					Expect(plan.CPUTenth).To(Equal(10))
-					Expect(plan.MemoryMb).To(Equal(2048))
-					Expect(plan.StorageMb).To(Equal(20480))
-					Expect(plan.TempStorageMb).To(Equal(1024))
-				})
+					hostingPlan := hostingPlans[1]
+					Expect(hostingPlan.CPUTenth).To(Equal(10))
+					Expect(hostingPlan.MemoryMb).To(Equal(2048))
+					Expect(hostingPlan.StorageMb).To(Equal(20480))
+					Expect(hostingPlan.TempStorageMb).To(Equal(1024))
 
-				It("should configure workspace plans for "+profile, func() {
-					err := manager.ApplyProfile(profile)
-					Expect(err).ToNot(HaveOccurred())
-
-					config := manager.GetInstallConfig()
+					// Workspace plans
 					workspacePlans := config.Codesphere.Plans.WorkspacePlans
 					Expect(workspacePlans).To(HaveKey(1))
-					plan := workspacePlans[1]
-					Expect(plan.HostingPlanID).To(Equal(1))
-					Expect(plan.OnDemand).To(BeTrue())
-				})
+					workspacePlan := workspacePlans[1]
+					Expect(workspacePlan.HostingPlanID).To(Equal(1))
+					Expect(workspacePlan.OnDemand).To(BeTrue())
 
-				It("should configure managed service backends for "+profile, func() {
-					err := manager.ApplyProfile(profile)
-					Expect(err).ToNot(HaveOccurred())
-
-					config := manager.GetInstallConfig()
+					// Managed service backends
 					Expect(config.ManagedServiceBackends).ToNot(BeNil())
 					Expect(config.ManagedServiceBackends.Postgres).ToNot(BeNil())
+
+					// Secrets
+					Expect(config.Secrets.BaseDir).To(Equal("/root/secrets"))
 				})
 			}
 		})
