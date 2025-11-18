@@ -8,9 +8,9 @@ echo "--- GCP K8S Test Cluster Deployment Script ---"
 
 # PROJECT_ID (Required)
 # Check if the environment variable is set and non-empty.
-if [[ -z "${PROJECT_ID}" ]]; then
-  read -p "Enter desired unique GCP Project ID (e.g., my-k8s-test-001): " PROJECT_ID
-  if [[ -z "${PROJECT_ID}" ]]; then
+if [[ -z "${PROJECT_NAME}" ]]; then
+  read -p "Enter desired unique GCP Project Name (e.g., my-k8s-test-001): " PROJECT_NAME
+  if [[ -z "${PROJECT_NAME}" ]]; then
     echo "Error: Project ID cannot be empty. Exiting."
     exit 1
   fi
@@ -71,7 +71,7 @@ SCHEDULING_TYPE="${SCHEDULING_TYPE:-SPOT}"
 # --- Summary of Configuration ---
 echo ""
 echo "Configuration Summary:"
-echo "  Project ID:        $PROJECT_ID"
+echo "  Project Name:        $PROJECT_NAME"
 echo "  Billing Account:   $BILLING_ACCOUNT"
 echo "  Folder ID:         ${FOLDER_ID:-[NOT SET]}"
 echo "  SSH Key Path:      $SSH_KEY_PATH"
@@ -115,11 +115,15 @@ cd 1-project-bootstrap
 
 terraform init
 
-if [ ! -z "$FOLDER_ID" ]; then
-  terraform apply -var="project_id=$PROJECT_ID" -var="billing_account=$BILLING_ACCOUNT"
+if [[ "$FOLDER_ID" == "" ]]; then
+  terraform apply -var="project_name=$PROJECT_NAME" -var="billing_account=$BILLING_ACCOUNT"
 else
-  terraform apply -var="project_id=$PROJECT_ID" -var="billing_account=$BILLING_ACCOUNT" -var="folder_id=$FOLDER_ID"
+  terraform apply -var="project_name=$PROJECT_NAME" -var="billing_account=$BILLING_ACCOUNT" -var="folder_id=$FOLDER_ID"
 fi
+
+PROJECT_ID=$(terraform output -raw project_id)
+
+echo "Project created with ID: $PROJECT_ID"
 
 wait_for_apis "$PROJECT_ID"
 

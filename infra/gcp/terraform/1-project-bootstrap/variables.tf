@@ -3,8 +3,8 @@ variable "billing_account" {
   type        = string
 }
 
-variable "project_id" {
-  description = "A unique ID for the new GCP project"
+variable "project_name" {
+  description = "The project name for the new GCP project"
   type        = string
 }
 
