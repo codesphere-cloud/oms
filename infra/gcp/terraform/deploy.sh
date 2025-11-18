@@ -52,6 +52,8 @@ if [[ -z "${CODESPHERE_DOMAIN}" ]]; then
   fi
 fi
 
+SECRETSDIR="${SECRETSDIR:-/etc/codesphere/secrets}"
+
 # FOLDER_ID (Optional) - If not set, it defaults to null/empty and is ignored by Terraform.
 FOLDER_ID="${FOLDER_ID:-}" # Use the value if set, otherwise leave empty.
 
@@ -131,23 +133,80 @@ terraform apply -var="ssh_public_key_path=$SSH_KEY_PATH" -var="vm_scheduling_typ
 echo -e "\n✅ Deployment Complete! Outputs:"
 terraform output
 
+JUMPBOX_IP=$(terraform output -json | yq -r .external_ips.value.jumpbox)
+
+echo -n "Waiting for SSH service to start on $JUMPBOX_IP..."
+
+# --- Loop to Check SSH Port ---
+for i in $(seq 1 10); do
+    if nc -vz "$JUMPBOX_IP" 22 2>/dev/null; then
+        break
+    fi
+
+    echo -n "."
+    sleep 5s
+done
+
+echo "ok"
+
+# --- Final Check and Error Handling ---
+if [ $i -gt 9 ]; then
+    echo "❌ ERROR: Failed waiting for SSH on $JUMPBOX_IP"
+    exit 1
+fi
+
 echo -e "\n--- Starting Step 3: Cluster Configuration ---"
 
+echo "configuring ssh access"
+cat <<EOF > $HOME/.ssh/ssh_config_pc
+Host $JUMPBOX_IP
+  User ubuntu
+  StrictHostKeyChecking=no
+  UserKnownHostsFile=/dev/null
+  IdentityFile=$SSH_KEY_PATH
+  ForwardAgent yes
+  SendEnv OMS_PORTAL_API_KEY
+
+EOF
+
+chmod 600 $HOME/.ssh/ssh_config_pc
+
+if ! grep -qF "Include $HOME/.ssh/ssh_config_pc" ~/.ssh/config; then
+    sed -i "1iInclude $HOME/.ssh/ssh_config_pc" ~/.ssh/config
+fi
+
+ssh $JUMPBOX_IP "sudo sed -i 's/no-port-forwarding.*$//g' /root/.ssh/authorized_keys;echo -e 'PermitRootLogin yes\nAcceptEnv *\n' | sudo tee /etc/ssh/sshd_config.d/51-cs-ssh-settings.conf; sudo systemctl restart sshd"
+
+ALL_PRIVATE_IPS=($(terraform output -json internal_vm_ips | yq -r '.[]'))
+for VM_IP in "${ALL_PRIVATE_IPS[@]}"; do
+  echo "Configuring ssh access on VM $VM_IP"
+  cat <<EOF >> ~/.ssh/ssh_config_pc
+Host $VM_IP
+  StrictHostKeyChecking=no
+  UserKnownHostsFile=/dev/null
+  IdentityFile=$SSH_KEY_PATH
+  ProxyJump $JUMPBOX_IP
+  ForwardAgent yes
+
+EOF
+  ssh ubuntu@$VM_IP "sudo sed -i 's/no-port-forwarding.*$//g' /root/.ssh/authorized_keys;echo -e 'PermitRootLogin yes\nAcceptEnv *\n' | sudo tee /etc/ssh/sshd_config.d/51-cs-ssh-settings.conf; sudo systemctl restart sshd"
+done
 echo "Setting inotify limits"
 # Example SSH command structure for configuration:
-JUMPBOX_IP=$(terraform output -json | yq -r .external_ips.value.jumpbox)
 K0S_IPS=($(terraform output -json internal_vm_ips | yq -r '."k0s-cp-1", ."k0s-cp-2", ."k0s-cp-3"'))
+
 
 for K0S_IP in "${K0S_IPS[@]}"; do
   echo "Configuring inotify limits on k0s node $K0S_IP..."
-  
-  # SSH via Jumpbox to run commands on the internal node:
-  ssh -o StrictHostKeyChecking=no -J ubuntu@$JUMPBOX_IP ubuntu@$K0S_IP 'echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" | sudo tee -a /etc/sysctl.conf; sudo sysctl -p'
+
+  ssh ubuntu@$K0S_IP 'echo "fs.inotify.max_user_watches=524288" | sudo tee -a /etc/sysctl.conf; echo "fs.inotify.max_user_instances=8192" | sudo tee -a /etc/sysctl.conf; sudo sysctl -p'
   echo "inotify limits set on $K0S_IP."
 done
 
 echo "Ceph"
-ssh-keygen -t rsa -b 4096 -C "ceph" -f ./ceph_id_rsa
+if [[ ! -f ./ceph_id_rsa ]]; then
+  ssh-keygen -t rsa -b 4096 -C "ceph" -f ./ceph_id_rsa
+fi
 
 # Generate CA Key
 openssl genrsa -out ca.key 2048
@@ -174,7 +233,7 @@ PRIMARY_PG_IP=$(terraform output -json | yq -r .internal_vm_ips.value.postgres)
 
 # Create CSR for Primary
 openssl req -new -nodes -out pg_primary.csr -newkey rsa:4096 -keyout pg_primary.key \
-  -subj "/CN=primary-pg-$CODESPHERE_DOMAIN/O=MyOrg"
+  -subj "/CN=$PRIMARY_PG_IP/O=MyOrg"
 
 # Create extensions file (primary.v3.ext)
 cat > pg_primary.v3.ext << EOF
@@ -183,7 +242,7 @@ basicConstraints=CA:FALSE
 keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
 subjectAltName = @alt_names
 [alt_names]
-IP.1 = $PRIMARY_PG_IP # e.g., 10.50.0.1
+IP.1 = $PRIMARY_PG_IP
 EOF
 
 # Sign Primary Certificate
@@ -223,10 +282,10 @@ $(sed 's/^/        /' domain_auth_key.pem)
 $(sed 's/^/        /' domain_auth_public.pem)
   - name: registryUsername
     fields:
-      password: '_json_key'
+      password: '_json_key_base64'
   - name: registryPassword
     fields:
-      password: $(terraform output -raw ar_puller_key_base64)
+      password: $(terraform output -raw ar_key_base64)
   - name: postgresPassword
     fields:
       # Generate a strong primary admin password (e.g., 25 characters)
@@ -234,6 +293,14 @@ $(sed 's/^/        /' domain_auth_public.pem)
   - name: postgresPrimaryServerKeyPem
     file:
       name: primary.key
+      content: |
+$(sed 's/^/        /' pg_primary.key)
+  - name: postgresReplicaPassword
+    fields:
+      password: $(openssl rand -base64 16)
+  - name: postgresReplicaServerKeyPem
+    file:
+      name: replica.key
       content: |
 $(sed 's/^/        /' pg_primary.key)
   - name: postgresUserAuth
@@ -262,7 +329,7 @@ $(sed 's/^/        /' pg_primary.key)
       password: workspace_blue
   - name: postgresPasswordAuth
     fields:
-      password: 
+      password: $(openssl rand -base64 16)
   - name: postgresPasswordDeployment
     fields:
       password: $(openssl rand -base64 16)
@@ -301,7 +368,7 @@ dataCenter:
   city: Karlsruhe # Your datacenter city
   countryCode: DE # Your datacenter country code
 secrets:
-  baseDir: /home/ubuntu/ # Path to your secrets directory (where prod.vault.yaml is)
+  baseDir: $SECRETSDIR # Path to your secrets directory (where prod.vault.yaml is)
 
 registry:
   server: $(terraform output -raw artifact_registry_fqdn)
@@ -312,7 +379,7 @@ postgres:
   # Option 1: Install New PostgreSQL (Refer to secrets file for passwords & keys)
   # CA certificate for PostgreSQL (pg_ca.pem from section 3.1.3)
   caCertPem: |
-$(sed 's/^/    /' pg_ca.pem)
+$(sed 's/^/    /' ca.pem)
   primary:
     sslConfig:
       serverCertPem: |
@@ -346,7 +413,7 @@ $(sed 's/^/      /' ceph_id_rsa.pub)
       host_pattern: '*' # Apply to all hosts defined above
     dataDevices: # Devices for storing data
       size: '500G:' # Disks 300GB or larger
-      limit: 2      # Use up to 2 such disks per host for data
+      limit: 1      # Use up to 2 such disks per host for data
     dbDevices:   # Devices for BlueStore internal metadata (DB/WAL)
       size: '50G:100G' # Disks between 100GB and 200GB
       limit: 1          # Use 1 such disk per host for metadata-DB
@@ -379,12 +446,15 @@ $(sed 's/^/        /' ca.pem)
         clusterName: my-cluster-name  
   gateway: # For Codesphere internal services
     serviceType: "LoadBalancer"
+    ipAddresses: [$(terraform output --json | yq .external_ips.value.k0s-cp-3)]
+
     # annotations: # Optional: for cloud provider specific LB config
       # Example Azure:
       # service.beta.kubernetes.io/azure-load-balancer-ipv4: <IP>
       # service.beta.kubernetes.io/azure-load-balancer-resource-group: <rg>
   publicGateway: # For user workspaces
     serviceType: "LoadBalancer"
+    ipAddresses: [$(terraform output --json | yq .external_ips.value.k0s-cp-2)]
     # annotations: {}
 metallb:
   # This is the primary switch to enable or disable the MetalLB integration.
@@ -544,16 +614,21 @@ managedServiceBackends:
   postgres: {}
 EOF
 
-if [[ -f age_key ]]; then
+if [[ ! -f age_key.txt ]]; then
   age-keygen -o age_key.txt
 fi
 sops --encrypt --age $(age-keygen -y age_key.txt) --in-place prod.vault.yaml
 
-scp config.yaml ubuntu@$JUMPBOX_IP:
-scp prod.vault.yaml ubuntu@$JUMPBOX_IP:
-scp age_key.txt ubuntu@$JUMPBOX_IP:
+ssh -o StrictHostKeyChecking=no root@$JUMPBOX_IP  "mkdir -p $SECRETSDIR"
+#ssh -o StrictHostKeyChecking=no -J root@$JUMPBOX_IP root@$K0S_IP "echo export OMS_PORTAL_API_KEY=$OMS_PORTAL_API_KEY >> ~/.bashrc"
+ssh -o StrictHostKeyChecking=no root@$JUMPBOX_IP "wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms-cli.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms-cli"
+ssh -o StrictHostKeyChecking=no root@$JUMPBOX_IP "chmod +x oms-cli; sudo mv oms-cli /usr/local/bin/"
+
+scp config.yaml root@$JUMPBOX_IP:
+scp prod.vault.yaml root@$JUMPBOX_IP:$SECRETSDIR/
+scp age_key.txt root@$JUMPBOX_IP:$SECRETSDIR/
 
 echo "All resources are contained in project: $PROJECT_ID"
 echo "To shut down and delete the project (and ALL its contents), run:"
 echo "gcloud projects delete $PROJECT_ID"
-echo "start the Codesphere installation using OMS from the jumpbox host: ssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes ubuntu@$JUMPBOX_IP"
+echo "start the Codesphere installation using OMS from the jumpbox host: ssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@$JUMPBOX_IP"

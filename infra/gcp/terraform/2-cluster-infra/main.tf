@@ -27,11 +27,16 @@ provider "google" {
 # 1. Define common locals
 locals {
   # Format SSH key for metadata: "user:key-content"
-  ssh_key_entry = "ubuntu:${trimspace(file(var.ssh_public_key_path))}"
+  SSH_PUBLIC_KEY_CONTENT = trimspace(file(var.ssh_public_key_path))
+
+  ssh_key_entry = <<-EOT
+root:${local.SSH_PUBLIC_KEY_CONTENT}
+ubuntu:${local.SSH_PUBLIC_KEY_CONTENT}
+EOT
 
   ceph_vms = {
-    for i in range(1, 5) : "ceph-${i}" => {
-      machine_type = "n2-standard-8"
+    for i in range(1, 5) : "ceph-${i}" =>  {
+      machine_type= "n2-standard-8"
       disk_sizes   = { root = 100, mds = 50, data = 500 }
       external_ip  = false
     }
@@ -75,6 +80,29 @@ resource "google_compute_subnetwork" "cluster_subnet" {
   network       = google_compute_network.vpc.self_link
 }
 
+resource "google_compute_router" "nat_router" {
+  name    = "${data.terraform_remote_state.bootstrap.outputs.project_id}-router"
+  project = data.terraform_remote_state.bootstrap.outputs.project_id
+  region  = var.region
+  network = google_compute_network.vpc.self_link
+}
+
+resource "google_compute_router_nat" "cluster_nat" {
+  name                               = "${data.terraform_remote_state.bootstrap.outputs.project_id}-nat-gateway"
+  router                             = google_compute_router.nat_router.name
+  region                             = google_compute_router.nat_router.region
+  
+  # Configuration for the NAT IP addresses
+  source_subnetwork_ip_ranges_to_nat = "ALL_SUBNETWORKS_ALL_IP_RANGES"
+  nat_ip_allocate_option             = "AUTO_ONLY"
+
+  # Configuration for the internal hosts to NAT
+  log_config {
+    enable = false
+    filter = "ERRORS_ONLY"
+  }
+}
+
 # Firewall rule to allow external SSH only to the Jumpbox
 resource "google_compute_firewall" "allow_ssh_ext" {
   name    = "${data.terraform_remote_state.bootstrap.outputs.project_id}-allow-ssh-ext"
@@ -102,6 +130,18 @@ resource "google_compute_firewall" "allow_internal" {
   source_ranges = [google_compute_subnetwork.cluster_subnet.ip_cidr_range]
 }
 
+resource "google_compute_firewall" "allow_all_egress" {
+  name    = "${data.terraform_remote_state.bootstrap.outputs.project_id}-allow-all-egress"
+  network = google_compute_network.vpc.name
+  direction = "EGRESS"
+
+  allow {
+    protocol = "all"
+  }
+
+  destination_ranges = ["0.0.0.0/0"]
+}
+
 # 3. Artifact Registry Setup (Managed Registry)
 resource "google_artifact_registry_repository" "codesphere_registry" {
   location      = var.region
@@ -110,19 +150,19 @@ resource "google_artifact_registry_repository" "codesphere_registry" {
   format        = "DOCKER"
 }
 
-resource "google_service_account" "ar_puller_sa" {
+resource "google_service_account" "ar_sa" {
   project      = data.terraform_remote_state.bootstrap.outputs.project_id
-  account_id   = "k0s-ar-puller"
-  display_name = "K0s Artifact Registry Puller"
+  account_id   = "k0s-ar-sa"
+  display_name = "K0s Artifact Registry Account"
 }
 
-resource "google_project_iam_member" "ar_reader" {
+resource "google_project_iam_member" "ar_writer" {
   project = data.terraform_remote_state.bootstrap.outputs.project_id
-  role    = "roles/artifactregistry.reader"
-  member  = "serviceAccount:${google_service_account.ar_puller_sa.email}"
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${google_service_account.ar_sa.email}"
 }
-resource "google_service_account_key" "ar_puller_key" {
-  service_account_id = google_service_account.ar_puller_sa.name
+resource "google_service_account_key" "ar_writer_key" {
+  service_account_id = google_service_account.ar_sa.name
 }
 
 # 4. Data Disks (Ceph MDS and Ceph Data)
@@ -183,7 +223,7 @@ resource "google_compute_instance" "cluster_vms" {
   # 5c. Boot Disk (100GiB SSD for all)
   boot_disk {
     initialize_params {
-      image = "debian-cloud/debian-12"
+      image = "ubuntu-os-cloud/ubuntu-2204-lts"
       size  = each.value.disk_sizes.root
       type  = "pd-ssd"
     }

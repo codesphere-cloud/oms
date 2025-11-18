@@ -24,8 +24,8 @@ output "project_id" {
   value       = data.terraform_remote_state.bootstrap.outputs.project_id
 }
 
-output "ar_puller_key_base64" {
+output "ar_key_base64" {
   description = "Base64 encoded JSON key for the k0s image puller service account. Use as the password."
-  value       = google_service_account_key.ar_puller_key.private_key
+  value       = google_service_account_key.ar_writer_key.private_key
   sensitive   = true # Mark as sensitive since it's a private key
 }
