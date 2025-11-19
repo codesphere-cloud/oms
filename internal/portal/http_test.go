@@ -352,6 +352,7 @@ var _ = Describe("HttpWrapper", func() {
 			})
 		})
 	})
+
 })
 
 // Helper types for testing
