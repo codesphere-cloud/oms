@@ -26,7 +26,7 @@ if [[ -z "${BILLING_ACCOUNT}" ]]; then
 fi
 
 if [[ -z "${BASE_DOMAIN}" ]]; then
-  read -p "Enter base domain (e.g. my-codesphere-domain.com): " BILLING_ACCOUNT
+  read -p "Enter base domain (e.g. my-codesphere-domain.com): " BASE_DOMAIN
   if [[ -z "${BASE_DOMAIN}" ]]; then
     echo "Error: Billing Account ID cannot be empty. Exiting."
     exit 1
