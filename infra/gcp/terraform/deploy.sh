@@ -25,6 +25,16 @@ if [[ -z "${BILLING_ACCOUNT}" ]]; then
   fi
 fi
 
+if [[ -z "${BASE_DOMAIN}" ]]; then
+  read -p "Enter base domain (e.g. my-codesphere-domain.com): " BILLING_ACCOUNT
+  if [[ -z "${BASE_DOMAIN}" ]]; then
+    echo "Error: Billing Account ID cannot be empty. Exiting."
+    exit 1
+  fi
+fi
+
+echo "Using base domain: $BASE_DOMAIN"
+
 # GITHUB_APP_CLIENT_ID (Required)
 if [[ -z "${GITHUB_APP_CLIENT_ID}" ]]; then
   read -p "Enter Github App Client ID: " GITHUB_APP_CLIENT_ID
@@ -39,15 +49,6 @@ if [[ -z "${GITHUB_APP_CLIENT_SECRET}" ]]; then
   read -p "Enter Github App Client SECRET: " GITHUB_APP_CLIENT_SECRET
   if [[ -z "${GITHUB_APP_CLIENT_SECRET}" ]]; then
     echo "Error: GitHub App Client SECRET cannot be empty. Exiting."
-    exit 1
-  fi
-fi
-
-# CODESPHERE_DOMAIN (Required)
-if [[ -z "${CODESPHERE_DOMAIN}" ]]; then
-  read -p "Enter Codesphere domain (e.g. codesphere.my-company.com): " CODESPHERE_DOMAIN
-  if [[ -z "${CODESPHERE_DOMAIN}" ]]; then
-    echo "Error: CODESPHERE_DOMAIN cannot be empty. Exiting."
     exit 1
   fi
 fi
@@ -76,7 +77,7 @@ echo "  Billing Account:   $BILLING_ACCOUNT"
 echo "  Folder ID:         ${FOLDER_ID:-[NOT SET]}"
 echo "  SSH Key Path:      $SSH_KEY_PATH"
 echo "  VM Scheduling:     $SCHEDULING_TYPE"
-echo "  Codesphere Domain:     $CODESPHERE_DOMAIN"
+echo "  Base Domain:     $BASE_DOMAIN"
 echo ""
 
 # --- Helper Function for API Waiting ---
@@ -167,7 +168,6 @@ Host $JUMPBOX_IP
   User ubuntu
   StrictHostKeyChecking=no
   UserKnownHostsFile=/dev/null
-  IdentityFile=$SSH_KEY_PATH
   ForwardAgent yes
   SendEnv OMS_PORTAL_API_KEY
 
@@ -188,7 +188,6 @@ for VM_IP in "${ALL_PRIVATE_IPS[@]}"; do
 Host $VM_IP
   StrictHostKeyChecking=no
   UserKnownHostsFile=/dev/null
-  IdentityFile=$SSH_KEY_PATH
   ProxyJump $JUMPBOX_IP
   ForwardAgent yes
 
@@ -224,7 +223,7 @@ openssl req -x509 -new -nodes -key ca.key -sha256 -days 1068 \
 
 # Create Certificate Signing Request (CSR) and new key for ingress
 openssl req -new -nodes -out ingress.csr -newkey rsa:4096 -keyout ingress.key \
-  -subj "/CN=$CODESPHERE_DOMAIN/O=MyOrg"
+  -subj "/CN=cs.$BASE_DOMAIN/O=MyOrg"
 
 # Sign the CSR with your existing CA
 openssl x509 -req -in ingress.csr -CA ca.pem -CAkey ca.key -CAcreateserial \
@@ -246,7 +245,8 @@ basicConstraints=CA:FALSE
 keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
 subjectAltName = @alt_names
 [alt_names]
-IP.1 = $PRIMARY_PG_IP
+IP.0 = $PRIMARY_PG_IP
+DNS.0 = postgres
 EOF
 
 # Sign Primary Certificate
@@ -467,13 +467,13 @@ metallb:
 
 # --- Codesphere Application Configuration ---
 codesphere:
-  domain: "codespheretest.ntlx.org" # Main domain for Codesphere UI/API
-  workspaceHostingBaseDomain: "ws.yourcompany.com" # Base domain for workspaces (*.ws.yourcompany.com should point to publicGateway IPs)
+  domain: "cs.$BASE_DOMAIN" # Main domain for Codesphere UI/API
+  workspaceHostingBaseDomain: "ws.$BASE_DOMAIN"
   # A primary public IP for workspaces (use one of the publicGateway). If assigned by a LoadBalancer and not known yet, 
-  # leave blank and add later once known. 
+  # leave blank and add later once known.
   publicIp: $(terraform output --json | yq .external_ips.value.k0s-cp-1)
   customDomains:
-    cNameBaseDomain: "codespheretest.ntlx.org" # For custom domain CNAMEs
+    cNameBaseDomain: "ws.$BASE_DOMAIN"
   dnsServers: ["1.1.1.1", "8.8.8.8"]
   experiments: [] # List of Codesphere experimental features to enable
   extraCaPem: "" # Optional: PEM of an extra custom root CA to be trusted by Codesphere services/workspaces
@@ -623,16 +623,21 @@ if [[ ! -f age_key.txt ]]; then
 fi
 sops --encrypt --age $(age-keygen -y age_key.txt) --in-place prod.vault.yaml
 
-ssh -o StrictHostKeyChecking=no root@$JUMPBOX_IP  "mkdir -p $SECRETSDIR"
+ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP  "sudo mkdir -p $SECRETSDIR; sudo chown ubuntu:ubuntu $SECRETSDIR"
 #ssh -o StrictHostKeyChecking=no -J root@$JUMPBOX_IP root@$K0S_IP "echo export OMS_PORTAL_API_KEY=$OMS_PORTAL_API_KEY >> ~/.bashrc"
-ssh -o StrictHostKeyChecking=no root@$JUMPBOX_IP "wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms-cli.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms-cli"
-ssh -o StrictHostKeyChecking=no root@$JUMPBOX_IP "chmod +x oms-cli; sudo mv oms-cli /usr/local/bin/"
+ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP "wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms-cli.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms-cli"
+ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP "chmod +x oms-cli; sudo mv oms-cli /usr/local/bin/"
 
-scp config.yaml root@$JUMPBOX_IP:
-scp prod.vault.yaml root@$JUMPBOX_IP:$SECRETSDIR/
-scp age_key.txt root@$JUMPBOX_IP:$SECRETSDIR/
+scp config.yaml ubuntu@$JUMPBOX_IP:$SECRETSDIR/
+scp prod.vault.yaml ubuntu@$JUMPBOX_IP:$SECRETSDIR/
+scp age_key.txt ubuntu@$JUMPBOX_IP:$SECRETSDIR/
 
 echo "All resources are contained in project: $PROJECT_ID"
 echo "To shut down and delete the project (and ALL its contents), run:"
 echo "gcloud projects delete $PROJECT_ID"
-echo "start the Codesphere installation using OMS from the jumpbox host: ssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@$JUMPBOX_IP"
+echo "start the Codesphere installation using OMS from the jumpbox host: ssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY ubuntu@$JUMPBOX_IP"
+
+echo "Please ensure that the necessary DNS records are configured for the domain $BASE_DOMAIN:"
+echo "- A record for 'cs.$BASE_DOMAIN' pointing to the gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-3)."
+echo "- A record for '*.cs.$BASE_DOMAIN' pointing to the public gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-2)."
+echo "- A record for '*.ws.$BASE_DOMAIN' pointing to the public gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-2)."

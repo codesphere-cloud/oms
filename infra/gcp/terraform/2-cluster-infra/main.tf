@@ -44,7 +44,7 @@ EOT
 
   k0s_vms = {
     for i in range(1, 4) : "k0s-cp-${i}" => {
-      machine_type = "n2-standard-4"
+      machine_type = "n2-standard-8"
       disk_sizes   = { root = 100 }
       external_ip  = true
     }
