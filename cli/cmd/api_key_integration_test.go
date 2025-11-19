@@ -253,7 +253,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			It("should not show any warning", func() {
 				cmd := exec.Command(cliPath, "version")
 				cmd.Env = append(os.Environ(),
-					"OMS_PORTAL_API_KEY=4hBieJRj2pWeB9qKJ9wQGE3CrcldLnLwP8fz6qutMjkf1n1",
+					"OMS_PORTAL_API_KEY=fake-api-key",
 					"OMS_PORTAL_API=http://localhost:3000/api",
 				)
 
