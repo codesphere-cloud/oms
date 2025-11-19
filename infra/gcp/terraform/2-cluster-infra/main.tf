@@ -142,6 +142,25 @@ resource "google_compute_firewall" "allow_all_egress" {
   destination_ranges = ["0.0.0.0/0"]
 }
 
+resource "google_compute_firewall" "allow_ingress_web" {
+  name    = "${data.terraform_remote_state.bootstrap.outputs.project_id}-allow-web"
+  network = google_compute_network.vpc.name
+  
+  direction = "INGRESS" # Inbound traffic
+
+  allow {
+    protocol = "tcp"
+    ports    = ["80", "443"] # Allow standard HTTP and HTTPS ports
+  }
+
+  # Allow traffic from all destinations (the Internet)
+  source_ranges = ["0.0.0.0/0"] 
+
+  # Apply this rule to all VMs with external access (Jumpbox and k0s nodes)
+  # This tag was already set on your k0s VMs and Jumpbox when they got their external IPs.
+  target_tags = ["ssh-external"] 
+}
+
 # 3. Artifact Registry Setup (Managed Registry)
 resource "google_artifact_registry_repository" "codesphere_registry" {
   location      = var.region

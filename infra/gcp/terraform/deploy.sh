@@ -212,31 +212,39 @@ if [[ ! -f ./ceph_id_rsa ]]; then
 fi
 
 # Generate CA Key
-openssl genrsa -out ca.key 2048
-openssl rsa -in ca.key -outform PEM -pubout -out ca-pub.pem
+if [ ! -f "ca.key" ]; then
+  openssl genrsa -out ca.key 2048
+  openssl rsa -in ca.key -outform PEM -pubout -out ca-pub.pem
+fi
 
 echo "Ingress"
 # Generate CA Certificate
-openssl req -x509 -new -nodes -key ca.key -sha256 -days 1068 \
-  -outform PEM -out ca.pem \
-  -subj '/CN=MyOrg Root CA/C=DE/L=KA/O=MyOrg'
+if [ ! -f "ca.pem" ]; then
+  openssl req -x509 -new -nodes -key ca.key -sha256 -days 1068 \
+    -outform PEM -out ca.pem \
+    -subj '/CN=MyOrg Root CA/C=DE/L=KA/O=MyOrg'
+fi
 
-# Create Certificate Signing Request (CSR) and new key for ingress
-openssl req -new -nodes -out ingress.csr -newkey rsa:4096 -keyout ingress.key \
-  -subj "/CN=cs.$BASE_DOMAIN/O=MyOrg"
+if [ ! -f "ingress.csr" ]; then
+  # Create Certificate Signing Request (CSR) and new key for ingress
+  openssl req -new -nodes -out ingress.csr -newkey rsa:4096 -keyout ingress.key \
+    -subj "/CN=cs.$BASE_DOMAIN/O=MyOrg"
 
-# Sign the CSR with your existing CA
-openssl x509 -req -in ingress.csr -CA ca.pem -CAkey ca.key -CAcreateserial \
-  -outform PEM -out ingress.pem \
-  -days 730 -sha256
+  # Sign the CSR with your existing CA
+  openssl x509 -req -in ingress.csr -CA ca.pem -CAkey ca.key -CAcreateserial \
+    -outform PEM -out ingress.pem \
+    -days 730 -sha256
 
+fi
 echo "Postgres"
 
 PRIMARY_PG_IP=$(terraform output -json | yq -r .internal_vm_ips.value.postgres)
 
-# Create CSR for Primary
-openssl req -new -nodes -out pg_primary.csr -newkey rsa:4096 -keyout pg_primary.key \
-  -subj "/CN=$PRIMARY_PG_IP/O=MyOrg"
+if [ ! -f "pg_primary.csr" ]; then
+  # Create CSR for Primary
+  openssl req -new -nodes -out pg_primary.csr -newkey rsa:4096 -keyout pg_primary.key \
+    -subj "/CN=$PRIMARY_PG_IP/O=MyOrg"
+fi
 
 # Create extensions file (primary.v3.ext)
 cat > pg_primary.v3.ext << EOF
@@ -249,14 +257,18 @@ IP.0 = $PRIMARY_PG_IP
 DNS.0 = postgres
 EOF
 
-# Sign Primary Certificate
-openssl x509 -req -in pg_primary.csr -CA ca.pem -CAkey ca.key -CAcreateserial \
-  -outform PEM -out pg_primary.pem \
-  -days 730 -sha256 -extfile pg_primary.v3.ext
+if [ ! -f "pg_primary.csr" ]; then
+  # Sign Primary Certificate
+  openssl x509 -req -in pg_primary.csr -CA ca.pem -CAkey ca.key -CAcreateserial \
+    -outform PEM -out pg_primary.pem \
+    -days 730 -sha256 -extfile pg_primary.v3.ext
+fi
 
-echo "domain auth keys"
-openssl ecparam -name prime256v1 -genkey -noout -out domain_auth_key.pem
-openssl ec -in domain_auth_key.pem -pubout -out domain_auth_public.pem
+if [ ! -f "domain_auth_key.pem" ]; then
+  echo "domain auth keys"
+  openssl ecparam -name prime256v1 -genkey -noout -out domain_auth_key.pem
+  openssl ec -in domain_auth_key.pem -pubout -out domain_auth_public.pem
+fi
 
 echo "generate secrets"
 
