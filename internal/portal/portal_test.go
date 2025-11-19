@@ -3,6 +3,8 @@
 
 package portal_test
 
+// TODO: Rewrite these tests to test every method
+
 import (
 	"bytes"
 	"encoding/json"
@@ -368,6 +370,181 @@ var _ = Describe("PortalClient", func() {
 				Expect(err).To(MatchError("no builds returned"))
 				Expect(packages).To(Equal(expectedResult))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+			})
+		})
+	})
+
+	Describe("GetApiKeyByHeader", func() {
+		var (
+			oldApiKey      string
+			keyId          string
+			expectedNewKey string
+			responseBody   []byte
+			requestHeader  string
+		)
+
+		BeforeEach(func() {
+			oldApiKey = "old-key-format-1234"
+			keyId = "test-key-id-12345"
+			expectedNewKey = keyId + oldApiKey
+			requestHeader = ""
+
+			mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+		})
+
+		Context("when the request succeeds", func() {
+			BeforeEach(func() {
+				response := map[string]string{
+					"keyId": keyId,
+				}
+				responseBody, _ = json.Marshal(response)
+
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						getUrl = *req.URL
+						requestHeader = req.Header.Get("X-API-Key")
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewReader(responseBody)),
+						}, nil
+					})
+			})
+
+			It("returns the new API key", func() {
+				result, err := client.GetApiKeyByHeader(oldApiKey)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(expectedNewKey))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/key"))
+				Expect(requestHeader).To(Equal(oldApiKey))
+			})
+
+			It("sends the old API key in the X-API-Key header", func() {
+				_, err := client.GetApiKeyByHeader(oldApiKey)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(requestHeader).To(Equal(oldApiKey))
+			})
+		})
+
+		Context("when the HTTP request fails", func() {
+			BeforeEach(func() {
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						return nil, errors.New("network error")
+					})
+			})
+
+			It("returns an error", func() {
+				_, err := client.GetApiKeyByHeader(oldApiKey)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to send request"))
+				Expect(err.Error()).To(ContainSubstring("network error"))
+			})
+		})
+
+		Context("when the server returns an error status code", func() {
+			BeforeEach(func() {
+				errorResponse := "Unauthorized"
+				responseBody = []byte(errorResponse)
+
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: http.StatusUnauthorized,
+							Body:       io.NopCloser(bytes.NewReader(responseBody)),
+						}, nil
+					})
+			})
+
+			It("returns an error with the status code", func() {
+				_, err := client.GetApiKeyByHeader(oldApiKey)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unexpected response status: 401"))
+				Expect(err.Error()).To(ContainSubstring("Unauthorized"))
+			})
+		})
+
+		Context("when the response body is not valid JSON", func() {
+			BeforeEach(func() {
+				responseBody = []byte("invalid json {")
+
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewReader(responseBody)),
+						}, nil
+					})
+			})
+
+			It("returns an error", func() {
+				_, err := client.GetApiKeyByHeader(oldApiKey)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to decode response"))
+			})
+		})
+
+		Context("when the response is missing the keyId field", func() {
+			BeforeEach(func() {
+				response := map[string]string{
+					"someOtherField": "value",
+				}
+				responseBody, _ = json.Marshal(response)
+
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewReader(responseBody)),
+						}, nil
+					})
+			})
+
+			It("returns only the old key", func() {
+				result, err := client.GetApiKeyByHeader(oldApiKey)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal(oldApiKey))
+			})
+		})
+
+		Context("when the server returns 404", func() {
+			BeforeEach(func() {
+				errorResponse := "Not Found"
+				responseBody = []byte(errorResponse)
+
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: http.StatusNotFound,
+							Body:       io.NopCloser(bytes.NewReader(responseBody)),
+						}, nil
+					})
+			})
+
+			It("returns an error with the status code", func() {
+				_, err := client.GetApiKeyByHeader(oldApiKey)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unexpected response status: 404"))
+			})
+		})
+
+		Context("when the server returns 500", func() {
+			BeforeEach(func() {
+				errorResponse := "Internal Server Error"
+				responseBody = []byte(errorResponse)
+
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: http.StatusInternalServerError,
+							Body:       io.NopCloser(bytes.NewReader(responseBody)),
+						}, nil
+					})
+			})
+
+			It("returns an error with the status code", func() {
+				_, err := client.GetApiKeyByHeader(oldApiKey)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unexpected response status: 500"))
 			})
 		})
 	})
