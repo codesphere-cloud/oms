@@ -19,7 +19,7 @@ type GlobalOptions struct {
 
 // GetRootCmd adds all child commands to the root command and sets flags appropriately.
 func GetRootCmd() *cobra.Command {
-	opts := GlobalOptions{}
+	opts := &GlobalOptions{}
 	rootCmd := &cobra.Command{
 		Use:   "oms",
 		Short: "Codesphere Operations Management System (OMS)",
@@ -55,13 +55,15 @@ func GetRootCmd() *cobra.Command {
 	}
 	// General commands
 	AddVersionCmd(rootCmd)
-	AddBetaCmd(rootCmd, &opts)
+	AddBetaCmd(rootCmd, opts)
 	AddUpdateCmd(rootCmd, opts)
 
 	// Package commands
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
-	AddInstallCmd(rootCmd, &opts)
+	AddInstallCmd(rootCmd, opts)
+	AddInitCmd(rootCmd, opts)
+	AddBuildCmd(rootCmd, opts)
 	AddLicensesCmd(rootCmd)
 
 	// OMS API key management commands
