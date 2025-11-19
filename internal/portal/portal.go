@@ -330,13 +330,12 @@ func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
 
 // GetApiKeyByHeader retrieves a new API key by sending the old key in the request header.
 func (c *PortalClient) GetApiKeyByHeader(oldKey string) (string, error) {
-	requestBody := bytes.NewBuffer([]byte{})
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "/key")
 	if err != nil {
 		return "", fmt.Errorf("failed to generate URL: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, url, requestBody)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
