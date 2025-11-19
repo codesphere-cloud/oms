@@ -27,6 +27,7 @@ type Portal interface {
 	RevokeAPIKey(key string) error
 	UpdateAPIKey(key string, expiresAt time.Time) error
 	ListAPIKeys() ([]ApiKey, error)
+	GetApiKeyId(oldKey string) (string, error)
 }
 
 type PortalClient struct {
@@ -325,4 +326,40 @@ func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
 	}
 
 	return keys, nil
+}
+
+// GetApiKeyId retrieves the key ID by sending the old key in the request header.
+func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
+	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "/key")
+	if err != nil {
+		return "", fmt.Errorf("failed to generate URL: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("X-API-Key", oldKey)
+
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
+	}
+
+	var result struct {
+		KeyID string `json:"keyId"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result.KeyID, nil
 }
