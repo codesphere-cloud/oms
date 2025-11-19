@@ -262,7 +262,7 @@ var _ = Describe("PortalClient", func() {
 		})
 	})
 
-	Describe("GetApiKeyByHeader", func() {
+	Describe("GetApiKeyId", func() {
 		Context("when the request succeeds", func() {
 			BeforeEach(func() {
 				response := map[string]string{"keyId": "test-key-id"}
@@ -275,10 +275,10 @@ var _ = Describe("PortalClient", func() {
 				}, nil)
 			})
 
-			It("returns the new API key", func() {
-				result, err := client.GetApiKeyByHeader("old-key")
+			It("returns the key ID", func() {
+				result, err := client.GetApiKeyId("old-key")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal("test-key-idold-key"))
+				Expect(result).To(Equal("test-key-id"))
 			})
 		})
 
@@ -289,7 +289,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := client.GetApiKeyByHeader("old-key")
+				_, err := client.GetApiKeyId("old-key")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("network error"))
 			})
@@ -305,7 +305,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns an error", func() {
-				_, err := client.GetApiKeyByHeader("old-key")
+				_, err := client.GetApiKeyId("old-key")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("unexpected response status: 401"))
 			})

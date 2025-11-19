@@ -27,7 +27,7 @@ type Portal interface {
 	RevokeAPIKey(key string) error
 	UpdateAPIKey(key string, expiresAt time.Time) error
 	ListAPIKeys() ([]ApiKey, error)
-	GetApiKeyByHeader(oldKey string) (string, error)
+	GetApiKeyId(oldKey string) (string, error)
 }
 
 type PortalClient struct {
@@ -328,8 +328,8 @@ func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
 	return keys, nil
 }
 
-// GetApiKeyByHeader retrieves a new API key by sending the old key in the request header.
-func (c *PortalClient) GetApiKeyByHeader(oldKey string) (string, error) {
+// GetApiKeyId retrieves the key ID by sending the old key in the request header.
+func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "/key")
 	if err != nil {
 		return "", fmt.Errorf("failed to generate URL: %w", err)
@@ -361,5 +361,5 @@ func (c *PortalClient) GetApiKeyByHeader(oldKey string) (string, error) {
 		return "", fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	return result.KeyID + oldKey, nil
+	return result.KeyID, nil
 }

@@ -275,12 +275,12 @@ func (_c *MockPortal_DownloadBuildArtifact_Call) RunAndReturn(run func(product P
 	return _c
 }
 
-// GetApiKeyByHeader provides a mock function for the type MockPortal
-func (_mock *MockPortal) GetApiKeyByHeader(oldKey string) (string, error) {
+// GetApiKeyId provides a mock function for the type MockPortal
+func (_mock *MockPortal) GetApiKeyId(oldKey string) (string, error) {
 	ret := _mock.Called(oldKey)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetApiKeyByHeader")
+		panic("no return value specified for GetApiKeyId")
 	}
 
 	var r0 string
@@ -301,30 +301,30 @@ func (_mock *MockPortal) GetApiKeyByHeader(oldKey string) (string, error) {
 	return r0, r1
 }
 
-// MockPortal_GetApiKeyByHeader_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetApiKeyByHeader'
-type MockPortal_GetApiKeyByHeader_Call struct {
+// MockPortal_GetApiKeyId_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetApiKeyId'
+type MockPortal_GetApiKeyId_Call struct {
 	*mock.Call
 }
 
-// GetApiKeyByHeader is a helper method to define mock.On call
+// GetApiKeyId is a helper method to define mock.On call
 //   - oldKey
-func (_e *MockPortal_Expecter) GetApiKeyByHeader(oldKey interface{}) *MockPortal_GetApiKeyByHeader_Call {
-	return &MockPortal_GetApiKeyByHeader_Call{Call: _e.mock.On("GetApiKeyByHeader", oldKey)}
+func (_e *MockPortal_Expecter) GetApiKeyId(oldKey interface{}) *MockPortal_GetApiKeyId_Call {
+	return &MockPortal_GetApiKeyId_Call{Call: _e.mock.On("GetApiKeyId", oldKey)}
 }
 
-func (_c *MockPortal_GetApiKeyByHeader_Call) Run(run func(oldKey string)) *MockPortal_GetApiKeyByHeader_Call {
+func (_c *MockPortal_GetApiKeyId_Call) Run(run func(oldKey string)) *MockPortal_GetApiKeyId_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(string))
 	})
 	return _c
 }
 
-func (_c *MockPortal_GetApiKeyByHeader_Call) Return(s string, err error) *MockPortal_GetApiKeyByHeader_Call {
+func (_c *MockPortal_GetApiKeyId_Call) Return(s string, err error) *MockPortal_GetApiKeyId_Call {
 	_c.Call.Return(s, err)
 	return _c
 }
 
-func (_c *MockPortal_GetApiKeyByHeader_Call) RunAndReturn(run func(oldKey string) (string, error)) *MockPortal_GetApiKeyByHeader_Call {
+func (_c *MockPortal_GetApiKeyId_Call) RunAndReturn(run func(oldKey string) (string, error)) *MockPortal_GetApiKeyId_Call {
 	_c.Call.Return(run)
 	return _c
 }
