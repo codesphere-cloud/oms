@@ -461,15 +461,15 @@ $(sed 's/^/        /' ca.pem)
         enabled: false
         clusterName: my-cluster-name  
   gateway: # For Codesphere internal services
-    serviceType: "LoadBalancer"
-    ipAddresses: [$(terraform output --json | yq .external_ips.value.k0s-cp-3)]
+    serviceType: "ClusterIP"
+    ipAddresses: [$(terraform output --json | yq .external_ips.value.k0s-cp-1)]
 
     # annotations: # Optional: for cloud provider specific LB config
       # Example Azure:
       # service.beta.kubernetes.io/azure-load-balancer-ipv4: <IP>
       # service.beta.kubernetes.io/azure-load-balancer-resource-group: <rg>
   publicGateway: # For user workspaces
-    serviceType: "LoadBalancer"
+    serviceType: "ClusterIP"
     ipAddresses: [$(terraform output --json | yq .external_ips.value.k0s-cp-2)]
     # annotations: {}
 metallb:
@@ -639,6 +639,8 @@ ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP  "sudo mkdir -p $SECRETSDIR; 
 #ssh -o StrictHostKeyChecking=no -J root@$JUMPBOX_IP root@$K0S_IP "echo export OMS_PORTAL_API_KEY=$OMS_PORTAL_API_KEY >> ~/.bashrc"
 ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP "wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms-cli.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms-cli"
 ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP "chmod +x oms-cli; sudo mv oms-cli /usr/local/bin/"
+ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP "curl -LO https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64; sudo mv sops-v3.11.0.linux.amd64 /usr/local/bin/sops; sudo chmod +x /usr/local/bin/sops"
+ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP "wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age /usr/local/bin/"
 
 scp config.yaml ubuntu@$JUMPBOX_IP:$SECRETSDIR/
 scp prod.vault.yaml ubuntu@$JUMPBOX_IP:$SECRETSDIR/
@@ -647,9 +649,9 @@ scp age_key.txt ubuntu@$JUMPBOX_IP:$SECRETSDIR/
 echo "All resources are contained in project: $PROJECT_ID"
 echo "To shut down and delete the project (and ALL its contents), run:"
 echo "gcloud projects delete $PROJECT_ID"
-echo "start the Codesphere installation using OMS from the jumpbox host: ssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY ubuntu@$JUMPBOX_IP"
+echo "start the Codesphere installation using OMS from the jumpbox host: ssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@$JUMPBOX_IP"
 
 echo "Please ensure that the necessary DNS records are configured for the domain $BASE_DOMAIN:"
-echo "- A record for 'cs.$BASE_DOMAIN' pointing to the gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-3)."
-echo "- A record for '*.cs.$BASE_DOMAIN' pointing to the public gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-2)."
+echo "- A record for 'cs.$BASE_DOMAIN' pointing to the gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-1)."
+echo "- A record for '*.cs.$BASE_DOMAIN' pointing to the public gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-1)."
 echo "- A record for '*.ws.$BASE_DOMAIN' pointing to the public gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-2)."

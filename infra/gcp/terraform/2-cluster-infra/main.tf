@@ -268,5 +268,5 @@ resource "google_compute_instance" "cluster_vms" {
     ssh-keys = local.ssh_key_entry
   }
 
-  tags = concat(["all-vms"], each.key == "jumpbox" ? ["ssh-external"] : [])
+  tags = concat(["all-vms"], each.value.external_ip == true ? ["ssh-external"] : [])
 }
