@@ -64,7 +64,11 @@ var _ = Describe("API Key Integration Tests", func() {
 				},
 			}
 
+			GinkgoWriter.Printf("Attempting to register API key for owner: %s at API: %s\n", registerCmd.Opts.Owner, os.Getenv("OMS_PORTAL_API"))
 			newKey, err := registerCmd.Register(portalClient)
+			if err != nil {
+				GinkgoWriter.Printf("Registration failed: %v\n", err)
+			}
 			Expect(err).To(BeNil(), "API key registration should succeed")
 			Expect(newKey).NotTo(BeNil(), "Register should return the created API key")
 
@@ -102,7 +106,12 @@ var _ = Describe("API Key Integration Tests", func() {
 				},
 			}
 
+			GinkgoWriter.Printf("[DEBUG] Attempting to register API key for owner: %s, org: %s at API: %s\n",
+				testOwner, testOrg, os.Getenv("OMS_PORTAL_API"))
 			newKey, err := registerCmd.Register(portalClient)
+			if err != nil {
+				GinkgoWriter.Printf("[ERROR] Registration failed: %v\n", err)
+			}
 			Expect(err).To(BeNil(), "API key registration should succeed")
 			Expect(newKey).NotTo(BeNil(), "Register should return the created API key")
 
@@ -222,17 +231,8 @@ var _ = Describe("API Key Integration Tests", func() {
 
 	Describe("Old API Key Detection and Warning", func() {
 		var (
-			cliPath string
+			cliPath = "../../oms-cli"
 		)
-
-		BeforeEach(func() {
-			cliPath = "./oms-cli"
-
-			_, err := os.Stat(cliPath)
-			if err != nil {
-				Skip("OMS CLI not found at " + cliPath + ", please build it first with 'make build-cli'")
-			}
-		})
 
 		Context("when using a 22-character old API key format", func() {
 			It("should detect the old format and attempt to upgrade", func() {
@@ -242,8 +242,11 @@ var _ = Describe("API Key Integration Tests", func() {
 					"OMS_PORTAL_API=http://localhost:3000/api",
 				)
 
-				output, _ := cmd.CombinedOutput()
+				output, err := cmd.CombinedOutput()
 				outputStr := string(output)
+				if err != nil {
+					GinkgoWriter.Printf("Command error: %v, Output: %s\n", err, outputStr)
+				}
 
 				Expect(outputStr).To(ContainSubstring("OMS CLI version"))
 			})
@@ -257,8 +260,11 @@ var _ = Describe("API Key Integration Tests", func() {
 					"OMS_PORTAL_API=http://localhost:3000/api",
 				)
 
-				output, _ := cmd.CombinedOutput()
+				output, err := cmd.CombinedOutput()
 				outputStr := string(output)
+				if err != nil {
+					GinkgoWriter.Printf("Command error: %v, Output: %s\n", err, outputStr)
+				}
 
 				Expect(outputStr).To(ContainSubstring("OMS CLI version"))
 				Expect(outputStr).NotTo(ContainSubstring("old API key"))
@@ -304,17 +310,8 @@ var _ = Describe("API Key Integration Tests", func() {
 
 	Describe("PreRun Hook Execution", func() {
 		var (
-			cliPath string
+			cliPath = "../../oms-cli"
 		)
-
-		BeforeEach(func() {
-			cliPath = "./oms-cli"
-
-			_, err := os.Stat(cliPath)
-			if err != nil {
-				Skip("OMS CLI not found at " + cliPath + ", please build it first with 'make build-cli'")
-			}
-		})
 
 		Context("when running any OMS command", func() {
 			It("should execute the PreRun hook", func() {
@@ -324,8 +321,11 @@ var _ = Describe("API Key Integration Tests", func() {
 					"OMS_PORTAL_API=http://localhost:3000/api",
 				)
 
-				output, _ := cmd.CombinedOutput()
+				output, err := cmd.CombinedOutput()
 				outputStr := string(output)
+				if err != nil {
+					GinkgoWriter.Printf("Command error: %v, Output: %s\n", err, outputStr)
+				}
 
 				Expect(outputStr).To(ContainSubstring("OMS CLI version"))
 			})
