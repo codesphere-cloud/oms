@@ -20,6 +20,9 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: Build CLI
+        run: make build-cli
+
       - name: Run Integration Tests
         env:
           OMS_PORTAL_API_KEY: ${{ secrets.OMS_PORTAL_API_KEY }}

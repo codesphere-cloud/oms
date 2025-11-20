@@ -31,6 +31,19 @@ var _ = Describe("RootCmd", func() {
 		mockHttpClient *portal.MockHttpClient
 	)
 
+	safeSetEnv := func(key, value string) {
+		originalValue, exists := os.LookupEnv(key)
+		Expect(os.Setenv(key, value)).To(Succeed())
+
+		DeferCleanup(func() {
+			if exists {
+				Expect(os.Setenv(key, originalValue)).To(Succeed())
+			} else {
+				Expect(os.Unsetenv(key)).To(Succeed())
+			}
+		})
+	}
+
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		mockHttpClient = portal.NewMockHttpClient(GinkgoT())
@@ -48,8 +61,8 @@ var _ = Describe("RootCmd", func() {
 				keyId := "test-key-id-12345"
 				expectedNewKey := keyId + oldKey
 
-				Expect(os.Setenv("OMS_PORTAL_API_KEY", oldKey)).NotTo(HaveOccurred())
-				Expect(os.Setenv("OMS_PORTAL_API", "http://test-portal.com/api")).NotTo(HaveOccurred())
+				safeSetEnv("OMS_PORTAL_API_KEY", oldKey)
+				safeSetEnv("OMS_PORTAL_API", "http://test-portal.com/api")
 
 				mockEnv.EXPECT().GetOmsPortalApi().Return("http://test-portal.com/api")
 
@@ -80,9 +93,6 @@ var _ = Describe("RootCmd", func() {
 				// Concatenate on client side
 				newApiKey := result + oldKey
 				Expect(newApiKey).To(Equal(expectedNewKey))
-
-				Expect(os.Unsetenv("OMS_PORTAL_API_KEY")).NotTo(HaveOccurred())
-				Expect(os.Unsetenv("OMS_PORTAL_API")).NotTo(HaveOccurred())
 			})
 		})
 
@@ -90,25 +100,19 @@ var _ = Describe("RootCmd", func() {
 			It("does not attempt to upgrade the key", func() {
 				newKey := "new-long-api-key-format-very-long-string"
 
-				Expect(os.Setenv("OMS_PORTAL_API_KEY", newKey)).NotTo(HaveOccurred())
-				Expect(os.Setenv("OMS_PORTAL_API", "http://test-portal.com/api")).NotTo(HaveOccurred())
+				safeSetEnv("OMS_PORTAL_API_KEY", newKey)
+				safeSetEnv("OMS_PORTAL_API", "http://test-portal.com/api")
 
 				Expect(len(newKey)).NotTo(Equal(22))
-
-				Expect(os.Unsetenv("OMS_PORTAL_API_KEY")).NotTo(HaveOccurred())
-				Expect(os.Unsetenv("OMS_PORTAL_API")).NotTo(HaveOccurred())
 			})
 		})
 
 		Context("when API key is empty", func() {
 			It("does not attempt to upgrade", func() {
-				Expect(os.Setenv("OMS_PORTAL_API_KEY", "")).NotTo(HaveOccurred())
-				Expect(os.Setenv("OMS_PORTAL_API", "http://test-portal.com/api")).NotTo(HaveOccurred())
+				safeSetEnv("OMS_PORTAL_API_KEY", "")
+				safeSetEnv("OMS_PORTAL_API", "http://test-portal.com/api")
 
 				Expect(len(os.Getenv("OMS_PORTAL_API_KEY"))).To(Equal(0))
-
-				Expect(os.Unsetenv("OMS_PORTAL_API_KEY")).NotTo(HaveOccurred())
-				Expect(os.Unsetenv("OMS_PORTAL_API")).NotTo(HaveOccurred())
 			})
 		})
 	})
