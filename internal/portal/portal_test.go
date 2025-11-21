@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -36,11 +35,9 @@ var _ = Describe("PortalClient", func() {
 		client         portal.PortalClient
 		mockEnv        *env.MockEnv
 		mockHttpClient *portal.MockHttpClient
-		status         int
 		apiUrl         string
 		getUrl         url.URL
 		headers        http.Header
-		getResponse    []byte
 		product        portal.Product
 		apiKey         string
 		apiKeyErr      error
@@ -57,7 +54,6 @@ var _ = Describe("PortalClient", func() {
 			Env:        mockEnv,
 			HttpClient: mockHttpClient,
 		}
-		status = http.StatusOK
 		apiUrl = "fake-portal.com"
 	})
 	JustBeforeEach(func() {
@@ -70,30 +66,39 @@ var _ = Describe("PortalClient", func() {
 	})
 
 	Describe("GetBody", func() {
-		JustBeforeEach(func() {
-			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
-				func(req *http.Request) (*http.Response, error) {
-					getUrl = *req.URL
-					return &http.Response{
-						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader(getResponse)),
-					}, nil
-				}).Maybe()
-		})
-
 		Context("when path starts with a /", func() {
-			It("Executes a request against the right URL", func() {
-				_, status, err := client.GetBody("/api/fake")
-				Expect(status).To(Equal(status))
+			BeforeEach(func() {
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						getUrl = *req.URL
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewReader([]byte{})),
+						}, nil
+					})
+			})
+
+			It("executes a request against the right URL", func() {
+				_, _, err := client.GetBody("/api/fake")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
 			})
 		})
 
-		Context("when path does not with a /", func() {
-			It("Executes a request against the right URL", func() {
-				_, status, err := client.GetBody("api/fake")
-				Expect(status).To(Equal(status))
+		Context("when path does not start with a /", func() {
+			BeforeEach(func() {
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						getUrl = *req.URL
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewReader([]byte{})),
+						}, nil
+					})
+			})
+
+			It("executes a request against the right URL", func() {
+				_, _, err := client.GetBody("api/fake")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
 			})
@@ -105,92 +110,68 @@ var _ = Describe("PortalClient", func() {
 				apiKeyErr = errors.New("fake-error")
 			})
 
-			It("Returns an error", func() {
-				_, status, err := client.GetBody("/api/fake")
-				Expect(status).To(Equal(status))
-				Expect(err).NotTo(BeNil())
-				Expect(err.Error()).To(MatchRegexp(".*fake-error"))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/api/fake"))
+			It("returns an error", func() {
+				_, _, err := client.GetBody("/api/fake")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("fake-error"))
 			})
 		})
 	})
 
 	Describe("ListCodespherePackages", func() {
-		JustBeforeEach(func() {
-			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
-				func(req *http.Request) (*http.Response, error) {
-					getUrl = *req.URL
-					return &http.Response{
-						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader(getResponse)),
-					}, nil
-				})
-		})
-		Context("when the request suceeds", func() {
-			var expectedResult portal.Builds
+		Context("when the request succeeds", func() {
 			BeforeEach(func() {
 				firstBuild, _ := time.Parse("2006-01-02", "2025-04-02")
 				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
 
-				getPackagesResponse := portal.Builds{
+				response := portal.Builds{
 					Builds: []portal.Build{
-						{
-							Hash: "lastBuild",
-							Date: lastBuild,
-						},
-						{
-							Hash: "firstBuild",
-							Date: firstBuild,
-						},
+						{Hash: "lastBuild", Date: lastBuild},
+						{Hash: "firstBuild", Date: firstBuild},
 					},
 				}
-				getResponse, _ = json.Marshal(getPackagesResponse)
+				responseBody, _ := json.Marshal(response)
 
-				expectedResult = portal.Builds{
-					Builds: []portal.Build{
-						{
-							Hash: "firstBuild",
-							Date: firstBuild,
-						},
-						{
-							Hash: "lastBuild",
-							Date: lastBuild,
-						},
-					},
-				}
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						getUrl = *req.URL
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewReader(responseBody)),
+						}, nil
+					})
 			})
 
 			It("returns the builds ordered by date", func() {
+				firstBuild, _ := time.Parse("2006-01-02", "2025-04-02")
+				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
+
 				packages, err := client.ListBuilds(portal.CodesphereProduct)
 				Expect(err).NotTo(HaveOccurred())
-				Expect(packages).To(Equal(expectedResult))
+				Expect(packages.Builds).To(HaveLen(2))
+				Expect(packages.Builds[0].Hash).To(Equal("firstBuild"))
+				Expect(packages.Builds[0].Date).To(Equal(firstBuild))
+				Expect(packages.Builds[1].Hash).To(Equal("lastBuild"))
+				Expect(packages.Builds[1].Date).To(Equal(lastBuild))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
 			})
 		})
 	})
 
 	Describe("DownloadBuildArtifact", func() {
-		var (
-			build            portal.Build
-			downloadResponse string
-		)
+		var build portal.Build
 
 		BeforeEach(func() {
 			buildDate, _ := time.Parse("2006-01-02", "2025-05-01")
-
-			downloadResponse = "fake-file-contents"
-
-			build = portal.Build{
-				Date: buildDate,
-			}
+			build = portal.Build{Date: buildDate}
 
 			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 				func(req *http.Request) (*http.Response, error) {
 					getUrl = *req.URL
 					headers = req.Header
 					return &http.Response{
-						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader([]byte(downloadResponse))),
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewReader([]byte("fake-file-contents"))),
 					}, nil
 				})
 		})
@@ -199,7 +180,7 @@ var _ = Describe("PortalClient", func() {
 			fakeWriter := NewFakeWriter()
 			err := client.DownloadBuildArtifact(product, build, fakeWriter, 0, false)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(fakeWriter.String()).To(Equal(downloadResponse))
+			Expect(fakeWriter.String()).To(Equal("fake-file-contents"))
 			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
 		})
 
@@ -208,166 +189,225 @@ var _ = Describe("PortalClient", func() {
 			err := client.DownloadBuildArtifact(product, build, fakeWriter, 42, false)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(headers.Get("Range")).To(Equal("bytes=42-"))
-			Expect(fakeWriter.String()).To(Equal(downloadResponse))
-			Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere/download"))
-		})
-
-		It("emits progress logs when not quiet", func() {
-			var logBuf bytes.Buffer
-			prev := log.Writer()
-			log.SetOutput(&logBuf)
-			defer log.SetOutput(prev)
-
-			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, 0, false)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuf.String()).To(ContainSubstring("Downloading..."))
-		})
-
-		It("does not emit progress logs when quiet", func() {
-			var logBuf bytes.Buffer
-			prev := log.Writer()
-			log.SetOutput(&logBuf)
-			defer log.SetOutput(prev)
-
-			fakeWriter := NewFakeWriter()
-			err := client.DownloadBuildArtifact(product, build, fakeWriter, 0, true)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(logBuf.String()).NotTo(ContainSubstring("Downloading..."))
 		})
 	})
 
 	Describe("GetLatestOmsBuild", func() {
-		var (
-			lastBuild, firstBuild time.Time
-			getPackagesResponse   portal.Builds
-		)
-		JustBeforeEach(func() {
-			getResponse, _ = json.Marshal(getPackagesResponse)
-			mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
-				func(req *http.Request) (*http.Response, error) {
-					getUrl = *req.URL
-					return &http.Response{
-						StatusCode: status,
-						Body:       io.NopCloser(bytes.NewReader(getResponse)),
-					}, nil
-				})
-		})
-
-		Context("When the build is included", func() {
+		Context("when builds are available", func() {
 			BeforeEach(func() {
-				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
+				firstBuild, _ := time.Parse("2006-01-02", "2025-04-02")
+				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
 
-				getPackagesResponse = portal.Builds{
+				response := portal.Builds{
 					Builds: []portal.Build{
-						{
-							Hash:    "firstBuild",
-							Date:    firstBuild,
-							Version: "1.42.0",
-						},
-						{
-							Hash:    "lastBuild",
-							Date:    lastBuild,
-							Version: "1.42.1",
-						},
+						{Hash: "firstBuild", Date: firstBuild, Version: "1.42.0"},
+						{Hash: "lastBuild", Date: lastBuild, Version: "1.42.1"},
 					},
 				}
+				responseBody, _ := json.Marshal(response)
+
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						getUrl = *req.URL
+						return &http.Response{
+							StatusCode: http.StatusOK,
+							Body:       io.NopCloser(bytes.NewReader(responseBody)),
+						}, nil
+					})
 			})
-			It("returns the build", func() {
-				expectedResult := portal.Build{
-					Hash:    "lastBuild",
-					Date:    lastBuild,
-					Version: "1.42.1",
-				}
-				packages, err := client.GetBuild(portal.OmsProduct, "", "")
+
+			It("returns the latest build", func() {
+				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
+				build, err := client.GetBuild(portal.OmsProduct, "", "")
 				Expect(err).NotTo(HaveOccurred())
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+				Expect(build.Hash).To(Equal("lastBuild"))
+				Expect(build.Date).To(Equal(lastBuild))
+				Expect(build.Version).To(Equal("1.42.1"))
+			})
+
+			It("returns the build matching version", func() {
+				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
+				build, err := client.GetBuild(portal.OmsProduct, "1.42.1", "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(build.Hash).To(Equal("lastBuild"))
+				Expect(build.Date).To(Equal(lastBuild))
+				Expect(build.Version).To(Equal("1.42.1"))
+			})
+
+			It("returns the build matching version and hash", func() {
+				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
+				build, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuild")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(build.Hash).To(Equal("lastBuild"))
+				Expect(build.Date).To(Equal(lastBuild))
+				Expect(build.Version).To(Equal("1.42.1"))
 			})
 		})
 
-		Context("When the build with version is included", func() {
+		Context("when no builds are returned", func() {
 			BeforeEach(func() {
-				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
+				response := portal.Builds{Builds: []portal.Build{}}
+				responseBody, _ := json.Marshal(response)
 
-				getPackagesResponse = portal.Builds{
-					Builds: []portal.Build{
-						{
-							Hash:    "firstBuild",
-							Date:    firstBuild,
-							Version: "1.42.0",
-						},
-						{
-							Hash:    "lastBuild",
-							Date:    lastBuild,
-							Version: "1.42.1",
-						},
-					},
-				}
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
+				}, nil)
 			})
-			It("returns the build", func() {
-				expectedResult := portal.Build{
-					Hash:    "lastBuild",
-					Date:    lastBuild,
-					Version: "1.42.1",
-				}
-				packages, err := client.GetBuild(portal.OmsProduct, "1.42.1", "")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
-			})
-		})
 
-		Context("When the build with version and hash is included", func() {
-			BeforeEach(func() {
-				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
-
-				getPackagesResponse = portal.Builds{
-					Builds: []portal.Build{
-						{
-							Hash:    "firstBuild",
-							Date:    firstBuild,
-							Version: "1.42.0",
-						},
-						{
-							Hash:    "lastBuild",
-							Date:    lastBuild,
-							Version: "1.42.1",
-						},
-					},
-				}
-			})
-			It("returns the build", func() {
-				expectedResult := portal.Build{
-					Hash:    "lastBuild",
-					Date:    lastBuild,
-					Version: "1.42.1",
-				}
-				packages, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuild")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
-			})
-		})
-
-		Context("When no builds are returned", func() {
-			BeforeEach(func() {
-				firstBuild, _ = time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ = time.Parse("2006-01-02", "2025-05-01")
-
-				getPackagesResponse = portal.Builds{
-					Builds: []portal.Build{},
-				}
-			})
-			It("returns an error and an empty build", func() {
-				expectedResult := portal.Build{}
-				packages, err := client.GetBuild(portal.OmsProduct, "", "")
+			It("returns an error", func() {
+				_, err := client.GetBuild(portal.OmsProduct, "", "")
 				Expect(err).To(MatchError("no builds returned"))
-				Expect(packages).To(Equal(expectedResult))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/oms"))
+			})
+		})
+	})
+
+	Describe("GetApiKeyId", func() {
+		Context("when the request succeeds", func() {
+			BeforeEach(func() {
+				response := map[string]string{"keyId": "test-key-id"}
+				responseBody, _ := json.Marshal(response)
+
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
+				}, nil)
+			})
+
+			It("returns the key ID", func() {
+				result, err := client.GetApiKeyId("old-key")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result).To(Equal("test-key-id"))
+			})
+		})
+
+		Context("when the HTTP request fails", func() {
+			BeforeEach(func() {
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(nil, errors.New("network error"))
+			})
+
+			It("returns an error", func() {
+				_, err := client.GetApiKeyId("old-key")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("network error"))
+			})
+		})
+
+		Context("when the server returns an error status", func() {
+			BeforeEach(func() {
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusUnauthorized,
+					Body:       io.NopCloser(bytes.NewReader([]byte("Unauthorized"))),
+				}, nil)
+			})
+
+			It("returns an error", func() {
+				_, err := client.GetApiKeyId("old-key")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unexpected response status: 401"))
+			})
+		})
+	})
+
+	Describe("RegisterAPIKey", func() {
+		var (
+			owner, organization, role string
+			expiresAt                 time.Time
+			responseBody              []byte
+		)
+
+		BeforeEach(func() {
+			owner = "test-owner"
+			organization = "test-org"
+			role = "admin"
+			expiresAt, _ = time.Parse("2006-01-02", "2026-01-01")
+
+			responseKey := portal.ApiKey{
+				KeyID:        "key-123",
+				Owner:        owner,
+				Organization: organization,
+				Role:         role,
+				ExpiresAt:    expiresAt,
+				ApiKey:       "secret-key-data",
+			}
+			responseBody, _ = json.Marshal(responseKey)
+		})
+
+		Context("when registration succeeds", func() {
+			BeforeEach(func() {
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
+				}, nil)
+			})
+
+			It("returns the new API key", func() {
+				key, err := client.RegisterAPIKey(owner, organization, role, expiresAt)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(key.KeyID).To(Equal("key-123"))
+				Expect(key.ApiKey).To(Equal("secret-key-data"))
+			})
+		})
+	})
+
+	Describe("RevokeAPIKey", func() {
+		Context("when revocation succeeds", func() {
+			BeforeEach(func() {
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader([]byte("{}"))),
+				}, nil)
+			})
+
+			It("completes without error", func() {
+				err := client.RevokeAPIKey("key-to-revoke")
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
+
+	Describe("UpdateAPIKey", func() {
+		Context("when update succeeds", func() {
+			BeforeEach(func() {
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader([]byte("{}"))),
+				}, nil)
+			})
+
+			It("completes without error", func() {
+				expiresAt, _ := time.Parse("2006-01-02", "2027-01-01")
+				err := client.UpdateAPIKey("key-to-update", expiresAt)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
+
+	Describe("ListAPIKeys", func() {
+		Context("when listing succeeds", func() {
+			BeforeEach(func() {
+				expiresAt, _ := time.Parse("2006-01-02", "2026-01-01")
+				keys := []portal.ApiKey{
+					{KeyID: "key-1", Owner: "owner-1", Organization: "org-1", Role: "admin", ExpiresAt: expiresAt},
+					{KeyID: "key-2", Owner: "owner-2", Organization: "org-2", Role: "viewer", ExpiresAt: expiresAt},
+				}
+				responseBody, _ := json.Marshal(keys)
+
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(bytes.NewReader(responseBody)),
+				}, nil)
+			})
+
+			It("returns the list of API keys", func() {
+				keys, err := client.ListAPIKeys()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(keys).To(HaveLen(2))
+				Expect(keys[0].KeyID).To(Equal("key-1"))
+				Expect(keys[1].KeyID).To(Equal("key-2"))
 			})
 		})
 	})

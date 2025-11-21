@@ -27,6 +27,7 @@ type Portal interface {
 	RevokeAPIKey(key string) error
 	UpdateAPIKey(key string, expiresAt time.Time) error
 	ListAPIKeys() ([]ApiKey, error)
+	GetApiKeyId(oldKey string) (string, error)
 }
 
 type PortalClient struct {
@@ -68,6 +69,8 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 		return
 	}
 
+	log.Printf("AuthorizedHttpRequest - Response status: %d, Content-Type: %s", resp.StatusCode, resp.Header.Get("Content-Type"))
+
 	if resp.StatusCode == http.StatusUnauthorized {
 		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
 		log.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")
@@ -77,6 +80,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 		if resp.Body != nil {
 			respBody, _ = io.ReadAll(resp.Body)
 		}
+		log.Printf("Non-2xx response received - Status: %d, Body: %s", resp.StatusCode, string(respBody))
 		err = fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
 		return
 	}
@@ -92,6 +96,8 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 		err = fmt.Errorf("failed to get generate URL: %w", err)
 		return
 	}
+
+	log.Printf("HttpRequest - Method: %s, URL: %s, Body length: %d bytes", method, url, len(body))
 
 	req, err := http.NewRequest(method, url, requestBody)
 	if err != nil {
@@ -254,8 +260,13 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	responseBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", readErr)
+	}
+
 	newKey := &ApiKey{}
-	err = json.NewDecoder(resp.Body).Decode(newKey)
+	err = json.Unmarshal(responseBody, newKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode response body: %w", err)
 	}
@@ -325,4 +336,40 @@ func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
 	}
 
 	return keys, nil
+}
+
+// GetApiKeyId retrieves the key ID by sending the old key in the request header.
+func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
+	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "/key")
+	if err != nil {
+		return "", fmt.Errorf("failed to generate URL: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("X-API-Key", oldKey)
+
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
+	}
+
+	var result struct {
+		KeyID string `json:"keyId"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return result.KeyID, nil
 }
