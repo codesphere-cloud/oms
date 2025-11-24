@@ -4,8 +4,12 @@
 package cmd
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
 	"log"
+
+	goio "io"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
@@ -78,6 +82,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	if err != nil {
 		return fmt.Errorf("failed to find artifact in package: %w", err)
 	}
+
 	fullFilename := build.Version + "-" + filename
 	out, err := c.FileWriter.OpenAppend(fullFilename)
 	if err != nil {
@@ -86,7 +91,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 			return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
 		}
 	}
-	defer func() { _ = out.Close() }()
+	defer util.CloseFileIgnoreError(out)
 
 	// get already downloaded file size of fullFilename
 	fileSize := 0
@@ -94,9 +99,44 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	if err == nil {
 		fileSize = int(fileInfo.Size())
 	}
+
 	err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet)
 	if err != nil {
 		return fmt.Errorf("failed to download build: %w", err)
 	}
+
+	err = c.verifyArtifact(fullFilename, download)
+	if err != nil {
+		return fmt.Errorf("failed to verify artifact: %w", err)
+	}
+
+	return nil
+}
+
+func (c *DownloadPackageCmd) verifyArtifact(fileName string, download portal.Build) error {
+	// skip if oms-portal does not provide MD5Sum (older builds)
+	if download.Artifacts[0].Md5Sum == "" {
+		return nil
+	}
+
+	checkFile, err := c.FileWriter.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer util.CloseFileIgnoreError(checkFile)
+
+	hash := md5.New()
+	_, err = goio.Copy(hash, checkFile)
+	if err != nil {
+		return fmt.Errorf("failed to compute checksum: %w", err)
+	}
+
+	downloadHash := hash.Sum(nil)
+	md5Hash := hex.EncodeToString(downloadHash)
+
+	if download.Artifacts[0].Md5Sum != md5Hash {
+		return fmt.Errorf("invalid hash: expected %s, but got %s", md5Hash, download.Artifacts[0].Md5Sum)
+	}
+
 	return nil
 }
