@@ -17,12 +17,14 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/portal"
 )
 
 type Portal interface {
 	ListBuilds(product Product) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
 	DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error
+	VerifyBuildArtifactDownload(fileName string, download Build) error
 	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)
 	RevokeAPIKey(key string) error
 	UpdateAPIKey(key string, expiresAt time.Time) error
@@ -232,6 +234,15 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 	}
 
 	log.Println("Download finished successfully.")
+	return nil
+}
+
+func (c *PortalClient) VerifyBuildArtifactDownload(fileName string, download portal.Build) error {
+	// skip if oms-portal does not provide MD5Sum (older builds)
+	if download.Artifacts[0].Md5Sum == "" {
+		return nil
+	}
+
 	return nil
 }
 
