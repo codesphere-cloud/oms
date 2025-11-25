@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 
 	goio "io"
 
@@ -82,8 +83,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	if err != nil {
 		return fmt.Errorf("failed to find artifact in package: %w", err)
 	}
-
-	fullFilename := build.Version + "-" + filename
+	fullFilename := strings.ReplaceAll(build.Version, "/", "-") + "-" + filename
 	out, err := c.FileWriter.OpenAppend(fullFilename)
 	if err != nil {
 		out, err = c.FileWriter.Create(fullFilename)

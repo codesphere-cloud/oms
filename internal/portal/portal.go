@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/env"
-	"github.com/codesphere-cloud/oms/internal/portal"
 )
 
 type Portal interface {
@@ -237,7 +236,7 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 	return nil
 }
 
-func (c *PortalClient) VerifyBuildArtifactDownload(fileName string, download portal.Build) error {
+func (c *PortalClient) VerifyBuildArtifactDownload(fileName string, download Build) error {
 	// skip if oms-portal does not provide MD5Sum (older builds)
 	if download.Artifacts[0].Md5Sum == "" {
 		return nil
