@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -199,7 +200,9 @@ var _ = Describe("PortalClient", func() {
 	Describe("VerifyBuildArtifactDownload", func() {
 
 		It("verifies the build successfully", func() {
-			testfile, err := os.Create("VerifyBuildArtifactDownload-installer.tar.gz")
+			tempDir := GinkgoT().TempDir()
+			testFilePath := filepath.Join(tempDir, "VerifyBuildArtifactDownload-installer.tar.gz")
+			testfile, err := os.Create(testFilePath)
 			Expect(err).ToNot(HaveOccurred())
 
 			_ = testfile
@@ -224,7 +227,9 @@ var _ = Describe("PortalClient", func() {
 		})
 
 		It("failed verification on bad checksum", func() {
-			testfile, err := os.Create("VerifyBuildArtifactDownload-bad-installer.tar.gz")
+			tempDir := GinkgoT().TempDir()
+			testFilePath := filepath.Join(tempDir, "VerifyBuildArtifactDownload-bad-installer.tar.gz")
+			testfile, err := os.Create(testFilePath)
 			Expect(err).ToNot(HaveOccurred())
 
 			hash := md5.New()
