@@ -205,14 +205,12 @@ var _ = Describe("PortalClient", func() {
 			testfile, err := os.Create(testFilePath)
 			Expect(err).ToNot(HaveOccurred())
 
-			_ = testfile
 			hash := md5.New()
 			_, err = io.Copy(hash, testfile)
 			Expect(err).ToNot(HaveOccurred())
 
 			testfileMd5Sum := hex.EncodeToString(hash.Sum(nil))
 
-			_ = testfileMd5Sum
 			build := portal.Build{
 				Artifacts: []portal.Artifact{
 					{
@@ -253,6 +251,54 @@ var _ = Describe("PortalClient", func() {
 			expectedErr := fmt.Sprintf("invalid md5Sum: expected %s, but got invalidchecksum", testfileMd5Sum)
 			Expect(err.Error()).To(ContainSubstring(expectedErr))
 		})
+
+		It("skipped verification on empty checksum", func() {
+			tempDir := GinkgoT().TempDir()
+			testFilePath := filepath.Join(tempDir, "VerifyBuildArtifactDownload-bad-installer.tar.gz")
+			testfile, err := os.Create(testFilePath)
+			Expect(err).ToNot(HaveOccurred())
+
+			build := portal.Build{
+				Artifacts: []portal.Artifact{
+					{
+						Filename: "installer.tar.gz",
+						Md5Sum:   "",
+					},
+				},
+			}
+
+			err = client.VerifyBuildArtifactDownload(testfile, build)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("failed verification if file is closed", func() {
+			tempDir := GinkgoT().TempDir()
+			testFilePath := filepath.Join(tempDir, "VerifyBuildArtifactDownload-installer.tar.gz")
+			testfile, err := os.Create(testFilePath)
+			Expect(err).ToNot(HaveOccurred())
+
+			hash := md5.New()
+			_, err = io.Copy(hash, testfile)
+			Expect(err).ToNot(HaveOccurred())
+
+			testfileMd5Sum := hex.EncodeToString(hash.Sum(nil))
+
+			build := portal.Build{
+				Artifacts: []portal.Artifact{
+					{
+						Filename: "installer.tar.gz",
+						Md5Sum:   testfileMd5Sum,
+					},
+				},
+			}
+
+			testfile.Close()
+
+			err = client.VerifyBuildArtifactDownload(testfile, build)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to compute checksum"))
+		})
+
 	})
 
 	Describe("GetLatestOmsBuild", func() {
