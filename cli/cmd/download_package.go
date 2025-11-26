@@ -105,7 +105,13 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 		return fmt.Errorf("failed to download build: %w", err)
 	}
 
-	err = p.VerifyBuildArtifactDownload(out, download)
+	verifyFile, err := c.FileWriter.Open(fullFilename)
+	if err != nil {
+		return err
+	}
+	defer util.CloseFileIgnoreError(verifyFile)
+
+	err = p.VerifyBuildArtifactDownload(verifyFile, download)
 	if err != nil {
 		return fmt.Errorf("failed to verify artifact: %w", err)
 	}

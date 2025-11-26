@@ -244,24 +244,21 @@ func (c *PortalClient) VerifyBuildArtifactDownload(file io.Reader, download Buil
 		return nil
 	}
 
-	// checkFile, err := c.FileWriter.OpenAppend(fileName)
-	// if err != nil {
-	// 	return err
-	// }
-	// defer util.CloseFileIgnoreError(checkFile)
-
 	hash := md5.New()
+
 	_, err := io.Copy(hash, file)
 	if err != nil {
 		return fmt.Errorf("failed to compute checksum: %w", err)
 	}
 
-	downloadHash := hash.Sum(nil)
-	md5Hash := hex.EncodeToString(downloadHash)
+	// downloadHash := hash.Sum(nil)
+	md5Sum := hex.EncodeToString(hash.Sum(nil))
 
-	if download.Artifacts[0].Md5Sum != md5Hash {
-		return fmt.Errorf("invalid hash: expected %s, but got %s", md5Hash, download.Artifacts[0].Md5Sum)
+	if download.Artifacts[0].Md5Sum != md5Sum {
+		return fmt.Errorf("invalid md5Sum: expected %s, but got %s", md5Sum, download.Artifacts[0].Md5Sum)
 	}
+
+	log.Println("File checksum verified successfully.")
 
 	return nil
 }
