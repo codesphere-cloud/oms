@@ -4,13 +4,9 @@
 package cmd
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"strings"
-
-	goio "io"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
@@ -114,34 +110,6 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	err = p.VerifyBuildArtifactDownload(verifyFile, download)
 	if err != nil {
 		return fmt.Errorf("failed to verify artifact: %w", err)
-	}
-
-	return nil
-}
-
-func (c *DownloadPackageCmd) verifyArtifact(fileName string, download portal.Build) error {
-	// skip if oms-portal does not provide MD5Sum (older builds)
-	if download.Artifacts[0].Md5Sum == "" {
-		return nil
-	}
-
-	checkFile, err := c.FileWriter.OpenAppend(fileName)
-	if err != nil {
-		return err
-	}
-	defer util.CloseFileIgnoreError(checkFile)
-
-	hash := md5.New()
-	_, err = goio.Copy(hash, checkFile)
-	if err != nil {
-		return fmt.Errorf("failed to compute checksum: %w", err)
-	}
-
-	downloadHash := hash.Sum(nil)
-	md5Hash := hex.EncodeToString(downloadHash)
-
-	if download.Artifacts[0].Md5Sum != md5Hash {
-		return fmt.Errorf("invalid hash: expected %s, but got %s", md5Hash, download.Artifacts[0].Md5Sum)
 	}
 
 	return nil
