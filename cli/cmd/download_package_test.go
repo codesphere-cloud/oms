@@ -15,7 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-var _ = Describe("ListPackages", func() {
+var _ = Describe("DownloadPackages", func() {
 
 	var (
 		c              cmd.DownloadPackageCmd
