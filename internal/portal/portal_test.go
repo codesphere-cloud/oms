@@ -292,7 +292,8 @@ var _ = Describe("PortalClient", func() {
 				},
 			}
 
-			testfile.Close()
+			err = testfile.Close()
+			Expect(err).ToNot(HaveOccurred())
 
 			err = client.VerifyBuildArtifactDownload(testfile, build)
 			Expect(err).To(HaveOccurred())
