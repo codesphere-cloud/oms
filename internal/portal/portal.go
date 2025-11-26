@@ -251,7 +251,6 @@ func (c *PortalClient) VerifyBuildArtifactDownload(file io.Reader, download Buil
 		return fmt.Errorf("failed to compute checksum: %w", err)
 	}
 
-	// downloadHash := hash.Sum(nil)
 	md5Sum := hex.EncodeToString(hash.Sum(nil))
 
 	if download.Artifacts[0].Md5Sum != md5Sum {

@@ -65,8 +65,8 @@ var _ = Describe("PortalClient", func() {
 		mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr).Maybe()
 	})
 	AfterEach(func() {
-		// mockEnv.AssertExpectations(GinkgoT())
-		// mockHttpClient.AssertExpectations(GinkgoT())
+		mockEnv.AssertExpectations(GinkgoT())
+		mockHttpClient.AssertExpectations(GinkgoT())
 	})
 
 	Describe("GetBody", func() {
