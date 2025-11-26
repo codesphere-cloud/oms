@@ -253,8 +253,8 @@ func (c *PortalClient) VerifyBuildArtifactDownload(file io.Reader, download Buil
 
 	md5Sum := hex.EncodeToString(hash.Sum(nil))
 
-	if download.Artifacts[0].Md5Sum != md5Sum {
-		return fmt.Errorf("invalid md5Sum: expected %s, but got %s", md5Sum, download.Artifacts[0].Md5Sum)
+	if !strings.EqualFold(download.Artifacts[0].Md5Sum, md5Sum) {
+		return fmt.Errorf("invalid md5Sum: expected %s, but got %s", download.Artifacts[0].Md5Sum, md5Sum)
 	}
 
 	log.Println("File checksum verified successfully.")

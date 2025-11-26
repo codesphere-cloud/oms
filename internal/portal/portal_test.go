@@ -224,9 +224,9 @@ var _ = Describe("PortalClient", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("failed verification on bad checksum", func() {
+		It("failed verification on wrong checksum", func() {
 			tempDir := GinkgoT().TempDir()
-			testFilePath := filepath.Join(tempDir, "VerifyBuildArtifactDownload-bad-installer.tar.gz")
+			testFilePath := filepath.Join(tempDir, "VerifyBuildArtifactDownload-installer.tar.gz")
 			testfile, err := os.Create(testFilePath)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -240,7 +240,7 @@ var _ = Describe("PortalClient", func() {
 				Artifacts: []portal.Artifact{
 					{
 						Filename: "bad-installer.tar.gz",
-						Md5Sum:   "invalidchecksum",
+						Md5Sum:   "anotherchecksum",
 					},
 				},
 			}
@@ -248,7 +248,7 @@ var _ = Describe("PortalClient", func() {
 			err = client.VerifyBuildArtifactDownload(testfile, build)
 			Expect(err).To(HaveOccurred())
 
-			expectedErr := fmt.Sprintf("invalid md5Sum: expected %s, but got invalidchecksum", testfileMd5Sum)
+			expectedErr := fmt.Sprintf("invalid md5Sum: expected anotherchecksum, but got %s", testfileMd5Sum)
 			Expect(err.Error()).To(ContainSubstring(expectedErr))
 		})
 
