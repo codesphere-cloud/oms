@@ -69,20 +69,14 @@ type MockConfigManager_ParseConfigYaml_Call struct {
 }
 
 // ParseConfigYaml is a helper method to define mock.On call
-//   - configPath string
+//   - configPath
 func (_e *MockConfigManager_Expecter) ParseConfigYaml(configPath interface{}) *MockConfigManager_ParseConfigYaml_Call {
 	return &MockConfigManager_ParseConfigYaml_Call{Call: _e.mock.On("ParseConfigYaml", configPath)}
 }
 
 func (_c *MockConfigManager_ParseConfigYaml_Call) Run(run func(configPath string)) *MockConfigManager_ParseConfigYaml_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(string))
 	})
 	return _c
 }
@@ -147,20 +141,14 @@ type MockInstallConfigManager_ApplyProfile_Call struct {
 }
 
 // ApplyProfile is a helper method to define mock.On call
-//   - profile string
+//   - profile
 func (_e *MockInstallConfigManager_Expecter) ApplyProfile(profile interface{}) *MockInstallConfigManager_ApplyProfile_Call {
 	return &MockInstallConfigManager_ApplyProfile_Call{Call: _e.mock.On("ApplyProfile", profile)}
 }
 
 func (_c *MockInstallConfigManager_ApplyProfile_Call) Run(run func(profile string)) *MockInstallConfigManager_ApplyProfile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(string))
 	})
 	return _c
 }
@@ -332,20 +320,14 @@ type MockInstallConfigManager_LoadInstallConfigFromFile_Call struct {
 }
 
 // LoadInstallConfigFromFile is a helper method to define mock.On call
-//   - configPath string
+//   - configPath
 func (_e *MockInstallConfigManager_Expecter) LoadInstallConfigFromFile(configPath interface{}) *MockInstallConfigManager_LoadInstallConfigFromFile_Call {
 	return &MockInstallConfigManager_LoadInstallConfigFromFile_Call{Call: _e.mock.On("LoadInstallConfigFromFile", configPath)}
 }
 
 func (_c *MockInstallConfigManager_LoadInstallConfigFromFile_Call) Run(run func(configPath string)) *MockInstallConfigManager_LoadInstallConfigFromFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(string))
 	})
 	return _c
 }
@@ -383,20 +365,14 @@ type MockInstallConfigManager_LoadVaultFromFile_Call struct {
 }
 
 // LoadVaultFromFile is a helper method to define mock.On call
-//   - vaultPath string
+//   - vaultPath
 func (_e *MockInstallConfigManager_Expecter) LoadVaultFromFile(vaultPath interface{}) *MockInstallConfigManager_LoadVaultFromFile_Call {
 	return &MockInstallConfigManager_LoadVaultFromFile_Call{Call: _e.mock.On("LoadVaultFromFile", vaultPath)}
 }
 
 func (_c *MockInstallConfigManager_LoadVaultFromFile_Call) Run(run func(vaultPath string)) *MockInstallConfigManager_LoadVaultFromFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(string))
 	})
 	return _c
 }
@@ -526,26 +502,15 @@ type MockInstallConfigManager_WriteInstallConfig_Call struct {
 }
 
 // WriteInstallConfig is a helper method to define mock.On call
-//   - configPath string
-//   - withComments bool
+//   - configPath
+//   - withComments
 func (_e *MockInstallConfigManager_Expecter) WriteInstallConfig(configPath interface{}, withComments interface{}) *MockInstallConfigManager_WriteInstallConfig_Call {
 	return &MockInstallConfigManager_WriteInstallConfig_Call{Call: _e.mock.On("WriteInstallConfig", configPath, withComments)}
 }
 
 func (_c *MockInstallConfigManager_WriteInstallConfig_Call) Run(run func(configPath string, withComments bool)) *MockInstallConfigManager_WriteInstallConfig_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 bool
-		if args[1] != nil {
-			arg1 = args[1].(bool)
-		}
-		run(
-			arg0,
-			arg1,
-		)
+		run(args[0].(string), args[1].(bool))
 	})
 	return _c
 }
@@ -583,26 +548,15 @@ type MockInstallConfigManager_WriteVault_Call struct {
 }
 
 // WriteVault is a helper method to define mock.On call
-//   - vaultPath string
-//   - withComments bool
+//   - vaultPath
+//   - withComments
 func (_e *MockInstallConfigManager_Expecter) WriteVault(vaultPath interface{}, withComments interface{}) *MockInstallConfigManager_WriteVault_Call {
 	return &MockInstallConfigManager_WriteVault_Call{Call: _e.mock.On("WriteVault", vaultPath, withComments)}
 }
 
 func (_c *MockInstallConfigManager_WriteVault_Call) Run(run func(vaultPath string, withComments bool)) *MockInstallConfigManager_WriteVault_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 bool
-		if args[1] != nil {
-			arg1 = args[1].(bool)
-		}
-		run(
-			arg0,
-			arg1,
-		)
+		run(args[0].(string), args[1].(bool))
 	})
 	return _c
 }
@@ -676,32 +630,16 @@ type MockK0sManager_Download_Call struct {
 }
 
 // Download is a helper method to define mock.On call
-//   - version string
-//   - force bool
-//   - quiet bool
+//   - version
+//   - force
+//   - quiet
 func (_e *MockK0sManager_Expecter) Download(version interface{}, force interface{}, quiet interface{}) *MockK0sManager_Download_Call {
 	return &MockK0sManager_Download_Call{Call: _e.mock.On("Download", version, force, quiet)}
 }
 
 func (_c *MockK0sManager_Download_Call) Run(run func(version string, force bool, quiet bool)) *MockK0sManager_Download_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 bool
-		if args[1] != nil {
-			arg1 = args[1].(bool)
-		}
-		var arg2 bool
-		if args[2] != nil {
-			arg2 = args[2].(bool)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
+		run(args[0].(string), args[1].(bool), args[2].(bool))
 	})
 	return _c
 }
@@ -792,32 +730,16 @@ type MockK0sManager_Install_Call struct {
 }
 
 // Install is a helper method to define mock.On call
-//   - configPath string
-//   - k0sPath string
-//   - force bool
+//   - configPath
+//   - k0sPath
+//   - force
 func (_e *MockK0sManager_Expecter) Install(configPath interface{}, k0sPath interface{}, force interface{}) *MockK0sManager_Install_Call {
 	return &MockK0sManager_Install_Call{Call: _e.mock.On("Install", configPath, k0sPath, force)}
 }
 
 func (_c *MockK0sManager_Install_Call) Run(run func(configPath string, k0sPath string, force bool)) *MockK0sManager_Install_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 bool
-		if args[2] != nil {
-			arg2 = args[2].(bool)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
+		run(args[0].(string), args[1].(string), args[2].(bool))
 	})
 	return _c
 }
@@ -882,20 +804,14 @@ type MockPackageManager_Extract_Call struct {
 }
 
 // Extract is a helper method to define mock.On call
-//   - force bool
+//   - force
 func (_e *MockPackageManager_Expecter) Extract(force interface{}) *MockPackageManager_Extract_Call {
 	return &MockPackageManager_Extract_Call{Call: _e.mock.On("Extract", force)}
 }
 
 func (_c *MockPackageManager_Extract_Call) Run(run func(force bool)) *MockPackageManager_Extract_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 bool
-		if args[0] != nil {
-			arg0 = args[0].(bool)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(bool))
 	})
 	return _c
 }
@@ -933,26 +849,15 @@ type MockPackageManager_ExtractDependency_Call struct {
 }
 
 // ExtractDependency is a helper method to define mock.On call
-//   - file string
-//   - force bool
+//   - file
+//   - force
 func (_e *MockPackageManager_Expecter) ExtractDependency(file interface{}, force interface{}) *MockPackageManager_ExtractDependency_Call {
 	return &MockPackageManager_ExtractDependency_Call{Call: _e.mock.On("ExtractDependency", file, force)}
 }
 
 func (_c *MockPackageManager_ExtractDependency_Call) Run(run func(file string, force bool)) *MockPackageManager_ExtractDependency_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 bool
-		if args[1] != nil {
-			arg1 = args[1].(bool)
-		}
-		run(
-			arg0,
-			arg1,
-		)
+		run(args[0].(string), args[1].(bool))
 	})
 	return _c
 }
@@ -999,20 +904,14 @@ type MockPackageManager_ExtractOciImageIndex_Call struct {
 }
 
 // ExtractOciImageIndex is a helper method to define mock.On call
-//   - imagefile string
+//   - imagefile
 func (_e *MockPackageManager_Expecter) ExtractOciImageIndex(imagefile interface{}) *MockPackageManager_ExtractOciImageIndex_Call {
 	return &MockPackageManager_ExtractOciImageIndex_Call{Call: _e.mock.On("ExtractOciImageIndex", imagefile)}
 }
 
 func (_c *MockPackageManager_ExtractOciImageIndex_Call) Run(run func(imagefile string)) *MockPackageManager_ExtractOciImageIndex_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(string))
 	})
 	return _c
 }
@@ -1105,20 +1004,14 @@ type MockPackageManager_GetBaseimageName_Call struct {
 }
 
 // GetBaseimageName is a helper method to define mock.On call
-//   - baseimage string
+//   - baseimage
 func (_e *MockPackageManager_Expecter) GetBaseimageName(baseimage interface{}) *MockPackageManager_GetBaseimageName_Call {
 	return &MockPackageManager_GetBaseimageName_Call{Call: _e.mock.On("GetBaseimageName", baseimage)}
 }
 
 func (_c *MockPackageManager_GetBaseimageName_Call) Run(run func(baseimage string)) *MockPackageManager_GetBaseimageName_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(string))
 	})
 	return _c
 }
@@ -1165,26 +1058,15 @@ type MockPackageManager_GetBaseimagePath_Call struct {
 }
 
 // GetBaseimagePath is a helper method to define mock.On call
-//   - baseimage string
-//   - force bool
+//   - baseimage
+//   - force
 func (_e *MockPackageManager_Expecter) GetBaseimagePath(baseimage interface{}, force interface{}) *MockPackageManager_GetBaseimagePath_Call {
 	return &MockPackageManager_GetBaseimagePath_Call{Call: _e.mock.On("GetBaseimagePath", baseimage, force)}
 }
 
 func (_c *MockPackageManager_GetBaseimagePath_Call) Run(run func(baseimage string, force bool)) *MockPackageManager_GetBaseimagePath_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 bool
-		if args[1] != nil {
-			arg1 = args[1].(bool)
-		}
-		run(
-			arg0,
-			arg1,
-		)
+		run(args[0].(string), args[1].(bool))
 	})
 	return _c
 }
@@ -1275,20 +1157,14 @@ type MockPackageManager_GetDependencyPath_Call struct {
 }
 
 // GetDependencyPath is a helper method to define mock.On call
-//   - filename string
+//   - filename
 func (_e *MockPackageManager_Expecter) GetDependencyPath(filename interface{}) *MockPackageManager_GetDependencyPath_Call {
 	return &MockPackageManager_GetDependencyPath_Call{Call: _e.mock.On("GetDependencyPath", filename)}
 }
 
 func (_c *MockPackageManager_GetDependencyPath_Call) Run(run func(filename string)) *MockPackageManager_GetDependencyPath_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(string))
 	})
 	return _c
 }

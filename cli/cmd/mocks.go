@@ -74,26 +74,15 @@ type MockOMSUpdater_Update_Call struct {
 }
 
 // Update is a helper method to define mock.On call
-//   - v semver.Version
-//   - repo string
+//   - v
+//   - repo
 func (_e *MockOMSUpdater_Expecter) Update(v interface{}, repo interface{}) *MockOMSUpdater_Update_Call {
 	return &MockOMSUpdater_Update_Call{Call: _e.mock.On("Update", v, repo)}
 }
 
 func (_c *MockOMSUpdater_Update_Call) Run(run func(v semver.Version, repo string)) *MockOMSUpdater_Update_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 semver.Version
-		if args[0] != nil {
-			arg0 = args[0].(semver.Version)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(
-			arg0,
-			arg1,
-		)
+		run(args[0].(semver.Version), args[1].(string))
 	})
 	return _c
 }
