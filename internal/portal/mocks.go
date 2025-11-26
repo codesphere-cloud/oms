@@ -5,10 +5,11 @@
 package portal
 
 import (
-	mock "github.com/stretchr/testify/mock"
 	"io"
 	"net/http"
 	"time"
+
+	mock "github.com/stretchr/testify/mock"
 )
 
 // NewMockHttp creates a new instance of MockHttp. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -645,16 +646,16 @@ func (_c *MockPortal_UpdateAPIKey_Call) RunAndReturn(run func(key string, expire
 }
 
 // VerifyBuildArtifactDownload provides a mock function for the type MockPortal
-func (_mock *MockPortal) VerifyBuildArtifactDownload(fileName string, download Build) error {
-	ret := _mock.Called(fileName, download)
+func (_mock *MockPortal) VerifyBuildArtifactDownload(file io.Reader, download Build) error {
+	ret := _mock.Called(file, download)
 
 	if len(ret) == 0 {
 		panic("no return value specified for VerifyBuildArtifactDownload")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, Build) error); ok {
-		r0 = returnFunc(fileName, download)
+	if returnFunc, ok := ret.Get(0).(func(io.Reader, Build) error); ok {
+		r0 = returnFunc(file, download)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -667,15 +668,26 @@ type MockPortal_VerifyBuildArtifactDownload_Call struct {
 }
 
 // VerifyBuildArtifactDownload is a helper method to define mock.On call
-//   - fileName
-//   - download
-func (_e *MockPortal_Expecter) VerifyBuildArtifactDownload(fileName interface{}, download interface{}) *MockPortal_VerifyBuildArtifactDownload_Call {
-	return &MockPortal_VerifyBuildArtifactDownload_Call{Call: _e.mock.On("VerifyBuildArtifactDownload", fileName, download)}
+//   - file io.Reader
+//   - download Build
+func (_e *MockPortal_Expecter) VerifyBuildArtifactDownload(file interface{}, download interface{}) *MockPortal_VerifyBuildArtifactDownload_Call {
+	return &MockPortal_VerifyBuildArtifactDownload_Call{Call: _e.mock.On("VerifyBuildArtifactDownload", file, download)}
 }
 
-func (_c *MockPortal_VerifyBuildArtifactDownload_Call) Run(run func(fileName string, download Build)) *MockPortal_VerifyBuildArtifactDownload_Call {
+func (_c *MockPortal_VerifyBuildArtifactDownload_Call) Run(run func(file io.Reader, download Build)) *MockPortal_VerifyBuildArtifactDownload_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(Build))
+		var arg0 io.Reader
+		if args[0] != nil {
+			arg0 = args[0].(io.Reader)
+		}
+		var arg1 Build
+		if args[1] != nil {
+			arg1 = args[1].(Build)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -685,7 +697,7 @@ func (_c *MockPortal_VerifyBuildArtifactDownload_Call) Return(err error) *MockPo
 	return _c
 }
 
-func (_c *MockPortal_VerifyBuildArtifactDownload_Call) RunAndReturn(run func(fileName string, download Build) error) *MockPortal_VerifyBuildArtifactDownload_Call {
+func (_c *MockPortal_VerifyBuildArtifactDownload_Call) RunAndReturn(run func(file io.Reader, download Build) error) *MockPortal_VerifyBuildArtifactDownload_Call {
 	_c.Call.Return(run)
 	return _c
 }
