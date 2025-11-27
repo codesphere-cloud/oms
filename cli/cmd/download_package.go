@@ -79,6 +79,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	if err != nil {
 		return fmt.Errorf("failed to find artifact in package: %w", err)
 	}
+
 	fullFilename := strings.ReplaceAll(build.Version, "/", "-") + "-" + filename
 	out, err := c.FileWriter.OpenAppend(fullFilename)
 	if err != nil {

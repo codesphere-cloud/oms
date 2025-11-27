@@ -71,6 +71,7 @@ var _ = Describe("DownloadPackages", func() {
 			err := c.DownloadBuild(mockPortal, build, filename)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
 		Context("Version contains a slash", func() {
 			BeforeEach(func() {
 				version = "other/version/v1.42.0"
