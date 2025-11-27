@@ -270,7 +270,7 @@ var _ = Describe("PortalClient", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		FIt("failed verification if file is closed", func() {
+		It("failed verification if file is closed", func() {
 			build := portal.Build{
 				Artifacts: []portal.Artifact{
 					{
