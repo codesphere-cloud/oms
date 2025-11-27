@@ -270,7 +270,7 @@ var _ = Describe("PortalClient", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("failed verification if file is closed", func() {
+		FIt("failed verification if file is closed", func() {
 			build := portal.Build{
 				Artifacts: []portal.Artifact{
 					{
@@ -279,6 +279,8 @@ var _ = Describe("PortalClient", func() {
 					},
 				},
 			}
+
+			fmt.Printf("%s", testfile.Name())
 
 			// Close the file before using it for verification
 			err := testfile.Close()
