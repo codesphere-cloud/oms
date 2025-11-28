@@ -591,3 +591,36 @@ func capitalize(s string) string {
 	s = strings.ReplaceAll(s, "_", "")
 	return strings.ToUpper(s[:1]) + s[1:]
 }
+
+func (c *RootConfig) GetRegistryPassword(vault *InstallVault) string {
+	for _, secret := range vault.Secrets {
+		if secret.Name == "registryPassword" && secret.Fields != nil {
+			return secret.Fields.Password
+		}
+	}
+	return ""
+}
+
+func (c *RootConfig) SetRegistryPassword(vault *InstallVault, secret string) {
+	c.SetPassword(vault, "registryPassword", secret)
+}
+
+func (c *RootConfig) SetRegistryUsername(vault *InstallVault, secret string) {
+	c.SetPassword(vault, "registryUsername", secret)
+}
+
+func (c *RootConfig) SetPassword(vault *InstallVault, name string, value string) {
+	for i, secret := range vault.Secrets {
+		if secret.Name == name {
+			vault.Secrets[i].Fields.Password = value
+			return
+		}
+	}
+	newSecret := SecretEntry{
+		Name: name,
+		Fields: &SecretFields{
+			Password: value,
+		},
+	}
+	vault.Secrets = append(vault.Secrets, newSecret)
+}
