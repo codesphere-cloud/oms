@@ -644,6 +644,52 @@ func (_c *MockPortal_UpdateAPIKey_Call) RunAndReturn(run func(key string, expire
 	return _c
 }
 
+// VerifyBuildArtifactDownload provides a mock function for the type MockPortal
+func (_mock *MockPortal) VerifyBuildArtifactDownload(file io.Reader, download Build) error {
+	ret := _mock.Called(file, download)
+
+	if len(ret) == 0 {
+		panic("no return value specified for VerifyBuildArtifactDownload")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(io.Reader, Build) error); ok {
+		r0 = returnFunc(file, download)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockPortal_VerifyBuildArtifactDownload_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'VerifyBuildArtifactDownload'
+type MockPortal_VerifyBuildArtifactDownload_Call struct {
+	*mock.Call
+}
+
+// VerifyBuildArtifactDownload is a helper method to define mock.On call
+//   - file
+//   - download
+func (_e *MockPortal_Expecter) VerifyBuildArtifactDownload(file interface{}, download interface{}) *MockPortal_VerifyBuildArtifactDownload_Call {
+	return &MockPortal_VerifyBuildArtifactDownload_Call{Call: _e.mock.On("VerifyBuildArtifactDownload", file, download)}
+}
+
+func (_c *MockPortal_VerifyBuildArtifactDownload_Call) Run(run func(file io.Reader, download Build)) *MockPortal_VerifyBuildArtifactDownload_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(io.Reader), args[1].(Build))
+	})
+	return _c
+}
+
+func (_c *MockPortal_VerifyBuildArtifactDownload_Call) Return(err error) *MockPortal_VerifyBuildArtifactDownload_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockPortal_VerifyBuildArtifactDownload_Call) RunAndReturn(run func(file io.Reader, download Build) error) *MockPortal_VerifyBuildArtifactDownload_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockHttpClient creates a new instance of MockHttpClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockHttpClient(t interface {

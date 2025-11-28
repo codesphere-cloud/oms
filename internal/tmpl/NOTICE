@@ -77,9 +77,9 @@ License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/inte
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.7.3
+Version: v6.7.5
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.3/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.5/LICENSE
  
 ----------
 Module: github.com/mattn/go-runewidth

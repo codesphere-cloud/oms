@@ -5,6 +5,8 @@ package portal
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +25,7 @@ type Portal interface {
 	ListBuilds(product Product) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
 	DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error
+	VerifyBuildArtifactDownload(file io.Reader, download Build) error
 	RegisterAPIKey(owner string, organization string, role string, expiresAt time.Time) (*ApiKey, error)
 	RevokeAPIKey(key string) error
 	UpdateAPIKey(key string, expiresAt time.Time) error
@@ -232,6 +235,30 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 	}
 
 	log.Println("Download finished successfully.")
+	return nil
+}
+
+func (c *PortalClient) VerifyBuildArtifactDownload(file io.Reader, download Build) error {
+	// skip if oms-portal does not provide MD5Sum (older builds)
+	if download.Artifacts[0].Md5Sum == "" {
+		return nil
+	}
+
+	hash := md5.New()
+
+	_, err := io.Copy(hash, file)
+	if err != nil {
+		return fmt.Errorf("failed to compute checksum: %w", err)
+	}
+
+	md5Sum := hex.EncodeToString(hash.Sum(nil))
+
+	if !strings.EqualFold(download.Artifacts[0].Md5Sum, md5Sum) {
+		return fmt.Errorf("invalid md5Sum: expected %s, but got %s", download.Artifacts[0].Md5Sum, md5Sum)
+	}
+
+	log.Println("File checksum verified successfully.")
+
 	return nil
 }
 
