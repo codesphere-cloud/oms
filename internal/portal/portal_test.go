@@ -5,11 +5,16 @@ package portal_test
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -56,16 +61,18 @@ var _ = Describe("PortalClient", func() {
 		}
 		apiUrl = "fake-portal.com"
 	})
-	JustBeforeEach(func() {
-		mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
-		mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr).Maybe()
-	})
+
 	AfterEach(func() {
 		mockEnv.AssertExpectations(GinkgoT())
 		mockHttpClient.AssertExpectations(GinkgoT())
 	})
 
 	Describe("GetBody", func() {
+		JustBeforeEach(func() {
+			mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+			mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
+		})
+
 		Context("when path starts with a /", func() {
 			BeforeEach(func() {
 				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
@@ -140,6 +147,9 @@ var _ = Describe("PortalClient", func() {
 							Body:       io.NopCloser(bytes.NewReader(responseBody)),
 						}, nil
 					})
+
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+				mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
 			})
 
 			It("returns the builds ordered by date", func() {
@@ -174,6 +184,9 @@ var _ = Describe("PortalClient", func() {
 						Body:       io.NopCloser(bytes.NewReader([]byte("fake-file-contents"))),
 					}, nil
 				})
+
+			mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+			mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
 		})
 
 		It("downloads the build", func() {
@@ -192,7 +205,100 @@ var _ = Describe("PortalClient", func() {
 		})
 	})
 
+	Describe("VerifyBuildArtifactDownload", func() {
+		var testfilePath string
+		var testfile *os.File
+		var testfileMd5Sum string
+
+		BeforeEach(func() {
+			var err error
+
+			tempDir := GinkgoT().TempDir()
+			testfilePath = filepath.Join(tempDir, "VerifyBuildArtifactDownload-installer.tar.gz")
+			testfile, err = os.Create(testfilePath)
+			Expect(err).ToNot(HaveOccurred())
+
+			hash := md5.New()
+			_, err = io.Copy(hash, testfile)
+			Expect(err).ToNot(HaveOccurred())
+
+			testfileMd5Sum = hex.EncodeToString(hash.Sum(nil))
+		})
+
+		It("verifies the build successfully", func() {
+			build := portal.Build{
+				Artifacts: []portal.Artifact{
+					{
+						Filename: "installer.tar.gz",
+						Md5Sum:   testfileMd5Sum,
+					},
+				},
+			}
+
+			err := client.VerifyBuildArtifactDownload(testfile, build)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("failed verification on wrong checksum", func() {
+			build := portal.Build{
+				Artifacts: []portal.Artifact{
+					{
+						Filename: "bad-installer.tar.gz",
+						Md5Sum:   "anotherchecksum",
+					},
+				},
+			}
+
+			err := client.VerifyBuildArtifactDownload(testfile, build)
+			Expect(err).To(HaveOccurred())
+
+			expectedErr := fmt.Sprintf("invalid md5Sum: expected anotherchecksum, but got %s", testfileMd5Sum)
+			Expect(err.Error()).To(ContainSubstring(expectedErr))
+		})
+
+		It("skipped verification on empty checksum", func() {
+			build := portal.Build{
+				Artifacts: []portal.Artifact{
+					{
+						Filename: "installer.tar.gz",
+						Md5Sum:   "",
+					},
+				},
+			}
+
+			err := client.VerifyBuildArtifactDownload(testfile, build)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("failed verification if file is closed", func() {
+			build := portal.Build{
+				Artifacts: []portal.Artifact{
+					{
+						Filename: "installer.tar.gz",
+						Md5Sum:   testfileMd5Sum,
+					},
+				},
+			}
+
+			fmt.Printf("%s", testfile.Name())
+
+			// Close the file before using it for verification
+			err := testfile.Close()
+			Expect(err).ToNot(HaveOccurred())
+
+			err = client.VerifyBuildArtifactDownload(testfile, build)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to compute checksum"))
+		})
+
+	})
+
 	Describe("GetLatestOmsBuild", func() {
+		BeforeEach(func() {
+			mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+			mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
+		})
+
 		Context("when builds are available", func() {
 			BeforeEach(func() {
 				firstBuild, _ := time.Parse("2006-01-02", "2025-04-02")
@@ -263,12 +369,15 @@ var _ = Describe("PortalClient", func() {
 	})
 
 	Describe("GetApiKeyId", func() {
+		BeforeEach(func() {
+			mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+		})
+
 		Context("when the request succeeds", func() {
 			BeforeEach(func() {
 				response := map[string]string{"keyId": "test-key-id"}
 				responseBody, _ := json.Marshal(response)
 
-				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
 				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewReader(responseBody)),
@@ -284,7 +393,6 @@ var _ = Describe("PortalClient", func() {
 
 		Context("when the HTTP request fails", func() {
 			BeforeEach(func() {
-				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
 				mockHttpClient.EXPECT().Do(mock.Anything).Return(nil, errors.New("network error"))
 			})
 
@@ -297,7 +405,6 @@ var _ = Describe("PortalClient", func() {
 
 		Context("when the server returns an error status", func() {
 			BeforeEach(func() {
-				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
 				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
 					StatusCode: http.StatusUnauthorized,
 					Body:       io.NopCloser(bytes.NewReader([]byte("Unauthorized"))),
@@ -334,6 +441,9 @@ var _ = Describe("PortalClient", func() {
 				ApiKey:       "secret-key-data",
 			}
 			responseBody, _ = json.Marshal(responseKey)
+
+			mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+			mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
 		})
 
 		Context("when registration succeeds", func() {
@@ -360,6 +470,9 @@ var _ = Describe("PortalClient", func() {
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewReader([]byte("{}"))),
 				}, nil)
+
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+				mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
 			})
 
 			It("completes without error", func() {
@@ -376,6 +489,9 @@ var _ = Describe("PortalClient", func() {
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewReader([]byte("{}"))),
 				}, nil)
+
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+				mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
 			})
 
 			It("completes without error", func() {
@@ -400,6 +516,9 @@ var _ = Describe("PortalClient", func() {
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewReader(responseBody)),
 				}, nil)
+
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+				mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
 			})
 
 			It("returns the list of API keys", func() {

@@ -15,7 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-var _ = Describe("ListPackages", func() {
+var _ = Describe("DownloadPackages", func() {
 
 	var (
 		c              cmd.DownloadPackageCmd
@@ -65,10 +65,13 @@ var _ = Describe("ListPackages", func() {
 
 			fakeFile := os.NewFile(uintptr(0), filename)
 			mockFileWriter.EXPECT().OpenAppend(version+"-"+filename).Return(fakeFile, nil)
+			mockFileWriter.EXPECT().Open(version+"-"+filename).Return(fakeFile, nil)
 			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
 			err := c.DownloadBuild(mockPortal, build, filename)
 			Expect(err).NotTo(HaveOccurred())
 		})
+
 		Context("Version contains a slash", func() {
 			BeforeEach(func() {
 				version = "other/version/v1.42.0"
@@ -83,7 +86,9 @@ var _ = Describe("ListPackages", func() {
 
 				fakeFile := os.NewFile(uintptr(0), filename)
 				mockFileWriter.EXPECT().OpenAppend("other-version-v1.42.0-"+filename).Return(fakeFile, nil)
+				mockFileWriter.EXPECT().Open("other-version-v1.42.0-"+filename).Return(fakeFile, nil)
 				mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+				mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
 				err := c.DownloadBuild(mockPortal, build, filename)
 				Expect(err).NotTo(HaveOccurred())
 			})
