@@ -24,3 +24,8 @@ variable "vm_scheduling_type" {
     error_message = "vm_scheduling_type must be either 'SPOT' or 'ON_DEMAND'."
   }
 }
+
+variable "project_name" {
+  description = "The GCP project name used for state file naming"
+  type        = string
+}

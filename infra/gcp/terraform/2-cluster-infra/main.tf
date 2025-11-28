@@ -9,10 +9,11 @@ terraform {
 }
 
 # Read the state file from the bootstrap folder to get the project ID
+# Note: This path will be dynamically resolved based on the PROJECT_NAME variable
 data "terraform_remote_state" "bootstrap" {
   backend = "local"
   config = {
-    path = "../1-project-bootstrap/terraform.tfstate"
+    path = "../1-project-bootstrap/${var.project_name}.tfstate"
   }
 }
 
@@ -60,7 +61,7 @@ EOT
     "postgres" = {
       machine_type = "n2-standard-4"
       disk_sizes   = { root = 100 }
-      external_ip  = false
+      external_ip  = true
     }
   }
 
@@ -159,6 +160,21 @@ resource "google_compute_firewall" "allow_ingress_web" {
   # Apply this rule to all VMs with external access (Jumpbox and k0s nodes)
   # This tag was already set on your k0s VMs and Jumpbox when they got their external IPs.
   target_tags = ["ssh-external"] 
+}
+
+# Allow external access to PostgreSQL on the postgres VM
+resource "google_compute_firewall" "allow_ingress_postgres" {
+  name    = "${data.terraform_remote_state.bootstrap.outputs.project_id}-allow-postgres"
+  network = google_compute_network.vpc.name
+  direction = "INGRESS"
+  source_ranges = ["0.0.0.0/0"] 
+
+  allow {
+    protocol = "tcp"
+    ports    = ["5432"] # PostgreSQL default port
+  }
+
+  target_tags = ["postgres-external"] 
 }
 
 # 3. Artifact Registry Setup (Managed Registry)
@@ -268,5 +284,9 @@ resource "google_compute_instance" "cluster_vms" {
     ssh-keys = local.ssh_key_entry
   }
 
-  tags = concat(["all-vms"], each.value.external_ip == true ? ["ssh-external"] : [])
+  tags = concat(
+    ["all-vms"], 
+    each.value.external_ip == true ? ["ssh-external"] : [],
+    each.key == "postgres" ? ["postgres-external"] : []
+  )
 }

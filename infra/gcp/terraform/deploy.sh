@@ -117,12 +117,12 @@ cd 1-project-bootstrap
 terraform init
 
 if [[ "$FOLDER_ID" == "" ]]; then
-  terraform apply -var="project_name=$PROJECT_NAME" -var="billing_account=$BILLING_ACCOUNT"
+  terraform apply -state="${PROJECT_NAME}.tfstate" -var="project_name=$PROJECT_NAME" -var="billing_account=$BILLING_ACCOUNT"
 else
-  terraform apply -var="project_name=$PROJECT_NAME" -var="billing_account=$BILLING_ACCOUNT" -var="folder_id=$FOLDER_ID"
+  terraform apply -state="${PROJECT_NAME}.tfstate" -var="project_name=$PROJECT_NAME" -var="billing_account=$BILLING_ACCOUNT" -var="folder_id=$FOLDER_ID"
 fi
 
-PROJECT_ID=$(terraform output -raw project_id)
+PROJECT_ID=$(terraform output -state="${PROJECT_NAME}.tfstate" -raw project_id)
 
 echo "Project created with ID: $PROJECT_ID"
 
@@ -133,12 +133,12 @@ cd ../2-cluster-infra
 
 terraform init
 
-terraform apply -var="ssh_public_key_path=$SSH_KEY_PATH" -var="vm_scheduling_type=$SCHEDULING_TYPE"
+terraform apply -state="${PROJECT_NAME}.tfstate" -var="ssh_public_key_path=$SSH_KEY_PATH" -var="vm_scheduling_type=$SCHEDULING_TYPE"
 
 echo -e "\n✅ Deployment Complete! Outputs:"
-terraform output
+terraform output -state="${PROJECT_NAME}.tfstate"
 
-JUMPBOX_IP=$(terraform output -json | yq -r .external_ips.value.jumpbox)
+JUMPBOX_IP=$(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .external_ips.value.jumpbox)
 
 echo -n "Waiting for SSH service to start on $JUMPBOX_IP..."
 
@@ -181,7 +181,7 @@ fi
 
 ssh $JUMPBOX_IP "sudo sed -i 's/no-port-forwarding.*$//g' /root/.ssh/authorized_keys;echo -e 'PermitRootLogin yes\nAcceptEnv *\n' | sudo tee /etc/ssh/sshd_config.d/51-cs-ssh-settings.conf; sudo systemctl restart sshd"
 
-ALL_PRIVATE_IPS=($(terraform output -json internal_vm_ips | yq -r '.[]'))
+ALL_PRIVATE_IPS=($(terraform output -state="${PROJECT_NAME}.tfstate" -json internal_vm_ips | yq -r '.[]'))
 for VM_IP in "${ALL_PRIVATE_IPS[@]}"; do
   echo "Configuring ssh access on VM $VM_IP"
   cat <<EOF >> ~/.ssh/ssh_config_pc
@@ -196,7 +196,7 @@ EOF
 done
 echo "Setting inotify limits"
 # Example SSH command structure for configuration:
-K0S_IPS=($(terraform output -json internal_vm_ips | yq -r '."k0s-cp-1", ."k0s-cp-2", ."k0s-cp-3"'))
+K0S_IPS=($(terraform output -state="${PROJECT_NAME}.tfstate" -json internal_vm_ips | yq -r '."k0s-cp-1", ."k0s-cp-2", ."k0s-cp-3"'))
 
 
 for K0S_IP in "${K0S_IPS[@]}"; do
@@ -238,7 +238,19 @@ if [ ! -f "ingress.csr" ]; then
 fi
 echo "Postgres"
 
-PRIMARY_PG_IP=$(terraform output -json | yq -r .internal_vm_ips.value.postgres)
+PRIMARY_PG_IP=$(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.postgres)
+
+# Allow override of PRIMARY_PG_IP with custom value
+if [[ -z "${CUSTOM_PG_IP}" ]]; then
+  read -p "Enter custom PostgreSQL IP (leave empty to use default $PRIMARY_PG_IP): " CUSTOM_PG_IP
+fi
+
+if [[ -n "${CUSTOM_PG_IP}" ]]; then
+  echo "Overriding PRIMARY_PG_IP from $PRIMARY_PG_IP to $CUSTOM_PG_IP"
+  PRIMARY_PG_IP="$CUSTOM_PG_IP"
+else
+  echo "Using default PRIMARY_PG_IP: $PRIMARY_PG_IP"
+fi
 
 if [ ! -f "pg_primary.csr" ]; then
   # Create CSR for Primary
@@ -247,7 +259,8 @@ if [ ! -f "pg_primary.csr" ]; then
 fi
 
 # Create extensions file (primary.v3.ext)
-cat > pg_primary.v3.ext << EOF
+if [ ! -f "pg_primary.v3.ext" ]; then
+  cat > pg_primary.v3.ext << EOF
 authorityKeyIdentifier=keyid,issuer
 basicConstraints=CA:FALSE
 keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
@@ -256,8 +269,9 @@ subjectAltName = @alt_names
 IP.0 = $PRIMARY_PG_IP
 DNS.0 = postgres
 EOF
+fi
 
-if [ ! -f "pg_primary.csr" ]; then
+if [ -f "pg_primary.csr" ]; then
   # Sign Primary Certificate
   openssl x509 -req -in pg_primary.csr -CA ca.pem -CAkey ca.key -CAcreateserial \
     -outform PEM -out pg_primary.pem \
@@ -271,7 +285,6 @@ if [ ! -f "domain_auth_key.pem" ]; then
 fi
 
 echo "generate secrets"
-
 cat << EOF > prod.vault.yaml
 secrets:
   - name: cephSshPrivateKey
@@ -301,11 +314,12 @@ $(sed 's/^/        /' domain_auth_public.pem)
       password: '_json_key_base64'
   - name: registryPassword
     fields:
-      password: $(terraform output -raw ar_key_base64)
+      password: $(terraform output -state="${PROJECT_NAME}.tfstate" -raw ar_key_base64)
   - name: postgresPassword
     fields:
       # Generate a strong primary admin password (e.g., 25 characters)
-      password: $(openssl rand -base64 16)
+      # password: $(openssl rand -base64 16)
+      password: 1qrEiR1GUwHB6UdxmJsexw==
   - name: postgresPrimaryServerKeyPem
     file:
       name: primary.key
@@ -313,7 +327,8 @@ $(sed 's/^/        /' domain_auth_public.pem)
 $(sed 's/^/        /' pg_primary.key)
   - name: postgresReplicaPassword
     fields:
-      password: $(openssl rand -base64 16)
+      # password: $(openssl rand -base64 16)
+      password: 8rgfMxUiDaPsVxZpRYjO7g==
   - name: postgresReplicaServerKeyPem
     file:
       name: replica.key
@@ -376,22 +391,9 @@ $(sed 's/^/        /' pg_primary.key)
       password: '$GITHUB_APP_CLIENT_SECRET'
 EOF
 
-
-cat << EOF > config.yaml
-dataCenter:
-  id: 1
-  name: main
-  city: Karlsruhe # Your datacenter city
-  countryCode: DE # Your datacenter country code
-secrets:
-  baseDir: $SECRETSDIR # Path to your secrets directory (where prod.vault.yaml is)
-
-registry:
-  server: $(terraform output -raw artifact_registry_fqdn)
-  replaceImagesInBom: true # Optional, should be set true if using an external registry
-  loadContainerImages: true # Optional, set to true if images should be loaded from the installer bundle
-
-postgres:
+# Generate PostgreSQL configuration based on DATACENTER_ID
+if [[ "$DATACENTER_ID" == "1" ]]; then
+  POSTGRES_CONFIG="
   # Option 1: Install New PostgreSQL (Refer to secrets file for passwords & keys)
   # CA certificate for PostgreSQL (pg_ca.pem from section 3.1.3)
   caCertPem: |
@@ -401,7 +403,37 @@ $(sed 's/^/    /' ca.pem)
       serverCertPem: |
 $(sed 's/^/        /' pg_primary.pem)
     ip: $PRIMARY_PG_IP
-    hostname: postgres
+    hostname: postgres"
+else
+  POSTGRES_CONFIG="
+  # Option 2: Use External PostgreSQL
+  # CA certificate for PostgreSQL (pg_ca.pem from section 3.1.3)
+  caCertPem: |
+$(sed 's/^/    /' ca.pem)
+  serverAddress: $PRIMARY_PG_IP"
+fi
+
+echo "generate config.yaml"
+cat << EOF > config.yaml
+dataCenters:
+  - id: 1
+    name: main
+    city: Karlsruhe # Your datacenter city
+    countryCode: DE # Your datacenter country code
+  - id: 2
+    name: second
+    city: Karlsruhe # Your datacenter city
+    countryCode: DE # Your datacenter country code
+currentDataCenterId: $DATACENTER_ID
+secrets:
+  baseDir: $SECRETSDIR # Path to your secrets directory (where prod.vault.yaml is)
+
+registry:
+  server: $(terraform output -state="${PROJECT_NAME}.tfstate" -raw artifact_registry_fqdn)
+  replaceImagesInBom: true # Optional, should be set true if using an external registry
+  loadContainerImages: true # Optional, set to true if images should be loaded from the installer bundle
+
+postgres:$POSTGRES_CONFIG
 
 ceph:
   csiKubeletDir: /var/lib/k0s/kubelet
@@ -412,16 +444,16 @@ $(sed 's/^/      /' ceph_id_rsa.pub)
   nodesSubnet: 10.10.0.0/20
   hosts:
     - hostname: ceph-1 
-      ipAddress: $(terraform output -json | yq -r .internal_vm_ips.value.ceph-1)
+      ipAddress: $(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.ceph-1)
       isMaster: true
     - hostname: ceph-2
-      ipAddress: $(terraform output -json | yq -r .internal_vm_ips.value.ceph-2)
+      ipAddress: $(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.ceph-2)
       isMaster: false
     - hostname: ceph-3 
-      ipAddress: $(terraform output -json | yq -r .internal_vm_ips.value.ceph-3)
+      ipAddress: $(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.ceph-3)
       isMaster: false
     - hostname: ceph-4 
-      ipAddress: $(terraform output -json | yq -r .internal_vm_ips.value.ceph-4)
+      ipAddress: $(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.ceph-4)
       isMaster: false
   osds:
   - specId: default
@@ -439,13 +471,13 @@ $(sed 's/^/      /' ceph_id_rsa.pub)
 # kubernetes.managedByCodesphere should be set accordingly
 kubernetes:
   managedByCodesphere: true
-  apiServerHost:  $(terraform output -json | yq -r .internal_vm_ips.value.k0s-cp-1)
+  apiServerHost:  $(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.k0s-cp-1)
   controlPlanes:
-    - ipAddress:  $(terraform output -json | yq -r .internal_vm_ips.value.k0s-cp-1)
+    - ipAddress:  $(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.k0s-cp-1)
   workers:
-    - ipAddress:  $(terraform output -json | yq -r .internal_vm_ips.value.k0s-cp-1)
-    - ipAddress:  $(terraform output -json | yq -r .internal_vm_ips.value.k0s-cp-2)
-    - ipAddress:  $(terraform output -json | yq -r .internal_vm_ips.value.k0s-cp-3)
+    - ipAddress:  $(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.k0s-cp-1)
+    - ipAddress:  $(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.k0s-cp-2)
+    - ipAddress:  $(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq -r .internal_vm_ips.value.k0s-cp-3)
 
 cluster:
   certificates: # CA for services accessed by Codesphere users
@@ -462,7 +494,7 @@ $(sed 's/^/        /' ca.pem)
         clusterName: my-cluster-name  
   gateway: # For Codesphere internal services
     serviceType: "ClusterIP"
-    ipAddresses: [$(terraform output --json | yq .external_ips.value.k0s-cp-1)]
+    ipAddresses: [$(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq .external_ips.value.k0s-cp-1)]
 
     # annotations: # Optional: for cloud provider specific LB config
       # Example Azure:
@@ -470,7 +502,7 @@ $(sed 's/^/        /' ca.pem)
       # service.beta.kubernetes.io/azure-load-balancer-resource-group: <rg>
   publicGateway: # For user workspaces
     serviceType: "ClusterIP"
-    ipAddresses: [$(terraform output --json | yq .external_ips.value.k0s-cp-2)]
+    ipAddresses: [$(terraform output -state="${PROJECT_NAME}.tfstate" -json | yq .external_ips.value.k0s-cp-2)]
     # annotations: {}
 metallb:
   # This is the primary switch to enable or disable the MetalLB integration.
@@ -483,7 +515,7 @@ codesphere:
   workspaceHostingBaseDomain: "ws.$BASE_DOMAIN"
   # A primary public IP for workspaces (use one of the publicGateway). If assigned by a LoadBalancer and not known yet, 
   # leave blank and add later once known.
-  publicIp: $(terraform output --json | yq .external_ips.value.k0s-cp-1)
+  publicIp: $(terraform output -state="${PROJECT_NAME}.tfstate" --json | yq .external_ips.value.k0s-cp-1)
   customDomains:
     cNameBaseDomain: "ws.$BASE_DOMAIN"
   dnsServers: ["1.1.1.1", "8.8.8.8"]
@@ -642,9 +674,12 @@ ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP "chmod +x oms-cli; sudo mv om
 ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP "curl -LO https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64; sudo mv sops-v3.11.0.linux.amd64 /usr/local/bin/sops; sudo chmod +x /usr/local/bin/sops"
 ssh -o StrictHostKeyChecking=no ubuntu@$JUMPBOX_IP "wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age /usr/local/bin/"
 
-scp config.yaml ubuntu@$JUMPBOX_IP:$SECRETSDIR/
-scp prod.vault.yaml ubuntu@$JUMPBOX_IP:$SECRETSDIR/
-scp age_key.txt ubuntu@$JUMPBOX_IP:$SECRETSDIR/
+: ssh -n -o StrictHostKeyChecking=no root@$JUMPBOX_IP '[[ -f config.yaml ]] && rm config.yaml'
+scp config.yaml root@$JUMPBOX_IP:$SECRETSDIR/
+: ssh -n -o StrictHostKeyChecking=no root@$JUMPBOX_IP '[[ -f prod.vault.yaml ]] && rm prod.vault.yaml'
+scp prod.vault.yaml root@$JUMPBOX_IP:$SECRETSDIR/
+: ssh -n -o StrictHostKeyChecking=no root@$JUMPBOX_IP '[[ -f age_key.txt ]] && rm age_key.txt'
+scp age_key.txt root@$JUMPBOX_IP:$SECRETSDIR/
 
 echo "All resources are contained in project: $PROJECT_ID"
 echo "To shut down and delete the project (and ALL its contents), run:"
@@ -652,6 +687,6 @@ echo "gcloud projects delete $PROJECT_ID"
 echo "start the Codesphere installation using OMS from the jumpbox host: ssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@$JUMPBOX_IP"
 
 echo "Please ensure that the necessary DNS records are configured for the domain $BASE_DOMAIN:"
-echo "- A record for 'cs.$BASE_DOMAIN' pointing to the gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-1)."
-echo "- A record for '*.cs.$BASE_DOMAIN' pointing to the public gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-1)."
-echo "- A record for '*.ws.$BASE_DOMAIN' pointing to the public gateway IP $(terraform output --json | yq .external_ips.value.k0s-cp-2)."
+echo "- A record for 'cs.$BASE_DOMAIN' pointing to the gateway IP $(terraform output -state="${PROJECT_NAME}.tfstate" --json | yq .external_ips.value.k0s-cp-1)."
+echo "- A record for '*.cs.$BASE_DOMAIN' pointing to the public gateway IP $(terraform output -state="${PROJECT_NAME}.tfstate" --json | yq .external_ips.value.k0s-cp-1)."
+echo "- A record for '*.ws.$BASE_DOMAIN' pointing to the public gateway IP $(terraform output -state="${PROJECT_NAME}.tfstate" --json | yq .external_ips.value.k0s-cp-2)."
