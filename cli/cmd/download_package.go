@@ -70,7 +70,7 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 			PreRunE: func(cmd *cobra.Command, args []string) error {
 				// if version flag is not set, expect version as argument
 				cmd.Args = cobra.NoArgs
-				if !cmd.Flags().Changed("version") { // also covers the shortcand "-V"
+				if !cmd.Flags().Changed("version") { // also covers the shorthand "-V"
 					cmd.Args = cobra.ExactArgs(1)
 				}
 
