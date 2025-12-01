@@ -11,13 +11,14 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/codesphere-cloud/cs-go v0.14.1
 	github.com/jedib0t/go-pretty/v6 v6.7.5
-	github.com/lithammer/shortuuid/v4 v4.2.0
+	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
 	github.com/rhysd/go-github-selfupdate v1.2.3
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/crypto v0.45.0
+	golang.org/x/term v0.37.0
 	google.golang.org/api v0.256.0
 	google.golang.org/grpc v1.76.0
 	gopkg.in/yaml.v3 v3.0.1
