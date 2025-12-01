@@ -8,12 +8,15 @@ Download a specific version of a Codesphere package
 To list available packages, run oms list packages.
 
 ```
-oms-cli update package [flags]
+oms-cli update package [VERSION] [flags]
 ```
 
 ### Examples
 
 ```
+# Download Codesphere version 1.55.0
+$ oms-cli download package codesphere-v1.55.0
+
 # Download Codesphere version 1.55.0
 $ oms-cli download package --version codesphere-v1.55.0
 
