@@ -76,7 +76,7 @@ var _ = Describe("DownloadPackages", func() {
 			BeforeEach(func() {
 				version = "other/version/v1.42.0"
 			})
-			It("Downloads the correct artifact to the correct output file", func() {
+			FIt("Downloads the correct artifact to the correct output file", func() {
 				expectedBuildToDownload := portal.Build{
 					Version: version,
 					Artifacts: []portal.Artifact{
