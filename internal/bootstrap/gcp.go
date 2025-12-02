@@ -24,6 +24,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/cloudbilling/v1"
+	"google.golang.org/api/dns/v1"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -43,6 +44,7 @@ type GCPBootstrapper struct {
 type CodesphereEnvironemnt struct {
 	ProjectID            string      `json:"project_id"`
 	ProjectName          string      `json:"project_name"`
+	DNSProjectID         string      `json:"dns_project_id"`
 	PostgreSQLNode       node.Node   `json:"postgresql_node"`
 	ControlPlaneNodes    []node.Node `json:"control_plane_nodes"`
 	CephNodes            []node.Node `json:"ceph_nodes"`
@@ -65,6 +67,7 @@ type CodesphereEnvironemnt struct {
 	SecretsFile           string
 	Region                string
 	Zone                  string
+	DNSZoneName           string
 }
 
 func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironemnt) (*GCPBootstrapper, error) {
@@ -81,6 +84,8 @@ func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironemnt) (*GCP
 		if err != nil {
 			return nil, fmt.Errorf("failed to load config file: %w", err)
 		}
+	} else {
+		icg.ApplyProfile("dev")
 	}
 
 	if fw.Exists(CodesphereEnv.SecretsFile) {
@@ -146,14 +151,34 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironemnt, error) {
 		return b.env, fmt.Errorf("failed to ensure compute instances: %w", err)
 	}
 
-	err = b.EnsureOmsInstalledJumpbox()
+	err = b.EnsureRootLoginEnabled()
 	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure OMS is installed: %w", err)
+		return b.env, fmt.Errorf("failed to ensure root login is enabled: %w", err)
+	}
+
+	err = b.EnsureJumpboxConfigured()
+	if err != nil {
+		return b.env, fmt.Errorf("failed to ensure jumpbox is configured: %w", err)
 	}
 
 	err = b.UpdateInstallConfig()
 	if err != nil {
 		return b.env, fmt.Errorf("failed to update install config: %w", err)
+	}
+
+	err = b.EnsureAgeKey()
+	if err != nil {
+		return b.env, fmt.Errorf("failed to ensure age key: %w", err)
+	}
+
+	err = b.EncryptVault()
+	if err != nil {
+		return b.env, fmt.Errorf("failed to encrypt vault: %w", err)
+	}
+
+	err = b.EnsureDNSRecords()
+	if err != nil {
+		return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
 	}
 	return b.env, nil
 }
@@ -232,14 +257,9 @@ func (b *GCPBootstrapper) EnsureBilling() error {
 }
 
 func (b *GCPBootstrapper) getProjectByName(ctx context.Context, client *resourcemanager.ProjectsClient, displayName string) (*resourcemanagerpb.Project, error) {
-	// The filter string format for the ListProjects API.
-	// We search by the 'name' field (the display name) and ensure the project is active.
-	filter := fmt.Sprintf("name:%s lifecycleState:ACTIVE", displayName)
-
-	log.Printf("Searching for project with filter: %s", filter)
-
 	req := &resourcemanagerpb.ListProjectsRequest{
-		Parent: fmt.Sprintf("folders/%s", b.env.FolderID),
+		Parent:      fmt.Sprintf("folders/%s", b.env.FolderID),
+		ShowDeleted: false,
 	}
 
 	it := client.ListProjects(ctx, req)
@@ -842,6 +862,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		node := node.Node{
 			ExternalIP: externalIP,
 			InternalIP: internalIP,
+			Name:       vm.Name,
 		}
 
 		switch vm.Tags[0] {
@@ -859,13 +880,53 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) EnsureOmsInstalledJumpbox() error {
-	err := b.env.Jumpbox.InstallOms(b.NodeManager)
-	if err != nil {
-		return fmt.Errorf("failed to install OMS agent on jumpbox: %w", err)
+func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
+	hasRootLogin := b.env.Jumpbox.HasRootLoginEnabled(nil, b.NodeManager)
+	if !hasRootLogin {
+		err := b.env.Jumpbox.EnableRootLogin(nil, b.NodeManager)
+		if err != nil {
+			return fmt.Errorf("failed to enable root login on %s: %w", b.env.Jumpbox.Name, err)
+		}
+		fmt.Printf("Root login enabled on %s\n", b.env.Jumpbox.Name)
 	}
 
-	fmt.Println("OMS agent installed on jumpbox")
+	allNodes := append(b.env.ControlPlaneNodes, b.env.PostgreSQLNode)
+	allNodes = append(allNodes, b.env.CephNodes...)
+
+	for _, node := range allNodes {
+		hasRootLogin := node.HasRootLoginEnabled(&b.env.Jumpbox, b.NodeManager)
+		if hasRootLogin {
+			fmt.Printf("Root login already enabled on %s\n", node.Name)
+			continue
+		}
+		err := node.EnableRootLogin(&b.env.Jumpbox, b.NodeManager)
+		if err != nil {
+			return fmt.Errorf("failed to enable root login on %s: %w", node.Name, err)
+		}
+
+		fmt.Printf("Root login enabled on %s\n", node.Name)
+	}
+	return nil
+}
+
+func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
+	if !b.env.Jumpbox.HasAcceptEnvConfigured(nil, b.NodeManager) {
+		err := b.env.Jumpbox.ConfigureAcceptEnv(nil, b.NodeManager)
+		if err != nil {
+			return fmt.Errorf("failed to configure AcceptEnv on jumpbox: %w", err)
+		}
+	}
+	hasOms := b.env.Jumpbox.HasCommand(b.NodeManager, "oms-cli")
+	if hasOms {
+		fmt.Println("OMS already installed on jumpbox")
+		return nil
+	}
+	err := b.env.Jumpbox.InstallOms(b.NodeManager)
+	if err != nil {
+		return fmt.Errorf("failed to install OMS on jumpbox: %w", err)
+	}
+
+	fmt.Println("OMS installed on jumpbox")
 	return nil
 }
 
@@ -1037,6 +1098,122 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	if err := b.icg.WriteVault(b.env.SecretsFile, true); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
+
+	err := b.env.Jumpbox.CopyFile(b.NodeManager, b.env.InstallConfig, "/etc/codesphere/config.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
+	}
+
+	err = b.env.Jumpbox.CopyFile(b.NodeManager, b.env.SecretsFile, "/etc/codesphere/secrets/prod-vault.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
+	}
+	return nil
+}
+
+func (b *GCPBootstrapper) EnsureAgeKey() error {
+	hasKey := b.env.Jumpbox.HasFile(nil, b.NodeManager, b.env.SecretsDir+"/age_key.txt")
+	if hasKey {
+		fmt.Println("Age key already present on jumpbox")
+		return nil
+	}
+
+	err := b.env.Jumpbox.RunSSHCommand(nil, b.NodeManager, "root", fmt.Sprintf("mkdir -p %s; age-keygen -o %s/age_key.txt", b.env.SecretsDir, b.env.SecretsDir))
+	if err != nil {
+		return fmt.Errorf("failed to generate age key on jumpbox: %w", err)
+	}
+
+	fmt.Println("Age key generated on jumpbox")
+	return nil
+}
+
+func (b *GCPBootstrapper) EncryptVault() error {
+	err := b.env.Jumpbox.RunSSHCommand(nil, b.NodeManager, "root", "sops --encrypt --in-place --age $(age-keygen -y "+b.env.SecretsDir+"/age_key.txt) "+b.env.SecretsDir+"/prod-vault.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to encrypt vault on jumpbox: %w", err)
+	}
+
+	fmt.Println("Vault encrypted on jumpbox")
+	return nil
+}
+
+func (b *GCPBootstrapper) EnsureDNSRecords() error {
+	ctx := context.Background()
+	gcpProject := b.env.DNSProjectID
+	if b.env.DNSProjectID == "" {
+		gcpProject = b.env.ProjectID
+	}
+
+	dnsService, err := dns.NewService(ctx, option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")))
+	if err != nil {
+		return fmt.Errorf("failed to create DNS service: %w", err)
+	}
+
+	zoneName := b.env.DNSZoneName
+	// Check if zone exists, otherwise create
+	_, err = dnsService.ManagedZones.Get(gcpProject, zoneName).Context(ctx).Do()
+	if err != nil {
+		zone := &dns.ManagedZone{
+			Name:        zoneName,
+			DnsName:     b.env.BaseDomain + ".",
+			Description: "Codesphere DNS zone",
+		}
+		_, err = dnsService.ManagedZones.Create(gcpProject, zone).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("failed to create DNS zone: %w", err)
+		}
+	}
+
+	records := []*dns.ResourceRecordSet{
+		{
+			Name:    fmt.Sprintf("cs.%s.", b.env.BaseDomain),
+			Type:    "A",
+			Ttl:     300,
+			Rrdatas: []string{b.env.ControlPlaneNodes[0].ExternalIP},
+		},
+		{
+			Name:    fmt.Sprintf("*.cs.%s.", b.env.BaseDomain),
+			Type:    "A",
+			Ttl:     300,
+			Rrdatas: []string{b.env.ControlPlaneNodes[0].ExternalIP},
+		},
+		{
+			Name:    fmt.Sprintf("*.ws.%s.", b.env.BaseDomain),
+			Type:    "A",
+			Ttl:     300,
+			Rrdatas: []string{b.env.ControlPlaneNodes[0].ExternalIP},
+		},
+	}
+
+	deletions := []*dns.ResourceRecordSet{}
+	// Clean up existing records
+	for _, record := range records {
+		existingRecord, err := dnsService.ResourceRecordSets.Get(gcpProject, zoneName, record.Name, record.Type).Context(ctx).Do()
+		if err == nil && existingRecord != nil {
+			deletions = append(deletions, existingRecord)
+		}
+	}
+
+	if len(deletions) > 0 {
+		delChange := &dns.Change{
+			Deletions: deletions,
+		}
+		_, err = dnsService.Changes.Create(gcpProject, zoneName, delChange).Context(ctx).Do()
+		if err != nil {
+			return fmt.Errorf("failed to delete DNS records: %w", err)
+		}
+	}
+
+	change := &dns.Change{
+		Additions: records,
+	}
+
+	_, err = dnsService.Changes.Create(gcpProject, zoneName, change).Context(ctx).Do()
+	if err != nil {
+		return fmt.Errorf("failed to create DNS records: %w", err)
+	}
+
+	fmt.Printf("DNS records created in project %s zone %s\n", gcpProject, zoneName)
 	return nil
 }
 
