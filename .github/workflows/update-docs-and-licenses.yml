@@ -12,8 +12,8 @@ on:
 
 jobs:
   update-files:
-    # skip runs triggered by the bot's own commit to avoid loops
-    if: github.actor != 'github-actions[bot]'
+    # skip runs triggered by the bot's own commit to avoid loops and runs triggered by renovate
+    if: github.actor != 'github-actions[bot]' && !startsWith(github.event.pull_request.head.ref, 'renovate/')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
