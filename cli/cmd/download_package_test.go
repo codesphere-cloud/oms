@@ -58,6 +58,7 @@ var _ = Describe("DownloadPackages", func() {
 	Context("AddDownloadPackageCmd", func() {
 		var downloadCmd cobra.Command
 		var opts *cmd.GlobalOptions
+
 		BeforeEach(func() {
 			downloadCmd = cobra.Command{}
 			opts = &cmd.GlobalOptions{}
@@ -143,6 +144,24 @@ var _ = Describe("DownloadPackages", func() {
 			err := downloadCmd.Execute()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("accepts 1 arg(s), received 0"))
+		})
+
+		FIt("invalid package command with duplicated version arg", func() {
+			downloadCmd.SetArgs([]string{
+				"package",
+				version + "-" + filename,
+				"--version", version + "-" + filename,
+			})
+
+			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
+
+			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+				return nil
+			}
+
+			err := downloadCmd.Execute()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unknown command"))
 		})
 	})
 
