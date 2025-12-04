@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
@@ -52,6 +53,116 @@ var _ = Describe("DownloadPackages", func() {
 	AfterEach(func() {
 		mockPortal.AssertExpectations(GinkgoT())
 		mockFileWriter.AssertExpectations(GinkgoT())
+	})
+
+	Context("AddDownloadPackageCmd", func() {
+		var downloadCmd cobra.Command
+		var opts *cmd.GlobalOptions
+
+		BeforeEach(func() {
+			downloadCmd = cobra.Command{}
+			opts = &cmd.GlobalOptions{}
+		})
+
+		It("valid package with version as flag", func() {
+			downloadCmd.SetArgs([]string{
+				"package",
+				"--version", version + "-" + filename,
+			})
+
+			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
+
+			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+				return nil
+			}
+
+			err := downloadCmd.Execute()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("valid package with version and file as flag", func() {
+			downloadCmd.SetArgs([]string{
+				"package",
+				"--version", version + "-" + filename,
+				"--file", "installer-lite.tar.gz",
+			})
+
+			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
+
+			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+				return nil
+			}
+
+			err := downloadCmd.Execute()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("valid package with version as positional argument", func() {
+			downloadCmd.SetArgs([]string{
+				"package",
+				version + "-" + filename,
+			})
+
+			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
+
+			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+				return nil
+			}
+
+			err := downloadCmd.Execute()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("valid package with version as positional argument and file as flag", func() {
+			downloadCmd.SetArgs([]string{
+				"package",
+				version + "-" + filename,
+				"--file", "installer-lite.tar.gz",
+			})
+
+			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
+
+			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+				return nil
+			}
+
+			err := downloadCmd.Execute()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("invalid package command without version", func() {
+			downloadCmd.SetArgs([]string{
+				"package",
+			})
+
+			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
+
+			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+				return nil
+			}
+
+			err := downloadCmd.Execute()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("accepts 1 arg(s), received 0"))
+		})
+
+		It("invalid package command with duplicated version arg", func() {
+			downloadCmd.SetArgs([]string{
+				"package",
+				version + "-" + filename,
+				"--version", version + "-" + filename,
+			})
+
+			cmd.AddDownloadPackageCmd(&downloadCmd, opts)
+
+			downloadCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
+				return nil
+			}
+
+			err := downloadCmd.Execute()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unknown command"))
+		})
 	})
 
 	Context("File exists", func() {
