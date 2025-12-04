@@ -146,7 +146,7 @@ var _ = Describe("DownloadPackages", func() {
 			Expect(err.Error()).To(ContainSubstring("accepts 1 arg(s), received 0"))
 		})
 
-		FIt("invalid package command with duplicated version arg", func() {
+		It("invalid package command with duplicated version arg", func() {
 			downloadCmd.SetArgs([]string{
 				"package",
 				version + "-" + filename,
