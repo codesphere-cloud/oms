@@ -107,9 +107,9 @@ License URL: https://github.com/russross/blackfriday/blob/v2.1.0/LICENSE.txt
  
 ----------
 Module: github.com/spf13/cobra
-Version: v1.10.1
+Version: v1.10.2
 License: Apache-2.0
-License URL: https://github.com/spf13/cobra/blob/v1.10.1/LICENSE.txt
+License URL: https://github.com/spf13/cobra/blob/v1.10.2/LICENSE.txt
  
 ----------
 Module: github.com/spf13/pflag
@@ -140,6 +140,12 @@ Module: github.com/ulikunitz/xz
 Version: v0.5.15
 License: BSD-3-Clause
 License URL: https://github.com/ulikunitz/xz/blob/v0.5.15/LICENSE
+ 
+----------
+Module: go.yaml.in/yaml/v3
+Version: v3.0.4
+License: MIT
+License URL: https://github.com/yaml/go-yaml/blob/v3.0.4/LICENSE
  
 ----------
 Module: golang.org/x/crypto
