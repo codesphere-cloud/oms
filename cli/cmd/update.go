@@ -4,8 +4,7 @@
 package cmd
 
 import (
-	"log"
-
+	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
 )
 
@@ -13,22 +12,14 @@ type UpdateCmd struct {
 	cmd *cobra.Command
 }
 
-func (c *UpdateCmd) RunE(_ *cobra.Command, args []string) error {
-	log.Printf("running %s", c.cmd.Use)
-
-	return nil
-}
-
 func AddUpdateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	updateCmd := UpdateCmd{
 		cmd: &cobra.Command{
 			Use:   "update",
 			Short: "Update OMS related resources",
-			Long:  `Updates resources, e.g. OMS or OMS API keys.`,
+			Long:  io.Long(`Updates resources, e.g. OMS or OMS API keys.`),
 		},
 	}
-
-	updateCmd.cmd.RunE = updateCmd.RunE
 
 	AddDownloadPackageCmd(updateCmd.cmd, opts)
 	AddOmsUpdateCmd(updateCmd.cmd)
