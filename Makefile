@@ -27,9 +27,9 @@ lint: install-build-deps
 	go tool golangci-lint run
 
 install-build-deps:
-# ifeq (, $(shell which go-licenses))
-# 	go install github.com/google/go-licenses@v1.6.0
-# endif
+ifeq (, $(shell which go-licenses))
+	go install github.com/google/go-licenses@v1.6.0
+endif
 ifeq (, $(shell which copywrite))
 	go install github.com/hashicorp/copywrite@v0.22.0
 endif
@@ -54,7 +54,7 @@ docs:
 	cp docs/oms-cli.md docs/README.md
 
 generate-license: generate
-	go tool go-licenses report --template .NOTICE.template  ./... > NOTICE
+	go-licenses report --template .NOTICE.template  ./... > NOTICE
 	copywrite headers apply
 
 run-lima:
