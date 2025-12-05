@@ -27,9 +27,6 @@ lint: install-build-deps
 	go tool golangci-lint run
 
 install-build-deps:
-ifeq (, $(shell which mockery))
-	go install github.com/vektra/mockery/v3@v3.2.1
-endif
 ifeq (, $(shell which go-licenses))
 	go install github.com/google/go-licenses@v1.6.0
 endif
@@ -41,7 +38,7 @@ ifeq (, $(shell which goreleaser))
 endif
 
 generate: install-build-deps
-	mockery
+	go tool mockery
 	go generate ./...
 
 VERSION ?= "0.0.0"
