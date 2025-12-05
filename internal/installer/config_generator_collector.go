@@ -24,36 +24,20 @@ func (g *InstallConfig) CollectInteractively() error {
 	return nil
 }
 
-func collectField[T any](isEmpty func(T) bool, promptFunc func() T) T {
-	return promptFunc()
-}
-
-func isEmptyString(s string) bool  { return s == "" }
-func isEmptyInt(i int) bool        { return i == 0 }
-func isEmptySlice(s []string) bool { return len(s) == 0 }
-
 func (g *InstallConfig) collectString(prompter *Prompter, prompt, defaultVal string) string {
-	return collectField(isEmptyString, func() string {
-		return prompter.String(prompt, defaultVal)
-	})
+	return prompter.String(prompt, defaultVal)
 }
 
 func (g *InstallConfig) collectInt(prompter *Prompter, prompt string, defaultVal int) int {
-	return collectField(isEmptyInt, func() int {
-		return prompter.Int(prompt, defaultVal)
-	})
+	return prompter.Int(prompt, defaultVal)
 }
 
 func (g *InstallConfig) collectStringSlice(prompter *Prompter, prompt string, defaultVal []string) []string {
-	return collectField(isEmptySlice, func() []string {
-		return prompter.StringSlice(prompt, defaultVal)
-	})
+	return prompter.StringSlice(prompt, defaultVal)
 }
 
 func (g *InstallConfig) collectChoice(prompter *Prompter, prompt string, options []string, defaultVal string) string {
-	return collectField(isEmptyString, func() string {
-		return prompter.Choice(prompt, options, defaultVal)
-	})
+	return prompter.Choice(prompt, options, defaultVal)
 }
 
 func k8sNodesToStringSlice(nodes []files.K8sNode) []string {
@@ -116,6 +100,8 @@ func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
 			}
 			g.Config.Postgres.Replica.IP = g.collectString(prompter, "Replica PostgreSQL server IP", "10.50.0.3")
 			g.Config.Postgres.Replica.Name = g.collectString(prompter, "Replica name (lowercase alphanumeric + underscore only)", "replica1")
+		} else {
+			g.Config.Postgres.Replica = nil
 		}
 	} else {
 		g.Config.Postgres.ServerAddress = g.collectString(prompter, "External PostgreSQL server address", "postgres.example.com:5432")
