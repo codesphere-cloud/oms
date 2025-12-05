@@ -36,7 +36,7 @@ var _ = Describe("API Key Integration Tests", func() {
 		apiKey := os.Getenv("OMS_PORTAL_API_KEY")
 		apiURL := os.Getenv("OMS_PORTAL_API")
 		if apiKey == "" || apiURL == "" {
-			Skip("Integration tests require OMS_PORTAL_API_KEY and OMS_PORTAL_API environment variables")
+			Fail("Integration tests require OMS_PORTAL_API_KEY and OMS_PORTAL_API environment variables")
 		}
 
 		originalAdminKey = apiKey
@@ -234,11 +234,11 @@ var _ = Describe("API Key Integration Tests", func() {
 			cliPath = "../../oms-cli"
 		)
 
-		Context("when using a 22-character old API key format", func() {
+		Context("when using a 25-character old API key format", func() {
 			It("should detect the old format and attempt to upgrade", func() {
 				cmd := exec.Command(cliPath, "version")
 				cmd.Env = append(os.Environ(),
-					"OMS_PORTAL_API_KEY=fakeapikeywith22charsa", // 22 characters
+					"OMS_PORTAL_API_KEY=fakeapikeywith25character", // 25 characters
 					"OMS_PORTAL_API=http://localhost:3000/api",
 				)
 
@@ -272,11 +272,11 @@ var _ = Describe("API Key Integration Tests", func() {
 			})
 		})
 
-		Context("when using a 22-character key with list api-keys command", func() {
+		Context("when using a 25-character key with list api-keys command", func() {
 			It("should attempt the upgrade and handle the error gracefully", func() {
 				cmd := exec.Command(cliPath, "list", "api-keys")
 				cmd.Env = append(os.Environ(),
-					"OMS_PORTAL_API_KEY=fakeapikeywith22charsa", // 22 characters (old format)
+					"OMS_PORTAL_API_KEY=fakeapikeywith25character", // 25 characters (old format)
 					"OMS_PORTAL_API=http://localhost:3000/api",
 				)
 
@@ -295,15 +295,15 @@ var _ = Describe("API Key Integration Tests", func() {
 		})
 
 		Context("when checking key length detection", func() {
-			It("should correctly identify 22-character old format", func() {
-				oldKey := "fakeapikeywith22charsa"
-				Expect(len(oldKey)).To(Equal(22))
+			It("should correctly identify 25-character old format", func() {
+				oldKey := "fakeapikeywith25character"
+				Expect(len(oldKey)).To(Equal(25))
 			})
 
 			It("should correctly identify new long format", func() {
 				newKey := "4hBieJRj2pWeB9qKJ9wQGE3CrcldLnLwP8fz6qutMjkf1n1"
-				Expect(len(newKey)).NotTo(Equal(22))
-				Expect(len(newKey)).To(BeNumerically(">", 22))
+				Expect(len(newKey)).NotTo(Equal(25))
+				Expect(len(newKey)).To(BeNumerically(">", 25))
 			})
 		})
 	})
