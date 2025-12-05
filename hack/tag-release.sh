@@ -53,7 +53,7 @@ git push origin "$NEWTAG"
 
 echo "Triggering release of version $NEWTAG"
 make install-build-deps
-goreleaser release --clean
+go tool goreleaser release --clean
 
 echo "RELEASE_VERSION=$NEWTAG" >> $GITHUB_ENV
 
