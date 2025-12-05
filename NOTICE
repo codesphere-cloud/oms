@@ -60,8 +60,8 @@ License URL: https://github.com/google/go-querystring/blob/v1.1.0/LICENSE
 ----------
 Module: github.com/inconshreveable/go-update
 Version: v0.0.0-20160112193335-8152e7eb6ccf
-License: Apache-2.0
-License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/LICENSE
+License: Unknown
+License URL: Unknown
  
 ----------
 Module: github.com/inconshreveable/go-update/internal/binarydist
