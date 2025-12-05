@@ -31,6 +31,10 @@ type DownloadPackageOpts struct {
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
+	if c.Opts.Version == "" && len(args) == 1 {
+		c.Opts.Version = args[0]
+	}
+
 	if c.Opts.Hash != "" {
 		log.Printf("Downloading package '%s' with hash '%s'\n", c.Opts.Version, c.Opts.Hash)
 	} else {
@@ -54,17 +58,33 @@ func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
 func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 	pkg := DownloadPackageCmd{
 		cmd: &cobra.Command{
-			Use:   "package",
+			Use:   "package [VERSION]",
 			Short: "Download a codesphere package",
 			Long: io.Long(`Download a specific version of a Codesphere package
 				To list available packages, run oms list packages.`),
 			Example: formatExamplesWithBinary("download package", []io.Example{
+				{Cmd: "codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
 			}, "oms-cli"),
+			PreRunE: func(cmd *cobra.Command, args []string) error {
+				// if version flag is not set, expect version as argument
+				cmd.Args = cobra.NoArgs
+				if !cmd.Flags().Changed("version") { // also covers the shorthand "-V"
+					cmd.Args = cobra.ExactArgs(1)
+				}
+
+				err := cmd.Args(cmd, args)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			},
 		},
 		FileWriter: util.NewFilesystemWriter(),
 	}
+
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Version, "version", "V", "", "Codesphere version to download")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Hash, "hash", "H", "", "Hash of the version to download if multiple builds exist for the same version")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer.tar.gz", "Specify artifact to download")
