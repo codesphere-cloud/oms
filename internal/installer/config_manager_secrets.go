@@ -24,7 +24,7 @@ func (g *InstallConfig) GenerateSecrets() error {
 	}
 
 	fmt.Println("Generating Ceph SSH keys...")
-	g.Config.Ceph.CephAdmSSHKey.PublicKey, g.Config.Ceph.SshPrivateKey, err = GenerateSSHKeyPair()
+	g.Config.Ceph.SshPrivateKey, g.Config.Ceph.CephAdmSSHKey.PublicKey, err = GenerateSSHKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to generate Ceph SSH keys: %w", err)
 	}

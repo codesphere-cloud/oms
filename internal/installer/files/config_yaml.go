@@ -485,6 +485,16 @@ func (c *RootConfig) addPostgresSecrets(vault *InstallVault) {
 		return
 	}
 
+	if c.Postgres.CaCertPrivateKey != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "postgresCaKeyPem",
+			File: &SecretFile{
+				Name:    "ca.key",
+				Content: c.Postgres.CaCertPrivateKey,
+			},
+		})
+	}
+
 	if c.Postgres.AdminPassword != "" {
 		vault.Secrets = append(vault.Secrets, SecretEntry{
 			Name: "postgresPassword",
@@ -528,14 +538,14 @@ func (c *RootConfig) addPostgresSecrets(vault *InstallVault) {
 	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace"}
 	for _, service := range services {
 		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: fmt.Sprintf("postgresUser%s", capitalize(service)),
+			Name: fmt.Sprintf("postgresUser%s", Capitalize(service)),
 			Fields: &SecretFields{
 				Password: service + "_blue",
 			},
 		})
 		if password, ok := c.Postgres.UserPasswords[service]; ok {
 			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: fmt.Sprintf("postgresPassword%s", capitalize(service)),
+				Name: fmt.Sprintf("postgresPassword%s", Capitalize(service)),
 				Fields: &SecretFields{
 					Password: password,
 				},
@@ -584,7 +594,7 @@ func (c *RootConfig) addKubeConfigSecret(vault *InstallVault) {
 	}
 }
 
-func capitalize(s string) string {
+func Capitalize(s string) string {
 	if s == "" {
 		return ""
 	}

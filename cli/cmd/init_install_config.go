@@ -106,10 +106,10 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 			- production: HA multi-node setup
 			- minimal: Minimal testing setup`),
 			Example: formatExamplesWithBinary("init install-config", []csio.Example{
-				{Cmd: "-c config.yaml -v prod.vault.yaml", Desc: "Create config files interactively"},
-				{Cmd: "--profile dev -c config.yaml -v prod.vault.yaml", Desc: "Use dev profile with defaults"},
-				{Cmd: "--profile production -c config.yaml -v prod.vault.yaml", Desc: "Use production profile"},
-				{Cmd: "--validate -c config.yaml -v prod.vault.yaml", Desc: "Validate existing configuration files"},
+				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
+				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
+				{Cmd: "--profile production -c config.yaml --vault prod.vault.yaml", Desc: "Use production profile"},
+				{Cmd: "--validate -c config.yaml --vault prod.vault.yaml", Desc: "Validate existing configuration files"},
 			}, "oms-cli"),
 		},
 		Opts:       &InitInstallConfigOpts{GlobalOptions: opts},
@@ -117,7 +117,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
-	c.cmd.Flags().StringVarP(&c.Opts.VaultFile, "vault", "v", "prod.vault.yaml", "Output file path for prod.vault.yaml")
+	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
 	c.cmd.Flags().BoolVar(&c.Opts.ValidateOnly, "validate", false, "Validate existing config files instead of creating new ones")

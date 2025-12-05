@@ -44,7 +44,6 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 	g.Config.Datacenter.CountryCode = "DE"
 	g.Config.Postgres.Mode = "install"
 	g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{}
-	g.Config.Postgres.Replica = &files.PostgresReplicaConfig{}
 	g.Config.Kubernetes.ManagedByCodesphere = true
 	g.Config.Kubernetes.NeedsKubeConfig = false
 	g.Config.Cluster.Certificates = files.ClusterCertificates{
@@ -110,6 +109,7 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 		g.Config.Datacenter.Name = "dev"
 		g.Config.Postgres.Primary.IP = "127.0.0.1"
 		g.Config.Postgres.Primary.Hostname = "localhost"
+		g.Config.Postgres.Replica = nil
 		g.Config.Ceph.NodesSubnet = "127.0.0.1/32"
 		g.Config.Ceph.Hosts = []files.CephHost{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
 		g.Config.Kubernetes.APIServerHost = "127.0.0.1"
@@ -125,8 +125,11 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 		g.Config.Datacenter.Name = "production"
 		g.Config.Postgres.Primary.IP = "10.50.0.2"
 		g.Config.Postgres.Primary.Hostname = "pg-primary"
-		g.Config.Postgres.Replica.IP = "10.50.0.3"
-		g.Config.Postgres.Replica.Name = "replica1"
+		g.Config.Postgres.Replica = &files.PostgresReplicaConfig{
+			IP:   "10.50.0.3",
+			Name: "replica1",
+		}
+		g.Config.Postgres.Replica.SSLConfig = files.SSLConfig{}
 		g.Config.Ceph.NodesSubnet = "10.53.101.0/24"
 		g.Config.Ceph.Hosts = []files.CephHost{
 			{Hostname: "ceph-node-0", IPAddress: "10.53.101.2", IsMaster: true},
@@ -161,6 +164,7 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 		g.Config.Datacenter.Name = "minimal"
 		g.Config.Postgres.Primary.IP = "127.0.0.1"
 		g.Config.Postgres.Primary.Hostname = "localhost"
+		g.Config.Postgres.Replica = nil
 		g.Config.Ceph.NodesSubnet = "127.0.0.1/32"
 		g.Config.Ceph.Hosts = []files.CephHost{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
 		g.Config.Kubernetes.APIServerHost = "127.0.0.1"

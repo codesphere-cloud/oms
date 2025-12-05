@@ -411,6 +411,50 @@ func (_c *MockInstallConfigManager_LoadVaultFromFile_Call) RunAndReturn(run func
 	return _c
 }
 
+// MergeVaultIntoConfig provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) MergeVaultIntoConfig() error {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for MergeVaultIntoConfig")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func() error); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInstallConfigManager_MergeVaultIntoConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MergeVaultIntoConfig'
+type MockInstallConfigManager_MergeVaultIntoConfig_Call struct {
+	*mock.Call
+}
+
+// MergeVaultIntoConfig is a helper method to define mock.On call
+func (_e *MockInstallConfigManager_Expecter) MergeVaultIntoConfig() *MockInstallConfigManager_MergeVaultIntoConfig_Call {
+	return &MockInstallConfigManager_MergeVaultIntoConfig_Call{Call: _e.mock.On("MergeVaultIntoConfig")}
+}
+
+func (_c *MockInstallConfigManager_MergeVaultIntoConfig_Call) Run(run func()) *MockInstallConfigManager_MergeVaultIntoConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_MergeVaultIntoConfig_Call) Return(err error) *MockInstallConfigManager_MergeVaultIntoConfig_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInstallConfigManager_MergeVaultIntoConfig_Call) RunAndReturn(run func() error) *MockInstallConfigManager_MergeVaultIntoConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ValidateInstallConfig provides a mock function for the type MockInstallConfigManager
 func (_mock *MockInstallConfigManager) ValidateInstallConfig() []string {
 	ret := _mock.Called()
