@@ -40,7 +40,7 @@ ifeq (, $(shell which goreleaser))
 	go install github.com/goreleaser/goreleaser/v2@v2.11.2
 endif
 
-generate:
+generate: install-build-deps
 	go tool mockery
 	go generate ./...
 
