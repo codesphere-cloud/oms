@@ -33,9 +33,6 @@ endif
 ifeq (, $(shell which copywrite))
 	go install github.com/hashicorp/copywrite@v0.22.0
 endif
-# ifeq (, $(shell which goreleaser))
-# 	go install github.com/goreleaser/goreleaser/v2@v2.11.2
-# endif
 
 generate: install-build-deps
 	go tool mockery
