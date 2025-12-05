@@ -6,10 +6,6 @@ Update OMS related resources
 
 Updates resources, e.g. OMS or OMS API keys.
 
-```
-oms-cli update [flags]
-```
-
 ### Options
 
 ```

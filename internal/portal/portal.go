@@ -72,8 +72,6 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 		return
 	}
 
-	log.Printf("AuthorizedHttpRequest - Response status: %d, Content-Type: %s", resp.StatusCode, resp.Header.Get("Content-Type"))
-
 	if resp.StatusCode == http.StatusUnauthorized {
 		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
 		log.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")
@@ -99,8 +97,6 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 		err = fmt.Errorf("failed to get generate URL: %w", err)
 		return
 	}
-
-	log.Printf("HttpRequest - Method: %s, URL: %s, Body length: %d bytes", method, url, len(body))
 
 	req, err := http.NewRequest(method, url, requestBody)
 	if err != nil {

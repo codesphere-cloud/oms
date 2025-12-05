@@ -30,7 +30,7 @@ func GetRootCmd() *cobra.Command {
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			apiKey := os.Getenv("OMS_PORTAL_API_KEY")
 
-			if len(apiKey) == 22 {
+			if len(apiKey) == 25 {
 				fmt.Fprintf(os.Stderr, "Warning: You used an old API key format.\n")
 				fmt.Fprintf(os.Stderr, "Attempting to upgrade to the new format...\n\n")
 
