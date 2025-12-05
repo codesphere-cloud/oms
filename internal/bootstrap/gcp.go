@@ -941,7 +941,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	b.InstallConfig.Postgres = files.PostgresConfig{
 		Primary: &files.PostgresPrimaryConfig{
-			IP:       b.env.PostgreSQLNode.ExternalIP,
+			IP:       b.env.PostgreSQLNode.InternalIP,
 			Hostname: "postgres",
 		},
 	}
