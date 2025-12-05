@@ -192,8 +192,8 @@ codesphere:
 	})
 
 	AfterEach(func() {
-		os.Remove(configFile.Name())
-		os.Remove(vaultFile.Name())
+		_ = os.Remove(configFile.Name())
+		_ = os.Remove(vaultFile.Name())
 	})
 
 	Context("when updating PostgreSQL configuration", func() {
