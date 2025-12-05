@@ -358,9 +358,9 @@ codesphere:
 			initialVault := &files.InstallVault{}
 			err := initialVault.Unmarshal(initialVaultContent)
 			Expect(err).NotTo(HaveOccurred())
-			initialSecretNames := make(map[string]bool)
+			initialSecrets := make(map[string]files.SecretEntry)
 			for _, secret := range initialVault.Secrets {
-				initialSecretNames[secret.Name] = true
+				initialSecrets[secret.Name] = secret
 			}
 
 			opts.CodesphereDomain = "updated.example.com"
@@ -374,12 +374,13 @@ codesphere:
 			err = updatedVault.Unmarshal(updatedVaultContent)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify all initial secrets are still present
-			for secretName := range initialSecretNames {
+			// Verify all initial secrets are still present with the same values
+			for secretName, initialSecret := range initialSecrets {
 				found := false
 				for _, secret := range updatedVault.Secrets {
 					if secret.Name == secretName {
 						found = true
+						Expect(secret.Fields).To(Equal(initialSecret.Fields), "Secret %s values should be preserved", secretName)
 						break
 					}
 				}
@@ -391,9 +392,9 @@ codesphere:
 			initialVault := &files.InstallVault{}
 			err := initialVault.Unmarshal(initialVaultContent)
 			Expect(err).NotTo(HaveOccurred())
-			initialSecretNames := make(map[string]bool)
+			initialSecrets := make(map[string]files.SecretEntry)
 			for _, secret := range initialVault.Secrets {
-				initialSecretNames[secret.Name] = true
+				initialSecrets[secret.Name] = secret
 			}
 
 			opts.PostgresPrimaryIP = "10.20.0.10"
@@ -407,12 +408,13 @@ codesphere:
 			err = updatedVault.Unmarshal(updatedVaultContent)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Verify all initial secrets are still present
-			for secretName := range initialSecretNames {
+			// Verify all initial secrets are still present with the same values
+			for secretName, initialSecret := range initialSecrets {
 				found := false
 				for _, secret := range updatedVault.Secrets {
 					if secret.Name == secretName {
 						found = true
+						Expect(secret.Fields).To(Equal(initialSecret.Fields), "Secret %s values should be preserved", secretName)
 						break
 					}
 				}
