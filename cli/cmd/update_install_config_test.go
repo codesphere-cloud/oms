@@ -409,28 +409,25 @@ codesphere:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify all initial secrets are still present with the same values
+			passwordSecrets := map[string]bool{
+				"postgresPassword":        true,
+				"postgresReplicaPassword": true,
+			}
 			for secretName, initialSecret := range initialSecrets {
 				found := false
 				for _, secret := range updatedVault.Secrets {
 					if secret.Name == secretName {
 						found = true
 						Expect(secret.Fields).To(Equal(initialSecret.Fields), "Secret %s values should be preserved", secretName)
+
+						if passwordSecrets[secretName] {
+							Expect(secret.Fields).NotTo(BeNil(), "Secret %s should have fields", secretName)
+							Expect(secret.Fields.Password).NotTo(BeEmpty(), "Password for %s should not be empty", secretName)
+						}
 						break
 					}
 				}
 				Expect(found).To(BeTrue(), "Initial secret %s should be preserved after certificate regeneration", secretName)
-			}
-
-			// Verify passwords from initial vault are still present and non-empty
-			passwordSecrets := map[string]bool{
-				"postgresPassword":        true,
-				"postgresReplicaPassword": true,
-			}
-			for _, secret := range updatedVault.Secrets {
-				if passwordSecrets[secret.Name] {
-					Expect(secret.Fields).NotTo(BeNil(), "Secret %s should have fields", secret.Name)
-					Expect(secret.Fields.Password).NotTo(BeEmpty(), "Password for %s should not be empty", secret.Name)
-				}
 			}
 		})
 	})
