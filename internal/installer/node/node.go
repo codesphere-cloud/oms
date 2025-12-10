@@ -172,12 +172,12 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 	if err != nil {
 		return fmt.Errorf("failed to get client: %w", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 	session, err := client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create session on jumpbox: %v", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	if err := n.forwardAgent(client, session); err != nil {
 		fmt.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
@@ -271,19 +271,19 @@ func (n *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src
 	if err != nil {
 		return fmt.Errorf("failed to get SSH client: %v", err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	srcFile, err := n.FileIO.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file %s: %v", src, err)
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	dstFile, err := client.Create(dst)
 	if err != nil {
 		return fmt.Errorf("failed to create destination file %s: %v", dst, err)
 	}
-	defer dstFile.Close()
+	defer func() { _ = dstFile.Close() }()
 
 	_, err = dstFile.ReadFrom(srcFile)
 	if err != nil {
@@ -296,10 +296,7 @@ func (n *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src
 func (n *Node) HasCommand(nm *NodeManager, command string) bool {
 	checkCommand := fmt.Sprintf("command -v %s >/dev/null 2>&1", command)
 	err := nm.RunSSHCommand("", n.ExternalIP, "root", checkCommand)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (n *Node) InstallOms(nm *NodeManager) error {
@@ -329,10 +326,7 @@ func (n *Node) CopyFile(nm *NodeManager, src string, dst string) error {
 func (n *Node) HasAcceptEnvConfigured(jumpbox *Node, nm *NodeManager) bool {
 	checkCommand := "sudo grep -E '^AcceptEnv OMS_PORTAL_API_KEY' /etc/ssh/sshd_config >/dev/null 2>&1"
 	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommand)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (n *Node) ConfigureAcceptEnv(jumpbox *Node, nm *NodeManager) error {
@@ -357,19 +351,13 @@ func (n *Node) HasRootLoginEnabled(jumpbox *Node, nm *NodeManager) bool {
 	}
 	checkCommandAuthorizedKeys := "sudo grep -E '^no-port-forwarding' /root/.ssh/authorized_keys >/dev/null 2>&1"
 	err = n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommandAuthorizedKeys)
-	if err == nil {
-		return false
-	}
-	return true
+	return err != nil
 }
 
 func (n *Node) HasFile(jumpbox *Node, nm *NodeManager, filePath string) bool {
 	checkCommand := fmt.Sprintf("test -f '%s'", filePath)
 	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommand)
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (n *Node) RunSSHCommand(jumpbox *Node, nm *NodeManager, username string, command string) error {

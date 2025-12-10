@@ -150,7 +150,7 @@ func (c *InstallK0sCmd) InstallK0sFromInstallConfig(pm installer.PackageManager,
 	if err := os.WriteFile(tmpK0sConfigPath, k0sConfigData, 0644); err != nil {
 		return fmt.Errorf("failed to write k0s config: %w", err)
 	}
-	defer os.Remove(tmpK0sConfigPath)
+	defer func() { _ = os.Remove(tmpK0sConfigPath) }()
 
 	log.Printf("Generated k0s configuration at %s", tmpK0sConfigPath)
 

@@ -125,7 +125,7 @@ func (k *K0s) Install(configPath string, k0sPath string, force bool) error {
 			log.Printf("Warning: failed to filter config, using original: %v", err)
 		} else {
 			configPath = filteredConfigPath
-			defer os.Remove(filteredConfigPath) // Clean up temp file after use
+			defer func() { _ = os.Remove(filteredConfigPath) }() // Clean up temp file after use
 		}
 		args = append(args, "--config", configPath)
 	} else {
@@ -206,7 +206,7 @@ func (k *K0s) filterConfigForK0s(configPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp config: %w", err)
 	}
-	defer tmpFile.Close()
+	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.Write(filteredData); err != nil {
 		return "", fmt.Errorf("failed to write temp config: %w", err)
