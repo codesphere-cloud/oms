@@ -876,6 +876,57 @@ func (_c *MockK0sManager_Install_Call) RunAndReturn(run func(configPath string, 
 	return _c
 }
 
+// Reset provides a mock function for the type MockK0sManager
+func (_mock *MockK0sManager) Reset(k0sPath string) error {
+	ret := _mock.Called(k0sPath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Reset")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(k0sPath)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockK0sManager_Reset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Reset'
+type MockK0sManager_Reset_Call struct {
+	*mock.Call
+}
+
+// Reset is a helper method to define mock.On call
+//   - k0sPath string
+func (_e *MockK0sManager_Expecter) Reset(k0sPath interface{}) *MockK0sManager_Reset_Call {
+	return &MockK0sManager_Reset_Call{Call: _e.mock.On("Reset", k0sPath)}
+}
+
+func (_c *MockK0sManager_Reset_Call) Run(run func(k0sPath string)) *MockK0sManager_Reset_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockK0sManager_Reset_Call) Return(err error) *MockK0sManager_Reset_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockK0sManager_Reset_Call) RunAndReturn(run func(k0sPath string) error) *MockK0sManager_Reset_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockPackageManager creates a new instance of MockPackageManager. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockPackageManager(t interface {

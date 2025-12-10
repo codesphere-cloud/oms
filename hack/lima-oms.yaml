@@ -18,8 +18,8 @@ disk: "60GiB"
 
 # Mount your OMS project
 mounts:
-- location: "."
-  mountPoint: "/home/user/oms"
+- location: "~"
+  mountPoint: "/home/user/host-home"
   writable: true
 
 # Ports and SSH
@@ -61,13 +61,12 @@ provision:
     set -eux -o pipefail
     
     # Install Docker in rootless mode
-    dockerd-rootless-setuptool.sh install
+    dockerd-rootless-setuptool.sh install || true
     
-    # Set up the OMS project
-    cd /home/user/oms
-    export PATH=$PATH:/usr/local/go/bin
-    go mod download
-    cd cli && go build -a -buildvcs=false && mv cli ../oms-cli
+    # Clone OMS repository locally for better build performance
+    if [ ! -d ~/oms ]; then
+      git clone https://github.com/codesphere-cloud/oms.git ~/oms
+    fi
 
 message: |
   Your OMS development environment is ready!
@@ -75,13 +74,32 @@ message: |
   To access it:
   ------
   limactl shell lima-oms
-  cd /home/user/oms
+  cd oms
   ./oms-cli --help
   ------
-
-  To install Codesphere eg.:
+  
+  To build the CLI for Linux (from your Mac):
   ------
-  ./oms-cli install codesphere --package codesphere-v1.66.0-installer --config config.yaml --priv-key ./path-to-private-key
+  make build-cli-linux
   ------
 
-  Go 1.24 and Docker are installed and ready to use.
+  To build the CLI inside lima:
+  ------
+  limactl shell lima-oms
+  cd oms
+  make build-cli
+  ------
+
+  To install k0s (run inside lima):
+  ------
+  limactl shell lima-oms
+  cd oms
+  ./oms-cli install k0s --k0s-config config.yaml --version v1.30.0+k0s.0 --force
+  ------
+
+  To install Codesphere (run inside lima):
+  ------
+  limactl shell lima-oms
+  cd oms
+  ./oms-cli install codesphere --package codesphere-v1.66.0-installer --install-config config.yaml --priv-key ./path-to-private-key
+  ------
