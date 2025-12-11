@@ -1,3 +1,6 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 variable "region" {
   description = "The GCP region to deploy resources into"
   type        = string
