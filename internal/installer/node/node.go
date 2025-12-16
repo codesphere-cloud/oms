@@ -96,11 +96,13 @@ func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 				return nil, fmt.Errorf("failed to read passphrase: %v", err)
 			}
 
-			signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphraseBytes)
-			for i := range passphraseBytes {
-				passphraseBytes[i] = 0
-			}
+			defer func() {
+				for i := range passphraseBytes {
+					passphraseBytes[i] = 0
+				}
+			}()
 
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphraseBytes)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
 			}
