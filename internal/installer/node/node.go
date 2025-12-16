@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,6 +30,10 @@ type Node struct {
 type NodeManager struct {
 	FileIO  util.FileIO
 	KeyPath string
+}
+
+func shellEscape(s string) string {
+	return strings.ReplaceAll(s, "'", "'\\''")
 }
 
 func (n *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
@@ -262,7 +267,7 @@ func (n *NodeManager) GetSFTPClient(jumpboxIp string, ip string, username string
 }
 
 func (nm *NodeManager) EnsureDirectoryExists(ip string, username string, dir string) error {
-	cmd := fmt.Sprintf("mkdir -p '%s'", dir)
+	cmd := fmt.Sprintf("mkdir -p '%s'", shellEscape(dir))
 	return nm.RunSSHCommand("", ip, username, cmd)
 }
 
@@ -294,7 +299,7 @@ func (n *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src
 }
 
 func (n *Node) HasCommand(nm *NodeManager, command string) bool {
-	checkCommand := fmt.Sprintf("command -v %s >/dev/null 2>&1", command)
+	checkCommand := fmt.Sprintf("command -v '%s' >/dev/null 2>&1", shellEscape(command))
 	err := nm.RunSSHCommand("", n.ExternalIP, "root", checkCommand)
 	return err == nil
 }
@@ -355,7 +360,7 @@ func (n *Node) HasRootLoginEnabled(jumpbox *Node, nm *NodeManager) bool {
 }
 
 func (n *Node) HasFile(jumpbox *Node, nm *NodeManager, filePath string) bool {
-	checkCommand := fmt.Sprintf("test -f '%s'", filePath)
+	checkCommand := fmt.Sprintf("test -f '%s'", shellEscape(filePath))
 	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommand)
 	return err == nil
 }
@@ -394,7 +399,7 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 	}
 
 	log.Printf("Making k0s binary executable on %s", n.ExternalIP)
-	chmodCmd := fmt.Sprintf("chmod +x %s", remoteK0sBinary)
+	chmodCmd := fmt.Sprintf("chmod +x '%s'", shellEscape(remoteK0sBinary))
 	if err := nm.RunSSHCommand("", n.ExternalIP, "root", chmodCmd); err != nil {
 		return fmt.Errorf("failed to make k0s binary executable: %w", err)
 	}
@@ -409,9 +414,9 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 		}
 	}
 
-	installCmd := fmt.Sprintf("sudo %s install controller", remoteK0sBinary)
+	installCmd := fmt.Sprintf("sudo '%s' install controller", shellEscape(remoteK0sBinary))
 	if k0sConfigPath != "" {
-		installCmd += fmt.Sprintf(" --config %s", remoteConfigPath)
+		installCmd += fmt.Sprintf(" --config '%s'", shellEscape(remoteConfigPath))
 	} else {
 		installCmd += " --single"
 	}
@@ -425,8 +430,8 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 	}
 
 	log.Printf("k0s successfully installed on %s", n.ExternalIP)
-	log.Printf("You can start it using: ssh root@%s 'sudo %s start'", n.ExternalIP, remoteK0sBinary)
-	log.Printf("You can check the status using: ssh root@%s 'sudo %s status'", n.ExternalIP, remoteK0sBinary)
+	log.Printf("You can start it using: ssh root@%s 'sudo %s start'", n.ExternalIP, shellEscape(remoteK0sBinary))
+	log.Printf("You can check the status using: ssh root@%s 'sudo %s status'", n.ExternalIP, shellEscape(remoteK0sBinary))
 
 	return nil
 }
