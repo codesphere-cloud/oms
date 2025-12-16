@@ -228,6 +228,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.SSHKeyPath = "/path/to/key"
 
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
+			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("invalid-key-data"), nil).Maybe()
 
 			// Remote installation will fail because we can't actually connect,
 			// but we're testing that it attempts remote installation
@@ -260,6 +261,8 @@ var _ = Describe("InstallK0sCmd", func() {
 		It("fails when SSH connection cannot be established", func() {
 			c.Opts.RemoteHost = "192.0.2.1" // TEST-NET-1, should fail to connect
 			c.Opts.SSHKeyPath = "/tmp/nonexistent-key"
+
+			mockFileWriter.EXPECT().ReadFile("/tmp/nonexistent-key").Return([]byte("invalid-key-data"), nil).Maybe()
 
 			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
 			Expect(err).To(HaveOccurred())
