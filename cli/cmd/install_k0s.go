@@ -86,6 +86,8 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 	k0s.cmd.Flags().StringVar(&k0s.Opts.RemoteUser, "remote-user", "root", "Remote user for SSH connection")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 
+	k0s.cmd.MarkFlagsRequiredTogether("remote-host", "ssh-key-path")
+
 	install.AddCommand(k0s.cmd)
 
 	k0s.cmd.RunE = k0s.RunE
@@ -146,10 +148,6 @@ func (c *InstallK0sCmd) InstallK0sFromInstallConfig(pm installer.PackageManager,
 }
 
 func (c *InstallK0sCmd) InstallK0sRemote(config *files.RootConfig, k0sBinaryPath string, k0sConfigPath string) error {
-	if c.Opts.SSHKeyPath == "" {
-		return fmt.Errorf("--ssh-key-path is required for remote installation")
-	}
-
 	log.Printf("Installing k0s on remote host %s", c.Opts.RemoteHost)
 
 	nm := &node.NodeManager{

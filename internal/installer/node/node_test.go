@@ -5,7 +5,6 @@ package node_test
 
 import (
 	"errors"
-	"io"
 	"os"
 	"testing"
 
@@ -45,12 +44,12 @@ var _ = Describe("Node", func() {
 				originalAuthSock := os.Getenv("SSH_AUTH_SOCK")
 				defer func() {
 					if originalAuthSock != "" {
-						os.Setenv("SSH_AUTH_SOCK", originalAuthSock)
+						_ = os.Setenv("SSH_AUTH_SOCK", originalAuthSock)
 					} else {
-						os.Unsetenv("SSH_AUTH_SOCK")
+						_ = os.Unsetenv("SSH_AUTH_SOCK")
 					}
 				}()
-				os.Unsetenv("SSH_AUTH_SOCK")
+				_ = os.Unsetenv("SSH_AUTH_SOCK")
 
 				nm.KeyPath = ""
 
@@ -64,12 +63,12 @@ var _ = Describe("Node", func() {
 				originalAuthSock := os.Getenv("SSH_AUTH_SOCK")
 				defer func() {
 					if originalAuthSock != "" {
-						os.Setenv("SSH_AUTH_SOCK", originalAuthSock)
+						_ = os.Setenv("SSH_AUTH_SOCK", originalAuthSock)
 					} else {
-						os.Unsetenv("SSH_AUTH_SOCK")
+						_ = os.Unsetenv("SSH_AUTH_SOCK")
 					}
 				}()
-				os.Unsetenv("SSH_AUTH_SOCK")
+				_ = os.Unsetenv("SSH_AUTH_SOCK")
 
 				nm.KeyPath = "/nonexistent/key"
 				mockFileWriter.EXPECT().ReadFile("/nonexistent/key").Return(nil, errors.New("file not found"))
@@ -84,12 +83,12 @@ var _ = Describe("Node", func() {
 				originalAuthSock := os.Getenv("SSH_AUTH_SOCK")
 				defer func() {
 					if originalAuthSock != "" {
-						os.Setenv("SSH_AUTH_SOCK", originalAuthSock)
+						_ = os.Setenv("SSH_AUTH_SOCK", originalAuthSock)
 					} else {
-						os.Unsetenv("SSH_AUTH_SOCK")
+						_ = os.Unsetenv("SSH_AUTH_SOCK")
 					}
 				}()
-				os.Unsetenv("SSH_AUTH_SOCK")
+				_ = os.Unsetenv("SSH_AUTH_SOCK")
 
 				invalidKey := []byte("not a valid ssh key")
 				nm.KeyPath = "/path/to/invalid/key"
@@ -273,22 +272,3 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 		})
 	})
 })
-
-// mockReadCloser implements io.ReadCloser for testing
-type mockReadCloser struct {
-	content []byte
-	pos     int
-}
-
-func (m *mockReadCloser) Read(p []byte) (n int, err error) {
-	if m.pos >= len(m.content) {
-		return 0, io.EOF
-	}
-	n = copy(p, m.content[m.pos:])
-	m.pos += n
-	return n, nil
-}
-
-func (m *mockReadCloser) Close() error {
-	return nil
-}
