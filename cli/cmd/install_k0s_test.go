@@ -268,5 +268,107 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
 		})
+
+		It("fails when SSH key file does not exist", func() {
+			c.Opts.RemoteHost = "192.168.1.50"
+			c.Opts.SSHKeyPath = "/nonexistent/ssh/key"
+
+			mockFileWriter.EXPECT().ReadFile("/nonexistent/ssh/key").Return(nil, os.ErrNotExist).Maybe()
+
+			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+		})
+
+		It("fails when SSH key file is invalid", func() {
+			c.Opts.RemoteHost = "192.168.1.50"
+			c.Opts.SSHKeyPath = "/path/to/invalid/key"
+
+			mockFileWriter.EXPECT().ReadFile("/path/to/invalid/key").Return([]byte("not-a-valid-key"), nil).Maybe()
+
+			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+		})
+
+		It("uses correct remote host IP for node configuration", func() {
+			c.Opts.RemoteHost = "10.0.0.50"
+			c.Opts.SSHKeyPath = "/path/to/key"
+
+			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
+
+			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+		})
+
+		It("passes correct paths to InstallK0s", func() {
+			c.Opts.RemoteHost = "192.168.1.60"
+			c.Opts.SSHKeyPath = "/custom/ssh/key"
+			c.Opts.Force = true
+
+			mockFileWriter.EXPECT().ReadFile("/custom/ssh/key").Return([]byte("ssh-key-data"), nil).Maybe()
+
+			err := c.InstallK0sRemote(config, "/custom/k0s/path", "/custom/config/path")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+		})
+
+		It("respects the force flag", func() {
+			c.Opts.RemoteHost = "192.168.1.70"
+			c.Opts.SSHKeyPath = "/path/to/key"
+			c.Opts.Force = true
+
+			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
+
+			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+		})
+
+		It("uses remote user from options", func() {
+			c.Opts.RemoteHost = "192.168.1.80"
+			c.Opts.SSHKeyPath = "/path/to/key"
+			c.Opts.RemoteUser = "ubuntu"
+
+			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
+
+			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+		})
+
+		It("handles empty remote host", func() {
+			c.Opts.RemoteHost = ""
+			c.Opts.SSHKeyPath = "/path/to/key"
+
+			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
+
+			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+		})
+
+		It("handles timeout during SSH connection", func() {
+			c.Opts.RemoteHost = "192.0.2.1" // TEST-NET-1 address
+			c.Opts.SSHKeyPath = "/path/to/key"
+
+			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----"), nil).Maybe()
+
+			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+		})
+
+		It("wraps errors from InstallK0s with context", func() {
+			c.Opts.RemoteHost = "10.0.0.100"
+			c.Opts.SSHKeyPath = "/path/to/key"
+
+			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
+
+			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+		})
 	})
 })
