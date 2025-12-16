@@ -180,7 +180,7 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 	defer func() { _ = client.Close() }()
 	session, err := client.NewSession()
 	if err != nil {
-		return fmt.Errorf("failed to create session on jumpbox: %v", err)
+		return fmt.Errorf("failed to create session on target node (%s): %v", ip, err)
 	}
 	defer func() { _ = session.Close() }()
 
