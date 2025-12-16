@@ -141,7 +141,7 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 
 		Context("file operations", func() {
 			It("should handle directory creation errors", func() {
-				err := nm.EnsureDirectoryExists("192.0.2.1", "root", "/tmp/test")
+				err := nm.EnsureDirectoryExists("", "192.0.2.1", "root", "/tmp/test")
 				Expect(err).To(HaveOccurred())
 			})
 

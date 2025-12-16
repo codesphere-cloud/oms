@@ -268,9 +268,9 @@ func (n *NodeManager) GetSFTPClient(jumpboxIp string, ip string, username string
 	return sftpClient, nil
 }
 
-func (nm *NodeManager) EnsureDirectoryExists(ip string, username string, dir string) error {
+func (nm *NodeManager) EnsureDirectoryExists(jumpboxIp string, ip string, username string, dir string) error {
 	cmd := fmt.Sprintf("mkdir -p '%s'", shellEscape(dir))
-	return nm.RunSSHCommand("", ip, username, cmd)
+	return nm.RunSSHCommand(jumpboxIp, ip, username, cmd)
 }
 
 func (n *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src string, dst string) error {
@@ -323,7 +323,7 @@ func (n *Node) InstallOms(nm *NodeManager) error {
 }
 
 func (n *Node) CopyFile(nm *NodeManager, src string, dst string) error {
-	err := nm.EnsureDirectoryExists(n.ExternalIP, "root", filepath.Dir(dst))
+	err := nm.EnsureDirectoryExists("", n.ExternalIP, "root", filepath.Dir(dst))
 	if err != nil {
 		return fmt.Errorf("failed to ensure directory exists: %w", err)
 	}
@@ -408,7 +408,7 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 
 	if k0sConfigPath != "" {
 		log.Printf("Copying k0s config to %s:%s", n.ExternalIP, remoteConfigPath)
-		if err := nm.EnsureDirectoryExists(n.ExternalIP, "root", "/etc/k0s"); err != nil {
+		if err := nm.EnsureDirectoryExists("", n.ExternalIP, "root", "/etc/k0s"); err != nil {
 			return fmt.Errorf("failed to create /etc/k0s directory: %w", err)
 		}
 		if err := nm.CopyFile("", n.ExternalIP, "root", k0sConfigPath, remoteConfigPath); err != nil {
