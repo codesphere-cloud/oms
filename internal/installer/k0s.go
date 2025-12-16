@@ -215,6 +215,8 @@ func (k *K0s) filterConfigForK0s(configPath string) (string, error) {
 	return tmpFile.Name(), nil
 }
 
+// Reset tears down an existing k0s installation by executing `k0s reset`.
+// This command removes all k0s-related resources
 func (k *K0s) Reset(k0sPath string) error {
 	if !k.FileWriter.Exists(k0sPath) {
 		return nil
