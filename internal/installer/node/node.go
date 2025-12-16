@@ -377,7 +377,7 @@ func (n *Node) RunSSHCommand(jumpbox *Node, nm *NodeManager, username string, co
 
 func (n *Node) EnableRootLogin(jumpbox *Node, nm *NodeManager) error {
 	cmds := []string{
-		"sudo sed-i 's/^#\\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config",
+		"sudo sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config",
 		"sudo sed -i 's/no-port-forwarding.*$//g' /root/.ssh/authorized_keys",
 		"sudo systemctl restart sshd",
 	}
