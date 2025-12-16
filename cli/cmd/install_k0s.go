@@ -32,7 +32,6 @@ type InstallK0sOpts struct {
 	*GlobalOptions
 	Version       string
 	Package       string
-	Config        string
 	InstallConfig string
 	SSHKeyPath    string
 	RemoteHost    string
@@ -46,16 +45,11 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	pm := installer.NewPackage(env.GetOmsWorkdir(), c.Opts.Package)
 	k0s := installer.NewK0s(hw, env, c.FileWriter)
 
-	if c.Opts.InstallConfig != "" {
-		return c.InstallK0sFromInstallConfig(pm, k0s)
+	if c.Opts.InstallConfig == "" {
+		return fmt.Errorf("--install-config is required")
 	}
 
-	err := c.InstallK0s(pm, k0s)
-	if err != nil {
-		return fmt.Errorf("failed to install k0s: %w", err)
-	}
-
-	return nil
+	return c.InstallK0sFromInstallConfig(pm, k0s)
 }
 
 func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
@@ -67,17 +61,14 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 			This will either download the k0s binary directly to the OMS workdir, if not already present, and install it
 			or load the k0s binary from the provided package file and install it.
 			If no version is specified, the latest version will be downloaded.
-			If no install config is provided, k0s will be installed with the '--single' flag.
 			
-			You can also install k0s from a Codesphere install-config file, which will:
+			You must provide a Codesphere install-config file, which will:
 			- Generate a k0s configuration from the install-config
 			- Optionally install k0s on remote nodes via SSH`),
 			Example: formatExamplesWithBinary("install k0s", []packageio.Example{
-				{Cmd: "", Desc: "Install k0s using the Go-native implementation"},
+				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install"},
 				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from"},
-				{Cmd: "--k0s-config <path>", Desc: "Path to k0s configuration file, if not set k0s will be installed with the '--single' flag"},
-				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
 				{Cmd: "--remote-host <ip>", Desc: "Remote host IP to install k0s on (requires --ssh-key-path)"},
 				{Cmd: "--ssh-key-path <path>", Desc: "SSH private key path for remote installation"},
 				{Cmd: "--force", Desc: "Force new download and installation even if k0s binary exists or is already installed"},
@@ -89,8 +80,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to install")
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from")
-	k0s.cmd.Flags().StringVar(&k0s.Opts.Config, "k0s-config", "", "Path to k0s configuration file")
-	k0s.cmd.Flags().StringVar(&k0s.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file (required)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.SSHKeyPath, "ssh-key-path", "", "SSH private key path for remote installation")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.RemoteHost, "remote-host", "", "Remote host IP to install k0s on")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.RemoteUser, "remote-user", "root", "Remote user for SSH connection")
@@ -102,26 +92,6 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 }
 
 const defaultK0sPath = "kubernetes/files/k0s"
-
-func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager) error {
-	// Default dependency path for k0s binary within package
-	k0sPath := pm.GetDependencyPath(defaultK0sPath)
-
-	var err error
-	if c.Opts.Package == "" {
-		k0sPath, err = k0s.Download(c.Opts.Version, c.Opts.Force, false)
-		if err != nil {
-			return fmt.Errorf("failed to download k0s: %w", err)
-		}
-	}
-
-	err = k0s.Install(c.Opts.Config, k0sPath, c.Opts.Force)
-	if err != nil {
-		return fmt.Errorf("failed to install k0s: %w", err)
-	}
-
-	return nil
-}
 
 func (c *InstallK0sCmd) InstallK0sFromInstallConfig(pm installer.PackageManager, k0s installer.K0sManager) error {
 	icg := installer.NewInstallConfigManager()
