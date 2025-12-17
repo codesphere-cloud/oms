@@ -124,8 +124,15 @@ func (k *K0s) Install(configPath string, k0sPath string, force bool) error {
 		if err != nil {
 			log.Printf("Warning: failed to filter config, using original: %v", err)
 		} else {
-			configPath = filteredConfigPath
-			defer func() { _ = os.Remove(filteredConfigPath) }() // Clean up temp file after use
+			filteredData, err := os.ReadFile(filteredConfigPath)
+			if err != nil {
+				log.Printf("Warning: failed to read filtered config: %v", err)
+			} else {
+				if err := os.WriteFile(configPath, filteredData, 0644); err != nil {
+					log.Printf("Warning: failed to write filtered config back: %v", err)
+				}
+			}
+			_ = os.Remove(filteredConfigPath)
 		}
 		args = append(args, "--config", configPath)
 	} else {

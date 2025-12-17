@@ -94,7 +94,7 @@ message: |
   ------
   limactl shell lima-oms
   cd oms
-  ./oms-cli install k0s --k0s-config config.yaml --version v1.30.0+k0s.0 --force
+  ./oms-cli install k0s --install-config config.yaml --version v1.30.0+k0s.0 --force
   ------
 
   To install Codesphere (run inside lima):

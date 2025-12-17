@@ -118,13 +118,17 @@ func (c *InstallK0sCmd) InstallK0sFromInstallConfig(pm installer.PackageManager,
 		return fmt.Errorf("failed to marshal k0s config: %w", err)
 	}
 
-	tmpK0sConfigPath := filepath.Join(os.TempDir(), "k0s-config.yaml")
-	if err := os.WriteFile(tmpK0sConfigPath, k0sConfigData, 0644); err != nil {
+	k0sConfigPath := "/etc/k0s/k0s.yaml"
+
+	if err := os.MkdirAll(filepath.Dir(k0sConfigPath), 0755); err != nil {
+		return fmt.Errorf("failed to create k0s config directory: %w", err)
+	}
+
+	if err := os.WriteFile(k0sConfigPath, k0sConfigData, 0644); err != nil {
 		return fmt.Errorf("failed to write k0s config: %w", err)
 	}
-	defer func() { _ = os.Remove(tmpK0sConfigPath) }()
 
-	log.Printf("Generated k0s configuration at %s", tmpK0sConfigPath)
+	log.Printf("Generated k0s configuration at %s", k0sConfigPath)
 
 	k0sPath := pm.GetDependencyPath(defaultK0sPath)
 	if c.Opts.Package == "" {
@@ -135,10 +139,10 @@ func (c *InstallK0sCmd) InstallK0sFromInstallConfig(pm installer.PackageManager,
 	}
 
 	if c.Opts.RemoteHost != "" {
-		return c.InstallK0sRemote(config, k0sPath, tmpK0sConfigPath)
+		return c.InstallK0sRemote(config, k0sPath, k0sConfigPath)
 	}
 
-	err = k0s.Install(tmpK0sConfigPath, k0sPath, c.Opts.Force)
+	err = k0s.Install(k0sConfigPath, k0sPath, c.Opts.Force)
 	if err != nil {
 		return fmt.Errorf("failed to install k0s: %w", err)
 	}
