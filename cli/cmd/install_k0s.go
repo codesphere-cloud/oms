@@ -45,11 +45,7 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	pm := installer.NewPackage(env.GetOmsWorkdir(), c.Opts.Package)
 	k0s := installer.NewK0s(hw, env, c.FileWriter)
 
-	if c.Opts.InstallConfig == "" {
-		return fmt.Errorf("--install-config is required")
-	}
-
-	return c.InstallK0sFromInstallConfig(pm, k0s)
+	return c.InstallK0s(pm, k0s)
 }
 
 func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
@@ -86,6 +82,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 	k0s.cmd.Flags().StringVar(&k0s.Opts.RemoteUser, "remote-user", "root", "Remote user for SSH connection")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 
+	k0s.cmd.MarkFlagRequired("install-config")
 	k0s.cmd.MarkFlagsRequiredTogether("remote-host", "ssh-key-path")
 
 	install.AddCommand(k0s.cmd)
@@ -95,7 +92,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 
 const defaultK0sPath = "kubernetes/files/k0s"
 
-func (c *InstallK0sCmd) InstallK0sFromInstallConfig(pm installer.PackageManager, k0s installer.K0sManager) error {
+func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager) error {
 	icg := installer.NewInstallConfigManager()
 	if err := icg.LoadInstallConfigFromFile(c.Opts.InstallConfig); err != nil {
 		return fmt.Errorf("failed to load install-config: %w", err)
@@ -118,12 +115,11 @@ func (c *InstallK0sCmd) InstallK0sFromInstallConfig(pm installer.PackageManager,
 		return fmt.Errorf("failed to marshal k0s config: %w", err)
 	}
 
-	// Use /etc/k0s/k0s.yaml for production, but allow using temp directory in tests
+	// allow temp directory in tests
 	k0sConfigPath := "/etc/k0s/k0s.yaml"
 	usedTempPath := false
 
 	if err := os.MkdirAll(filepath.Dir(k0sConfigPath), 0755); err != nil {
-		// If we can't write to /etc/k0s (e.g., in tests without root), use temp directory
 		tmpK0sConfigPath := filepath.Join(os.TempDir(), "k0s-config.yaml")
 		if err := os.WriteFile(tmpK0sConfigPath, k0sConfigData, 0644); err != nil {
 			return fmt.Errorf("failed to write k0s config: %w", err)
@@ -138,7 +134,7 @@ func (c *InstallK0sCmd) InstallK0sFromInstallConfig(pm installer.PackageManager,
 		log.Printf("Generated k0s configuration at %s", k0sConfigPath)
 	}
 
-	// Clean up temp file if used (only for testing scenarios)
+	// Clean up temp file if used
 	if usedTempPath {
 		defer func() { _ = os.Remove(k0sConfigPath) }()
 	}

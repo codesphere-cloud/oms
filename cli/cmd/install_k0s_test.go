@@ -117,7 +117,7 @@ var _ = Describe("InstallK0sCmd", func() {
 		It("fails when install-config file does not exist", func() {
 			c.Opts.InstallConfig = "/nonexistent/install-config.yaml"
 
-			err := c.InstallK0sFromInstallConfig(mockPM, mockK0s)
+			err := c.InstallK0s(mockPM, mockK0s)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load install-config"))
 		})
@@ -132,7 +132,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			c.Opts.InstallConfig = configPath
 
-			err = c.InstallK0sFromInstallConfig(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("external Kubernetes"))
 		})
@@ -152,7 +152,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0s.EXPECT().Install(mock.Anything, "/test/path/k0s", true).Return(nil)
 
-			err = c.InstallK0sFromInstallConfig(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -172,7 +172,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockK0s.EXPECT().Download("v1.29.0+k0s.0", false, false).Return("/downloaded/k0s", nil)
 			mockK0s.EXPECT().Install(mock.Anything, "/downloaded/k0s", false).Return(nil)
 
-			err = c.InstallK0sFromInstallConfig(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -190,7 +190,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0s.EXPECT().Download("", false, false).Return("", os.ErrNotExist)
 
-			err = c.InstallK0sFromInstallConfig(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to download k0s"))
 		})
@@ -209,7 +209,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0s.EXPECT().Install(mock.Anything, "/test/path/k0s", false).Return(os.ErrPermission)
 
-			err = c.InstallK0sFromInstallConfig(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to install k0s"))
 		})
@@ -232,7 +232,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			// Remote installation will fail because we can't actually connect,
 			// but we're testing that it attempts remote installation
-			err = c.InstallK0sFromInstallConfig(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
 		})
