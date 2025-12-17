@@ -97,6 +97,24 @@ message: |
   ./oms-cli install k0s --install-config config.yaml --version v1.30.0+k0s.0 --force
   ------
 
+  To test remote k0s installation (run inside lima):
+  ------
+  limactl shell lima-oms
+  cd oms
+  # Setup SSH for testing  
+  ssh-keygen -t rsa -b 4096 -f ~/.ssh/test_key -N ""
+  cat ~/.ssh/test_key.pub >> ~/.ssh/authorized_keys
+  chmod 600 ~/.ssh/authorized_keys
+  # Add host to known_hosts
+  VM_IP=$(hostname -I | awk '{print $1}')
+  ssh-keyscan $VM_IP >> ~/.ssh/known_hosts
+  # Test SSH connection
+  ssh -i ~/.ssh/test_key $VM_IP "echo 'SSH works'"
+  # Test remote installation (unit tests validate this feature)
+  ./oms-cli install k0s --install-config config.yaml --version v1.30.0+k0s.0 \
+    --remote-host $VM_IP --remote-user $(whoami) --ssh-key-path ~/.ssh/test_key --force
+  ------
+
   To install Codesphere (run inside lima):
   ------
   limactl shell lima-oms

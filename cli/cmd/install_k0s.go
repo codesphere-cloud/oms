@@ -176,6 +176,7 @@ func (c *InstallK0sCmd) InstallK0sRemote(config *files.RootConfig, k0sBinaryPath
 		ExternalIP: c.Opts.RemoteHost,
 		InternalIP: c.Opts.RemoteHost,
 		Name:       "k0s-node",
+		User:       c.Opts.RemoteUser,
 	}
 
 	if err := remoteNode.InstallK0s(nm, k0sBinaryPath, k0sConfigPath, c.Opts.Force); err != nil {

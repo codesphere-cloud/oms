@@ -25,6 +25,7 @@ type Node struct {
 	Name       string `json:"name"`
 	ExternalIP string `json:"external_ip"`
 	InternalIP string `json:"internal_ip"`
+	User       string `json:"user,omitempty"`
 }
 
 type NodeManager struct {
@@ -37,6 +38,12 @@ func shellEscape(s string) string {
 }
 
 func (n *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
+	// Required for testing/development via environment variable
+	if os.Getenv("OMS_SSH_INSECURE") == "true" {
+		fmt.Println("Warning: Using insecure host key checking (OMS_SSH_INSECURE=true)")
+		return ssh.InsecureIgnoreHostKey(), nil
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user home directory: %w", err)
@@ -75,18 +82,23 @@ func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 	}
 
 	if n.KeyPath != "" {
-		fmt.Println("Falling back to private key file authentication.")
+		fmt.Printf("Falling back to private key file authentication (key: %s).\n", n.KeyPath)
 
 		key, err := n.FileIO.ReadFile(n.KeyPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
 		}
 
+		fmt.Printf("Successfully read %d bytes from key file\n", len(key))
+
 		signer, err := ssh.ParsePrivateKey(key)
 		if err == nil {
+			fmt.Printf("Successfully parsed private key (type: %s)\n", signer.PublicKey().Type())
 			authMethods = append(authMethods, ssh.PublicKeys(signer))
 			return authMethods, nil
 		}
+
+		fmt.Printf("Failed to parse private key: %v\n", err)
 		if _, ok := err.(*ssh.PassphraseMissingError); ok {
 			fmt.Printf("Enter passphrase for key '%s': ", n.KeyPath)
 			passphraseBytes, err := term.ReadPassword(int(syscall.Stdin))
@@ -323,11 +335,16 @@ func (n *Node) InstallOms(nm *NodeManager) error {
 }
 
 func (n *Node) CopyFile(nm *NodeManager, src string, dst string) error {
-	err := nm.EnsureDirectoryExists("", n.ExternalIP, "root", filepath.Dir(dst))
+	user := n.User
+	if user == "" {
+		user = "root"
+	}
+
+	err := nm.EnsureDirectoryExists("", n.ExternalIP, user, filepath.Dir(dst))
 	if err != nil {
 		return fmt.Errorf("failed to ensure directory exists: %w", err)
 	}
-	return nm.CopyFile("", n.ExternalIP, "root", src, dst)
+	return nm.CopyFile("", n.ExternalIP, user, src, dst)
 }
 
 func (n *Node) HasAcceptEnvConfigured(jumpbox *Node, nm *NodeManager) bool {
@@ -395,24 +412,40 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 	remoteK0sBinary := filepath.Join(remoteK0sDir, "k0s")
 	remoteConfigPath := "/etc/k0s/k0s.yaml"
 
-	log.Printf("Copying k0s binary to %s:%s", n.ExternalIP, remoteK0sBinary)
-	if err := n.CopyFile(nm, k0sBinaryPath, remoteK0sBinary); err != nil {
-		return fmt.Errorf("failed to copy k0s binary: %w", err)
+	user := n.User
+	if user == "" {
+		user = "root"
 	}
 
-	log.Printf("Making k0s binary executable on %s", n.ExternalIP)
-	chmodCmd := fmt.Sprintf("chmod +x '%s'", shellEscape(remoteK0sBinary))
-	if err := nm.RunSSHCommand("", n.ExternalIP, "root", chmodCmd); err != nil {
-		return fmt.Errorf("failed to make k0s binary executable: %w", err)
+	// Copy k0s binary to temp location first, then move with sudo
+	tmpK0sBinary := "/tmp/k0s"
+	log.Printf("Copying k0s binary to %s:%s", n.ExternalIP, tmpK0sBinary)
+	if err := nm.CopyFile("", n.ExternalIP, user, k0sBinaryPath, tmpK0sBinary); err != nil {
+		return fmt.Errorf("failed to copy k0s binary to temp: %w", err)
+	}
+
+	// Move to final location and make executable with sudo
+	log.Printf("Moving k0s binary to %s", remoteK0sBinary)
+	moveCmd := fmt.Sprintf("sudo mv '%s' '%s' && sudo chmod +x '%s'",
+		shellEscape(tmpK0sBinary), shellEscape(remoteK0sBinary), shellEscape(remoteK0sBinary))
+	if err := nm.RunSSHCommand("", n.ExternalIP, user, moveCmd); err != nil {
+		return fmt.Errorf("failed to move and chmod k0s binary: %w", err)
 	}
 
 	if k0sConfigPath != "" {
-		log.Printf("Copying k0s config to %s:%s", n.ExternalIP, remoteConfigPath)
-		if err := nm.EnsureDirectoryExists("", n.ExternalIP, "root", "/etc/k0s"); err != nil {
-			return fmt.Errorf("failed to create /etc/k0s directory: %w", err)
+		// Copy config to temp location first
+		tmpConfigPath := "/tmp/k0s-config.yaml"
+		log.Printf("Copying k0s config to %s", tmpConfigPath)
+		if err := nm.CopyFile("", n.ExternalIP, user, k0sConfigPath, tmpConfigPath); err != nil {
+			return fmt.Errorf("failed to copy k0s config to temp: %w", err)
 		}
-		if err := nm.CopyFile("", n.ExternalIP, "root", k0sConfigPath, remoteConfigPath); err != nil {
-			return fmt.Errorf("failed to copy k0s config: %w", err)
+
+		// Create /etc/k0s directory and move config with sudo
+		log.Printf("Moving k0s config to %s", remoteConfigPath)
+		setupConfigCmd := fmt.Sprintf("sudo mkdir -p /etc/k0s && sudo mv '%s' '%s' && sudo chmod 644 '%s'",
+			shellEscape(tmpConfigPath), shellEscape(remoteConfigPath), shellEscape(remoteConfigPath))
+		if err := nm.RunSSHCommand("", n.ExternalIP, user, setupConfigCmd); err != nil {
+			return fmt.Errorf("failed to setup k0s config: %w", err)
 		}
 	}
 
@@ -427,13 +460,13 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 	}
 
 	log.Printf("Installing k0s on %s", n.ExternalIP)
-	if err := nm.RunSSHCommand("", n.ExternalIP, "root", installCmd); err != nil {
+	if err := nm.RunSSHCommand("", n.ExternalIP, user, installCmd); err != nil {
 		return fmt.Errorf("failed to install k0s: %w", err)
 	}
 
 	log.Printf("k0s successfully installed on %s", n.ExternalIP)
-	log.Printf("You can start it using: ssh root@%s 'sudo %s start'", n.ExternalIP, shellEscape(remoteK0sBinary))
-	log.Printf("You can check the status using: ssh root@%s 'sudo %s status'", n.ExternalIP, shellEscape(remoteK0sBinary))
+	log.Printf("You can start it using: ssh %s@%s 'sudo %s start'", user, n.ExternalIP, shellEscape(remoteK0sBinary))
+	log.Printf("You can check the status using: ssh %s@%s 'sudo %s status'", user, n.ExternalIP, shellEscape(remoteK0sBinary))
 
 	return nil
 }
