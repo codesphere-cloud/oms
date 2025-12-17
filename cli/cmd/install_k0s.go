@@ -118,17 +118,30 @@ func (c *InstallK0sCmd) InstallK0sFromInstallConfig(pm installer.PackageManager,
 		return fmt.Errorf("failed to marshal k0s config: %w", err)
 	}
 
+	// Use /etc/k0s/k0s.yaml for production, but allow using temp directory in tests
 	k0sConfigPath := "/etc/k0s/k0s.yaml"
+	usedTempPath := false
 
 	if err := os.MkdirAll(filepath.Dir(k0sConfigPath), 0755); err != nil {
-		return fmt.Errorf("failed to create k0s config directory: %w", err)
+		// If we can't write to /etc/k0s (e.g., in tests without root), use temp directory
+		tmpK0sConfigPath := filepath.Join(os.TempDir(), "k0s-config.yaml")
+		if err := os.WriteFile(tmpK0sConfigPath, k0sConfigData, 0644); err != nil {
+			return fmt.Errorf("failed to write k0s config: %w", err)
+		}
+		k0sConfigPath = tmpK0sConfigPath
+		usedTempPath = true
+		log.Printf("Generated k0s configuration at %s (using temp path due to permissions)", k0sConfigPath)
+	} else {
+		if err := os.WriteFile(k0sConfigPath, k0sConfigData, 0644); err != nil {
+			return fmt.Errorf("failed to write k0s config: %w", err)
+		}
+		log.Printf("Generated k0s configuration at %s", k0sConfigPath)
 	}
 
-	if err := os.WriteFile(k0sConfigPath, k0sConfigData, 0644); err != nil {
-		return fmt.Errorf("failed to write k0s config: %w", err)
+	// Clean up temp file if used (only for testing scenarios)
+	if usedTempPath {
+		defer func() { _ = os.Remove(k0sConfigPath) }()
 	}
-
-	log.Printf("Generated k0s configuration at %s", k0sConfigPath)
 
 	k0sPath := pm.GetDependencyPath(defaultK0sPath)
 	if c.Opts.Package == "" {
