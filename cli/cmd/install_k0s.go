@@ -117,7 +117,6 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 
 	// allow temp directory in tests
 	k0sConfigPath := "/etc/k0s/k0s.yaml"
-	usedTempPath := false
 
 	if err := os.MkdirAll(filepath.Dir(k0sConfigPath), 0755); err != nil {
 		tmpK0sConfigPath := filepath.Join(os.TempDir(), "k0s-config.yaml")
@@ -125,18 +124,14 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 			return fmt.Errorf("failed to write k0s config: %w", err)
 		}
 		k0sConfigPath = tmpK0sConfigPath
-		usedTempPath = true
+		// Clean up temp file on all exit paths
+		defer func() { _ = os.Remove(k0sConfigPath) }()
 		log.Printf("Generated k0s configuration at %s (using temp path due to permissions)", k0sConfigPath)
 	} else {
 		if err := os.WriteFile(k0sConfigPath, k0sConfigData, 0644); err != nil {
 			return fmt.Errorf("failed to write k0s config: %w", err)
 		}
 		log.Printf("Generated k0s configuration at %s", k0sConfigPath)
-	}
-
-	// Clean up temp file if used
-	if usedTempPath {
-		defer func() { _ = os.Remove(k0sConfigPath) }()
 	}
 
 	k0sPath := pm.GetDependencyPath(defaultK0sPath)

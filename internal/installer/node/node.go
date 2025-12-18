@@ -37,7 +37,7 @@ func shellEscape(s string) string {
 	return strings.ReplaceAll(s, "'", "'\\''")
 }
 
-func (n *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
+func (nm *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user home directory: %w", err)
@@ -62,7 +62,7 @@ func (n *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 	return hostKeyCallback, nil
 }
 
-func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
+func (nm *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 	var authMethods []ssh.AuthMethod
 
 	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
@@ -75,45 +75,68 @@ func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 		fmt.Printf("Could not connect to SSH Agent (%s): %v\n", authSocket, err)
 	}
 
-	if n.KeyPath != "" {
-		fmt.Printf("Falling back to private key file authentication (key: %s).\n", n.KeyPath)
+	if nm.KeyPath != "" {
+		fmt.Printf("Falling back to private key file authentication (key: %s).\n", nm.KeyPath)
 
-		key, err := n.FileIO.ReadFile(n.KeyPath)
+		key, err := nm.FileIO.ReadFile(nm.KeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
+			return nil, fmt.Errorf("failed to read private key file %s: %v", nm.KeyPath, err)
 		}
 
-		fmt.Printf("Successfully read %d bytes from key file\n", len(key))
+		fmt.Printf("Successfully read %d bytes from key file\\n", len(key))
 
 		signer, err := ssh.ParsePrivateKey(key)
 		if err == nil {
-			fmt.Printf("Successfully parsed private key (type: %s)\n", signer.PublicKey().Type())
+			fmt.Printf("Successfully parsed private key (type: %s)\\n", signer.PublicKey().Type())
 			authMethods = append(authMethods, ssh.PublicKeys(signer))
 			return authMethods, nil
 		}
 
-		fmt.Printf("Failed to parse private key: %v\n", err)
+		fmt.Printf("Failed to parse private key: %v\\n", err)
 		if _, ok := err.(*ssh.PassphraseMissingError); ok {
-			fmt.Printf("Enter passphrase for key '%s': ", n.KeyPath)
-			passphraseBytes, err := term.ReadPassword(int(syscall.Stdin))
-			fmt.Println()
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to read passphrase: %v", err)
+			// Check if we're in an interactive terminal
+			if !term.IsTerminal(int(syscall.Stdin)) {
+				return nil, fmt.Errorf("passphrase-protected key requires interactive terminal. Use ssh-agent or an unencrypted key for automated scenarios")
 			}
 
-			defer func() {
-				for i := range passphraseBytes {
-					passphraseBytes[i] = 0
-				}
+			fmt.Printf("Enter passphrase for key '%s': ", nm.KeyPath)
+
+			// Read passphrase with a timeout using a channel
+			type result struct {
+				password []byte
+				err      error
+			}
+			resultChan := make(chan result, 1)
+			go func() {
+				passphraseBytes, err := term.ReadPassword(int(syscall.Stdin))
+				resultChan <- result{password: passphraseBytes, err: err}
 			}()
 
-			signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphraseBytes)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
+			// Wait for passphrase input with 30 second timeout
+			select {
+			case res := <-resultChan:
+				fmt.Println()
+				if res.err != nil {
+					return nil, fmt.Errorf("failed to read passphrase: %v", res.err)
+				}
+
+				defer func() {
+					for i := range res.password {
+						res.password[i] = 0
+					}
+				}()
+
+				signer, err = ssh.ParsePrivateKeyWithPassphrase(key, res.password)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
+				}
+				authMethods = append(authMethods, ssh.PublicKeys(signer))
+				return authMethods, nil
+
+			case <-time.After(30 * time.Second):
+				fmt.Println()
+				return nil, fmt.Errorf("passphrase input timeout after 30 seconds")
 			}
-			authMethods = append(authMethods, ssh.PublicKeys(signer))
-			return authMethods, nil
 		}
 		return nil, fmt.Errorf("failed to parse private key: %v", err)
 	}
@@ -125,13 +148,13 @@ func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 	return authMethods, nil
 }
 
-func (n *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error) {
-	authMethods, err := n.getAuthMethods()
+func (nm *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error) {
+	authMethods, err := nm.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("jumpbox authentication setup failed: %v", err)
 	}
 
-	hostKeyCallback, err := n.getHostKeyCallback()
+	hostKeyCallback, err := nm.getHostKeyCallback()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host key callback: %w", err)
 	}
@@ -149,14 +172,14 @@ func (n *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error)
 		return nil, fmt.Errorf("failed to dial jumpbox %s: %v", addr, err)
 	}
 
-	if err := n.forwardAgent(jumpboxClient, nil); err != nil {
+	if err := nm.forwardAgent(jumpboxClient, nil); err != nil {
 		fmt.Printf(" Warning: Agent forwarding setup failed on jumpbox: %v\n", err)
 	}
 
 	return jumpboxClient, nil
 }
 
-func (n *NodeManager) forwardAgent(client *ssh.Client, session *ssh.Session) error {
+func (nm *NodeManager) forwardAgent(client *ssh.Client, session *ssh.Session) error {
 	authSocket := os.Getenv("SSH_AUTH_SOCK")
 	if authSocket == "" {
 		log.Printf("SSH_AUTH_SOCK not set. Cannot perform agent forwarding")
@@ -180,8 +203,8 @@ func (n *NodeManager) forwardAgent(client *ssh.Client, session *ssh.Session) err
 	return nil
 }
 
-func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string, command string) error {
-	client, err := n.GetClient(jumpboxIp, ip, username)
+func (nm *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string, command string) error {
+	client, err := nm.GetClient(jumpboxIp, ip, username)
 	if err != nil {
 		return fmt.Errorf("failed to get client: %w", err)
 	}
@@ -192,7 +215,7 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 	}
 	defer func() { _ = session.Close() }()
 
-	if err := n.forwardAgent(client, session); err != nil {
+	if err := nm.forwardAgent(client, session); err != nil {
 		fmt.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
 	}
 
@@ -209,20 +232,20 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 	return nil
 }
 
-func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
+func (nm *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
 
-	authMethods, err := n.getAuthMethods()
+	authMethods, err := nm.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get authentication methods: %w", err)
 	}
 
-	hostKeyCallback, err := n.getHostKeyCallback()
+	hostKeyCallback, err := nm.getHostKeyCallback()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host key callback: %w", err)
 	}
 
 	if jumpboxIp != "" {
-		jbClient, err := n.connectToJumpbox(jumpboxIp, username)
+		jbClient, err := nm.connectToJumpbox(jumpboxIp, username)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to jumpbox: %v", err)
 		}
@@ -262,8 +285,8 @@ func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*
 	return client, nil
 }
 
-func (n *NodeManager) GetSFTPClient(jumpboxIp string, ip string, username string) (*sftp.Client, error) {
-	client, err := n.GetClient(jumpboxIp, ip, username)
+func (nm *NodeManager) GetSFTPClient(jumpboxIp string, ip string, username string) (*sftp.Client, error) {
+	client, err := nm.GetClient(jumpboxIp, ip, username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SSH client: %v", err)
 	}
@@ -279,14 +302,14 @@ func (nm *NodeManager) EnsureDirectoryExists(jumpboxIp string, ip string, userna
 	return nm.RunSSHCommand(jumpboxIp, ip, username, cmd)
 }
 
-func (n *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src string, dst string) error {
-	client, err := n.GetSFTPClient(jumpboxIp, ip, username)
+func (nm *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src string, dst string) error {
+	client, err := nm.GetSFTPClient(jumpboxIp, ip, username)
 	if err != nil {
 		return fmt.Errorf("failed to get SSH client: %v", err)
 	}
 	defer func() { _ = client.Close() }()
 
-	srcFile, err := n.FileIO.Open(src)
+	srcFile, err := nm.FileIO.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file %s: %v", src, err)
 	}
