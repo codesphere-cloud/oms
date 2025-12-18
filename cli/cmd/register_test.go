@@ -30,7 +30,7 @@ var _ = Describe("RegisterCmd", func() {
 		expiresAt = "2025-05-01T15:04:05Z"
 		owner = "test-owner"
 		organization = "test-org"
-		role = "admin"
+		role = "Admin"
 		c = cmd.RegisterCmd{
 			Opts: cmd.RegisterOpts{
 				Owner:        owner,
@@ -60,13 +60,33 @@ var _ = Describe("RegisterCmd", func() {
 	})
 
 	Context("when expiration date is invalid", func() {
-		BeforeEach(func() {
-			c.Opts.ExpiresAt = "invalid-date"
-		})
 		It("returns error for invalid expiration date", func() {
+			c.Opts.ExpiresAt = "invalid-date"
 			ak, err := c.Register(mockPortal)
 			Expect(ak).To(BeNil())
 			Expect(err).To(MatchError(ContainSubstring("failed to parse expiration date")))
+		})
+	})
+
+	Context("when role is valid", func() {
+		It("accepts Admin role", func() {
+			c.Opts.Role = "Admin"
+			parsedTime, _ := time.Parse(time.RFC3339, expiresAt)
+
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, "Admin", parsedTime).Return(&portal.ApiKey{}, nil)
+
+			ak, err := c.Register(mockPortal)
+			Expect(err).To(BeNil())
+			Expect(ak).NotTo(BeNil())
+		})
+	})
+
+	Context("when role is invalid", func() {
+		It("returns error for invalid role", func() {
+			c.Opts.Role = "InvalidRole"
+			ak, err := c.Register(mockPortal)
+			Expect(ak).To(BeNil())
+			Expect(err).To(MatchError(ContainSubstring("invalid role: InvalidRole")))
 		})
 	})
 })

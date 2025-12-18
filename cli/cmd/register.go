@@ -39,24 +39,6 @@ func (c *RegisterCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
-	var err error
-	var expiresAt time.Time
-	if c.Opts.ExpiresAt != "" {
-		expiresAt, err = time.Parse(time.RFC3339, c.Opts.ExpiresAt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse expiration date: %w", err)
-		}
-	}
-
-	newKey, err := p.RegisterAPIKey(c.Opts.Owner, c.Opts.Organization, c.Opts.Role, expiresAt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to register API key: %w", err)
-	}
-
-	return newKey, nil
-}
-
 func AddRegisterCmd(list *cobra.Command, opts *GlobalOptions) {
 	c := RegisterCmd{
 		cmd: &cobra.Command{
@@ -74,4 +56,26 @@ func AddRegisterCmd(list *cobra.Command, opts *GlobalOptions) {
 	c.cmd.RunE = c.RunE
 
 	list.AddCommand(c.cmd)
+}
+
+func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
+	if c.Opts.Role != "Admin" && c.Opts.Role != "Dev" && c.Opts.Role != "Ext" {
+		return nil, fmt.Errorf("invalid role: %s. Available roles are: Admin, Dev, Ext", c.Opts.Role)
+	}
+
+	var err error
+	var expiresAt time.Time
+	if c.Opts.ExpiresAt != "" {
+		expiresAt, err = time.Parse(time.RFC3339, c.Opts.ExpiresAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse expiration date: %w", err)
+		}
+	}
+
+	newKey, err := p.RegisterAPIKey(c.Opts.Owner, c.Opts.Organization, c.Opts.Role, expiresAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register API key: %w", err)
+	}
+
+	return newKey, nil
 }
