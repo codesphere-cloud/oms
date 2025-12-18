@@ -383,7 +383,7 @@ func (n *Node) RunSSHCommand(jumpbox *Node, nm *NodeManager, username string, co
 		return nm.RunSSHCommand("", n.ExternalIP, username, command)
 	}
 
-	return nm.RunSSHCommand(jumpbox.ExternalIP, n.InternalIP, "ubuntu", command)
+	return nm.RunSSHCommand(jumpbox.ExternalIP, n.InternalIP, username, command)
 }
 
 func (n *Node) EnableRootLogin(jumpbox *Node, nm *NodeManager) error {
