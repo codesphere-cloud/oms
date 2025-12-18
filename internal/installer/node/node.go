@@ -38,12 +38,6 @@ func shellEscape(s string) string {
 }
 
 func (n *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
-	// Required for testing/development via environment variable
-	if os.Getenv("OMS_SSH_INSECURE") == "true" {
-		fmt.Println("Warning: Using insecure host key checking (OMS_SSH_INSECURE=true)")
-		return ssh.InsecureIgnoreHostKey(), nil
-	}
-
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user home directory: %w", err)

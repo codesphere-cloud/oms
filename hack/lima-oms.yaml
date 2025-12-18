@@ -110,7 +110,8 @@ message: |
   ssh-keyscan $VM_IP >> ~/.ssh/known_hosts
   # Test SSH connection
   ssh -i ~/.ssh/test_key $VM_IP "echo 'SSH works'"
-  # Test remote installation (unit tests validate this feature)
+  # Note: Remote installation requires proper SSH host key verification
+  # For testing, you can add the host to known_hosts (already done above with ssh-keyscan)
   ./oms-cli install k0s --install-config config.yaml --version v1.30.0+k0s.0 \
     --remote-host $VM_IP --remote-user $(whoami) --ssh-key-path ~/.ssh/test_key --force
   ------
