@@ -228,7 +228,7 @@ func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*
 	}
 
 	if jumpboxIp != "" {
-		jbClient, err := n.connectToJumpbox(jumpboxIp, "ubuntu")
+		jbClient, err := n.connectToJumpbox(jumpboxIp, username)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to jumpbox: %v", err)
 		}
