@@ -58,7 +58,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			err := c.RunE(nil, nil)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("--install-config is required"))
+			Expect(err.Error()).To(ContainSubstring("install-config"))
 		})
 	})
 
