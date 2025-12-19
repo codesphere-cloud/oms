@@ -335,22 +335,6 @@ func (n *Node) HasCommand(nm *NodeManager, command string) bool {
 	return err == nil
 }
 
-func (n *Node) InstallOms(nm *NodeManager) error {
-	remoteCommands := []string{
-		"wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms-cli.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms-cli",
-		"chmod +x oms-cli; sudo mv oms-cli /usr/local/bin/",
-		"curl -LO https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64; sudo mv sops-v3.11.0.linux.amd64 /usr/local/bin/sops; sudo chmod +x /usr/local/bin/sops",
-		"wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
-	}
-	for _, cmd := range remoteCommands {
-		err := nm.RunSSHCommand("", n.ExternalIP, "root", cmd)
-		if err != nil {
-			return fmt.Errorf("failed to run remote command '%s': %w", cmd, err)
-		}
-	}
-	return nil
-}
-
 func (n *Node) CopyFile(nm *NodeManager, src string, dst string) error {
 	user := n.User
 	if user == "" {
@@ -362,37 +346,6 @@ func (n *Node) CopyFile(nm *NodeManager, src string, dst string) error {
 		return fmt.Errorf("failed to ensure directory exists: %w", err)
 	}
 	return nm.CopyFile("", n.ExternalIP, user, src, dst)
-}
-
-func (n *Node) HasAcceptEnvConfigured(jumpbox *Node, nm *NodeManager) bool {
-	checkCommand := "sudo grep -E '^AcceptEnv OMS_PORTAL_API_KEY' /etc/ssh/sshd_config >/dev/null 2>&1"
-	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommand)
-	return err == nil
-}
-
-func (n *Node) ConfigureAcceptEnv(jumpbox *Node, nm *NodeManager) error {
-	cmds := []string{
-		"sudo sed -i 's/^#\\?AcceptEnv.*/AcceptEnv OMS_PORTAL_API_KEY/' /etc/ssh/sshd_config",
-		"sudo systemctl restart sshd",
-	}
-	for _, cmd := range cmds {
-		err := n.RunSSHCommand(jumpbox, nm, "ubuntu", cmd)
-		if err != nil {
-			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
-		}
-	}
-	return nil
-}
-
-func (n *Node) HasRootLoginEnabled(jumpbox *Node, nm *NodeManager) bool {
-	checkCommandPermit := "sudo grep -E '^PermitRootLogin yes' /etc/ssh/sshd_config >/dev/null 2>&1"
-	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommandPermit)
-	if err != nil {
-		return false
-	}
-	checkCommandAuthorizedKeys := "sudo grep -E '^no-port-forwarding' /root/.ssh/authorized_keys >/dev/null 2>&1"
-	err = n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommandAuthorizedKeys)
-	return err != nil
 }
 
 func (n *Node) HasFile(jumpbox *Node, nm *NodeManager, filePath string) bool {
@@ -407,21 +360,6 @@ func (n *Node) RunSSHCommand(jumpbox *Node, nm *NodeManager, username string, co
 	}
 
 	return nm.RunSSHCommand(jumpbox.ExternalIP, n.InternalIP, username, command)
-}
-
-func (n *Node) EnableRootLogin(jumpbox *Node, nm *NodeManager) error {
-	cmds := []string{
-		"sudo sed -i -E 's/^[[:space:]]*(#[[:space:]]*)?PermitRootLogin[[:space:]]+(yes|no|prohibit-password|without-password)[[:space:]]*$/PermitRootLogin yes/' /etc/ssh/sshd_config",
-		"sudo sed -i 's/no-port-forwarding.*$//g' /root/.ssh/authorized_keys",
-		"sudo systemctl restart sshd",
-	}
-	for _, cmd := range cmds {
-		err := n.RunSSHCommand(jumpbox, nm, "ubuntu", cmd)
-		if err != nil {
-			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
-		}
-	}
-	return nil
 }
 
 func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath string, force bool) error {

@@ -243,7 +243,7 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 
 				err := n.InstallK0s(nm, k0sBinaryPath, "", false)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to ensure directory exists"))
+				Expect(err.Error()).To(ContainSubstring("failed to copy k0s binary to temp"))
 			})
 
 			It("should handle paths with special characters safely", func() {

@@ -230,6 +230,12 @@ func (k *K0s) Reset(k0sPath string) error {
 	}
 
 	log.Println("Resetting existing k0s installation...")
+
+	log.Println("Stopping k0s service if running...")
+	if err := util.RunCommand("sudo", []string{k0sPath, "stop"}, ""); err != nil {
+		log.Printf("Note: k0s stop returned error, try to continue the reset: %v", err)
+	}
+
 	err := util.RunCommand("sudo", []string{k0sPath, "reset"}, "")
 	if err != nil {
 		return fmt.Errorf("failed to reset k0s: %w", err)
