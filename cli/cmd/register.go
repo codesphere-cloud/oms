@@ -12,6 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	API_KEY_ROLE_ADMIN = "Admin"
+	API_KEY_ROLE_DEV   = "Dev"
+	API_KEY_ROLE_EXT   = "Ext"
+)
+
 type RegisterCmd struct {
 	cmd  *cobra.Command
 	Opts RegisterOpts
@@ -59,7 +65,7 @@ func AddRegisterCmd(list *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
-	if c.Opts.Role != "Admin" && c.Opts.Role != "Dev" && c.Opts.Role != "Ext" {
+	if c.Opts.Role != API_KEY_ROLE_ADMIN && c.Opts.Role != API_KEY_ROLE_DEV && c.Opts.Role != API_KEY_ROLE_EXT {
 		return nil, fmt.Errorf("invalid role: %s. Available roles are: Admin, Dev, Ext", c.Opts.Role)
 	}
 
