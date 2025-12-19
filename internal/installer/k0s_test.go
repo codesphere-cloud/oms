@@ -321,4 +321,32 @@ var _ = Describe("K0s", func() {
 			})
 		})
 	})
+
+	Describe("Reset", func() {
+		BeforeEach(func() {
+			k0sImpl.Goos = "linux"
+			k0sImpl.Goarch = "amd64"
+		})
+
+		Context("when k0s binary does not exist", func() {
+			It("should return nil without attempting reset", func() {
+				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
+
+				err := k0s.Reset(k0sPath)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("platform validation", func() {
+			It("should work regardless of platform for reset", func() {
+				k0sImpl.Goos = "darwin"
+				k0sImpl.Goarch = "arm64"
+
+				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
+
+				err := k0s.Reset(k0sPath)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
 })

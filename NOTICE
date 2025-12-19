@@ -23,9 +23,9 @@ License URL: https://github.com/clipperhouse/uax29/blob/v2.3.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go/pkg/io
-Version: v0.14.1
+Version: v0.15.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.14.1/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.15.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -77,15 +77,27 @@ License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/inte
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.7.5
+Version: v6.7.7
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.5/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.7/LICENSE
+ 
+----------
+Module: github.com/kr/fs
+Version: v0.1.0
+License: BSD-3-Clause
+License URL: https://github.com/kr/fs/blob/v0.1.0/LICENSE
  
 ----------
 Module: github.com/mattn/go-runewidth
 Version: v0.0.19
 License: MIT
 License URL: https://github.com/mattn/go-runewidth/blob/v0.0.19/LICENSE
+ 
+----------
+Module: github.com/pkg/sftp
+Version: v1.13.10
+License: BSD-2-Clause
+License URL: https://github.com/pkg/sftp/blob/v1.13.10/LICENSE
  
 ----------
 Module: github.com/pmezard/go-difflib/difflib
@@ -155,9 +167,9 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.4/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.45.0
+Version: v0.46.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.45.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.46.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
@@ -166,10 +178,22 @@ License: BSD-3-Clause
 License URL: https://cs.opensource.google/go/x/oauth2/+/v0.33.0:LICENSE
  
 ----------
-Module: golang.org/x/text
-Version: v0.31.0
+Module: golang.org/x/sys/unix
+Version: v0.39.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/text/+/v0.31.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sys/+/v0.39.0:LICENSE
+ 
+----------
+Module: golang.org/x/term
+Version: v0.38.0
+License: BSD-3-Clause
+License URL: https://cs.opensource.google/go/x/term/+/v0.38.0:LICENSE
+ 
+----------
+Module: golang.org/x/text
+Version: v0.32.0
+License: BSD-3-Clause
+License URL: https://cs.opensource.google/go/x/text/+/v0.32.0:LICENSE
  
 ----------
 Module: gopkg.in/yaml.v3

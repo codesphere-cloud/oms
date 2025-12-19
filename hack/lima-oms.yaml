@@ -18,8 +18,8 @@ disk: "60GiB"
 
 # Mount your OMS project
 mounts:
-- location: "."
-  mountPoint: "/home/user/oms"
+- location: "~"
+  mountPoint: "/home/user/host-home"
   writable: true
 
 # Ports and SSH
@@ -61,13 +61,12 @@ provision:
     set -eux -o pipefail
     
     # Install Docker in rootless mode
-    dockerd-rootless-setuptool.sh install
+    dockerd-rootless-setuptool.sh install || true
     
-    # Set up the OMS project
-    cd /home/user/oms
-    export PATH=$PATH:/usr/local/go/bin
-    go mod download
-    cd cli && go build -a -buildvcs=false && mv cli ../oms-cli
+    # Clone OMS repository locally for better build performance
+    if [ ! -d ~/oms ]; then
+      git clone https://github.com/codesphere-cloud/oms.git ~/oms
+    fi
 
 message: |
   Your OMS development environment is ready!
@@ -75,13 +74,51 @@ message: |
   To access it:
   ------
   limactl shell lima-oms
-  cd /home/user/oms
+  cd oms
   ./oms-cli --help
   ------
-
-  To install Codesphere eg.:
+  
+  To build the CLI for Linux (from your Mac):
   ------
-  ./oms-cli install codesphere --package codesphere-v1.66.0-installer --config config.yaml --priv-key ./path-to-private-key
+  make build-cli-linux
   ------
 
-  Go 1.24 and Docker are installed and ready to use.
+  To build the CLI inside lima:
+  ------
+  limactl shell lima-oms
+  cd oms
+  make build-cli
+  ------
+
+  To install k0s (run inside lima):
+  ------
+  limactl shell lima-oms
+  cd oms
+  ./oms-cli install k0s --install-config config.yaml --version v1.30.0+k0s.0 --force
+  ------
+
+  To test remote k0s installation (run inside lima):
+  ------
+  limactl shell lima-oms
+  cd oms
+  # Setup SSH for testing  
+  ssh-keygen -t rsa -b 4096 -f ~/.ssh/test_key -N ""
+  cat ~/.ssh/test_key.pub >> ~/.ssh/authorized_keys
+  chmod 600 ~/.ssh/authorized_keys
+  # Add host to known_hosts
+  VM_IP=$(hostname -I | awk '{print $1}')
+  ssh-keyscan $VM_IP >> ~/.ssh/known_hosts
+  # Test SSH connection
+  ssh -i ~/.ssh/test_key $VM_IP "echo 'SSH works'"
+  # Note: Remote installation requires proper SSH host key verification
+  # For testing, you can add the host to known_hosts (already done above with ssh-keyscan)
+  ./oms-cli install k0s --install-config config.yaml --version v1.30.0+k0s.0 \
+    --remote-host $VM_IP --remote-user $(whoami) --ssh-key-path ~/.ssh/test_key --force
+  ------
+
+  To install Codesphere (run inside lima):
+  ------
+  limactl shell lima-oms
+  cd oms
+  ./oms-cli install codesphere --package codesphere-v1.66.0-installer --install-config config.yaml --priv-key ./path-to-private-key
+  ------
