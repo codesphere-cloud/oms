@@ -72,6 +72,9 @@ func GetRootCmd() *cobra.Command {
 	AddRegisterCmd(rootCmd, opts)
 	AddRevokeCmd(rootCmd, opts)
 
+	// Smoke test commands
+	AddSmoketestCmd(rootCmd, opts)
+
 	return rootCmd
 }
 
