@@ -32,6 +32,31 @@ type K0s struct {
 	Goarch     string
 }
 
+// valid top-level fields in a k0s ClusterConfig.
+// Reference: https://docs.k0sproject.io/stable/configuration/
+var K0sConfigTopLevelKeys = []string{
+	"apiVersion",
+	"kind",
+	"metadata",
+	"spec",
+}
+
+// valid fields in the spec section of a k0s ClusterConfig.
+// Reference: https://docs.k0sproject.io/stable/configuration/
+var K0sConfigSpecKeys = []string{
+	"api",
+	"controllerManager",
+	"scheduler",
+	"extensions",
+	"network",
+	"storage",
+	"telemetry",
+	"images",
+	"konnectivity",
+	"installConfig",
+	"featureGates",
+}
+
 func NewK0s(hw portal.Http, env env.Env, fw util.FileIO) K0sManager {
 	return &K0s{
 		Env:        env,
@@ -170,11 +195,9 @@ func (k *K0s) filterConfigForK0s(configPath string) (string, error) {
 		return "", fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	keysToKeep := map[string]bool{
-		"apiVersion": true,
-		"kind":       true,
-		"metadata":   true,
-		"spec":       true,
+	keysToKeep := make(map[string]bool, len(K0sConfigTopLevelKeys))
+	for _, key := range K0sConfigTopLevelKeys {
+		keysToKeep[key] = true
 	}
 
 	for key := range config {
@@ -184,16 +207,9 @@ func (k *K0s) filterConfigForK0s(configPath string) (string, error) {
 	}
 
 	if spec, ok := config["spec"].(map[string]interface{}); ok {
-		specKeysToKeep := map[string]bool{
-			"api":               true,
-			"controllerManager": true,
-			"scheduler":         true,
-			"extensions":        true,
-			"network":           true,
-			"storage":           true,
-			"telemetry":         true,
-			"images":            true,
-			"konnectivity":      true,
+		specKeysToKeep := make(map[string]bool, len(K0sConfigSpecKeys))
+		for _, key := range K0sConfigSpecKeys {
+			specKeysToKeep[key] = true
 		}
 
 		for key := range spec {
