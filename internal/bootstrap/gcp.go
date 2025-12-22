@@ -56,6 +56,8 @@ type CodesphereEnvironemnt struct {
 	InstallCodesphereVersion string      `json:"install_codesphere_version"`
 	Preemptible              bool        `json:"preemptible"`
 	WriteConfig              bool        `json:"write_config"`
+	GatewayIP                string      `json:"gateway_ip"`
+	PublicGatewayIP          string      `json:"public_gateway_ip"`
 
 	ProjectDisplayName    string
 	BillingAccount        string
@@ -161,6 +163,11 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironemnt, error) {
 	err = b.EnsureComputeInstances()
 	if err != nil {
 		return b.env, fmt.Errorf("failed to ensure compute instances: %w", err)
+	}
+
+	err = b.EnsureGatewayIPAddresses()
+	if err != nil {
+		return b.env, fmt.Errorf("failed to ensure external IP addresses: %w", err)
 	}
 
 	err = b.EnsureRootLoginEnabled()
@@ -453,7 +460,7 @@ func (b *GCPBootstrapper) EnsureServiceAccount(name string) (string, bool, error
 	saReq := &iam.CreateServiceAccountRequest{
 		AccountId: name,
 		ServiceAccount: &iam.ServiceAccount{
-			DisplayName: "Artifact Registry Writer",
+			DisplayName: name,
 		},
 	}
 
@@ -480,15 +487,13 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 
 func (b *GCPBootstrapper) EnsureIAMRole(saID, role string) error {
 
-	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saID, b.env.ProjectID)
+	member := fmt.Sprintf("serviceAccount:%s@%s.iam.gserviceaccount.com", saID, b.env.ProjectID)
 
 	c, err := resourcemanager.NewProjectsClient(b.ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create resource manager client: %w", err)
 	}
 	defer c.Close()
-
-	member := fmt.Sprintf("serviceAccount:%s", saEmail)
 
 	getReq := &iampb.GetIamPolicyRequest{
 		Resource: b.env.ProjectName,
@@ -774,6 +779,7 @@ type VMDef struct {
 	MachineType     string
 	Tags            []string
 	AdditionalDisks []int64
+	ExternalIP      bool
 }
 
 func (b *GCPBootstrapper) EnsureComputeInstances() error {
@@ -791,15 +797,15 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	// Example VM definitions (expand as needed)
 
 	vmDefs := []VMDef{
-		{"jumpbox", "e2-medium", []string{"jumpbox", "ssh"}, []int64{}},
-		{"postgres", "e2-medium", []string{"postgres"}, []int64{50}},
-		{"ceph-1", "e2-standard-8", []string{"ceph"}, []int64{20, 200}},
-		{"ceph-2", "e2-standard-8", []string{"ceph"}, []int64{20, 200}},
-		{"ceph-3", "e2-standard-8", []string{"ceph"}, []int64{20, 200}},
-		{"ceph-4", "e2-standard-8", []string{"ceph"}, []int64{20, 200}},
-		{"k0s-1", "e2-standard-8", []string{"k0s"}, []int64{}},
-		{"k0s-2", "e2-standard-8", []string{"k0s"}, []int64{}},
-		{"k0s-3", "e2-standard-8", []string{"k0s"}, []int64{}},
+		{"jumpbox", "e2-medium", []string{"jumpbox", "ssh"}, []int64{}, true},
+		{"postgres", "e2-medium", []string{"postgres"}, []int64{50}, true},
+		{"ceph-1", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
+		{"ceph-2", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
+		{"ceph-3", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
+		{"ceph-4", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
+		{"k0s-1", "e2-standard-8", []string{"k0s"}, []int64{}, false},
+		{"k0s-2", "e2-standard-8", []string{"k0s"}, []int64{}, false},
+		{"k0s-3", "e2-standard-8", []string{"k0s"}, []int64{}, false},
 	}
 
 	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", projectID, projectID)
@@ -834,9 +840,14 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
 
 		instance := &computepb.Instance{
-			Name:            protoString(vm.Name),
-			ServiceAccounts: []*computepb.ServiceAccount{{Email: protoString(serviceAccount)}},
-			MachineType:     protoString(fmt.Sprintf("zones/%s/machineTypes/%s", zone, vm.MachineType)),
+			Name: protoString(vm.Name),
+			ServiceAccounts: []*computepb.ServiceAccount{
+				{
+					Email:  protoString(serviceAccount),
+					Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
+				},
+			},
+			MachineType: protoString(fmt.Sprintf("zones/%s/machineTypes/%s", zone, vm.MachineType)),
 			Tags: &computepb.Tags{
 				Items: vm.Tags,
 			},
@@ -847,12 +858,6 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				{
 					Network:    protoString(network),
 					Subnetwork: protoString(subnetwork),
-					AccessConfigs: []*computepb.AccessConfig{
-						{
-							Name: protoString("External NAT"),
-							Type: protoString("ONE_TO_ONE_NAT"),
-						},
-					},
 				},
 			},
 			Disks: disks,
@@ -860,10 +865,20 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				Items: []*computepb.Items{
 					{
 						Key:   protoString("ssh-keys"),
-						Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", readSSHKey(b.env.SSHPublicKeyPath), readSSHKey(b.env.SSHPublicKeyPath))),
+						Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", readSSHKey(b.env.SSHPublicKeyPath)+"root", readSSHKey(b.env.SSHPublicKeyPath)) + "ubuntu"),
 					},
 				},
 			},
+		}
+
+		// Configure external IP if needed
+		if vm.ExternalIP {
+			instance.NetworkInterfaces[0].AccessConfigs = []*computepb.AccessConfig{
+				{
+					Name: protoString("External NAT"),
+					Type: protoString("ONE_TO_ONE_NAT"),
+				},
+			}
 		}
 
 		op, err := instancesClient.Insert(ctx, &computepb.InsertInstanceRequest{
@@ -918,6 +933,64 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	}
 
 	return nil
+}
+
+// EnsureGatewayIPAddresses reserves 2 static external IP addresses for the ingress
+// controllers of the cluster.
+func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
+	var err error
+	b.env.GatewayIP, err = b.EnsureExternalIP("gateway")
+	if err != nil {
+		return fmt.Errorf("failed to ensure gateway IP: %w", err)
+	}
+	b.env.PublicGatewayIP, err = b.EnsureExternalIP("public-gateway")
+	if err != nil {
+		return fmt.Errorf("failed to ensure public gateway IP: %w", err)
+	}
+	return nil
+}
+
+func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
+	addressesClient, err := compute.NewAddressesRESTClient(b.ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to create addresses client: %w", err)
+	}
+	defer addressesClient.Close()
+
+	desiredAddress := &computepb.Address{
+		Name:        &name,
+		AddressType: protoString("EXTERNAL"),
+		Region:      &b.env.Region,
+	}
+
+	// Figure out if address already exists and get IP
+	req := &computepb.GetAddressRequest{
+		Project: b.env.ProjectID,
+		Region:  b.env.Region,
+		Address: *desiredAddress.Name,
+	}
+
+	address, err := addressesClient.Get(b.ctx, req)
+
+	if err == nil && address != nil {
+		fmt.Printf("Address %s already exists\n", name)
+		return address.GetAddress(), nil
+	}
+
+	op, err := addressesClient.Insert(b.ctx, &computepb.InsertAddressRequest{
+		Project:         b.env.ProjectID,
+		Region:          b.env.Region,
+		AddressResource: desiredAddress,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to create address %s: %w", name, err)
+	}
+	if err := op.Wait(b.ctx); err != nil {
+		return "", fmt.Errorf("failed to wait for address %s creation: %w", name, err)
+	}
+	fmt.Printf("Address %s ensured\n", name)
+
+	return address.GetAddress(), nil
 }
 
 func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
@@ -1063,9 +1136,15 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.InstallConfig.Cluster.Gateway = files.GatewayConfig{
 		ServiceType: "LoadBalancer",
 		//IPAddresses: []string{b.env.ControlPlaneNodes[0].ExternalIP},
+		Annotations: map[string]string{
+			"cloud.google.com/load-balancer-ipv4": b.env.GatewayIP,
+		},
 	}
 	b.InstallConfig.Cluster.PublicGateway = files.GatewayConfig{
 		ServiceType: "LoadBalancer",
+		Annotations: map[string]string{
+			"cloud.google.com/load-balancer-ipv4": b.env.PublicGatewayIP,
+		},
 		//IPAddresses: []string{b.env.ControlPlaneNodes[1].ExternalIP},
 	}
 
@@ -1240,19 +1319,25 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 			Name:    fmt.Sprintf("cs.%s.", b.env.BaseDomain),
 			Type:    "A",
 			Ttl:     300,
-			Rrdatas: []string{b.env.ControlPlaneNodes[0].ExternalIP},
+			Rrdatas: []string{b.env.GatewayIP},
 		},
 		{
 			Name:    fmt.Sprintf("*.cs.%s.", b.env.BaseDomain),
 			Type:    "A",
 			Ttl:     300,
-			Rrdatas: []string{b.env.ControlPlaneNodes[0].ExternalIP},
+			Rrdatas: []string{b.env.GatewayIP},
 		},
 		{
 			Name:    fmt.Sprintf("*.ws.%s.", b.env.BaseDomain),
 			Type:    "A",
 			Ttl:     300,
-			Rrdatas: []string{b.env.ControlPlaneNodes[0].ExternalIP},
+			Rrdatas: []string{b.env.PublicGatewayIP},
+		},
+		{
+			Name:    fmt.Sprintf("ws.%s.", b.env.BaseDomain),
+			Type:    "A",
+			Ttl:     300,
+			Rrdatas: []string{b.env.PublicGatewayIP},
 		},
 	}
 
@@ -1412,5 +1497,5 @@ func readSSHKey(path string) string {
 	if err != nil {
 		return ""
 	}
-	return string(data)
+	return strings.TrimSpace(string(data))
 }
