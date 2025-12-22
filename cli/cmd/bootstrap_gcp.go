@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -20,7 +21,7 @@ type BootstrapGcpCmd struct {
 	cmd           *cobra.Command
 	Opts          *GlobalOptions
 	Env           env.Env
-	CodesphereEnv *bootstrap.CodesphereEnvironemnt
+	CodesphereEnv *bootstrap.CodesphereEnvironment
 }
 
 func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
@@ -46,7 +47,7 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 		},
 		Opts:          opts,
 		Env:           env.NewEnv(),
-		CodesphereEnv: &bootstrap.CodesphereEnvironemnt{},
+		CodesphereEnv: &bootstrap.CodesphereEnvironment{},
 	}
 
 	flags := bootstrapGcpCmd.cmd.Flags()
@@ -81,7 +82,8 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
-	bootstrapper, err := bootstrap.NewGCPBootstrapper(c.Env, c.CodesphereEnv)
+	gcpClient := bootstrap.NewGCPClient(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	bootstrapper, err := bootstrap.NewGCPBootstrapper(c.Env, c.CodesphereEnv, gcpClient)
 	if err != nil {
 		return err
 	}

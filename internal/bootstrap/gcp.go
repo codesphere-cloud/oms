@@ -8,27 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"slices"
-
-	artifact "cloud.google.com/go/artifactregistry/apiv1"
-	artifactpb "cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	compute "cloud.google.com/go/compute/apiv1"
 	"cloud.google.com/go/compute/apiv1/computepb"
-	"cloud.google.com/go/iam/apiv1/iampb"
-	resourcemanager "cloud.google.com/go/resourcemanager/apiv3"
-	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
-	serviceusage "cloud.google.com/go/serviceusage/apiv1"
-	"cloud.google.com/go/serviceusage/apiv1/serviceusagepb"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
-	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
-	"google.golang.org/api/iam/v1"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -36,14 +24,15 @@ import (
 
 type GCPBootstrapper struct {
 	ctx           context.Context
-	env           *CodesphereEnvironemnt
+	env           *CodesphereEnvironment
 	InstallConfig *files.RootConfig
 	Secrets       *files.InstallVault
 	icg           installer.InstallConfigManager
 	NodeManager   *node.NodeManager
+	GCPClient     GCPClient
 }
 
-type CodesphereEnvironemnt struct {
+type CodesphereEnvironment struct {
 	ProjectID                string      `json:"project_id"`
 	ProjectName              string      `json:"project_name"`
 	DNSProjectID             string      `json:"dns_project_id"`
@@ -77,7 +66,7 @@ type CodesphereEnvironemnt struct {
 	DNSZoneName           string
 }
 
-func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironemnt) (*GCPBootstrapper, error) {
+func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironment, gcpClient GCPClient) (*GCPBootstrapper, error) {
 	ctx := context.Background()
 	fw := util.NewFilesystemWriter()
 	icg := installer.NewInstallConfigManager()
@@ -116,10 +105,11 @@ func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironemnt) (*GCP
 		Secrets:       icg.GetVault(),
 		ctx:           ctx,
 		icg:           icg,
+		GCPClient:     gcpClient,
 	}, nil
 }
 
-func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironemnt, error) {
+func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironment, error) {
 	err := b.EnsureProject()
 	if err != nil {
 		return b.env, fmt.Errorf("failed to ensure GCP project: %w", err)
@@ -218,12 +208,6 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironemnt, error) {
 }
 
 func (b *GCPBootstrapper) EnsureProject() error {
-	client, err := resourcemanager.NewProjectsClient(b.ctx, option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")))
-	if err != nil {
-		return fmt.Errorf("failed to create resource manager client: %w", err)
-	}
-	defer client.Close()
-
 	parent := ""
 	if b.env.FolderID != "" {
 		parent = fmt.Sprintf("folders/%s", b.env.FolderID)
@@ -232,97 +216,40 @@ func (b *GCPBootstrapper) EnsureProject() error {
 	// Generate a unique project ID
 	projectGuid := strings.ToLower(shortuuid.New()[:8])
 	projectId := b.env.ProjectName + "-" + projectGuid
-	project := &resourcemanagerpb.Project{
-		ProjectId:   projectId,
-		DisplayName: b.env.ProjectName,
-		Parent:      parent,
-	}
 
-	existingProject, err := b.getProjectByName(b.ctx, client, b.env.ProjectName)
+	existingProject, err := b.GCPClient.GetProjectByName(b.ctx, b.env.FolderID, b.env.ProjectName)
 	if err == nil {
 		b.env.ProjectID = existingProject.ProjectId
 		b.env.ProjectName = existingProject.Name
 		return nil
 	}
 	if err.Error() == fmt.Sprintf("project not found: %s", b.env.ProjectName) {
-		_, err = client.CreateProject(b.ctx, &resourcemanagerpb.CreateProjectRequest{
-			Project: project,
-		})
+		_, err := b.GCPClient.CreateProject(b.ctx, parent, projectId, b.env.ProjectName)
 		if err != nil {
 			return fmt.Errorf("failed to create project: %w", err)
 		}
-		b.env.ProjectID = project.ProjectId
-		b.env.ProjectName = project.Name
+		b.env.ProjectID = projectId
 		return nil
 	}
 	return fmt.Errorf("failed to get project: %w", err)
 }
 
 func (b *GCPBootstrapper) EnsureBilling() error {
-	projectID := b.env.ProjectID
-	billingAccount := b.env.BillingAccount
-
-	ctx := b.ctx
-	billingService, err := cloudbilling.NewService(ctx, option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")))
-	if err != nil {
-		return fmt.Errorf("failed to create Cloud Billing service: %w", err)
-	}
-
-	projectName := fmt.Sprintf("projects/%s", projectID)
-	billingInfo := &cloudbilling.ProjectBillingInfo{
-		BillingAccountName: fmt.Sprintf("billingAccounts/%s", billingAccount),
-	}
-
-	bi, err := billingService.Projects.GetBillingInfo(projectName).Context(ctx).Do()
+	projectName := fmt.Sprintf("projects/%s", b.env.ProjectID)
+	bi, err := b.GCPClient.GetBillingInfo(projectName)
 	if err != nil {
 		return fmt.Errorf("failed to get billing info: %w", err)
 	}
-	if bi.BillingEnabled && bi.BillingAccountName == billingInfo.BillingAccountName {
+	if bi.BillingEnabled && bi.BillingAccountName == b.env.BillingAccount {
 		return nil
 	}
 
-	_, err = billingService.Projects.UpdateBillingInfo(projectName, billingInfo).Context(ctx).Do()
-	if err != nil {
-		return fmt.Errorf("failed to enable billing: %w", err)
-	}
-
-	fmt.Printf("Billing enabled for project %s with account %s\n", projectID, billingAccount)
+	b.GCPClient.EnableBilling(b.ctx, projectName, b.env.BillingAccount)
+	log.Printf("Billing enabled for project %s with account %s\n", b.env.ProjectID, b.env.BillingAccount)
 	return nil
 }
 
-func (b *GCPBootstrapper) getProjectByName(ctx context.Context, client *resourcemanager.ProjectsClient, displayName string) (*resourcemanagerpb.Project, error) {
-	req := &resourcemanagerpb.ListProjectsRequest{
-		Parent:      fmt.Sprintf("folders/%s", b.env.FolderID),
-		ShowDeleted: false,
-	}
-
-	it := client.ListProjects(ctx, req)
-
-	for {
-		project, err := it.Next()
-		if err == iterator.Done {
-			// No more results found
-			return nil, fmt.Errorf("project not found: %s", displayName)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("error iterating projects: %w", err)
-		}
-
-		// Because the filter is a prefix search on the display name,
-		// we should perform an exact match check here to be sure.
-		if project.GetDisplayName() == displayName {
-			return project, nil
-		}
-	}
-}
-
 func (b *GCPBootstrapper) EnsureAPIsEnabled() error {
-	client, err := serviceusage.NewClient(b.ctx, option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")))
-	if err != nil {
-		return fmt.Errorf("failed to create serviceusage client: %w", err)
-	}
-	defer client.Close()
-
 	apis := []string{
 		"compute.googleapis.com",
 		"serviceusage.googleapis.com",
@@ -330,95 +257,39 @@ func (b *GCPBootstrapper) EnsureAPIsEnabled() error {
 		"dns.googleapis.com",
 	}
 
-	for _, api := range apis {
-		log.Printf("Enabling API: %s", api)
-		serviceName := fmt.Sprintf("%s/services/%s", b.env.ProjectName, api)
-		// Figure out if API is already enabled
-		svc, err := client.GetService(b.ctx, &serviceusagepb.GetServiceRequest{Name: serviceName})
-		if err == nil && svc.State == serviceusagepb.State_ENABLED {
-			fmt.Printf("API %s already enabled\n", api)
-			continue
-		}
-		if err != nil {
-			return fmt.Errorf("failed to get service %s: %w", api, err)
-		}
-
-		// Enable the API
-		op, err := client.EnableService(b.ctx, &serviceusagepb.EnableServiceRequest{Name: serviceName})
-		if err != nil {
-			// If already enabled, ignore error
-			if status.Code(err) == codes.AlreadyExists {
-				fmt.Printf("API %s already enabled\n", api)
-				continue
-			}
-			return fmt.Errorf("failed to enable API %s: %w", api, err)
-		}
-		if _, err := op.Wait(b.ctx); err != nil {
-			return fmt.Errorf("failed to enable API %s: %w", api, err)
-		}
-		fmt.Printf("Enabled API: %s\n", api)
-
+	err := b.GCPClient.EnableAPIs(b.ctx, b.env.ProjectID, apis)
+	if err != nil {
+		return fmt.Errorf("failed to enable APIs: %w", err)
 	}
+
+	log.Printf("Required APIs enabled for project %s\n", b.env.ProjectID)
 
 	return nil
 }
 
 func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
-	projectID := b.env.ProjectID
-	location := b.env.Region // You may want to make this configurable
 	repoName := "codesphere-registry"
-	fullRepoName := fmt.Sprintf("projects/%s/locations/%s/repositories/%s", projectID, location, repoName)
 
-	ctx := b.ctx
-
-	artifactClient, err := artifact.NewClient(ctx, option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")))
-	if err != nil {
-		return fmt.Errorf("failed to create artifact registry client: %w", err)
+	repo, err := b.GCPClient.GetArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
+	if err == nil && repo != nil {
+		b.InstallConfig.Registry.Server = repo.GetRegistryUri()
+		return nil
 	}
-	defer artifactClient.Close()
-
-	parent := fmt.Sprintf("projects/%s/locations/%s", projectID, location)
-	repoReq := &artifactpb.CreateRepositoryRequest{
-		Parent:       parent,
-		RepositoryId: repoName,
-		Repository: &artifactpb.Repository{
-			Format:      artifactpb.Repository_DOCKER,
-			Description: "Codesphere managed registry",
-			Name:        fullRepoName,
-		},
+	repo, err = b.GCPClient.CreateArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
+	if err != nil || repo == nil {
+		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
 	}
 
-	op, err := artifactClient.CreateRepository(ctx, repoReq)
-	if err != nil && status.Code(err) != codes.AlreadyExists {
-		return fmt.Errorf("failed to create artifact registry repository: %w", err)
-	}
-	var repo *artifactpb.Repository
-	if err == nil {
-		repo, err = op.Wait(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to wait for artifact registry repository creation: %w", err)
-		}
-	}
-
-	if repo == nil {
-		repo, err = artifactClient.GetRepository(b.ctx, &artifactpb.GetRepositoryRequest{
-			Name: fullRepoName,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to get artifact registry repository: %w", err)
-		}
-	}
-
-	b.InstallConfig.Registry.Server = repo.GetRegistryUri()
-	fmt.Printf("Artifact Registry repository %s ensured\n", repoName)
+	log.Printf("Artifact Registry repository %s ensured\n", repoName)
 
 	return nil
 }
 
 func (b *GCPBootstrapper) EnsureServiceAccounts() error {
-	iamService, err := iam.NewService(b.ctx)
-
-	_, _, err = b.EnsureServiceAccount("cloud-controller")
+	_, _, err := b.EnsureServiceAccount("cloud-controller")
+	if err != nil {
+		return err
+	}
 	sa, newSa, err := b.EnsureServiceAccount("artifact-registry-writer")
 	if err != nil {
 		return err
@@ -429,21 +300,18 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 	}
 
 	for retries := range 5 {
-		// Create Service Account Key
-		keyReq := &iam.CreateServiceAccountKeyRequest{}
-		saName := fmt.Sprintf("projects/%s/serviceAccounts/%s", b.env.ProjectID, sa)
-		key, err := iamService.Projects.ServiceAccounts.Keys.Create(saName, keyReq).Context(b.ctx).Do()
+		privateKey, err := b.GCPClient.CreateServiceAccountKey(b.ctx, b.env.ProjectID, sa)
 
 		if err != nil && status.Code(err) != codes.AlreadyExists {
 			if retries > 3 {
 				return fmt.Errorf("failed to create service account key: %w", err)
 			}
-			log.Printf("got response %d trying to create service account key for %s, retrying...", status.Code(err), saName)
+			log.Printf("got response %d trying to create service account key for %s, retrying...", status.Code(err), sa)
 			time.Sleep(5 * time.Second)
 			continue
 		}
 		fmt.Printf("Service account key for %s ensured\n", sa)
-		b.InstallConfig.Registry.Password = string(key.PrivateKeyData)
+		b.InstallConfig.Registry.Password = string(privateKey)
 		b.InstallConfig.Registry.Username = "_json_key_base64"
 		break
 	}
@@ -452,223 +320,41 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 }
 
 func (b *GCPBootstrapper) EnsureServiceAccount(name string) (string, bool, error) {
-	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", name, b.env.ProjectID)
-	iamService, err := iam.NewService(b.ctx)
-	if err != nil {
-		return "", false, fmt.Errorf("failed to create IAM service: %w", err)
-	}
-	saReq := &iam.CreateServiceAccountRequest{
-		AccountId: name,
-		ServiceAccount: &iam.ServiceAccount{
-			DisplayName: name,
-		},
-	}
-
-	newSA := false
-	_, err = iamService.Projects.ServiceAccounts.Create(fmt.Sprintf("projects/%s", b.env.ProjectID), saReq).Context(b.ctx).Do()
-	if err != nil && !strings.HasPrefix(err.Error(), "googleapi: Error 409: Service account") {
-		return "", false, fmt.Errorf("failed to create service account: %w", err)
-	}
-	if err == nil {
-		newSA = true
-	}
-	fmt.Printf("Service account %s ensured\n", saEmail)
-	return saEmail, newSA, nil
+	return b.GCPClient.CreateServiceAccount(b.ctx, b.env.ProjectID, name, name)
 }
 
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.EnsureIAMRole("artifact-registry-writer", "roles/artifactregistry.writer")
+	err := b.GCPClient.AssignIAMRole(b.ctx, b.env.ProjectID, "artifact-registry-writer", "roles/artifactregistry.writer")
 	if err != nil {
 		return err
 	}
-	err = b.EnsureIAMRole("cloud-controller", "roles/compute.admin")
+	err = b.GCPClient.AssignIAMRole(b.ctx, b.env.ProjectID, "cloud-controller", "roles/compute.admin")
 	return err
 }
 
-func (b *GCPBootstrapper) EnsureIAMRole(saID, role string) error {
-
-	member := fmt.Sprintf("serviceAccount:%s@%s.iam.gserviceaccount.com", saID, b.env.ProjectID)
-
-	c, err := resourcemanager.NewProjectsClient(b.ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create resource manager client: %w", err)
-	}
-	defer c.Close()
-
-	getReq := &iampb.GetIamPolicyRequest{
-		Resource: b.env.ProjectName,
-	}
-
-	policy, err := c.GetIamPolicy(b.ctx, getReq)
-	if err != nil {
-		return fmt.Errorf("failed to get IAM policy: %w", err)
-	}
-
-	// Check if the binding already exists
-	for _, binding := range policy.Bindings {
-		if binding.Role == role {
-			if slices.Contains(binding.Members, member) {
-				fmt.Printf("IAM role %s already assigned to %s\n", role, member)
-				return nil
-			}
-		}
-	}
-
-	policy.Bindings = append(policy.Bindings, &iampb.Binding{
-		Role:    role,
-		Members: []string{member},
-	})
-	req := &iampb.SetIamPolicyRequest{
-		Resource: b.env.ProjectName,
-		Policy:   policy,
-	}
-
-	_, err = c.SetIamPolicy(b.ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to set IAM policy: %w", err)
-	}
-
-	fmt.Printf("Assigned IAM role %s to %s\n", role, member)
-	return nil
-}
 func (b *GCPBootstrapper) EnsureVPC() error {
-	projectID := b.env.ProjectID
-	networkName := fmt.Sprintf("%s-vpc", projectID)
-	subnetName := fmt.Sprintf("%s-%s-subnet", projectID, b.env.Region)
-	routerName := fmt.Sprintf("%s-router", projectID)
-	natName := fmt.Sprintf("%s-nat-gateway", projectID)
-
-	ctx := b.ctx
+	networkName := fmt.Sprintf("%s-vpc", b.env.ProjectID)
+	subnetName := fmt.Sprintf("%s-%s-subnet", b.env.ProjectID, b.env.Region)
+	routerName := fmt.Sprintf("%s-router", b.env.ProjectID)
+	natName := fmt.Sprintf("%s-nat-gateway", b.env.ProjectID)
 
 	// Create VPC
-	networksClient, err := compute.NewNetworksRESTClient(ctx)
+	err := b.GCPClient.CreateVPC(b.ctx, b.env.ProjectID, b.env.Region, networkName, subnetName, routerName, natName)
 	if err != nil {
-		return fmt.Errorf("failed to create networks client: %w", err)
-	}
-	defer networksClient.Close()
-
-	network := &computepb.Network{
-		Name:                  &networkName,
-		AutoCreateSubnetworks: protoBool(false),
-	}
-	op, err := networksClient.Insert(ctx, &computepb.InsertNetworkRequest{
-		Project:         projectID,
-		NetworkResource: network,
-	})
-	if err != nil && !isAlreadyExistsError(err) {
-		return fmt.Errorf("failed to create VPC: %w", err)
-	}
-	if err == nil {
-		if err := op.Wait(ctx); err != nil {
-			return fmt.Errorf("failed to wait for VPC creation: %w", err)
-		}
+		return fmt.Errorf("failed to ensure VPC: %w", err)
 	}
 	fmt.Printf("VPC %s ensured\n", networkName)
-
-	// Create Subnet
-	subnetsClient, err := compute.NewSubnetworksRESTClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create subnetworks client: %w", err)
-	}
-	defer subnetsClient.Close()
-
-	subnet := &computepb.Subnetwork{
-		Name:        &subnetName,
-		IpCidrRange: protoString("10.10.0.0/20"),
-		Region:      &b.env.Region,
-		Network:     protoString(fmt.Sprintf("projects/%s/global/networks/%s", projectID, networkName)),
-	}
-	op, err = subnetsClient.Insert(ctx, &computepb.InsertSubnetworkRequest{
-		Project:            projectID,
-		Region:             b.env.Region,
-		SubnetworkResource: subnet,
-	})
-	if err != nil && !isAlreadyExistsError(err) {
-		return fmt.Errorf("failed to create subnet: %w", err)
-	}
-	if err == nil {
-		if err := op.Wait(ctx); err != nil {
-			return fmt.Errorf("failed to wait for subnet creation: %w", err)
-		}
-	}
-	fmt.Printf("Subnet %s ensured\n", subnetName)
-
-	// Create Router
-	routersClient, err := compute.NewRoutersRESTClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create routers client: %w", err)
-	}
-	defer routersClient.Close()
-
-	router := &computepb.Router{
-		Name:    &routerName,
-		Region:  &b.env.Region,
-		Network: protoString(fmt.Sprintf("projects/%s/global/networks/%s", projectID, networkName)),
-	}
-	op, err = routersClient.Insert(ctx, &computepb.InsertRouterRequest{
-		Project:        projectID,
-		Region:         b.env.Region,
-		RouterResource: router,
-	})
-	if err != nil && !isAlreadyExistsError(err) {
-		return fmt.Errorf("failed to create router: %w", err)
-	}
-	if err == nil {
-		if err := op.Wait(ctx); err != nil {
-			return fmt.Errorf("failed to wait for router creation: %w", err)
-		}
-	}
-	fmt.Printf("Router %s ensured\n", routerName)
-
-	// Create NAT Gateway
-	natsClient, err := compute.NewRoutersRESTClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create routers client for NAT: %w", err)
-	}
-	defer natsClient.Close()
-
-	nat := &computepb.RouterNat{
-		Name:                          &natName,
-		SourceSubnetworkIpRangesToNat: protoString("ALL_SUBNETWORKS_ALL_IP_RANGES"),
-		NatIpAllocateOption:           protoString("AUTO_ONLY"),
-		LogConfig: &computepb.RouterNatLogConfig{
-			Enable: protoBool(false),
-			Filter: protoString("ERRORS_ONLY"),
-		},
-	}
-	// Patch NAT config to router
-	_, err = routersClient.Patch(ctx, &computepb.PatchRouterRequest{
-		Project: projectID,
-		Region:  b.env.Region,
-		Router:  routerName,
-		RouterResource: &computepb.Router{
-			Name: &routerName,
-			Nats: []*computepb.RouterNat{nat},
-		},
-	})
-	if err != nil && !isAlreadyExistsError(err) {
-		return fmt.Errorf("failed to create NAT gateway: %w", err)
-	}
-	fmt.Printf("NAT gateway %s ensured\n", natName)
 
 	return nil
 }
 
 func (b *GCPBootstrapper) EnsureFirewallRules() error {
-	projectID := b.env.ProjectID
-	networkName := fmt.Sprintf("%s-vpc", projectID)
-	ctx := b.ctx
-
-	firewallsClient, err := compute.NewFirewallsRESTClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create firewalls client: %w", err)
-	}
-	defer firewallsClient.Close()
+	networkName := fmt.Sprintf("%s-vpc", b.env.ProjectID)
 
 	// Allow external SSH to Jumpbox
 	sshRule := &computepb.Firewall{
 		Name:      protoString("allow-ssh-ext"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", projectID, networkName)),
+		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.env.ProjectID, networkName)),
 		Direction: protoString("INGRESS"),
 		Priority:  protoInt32(1000),
 		Allowed: []*computepb.Allowed{
@@ -681,18 +367,15 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		TargetTags:   []string{"ssh"},
 		Description:  protoString("Allow external SSH to Jumpbox"),
 	}
-	_, err = firewallsClient.Insert(ctx, &computepb.InsertFirewallRequest{
-		Project:          projectID,
-		FirewallResource: sshRule,
-	})
-	if err != nil && !isAlreadyExistsError(err) {
-		return fmt.Errorf("failed to create SSH firewall rule: %w", err)
+	err := b.GCPClient.CreateFirewallRule(b.ctx, b.env.ProjectID, sshRule)
+	if err != nil {
+		return fmt.Errorf("failed to create jumpbox ssh firewall rule: %w", err)
 	}
 
 	// Allow all internal traffic
 	internalRule := &computepb.Firewall{
 		Name:      protoString("allow-internal"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", projectID, networkName)),
+		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.env.ProjectID, networkName)),
 		Direction: protoString("INGRESS"),
 		Priority:  protoInt32(1000),
 		Allowed: []*computepb.Allowed{
@@ -701,18 +384,15 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		SourceRanges: []string{"10.10.0.0/20"},
 		Description:  protoString("Allow all internal traffic"),
 	}
-	_, err = firewallsClient.Insert(ctx, &computepb.InsertFirewallRequest{
-		Project:          projectID,
-		FirewallResource: internalRule,
-	})
-	if err != nil && !isAlreadyExistsError(err) {
+	err = b.GCPClient.CreateFirewallRule(b.ctx, b.env.ProjectID, internalRule)
+	if err != nil {
 		return fmt.Errorf("failed to create internal firewall rule: %w", err)
 	}
 
 	// Allow all egress
 	egressRule := &computepb.Firewall{
 		Name:      protoString("allow-all-egress"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", projectID, networkName)),
+		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.env.ProjectID, networkName)),
 		Direction: protoString("EGRESS"),
 		Priority:  protoInt32(1000),
 		Allowed: []*computepb.Allowed{
@@ -721,18 +401,15 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		DestinationRanges: []string{"0.0.0.0/0"},
 		Description:       protoString("Allow all egress"),
 	}
-	_, err = firewallsClient.Insert(ctx, &computepb.InsertFirewallRequest{
-		Project:          projectID,
-		FirewallResource: egressRule,
-	})
-	if err != nil && !isAlreadyExistsError(err) {
+	err = b.GCPClient.CreateFirewallRule(b.ctx, b.env.ProjectID, egressRule)
+	if err != nil {
 		return fmt.Errorf("failed to create egress firewall rule: %w", err)
 	}
 
 	// Allow ingress for web (HTTP/HTTPS)
 	webRule := &computepb.Firewall{
 		Name:      protoString("allow-ingress-web"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", projectID, networkName)),
+		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.env.ProjectID, networkName)),
 		Direction: protoString("INGRESS"),
 		Priority:  protoInt32(1000),
 		Allowed: []*computepb.Allowed{
@@ -741,18 +418,15 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		SourceRanges: []string{"0.0.0.0/0"},
 		Description:  protoString("Allow HTTP/HTTPS ingress"),
 	}
-	_, err = firewallsClient.Insert(ctx, &computepb.InsertFirewallRequest{
-		Project:          projectID,
-		FirewallResource: webRule,
-	})
-	if err != nil && !isAlreadyExistsError(err) {
-		return fmt.Errorf("failed to create web ingress firewall rule: %w", err)
+	err = b.GCPClient.CreateFirewallRule(b.ctx, b.env.ProjectID, webRule)
+	if err != nil {
+		return fmt.Errorf("failed to create web firewall rule: %w", err)
 	}
 
 	// Allow ingress for PostgreSQL
 	postgresRule := &computepb.Firewall{
 		Name:      protoString("allow-ingress-postgres"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", projectID, networkName)),
+		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.env.ProjectID, networkName)),
 		Direction: protoString("INGRESS"),
 		Priority:  protoInt32(1000),
 		Allowed: []*computepb.Allowed{
@@ -762,12 +436,9 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		TargetTags:   []string{"postgres"},
 		Description:  protoString("Allow external access to PostgreSQL"),
 	}
-	_, err = firewallsClient.Insert(ctx, &computepb.InsertFirewallRequest{
-		Project:          projectID,
-		FirewallResource: postgresRule,
-	})
-	if err != nil && !isAlreadyExistsError(err) {
-		return fmt.Errorf("failed to create postgres ingress firewall rule: %w", err)
+	err = b.GCPClient.CreateFirewallRule(b.ctx, b.env.ProjectID, postgresRule)
+	if err != nil {
+		return fmt.Errorf("failed to create postgres firewall rule: %w", err)
 	}
 
 	fmt.Println("Firewall rules ensured")
@@ -1167,7 +838,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 							BomRef: "workspace-agent-24.04",
 						},
 						Pool: map[int]int{
-							1: 1,
+							101: 5,
+							8:   5,
 						},
 					},
 				},
@@ -1449,10 +1121,15 @@ EOF
 
 KUBECTL="/etc/codesphere/deps/kubernetes/files/k0s kubectl"
 $KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system
+echo alias kubectl=\"$KUBECTL\" >> /root/.bashrc
 
 $KUBECTL apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-gcp/refs/tags/providers/v0.28.2/deploy/packages/default/manifest.yaml
 
 $KUBECTL apply -f cc-deployment.yaml
+
+// set loadBalancerIP for public-gateway-controller and gateway-controller
+$KUBECTL patch svc public-gateway-controller -n codesphere-system -p '{"spec": {"loadBalancerIP": "'` + b.env.PublicGatewayIP + `'"}}'
+$KUBECTL patch svc gateway-controller -n codesphere-system -p '{"spec": {"loadBalancerIP": "'` + b.env.GatewayIP + `'"}}'
 
 sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
 
@@ -1483,10 +1160,8 @@ systemctl restart k0scontroller
 }
 
 // Helper functions
-func protoString(s string) *string { return &s }
-func protoBool(b bool) *bool       { return &b }
-func protoInt32(i int32) *int32    { return &i }
-func protoInt64(i int64) *int64    { return &i }
+func protoInt32(i int32) *int32 { return &i }
+func protoInt64(i int64) *int64 { return &i }
 func isAlreadyExistsError(err error) bool {
 	return status.Code(err) == codes.AlreadyExists || strings.Contains(err.Error(), "already exists")
 }
