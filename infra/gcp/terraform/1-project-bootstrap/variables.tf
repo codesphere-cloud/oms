@@ -1,3 +1,6 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 variable "billing_account" {
   description = "Your GCP billing account ID"
   type        = string

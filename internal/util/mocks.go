@@ -718,14 +718,20 @@ type MockFileIO_ReadFile_Call struct {
 }
 
 // ReadFile is a helper method to define mock.On call
-//   - filename
+//   - filename string
 func (_e *MockFileIO_Expecter) ReadFile(filename interface{}) *MockFileIO_ReadFile_Call {
 	return &MockFileIO_ReadFile_Call{Call: _e.mock.On("ReadFile", filename)}
 }
 
 func (_c *MockFileIO_ReadFile_Call) Run(run func(filename string)) *MockFileIO_ReadFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }

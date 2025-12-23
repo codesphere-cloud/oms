@@ -1,3 +1,6 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 output "external_ips" {
   description = "The external IP addresses for jumpbox access and DNS for ingress."
 value = {

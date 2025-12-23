@@ -1,3 +1,6 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # Configure the Google provider and link to the project
 terraform {
   required_providers {

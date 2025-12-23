@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 
 set -ex
 
