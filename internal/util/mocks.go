@@ -684,6 +684,68 @@ func (_c *MockFileIO_ReadDir_Call) RunAndReturn(run func(dirname string) ([]os.D
 	return _c
 }
 
+// ReadFile provides a mock function for the type MockFileIO
+func (_mock *MockFileIO) ReadFile(filename string) ([]byte, error) {
+	ret := _mock.Called(filename)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReadFile")
+	}
+
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) ([]byte, error)); ok {
+		return returnFunc(filename)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) []byte); ok {
+		r0 = returnFunc(filename)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(filename)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockFileIO_ReadFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReadFile'
+type MockFileIO_ReadFile_Call struct {
+	*mock.Call
+}
+
+// ReadFile is a helper method to define mock.On call
+//   - filename string
+func (_e *MockFileIO_Expecter) ReadFile(filename interface{}) *MockFileIO_ReadFile_Call {
+	return &MockFileIO_ReadFile_Call{Call: _e.mock.On("ReadFile", filename)}
+}
+
+func (_c *MockFileIO_ReadFile_Call) Run(run func(filename string)) *MockFileIO_ReadFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockFileIO_ReadFile_Call) Return(bytes []byte, err error) *MockFileIO_ReadFile_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *MockFileIO_ReadFile_Call) RunAndReturn(run func(filename string) ([]byte, error)) *MockFileIO_ReadFile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // WriteFile provides a mock function for the type MockFileIO
 func (_mock *MockFileIO) WriteFile(filename string, data []byte, perm os.FileMode) error {
 	ret := _mock.Called(filename, data, perm)

@@ -110,9 +110,9 @@ var _ = Describe("ConfigManagerSecrets", func() {
 				Expect(strings.HasPrefix(configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
 
 				// Replica server certificate
-				Expect(configManager.Config.Postgres.Replica.PrivateKey).ToNot(BeEmpty())
+				Expect(configManager.Config.Postgres.ReplicaPrivateKey).ToNot(BeEmpty())
 				Expect(configManager.Config.Postgres.Replica.SSLConfig.ServerCertPem).ToNot(BeEmpty())
-				Expect(strings.HasPrefix(configManager.Config.Postgres.Replica.PrivateKey, "-----BEGIN")).To(BeTrue())
+				Expect(strings.HasPrefix(configManager.Config.Postgres.ReplicaPrivateKey, "-----BEGIN")).To(BeTrue())
 				Expect(strings.HasPrefix(configManager.Config.Postgres.Replica.SSLConfig.ServerCertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
 			})
 		})

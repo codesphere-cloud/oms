@@ -299,7 +299,7 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, tra
 	if tracker.NeedsPostgresReplicaCertRegen() && config.Postgres.Replica != nil {
 		fmt.Println("  - Regenerating PostgreSQL replica server certificate...")
 		var err error
-		config.Postgres.Replica.PrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
+		config.Postgres.ReplicaPrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
 			config.Postgres.CaCertPrivateKey,
 			config.Postgres.CACertPem,
 			config.Postgres.Replica.Name,
