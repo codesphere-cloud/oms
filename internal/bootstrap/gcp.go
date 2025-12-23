@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	compute "cloud.google.com/go/compute/apiv1"
@@ -170,6 +172,11 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironment, error) {
 		return b.env, fmt.Errorf("failed to ensure jumpbox is configured: %w", err)
 	}
 
+	err = b.EnsureInotifyWatches()
+	if err != nil {
+		return b.env, fmt.Errorf("failed to ensure inotify watches: %w", err)
+	}
+
 	if b.env.WriteConfig {
 		err = b.UpdateInstallConfig()
 		if err != nil {
@@ -235,8 +242,7 @@ func (b *GCPBootstrapper) EnsureProject() error {
 }
 
 func (b *GCPBootstrapper) EnsureBilling() error {
-	projectName := fmt.Sprintf("projects/%s", b.env.ProjectID)
-	bi, err := b.GCPClient.GetBillingInfo(projectName)
+	bi, err := b.GCPClient.GetBillingInfo(b.env.ProjectID)
 	if err != nil {
 		return fmt.Errorf("failed to get billing info: %w", err)
 	}
@@ -244,7 +250,7 @@ func (b *GCPBootstrapper) EnsureBilling() error {
 		return nil
 	}
 
-	b.GCPClient.EnableBilling(b.ctx, projectName, b.env.BillingAccount)
+	err = b.GCPClient.EnableBilling(b.ctx, b.env.ProjectID, b.env.BillingAccount)
 	log.Printf("Billing enabled for project %s with account %s\n", b.env.ProjectID, b.env.BillingAccount)
 	return nil
 }
@@ -483,126 +489,155 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	subnetwork := fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s-%s-subnet", projectID, region, projectID, region)
 	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-ssd", projectID, zone)
 
+	// Create VMs in parallel
+	wg := sync.WaitGroup{}
+	errCh := make(chan error, len(vmDefs))
+	mu := sync.Mutex{}
 	for _, vm := range vmDefs {
-		disks := []*computepb.AttachedDisk{
-			{
-				Boot:       protoBool(true),
-				AutoDelete: protoBool(true),
-				Type:       protoString("PERSISTENT"),
-				InitializeParams: &computepb.AttachedDiskInitializeParams{
-					DiskType:    &diskType,
-					DiskSizeGb:  protoInt64(200),
-					SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
-				},
-			},
-		}
-		for _, diskSize := range vm.AdditionalDisks {
-			disks = append(disks, &computepb.AttachedDisk{
-				Boot:       protoBool(false),
-				AutoDelete: protoBool(true),
-				Type:       protoString("PERSISTENT"),
-				InitializeParams: &computepb.AttachedDiskInitializeParams{
-					DiskSizeGb: protoInt64(diskSize),
-					DiskType:   &diskType,
-				},
-			})
-		}
-
-		serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
-
-		instance := &computepb.Instance{
-			Name: protoString(vm.Name),
-			ServiceAccounts: []*computepb.ServiceAccount{
+		wg.Add(1)
+		go func(vm VMDef) {
+			defer wg.Done()
+			disks := []*computepb.AttachedDisk{
 				{
-					Email:  protoString(serviceAccount),
-					Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
-				},
-			},
-			MachineType: protoString(fmt.Sprintf("zones/%s/machineTypes/%s", zone, vm.MachineType)),
-			Tags: &computepb.Tags{
-				Items: vm.Tags,
-			},
-			Scheduling: &computepb.Scheduling{
-				Preemptible: &b.env.Preemptible,
-			},
-			NetworkInterfaces: []*computepb.NetworkInterface{
-				{
-					Network:    protoString(network),
-					Subnetwork: protoString(subnetwork),
-				},
-			},
-			Disks: disks,
-			Metadata: &computepb.Metadata{
-				Items: []*computepb.Items{
-					{
-						Key:   protoString("ssh-keys"),
-						Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", readSSHKey(b.env.SSHPublicKeyPath)+"root", readSSHKey(b.env.SSHPublicKeyPath)) + "ubuntu"),
+					Boot:       protoBool(true),
+					AutoDelete: protoBool(true),
+					Type:       protoString("PERSISTENT"),
+					InitializeParams: &computepb.AttachedDiskInitializeParams{
+						DiskType:    &diskType,
+						DiskSizeGb:  protoInt64(200),
+						SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
 					},
 				},
-			},
-		}
+			}
+			for _, diskSize := range vm.AdditionalDisks {
+				disks = append(disks, &computepb.AttachedDisk{
+					Boot:       protoBool(false),
+					AutoDelete: protoBool(true),
+					Type:       protoString("PERSISTENT"),
+					InitializeParams: &computepb.AttachedDiskInitializeParams{
+						DiskSizeGb: protoInt64(diskSize),
+						DiskType:   &diskType,
+					},
+				})
+			}
 
-		// Configure external IP if needed
-		if vm.ExternalIP {
-			instance.NetworkInterfaces[0].AccessConfigs = []*computepb.AccessConfig{
-				{
-					Name: protoString("External NAT"),
-					Type: protoString("ONE_TO_ONE_NAT"),
+			serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
+
+			instance := &computepb.Instance{
+				Name: protoString(vm.Name),
+				ServiceAccounts: []*computepb.ServiceAccount{
+					{
+						Email:  protoString(serviceAccount),
+						Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
+					},
+				},
+				MachineType: protoString(fmt.Sprintf("zones/%s/machineTypes/%s", zone, vm.MachineType)),
+				Tags: &computepb.Tags{
+					Items: vm.Tags,
+				},
+				Scheduling: &computepb.Scheduling{
+					Preemptible: &b.env.Preemptible,
+				},
+				NetworkInterfaces: []*computepb.NetworkInterface{
+					{
+						Network:    protoString(network),
+						Subnetwork: protoString(subnetwork),
+					},
+				},
+				Disks: disks,
+				Metadata: &computepb.Metadata{
+					Items: []*computepb.Items{
+						{
+							Key:   protoString("ssh-keys"),
+							Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", readSSHKey(b.env.SSHPublicKeyPath)+"root", readSSHKey(b.env.SSHPublicKeyPath)) + "ubuntu"),
+						},
+					},
 				},
 			}
-		}
 
-		op, err := instancesClient.Insert(ctx, &computepb.InsertInstanceRequest{
-			Project:          projectID,
-			Zone:             zone,
-			InstanceResource: instance,
-		})
-		if err != nil && !isAlreadyExistsError(err) {
-			return fmt.Errorf("failed to create instance %s: %w", vm.Name, err)
-		}
-		if err == nil {
-			if err := op.Wait(ctx); err != nil {
-				return fmt.Errorf("failed to wait for instance %s creation: %w", vm.Name, err)
+			// Configure external IP if needed
+			if vm.ExternalIP {
+				instance.NetworkInterfaces[0].AccessConfigs = []*computepb.AccessConfig{
+					{
+						Name: protoString("External NAT"),
+						Type: protoString("ONE_TO_ONE_NAT"),
+					},
+				}
 			}
-		}
-		fmt.Printf("Instance %s ensured\n", vm.Name)
 
-		//find out the IP addresses of the created instance
-		resp, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-			Project:  projectID,
-			Zone:     zone,
-			Instance: vm.Name,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
-		}
-		externalIP := ""
-		internalIP := ""
-		if len(resp.GetNetworkInterfaces()) > 0 {
-			internalIP = resp.GetNetworkInterfaces()[0].GetNetworkIP()
-			if len(resp.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
-				externalIP = resp.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
+			op, err := instancesClient.Insert(ctx, &computepb.InsertInstanceRequest{
+				Project:          projectID,
+				Zone:             zone,
+				InstanceResource: instance,
+			})
+			if err != nil && !isAlreadyExistsError(err) {
+				errCh <- fmt.Errorf("failed to create instance %s: %w", vm.Name, err)
 			}
-		}
+			if err == nil {
+				if err := op.Wait(ctx); err != nil {
+					errCh <- fmt.Errorf("failed to wait for instance %s creation: %w", vm.Name, err)
+				}
+			}
+			fmt.Printf("Instance %s ensured\n", vm.Name)
 
-		node := node.Node{
-			ExternalIP: externalIP,
-			InternalIP: internalIP,
-			Name:       vm.Name,
-		}
+			//find out the IP addresses of the created instance
+			resp, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+				Project:  projectID,
+				Zone:     zone,
+				Instance: vm.Name,
+			})
+			if err != nil {
+				errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
+			}
+			externalIP := ""
+			internalIP := ""
+			if len(resp.GetNetworkInterfaces()) > 0 {
+				internalIP = resp.GetNetworkInterfaces()[0].GetNetworkIP()
+				if len(resp.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
+					externalIP = resp.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
+				}
+			}
 
-		switch vm.Tags[0] {
-		case "jumpbox":
-			b.env.Jumpbox = node
-		case "postgres":
-			b.env.PostgreSQLNode = node
-		case "ceph":
-			b.env.CephNodes = append(b.env.CephNodes, node)
-		case "k0s":
-			b.env.ControlPlaneNodes = append(b.env.ControlPlaneNodes, node)
-		}
+			node := node.Node{
+				ExternalIP: externalIP,
+				InternalIP: internalIP,
+				Name:       vm.Name,
+			}
+
+			mu.Lock()
+			switch vm.Tags[0] {
+			case "jumpbox":
+				b.env.Jumpbox = node
+			case "postgres":
+				b.env.PostgreSQLNode = node
+			case "ceph":
+				b.env.CephNodes = append(b.env.CephNodes, node)
+			case "k0s":
+				b.env.ControlPlaneNodes = append(b.env.ControlPlaneNodes, node)
+			}
+			mu.Unlock()
+		}(vm)
+	}
+	wg.Wait()
+
+	close(errCh)
+	errStr := ""
+	for err := range errCh {
+		errStr += err.Error() + "; "
+	}
+	if errStr != "" {
+		return fmt.Errorf("error ensuring compute instances: %s", errStr)
 	}
 
+	//sort ceph nodes by name to ensure consistent ordering
+	sort.Slice(b.env.CephNodes, func(i, j int) bool {
+		return b.env.CephNodes[i].Name < b.env.CephNodes[j].Name
+	})
+
+	//sort control plane nodes by name to ensure consistent ordering
+	sort.Slice(b.env.ControlPlaneNodes, func(i, j int) bool {
+		return b.env.ControlPlaneNodes[i].Name < b.env.ControlPlaneNodes[j].Name
+	})
 	return nil
 }
 
@@ -661,10 +696,20 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 	}
 	fmt.Printf("Address %s ensured\n", name)
 
-	return address.GetAddress(), nil
+	address, err = addressesClient.Get(b.ctx, req)
+
+	if err == nil && address != nil {
+		return address.GetAddress(), nil
+	}
+	return "", fmt.Errorf("failed to get address %s after creation", name)
 }
 
 func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
+	// wait for SSH service to be available on jumpbox
+	err := b.env.Jumpbox.WaitForSSH(nil, b.NodeManager, 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("timed out waiting for SSH service to start on jumpbox: %w", err)
+	}
 	hasRootLogin := b.env.Jumpbox.HasRootLoginEnabled(nil, b.NodeManager)
 	if !hasRootLogin {
 		err := b.env.Jumpbox.EnableRootLogin(nil, b.NodeManager)
@@ -678,6 +723,10 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 	allNodes = append(allNodes, b.env.CephNodes...)
 
 	for _, node := range allNodes {
+		err = node.WaitForSSH(&b.env.Jumpbox, b.NodeManager, 30*time.Second)
+		if err != nil {
+			return fmt.Errorf("timed out waiting for SSH service to start on %s: %w", node.Name, err)
+		}
 		hasRootLogin := node.HasRootLoginEnabled(&b.env.Jumpbox, b.NodeManager)
 		if hasRootLogin {
 			fmt.Printf("Root login already enabled on %s\n", node.Name)
@@ -721,7 +770,27 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 	return nil
 }
 
+func (b *GCPBootstrapper) EnsureInotifyWatches() error {
+	allNodes := append(b.env.ControlPlaneNodes, b.env.PostgreSQLNode)
+	allNodes = append(allNodes, b.env.CephNodes...)
+
+	for _, node := range allNodes {
+		hasInotify := node.HasInotifyWatchesConfigured(&b.env.Jumpbox, b.NodeManager)
+		if hasInotify {
+			fmt.Printf("Inotify watches already configured on %s\n", node.Name)
+			continue
+		}
+		err := node.ConfigureInotifyWatches(&b.env.Jumpbox, b.NodeManager)
+		if err != nil {
+			return fmt.Errorf("failed to configure inotify watches on %s: %w", node.Name, err)
+		}
+		fmt.Printf("Inotify watches configured on %s\n", node.Name)
+	}
+	return nil
+}
+
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
+
 	// Update install config with necessary values
 	b.InstallConfig.Datacenter.ID = b.env.DatacenterID
 	b.InstallConfig.Datacenter.City = "Karlsruhe"
@@ -732,7 +801,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	if b.InstallConfig.Postgres.Primary == nil {
 		b.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
-			Hostname: "postgres",
+			Hostname: b.env.PostgreSQLNode.Name,
 		}
 	}
 	b.InstallConfig.Postgres.Primary.IP = b.env.PostgreSQLNode.InternalIP
@@ -741,20 +810,20 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.InstallConfig.Ceph.NodesSubnet = "10.10.0.0/20"
 	b.InstallConfig.Ceph.Hosts = []files.CephHost{
 		{
-			Hostname:  "ceph-1",
+			Hostname:  b.env.CephNodes[0].Name,
 			IsMaster:  true,
 			IPAddress: b.env.CephNodes[0].InternalIP,
 		},
 		{
-			Hostname:  "ceph-2",
+			Hostname:  b.env.CephNodes[1].Name,
 			IPAddress: b.env.CephNodes[1].InternalIP,
 		},
 		{
-			Hostname:  "ceph-3",
+			Hostname:  b.env.CephNodes[2].Name,
 			IPAddress: b.env.CephNodes[2].InternalIP,
 		},
 		{
-			Hostname:  "ceph-4",
+			Hostname:  b.env.CephNodes[3].Name,
 			IPAddress: b.env.CephNodes[3].InternalIP,
 		},
 	}
@@ -838,8 +907,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 							BomRef: "workspace-agent-24.04",
 						},
 						Pool: map[int]int{
-							101: 5,
-							8:   5,
+							1: 1,
+							2: 1,
+							3: 1,
+							4: 1,
 						},
 					},
 				},
@@ -855,11 +926,50 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				StorageMb:     20480,
 				TempStorageMb: 1024,
 			},
+			2: {
+				CPUTenth:      20,
+				GPUParts:      0,
+				MemoryMb:      4096,
+				StorageMb:     20480,
+				TempStorageMb: 1024,
+			},
+			3: {
+				CPUTenth:      40,
+				GPUParts:      0,
+				MemoryMb:      8192,
+				StorageMb:     40960,
+				TempStorageMb: 1024,
+			},
+			4: {
+				CPUTenth:      80,
+				GPUParts:      0,
+				MemoryMb:      16384,
+				StorageMb:     40960,
+				TempStorageMb: 1024,
+			},
 		},
 		WorkspacePlans: map[int]files.WorkspacePlan{
 			1: {
-				Name:          "Standard Developer",
+				Name:          "Micro",
 				HostingPlanID: 1,
+				MaxReplicas:   3,
+				OnDemand:      true,
+			},
+			2: {
+				Name:          "Standard",
+				HostingPlanID: 2,
+				MaxReplicas:   3,
+				OnDemand:      true,
+			},
+			3: {
+				Name:          "Big",
+				HostingPlanID: 3,
+				MaxReplicas:   3,
+				OnDemand:      true,
+			},
+			4: {
+				Name:          "Pro",
+				HostingPlanID: 4,
 				MaxReplicas:   3,
 				OnDemand:      true,
 			},
@@ -876,6 +986,9 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				Issuer:                "https://github.com",
 				AuthorizationEndpoint: "https://github.com/login/oauth/authorize",
 				TokenEndpoint:         "https://github.com/login/oauth/access_token",
+
+				ClientID:     b.env.GithubAppClientID,
+				ClientSecret: b.env.GithubAppClientSecret,
 			},
 		},
 	}
@@ -1070,14 +1183,13 @@ EOF
 
 cat <<EOF >> cc-deployment.yaml
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: cloud-controller-manager
   namespace: kube-system
   labels:
     component: cloud-controller-manager
 spec:
-  replicas: 1
   selector:
     matchLabels:
       component: cloud-controller-manager
@@ -1122,14 +1234,15 @@ EOF
 KUBECTL="/etc/codesphere/deps/kubernetes/files/k0s kubectl"
 $KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system
 echo alias kubectl=\"$KUBECTL\" >> /root/.bashrc
+echo alias k=\"$KUBECTL\" >> /root/.bashrc
 
 $KUBECTL apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-gcp/refs/tags/providers/v0.28.2/deploy/packages/default/manifest.yaml
 
 $KUBECTL apply -f cc-deployment.yaml
 
-// set loadBalancerIP for public-gateway-controller and gateway-controller
-$KUBECTL patch svc public-gateway-controller -n codesphere-system -p '{"spec": {"loadBalancerIP": "'` + b.env.PublicGatewayIP + `'"}}'
-$KUBECTL patch svc gateway-controller -n codesphere-system -p '{"spec": {"loadBalancerIP": "'` + b.env.GatewayIP + `'"}}'
+# set loadBalancerIP for public-gateway-controller and gateway-controller
+$KUBECTL patch svc public-gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + b.env.PublicGatewayIP + `'"}}'
+$KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + b.env.GatewayIP + `'"}}'
 
 sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
 

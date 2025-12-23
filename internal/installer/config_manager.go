@@ -339,5 +339,13 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 		g.Config.Registry.Password = secret.Fields.Password
 	}
 
+	// GitHub secrets
+	if secret, ok := secretsMap["githubAppsClientId"]; ok && secret.Fields != nil {
+		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientID = secret.Fields.Password
+	}
+	if secret, ok := secretsMap["githubAppsClientSecret"]; ok && secret.Fields != nil {
+		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientSecret = secret.Fields.Password
+	}
+
 	return nil
 }
