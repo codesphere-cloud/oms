@@ -390,3 +390,48 @@ func (n *Node) EnableRootLogin(jumpbox *Node, nm *NodeManager) error {
 	}
 	return nil
 }
+
+func (n *Node) WaitForSSH(jumpbox *Node, nm *NodeManager, timeout time.Duration) error {
+	start := time.Now()
+	jumpboxIp := ""
+	nodeIp := n.ExternalIP
+	if jumpbox != nil {
+		jumpboxIp = jumpbox.ExternalIP
+		nodeIp = n.InternalIP
+	}
+	for {
+		client, err := nm.GetClient(jumpboxIp, nodeIp, jumpboxUser)
+		if err == nil {
+			client.Close()
+			return nil
+		}
+		if time.Since(start) > timeout {
+			return fmt.Errorf("timeout waiting for SSH on node %s (%s)", n.Name, n.ExternalIP)
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (n *Node) HasInotifyWatchesConfigured(jumpbox *Node, nm *NodeManager) bool {
+	checkCommand := "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1"
+	err := n.RunSSHCommand(jumpbox, nm, "root", checkCommand)
+	if err != nil {
+		// If the command returns a NON-zero exit status, it means the setting is not configured
+		return false
+	}
+	return true
+}
+
+func (n *Node) ConfigureInotifyWatches(jumpbox *Node, nm *NodeManager) error {
+	cmds := []string{
+		"echo 'fs.inotify.max_user_watches=1048576' | sudo tee -a /etc/sysctl.conf",
+		"sudo sysctl -p",
+	}
+	for _, cmd := range cmds {
+		err := n.RunSSHCommand(jumpbox, nm, "root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
+		}
+	}
+	return nil
+}

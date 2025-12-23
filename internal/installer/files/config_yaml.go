@@ -326,6 +326,9 @@ type OAuthConfig struct {
 	TokenEndpoint         string `yaml:"tokenEndpoint"`
 	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
 	Scope                 string `yaml:"scope,omitempty"`
+
+	ClientID     string `yaml:"-"`
+	ClientSecret string `yaml:"-"`
 }
 
 type ManagedServiceConfig struct {
@@ -456,6 +459,26 @@ func (c *RootConfig) addCodesphereSecrets(vault *InstallVault) {
 				},
 			},
 		)
+	}
+
+	// GitHub secrets
+	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.GitHub != nil {
+		if c.Codesphere.GitProviders.GitHub.OAuth.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "githubAppsClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.GitHub.OAuth.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.GitProviders.GitHub.OAuth.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "githubAppsClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.GitHub.OAuth.ClientSecret,
+				},
+			})
+		}
 	}
 }
 
