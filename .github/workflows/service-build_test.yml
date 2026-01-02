@@ -28,4 +28,4 @@ jobs:
         run: make build-service
 
       - name: Test
-        run: make test-service
+        run: make test
