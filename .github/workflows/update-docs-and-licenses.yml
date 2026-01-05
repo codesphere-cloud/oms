@@ -21,6 +21,8 @@ jobs:
         with:
           # on push to main, use main; on PR, check out the PR head
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          # Use PAT to ensure commits trigger other workflows
+          token: ${{ secrets.UPDATE_DOCS_PAT }}
 
       - name: Set up Go
         uses: actions/setup-go@v6
