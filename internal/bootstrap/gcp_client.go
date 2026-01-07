@@ -20,7 +20,6 @@ import (
 	"cloud.google.com/go/serviceusage/apiv1/serviceusagepb"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"google.golang.org/api/cloudbilling/v1"
-	"google.golang.org/api/dns/v1"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -42,10 +41,6 @@ type GCPClient interface {
 	AssignIAMRole(ctx context.Context, projectID, saEmail, role string) error
 	CreateVPC(ctx context.Context, projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(ctx context.Context, projectID string, rule *computepb.Firewall) error
-	CreateInstance(ctx context.Context, projectID, zone string, instance *computepb.Instance) error
-	GetInstanceIPs(ctx context.Context, projectID, zone, instanceName string) (externalIP, internalIP string, err error)
-	ReserveExternalIP(ctx context.Context, projectID, region, name string) (string, error)
-	CreateDNSRecords(ctx context.Context, projectID, zoneName string, records []*dns.ResourceRecordSet) error
 }
 
 // Concrete implementation
@@ -420,111 +415,6 @@ func (c *RealGCPClient) CreateFirewallRule(ctx context.Context, projectID string
 		return err
 	}
 	return nil
-}
-
-func (c *RealGCPClient) CreateInstance(ctx context.Context, projectID, zone string, instance *computepb.Instance) error {
-	client, err := compute.NewInstancesRESTClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
-	if err != nil {
-		return err
-	}
-	defer util.IgnoreError(client.Close)
-	op, err := client.Insert(ctx, &computepb.InsertInstanceRequest{
-		Project:          projectID,
-		Zone:             zone,
-		InstanceResource: instance,
-	})
-	if err != nil && !strings.Contains(err.Error(), "already exists") {
-		return err
-	}
-	if err == nil {
-		if err := op.Wait(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *RealGCPClient) GetInstanceIPs(ctx context.Context, projectID, zone, instanceName string) (externalIP, internalIP string, err error) {
-	client, err := compute.NewInstancesRESTClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
-	if err != nil {
-		return "", "", err
-	}
-	defer util.IgnoreError(client.Close)
-	resp, err := client.Get(ctx, &computepb.GetInstanceRequest{
-		Project:  projectID,
-		Zone:     zone,
-		Instance: instanceName,
-	})
-	if err != nil {
-		return "", "", err
-	}
-	ifaces := resp.GetNetworkInterfaces()
-	if len(ifaces) > 0 {
-		internalIP = ifaces[0].GetNetworkIP()
-		if len(ifaces[0].GetAccessConfigs()) > 0 {
-			externalIP = ifaces[0].GetAccessConfigs()[0].GetNatIP()
-		}
-	}
-	return externalIP, internalIP, nil
-}
-
-func (c *RealGCPClient) ReserveExternalIP(ctx context.Context, projectID, region, name string) (string, error) {
-	addressesClient, err := compute.NewAddressesRESTClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
-	if err != nil {
-		return "", err
-	}
-	defer util.IgnoreError(addressesClient.Close)
-	desiredAddress := &computepb.Address{
-		Name:        &name,
-		AddressType: protoString("EXTERNAL"),
-		Region:      &region,
-	}
-	req := &computepb.GetAddressRequest{
-		Project: projectID,
-		Region:  region,
-		Address: name,
-	}
-	address, err := addressesClient.Get(ctx, req)
-	if err == nil && address != nil {
-		return address.GetAddress(), nil
-	}
-	op, err := addressesClient.Insert(ctx, &computepb.InsertAddressRequest{
-		Project:         projectID,
-		Region:          region,
-		AddressResource: desiredAddress,
-	})
-	if err != nil {
-		return "", err
-	}
-	if err := op.Wait(ctx); err != nil {
-		return "", err
-	}
-	return address.GetAddress(), nil
-}
-
-func (c *RealGCPClient) CreateDNSRecords(ctx context.Context, projectID, zoneName string, records []*dns.ResourceRecordSet) error {
-	dnsService, err := dns.NewService(ctx, option.WithCredentialsFile(c.CredentialsFile))
-	if err != nil {
-		return err
-	}
-	// Check if zone exists, otherwise create
-	_, err = dnsService.ManagedZones.Get(projectID, zoneName).Context(ctx).Do()
-	if err != nil {
-		zone := &dns.ManagedZone{
-			Name:        zoneName,
-			DnsName:     records[0].Name, // Assumes first record is base domain
-			Description: "Codesphere DNS zone",
-		}
-		_, err = dnsService.ManagedZones.Create(projectID, zone).Context(ctx).Do()
-		if err != nil {
-			return err
-		}
-	}
-	change := &dns.Change{
-		Additions: records,
-	}
-	_, err = dnsService.Changes.Create(projectID, zoneName, change).Context(ctx).Do()
-	return err
 }
 
 // Helper functions

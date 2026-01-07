@@ -145,22 +145,6 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {
-	if c.FileWriter.Exists(c.Opts.ConfigFile) {
-		fmt.Printf("Reading install config file: %s\n", c.Opts.ConfigFile)
-		err := icg.LoadInstallConfigFromFile(c.Opts.ConfigFile)
-		if err != nil {
-			return fmt.Errorf("failed to load config file: %w", err)
-		}
-	}
-
-	if c.FileWriter.Exists(c.Opts.VaultFile) {
-		fmt.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
-		err := icg.LoadVaultFromFile(c.Opts.VaultFile)
-		if err != nil {
-			return fmt.Errorf("failed to load vault file: %w", err)
-		}
-	}
-
 	if c.Opts.ValidateOnly {
 		return c.validateOnly(icg)
 	}
@@ -231,6 +215,12 @@ func (c *InitInstallConfigCmd) printSuccessMessage() {
 
 func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) error {
 	fmt.Printf("Validating configuration files...\n")
+
+	fmt.Printf("Reading install config file: %s\n", c.Opts.ConfigFile)
+	err := icg.LoadInstallConfigFromFile(c.Opts.ConfigFile)
+	if err != nil {
+		return fmt.Errorf("failed to load config file: %w", err)
+	}
 
 	errors := icg.ValidateInstallConfig()
 	if len(errors) > 0 {
