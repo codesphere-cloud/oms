@@ -152,16 +152,21 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 	if err != nil {
 		return fmt.Errorf("failed to get client: %w", err)
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 	session, err := client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create session on jumpbox: %v", err)
 	}
-	defer session.Close()
+	defer util.IgnoreError(session.Close)
 
-	session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
+	err = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
+	if err != nil {
+		return fmt.Errorf("failed to set OMS_PORTAL_API_KEY environment variable: %v", err)
+	}
 
-	if err := n.forwardAgent(client, session); err != nil {
+	err = n.forwardAgent(client, session)
+
+	if err != nil {
 		fmt.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
 	}
 
@@ -254,19 +259,19 @@ func (n *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src
 	if err != nil {
 		return fmt.Errorf("failed to get SSH client: %v", err)
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 
 	srcFile, err := n.FileIO.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file %s: %v", src, err)
 	}
-	defer srcFile.Close()
+	defer util.IgnoreError(srcFile.Close)
 
 	dstFile, err := client.Create(dst)
 	if err != nil {
 		return fmt.Errorf("failed to create destination file %s: %v", dst, err)
 	}
-	defer dstFile.Close()
+	defer util.IgnoreError(dstFile.Close)
 
 	_, err = dstFile.ReadFrom(srcFile)
 	if err != nil {
@@ -402,7 +407,7 @@ func (n *Node) WaitForSSH(jumpbox *Node, nm *NodeManager, timeout time.Duration)
 	for {
 		client, err := nm.GetClient(jumpboxIp, nodeIp, jumpboxUser)
 		if err == nil {
-			client.Close()
+			_ = client.Close()
 			return nil
 		}
 		if time.Since(start) > timeout {

@@ -18,6 +18,7 @@ import (
 	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
 	serviceusage "cloud.google.com/go/serviceusage/apiv1"
 	"cloud.google.com/go/serviceusage/apiv1/serviceusagepb"
+	"github.com/codesphere-cloud/oms/internal/util"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
 	"google.golang.org/api/iam/v1"
@@ -63,7 +64,7 @@ func (c *RealGCPClient) GetProjectByName(ctx context.Context, folderID string, d
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 	req := &resourcemanagerpb.ListProjectsRequest{
 		Parent:      fmt.Sprintf("folders/%s", folderID),
 		ShowDeleted: false,
@@ -94,7 +95,7 @@ func (c *RealGCPClient) CreateProject(ctx context.Context, parent, projectID, di
 	if err != nil {
 		return "", err
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 	project := &resourcemanagerpb.Project{
 		ProjectId:   projectID,
 		DisplayName: displayName,
@@ -146,7 +147,7 @@ func (c *RealGCPClient) EnableAPIs(ctx context.Context, projectID string, apis [
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 	// enable APIs in parallel
 	wg := sync.WaitGroup{}
 	errCh := make(chan error, len(apis))
@@ -187,7 +188,7 @@ func (c *RealGCPClient) CreateArtifactRegistry(ctx context.Context, projectID, r
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 	parent := fmt.Sprintf("projects/%s/locations/%s", projectID, region)
 	repoReq := &artifactpb.CreateRepositoryRequest{
 		Parent:       parent,
@@ -217,7 +218,7 @@ func (c *RealGCPClient) GetArtifactRegistry(ctx context.Context, projectID, regi
 	if err != nil {
 		return nil, err
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 	repo, err := client.GetRepository(ctx, &artifactpb.GetRepositoryRequest{
 		Name: fullRepoName,
 	})
@@ -269,7 +270,7 @@ func (c *RealGCPClient) AssignIAMRole(ctx context.Context, projectID, saName, ro
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 	getReq := &iampb.GetIamPolicyRequest{
 		Resource: fmt.Sprintf("projects/%s", projectID),
 	}
@@ -303,7 +304,7 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 	if err != nil {
 		return err
 	}
-	defer networksClient.Close()
+	defer util.IgnoreError(networksClient.Close)
 	network := &computepb.Network{
 		Name:                  &networkName,
 		AutoCreateSubnetworks: protoBool(false),
@@ -324,7 +325,7 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 	if err != nil {
 		return err
 	}
-	defer subnetsClient.Close()
+	defer util.IgnoreError(subnetsClient.Close)
 	subnet := &computepb.Subnetwork{
 		Name:        &subnetName,
 		IpCidrRange: protoString("10.10.0.0/20"),
@@ -350,7 +351,7 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 	if err != nil {
 		return fmt.Errorf("failed to create routers client: %w", err)
 	}
-	defer routersClient.Close()
+	defer util.IgnoreError(routersClient.Close)
 
 	router := &computepb.Router{
 		Name:    &routerName,
@@ -377,7 +378,7 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 	if err != nil {
 		return fmt.Errorf("failed to create routers client for NAT: %w", err)
 	}
-	defer natsClient.Close()
+	defer util.IgnoreError(natsClient.Close)
 
 	nat := &computepb.RouterNat{
 		Name:                          &natName,
@@ -410,7 +411,7 @@ func (c *RealGCPClient) CreateFirewallRule(ctx context.Context, projectID string
 	if err != nil {
 		return err
 	}
-	defer firewallsClient.Close()
+	defer util.IgnoreError(firewallsClient.Close)
 	_, err = firewallsClient.Insert(ctx, &computepb.InsertFirewallRequest{
 		Project:          projectID,
 		FirewallResource: rule,
@@ -426,7 +427,7 @@ func (c *RealGCPClient) CreateInstance(ctx context.Context, projectID, zone stri
 	if err != nil {
 		return err
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 	op, err := client.Insert(ctx, &computepb.InsertInstanceRequest{
 		Project:          projectID,
 		Zone:             zone,
@@ -448,7 +449,7 @@ func (c *RealGCPClient) GetInstanceIPs(ctx context.Context, projectID, zone, ins
 	if err != nil {
 		return "", "", err
 	}
-	defer client.Close()
+	defer util.IgnoreError(client.Close)
 	resp, err := client.Get(ctx, &computepb.GetInstanceRequest{
 		Project:  projectID,
 		Zone:     zone,
@@ -472,7 +473,7 @@ func (c *RealGCPClient) ReserveExternalIP(ctx context.Context, projectID, region
 	if err != nil {
 		return "", err
 	}
-	defer addressesClient.Close()
+	defer util.IgnoreError(addressesClient.Close)
 	desiredAddress := &computepb.Address{
 		Name:        &name,
 		AddressType: protoString("EXTERNAL"),

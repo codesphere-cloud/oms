@@ -85,7 +85,10 @@ func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironment, gcpCl
 
 		CodesphereEnv.ExistingConfigUsed = true
 	} else {
-		icg.ApplyProfile("dev")
+		err := icg.ApplyProfile("dev")
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply profile: %w", err)
+		}
 	}
 
 	if fw.Exists(CodesphereEnv.SecretsFile) {
@@ -251,6 +254,9 @@ func (b *GCPBootstrapper) EnsureBilling() error {
 	}
 
 	err = b.GCPClient.EnableBilling(b.ctx, b.env.ProjectID, b.env.BillingAccount)
+	if err != nil {
+		return fmt.Errorf("failed to enable billing: %w", err)
+	}
 	log.Printf("Billing enabled for project %s with account %s\n", b.env.ProjectID, b.env.BillingAccount)
 	return nil
 }
@@ -469,7 +475,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	if err != nil {
 		return fmt.Errorf("failed to create instances client: %w", err)
 	}
-	defer instancesClient.Close()
+	defer util.IgnoreError(instancesClient.Close)
 
 	// Example VM definitions (expand as needed)
 
@@ -661,7 +667,7 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create addresses client: %w", err)
 	}
-	defer addressesClient.Close()
+	defer util.IgnoreError(addressesClient.Close)
 
 	desiredAddress := &computepb.Address{
 		Name:        &name,

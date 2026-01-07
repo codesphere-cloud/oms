@@ -14,6 +14,7 @@ import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 // BootstrapGcpCmd represents the baseimage command
@@ -72,10 +73,10 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallCodesphereVersion, "install-codesphere-version", "", "Codesphere version to install (default: none)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
 
-	cobra.MarkFlagRequired(flags, "project-name")
-	cobra.MarkFlagRequired(flags, "billing-account")
-	cobra.MarkFlagRequired(flags, "base-domain")
-	cobra.MarkFlagRequired(flags, "ssh-key-path")
+	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
+	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
+	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
+	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "ssh-public-key-path")
 
 	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
 	root.AddCommand(bootstrapGcpCmd.cmd)
