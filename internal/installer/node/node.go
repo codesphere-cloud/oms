@@ -33,6 +33,8 @@ type NodeManager struct {
 	KeyPath string
 }
 
+const jumpboxUser = "ubuntu"
+
 func shellEscape(s string) string {
 	return strings.ReplaceAll(s, "'", "'\\''")
 }
@@ -208,12 +210,14 @@ func (nm *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username strin
 	if err != nil {
 		return fmt.Errorf("failed to get client: %w", err)
 	}
-	defer func() { _ = client.Close() }()
+	defer util.IgnoreError(client.Close)
 	session, err := client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create session on target node (%s): %v", ip, err)
 	}
-	defer func() { _ = session.Close() }()
+	defer util.IgnoreError(session.Close)
+
+	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
 
 	if err := nm.forwardAgent(client, session); err != nil {
 		fmt.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
@@ -245,7 +249,7 @@ func (nm *NodeManager) GetClient(jumpboxIp string, ip string, username string) (
 	}
 
 	if jumpboxIp != "" {
-		jbClient, err := nm.connectToJumpbox(jumpboxIp, username)
+		jbClient, err := nm.connectToJumpbox(jumpboxIp, jumpboxUser)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to jumpbox: %v", err)
 		}
@@ -307,19 +311,19 @@ func (nm *NodeManager) CopyFile(jumpboxIp string, ip string, username string, sr
 	if err != nil {
 		return fmt.Errorf("failed to get SSH client: %v", err)
 	}
-	defer func() { _ = client.Close() }()
+	defer util.IgnoreError(client.Close)
 
 	srcFile, err := nm.FileIO.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file %s: %v", src, err)
 	}
-	defer func() { _ = srcFile.Close() }()
+	defer util.IgnoreError(srcFile.Close)
 
 	dstFile, err := client.Create(dst)
 	if err != nil {
 		return fmt.Errorf("failed to create destination file %s: %v", dst, err)
 	}
-	defer func() { _ = dstFile.Close() }()
+	defer util.IgnoreError(dstFile.Close)
 
 	_, err = dstFile.ReadFrom(srcFile)
 	if err != nil {
@@ -335,17 +339,74 @@ func (n *Node) HasCommand(nm *NodeManager, command string) bool {
 	return err == nil
 }
 
-func (n *Node) CopyFile(nm *NodeManager, src string, dst string) error {
+func (n *Node) InstallOms(nm *NodeManager) error {
+	remoteCommands := []string{
+		"wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms-cli.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms-cli",
+		"chmod +x oms-cli; sudo mv oms-cli /usr/local/bin/",
+		"curl -LO https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64; sudo mv sops-v3.11.0.linux.amd64 /usr/local/bin/sops; sudo chmod +x /usr/local/bin/sops",
+		"wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
+	}
+	for _, cmd := range remoteCommands {
+		err := nm.RunSSHCommand("", n.ExternalIP, "root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to run remote command '%s': %w", cmd, err)
+		}
+	}
+	return nil
+}
+
+func (n *Node) CopyFile(jumpbox *Node, nm *NodeManager, src string, dst string) error {
 	user := n.User
 	if user == "" {
 		user = "root"
 	}
 
-	err := nm.EnsureDirectoryExists("", n.ExternalIP, user, filepath.Dir(dst))
+	if jumpbox == nil {
+		err := nm.EnsureDirectoryExists("", n.ExternalIP, user, filepath.Dir(dst))
+		if err != nil {
+			return fmt.Errorf("failed to ensure directory exists: %w", err)
+		}
+		return nm.CopyFile("", n.ExternalIP, user, src, dst)
+	}
+	err := nm.EnsureDirectoryExists(jumpbox.ExternalIP, n.InternalIP, user, filepath.Dir(dst))
 	if err != nil {
 		return fmt.Errorf("failed to ensure directory exists: %w", err)
 	}
-	return nm.CopyFile("", n.ExternalIP, user, src, dst)
+	return nm.CopyFile(jumpbox.ExternalIP, n.InternalIP, user, src, dst)
+}
+
+func (n *Node) HasAcceptEnvConfigured(jumpbox *Node, nm *NodeManager) bool {
+	checkCommand := "sudo grep -E '^AcceptEnv OMS_PORTAL_API_KEY' /etc/ssh/sshd_config >/dev/null 2>&1"
+	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommand)
+	return err == nil
+}
+
+func (n *Node) ConfigureAcceptEnv(jumpbox *Node, nm *NodeManager) error {
+	cmds := []string{
+		"sudo sed -i 's/^#\\?AcceptEnv.*/AcceptEnv OMS_PORTAL_API_KEY/' /etc/ssh/sshd_config",
+		"sudo systemctl restart sshd",
+	}
+	for _, cmd := range cmds {
+		err := n.RunSSHCommand(jumpbox, nm, "ubuntu", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
+		}
+	}
+	return nil
+}
+
+func (n *Node) HasRootLoginEnabled(jumpbox *Node, nm *NodeManager) bool {
+	checkCommandPermit := "sudo grep -E '^PermitRootLogin yes' /etc/ssh/sshd_config >/dev/null 2>&1"
+	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommandPermit)
+	if err != nil {
+		return false
+	}
+	checkCommandAuthorizedKeys := "sudo grep -E '^no-port-forwarding' /root/.ssh/authorized_keys >/dev/null 2>&1"
+	err = n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommandAuthorizedKeys)
+	if err == nil {
+		return false
+	}
+	return true
 }
 
 func (n *Node) HasFile(jumpbox *Node, nm *NodeManager, filePath string) bool {
@@ -360,6 +421,62 @@ func (n *Node) RunSSHCommand(jumpbox *Node, nm *NodeManager, username string, co
 	}
 
 	return nm.RunSSHCommand(jumpbox.ExternalIP, n.InternalIP, username, command)
+}
+
+func (n *Node) EnableRootLogin(jumpbox *Node, nm *NodeManager) error {
+	cmds := []string{
+		"sudo sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config",
+		"sudo sed -i 's/no-port-forwarding.*$//g' /root/.ssh/authorized_keys",
+		"sudo systemctl restart sshd",
+	}
+	for _, cmd := range cmds {
+		err := n.RunSSHCommand(jumpbox, nm, "ubuntu", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
+		}
+	}
+	return nil
+}
+
+func (n *Node) WaitForSSH(jumpbox *Node, nm *NodeManager, timeout time.Duration) error {
+	start := time.Now()
+	jumpboxIp := ""
+	nodeIp := n.ExternalIP
+	if jumpbox != nil {
+		jumpboxIp = jumpbox.ExternalIP
+		nodeIp = n.InternalIP
+	}
+	for {
+		client, err := nm.GetClient(jumpboxIp, nodeIp, jumpboxUser)
+		if err == nil {
+			_ = client.Close()
+			return nil
+		}
+		if time.Since(start) > timeout {
+			return fmt.Errorf("timeout waiting for SSH on node %s (%s)", n.Name, n.ExternalIP)
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (n *Node) HasInotifyWatchesConfigured(jumpbox *Node, nm *NodeManager) bool {
+	checkCommand := "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1"
+	err := n.RunSSHCommand(jumpbox, nm, "root", checkCommand)
+	return err == nil
+}
+
+func (n *Node) ConfigureInotifyWatches(jumpbox *Node, nm *NodeManager) error {
+	cmds := []string{
+		"echo 'fs.inotify.max_user_watches=1048576' | sudo tee -a /etc/sysctl.conf",
+		"sudo sysctl -p",
+	}
+	for _, cmd := range cmds {
+		err := n.RunSSHCommand(jumpbox, nm, "root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
+		}
+	}
+	return nil
 }
 
 func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath string, force bool) error {

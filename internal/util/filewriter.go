@@ -17,7 +17,6 @@ type FileIO interface {
 	MkdirAll(path string, perm os.FileMode) error
 	OpenFile(name string, flag int, perm os.FileMode) (*os.File, error)
 	WriteFile(filename string, data []byte, perm os.FileMode) error
-	ReadFile(filename string) ([]byte, error)
 	ReadDir(dirname string) ([]os.DirEntry, error)
 	ReadFile(filename string) ([]byte, error)
 	CreateAndWrite(filePath string, data []byte, fileType string) error
@@ -83,10 +82,6 @@ func (fs *FilesystemWriter) OpenFile(name string, flag int, perm os.FileMode) (*
 
 func (fs *FilesystemWriter) WriteFile(filename string, data []byte, perm os.FileMode) error {
 	return os.WriteFile(filename, data, perm)
-}
-
-func (fs *FilesystemWriter) ReadFile(filename string) ([]byte, error) {
-	return os.ReadFile(filename)
 }
 
 func (fs *FilesystemWriter) ReadDir(dirname string) ([]os.DirEntry, error) {

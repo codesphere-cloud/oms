@@ -329,7 +329,7 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 
 		Context("CopyFile", func() {
 			It("should fail when directory creation fails", func() {
-				err := n.CopyFile(nm, "/some/file", "/remote/path/dest.txt")
+				err := n.CopyFile(nil, nm, "/some/file", "/remote/path/dest.txt")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to ensure directory exists"))
 			})
