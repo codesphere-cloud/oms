@@ -19,6 +19,7 @@ type FileIO interface {
 	WriteFile(filename string, data []byte, perm os.FileMode) error
 	ReadFile(filename string) ([]byte, error)
 	ReadDir(dirname string) ([]os.DirEntry, error)
+	ReadFile(filename string) ([]byte, error)
 	CreateAndWrite(filePath string, data []byte, fileType string) error
 }
 
@@ -90,6 +91,10 @@ func (fs *FilesystemWriter) ReadFile(filename string) ([]byte, error) {
 
 func (fs *FilesystemWriter) ReadDir(dirname string) ([]os.DirEntry, error) {
 	return os.ReadDir(dirname)
+}
+
+func (fs *FilesystemWriter) ReadFile(filename string) ([]byte, error) {
+	return os.ReadFile(filename)
 }
 
 type ClosableFile interface {

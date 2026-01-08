@@ -297,6 +297,52 @@ func (_c *MockInstallConfigManager_GetInstallConfig_Call) RunAndReturn(run func(
 	return _c
 }
 
+// GetVault provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) GetVault() *files.InstallVault {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetVault")
+	}
+
+	var r0 *files.InstallVault
+	if returnFunc, ok := ret.Get(0).(func() *files.InstallVault); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*files.InstallVault)
+		}
+	}
+	return r0
+}
+
+// MockInstallConfigManager_GetVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetVault'
+type MockInstallConfigManager_GetVault_Call struct {
+	*mock.Call
+}
+
+// GetVault is a helper method to define mock.On call
+func (_e *MockInstallConfigManager_Expecter) GetVault() *MockInstallConfigManager_GetVault_Call {
+	return &MockInstallConfigManager_GetVault_Call{Call: _e.mock.On("GetVault")}
+}
+
+func (_c *MockInstallConfigManager_GetVault_Call) Run(run func()) *MockInstallConfigManager_GetVault_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_GetVault_Call) Return(installVault *files.InstallVault) *MockInstallConfigManager_GetVault_Call {
+	_c.Call.Return(installVault)
+	return _c
+}
+
+func (_c *MockInstallConfigManager_GetVault_Call) RunAndReturn(run func() *files.InstallVault) *MockInstallConfigManager_GetVault_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // LoadInstallConfigFromFile provides a mock function for the type MockInstallConfigManager
 func (_mock *MockInstallConfigManager) LoadInstallConfigFromFile(configPath string) error {
 	ret := _mock.Called(configPath)
