@@ -159,10 +159,7 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 	}
 	defer util.IgnoreError(session.Close)
 
-	err = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
-	if err != nil {
-		return fmt.Errorf("failed to set OMS_PORTAL_API_KEY environment variable: %v", err)
-	}
+	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
 
 	err = n.forwardAgent(client, session)
 
