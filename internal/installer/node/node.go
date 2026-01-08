@@ -410,6 +410,11 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 	} else {
 		installCmd += " --single"
 	}
+
+	installCmd += " --enable-worker"
+	installCmd += " --no-taints"
+	installCmd += fmt.Sprintf(" --kubelet-extra-args='--node-ip=%s'", shellEscape(n.ExternalIP))
+
 	if force {
 		installCmd += " --force"
 	}

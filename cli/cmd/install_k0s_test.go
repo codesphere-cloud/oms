@@ -150,7 +150,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Force = true
 
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0s.EXPECT().Install(mock.Anything, "/test/path/k0s", true).Return(nil)
+			mockK0s.EXPECT().Install(mock.Anything, "/test/path/k0s", true, mock.Anything).Return(nil)
 
 			err = c.InstallK0s(mockPM, mockK0s)
 			Expect(err).NotTo(HaveOccurred())
@@ -170,7 +170,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0s.EXPECT().Download("v1.29.0+k0s.0", false, false).Return("/downloaded/k0s", nil)
-			mockK0s.EXPECT().Install(mock.Anything, "/downloaded/k0s", false).Return(nil)
+			mockK0s.EXPECT().Install(mock.Anything, "/downloaded/k0s", false, mock.Anything).Return(nil)
 
 			err = c.InstallK0s(mockPM, mockK0s)
 			Expect(err).NotTo(HaveOccurred())
@@ -207,7 +207,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Package = "test-package.tar.gz"
 
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0s.EXPECT().Install(mock.Anything, "/test/path/k0s", false).Return(os.ErrPermission)
+			mockK0s.EXPECT().Install(mock.Anything, "/test/path/k0s", false, mock.Anything).Return(os.ErrPermission)
 
 			err = c.InstallK0s(mockPM, mockK0s)
 			Expect(err).To(HaveOccurred())

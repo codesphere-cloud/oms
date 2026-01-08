@@ -115,7 +115,6 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return fmt.Errorf("failed to marshal k0s config: %w", err)
 	}
 
-	// allow temp directory in tests
 	k0sConfigPath := "/etc/k0s/k0s.yaml"
 
 	if err := os.MkdirAll(filepath.Dir(k0sConfigPath), 0755); err != nil {
@@ -146,7 +145,17 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return c.InstallK0sRemote(config, k0sPath, k0sConfigPath)
 	}
 
-	err = k0s.Install(k0sConfigPath, k0sPath, c.Opts.Force)
+	controlPlaneIPs := make([]string, 0, len(config.Kubernetes.ControlPlanes))
+	for _, cp := range config.Kubernetes.ControlPlanes {
+		controlPlaneIPs = append(controlPlaneIPs, cp.IPAddress)
+	}
+	nodeIP, err := installer.GetNodeIPAddress(controlPlaneIPs)
+	if err != nil {
+		log.Printf("Warning: could not determine node IP: %v. Installing without --kubelet-extra-args", err)
+		nodeIP = ""
+	}
+
+	err = k0s.Install(k0sConfigPath, k0sPath, c.Opts.Force, nodeIP)
 	if err != nil {
 		return fmt.Errorf("failed to install k0s: %w", err)
 	}

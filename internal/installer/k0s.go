@@ -6,6 +6,7 @@ package installer
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,7 +21,7 @@ import (
 type K0sManager interface {
 	GetLatestVersion() (string, error)
 	Download(version string, force bool, quiet bool) (string, error)
-	Install(configPath string, k0sPath string, force bool) error
+	Install(configPath string, k0sPath string, force bool, nodeIP string) error
 	Reset(k0sPath string) error
 }
 
@@ -126,7 +127,7 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	return k0sPath, nil
 }
 
-func (k *K0s) Install(configPath string, k0sPath string, force bool) error {
+func (k *K0s) Install(configPath string, k0sPath string, force bool, nodeIP string) error {
 	if k.Goos != "linux" || k.Goarch != "amd64" {
 		return fmt.Errorf("k0s installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
 	}
@@ -162,6 +163,13 @@ func (k *K0s) Install(configPath string, k0sPath string, force bool) error {
 		args = append(args, "--config", configPath)
 	} else {
 		args = append(args, "--single")
+	}
+
+	args = append(args, "--enable-worker")
+	args = append(args, "--no-taints")
+
+	if nodeIP != "" {
+		args = append(args, "--kubelet-extra-args", fmt.Sprintf("--node-ip=%s", nodeIP))
 	}
 
 	if force {
@@ -236,6 +244,38 @@ func (k *K0s) filterConfigForK0s(configPath string) (string, error) {
 	}
 
 	return tmpFile.Name(), nil
+}
+
+// GetNodeIPAddress finds the IP address of the current node by matching
+// against the control plane IPs in the config
+func GetNodeIPAddress(controlPlanes []string) (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", fmt.Errorf("failed to get network interfaces: %w", err)
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				ip := ipnet.IP.String()
+				for _, cpIP := range controlPlanes {
+					if ip == cpIP {
+						return ip, nil
+					}
+				}
+			}
+		}
+	}
+
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				return ipnet.IP.String(), nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no suitable IP address found")
 }
 
 // Reset tears down an existing k0s installation by executing `k0s reset`.

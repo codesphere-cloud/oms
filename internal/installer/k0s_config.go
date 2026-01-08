@@ -22,9 +22,11 @@ type K0sMetadata struct {
 }
 
 type K0sSpec struct {
-	API     *K0sAPI     `yaml:"api,omitempty"`
-	Network *K0sNetwork `yaml:"network,omitempty"`
-	Storage *K0sStorage `yaml:"storage,omitempty"`
+	API       *K0sAPI       `yaml:"api,omitempty"`
+	Network   *K0sNetwork   `yaml:"network,omitempty"`
+	Storage   *K0sStorage   `yaml:"storage,omitempty"`
+	Images    *K0sImages    `yaml:"images,omitempty"`
+	Telemetry *K0sTelemetry `yaml:"telemetry,omitempty"`
 }
 
 type K0sAPI struct {
@@ -47,6 +49,14 @@ type K0sStorage struct {
 
 type K0sEtcd struct {
 	PeerAddress string `yaml:"peerAddress,omitempty"`
+}
+
+type K0sImages struct {
+	DefaultPullPolicy string `yaml:"default_pull_policy,omitempty"`
+}
+
+type K0sTelemetry struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
@@ -86,14 +96,26 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 		}
 
 		k0sConfig.Spec.Network = &K0sNetwork{
-			Provider: "kuberouter",
+			Provider: "calico",
 		}
 
 		if installConfig.Kubernetes.PodCIDR != "" {
 			k0sConfig.Spec.Network.PodCIDR = installConfig.Kubernetes.PodCIDR
+		} else {
+			k0sConfig.Spec.Network.PodCIDR = "100.96.0.0/11"
 		}
 		if installConfig.Kubernetes.ServiceCIDR != "" {
 			k0sConfig.Spec.Network.ServiceCIDR = installConfig.Kubernetes.ServiceCIDR
+		} else {
+			k0sConfig.Spec.Network.ServiceCIDR = "100.64.0.0/13"
+		}
+
+		k0sConfig.Spec.Images = &K0sImages{
+			DefaultPullPolicy: "Never",
+		}
+
+		k0sConfig.Spec.Telemetry = &K0sTelemetry{
+			Enabled: false,
 		}
 
 		if len(installConfig.Kubernetes.ControlPlanes) > 0 {

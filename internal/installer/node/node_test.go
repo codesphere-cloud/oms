@@ -21,6 +21,121 @@ func TestNode(t *testing.T) {
 }
 
 var _ = Describe("Node", func() {
+	Describe("shellEscape function", func() {
+		Context("security and injection prevention", func() {
+			It("should handle single quotes correctly", func() {
+				testNode := &node.Node{
+					ExternalIP: "192.168.1.100",
+					User:       "root",
+				}
+				mockFileWriter := util.NewMockFileIO(GinkgoT())
+				nm := &node.NodeManager{
+					FileIO:  mockFileWriter,
+					KeyPath: "",
+				}
+
+				result := testNode.HasCommand(nm, "test'; echo 'injected")
+				Expect(result).To(BeFalse())
+			})
+
+			It("should handle special shell characters safely", func() {
+				testNode := &node.Node{
+					ExternalIP: "192.168.1.100",
+					User:       "root",
+				}
+				mockFileWriter := util.NewMockFileIO(GinkgoT())
+				nm := &node.NodeManager{
+					FileIO:  mockFileWriter,
+					KeyPath: "",
+				}
+
+				// Test various injection attempts
+				injectionAttempts := []string{
+					"cmd; rm -rf /",
+					"cmd && malicious",
+					"cmd | grep password",
+					"cmd`backdoor`",
+					"cmd$(malicious)",
+					"cmd\nrm -rf /",
+				}
+
+				for _, attempt := range injectionAttempts {
+					result := testNode.HasCommand(nm, attempt)
+					Expect(result).To(BeFalse())
+				}
+			})
+
+			It("should preserve normal commands", func() {
+				testNode := &node.Node{
+					ExternalIP: "192.168.1.100",
+					User:       "root",
+				}
+				mockFileWriter := util.NewMockFileIO(GinkgoT())
+				nm := &node.NodeManager{
+					FileIO:  mockFileWriter,
+					KeyPath: "",
+				}
+
+				normalCommands := []string{
+					"kubectl",
+					"ls",
+					"cat /etc/hosts",
+					"echo test",
+				}
+
+				for _, cmd := range normalCommands {
+					result := testNode.HasCommand(nm, cmd)
+					Expect(result).To(BeFalse())
+				}
+			})
+
+			It("should handle Unicode characters", func() {
+				testNode := &node.Node{
+					ExternalIP: "192.168.1.100",
+					User:       "root",
+				}
+				mockFileWriter := util.NewMockFileIO(GinkgoT())
+				nm := &node.NodeManager{
+					FileIO:  mockFileWriter,
+					KeyPath: "",
+				}
+
+				result := testNode.HasCommand(nm, "test-文件-αβγ")
+				Expect(result).To(BeFalse())
+			})
+
+			It("should handle empty strings", func() {
+				testNode := &node.Node{
+					ExternalIP: "192.168.1.100",
+					User:       "root",
+				}
+				mockFileWriter := util.NewMockFileIO(GinkgoT())
+				nm := &node.NodeManager{
+					FileIO:  mockFileWriter,
+					KeyPath: "",
+				}
+
+				result := testNode.HasCommand(nm, "")
+				Expect(result).To(BeFalse())
+			})
+
+			It("should handle nested quotes", func() {
+				testNode := &node.Node{
+					ExternalIP: "192.168.1.100",
+					User:       "root",
+				}
+				mockFileWriter := util.NewMockFileIO(GinkgoT())
+				nm := &node.NodeManager{
+					FileIO:  mockFileWriter,
+					KeyPath: "",
+				}
+
+				result := testNode.HasCommand(nm, "echo 'test \"nested\" quotes'")
+				Expect(result).To(BeFalse())
+			})
+		})
+	})
+
 	Describe("NodeManager", func() {
 		var (
 			nm             *node.NodeManager

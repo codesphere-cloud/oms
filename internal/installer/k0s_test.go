@@ -288,7 +288,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "windows"
 				k0sImpl.Goarch = "amd64"
 
-				err := k0s.Install("", k0sPath, false)
+				err := k0s.Install("", k0sPath, false, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("k0s installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("windows/amd64"))
@@ -298,7 +298,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "arm64"
 
-				err := k0s.Install("", k0sPath, false)
+				err := k0s.Install("", k0sPath, false, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("k0s installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("linux/arm64"))
@@ -314,7 +314,7 @@ var _ = Describe("K0s", func() {
 			It("should fail when k0s binary doesn't exist", func() {
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 
-				err := k0s.Install("", k0sPath, false)
+				err := k0s.Install("", k0sPath, false, "")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("k0s binary does not exist"))
 				Expect(err.Error()).To(ContainSubstring("please download first"))
