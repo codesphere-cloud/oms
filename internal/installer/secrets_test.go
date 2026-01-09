@@ -15,10 +15,11 @@ var _ = Describe("ExtractVault", func() {
 	It("extracts all secrets from config into vault format", func() {
 		config := &files.RootConfig{
 			Postgres: files.PostgresConfig{
-				CACertPem:        "-----BEGIN CERTIFICATE-----\nPG-CA\n-----END CERTIFICATE-----",
-				CaCertPrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-CA-KEY\n-----END RSA PRIVATE KEY-----",
-				AdminPassword:    "admin-pass-123",
-				ReplicaPassword:  "replica-pass-456",
+				CACertPem:         "-----BEGIN CERTIFICATE-----\nPG-CA\n-----END CERTIFICATE-----",
+				CaCertPrivateKey:  "-----BEGIN RSA PRIVATE KEY-----\nPG-CA-KEY\n-----END RSA PRIVATE KEY-----",
+				AdminPassword:     "admin-pass-123",
+				ReplicaPassword:   "replica-pass-456",
+				ReplicaPrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-REPLICA-KEY\n-----END RSA PRIVATE KEY-----",
 				Primary: &files.PostgresPrimaryConfig{
 					SSLConfig: files.SSLConfig{
 						ServerCertPem: "-----BEGIN CERTIFICATE-----\nPG-PRIMARY\n-----END CERTIFICATE-----",
@@ -33,7 +34,6 @@ var _ = Describe("ExtractVault", func() {
 					SSLConfig: files.SSLConfig{
 						ServerCertPem: "-----BEGIN CERTIFICATE-----\nPG-REPLICA\n-----END CERTIFICATE-----",
 					},
-					PrivateKey: "-----BEGIN RSA PRIVATE KEY-----\nPG-REPLICA-KEY\n-----END RSA PRIVATE KEY-----",
 				},
 				UserPasswords: map[string]string{
 					"auth":       "auth-pass",

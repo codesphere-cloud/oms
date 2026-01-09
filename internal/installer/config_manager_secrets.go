@@ -60,7 +60,7 @@ func (g *InstallConfig) generatePostgresSecrets(config *files.RootConfig) error 
 	config.Postgres.ReplicaPassword = GeneratePassword(32)
 
 	if config.Postgres.Replica != nil {
-		config.Postgres.Replica.PrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = GenerateServerCertificate(
+		config.Postgres.ReplicaPrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = GenerateServerCertificate(
 			config.Postgres.CaCertPrivateKey,
 			config.Postgres.CACertPem,
 			config.Postgres.Replica.Name,
