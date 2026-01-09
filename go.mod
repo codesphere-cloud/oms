@@ -3,7 +3,7 @@ module github.com/codesphere-cloud/oms
 go 1.25.5
 
 require (
-	cloud.google.com/go/artifactregistry v1.17.2
+	cloud.google.com/go/artifactregistry v1.19.0
 	cloud.google.com/go/compute v1.49.1
 	cloud.google.com/go/iam v1.5.3
 	cloud.google.com/go/resourcemanager v1.10.7
