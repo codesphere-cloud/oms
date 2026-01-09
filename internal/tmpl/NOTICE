@@ -70,6 +70,12 @@ License: MIT
 License URL: https://github.com/blang/semver/blob/v3.5.1/LICENSE
  
 ----------
+Module: github.com/cespare/xxhash/v2
+Version: v2.3.0
+License: MIT
+License URL: https://github.com/cespare/xxhash/blob/v2.3.0/LICENSE.txt
+ 
+----------
 Module: github.com/clipperhouse/stringish
 Version: v0.1.1
 License: MIT
@@ -179,9 +185,21 @@ License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/inte
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.7.7
+Version: v6.7.8
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.7/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.8/LICENSE
+ 
+----------
+Module: github.com/kr/fs
+Version: v0.1.0
+License: BSD-3-Clause
+License URL: https://github.com/kr/fs/blob/v0.1.0/LICENSE
+ 
+----------
+Module: github.com/lithammer/shortuuid
+Version: v3.0.0
+License: MIT
+License URL: https://github.com/lithammer/shortuuid/blob/v3.0.0/LICENSE
  
 ----------
 Module: github.com/mattn/go-runewidth
@@ -275,21 +293,21 @@ License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/ins
  
 ----------
 Module: go.opentelemetry.io/otel
-Version: v1.38.0
+Version: v1.39.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.38.0/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.39.0/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/metric
-Version: v1.38.0
+Version: v1.39.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.38.0/metric/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.39.0/metric/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/trace
-Version: v1.38.0
+Version: v1.39.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.38.0/trace/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.39.0/trace/LICENSE
  
 ----------
 Module: go.yaml.in/yaml/v3
@@ -304,10 +322,16 @@ License: BSD-3-Clause
 License URL: https://cs.opensource.google/go/x/crypto/+/v0.46.0:LICENSE
  
 ----------
-Module: golang.org/x/oauth2
-Version: v0.33.0
+Module: golang.org/x/net
+Version: v0.48.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/oauth2/+/v0.33.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.48.0:LICENSE
+ 
+----------
+Module: golang.org/x/oauth2
+Version: v0.34.0
+License: BSD-3-Clause
+License URL: https://cs.opensource.google/go/x/oauth2/+/v0.34.0:LICENSE
  
 ----------
 Module: golang.org/x/sync/semaphore
@@ -332,6 +356,54 @@ Module: golang.org/x/text
 Version: v0.32.0
 License: BSD-3-Clause
 License URL: https://cs.opensource.google/go/x/text/+/v0.32.0:LICENSE
+ 
+----------
+Module: golang.org/x/time/rate
+Version: v0.14.0
+License: BSD-3-Clause
+License URL: https://cs.opensource.google/go/x/time/+/v0.14.0:LICENSE
+ 
+----------
+Module: google.golang.org/api
+Version: v0.247.0
+License: BSD-3-Clause
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.247.0/LICENSE
+ 
+----------
+Module: google.golang.org/api/internal/third_party/uritemplates
+Version: v0.247.0
+License: BSD-3-Clause
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.247.0/internal/third_party/uritemplates/LICENSE
+ 
+----------
+Module: google.golang.org/genproto/googleapis
+Version: v0.0.0-20250715232539-7130f93afb79
+License: Apache-2.0
+License URL: https://github.com/googleapis/go-genproto/blob/7130f93afb79/LICENSE
+ 
+----------
+Module: google.golang.org/genproto/googleapis/api
+Version: v0.0.0-20250825161204-c5933d9347a5
+License: Apache-2.0
+License URL: https://github.com/googleapis/go-genproto/blob/c5933d9347a5/googleapis/api/LICENSE
+ 
+----------
+Module: google.golang.org/genproto/googleapis/rpc
+Version: v0.0.0-20250825161204-c5933d9347a5
+License: Apache-2.0
+License URL: https://github.com/googleapis/go-genproto/blob/c5933d9347a5/googleapis/rpc/LICENSE
+ 
+----------
+Module: google.golang.org/grpc
+Version: v1.75.0
+License: Apache-2.0
+License URL: https://github.com/grpc/grpc-go/blob/v1.75.0/LICENSE
+ 
+----------
+Module: google.golang.org/protobuf
+Version: v1.36.11
+License: BSD-3-Clause
+License URL: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.11/LICENSE
  
 ----------
 Module: gopkg.in/yaml.v3

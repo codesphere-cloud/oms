@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"
 )
 
@@ -23,6 +25,7 @@ type Node struct {
 	Name       string `json:"name"`
 	ExternalIP string `json:"external_ip"`
 	InternalIP string `json:"internal_ip"`
+	User       string `json:"user,omitempty"`
 }
 
 type NodeManager struct {
@@ -30,15 +33,43 @@ type NodeManager struct {
 	KeyPath string
 }
 
-// getAuthMethods constructs a slice of ssh.AuthMethod, prioritizing the SSH agent.
-func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
+const jumpboxUser = "ubuntu"
+
+func shellEscape(s string) string {
+	return strings.ReplaceAll(s, "'", "'\\''")
+}
+
+func (nm *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	knownHostsPath := filepath.Join(homeDir, ".ssh", "known_hosts")
+	hostKeyCallback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		sshDir := filepath.Join(homeDir, ".ssh")
+		if err := os.MkdirAll(sshDir, 0700); err != nil {
+			return nil, fmt.Errorf("failed to create .ssh directory: %w", err)
+		}
+		if _, err := os.Create(knownHostsPath); err != nil {
+			return nil, fmt.Errorf("failed to create known_hosts file: %w", err)
+		}
+		hostKeyCallback, err = knownhosts.New(knownHostsPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load known_hosts: %w", err)
+		}
+	}
+
+	return hostKeyCallback, nil
+}
+
+func (nm *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 	var authMethods []ssh.AuthMethod
 
 	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
-		// Connect to the SSH agent's socket
 		conn, err := net.Dial("unix", authSocket)
 		if err == nil {
-			// Create an Agent client and use it for authentication
 			agentClient := agent.NewClient(conn)
 			authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
 			return authMethods, nil
@@ -46,41 +77,68 @@ func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 		fmt.Printf("Could not connect to SSH Agent (%s): %v\n", authSocket, err)
 	}
 
-	if n.KeyPath != "" {
-		fmt.Println("Falling back to private key file authentication.")
+	if nm.KeyPath != "" {
+		fmt.Printf("Falling back to private key file authentication (key: %s).\n", nm.KeyPath)
 
-		// This logic is copied from the previous answer
-		key, err := n.FileIO.ReadFile(n.KeyPath)
+		key, err := nm.FileIO.ReadFile(nm.KeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
+			return nil, fmt.Errorf("failed to read private key file %s: %v", nm.KeyPath, err)
 		}
+
+		fmt.Printf("Successfully read %d bytes from key file\\n", len(key))
 
 		signer, err := ssh.ParsePrivateKey(key)
 		if err == nil {
+			fmt.Printf("Successfully parsed private key (type: %s)\\n", signer.PublicKey().Type())
 			authMethods = append(authMethods, ssh.PublicKeys(signer))
 			return authMethods, nil
 		}
+
+		fmt.Printf("Failed to parse private key: %v\\n", err)
 		if _, ok := err.(*ssh.PassphraseMissingError); ok {
-			// Key is encrypted, prompt for passphrase
-			fmt.Printf("Enter passphrase for key '%s': ", n.KeyPath)
-			passphraseBytes, err := term.ReadPassword(int(syscall.Stdin))
-			fmt.Println()
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to read passphrase: %v", err)
+			// Check if we're in an interactive terminal
+			if !term.IsTerminal(int(syscall.Stdin)) {
+				return nil, fmt.Errorf("passphrase-protected key requires interactive terminal. Use ssh-agent or an unencrypted key for automated scenarios")
 			}
 
-			signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphraseBytes)
-			// Clear passphrase from memory
-			for i := range passphraseBytes {
-				passphraseBytes[i] = 0
-			}
+			fmt.Printf("Enter passphrase for key '%s': ", nm.KeyPath)
 
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
+			// Read passphrase with a timeout using a channel
+			type result struct {
+				password []byte
+				err      error
 			}
-			authMethods = append(authMethods, ssh.PublicKeys(signer))
-			return authMethods, nil
+			resultChan := make(chan result, 1)
+			go func() {
+				passphraseBytes, err := term.ReadPassword(int(syscall.Stdin))
+				resultChan <- result{password: passphraseBytes, err: err}
+			}()
+
+			// Wait for passphrase input with 30 second timeout
+			select {
+			case res := <-resultChan:
+				fmt.Println()
+				if res.err != nil {
+					return nil, fmt.Errorf("failed to read passphrase: %v", res.err)
+				}
+
+				defer func() {
+					for i := range res.password {
+						res.password[i] = 0
+					}
+				}()
+
+				signer, err = ssh.ParsePrivateKeyWithPassphrase(key, res.password)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
+				}
+				authMethods = append(authMethods, ssh.PublicKeys(signer))
+				return authMethods, nil
+
+			case <-time.After(30 * time.Second):
+				fmt.Println()
+				return nil, fmt.Errorf("passphrase input timeout after 30 seconds")
+			}
 		}
 		return nil, fmt.Errorf("failed to parse private key: %v", err)
 	}
@@ -92,18 +150,22 @@ func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 	return authMethods, nil
 }
 
-func (n *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error) {
-	authMethods, err := n.getAuthMethods()
+func (nm *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error) {
+	authMethods, err := nm.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("jumpbox authentication setup failed: %v", err)
 	}
 
+	hostKeyCallback, err := nm.getHostKeyCallback()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get host key callback: %w", err)
+	}
+
 	config := &ssh.ClientConfig{
-		User:    username,
-		Auth:    authMethods,
-		Timeout: 10 * time.Second,
-		// WARNING: Still using InsecureIgnoreHostKey for simplicity. Use known_hosts in production.
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		User:            username,
+		Auth:            authMethods,
+		Timeout:         10 * time.Second,
+		HostKeyCallback: hostKeyCallback,
 	}
 
 	addr := fmt.Sprintf("%s:22", ip)
@@ -112,27 +174,23 @@ func (n *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error)
 		return nil, fmt.Errorf("failed to dial jumpbox %s: %v", addr, err)
 	}
 
-	// Enable Agent Forwarding on the jumpbox connection
-	if err := n.forwardAgent(jumpboxClient, nil); err != nil {
+	if err := nm.forwardAgent(jumpboxClient, nil); err != nil {
 		fmt.Printf(" Warning: Agent forwarding setup failed on jumpbox: %v\n", err)
 	}
 
 	return jumpboxClient, nil
 }
 
-func (n *NodeManager) forwardAgent(client *ssh.Client, session *ssh.Session) error {
+func (nm *NodeManager) forwardAgent(client *ssh.Client, session *ssh.Session) error {
 	authSocket := os.Getenv("SSH_AUTH_SOCK")
 	if authSocket == "" {
 		log.Printf("SSH_AUTH_SOCK not set. Cannot perform agent forwarding")
 	} else {
-		// Connect to the local SSH Agent socket
 		conn, err := net.Dial("unix", authSocket)
 		if err != nil {
 			log.Printf("failed to dial SSH agent socket: %v", err)
 		} else {
-			// Create an agent client for the local agent
 			ag := agent.NewClient(conn)
-			// This tells the remote server to proxy authentication requests back to us.
 			if err := agent.ForwardToAgent(client, ag); err != nil {
 				log.Printf("failed to forward agent to remote client: %v", err)
 			}
@@ -147,52 +205,51 @@ func (n *NodeManager) forwardAgent(client *ssh.Client, session *ssh.Session) err
 	return nil
 }
 
-const jumpboxUser = "ubuntu"
-
-// RunSSHCommand connects to the node, executes a command and streams the output
-func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string, command string) error {
-	client, err := n.GetClient(jumpboxIp, ip, username)
+func (nm *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string, command string) error {
+	client, err := nm.GetClient(jumpboxIp, ip, username)
 	if err != nil {
 		return fmt.Errorf("failed to get client: %w", err)
 	}
 	defer util.IgnoreError(client.Close)
 	session, err := client.NewSession()
 	if err != nil {
-		return fmt.Errorf("failed to create session on jumpbox: %v", err)
+		return fmt.Errorf("failed to create session on target node (%s): %v", ip, err)
 	}
 	defer util.IgnoreError(session.Close)
 
 	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
 
-	err = n.forwardAgent(client, session)
-
-	if err != nil {
+	if err := nm.forwardAgent(client, session); err != nil {
 		fmt.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
 	}
 
 	session.Stdout = os.Stdout
 	session.Stderr = os.Stderr
-	// Start the command
 	if err := session.Start(command); err != nil {
 		return fmt.Errorf("failed to start command: %v", err)
 	}
 
 	if err := session.Wait(); err != nil {
-		// A non-zero exit status from the remote command is also considered an error
 		return fmt.Errorf("command failed: %w", err)
 	}
 
 	return nil
 }
 
-func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
+func (nm *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
 
-	authMethods, err := n.getAuthMethods()
+	authMethods, err := nm.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get authentication methods: %w", err)
 	}
+
+	hostKeyCallback, err := nm.getHostKeyCallback()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get host key callback: %w", err)
+	}
+
 	if jumpboxIp != "" {
-		jbClient, err := n.connectToJumpbox(jumpboxIp, jumpboxUser)
+		jbClient, err := nm.connectToJumpbox(jumpboxIp, jumpboxUser)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to jumpbox: %v", err)
 		}
@@ -201,7 +258,7 @@ func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*
 			User:            username,
 			Auth:            authMethods,
 			Timeout:         10 * time.Second,
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			HostKeyCallback: hostKeyCallback,
 		}
 
 		finalAddr := fmt.Sprintf("%s:22", ip)
@@ -218,14 +275,10 @@ func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*
 	}
 
 	config := &ssh.ClientConfig{
-		User:    username,
-		Auth:    authMethods,
-		Timeout: 10 * time.Second,
-		// WARNING: This is INSECURE for production!
-		// It tells the client to accept any host key.
-		// For production, you should implement a proper HostKeyCallback
-		// to verify the remote server's identity.
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		User:            username,
+		Auth:            authMethods,
+		Timeout:         10 * time.Second,
+		HostKeyCallback: hostKeyCallback,
 	}
 
 	addr := fmt.Sprintf("%s:22", ip)
@@ -236,8 +289,8 @@ func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*
 	return client, nil
 }
 
-func (n *NodeManager) GetSFTPClient(jumpboxIp string, ip string, username string) (*sftp.Client, error) {
-	client, err := n.GetClient(jumpboxIp, ip, username)
+func (nm *NodeManager) GetSFTPClient(jumpboxIp string, ip string, username string) (*sftp.Client, error) {
+	client, err := nm.GetClient(jumpboxIp, ip, username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SSH client: %v", err)
 	}
@@ -248,20 +301,19 @@ func (n *NodeManager) GetSFTPClient(jumpboxIp string, ip string, username string
 	return sftpClient, nil
 }
 
-// EnsureDirectoryExists creates the directory on the remote node via SSH if it does not exist.
 func (nm *NodeManager) EnsureDirectoryExists(jumpboxIp string, ip string, username string, dir string) error {
-	cmd := fmt.Sprintf("mkdir -p '%s'", dir)
+	cmd := fmt.Sprintf("mkdir -p '%s'", shellEscape(dir))
 	return nm.RunSSHCommand(jumpboxIp, ip, username, cmd)
 }
 
-func (n *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src string, dst string) error {
-	client, err := n.GetSFTPClient(jumpboxIp, ip, username)
+func (nm *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src string, dst string) error {
+	client, err := nm.GetSFTPClient(jumpboxIp, ip, username)
 	if err != nil {
 		return fmt.Errorf("failed to get SSH client: %v", err)
 	}
 	defer util.IgnoreError(client.Close)
 
-	srcFile, err := n.FileIO.Open(src)
+	srcFile, err := nm.FileIO.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file %s: %v", src, err)
 	}
@@ -282,13 +334,9 @@ func (n *NodeManager) CopyFile(jumpboxIp string, ip string, username string, src
 }
 
 func (n *Node) HasCommand(nm *NodeManager, command string) bool {
-	checkCommand := fmt.Sprintf("command -v %s >/dev/null 2>&1", command)
+	checkCommand := fmt.Sprintf("command -v '%s' >/dev/null 2>&1", shellEscape(command))
 	err := nm.RunSSHCommand("", n.ExternalIP, "root", checkCommand)
-	if err != nil {
-		// If the command returns a non-zero exit status, it means the command is not found
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (n *Node) InstallOms(nm *NodeManager) error {
@@ -308,29 +356,29 @@ func (n *Node) InstallOms(nm *NodeManager) error {
 }
 
 func (n *Node) CopyFile(jumpbox *Node, nm *NodeManager, src string, dst string) error {
+	user := n.User
+	if user == "" {
+		user = "root"
+	}
+
 	if jumpbox == nil {
-		err := nm.EnsureDirectoryExists("", n.ExternalIP, "root", filepath.Dir(dst))
+		err := nm.EnsureDirectoryExists("", n.ExternalIP, user, filepath.Dir(dst))
 		if err != nil {
 			return fmt.Errorf("failed to ensure directory exists: %w", err)
 		}
-		return nm.CopyFile("", n.ExternalIP, "root", src, dst)
+		return nm.CopyFile("", n.ExternalIP, user, src, dst)
 	}
-	err := nm.EnsureDirectoryExists(jumpbox.ExternalIP, n.InternalIP, "root", filepath.Dir(dst))
+	err := nm.EnsureDirectoryExists(jumpbox.ExternalIP, n.InternalIP, user, filepath.Dir(dst))
 	if err != nil {
 		return fmt.Errorf("failed to ensure directory exists: %w", err)
 	}
-	return nm.CopyFile(jumpbox.ExternalIP, n.InternalIP, "root", src, dst)
+	return nm.CopyFile(jumpbox.ExternalIP, n.InternalIP, user, src, dst)
 }
 
-// HasAcceptEnvConfigured checks if AcceptEnv is configured
 func (n *Node) HasAcceptEnvConfigured(jumpbox *Node, nm *NodeManager) bool {
 	checkCommand := "sudo grep -E '^AcceptEnv OMS_PORTAL_API_KEY' /etc/ssh/sshd_config >/dev/null 2>&1"
 	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommand)
-	if err != nil {
-		// If the command returns a NON-zero exit status, it means AcceptEnv is not configured
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (n *Node) ConfigureAcceptEnv(jumpbox *Node, nm *NodeManager) error {
@@ -351,26 +399,17 @@ func (n *Node) HasRootLoginEnabled(jumpbox *Node, nm *NodeManager) bool {
 	checkCommandPermit := "sudo grep -E '^PermitRootLogin yes' /etc/ssh/sshd_config >/dev/null 2>&1"
 	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommandPermit)
 	if err != nil {
-		// If the command returns a NON-zero exit status, it means root login is not permitted
 		return false
 	}
 	checkCommandAuthorizedKeys := "sudo grep -E '^no-port-forwarding' /root/.ssh/authorized_keys >/dev/null 2>&1"
 	err = n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommandAuthorizedKeys)
-	if err == nil {
-		// If the command returns a ZERO exit status, it means root login is prevented
-		return false
-	}
-	return true
+	return err != nil
 }
 
 func (n *Node) HasFile(jumpbox *Node, nm *NodeManager, filePath string) bool {
-	checkCommand := fmt.Sprintf("test -f '%s'", filePath)
+	checkCommand := fmt.Sprintf("test -f '%s'", shellEscape(filePath))
 	err := n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommand)
-	if err != nil {
-		// If the command returns a non-zero exit status, it means the file does not exist
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (n *Node) RunSSHCommand(jumpbox *Node, nm *NodeManager, username string, command string) error {
@@ -420,11 +459,7 @@ func (n *Node) WaitForSSH(jumpbox *Node, nm *NodeManager, timeout time.Duration)
 func (n *Node) HasInotifyWatchesConfigured(jumpbox *Node, nm *NodeManager) bool {
 	checkCommand := "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1"
 	err := n.RunSSHCommand(jumpbox, nm, "root", checkCommand)
-	if err != nil {
-		// If the command returns a NON-zero exit status, it means the setting is not configured
-		return false
-	}
-	return true
+	return err == nil
 }
 
 func (n *Node) ConfigureInotifyWatches(jumpbox *Node, nm *NodeManager) error {
@@ -438,5 +473,74 @@ func (n *Node) ConfigureInotifyWatches(jumpbox *Node, nm *NodeManager) error {
 			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
 		}
 	}
+	return nil
+}
+
+func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath string, force bool) error {
+	remoteK0sDir := "/usr/local/bin"
+	remoteK0sBinary := filepath.Join(remoteK0sDir, "k0s")
+	remoteConfigPath := "/etc/k0s/k0s.yaml"
+
+	user := n.User
+	if user == "" {
+		user = "root"
+	}
+
+	// Copy k0s binary to temp location first, then move with sudo
+	tmpK0sBinary := "/tmp/k0s"
+	log.Printf("Copying k0s binary to %s:%s", n.ExternalIP, tmpK0sBinary)
+	if err := nm.CopyFile("", n.ExternalIP, user, k0sBinaryPath, tmpK0sBinary); err != nil {
+		return fmt.Errorf("failed to copy k0s binary to temp: %w", err)
+	}
+
+	// Move to final location and make executable with sudo
+	log.Printf("Moving k0s binary to %s", remoteK0sBinary)
+	moveCmd := fmt.Sprintf("sudo mv '%s' '%s' && sudo chmod +x '%s'",
+		shellEscape(tmpK0sBinary), shellEscape(remoteK0sBinary), shellEscape(remoteK0sBinary))
+	if err := nm.RunSSHCommand("", n.ExternalIP, user, moveCmd); err != nil {
+		return fmt.Errorf("failed to move and chmod k0s binary: %w", err)
+	}
+
+	if k0sConfigPath != "" {
+		// Copy config to temp location first
+		tmpConfigPath := "/tmp/k0s-config.yaml"
+		log.Printf("Copying k0s config to %s", tmpConfigPath)
+		if err := nm.CopyFile("", n.ExternalIP, user, k0sConfigPath, tmpConfigPath); err != nil {
+			return fmt.Errorf("failed to copy k0s config to temp: %w", err)
+		}
+
+		// Create /etc/k0s directory and move config with sudo
+		log.Printf("Moving k0s config to %s", remoteConfigPath)
+		setupConfigCmd := fmt.Sprintf("sudo mkdir -p /etc/k0s && sudo mv '%s' '%s' && sudo chmod 644 '%s'",
+			shellEscape(tmpConfigPath), shellEscape(remoteConfigPath), shellEscape(remoteConfigPath))
+		if err := nm.RunSSHCommand("", n.ExternalIP, user, setupConfigCmd); err != nil {
+			return fmt.Errorf("failed to setup k0s config: %w", err)
+		}
+	}
+
+	installCmd := fmt.Sprintf("sudo '%s' install controller", shellEscape(remoteK0sBinary))
+	if k0sConfigPath != "" {
+		installCmd += fmt.Sprintf(" --config '%s'", shellEscape(remoteConfigPath))
+	} else {
+		installCmd += " --single"
+	}
+
+	installCmd += " --enable-worker"
+	installCmd += " --no-taints"
+	installCmd += fmt.Sprintf(" --kubelet-extra-args='--node-ip=%s'", shellEscape(n.ExternalIP))
+
+	if force {
+		installCmd += " --force"
+	}
+
+	log.Printf("Installing k0s on %s", n.ExternalIP)
+	if err := nm.RunSSHCommand("", n.ExternalIP, user, installCmd); err != nil {
+		return fmt.Errorf("failed to install k0s: %w", err)
+	}
+
+	log.Printf("k0s successfully installed on %s", n.ExternalIP)
+	log.Printf("You can start it using: ssh %s@%s 'sudo %s start'", user, n.ExternalIP, shellEscape(remoteK0sBinary))
+	log.Printf("You can check the status using: ssh %s@%s 'sudo %s status'", user, n.ExternalIP, shellEscape(remoteK0sBinary))
+
 	return nil
 }

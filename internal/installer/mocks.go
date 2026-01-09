@@ -860,16 +860,16 @@ func (_c *MockK0sManager_GetLatestVersion_Call) RunAndReturn(run func() (string,
 }
 
 // Install provides a mock function for the type MockK0sManager
-func (_mock *MockK0sManager) Install(configPath string, k0sPath string, force bool) error {
-	ret := _mock.Called(configPath, k0sPath, force)
+func (_mock *MockK0sManager) Install(configPath string, k0sPath string, force bool, nodeIP string) error {
+	ret := _mock.Called(configPath, k0sPath, force, nodeIP)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Install")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, bool) error); ok {
-		r0 = returnFunc(configPath, k0sPath, force)
+	if returnFunc, ok := ret.Get(0).(func(string, string, bool, string) error); ok {
+		r0 = returnFunc(configPath, k0sPath, force, nodeIP)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -885,11 +885,12 @@ type MockK0sManager_Install_Call struct {
 //   - configPath string
 //   - k0sPath string
 //   - force bool
-func (_e *MockK0sManager_Expecter) Install(configPath interface{}, k0sPath interface{}, force interface{}) *MockK0sManager_Install_Call {
-	return &MockK0sManager_Install_Call{Call: _e.mock.On("Install", configPath, k0sPath, force)}
+//   - nodeIP string
+func (_e *MockK0sManager_Expecter) Install(configPath interface{}, k0sPath interface{}, force interface{}, nodeIP interface{}) *MockK0sManager_Install_Call {
+	return &MockK0sManager_Install_Call{Call: _e.mock.On("Install", configPath, k0sPath, force, nodeIP)}
 }
 
-func (_c *MockK0sManager_Install_Call) Run(run func(configPath string, k0sPath string, force bool)) *MockK0sManager_Install_Call {
+func (_c *MockK0sManager_Install_Call) Run(run func(configPath string, k0sPath string, force bool, nodeIP string)) *MockK0sManager_Install_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -903,10 +904,15 @@ func (_c *MockK0sManager_Install_Call) Run(run func(configPath string, k0sPath s
 		if args[2] != nil {
 			arg2 = args[2].(bool)
 		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -917,7 +923,58 @@ func (_c *MockK0sManager_Install_Call) Return(err error) *MockK0sManager_Install
 	return _c
 }
 
-func (_c *MockK0sManager_Install_Call) RunAndReturn(run func(configPath string, k0sPath string, force bool) error) *MockK0sManager_Install_Call {
+func (_c *MockK0sManager_Install_Call) RunAndReturn(run func(configPath string, k0sPath string, force bool, nodeIP string) error) *MockK0sManager_Install_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Reset provides a mock function for the type MockK0sManager
+func (_mock *MockK0sManager) Reset(k0sPath string) error {
+	ret := _mock.Called(k0sPath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Reset")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(k0sPath)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockK0sManager_Reset_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Reset'
+type MockK0sManager_Reset_Call struct {
+	*mock.Call
+}
+
+// Reset is a helper method to define mock.On call
+//   - k0sPath string
+func (_e *MockK0sManager_Expecter) Reset(k0sPath interface{}) *MockK0sManager_Reset_Call {
+	return &MockK0sManager_Reset_Call{Call: _e.mock.On("Reset", k0sPath)}
+}
+
+func (_c *MockK0sManager_Reset_Call) Run(run func(k0sPath string)) *MockK0sManager_Reset_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockK0sManager_Reset_Call) Return(err error) *MockK0sManager_Reset_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockK0sManager_Reset_Call) RunAndReturn(run func(k0sPath string) error) *MockK0sManager_Reset_Call {
 	_c.Call.Return(run)
 	return _c
 }
