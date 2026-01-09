@@ -4,8 +4,8 @@ go 1.25.5
 
 require (
 	cloud.google.com/go/artifactregistry v1.19.0
-	cloud.google.com/go/compute v1.40.0
 	cloud.google.com/go/compute v1.53.0
+	cloud.google.com/go/iam v1.5.3
 	cloud.google.com/go/resourcemanager v1.10.7
 	cloud.google.com/go/serviceusage v1.9.7
 	github.com/blang/semver v3.5.1+incompatible
@@ -487,7 +487,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genproto v0.0.0-20250715232539-7130f93afb79 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251111163417-95abcf5c77ba // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251103181224-f26f9409b101 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251111163417-95abcf5c77ba // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/mail.v2 v2.3.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
