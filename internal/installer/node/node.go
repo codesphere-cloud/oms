@@ -403,10 +403,7 @@ func (n *Node) HasRootLoginEnabled(jumpbox *Node, nm *NodeManager) bool {
 	}
 	checkCommandAuthorizedKeys := "sudo grep -E '^no-port-forwarding' /root/.ssh/authorized_keys >/dev/null 2>&1"
 	err = n.RunSSHCommand(jumpbox, nm, "ubuntu", checkCommandAuthorizedKeys)
-	if err == nil {
-		return false
-	}
-	return true
+	return err != nil
 }
 
 func (n *Node) HasFile(jumpbox *Node, nm *NodeManager, filePath string) bool {
