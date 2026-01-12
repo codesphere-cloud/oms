@@ -22,7 +22,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/dns/v1"
-	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -1088,7 +1087,7 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 		gcpProject = b.env.ProjectID
 	}
 
-	dnsService, err := dns.NewService(ctx, option.WithCredentialsFile(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")))
+	dnsService, err := dns.NewService(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create DNS service: %w", err)
 	}

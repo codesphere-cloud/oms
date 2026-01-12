@@ -58,7 +58,7 @@ func NewGCPClient(credentialsFile string) *RealGCPClient {
 }
 
 func (c *RealGCPClient) GetProjectByName(ctx context.Context, folderID string, displayName string) (*resourcemanagerpb.Project, error) {
-	client, err := resourcemanager.NewProjectsClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	client, err := resourcemanager.NewProjectsClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (c *RealGCPClient) GetProjectByName(ctx context.Context, folderID string, d
 }
 
 func (c *RealGCPClient) CreateProject(ctx context.Context, parent, projectID, displayName string) (string, error) {
-	client, err := resourcemanager.NewProjectsClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	client, err := resourcemanager.NewProjectsClient(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -116,7 +116,7 @@ func getProjectResourceName(projectID string) string {
 
 func (c *RealGCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error) {
 	projectName := getProjectResourceName(projectID)
-	billingService, err := cloudbilling.NewService(context.Background(), option.WithCredentialsFile(c.CredentialsFile))
+	billingService, err := cloudbilling.NewService(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (c *RealGCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectB
 }
 
 func (c *RealGCPClient) EnableBilling(ctx context.Context, projectID, billingAccount string) error {
-	billingService, err := cloudbilling.NewService(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	billingService, err := cloudbilling.NewService(ctx)
 	if err != nil {
 		return err
 	}
@@ -141,7 +141,7 @@ func (c *RealGCPClient) EnableBilling(ctx context.Context, projectID, billingAcc
 }
 
 func (c *RealGCPClient) EnableAPIs(ctx context.Context, projectID string, apis []string) error {
-	client, err := serviceusage.NewClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	client, err := serviceusage.NewClient(ctx)
 	if err != nil {
 		return err
 	}
