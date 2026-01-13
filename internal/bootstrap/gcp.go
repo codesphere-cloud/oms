@@ -488,9 +488,9 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		{"ceph-2", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
 		{"ceph-3", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
 		{"ceph-4", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
-		{"k0s-1", "e2-standard-8", []string{"k0s"}, []int64{}, false},
-		{"k0s-2", "e2-standard-8", []string{"k0s"}, []int64{}, false},
-		{"k0s-3", "e2-standard-8", []string{"k0s"}, []int64{}, false},
+		{"k0s-1", "e2-standard-16", []string{"k0s"}, []int64{}, false},
+		{"k0s-2", "e2-standard-16", []string{"k0s"}, []int64{}, false},
+		{"k0s-3", "e2-standard-16", []string{"k0s"}, []int64{}, false},
 	}
 
 	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", projectID, projectID)
@@ -917,8 +917,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 						Pool: map[int]int{
 							1: 1,
 							2: 1,
-							3: 1,
-							4: 1,
+							3: 0,
+							4: 0,
 						},
 					},
 				},
