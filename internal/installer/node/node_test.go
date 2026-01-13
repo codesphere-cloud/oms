@@ -356,7 +356,7 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 				k0sBinaryPath := "/path/to/k0s"
 				mockFileWriter.EXPECT().Open(k0sBinaryPath).Return(nil, errors.New("file not found")).Maybe()
 
-				err := n.InstallK0s(nm, k0sBinaryPath, "", false)
+				err := n.InstallK0s(nm, k0sBinaryPath, "", false, "192.168.1.100")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to copy k0s binary to temp"))
 			})
@@ -364,14 +364,14 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 			It("should handle paths with special characters safely", func() {
 				k0sBinaryPath := "/path/to/k0s'; echo 'injected"
 
-				err := n.InstallK0s(nm, k0sBinaryPath, "", false)
+				err := n.InstallK0s(nm, k0sBinaryPath, "", false, "192.168.1.100")
 				Expect(err).To(HaveOccurred())
 			})
 
 			It("should support force flag parameter", func() {
 				k0sBinaryPath := "/tmp/k0s"
 
-				err := n.InstallK0s(nm, k0sBinaryPath, "", true)
+				err := n.InstallK0s(nm, k0sBinaryPath, "", true, "192.168.1.100")
 				Expect(err).To(HaveOccurred())
 				// Will fail to connect, but tests that force flag is handled
 			})
@@ -380,7 +380,7 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 				k0sBinaryPath := "/tmp/k0s"
 				k0sConfigPath := "/tmp/k0s.yaml"
 
-				err := n.InstallK0s(nm, k0sBinaryPath, k0sConfigPath, false)
+				err := n.InstallK0s(nm, k0sBinaryPath, k0sConfigPath, false, "192.168.1.100")
 				Expect(err).To(HaveOccurred())
 				// Will fail to connect, but tests that config path is handled
 			})

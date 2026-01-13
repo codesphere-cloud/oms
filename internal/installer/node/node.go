@@ -33,7 +33,13 @@ type NodeManager struct {
 	KeyPath string
 }
 
-const jumpboxUser = "ubuntu"
+const (
+	jumpboxUser     = "ubuntu"
+	remoteK0sDir    = "/usr/local/bin"
+	remoteK0sConfig = "/etc/k0s/k0s.yaml"
+	tmpK0sBinary    = "/tmp/k0s"
+	tmpK0sConfig    = "/tmp/k0s-config.yaml"
+)
 
 func shellEscape(s string) string {
 	return strings.ReplaceAll(s, "'", "'\\''")
@@ -85,16 +91,16 @@ func (nm *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 			return nil, fmt.Errorf("failed to read private key file %s: %v", nm.KeyPath, err)
 		}
 
-		fmt.Printf("Successfully read %d bytes from key file\\n", len(key))
+		log.Printf("Successfully read %d bytes from key file", len(key))
 
 		signer, err := ssh.ParsePrivateKey(key)
 		if err == nil {
-			fmt.Printf("Successfully parsed private key (type: %s)\\n", signer.PublicKey().Type())
+			log.Printf("Successfully parsed private key (type: %s)", signer.PublicKey().Type())
 			authMethods = append(authMethods, ssh.PublicKeys(signer))
 			return authMethods, nil
 		}
 
-		fmt.Printf("Failed to parse private key: %v\\n", err)
+		log.Printf("Failed to parse private key: %v", err)
 		if _, ok := err.(*ssh.PassphraseMissingError); ok {
 			// Check if we're in an interactive terminal
 			if !term.IsTerminal(int(syscall.Stdin)) {
@@ -476,10 +482,9 @@ func (n *Node) ConfigureInotifyWatches(jumpbox *Node, nm *NodeManager) error {
 	return nil
 }
 
-func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath string, force bool) error {
-	remoteK0sDir := "/usr/local/bin"
+func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath string, force bool, nodeIP string) error {
 	remoteK0sBinary := filepath.Join(remoteK0sDir, "k0s")
-	remoteConfigPath := "/etc/k0s/k0s.yaml"
+	remoteConfigPath := remoteK0sConfig
 
 	user := n.User
 	if user == "" {
@@ -487,7 +492,6 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 	}
 
 	// Copy k0s binary to temp location first, then move with sudo
-	tmpK0sBinary := "/tmp/k0s"
 	log.Printf("Copying k0s binary to %s:%s", n.ExternalIP, tmpK0sBinary)
 	if err := nm.CopyFile("", n.ExternalIP, user, k0sBinaryPath, tmpK0sBinary); err != nil {
 		return fmt.Errorf("failed to copy k0s binary to temp: %w", err)
@@ -503,16 +507,15 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 
 	if k0sConfigPath != "" {
 		// Copy config to temp location first
-		tmpConfigPath := "/tmp/k0s-config.yaml"
-		log.Printf("Copying k0s config to %s", tmpConfigPath)
-		if err := nm.CopyFile("", n.ExternalIP, user, k0sConfigPath, tmpConfigPath); err != nil {
+		log.Printf("Copying k0s config to %s", tmpK0sConfig)
+		if err := nm.CopyFile("", n.ExternalIP, user, k0sConfigPath, tmpK0sConfig); err != nil {
 			return fmt.Errorf("failed to copy k0s config to temp: %w", err)
 		}
 
 		// Create /etc/k0s directory and move config with sudo
 		log.Printf("Moving k0s config to %s", remoteConfigPath)
 		setupConfigCmd := fmt.Sprintf("sudo mkdir -p /etc/k0s && sudo mv '%s' '%s' && sudo chmod 644 '%s'",
-			shellEscape(tmpConfigPath), shellEscape(remoteConfigPath), shellEscape(remoteConfigPath))
+			shellEscape(tmpK0sConfig), shellEscape(remoteConfigPath), shellEscape(remoteConfigPath))
 		if err := nm.RunSSHCommand("", n.ExternalIP, user, setupConfigCmd); err != nil {
 			return fmt.Errorf("failed to setup k0s config: %w", err)
 		}
@@ -527,7 +530,7 @@ func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath s
 
 	installCmd += " --enable-worker"
 	installCmd += " --no-taints"
-	installCmd += fmt.Sprintf(" --kubelet-extra-args='--node-ip=%s'", shellEscape(n.ExternalIP))
+	installCmd += fmt.Sprintf(" --kubelet-extra-args='--node-ip=%s'", shellEscape(nodeIP))
 
 	if force {
 		installCmd += " --force"

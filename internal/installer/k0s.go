@@ -149,18 +149,11 @@ func (k *K0s) Install(configPath string, k0sPath string, force bool, nodeIP stri
 		filteredConfigPath, err := k.filterConfigForK0s(configPath)
 		if err != nil {
 			log.Printf("Warning: failed to filter config, using original: %v", err)
+			args = append(args, "--config", configPath)
 		} else {
-			filteredData, err := os.ReadFile(filteredConfigPath)
-			if err != nil {
-				log.Printf("Warning: failed to read filtered config: %v", err)
-			} else {
-				if err := os.WriteFile(configPath, filteredData, 0644); err != nil {
-					log.Printf("Warning: failed to write filtered config back: %v", err)
-				}
-			}
-			_ = os.Remove(filteredConfigPath)
+			args = append(args, "--config", filteredConfigPath)
+			defer func() { _ = os.Remove(filteredConfigPath) }()
 		}
-		args = append(args, "--config", configPath)
 	} else {
 		args = append(args, "--single")
 	}

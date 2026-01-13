@@ -62,7 +62,7 @@ var _ = Describe("InstallK0sCmd", func() {
 		})
 	})
 
-	Context("InstallK0sFromInstallConfig method", func() {
+	Context("InstallK0s method", func() {
 		var (
 			mockPM  *installer.MockPackageManager
 			mockK0s *installer.MockK0sManager

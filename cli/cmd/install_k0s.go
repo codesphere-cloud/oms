@@ -90,7 +90,31 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 	k0s.cmd.RunE = k0s.RunE
 }
 
-const defaultK0sPath = "kubernetes/files/k0s"
+const (
+	defaultK0sPath = "kubernetes/files/k0s"
+	k0sConfigDir   = "/etc/k0s"
+	k0sConfigFile  = "k0s.yaml"
+)
+
+// writeK0sConfigFile writes the k0s config to the specified path
+func writeK0sConfigFile(preferredPath string, data []byte) (string, func(), error) {
+	if err := os.MkdirAll(filepath.Dir(preferredPath), 0755); err != nil {
+		// Fall back to temp file
+		tmpPath := filepath.Join(os.TempDir(), "k0s-config.yaml")
+		if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+			return "", nil, err
+		}
+		log.Printf("Generated k0s configuration at %s (using temp path due to permissions)", tmpPath)
+		cleanup := func() { _ = os.Remove(tmpPath) }
+		return tmpPath, cleanup, nil
+	}
+
+	if err := os.WriteFile(preferredPath, data, 0644); err != nil {
+		return "", nil, err
+	}
+	log.Printf("Generated k0s configuration at %s", preferredPath)
+	return preferredPath, nil, nil
+}
 
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager) error {
 	icg := installer.NewInstallConfigManager()
@@ -115,22 +139,13 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return fmt.Errorf("failed to marshal k0s config: %w", err)
 	}
 
-	k0sConfigPath := "/etc/k0s/k0s.yaml"
-
-	if err := os.MkdirAll(filepath.Dir(k0sConfigPath), 0755); err != nil {
-		tmpK0sConfigPath := filepath.Join(os.TempDir(), "k0s-config.yaml")
-		if err := os.WriteFile(tmpK0sConfigPath, k0sConfigData, 0644); err != nil {
-			return fmt.Errorf("failed to write k0s config: %w", err)
-		}
-		k0sConfigPath = tmpK0sConfigPath
-		// Clean up temp file on all exit paths
-		defer func() { _ = os.Remove(k0sConfigPath) }()
-		log.Printf("Generated k0s configuration at %s (using temp path due to permissions)", k0sConfigPath)
-	} else {
-		if err := os.WriteFile(k0sConfigPath, k0sConfigData, 0644); err != nil {
-			return fmt.Errorf("failed to write k0s config: %w", err)
-		}
-		log.Printf("Generated k0s configuration at %s", k0sConfigPath)
+	k0sConfigPath := filepath.Join(k0sConfigDir, k0sConfigFile)
+	k0sConfigPath, cleanup, err := writeK0sConfigFile(k0sConfigPath, k0sConfigData)
+	if err != nil {
+		return fmt.Errorf("failed to write k0s config: %w", err)
+	}
+	if cleanup != nil {
+		defer cleanup()
 	}
 
 	k0sPath := pm.GetDependencyPath(defaultK0sPath)
@@ -179,7 +194,17 @@ func (c *InstallK0sCmd) InstallK0sRemote(config *files.RootConfig, k0sBinaryPath
 		User:       c.Opts.RemoteUser,
 	}
 
-	if err := remoteNode.InstallK0s(nm, k0sBinaryPath, k0sConfigPath, c.Opts.Force); err != nil {
+	controlPlaneIPs := make([]string, 0, len(config.Kubernetes.ControlPlanes))
+	for _, cp := range config.Kubernetes.ControlPlanes {
+		controlPlaneIPs = append(controlPlaneIPs, cp.IPAddress)
+	}
+	nodeIP, err := installer.GetNodeIPAddress(controlPlaneIPs)
+	if err != nil {
+		log.Printf("Warning: could not determine node IP from control planes: %v. Using remote host IP: %s", err, c.Opts.RemoteHost)
+		nodeIP = c.Opts.RemoteHost
+	}
+
+	if err := remoteNode.InstallK0s(nm, k0sBinaryPath, k0sConfigPath, c.Opts.Force, nodeIP); err != nil {
 		return fmt.Errorf("failed to install k0s on remote host: %w", err)
 	}
 
