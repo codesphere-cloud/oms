@@ -15,18 +15,19 @@ import (
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
 	"github.com/codesphere-cloud/oms/internal/codesphere"
+	"github.com/codesphere-cloud/oms/internal/codesphere/teststeps"
 )
 
 var _ = Describe("SmoketestCodesphereCmd", func() {
 	var (
 		mockClient *codesphere.MockClient
 		c          cmd.SmoketestCodesphereCmd
-		opts       *cmd.SmoketestCodesphereOpts
+		opts       *teststeps.SmoketestCodesphereOpts
 	)
 
 	BeforeEach(func() {
 		mockClient = codesphere.NewMockClient(GinkgoT())
-		opts = &cmd.SmoketestCodesphereOpts{
+		opts = &teststeps.SmoketestCodesphereOpts{
 			BaseURL: "https://test.codesphere.com/api",
 			Token:   "test-token",
 			TeamID:  "123",
@@ -34,10 +35,11 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			Quiet:   true, // Suppress log output in tests
 			Timeout: 10 * time.Minute,
 			Profile: "ci.yml",
+			Steps:   []string{},
+			Client:  mockClient,
 		}
 		c = cmd.SmoketestCodesphereCmd{
-			Opts:   opts,
-			Client: mockClient,
+			Opts: opts,
 		}
 	})
 
@@ -350,7 +352,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 		It("runs only specified steps when steps flag is set", func() {
 			workspaceID := 789
-			opts.Steps = "createWorkspace,setEnvVar"
+			opts.Steps = []string{"createWorkspace", "setEnvVar"}
 
 			mockClient.EXPECT().CreateWorkspace(
 				mock.Anything,
