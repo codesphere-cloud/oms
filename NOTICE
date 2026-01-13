@@ -406,6 +406,12 @@ License: BSD-3-Clause
 License URL: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.11/LICENSE
  
 ----------
+Module: gopkg.in/validator.v2
+Version: v2.0.1
+License: Apache-2.0
+License URL: https://github.com/go-validator/validator/blob/v2.0.1/LICENSE
+ 
+----------
 Module: gopkg.in/yaml.v3
 Version: v3.0.1
 License: MIT
