@@ -40,7 +40,7 @@ $ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --to
       --plan-id string     Plan ID for workspace creation
       --profile string     CI profile to use for landscape and pipeline (default "ci.yml")
   -q, --quiet              Suppress progress logging
-      --steps string       Comma-separated list of steps to run (createWorkspace,setEnvVar,createFiles,syncLandscape,startPipeline,deleteWorkspace). If empty, all steps including deleteWorkspace are run. If specified without deleteWorkspace, the workspace will be kept for manual inspection.
+      --steps strings      Comma-separated list of steps to run (createWorkspace,setEnvVar,createFiles,syncLandscape,startPipeline,deleteWorkspace). If empty, all steps including deleteWorkspace are run. If specified without deleteWorkspace, the workspace will be kept for manual inspection.
       --team-id string     Team ID for workspace creation
       --timeout duration   Timeout for the entire smoke test (default 10m0s)
       --token string       API token for authentication
