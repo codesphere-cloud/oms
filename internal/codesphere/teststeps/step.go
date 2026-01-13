@@ -3,7 +3,6 @@ package teststeps
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/codesphere"
@@ -35,12 +34,6 @@ type SmoketestCodesphereOpts struct {
 }
 
 // Logging helpers
-
-func (c *SmoketestCodesphereOpts) logf(format string, args ...interface{}) {
-	if !c.Quiet {
-		log.Printf(format, args...)
-	}
-}
 
 func (c *SmoketestCodesphereOpts) logStep(message string) {
 	if !c.Quiet {
