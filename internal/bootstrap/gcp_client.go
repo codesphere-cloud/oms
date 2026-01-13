@@ -25,7 +25,6 @@ import (
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
-	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -58,7 +57,7 @@ func NewGCPClient(credentialsFile string) *RealGCPClient {
 }
 
 func (c *RealGCPClient) GetProjectByName(ctx context.Context, folderID string, displayName string) (*resourcemanagerpb.Project, error) {
-	client, err := resourcemanager.NewProjectsClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	client, err := resourcemanager.NewProjectsClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +88,7 @@ func (c *RealGCPClient) GetProjectByName(ctx context.Context, folderID string, d
 }
 
 func (c *RealGCPClient) CreateProject(ctx context.Context, parent, projectID, displayName string) (string, error) {
-	client, err := resourcemanager.NewProjectsClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	client, err := resourcemanager.NewProjectsClient(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -116,7 +115,7 @@ func getProjectResourceName(projectID string) string {
 
 func (c *RealGCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error) {
 	projectName := getProjectResourceName(projectID)
-	billingService, err := cloudbilling.NewService(context.Background(), option.WithCredentialsFile(c.CredentialsFile))
+	billingService, err := cloudbilling.NewService(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +127,7 @@ func (c *RealGCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectB
 }
 
 func (c *RealGCPClient) EnableBilling(ctx context.Context, projectID, billingAccount string) error {
-	billingService, err := cloudbilling.NewService(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	billingService, err := cloudbilling.NewService(ctx)
 	if err != nil {
 		return err
 	}
@@ -141,7 +140,7 @@ func (c *RealGCPClient) EnableBilling(ctx context.Context, projectID, billingAcc
 }
 
 func (c *RealGCPClient) EnableAPIs(ctx context.Context, projectID string, apis []string) error {
-	client, err := serviceusage.NewClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	client, err := serviceusage.NewClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -182,7 +181,7 @@ func (c *RealGCPClient) EnableAPIs(ctx context.Context, projectID string, apis [
 }
 
 func (c *RealGCPClient) CreateArtifactRegistry(ctx context.Context, projectID, region, repoName string) (*artifactpb.Repository, error) {
-	client, err := artifact.NewClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	client, err := artifact.NewClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +211,7 @@ func (c *RealGCPClient) CreateArtifactRegistry(ctx context.Context, projectID, r
 
 func (c *RealGCPClient) GetArtifactRegistry(ctx context.Context, projectID, region, repoName string) (*artifactpb.Repository, error) {
 	fullRepoName := fmt.Sprintf("projects/%s/locations/%s/repositories/%s", projectID, region, repoName)
-	client, err := artifact.NewClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	client, err := artifact.NewClient(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +227,7 @@ func (c *RealGCPClient) GetArtifactRegistry(ctx context.Context, projectID, regi
 
 func (c *RealGCPClient) CreateServiceAccount(ctx context.Context, projectID, name, displayName string) (string, bool, error) {
 	saMail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", name, projectID)
-	iamService, err := iam.NewService(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	iamService, err := iam.NewService(ctx)
 	if err != nil {
 		return saMail, false, err
 	}
@@ -249,7 +248,7 @@ func (c *RealGCPClient) CreateServiceAccount(ctx context.Context, projectID, nam
 }
 
 func (c *RealGCPClient) CreateServiceAccountKey(ctx context.Context, projectID, saEmail string) (string, error) {
-	iamService, err := iam.NewService(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	iamService, err := iam.NewService(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -264,7 +263,7 @@ func (c *RealGCPClient) CreateServiceAccountKey(ctx context.Context, projectID, 
 
 func (c *RealGCPClient) AssignIAMRole(ctx context.Context, projectID, saName, role string) error {
 	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, projectID)
-	client, err := resourcemanager.NewProjectsClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	client, err := resourcemanager.NewProjectsClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -298,7 +297,7 @@ func (c *RealGCPClient) AssignIAMRole(ctx context.Context, projectID, saName, ro
 }
 
 func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networkName, subnetName, routerName, natName string) error {
-	networksClient, err := compute.NewNetworksRESTClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	networksClient, err := compute.NewNetworksRESTClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -319,7 +318,7 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 			return err
 		}
 	}
-	subnetsClient, err := compute.NewSubnetworksRESTClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	subnetsClient, err := compute.NewSubnetworksRESTClient(ctx)
 	if err != nil {
 		return err
 	}
@@ -405,7 +404,7 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 }
 
 func (c *RealGCPClient) CreateFirewallRule(ctx context.Context, projectID string, rule *computepb.Firewall) error {
-	firewallsClient, err := compute.NewFirewallsRESTClient(ctx, option.WithCredentialsFile(c.CredentialsFile))
+	firewallsClient, err := compute.NewFirewallsRESTClient(ctx)
 	if err != nil {
 		return err
 	}
