@@ -64,10 +64,22 @@ License: Apache-2.0
 License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.9.7/serviceusage/LICENSE
  
 ----------
-Module: github.com/blang/semver
-Version: v3.5.1
+Module: code.gitea.io/sdk/gitea
+Version: v0.22.1
 License: MIT
-License URL: https://github.com/blang/semver/blob/v3.5.1/LICENSE
+License URL: https://gitea.com/gitea/go-sdk/src/tag/gitea/v0.22.1/gitea/LICENSE
+ 
+----------
+Module: github.com/42wim/httpsig
+Version: v1.2.3
+License: BSD-3-Clause
+License URL: https://github.com/42wim/httpsig/blob/v1.2.3/LICENSE
+ 
+----------
+Module: github.com/Masterminds/semver/v3
+Version: v3.4.0
+License: MIT
+License URL: https://github.com/Masterminds/semver/blob/v3.4.0/LICENSE.txt
  
 ----------
 Module: github.com/cespare/xxhash/v2
@@ -106,6 +118,18 @@ License: MIT
 License URL: https://github.com/cpuguy83/go-md2man/blob/v2.0.7/LICENSE.md
  
 ----------
+Module: github.com/creativeprojects/go-selfupdate
+Version: v1.5.2
+License: MIT
+License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.5.2/LICENSE
+ 
+----------
+Module: github.com/creativeprojects/go-selfupdate/update
+Version: v1.5.2
+License: Apache-2.0
+License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.5.2/update/LICENSE
+ 
+----------
 Module: github.com/davecgh/go-spew/spew
 Version: v1.1.2-0.20180830191138-d8f796af33cc
 License: ISC
@@ -116,6 +140,12 @@ Module: github.com/felixge/httpsnoop
 Version: v1.0.4
 License: MIT
 License URL: https://github.com/felixge/httpsnoop/blob/v1.0.4/LICENSE.txt
+ 
+----------
+Module: github.com/go-fed/httpsig
+Version: v1.1.0
+License: BSD-3-Clause
+License URL: https://github.com/go-fed/httpsig/blob/v1.1.0/LICENSE
  
 ----------
 Module: github.com/go-logr/logr
@@ -130,10 +160,10 @@ License: Apache-2.0
 License URL: https://github.com/go-logr/stdr/blob/v1.2.2/LICENSE
  
 ----------
-Module: github.com/google/go-github/v30/github
-Version: v30.1.0
+Module: github.com/google/go-github/v74/github
+Version: v74.0.0
 License: BSD-3-Clause
-License URL: https://github.com/google/go-github/blob/v30.1.0/LICENSE
+License URL: https://github.com/google/go-github/blob/v74.0.0/LICENSE
  
 ----------
 Module: github.com/google/go-querystring/query
@@ -166,22 +196,22 @@ License: BSD-3-Clause
 License URL: https://github.com/googleapis/gax-go/blob/v2.16.0/v2/LICENSE
  
 ----------
-Module: github.com/inconshreveable/go-update
-Version: v0.0.0-20160112193335-8152e7eb6ccf
-License: Apache-2.0
-License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/LICENSE
+Module: github.com/hashicorp/go-cleanhttp
+Version: v0.5.2
+License: MPL-2.0
+License URL: https://github.com/hashicorp/go-cleanhttp/blob/v0.5.2/LICENSE
  
 ----------
-Module: github.com/inconshreveable/go-update/internal/binarydist
-Version: v0.0.0-20160112193335-8152e7eb6ccf
-License: MIT
-License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/internal/binarydist/License
+Module: github.com/hashicorp/go-retryablehttp
+Version: v0.7.8
+License: MPL-2.0
+License URL: https://github.com/hashicorp/go-retryablehttp/blob/v0.7.8/LICENSE
  
 ----------
-Module: github.com/inconshreveable/go-update/internal/osext
-Version: v0.0.0-20160112193335-8152e7eb6ccf
-License: BSD-3-Clause
-License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/internal/osext/LICENSE
+Module: github.com/hashicorp/go-version
+Version: v1.8.0
+License: MPL-2.0
+License URL: https://github.com/hashicorp/go-version/blob/v1.8.0/LICENSE
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
@@ -220,12 +250,6 @@ License: BSD-3-Clause
 License URL: https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE
  
 ----------
-Module: github.com/rhysd/go-github-selfupdate/selfupdate
-Version: v1.2.3
-License: MIT
-License URL: https://github.com/rhysd/go-github-selfupdate/blob/v1.2.3/LICENSE
- 
-----------
 Module: github.com/russross/blackfriday/v2
 Version: v2.1.0
 License: BSD-2-Clause
@@ -256,12 +280,6 @@ License: MIT
 License URL: https://github.com/stretchr/testify/blob/v1.11.1/LICENSE
  
 ----------
-Module: github.com/tcnksm/go-gitconfig
-Version: v0.1.2
-License: MIT
-License URL: https://github.com/tcnksm/go-gitconfig/blob/v0.1.2/LICENSE
- 
-----------
 Module: github.com/ulikunitz/xz
 Version: v0.5.15
 License: BSD-3-Clause
@@ -272,6 +290,12 @@ Module: github.com/yaml/go-yaml
 Version: v2.1.0
 License: Apache-2.0
 License URL: https://github.com/yaml/go-yaml/blob/v2.1.0/LICENSE
+ 
+----------
+Module: gitlab.com/gitlab-org/api/client-go
+Version: v1.10.0
+License: Apache-2.0
+License URL: https://gitlab.com/gitlab-org/api/blob/client-go/v1.10.0/client-go/LICENSE
  
 ----------
 Module: go.opentelemetry.io/auto/sdk
@@ -317,9 +341,9 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.4/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.46.0
+Version: v0.47.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.46.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.47.0:LICENSE
  
 ----------
 Module: golang.org/x/net
@@ -353,9 +377,9 @@ License URL: https://cs.opensource.google/go/x/term/+/v0.39.0:LICENSE
  
 ----------
 Module: golang.org/x/text
-Version: v0.32.0
+Version: v0.33.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/text/+/v0.32.0:LICENSE
+License URL: https://cs.opensource.google/go/x/text/+/v0.33.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
