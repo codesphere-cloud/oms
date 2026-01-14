@@ -26,6 +26,7 @@ like downloading new versions.
 * [oms-cli list](oms-cli_list.md)	 - List resources available through OMS
 * [oms-cli register](oms-cli_register.md)	 - Register a new API key
 * [oms-cli revoke](oms-cli_revoke.md)	 - Revoke resources available through OMS
+* [oms-cli smoketest](oms-cli_smoketest.md)	 - Run smoke tests for Codesphere components
 * [oms-cli update](oms-cli_update.md)	 - Update OMS related resources
 * [oms-cli version](oms-cli_version.md)	 - Print version
 
