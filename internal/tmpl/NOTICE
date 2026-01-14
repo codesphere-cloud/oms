@@ -220,10 +220,10 @@ License: BSD-3-Clause
 License URL: https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE
  
 ----------
-Module: github.com/rhysd/go-github-selfupdate/selfupdate
-Version: v1.2.3
+Module: github.com/creativeprojects/go-selfupdate
+Version: v1.5.2
 License: MIT
-License URL: https://github.com/rhysd/go-github-selfupdate/blob/v1.2.3/LICENSE
+License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.5.2/LICENSE
  
 ----------
 Module: github.com/russross/blackfriday/v2
