@@ -1,10 +1,10 @@
 ## oms-cli install
 
-Coming soon: Install Codesphere and other components
+Install Codesphere and other components
 
 ### Synopsis
 
-Coming soon: Install Codesphere and other components like Ceph and PostgreSQL.
+Install Codesphere and other components like Ceph and PostgreSQL.
 
 ### Options
 
