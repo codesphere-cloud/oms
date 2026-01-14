@@ -21,7 +21,7 @@ like downloading new versions.
 * [oms-cli build](oms-cli_build.md)	 - Build and push images to a registry
 * [oms-cli download](oms-cli_download.md)	 - Download resources available through OMS
 * [oms-cli init](oms-cli_init.md)	 - Initialize configuration files
-* [oms-cli install](oms-cli_install.md)	 - Coming soon: Install Codesphere and other components
+* [oms-cli install](oms-cli_install.md)	 - Install Codesphere and other components
 * [oms-cli licenses](oms-cli_licenses.md)	 - Print license information
 * [oms-cli list](oms-cli_list.md)	 - List resources available through OMS
 * [oms-cli register](oms-cli_register.md)	 - Register a new API key
