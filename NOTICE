@@ -22,13 +22,7 @@ License: Apache-2.0
 License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt/v0.2.8/auth/oauth2adapt/LICENSE
  
 ----------
-Module: cloud.google.com/go/compute/apiv1
-Version: v1.53.0
-License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.53.0/compute/apiv1/license_codes_client.go
- 
-----------
-Module: cloud.google.com/go/compute/internal
+Module: cloud.google.com/go/compute
 Version: v1.53.0
 License: Apache-2.0
 License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.53.0/compute/LICENSE
@@ -122,12 +116,6 @@ Module: github.com/creativeprojects/go-selfupdate
 Version: v1.5.2
 License: MIT
 License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.5.2/LICENSE
- 
-----------
-Module: github.com/creativeprojects/go-selfupdate/update
-Version: v1.5.2
-License: Apache-2.0
-License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.5.2/update/LICENSE
  
 ----------
 Module: github.com/davecgh/go-spew/spew
@@ -295,7 +283,7 @@ License URL: https://github.com/yaml/go-yaml/blob/v2.1.0/LICENSE
 Module: gitlab.com/gitlab-org/api/client-go
 Version: v1.10.0
 License: Apache-2.0
-License URL: https://gitlab.com/gitlab-org/api/blob/client-go/v1.10.0/client-go/LICENSE
+License URL: https://gitlab.com/gitlab-org/api/client-go/-/blob/v1.10.0/LICENSE
  
 ----------
 Module: go.opentelemetry.io/auto/sdk
@@ -322,15 +310,33 @@ License: Apache-2.0
 License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.39.0/LICENSE
  
 ----------
+Module: go.opentelemetry.io/otel
+Version: v1.39.0
+License: BSD-3-Clause
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.39.0/LICENSE
+ 
+----------
 Module: go.opentelemetry.io/otel/metric
 Version: v1.39.0
 License: Apache-2.0
 License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.39.0/metric/LICENSE
  
 ----------
+Module: go.opentelemetry.io/otel/metric
+Version: v1.39.0
+License: BSD-3-Clause
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.39.0/metric/LICENSE
+ 
+----------
 Module: go.opentelemetry.io/otel/trace
 Version: v1.39.0
 License: Apache-2.0
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.39.0/trace/LICENSE
+ 
+----------
+Module: go.opentelemetry.io/otel/trace
+Version: v1.39.0
+License: BSD-3-Clause
 License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.39.0/trace/LICENSE
  
 ----------
