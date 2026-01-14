@@ -17,7 +17,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// BootstrapGcpCmd represents the baseimage command
 type BootstrapGcpCmd struct {
 	cmd           *cobra.Command
 	Opts          *GlobalOptions
