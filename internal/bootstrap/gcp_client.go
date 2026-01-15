@@ -202,10 +202,15 @@ func (c *RealGCPClient) CreateArtifactRegistry(ctx context.Context, projectID, r
 		return nil, err
 	}
 
-	// var repo *artifactpb.Repository
 	repo, err := op.Wait(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	// get repo again to ensure all infos are stored, else e.g. uri would be missing
+	repo, err = c.GetArtifactRegistry(ctx, projectID, region, repoName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get newly created artifact registry: %w", err)
 	}
 
 	return repo, nil
