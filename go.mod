@@ -531,7 +531,7 @@ require (
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/tcnksm/go-gitconfig v0.1.2 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
-	github.com/yaml/go-yaml v2.1.0+incompatible
+	github.com/yaml/go-yaml v2.4.3+incompatible
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/mod v0.31.0 // indirect
 	golang.org/x/net v0.48.0 // indirect
