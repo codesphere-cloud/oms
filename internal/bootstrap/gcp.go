@@ -137,50 +137,50 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironment, error) {
 		return b.env, fmt.Errorf("failed to ensure artifact registry: %w", err)
 	}
 
-	err = b.EnsureServiceAccounts()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure service accounts: %w", err)
-	}
+	// err = b.EnsureServiceAccounts()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure service accounts: %w", err)
+	// }
 
-	err = b.EnsureIAMRoles()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure IAM roles: %w", err)
-	}
+	// err = b.EnsureIAMRoles()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure IAM roles: %w", err)
+	// }
 
-	err = b.EnsureVPC()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure VPC: %w", err)
-	}
+	// err = b.EnsureVPC()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure VPC: %w", err)
+	// }
 
-	err = b.EnsureFirewallRules()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure firewall rules: %w", err)
-	}
+	// err = b.EnsureFirewallRules()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure firewall rules: %w", err)
+	// }
 
-	err = b.EnsureComputeInstances()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure compute instances: %w", err)
-	}
+	// err = b.EnsureComputeInstances()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure compute instances: %w", err)
+	// }
 
-	err = b.EnsureGatewayIPAddresses()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure external IP addresses: %w", err)
-	}
+	// err = b.EnsureGatewayIPAddresses()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure external IP addresses: %w", err)
+	// }
 
-	err = b.EnsureRootLoginEnabled()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure root login is enabled: %w", err)
-	}
+	// err = b.EnsureRootLoginEnabled()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure root login is enabled: %w", err)
+	// }
 
-	err = b.EnsureJumpboxConfigured()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure jumpbox is configured: %w", err)
-	}
+	// err = b.EnsureJumpboxConfigured()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure jumpbox is configured: %w", err)
+	// }
 
-	err = b.EnsureInotifyWatches()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure inotify watches: %w", err)
-	}
+	// err = b.EnsureInotifyWatches()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure inotify watches: %w", err)
+	// }
 
 	if b.env.WriteConfig {
 		err = b.UpdateInstallConfig()
@@ -188,33 +188,33 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironment, error) {
 			return b.env, fmt.Errorf("failed to update install config: %w", err)
 		}
 
-		err = b.EnsureAgeKey()
-		if err != nil {
-			return b.env, fmt.Errorf("failed to ensure age key: %w", err)
-		}
+		// 	err = b.EnsureAgeKey()
+		// 	if err != nil {
+		// 		return b.env, fmt.Errorf("failed to ensure age key: %w", err)
+		// 	}
 
-		err = b.EncryptVault()
-		if err != nil {
-			return b.env, fmt.Errorf("failed to encrypt vault: %w", err)
-		}
+		// 	err = b.EncryptVault()
+		// 	if err != nil {
+		// 		return b.env, fmt.Errorf("failed to encrypt vault: %w", err)
+		// 	}
 	}
 
-	err = b.EnsureDNSRecords()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
-	}
+	// err = b.EnsureDNSRecords()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
+	// }
 
-	if b.env.InstallCodesphereVersion != "" {
-		err = b.InstallCodesphere()
-		if err != nil {
-			return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
-		}
-	}
+	// if b.env.InstallCodesphereVersion != "" {
+	// 	err = b.InstallCodesphere()
+	// 	if err != nil {
+	// 		return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
+	// 	}
+	// }
 
-	err = b.GenerateK0sConfigScript()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to generate k0s config script: %w", err)
-	}
+	// err = b.GenerateK0sConfigScript()
+	// if err != nil {
+	// 	return b.env, fmt.Errorf("failed to generate k0s config script: %w", err)
+	// }
 
 	return b.env, nil
 }
@@ -287,14 +287,24 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	repo, err := b.GCPClient.GetArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
 	if err == nil && repo != nil {
 		b.InstallConfig.Registry.Server = repo.GetRegistryUri()
+
 		return nil
 	}
+
 	repo, err = b.GCPClient.CreateArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
 	if err != nil || repo == nil {
 		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
 	}
 
-	log.Printf("Artifact Registry repository %s ensured\n", repoName)
+	b.InstallConfig.Registry.Server = repo.GetRegistryUri()
+	repo, err = b.GCPClient.GetArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
+	if err == nil && repo != nil {
+		b.InstallConfig.Registry.Server = repo.GetRegistryUri()
+
+		return nil
+	}
+
+	log.Printf("Artifact Registry repository %s ensured\n", b.InstallConfig.Registry.Server)
 
 	return nil
 }
@@ -816,25 +826,25 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	b.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
 	b.InstallConfig.Ceph.NodesSubnet = "10.10.0.0/20"
-	b.InstallConfig.Ceph.Hosts = []files.CephHost{
-		{
-			Hostname:  b.env.CephNodes[0].Name,
-			IsMaster:  true,
-			IPAddress: b.env.CephNodes[0].InternalIP,
-		},
-		{
-			Hostname:  b.env.CephNodes[1].Name,
-			IPAddress: b.env.CephNodes[1].InternalIP,
-		},
-		{
-			Hostname:  b.env.CephNodes[2].Name,
-			IPAddress: b.env.CephNodes[2].InternalIP,
-		},
-		{
-			Hostname:  b.env.CephNodes[3].Name,
-			IPAddress: b.env.CephNodes[3].InternalIP,
-		},
-	}
+	// b.InstallConfig.Ceph.Hosts = []files.CephHost{
+	// 	{
+	// 		Hostname:  b.env.CephNodes[0].Name,
+	// 		IsMaster:  true,
+	// 		IPAddress: b.env.CephNodes[0].InternalIP,
+	// 	},
+	// 	{
+	// 		Hostname:  b.env.CephNodes[1].Name,
+	// 		IPAddress: b.env.CephNodes[1].InternalIP,
+	// 	},
+	// 	{
+	// 		Hostname:  b.env.CephNodes[2].Name,
+	// 		IPAddress: b.env.CephNodes[2].InternalIP,
+	// 	},
+	// 	{
+	// 		Hostname:  b.env.CephNodes[3].Name,
+	// 		IPAddress: b.env.CephNodes[3].InternalIP,
+	// 	},
+	// }
 	b.InstallConfig.Ceph.OSDs = []files.CephOSD{
 		{
 			SpecID: "default",
@@ -852,27 +862,27 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		},
 	}
 
-	b.InstallConfig.Kubernetes = files.KubernetesConfig{
-		ManagedByCodesphere: true,
-		APIServerHost:       b.env.ControlPlaneNodes[0].InternalIP,
-		ControlPlanes: []files.K8sNode{
-			{
-				IPAddress: b.env.ControlPlaneNodes[0].InternalIP,
-			},
-		},
-		Workers: []files.K8sNode{
-			{
-				IPAddress: b.env.ControlPlaneNodes[0].InternalIP,
-			},
+	// b.InstallConfig.Kubernetes = files.KubernetesConfig{
+	// 	ManagedByCodesphere: true,
+	// 	APIServerHost:       b.env.ControlPlaneNodes[0].InternalIP,
+	// 	ControlPlanes: []files.K8sNode{
+	// 		{
+	// 			IPAddress: b.env.ControlPlaneNodes[0].InternalIP,
+	// 		},
+	// 	},
+	// 	Workers: []files.K8sNode{
+	// 		{
+	// 			IPAddress: b.env.ControlPlaneNodes[0].InternalIP,
+	// 		},
 
-			{
-				IPAddress: b.env.ControlPlaneNodes[1].InternalIP,
-			},
-			{
-				IPAddress: b.env.ControlPlaneNodes[2].InternalIP,
-			},
-		},
-	}
+	// 		{
+	// 			IPAddress: b.env.ControlPlaneNodes[1].InternalIP,
+	// 		},
+	// 		{
+	// 			IPAddress: b.env.ControlPlaneNodes[2].InternalIP,
+	// 		},
+	// 	},
+	// }
 	b.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{
 		Prometheus: &files.PrometheusConfig{
 			RemoteWrite: &files.RemoteWriteConfig{
@@ -898,7 +908,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	b.InstallConfig.Codesphere.Domain = "cs." + b.env.BaseDomain
 	b.InstallConfig.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.env.BaseDomain
-	b.InstallConfig.Codesphere.PublicIP = b.env.ControlPlaneNodes[1].ExternalIP
+	// b.InstallConfig.Codesphere.PublicIP = b.env.ControlPlaneNodes[1].ExternalIP
 	b.InstallConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
 		CNameBaseDomain: "ws." + b.env.BaseDomain,
 	}
