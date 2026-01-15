@@ -188,33 +188,33 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironment, error) {
 			return b.env, fmt.Errorf("failed to update install config: %w", err)
 		}
 
-		// 	err = b.EnsureAgeKey()
-		// 	if err != nil {
-		// 		return b.env, fmt.Errorf("failed to ensure age key: %w", err)
-		// 	}
+		err = b.EnsureAgeKey()
+		if err != nil {
+			return b.env, fmt.Errorf("failed to ensure age key: %w", err)
+		}
 
-		// 	err = b.EncryptVault()
-		// 	if err != nil {
-		// 		return b.env, fmt.Errorf("failed to encrypt vault: %w", err)
-		// 	}
+		err = b.EncryptVault()
+		if err != nil {
+			return b.env, fmt.Errorf("failed to encrypt vault: %w", err)
+		}
 	}
 
-	// err = b.EnsureDNSRecords()
-	// if err != nil {
-	// 	return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
-	// }
+	err = b.EnsureDNSRecords()
+	if err != nil {
+		return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
+	}
 
-	// if b.env.InstallCodesphereVersion != "" {
-	// 	err = b.InstallCodesphere()
-	// 	if err != nil {
-	// 		return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
-	// 	}
-	// }
+	if b.env.InstallCodesphereVersion != "" {
+		err = b.InstallCodesphere()
+		if err != nil {
+			return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
+		}
+	}
 
-	// err = b.GenerateK0sConfigScript()
-	// if err != nil {
-	// 	return b.env, fmt.Errorf("failed to generate k0s config script: %w", err)
-	// }
+	err = b.GenerateK0sConfigScript()
+	if err != nil {
+		return b.env, fmt.Errorf("failed to generate k0s config script: %w", err)
+	}
 
 	return b.env, nil
 }
@@ -288,13 +288,6 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	if err != nil && status.Code(err) != codes.NotFound {
 		return fmt.Errorf("failed to get artifact registry: %w", err)
 	}
-
-	// if err == nil && repo != nil {
-	// 	b.InstallConfig.Registry.Server = repo.GetRegistryUri()
-	// 	log.Printf("Artifact Registry repository %s ensured\n", b.InstallConfig.Registry.Server)
-
-	// 	return nil
-	// }
 
 	// Create the repository if it doesn't exist
 	if repo == nil {
