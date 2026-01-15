@@ -186,6 +186,7 @@ func (c *RealGCPClient) CreateArtifactRegistry(ctx context.Context, projectID, r
 		return nil, err
 	}
 	defer util.IgnoreError(client.Close)
+
 	parent := fmt.Sprintf("projects/%s/locations/%s", projectID, region)
 	repoReq := &artifactpb.CreateRepositoryRequest{
 		Parent:       parent,
@@ -195,17 +196,23 @@ func (c *RealGCPClient) CreateArtifactRegistry(ctx context.Context, projectID, r
 			Description: "Codesphere managed registry",
 		},
 	}
+
 	op, err := client.CreateRepository(ctx, repoReq)
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return nil, err
 	}
-	var repo *artifactpb.Repository
-	if err == nil {
-		repo, err = op.Wait(ctx)
-		if err != nil {
-			return nil, err
-		}
+
+	_, err = op.Wait(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	// get repo again to ensure all infos are stored, else e.g. uri would be missing
+	repo, err := c.GetArtifactRegistry(ctx, projectID, region, repoName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get newly created artifact registry: %w", err)
+	}
+
 	return repo, nil
 }
 

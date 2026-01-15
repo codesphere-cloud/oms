@@ -285,16 +285,21 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	repoName := "codesphere-registry"
 
 	repo, err := b.GCPClient.GetArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
-	if err == nil && repo != nil {
-		b.InstallConfig.Registry.Server = repo.GetRegistryUri()
-		return nil
-	}
-	repo, err = b.GCPClient.CreateArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
-	if err != nil || repo == nil {
-		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
+	if err != nil && status.Code(err) != codes.NotFound {
+		return fmt.Errorf("failed to get artifact registry: %w", err)
 	}
 
-	log.Printf("Artifact Registry repository %s ensured\n", repoName)
+	// Create the repository if it doesn't exist
+	if repo == nil {
+		repo, err = b.GCPClient.CreateArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
+		if err != nil || repo == nil {
+			return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
+		}
+	}
+
+	b.InstallConfig.Registry.Server = repo.GetRegistryUri()
+
+	log.Printf("Artifact Registry repository %s ensured\n", b.InstallConfig.Registry.Server)
 
 	return nil
 }
