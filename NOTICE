@@ -365,15 +365,15 @@ License URL: https://cs.opensource.google/go/x/time/+/v0.14.0:LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.259.0
+Version: v0.260.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.259.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.260.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.259.0
+Version: v0.260.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.259.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.260.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
