@@ -177,9 +177,9 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironment, error) {
 		return b.env, fmt.Errorf("failed to ensure jumpbox is configured: %w", err)
 	}
 
-	err = b.EnsureInotifyWatches()
+	err = b.EnsureHostsConfigured()
 	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure inotify watches: %w", err)
+		return b.env, fmt.Errorf("failed to ensure hosts are configured: %w", err)
 	}
 
 	if b.env.WriteConfig {
@@ -207,7 +207,7 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironment, error) {
 	if b.env.InstallCodesphereVersion != "" {
 		err = b.InstallCodesphere()
 		if err != nil {
-			return b.env, fmt.Errorf("failed to ensure DNS records: %w", err)
+			return b.env, fmt.Errorf("failed to install Codesphere: %w", err)
 		}
 	}
 
@@ -285,16 +285,21 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	repoName := "codesphere-registry"
 
 	repo, err := b.GCPClient.GetArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
-	if err == nil && repo != nil {
-		b.InstallConfig.Registry.Server = repo.GetRegistryUri()
-		return nil
-	}
-	repo, err = b.GCPClient.CreateArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
-	if err != nil || repo == nil {
-		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
+	if err != nil && status.Code(err) != codes.NotFound {
+		return fmt.Errorf("failed to get artifact registry: %w", err)
 	}
 
-	log.Printf("Artifact Registry repository %s ensured\n", repoName)
+	// Create the repository if it doesn't exist
+	if repo == nil {
+		repo, err = b.GCPClient.CreateArtifactRegistry(b.ctx, b.env.ProjectID, b.env.Region, repoName)
+		if err != nil || repo == nil {
+			return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
+		}
+	}
+
+	b.InstallConfig.Registry.Server = repo.GetRegistryUri()
+
+	log.Printf("Artifact Registry repository %s ensured\n", b.InstallConfig.Registry.Server)
 
 	return nil
 }
@@ -778,21 +783,25 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) EnsureInotifyWatches() error {
+func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	allNodes := append(b.env.ControlPlaneNodes, b.env.PostgreSQLNode)
 	allNodes = append(allNodes, b.env.CephNodes...)
 
 	for _, node := range allNodes {
-		hasInotify := node.HasInotifyWatchesConfigured(&b.env.Jumpbox, b.NodeManager)
-		if hasInotify {
-			fmt.Printf("Inotify watches already configured on %s\n", node.Name)
-			continue
+		if !node.HasInotifyWatchesConfigured(&b.env.Jumpbox, b.NodeManager) {
+			err := node.ConfigureInotifyWatches(&b.env.Jumpbox, b.NodeManager)
+			if err != nil {
+				return fmt.Errorf("failed to configure inotify watches on %s: %w", node.Name, err)
+			}
 		}
-		err := node.ConfigureInotifyWatches(&b.env.Jumpbox, b.NodeManager)
-		if err != nil {
-			return fmt.Errorf("failed to configure inotify watches on %s: %w", node.Name, err)
+
+		if !node.HasMemoryMapConfigured(&b.env.Jumpbox, b.NodeManager) {
+			err := node.ConfigureMemoryMap(&b.env.Jumpbox, b.NodeManager)
+			if err != nil {
+				return fmt.Errorf("failed to configure memory map on %s: %w", node.Name, err)
+			}
 		}
-		fmt.Printf("Inotify watches configured on %s\n", node.Name)
+		fmt.Printf("Host %s configured\n", node.Name)
 	}
 	return nil
 }
