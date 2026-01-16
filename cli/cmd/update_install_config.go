@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -283,7 +284,8 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, tracker 
 
 func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, tracker *SecretDependencyTracker) error {
 	if tracker.NeedsPostgresPrimaryCertRegen() {
-		fmt.Println("  - Regenerating PostgreSQL primary server certificate...")
+		log.Println("  - Regenerating PostgreSQL primary server certificate...")
+
 		var err error
 		config.Postgres.Primary.PrivateKey, config.Postgres.Primary.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
 			config.Postgres.CaCertPrivateKey,
@@ -297,7 +299,8 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, tra
 	}
 
 	if tracker.NeedsPostgresReplicaCertRegen() && config.Postgres.Replica != nil {
-		fmt.Println("  - Regenerating PostgreSQL replica server certificate...")
+		log.Println("  - Regenerating PostgreSQL replica server certificate...")
+
 		var err error
 		config.Postgres.ReplicaPrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
 			config.Postgres.CaCertPrivateKey,
