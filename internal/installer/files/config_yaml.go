@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yaml/go-yaml"
+	"go.yaml.in/yaml/v3"
 )
 
 // Vault
