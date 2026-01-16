@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/yaml/go-yaml"
 )
 
 // Vault
@@ -67,6 +67,10 @@ type RegistryConfig struct {
 	Server              string `yaml:"server"`
 	ReplaceImagesInBom  bool   `yaml:"replaceImagesInBom"`
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
+
+	// Stored separately in vault
+	Username string `yaml:"-"`
+	Password string `yaml:"-"`
 }
 
 type PostgresConfig struct {
@@ -77,10 +81,11 @@ type PostgresConfig struct {
 	ServerAddress string                 `yaml:"serverAddress,omitempty"`
 
 	// Stored separately in vault
-	CaCertPrivateKey string            `yaml:"-"`
-	AdminPassword    string            `yaml:"-"`
-	ReplicaPassword  string            `yaml:"-"`
-	UserPasswords    map[string]string `yaml:"-"`
+	CaCertPrivateKey  string            `yaml:"-"`
+	AdminPassword     string            `yaml:"-"`
+	ReplicaPassword   string            `yaml:"-"`
+	ReplicaPrivateKey string            `yaml:"-"`
+	UserPasswords     map[string]string `yaml:"-"`
 }
 
 type PostgresPrimaryConfig struct {
@@ -95,8 +100,6 @@ type PostgresReplicaConfig struct {
 	IP        string    `yaml:"ip"`
 	Name      string    `yaml:"name"`
 	SSLConfig SSLConfig `yaml:"sslConfig"`
-
-	PrivateKey string `yaml:"-"`
 }
 
 type SSLConfig struct {
@@ -323,6 +326,9 @@ type OAuthConfig struct {
 	TokenEndpoint         string `yaml:"tokenEndpoint"`
 	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
 	Scope                 string `yaml:"scope,omitempty"`
+
+	ClientID     string `yaml:"-"`
+	ClientSecret string `yaml:"-"`
 }
 
 type ManagedServiceConfig struct {
@@ -454,6 +460,26 @@ func (c *RootConfig) addCodesphereSecrets(vault *InstallVault) {
 			},
 		)
 	}
+
+	// GitHub secrets
+	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.GitHub != nil {
+		if c.Codesphere.GitProviders.GitHub.OAuth.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "githubAppsClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.GitHub.OAuth.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.GitProviders.GitHub.OAuth.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "githubAppsClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.GitHub.OAuth.ClientSecret,
+				},
+			})
+		}
+	}
 }
 
 func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
@@ -485,6 +511,16 @@ func (c *RootConfig) addPostgresSecrets(vault *InstallVault) {
 		return
 	}
 
+	if c.Postgres.CaCertPrivateKey != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "postgresCaKeyPem",
+			File: &SecretFile{
+				Name:    "ca.key",
+				Content: c.Postgres.CaCertPrivateKey,
+			},
+		})
+	}
+
 	if c.Postgres.AdminPassword != "" {
 		vault.Secrets = append(vault.Secrets, SecretEntry{
 			Name: "postgresPassword",
@@ -504,38 +540,34 @@ func (c *RootConfig) addPostgresSecrets(vault *InstallVault) {
 		})
 	}
 
-	if c.Postgres.Replica != nil {
-		if c.Postgres.ReplicaPassword != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: "postgresReplicaPassword",
-				Fields: &SecretFields{
-					Password: c.Postgres.ReplicaPassword,
-				},
-			})
-		}
-
-		if c.Postgres.Replica.PrivateKey != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: "postgresReplicaServerKeyPem",
-				File: &SecretFile{
-					Name:    "replica.key",
-					Content: c.Postgres.Replica.PrivateKey,
-				},
-			})
-		}
+	if c.Postgres.ReplicaPassword != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "postgresReplicaPassword",
+			Fields: &SecretFields{
+				Password: c.Postgres.ReplicaPassword,
+			},
+		})
 	}
+
+	vault.Secrets = append(vault.Secrets, SecretEntry{
+		Name: "postgresReplicaServerKeyPem",
+		File: &SecretFile{
+			Name:    "replica.key",
+			Content: c.Postgres.ReplicaPrivateKey,
+		},
+	})
 
 	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace"}
 	for _, service := range services {
 		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: fmt.Sprintf("postgresUser%s", capitalize(service)),
+			Name: fmt.Sprintf("postgresUser%s", Capitalize(service)),
 			Fields: &SecretFields{
 				Password: service + "_blue",
 			},
 		})
 		if password, ok := c.Postgres.UserPasswords[service]; ok {
 			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: fmt.Sprintf("postgresPassword%s", capitalize(service)),
+				Name: fmt.Sprintf("postgresPassword%s", Capitalize(service)),
 				Fields: &SecretFields{
 					Password: password,
 				},
@@ -559,13 +591,13 @@ func (c *RootConfig) addRegistrySecrets(vault *InstallVault) {
 			SecretEntry{
 				Name: "registryUsername",
 				Fields: &SecretFields{
-					Password: "YOUR_REGISTRY_USERNAME",
+					Password: c.Registry.Username,
 				},
 			},
 			SecretEntry{
 				Name: "registryPassword",
 				Fields: &SecretFields{
-					Password: "YOUR_REGISTRY_PASSWORD",
+					Password: c.Registry.Password,
 				},
 			},
 		)
@@ -584,7 +616,7 @@ func (c *RootConfig) addKubeConfigSecret(vault *InstallVault) {
 	}
 }
 
-func capitalize(s string) string {
+func Capitalize(s string) string {
 	if s == "" {
 		return ""
 	}

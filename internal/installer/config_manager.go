@@ -22,9 +22,11 @@ type InstallConfigManager interface {
 	// Configuration management
 	LoadInstallConfigFromFile(configPath string) error
 	LoadVaultFromFile(vaultPath string) error
+	MergeVaultIntoConfig() error
 	ValidateInstallConfig() []string
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
+	GetVault() *files.InstallVault
 	CollectInteractively() error
 	// Output
 	GenerateSecrets() error
@@ -181,6 +183,10 @@ func (g *InstallConfig) GetInstallConfig() *files.RootConfig {
 	return g.Config
 }
 
+func (g *InstallConfig) GetVault() *files.InstallVault {
+	return g.Vault
+}
+
 func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool) error {
 	if g.Config == nil {
 		return fmt.Errorf("no configuration provided - config is nil")
@@ -258,4 +264,88 @@ func AddVaultComments(yamlData []byte) []byte {
 
 `
 	return append([]byte(header), yamlData...)
+}
+
+func (g *InstallConfig) MergeVaultIntoConfig() error {
+	if g.Vault == nil {
+		return fmt.Errorf("vault not loaded")
+	}
+	if g.Config == nil {
+		return fmt.Errorf("config not loaded")
+	}
+
+	secretsMap := make(map[string]files.SecretEntry)
+	for _, secret := range g.Vault.Secrets {
+		secretsMap[secret.Name] = secret
+	}
+
+	// PostgreSQL secrets
+	if secret, ok := secretsMap["postgresCaKeyPem"]; ok && secret.File != nil {
+		g.Config.Postgres.CaCertPrivateKey = secret.File.Content
+	}
+
+	if secret, ok := secretsMap["postgresPassword"]; ok && secret.Fields != nil {
+		g.Config.Postgres.AdminPassword = secret.Fields.Password
+	}
+
+	if secret, ok := secretsMap["postgresPrimaryServerKeyPem"]; ok && secret.File != nil {
+		if g.Config.Postgres.Primary != nil {
+			g.Config.Postgres.Primary.PrivateKey = secret.File.Content
+		}
+	}
+
+	if secret, ok := secretsMap["postgresReplicaPassword"]; ok && secret.Fields != nil {
+		g.Config.Postgres.ReplicaPassword = secret.Fields.Password
+	}
+
+	if secret, ok := secretsMap["postgresReplicaServerKeyPem"]; ok && secret.File != nil {
+		g.Config.Postgres.ReplicaPrivateKey = secret.File.Content
+	}
+
+	// PostgreSQL user passwords
+	g.Config.Postgres.UserPasswords = make(map[string]string)
+	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace"}
+	for _, service := range services {
+		secretName := fmt.Sprintf("postgresPassword%s", files.Capitalize(service))
+		if secret, ok := secretsMap[secretName]; ok && secret.Fields != nil {
+			g.Config.Postgres.UserPasswords[service] = secret.Fields.Password
+		}
+	}
+
+	// Ceph secrets
+	if secret, ok := secretsMap["cephSshPrivateKey"]; ok && secret.File != nil {
+		g.Config.Ceph.SshPrivateKey = secret.File.Content
+	}
+
+	// Cluster secrets
+	if secret, ok := secretsMap["selfSignedCaKeyPem"]; ok && secret.File != nil {
+		g.Config.Cluster.IngressCAKey = secret.File.Content
+	}
+
+	// Codesphere secrets
+	if secret, ok := secretsMap["domainAuthPrivateKey"]; ok && secret.File != nil {
+		g.Config.Codesphere.DomainAuthPrivateKey = secret.File.Content
+	}
+
+	if secret, ok := secretsMap["domainAuthPublicKey"]; ok && secret.File != nil {
+		g.Config.Codesphere.DomainAuthPublicKey = secret.File.Content
+	}
+
+	if secret, ok := secretsMap["registryUsername"]; ok && secret.Fields != nil {
+		g.Config.Registry.Username = secret.Fields.Password
+	}
+
+	if secret, ok := secretsMap["registryPassword"]; ok && secret.Fields != nil {
+		g.Config.Registry.Password = secret.Fields.Password
+	}
+
+	// GitHub secrets
+	if secret, ok := secretsMap["githubAppsClientId"]; ok && secret.Fields != nil {
+		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientID = secret.Fields.Password
+	}
+	if secret, ok := secretsMap["githubAppsClientSecret"]; ok && secret.Fields != nil {
+		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientSecret = secret.Fields.Password
+	}
+
+	return nil
 }

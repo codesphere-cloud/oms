@@ -24,7 +24,7 @@ func (g *InstallConfig) GenerateSecrets() error {
 	}
 
 	fmt.Println("Generating Ceph SSH keys...")
-	g.Config.Ceph.CephAdmSSHKey.PublicKey, g.Config.Ceph.SshPrivateKey, err = GenerateSSHKeyPair()
+	g.Config.Ceph.SshPrivateKey, g.Config.Ceph.CephAdmSSHKey.PublicKey, err = GenerateSSHKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to generate Ceph SSH keys: %w", err)
 	}
@@ -60,7 +60,7 @@ func (g *InstallConfig) generatePostgresSecrets(config *files.RootConfig) error 
 	config.Postgres.ReplicaPassword = GeneratePassword(32)
 
 	if config.Postgres.Replica != nil {
-		config.Postgres.Replica.PrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = GenerateServerCertificate(
+		config.Postgres.ReplicaPrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = GenerateServerCertificate(
 			config.Postgres.CaCertPrivateKey,
 			config.Postgres.CACertPem,
 			config.Postgres.Replica.Name,

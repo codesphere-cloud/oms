@@ -26,16 +26,16 @@ oms-cli init install-config [flags]
 
 ```
 # Create config files interactively
-$ oms-cli init install-config -c config.yaml -v prod.vault.yaml
+$ oms-cli init install-config -c config.yaml --vault prod.vault.yaml
 
 # Use dev profile with defaults
-$ oms-cli init install-config --profile dev -c config.yaml -v prod.vault.yaml
+$ oms-cli init install-config --profile dev -c config.yaml --vault prod.vault.yaml
 
 # Use production profile
-$ oms-cli init install-config --profile production -c config.yaml -v prod.vault.yaml
+$ oms-cli init install-config --profile production -c config.yaml --vault prod.vault.yaml
 
 # Validate existing configuration files
-$ oms-cli init install-config --validate -c config.yaml -v prod.vault.yaml
+$ oms-cli init install-config --validate -c config.yaml --vault prod.vault.yaml
 
 ```
 
@@ -56,7 +56,7 @@ $ oms-cli init install-config --validate -c config.yaml -v prod.vault.yaml
       --profile string               Use a predefined configuration profile (dev, production, minimal)
       --secrets-dir string           Secrets base directory (default "/root/secrets")
       --validate                     Validate existing config files instead of creating new ones
-  -v, --vault string                 Output file path for prod.vault.yaml (default "prod.vault.yaml")
+      --vault string                 Output file path for prod.vault.yaml (default "prod.vault.yaml")
       --with-comments                Add helpful comments to the generated YAML files
 ```
 
