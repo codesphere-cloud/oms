@@ -42,7 +42,7 @@ type SecretFields struct {
 type RootConfig struct {
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
-	Registry               RegistryConfig                `yaml:"registry,omitempty"`
+	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
 	Ceph                   CephConfig                    `yaml:"ceph"`
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
