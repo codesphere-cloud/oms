@@ -22,6 +22,8 @@ type BootstrapGcpCmd struct {
 	Opts          *GlobalOptions
 	Env           env.Env
 	CodesphereEnv *bootstrap.CodesphereEnvironment
+
+	InputRegistryType string
 }
 
 func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
@@ -70,6 +72,7 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSProjectID, "dns-project-id", "", "GCP Project ID for Cloud DNS (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSZoneName, "dns-zone-name", "oms-testing", "Cloud DNS Zone Name (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallCodesphereVersion, "install-codesphere-version", "", "Codesphere version to install (default: none)")
+	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
 
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
@@ -81,11 +84,14 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
+	c.CodesphereEnv.RegistryType = bootstrap.RegistryType(c.InputRegistryType)
+
 	gcpClient := bootstrap.NewGCPClient(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	bootstrapper, err := bootstrap.NewGCPBootstrapper(c.Env, c.CodesphereEnv, gcpClient)
 	if err != nil {
 		return err
 	}
+
 	env, err := bootstrapper.Bootstrap()
 	envBytes, err2 := json.MarshalIndent(env, "", "  ")
 	envString := string(envBytes)
