@@ -375,7 +375,7 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 			return fmt.Errorf("failed to wait for router creation: %w", err)
 		}
 	}
-	fmt.Printf("Router %s ensured\n", routerName)
+	log.Printf("Router %s ensured\n", routerName)
 
 	// Create NAT Gateway
 	natsClient, err := compute.NewRoutersRESTClient(ctx)
@@ -406,7 +406,7 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 	if err != nil && !isAlreadyExistsError(err) {
 		return fmt.Errorf("failed to create NAT gateway: %w", err)
 	}
-	fmt.Printf("NAT gateway %s ensured\n", natName)
+	log.Printf("NAT gateway %s ensured\n", natName)
 	return nil
 }
 

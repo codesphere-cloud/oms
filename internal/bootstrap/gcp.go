@@ -79,7 +79,7 @@ func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironment, gcpCl
 		KeyPath: CodesphereEnv.SSHPrivateKeyPath,
 	}
 	if fw.Exists(CodesphereEnv.InstallConfig) {
-		fmt.Printf("Reading install config file: %s\n", CodesphereEnv.InstallConfig)
+		log.Printf("Reading install config file: %s\n", CodesphereEnv.InstallConfig)
 		err := icg.LoadInstallConfigFromFile(CodesphereEnv.InstallConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load config file: %w", err)
@@ -94,12 +94,12 @@ func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironment, gcpCl
 	}
 
 	if fw.Exists(CodesphereEnv.SecretsFile) {
-		fmt.Printf("Reading vault file: %s\n", CodesphereEnv.SecretsFile)
+		log.Printf("Reading vault file: %s\n", CodesphereEnv.SecretsFile)
 		err := icg.LoadVaultFromFile(CodesphereEnv.SecretsFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load vault file: %w", err)
 		}
-		fmt.Println("Merging vault secrets into configuration...")
+		log.Println("Merging vault secrets into configuration...")
 		err = icg.MergeVaultIntoConfig()
 		if err != nil {
 			return nil, fmt.Errorf("failed to merge vault into config: %w", err)
@@ -329,7 +329,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 			time.Sleep(5 * time.Second)
 			continue
 		}
-		fmt.Printf("Service account key for %s ensured\n", sa)
+		log.Printf("Service account key for %s ensured\n", sa)
 		b.InstallConfig.Registry.Password = string(privateKey)
 		b.InstallConfig.Registry.Username = "_json_key_base64"
 		break
@@ -362,7 +362,7 @@ func (b *GCPBootstrapper) EnsureVPC() error {
 	if err != nil {
 		return fmt.Errorf("failed to ensure VPC: %w", err)
 	}
-	fmt.Printf("VPC %s ensured\n", networkName)
+	log.Printf("VPC %s ensured\n", networkName)
 
 	return nil
 }
@@ -460,7 +460,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		return fmt.Errorf("failed to create postgres firewall rule: %w", err)
 	}
 
-	fmt.Println("Firewall rules ensured")
+	log.Println("Firewall rules ensured")
 	return nil
 }
 
@@ -591,7 +591,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 					errCh <- fmt.Errorf("failed to wait for instance %s creation: %w", vm.Name, err)
 				}
 			}
-			fmt.Printf("Instance %s ensured\n", vm.Name)
+			log.Printf("Instance %s ensured\n", vm.Name)
 
 			//find out the IP addresses of the created instance
 			resp, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
@@ -692,7 +692,7 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 	address, err := addressesClient.Get(b.ctx, req)
 
 	if err == nil && address != nil {
-		fmt.Printf("Address %s already exists\n", name)
+		log.Printf("Address %s already exists\n", name)
 		return address.GetAddress(), nil
 	}
 
@@ -707,7 +707,7 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 	if err := op.Wait(b.ctx); err != nil {
 		return "", fmt.Errorf("failed to wait for address %s creation: %w", name, err)
 	}
-	fmt.Printf("Address %s ensured\n", name)
+	log.Printf("Address %s ensured\n", name)
 
 	address, err = addressesClient.Get(b.ctx, req)
 
@@ -729,7 +729,7 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 		if err != nil {
 			return fmt.Errorf("failed to enable root login on %s: %w", b.env.Jumpbox.Name, err)
 		}
-		fmt.Printf("Root login enabled on %s\n", b.env.Jumpbox.Name)
+		log.Printf("Root login enabled on %s\n", b.env.Jumpbox.Name)
 	}
 
 	allNodes := append(b.env.ControlPlaneNodes, b.env.PostgreSQLNode)
@@ -742,7 +742,7 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 		}
 		hasRootLogin := node.HasRootLoginEnabled(&b.env.Jumpbox, b.NodeManager)
 		if hasRootLogin {
-			fmt.Printf("Root login already enabled on %s\n", node.Name)
+			log.Printf("Root login already enabled on %s\n", node.Name)
 			continue
 		}
 		for i := range 3 {
@@ -757,7 +757,7 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 			time.Sleep(10 * time.Second)
 		}
 
-		fmt.Printf("Root login enabled on %s\n", node.Name)
+		log.Printf("Root login enabled on %s\n", node.Name)
 	}
 	return nil
 }
@@ -771,7 +771,7 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 	}
 	hasOms := b.env.Jumpbox.HasCommand(b.NodeManager, "oms-cli")
 	if hasOms {
-		fmt.Println("OMS already installed on jumpbox")
+		log.Println("OMS already installed on jumpbox")
 		return nil
 	}
 	err := b.env.Jumpbox.InstallOms(b.NodeManager)
@@ -779,7 +779,7 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		return fmt.Errorf("failed to install OMS on jumpbox: %w", err)
 	}
 
-	fmt.Println("OMS installed on jumpbox")
+	log.Println("OMS installed on jumpbox")
 	return nil
 }
 
@@ -790,14 +790,14 @@ func (b *GCPBootstrapper) EnsureInotifyWatches() error {
 	for _, node := range allNodes {
 		hasInotify := node.HasInotifyWatchesConfigured(&b.env.Jumpbox, b.NodeManager)
 		if hasInotify {
-			fmt.Printf("Inotify watches already configured on %s\n", node.Name)
+			log.Printf("Inotify watches already configured on %s\n", node.Name)
 			continue
 		}
 		err := node.ConfigureInotifyWatches(&b.env.Jumpbox, b.NodeManager)
 		if err != nil {
 			return fmt.Errorf("failed to configure inotify watches on %s: %w", node.Name, err)
 		}
-		fmt.Printf("Inotify watches configured on %s\n", node.Name)
+		log.Printf("Inotify watches configured on %s\n", node.Name)
 	}
 	return nil
 }
@@ -1057,7 +1057,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 func (b *GCPBootstrapper) EnsureAgeKey() error {
 	hasKey := b.env.Jumpbox.HasFile(nil, b.NodeManager, b.env.SecretsDir+"/age_key.txt")
 	if hasKey {
-		fmt.Println("Age key already present on jumpbox")
+		log.Println("Age key already present on jumpbox")
 		return nil
 	}
 
@@ -1066,7 +1066,7 @@ func (b *GCPBootstrapper) EnsureAgeKey() error {
 		return fmt.Errorf("failed to generate age key on jumpbox: %w", err)
 	}
 
-	fmt.Println("Age key generated on jumpbox")
+	log.Println("Age key generated on jumpbox")
 	return nil
 }
 
@@ -1081,7 +1081,7 @@ func (b *GCPBootstrapper) EncryptVault() error {
 		return fmt.Errorf("failed to encrypt vault on jumpbox: %w", err)
 	}
 
-	fmt.Println("Vault encrypted on jumpbox")
+	log.Println("Vault encrypted on jumpbox")
 	return nil
 }
 
@@ -1167,7 +1167,7 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 		return fmt.Errorf("failed to create DNS records: %w", err)
 	}
 
-	fmt.Printf("DNS records created in project %s zone %s\n", gcpProject, zoneName)
+	log.Printf("DNS records created in project %s zone %s\n", gcpProject, zoneName)
 	return nil
 }
 
@@ -1182,7 +1182,7 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
 
-	fmt.Println("Codesphere installed from jumpbox")
+	log.Println("Codesphere installed from jumpbox")
 	return nil
 }
 
