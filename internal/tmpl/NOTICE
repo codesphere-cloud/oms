@@ -268,12 +268,6 @@ License: BSD-3-Clause
 License URL: https://github.com/ulikunitz/xz/blob/v0.5.15/LICENSE
  
 ----------
-Module: github.com/yaml/go-yaml
-Version: v2.1.0
-License: Apache-2.0
-License URL: https://github.com/yaml/go-yaml/blob/v2.1.0/LICENSE
- 
-----------
 Module: go.opentelemetry.io/auto/sdk
 Version: v1.2.1
 License: Apache-2.0
