@@ -9,7 +9,7 @@ require (
 	cloud.google.com/go/resourcemanager v1.10.7
 	cloud.google.com/go/serviceusage v1.9.7
 	github.com/blang/semver v3.5.1+incompatible
-	github.com/codesphere-cloud/cs-go v0.15.1
+	github.com/codesphere-cloud/cs-go v0.15.2
 	github.com/jedib0t/go-pretty/v6 v6.7.8
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.27.5
