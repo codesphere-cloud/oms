@@ -617,9 +617,9 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 			})
 		})
 
-		Context("when no container images with codesphere-v exist", func() {
+		Context("when no container images with :codesphere exist", func() {
 			BeforeEach(func() {
-				// Create bom.json with images but no codesphere-v versions
+				// Create bom.json with images but no :codesphere versions
 				workDir := pkg.GetWorkDir()
 				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
 				Expect(err).NotTo(HaveOccurred())
@@ -643,32 +643,6 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 				_, err := pkg.GetCodesphereVersion()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("no container images found in bom.json"))
-			})
-		})
-
-		Context("when container images exist but have invalid format", func() {
-			It("returns an error", func() {
-				// Create bom.json with images that have invalid format (no colon)
-				workDir := pkg.GetWorkDir()
-				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
-				Expect(err).NotTo(HaveOccurred())
-
-				bomContent := `{
-					"components": {
-						"codesphere": {
-							"containerImages": {
-								"workspace-agent-24.04": "invalid-image-format-without-colon-codesphere-v1.66.0"
-							}
-						}
-					}
-				}`
-				bomPath := pkg.GetDependencyPath("bom.json")
-				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
-				Expect(err).NotTo(HaveOccurred())
-
-				_, err = pkg.GetCodesphereVersion()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("invalid image name format"))
 			})
 		})
 
@@ -697,6 +671,32 @@ var _ = Describe("Package GetCodesphereVersion", func() {
 				Expect(err).NotTo(HaveOccurred())
 				// Should return one of the codesphere versions (depends on map iteration order)
 				Expect(version).To(Or(Equal("codesphere-v1.66.0"), Equal("codesphere-v1.65.0")))
+			})
+		})
+
+		Context("when codesphere-lts version exists", func() {
+			It("returns a valid codesphere version", func() {
+				// Create bom.json with codesphere-lts version
+				workDir := pkg.GetWorkDir()
+				err := os.MkdirAll(filepath.Join(workDir, "deps"), 0755)
+				Expect(err).NotTo(HaveOccurred())
+
+				bomContent := `{
+					"components": {
+						"codesphere": {
+							"containerImages": {
+								"workspace-agent-24.04": "ghcr.io/codesphere-cloud/workspace-agent-24.04:codesphere-lts-v1.70.0"
+							}
+						}
+					}
+				}`
+				bomPath := pkg.GetDependencyPath("bom.json")
+				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
+				Expect(err).NotTo(HaveOccurred())
+
+				version, err := pkg.GetCodesphereVersion()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(version).To(Equal("codesphere-lts-v1.70.0"))
 			})
 		})
 	})

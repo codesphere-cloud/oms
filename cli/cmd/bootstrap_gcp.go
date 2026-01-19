@@ -75,7 +75,6 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
-	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "ssh-public-key-path")
 
 	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
 	root.AddCommand(bootstrapGcpCmd.cmd)
