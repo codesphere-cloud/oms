@@ -813,7 +813,7 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 				return fmt.Errorf("failed to configure memory map on %s: %w", node.Name, err)
 			}
 		}
-		fmt.Printf("Host %s configured", node.Name)
+		log.Printf("Host %s configured", node.Name)
 	}
 	return nil
 }
