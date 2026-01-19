@@ -78,8 +78,9 @@ func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironment, gcpCl
 		FileIO:  fw,
 		KeyPath: CodesphereEnv.SSHPrivateKeyPath,
 	}
+
 	if fw.Exists(CodesphereEnv.InstallConfig) {
-		log.Printf("Reading install config file: %s\n", CodesphereEnv.InstallConfig)
+		log.Printf("Reading install config file: %s", CodesphereEnv.InstallConfig)
 		err := icg.LoadInstallConfigFromFile(CodesphereEnv.InstallConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load config file: %w", err)
@@ -94,17 +95,19 @@ func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironment, gcpCl
 	}
 
 	if fw.Exists(CodesphereEnv.SecretsFile) {
-		log.Printf("Reading vault file: %s\n", CodesphereEnv.SecretsFile)
+		log.Printf("Reading vault file: %s", CodesphereEnv.SecretsFile)
 		err := icg.LoadVaultFromFile(CodesphereEnv.SecretsFile)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load vault file: %w", err)
 		}
+
 		log.Println("Merging vault secrets into configuration...")
 		err = icg.MergeVaultIntoConfig()
 		if err != nil {
 			return nil, fmt.Errorf("failed to merge vault into config: %w", err)
 		}
 	}
+
 	return &GCPBootstrapper{
 		env:           CodesphereEnv,
 		InstallConfig: icg.GetInstallConfig(),
@@ -259,7 +262,8 @@ func (b *GCPBootstrapper) EnsureBilling() error {
 	if err != nil {
 		return fmt.Errorf("failed to enable billing: %w", err)
 	}
-	log.Printf("Billing enabled for project %s with account %s\n", b.env.ProjectID, b.env.BillingAccount)
+	log.Printf("Billing enabled for project %s with account %s", b.env.ProjectID, b.env.BillingAccount)
+
 	return nil
 }
 
@@ -276,7 +280,7 @@ func (b *GCPBootstrapper) EnsureAPIsEnabled() error {
 		return fmt.Errorf("failed to enable APIs: %w", err)
 	}
 
-	log.Printf("Required APIs enabled for project %s\n", b.env.ProjectID)
+	log.Printf("Required APIs enabled for project %s", b.env.ProjectID)
 
 	return nil
 }
@@ -299,7 +303,7 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 
 	b.InstallConfig.Registry.Server = repo.GetRegistryUri()
 
-	log.Printf("Artifact Registry repository %s ensured\n", b.InstallConfig.Registry.Server)
+	log.Printf("Artifact Registry repository %s ensured", b.InstallConfig.Registry.Server)
 
 	return nil
 }
@@ -325,13 +329,17 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 			if retries > 3 {
 				return fmt.Errorf("failed to create service account key: %w", err)
 			}
+
 			log.Printf("got response %d trying to create service account key for %s, retrying...", status.Code(err), sa)
+
 			time.Sleep(5 * time.Second)
 			continue
 		}
-		log.Printf("Service account key for %s ensured\n", sa)
+
+		log.Printf("Service account key for %s ensured", sa)
 		b.InstallConfig.Registry.Password = string(privateKey)
 		b.InstallConfig.Registry.Username = "_json_key_base64"
+
 		break
 	}
 
@@ -362,7 +370,8 @@ func (b *GCPBootstrapper) EnsureVPC() error {
 	if err != nil {
 		return fmt.Errorf("failed to ensure VPC: %w", err)
 	}
-	log.Printf("VPC %s ensured\n", networkName)
+
+	log.Printf("VPC %s ensured", networkName)
 
 	return nil
 }
@@ -591,7 +600,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 					errCh <- fmt.Errorf("failed to wait for instance %s creation: %w", vm.Name, err)
 				}
 			}
-			log.Printf("Instance %s ensured\n", vm.Name)
+			log.Printf("Instance %s ensured", vm.Name)
 
 			//find out the IP addresses of the created instance
 			resp, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
@@ -692,7 +701,8 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 	address, err := addressesClient.Get(b.ctx, req)
 
 	if err == nil && address != nil {
-		log.Printf("Address %s already exists\n", name)
+		log.Printf("Address %s already exists", name)
+
 		return address.GetAddress(), nil
 	}
 
@@ -707,7 +717,7 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 	if err := op.Wait(b.ctx); err != nil {
 		return "", fmt.Errorf("failed to wait for address %s creation: %w", name, err)
 	}
-	log.Printf("Address %s ensured\n", name)
+	log.Printf("Address %s ensured", name)
 
 	address, err = addressesClient.Get(b.ctx, req)
 
@@ -723,13 +733,14 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 	if err != nil {
 		return fmt.Errorf("timed out waiting for SSH service to start on jumpbox: %w", err)
 	}
+
 	hasRootLogin := b.env.Jumpbox.HasRootLoginEnabled(nil, b.NodeManager)
 	if !hasRootLogin {
 		err := b.env.Jumpbox.EnableRootLogin(nil, b.NodeManager)
 		if err != nil {
 			return fmt.Errorf("failed to enable root login on %s: %w", b.env.Jumpbox.Name, err)
 		}
-		log.Printf("Root login enabled on %s\n", b.env.Jumpbox.Name)
+		log.Printf("Root login enabled on %s", b.env.Jumpbox.Name)
 	}
 
 	allNodes := append(b.env.ControlPlaneNodes, b.env.PostgreSQLNode)
@@ -742,7 +753,8 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 		}
 		hasRootLogin := node.HasRootLoginEnabled(&b.env.Jumpbox, b.NodeManager)
 		if hasRootLogin {
-			log.Printf("Root login already enabled on %s\n", node.Name)
+			log.Printf("Root login already enabled on %s", node.Name)
+
 			continue
 		}
 		for i := range 3 {
@@ -757,7 +769,7 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 			time.Sleep(10 * time.Second)
 		}
 
-		log.Printf("Root login enabled on %s\n", node.Name)
+		log.Printf("Root login enabled on %s", node.Name)
 	}
 	return nil
 }
@@ -801,7 +813,7 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 				return fmt.Errorf("failed to configure memory map on %s: %w", node.Name, err)
 			}
 		}
-		fmt.Printf("Host %s configured\n", node.Name)
+		fmt.Printf("Host %s configured", node.Name)
 	}
 	return nil
 }
@@ -1171,7 +1183,7 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 		return fmt.Errorf("failed to create DNS records: %w", err)
 	}
 
-	log.Printf("DNS records created in project %s zone %s\n", gcpProject, zoneName)
+	log.Printf("DNS records created in project %s zone %s", gcpProject, zoneName)
 	return nil
 }
 
