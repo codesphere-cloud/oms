@@ -19,6 +19,7 @@ func (g *InstallConfig) CollectInteractively() error {
 	g.collectK8sConfig(prompter)
 	g.collectGatewayConfig(prompter)
 	g.collectMetalLBConfig(prompter)
+	g.collectACMEConfig(prompter)
 	g.collectCodesphereConfig(prompter)
 
 	return nil
@@ -207,6 +208,72 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 				IPAddresses: poolIPs,
 			}
 		}
+	}
+}
+
+func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
+	fmt.Println("\n=== ACME Certificate Configuration (Optional) ===")
+
+	// Initialize ACME config if it doesn't exist
+	if g.Config.Cluster.Certificates.ACME == nil {
+		g.Config.Cluster.Certificates.ACME = &files.ACMEConfig{}
+	}
+
+	g.Config.Cluster.Certificates.ACME.Enabled = prompter.Bool("Enable ACME certificate issuer (e.g., Let's Encrypt)", g.Config.Cluster.Certificates.ACME.Enabled)
+
+	if g.Config.Cluster.Certificates.ACME.Enabled {
+		defaultIssuerName := g.Config.Cluster.Certificates.ACME.Name
+		if defaultIssuerName == "" {
+			defaultIssuerName = "acme-issuer"
+		}
+		g.Config.Cluster.Certificates.ACME.Name = g.collectString(prompter, "ACME issuer name", defaultIssuerName)
+
+		defaultEmail := g.Config.Cluster.Certificates.ACME.Email
+		if defaultEmail == "" {
+			defaultEmail = "admin@example.com"
+		}
+		g.Config.Cluster.Certificates.ACME.Email = g.collectString(prompter, "Email address for ACME account registration", defaultEmail)
+
+		defaultServer := g.Config.Cluster.Certificates.ACME.Server
+		if defaultServer == "" {
+			defaultServer = "https://acme-v02.api.letsencrypt.org/directory"
+		}
+		g.Config.Cluster.Certificates.ACME.Server = g.collectString(prompter, "ACME server URL", defaultServer)
+
+		// External Account Binding (EAB)
+		fmt.Println("\n--- External Account Binding (Optional) ---")
+		hasEAB := prompter.Bool("Configure External Account Binding (required by some ACME CAs)", g.Config.Cluster.Certificates.ACME.EABKeyID != "")
+		if hasEAB {
+			g.Config.Cluster.Certificates.ACME.EABKeyID = g.collectString(prompter, "EAB Key ID", g.Config.Cluster.Certificates.ACME.EABKeyID)
+			g.Config.Cluster.Certificates.ACME.EABMacKey = g.collectString(prompter, "EAB MAC Key", g.Config.Cluster.Certificates.ACME.EABMacKey)
+		} else {
+			g.Config.Cluster.Certificates.ACME.EABKeyID = ""
+			g.Config.Cluster.Certificates.ACME.EABMacKey = ""
+		}
+
+		// DNS-01 Challenge Configuration
+		fmt.Println("\n--- DNS-01 Challenge Configuration (Optional) ---")
+		if g.Config.Cluster.Certificates.ACME.Solver.DNS01 == nil {
+			g.Config.Cluster.Certificates.ACME.Solver.DNS01 = &files.ACMEDNS01Solver{}
+		}
+
+		useDNS01 := prompter.Bool("Configure DNS-01 challenge solver", g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider != "")
+		if useDNS01 {
+			providerOptions := []string{"route53", "cloudflare", "azure", "gcp", "other"}
+			defaultProvider := g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider
+			if defaultProvider == "" {
+				defaultProvider = "cloudflare"
+			}
+			g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
+
+			fmt.Println("Note: Additional DNS provider configuration will need to be added to the vault file.")
+			fmt.Println("Provider config and secrets should be added manually after generation.")
+		} else {
+			g.Config.Cluster.Certificates.ACME.Solver.DNS01 = nil
+		}
+	} else {
+		// If ACME is disabled, clear the config
+		g.Config.Cluster.Certificates.ACME = nil
 	}
 }
 

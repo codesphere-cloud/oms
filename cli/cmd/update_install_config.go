@@ -46,6 +46,14 @@ type UpdateInstallConfigOpts struct {
 	ClusterPublicGatewayServiceType string
 	ClusterPublicGatewayIPAddresses []string
 
+	ACMEEnabled       bool
+	ACMEIssuerName    string
+	ACMEEmail         string
+	ACMEServer        string
+	ACMEEABKeyID      string
+	ACMEEABMacKey     string
+	ACMEDNS01Provider string
+
 	CodesphereDomain                       string
 	CodespherePublicIP                     string
 	CodesphereWorkspaceHostingBaseDomain   string
@@ -108,6 +116,15 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().StringSliceVar(&c.Opts.ClusterGatewayIPAddresses, "cluster-gateway-ips", []string{}, "Cluster gateway IP addresses (comma-separated)")
 	c.cmd.Flags().StringVar(&c.Opts.ClusterPublicGatewayServiceType, "cluster-public-gateway-service-type", "", "Cluster public gateway service type")
 	c.cmd.Flags().StringSliceVar(&c.Opts.ClusterPublicGatewayIPAddresses, "cluster-public-gateway-ips", []string{}, "Cluster public gateway IP addresses (comma-separated)")
+
+	// ACME update flags
+	c.cmd.Flags().BoolVar(&c.Opts.ACMEEnabled, "acme-enabled", false, "Enable ACME certificate issuer")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEIssuerName, "acme-issuer-name", "", "Name for the ACME ClusterIssuer")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEEmail, "acme-email", "", "Email address for ACME account registration")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEServer, "acme-server", "", "ACME server URL")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEEABKeyID, "acme-eab-key-id", "", "External Account Binding key ID (required by some ACME providers)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEEABMacKey, "acme-eab-mac-key", "", "External Account Binding MAC key (required by some ACME providers)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEDNS01Provider, "acme-dns01-provider", "", "DNS provider for DNS-01 solver")
 
 	// Codesphere update flags
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
@@ -254,6 +271,67 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, tracker 
 		config.Cluster.PublicGateway.IPAddresses = c.Opts.ClusterPublicGatewayIPAddresses
 	}
 
+	// ACME updates
+	acmeChanged := false
+	if c.Opts.ACMEEnabled {
+		if config.Cluster.Certificates.ACME == nil {
+			config.Cluster.Certificates.ACME = &files.ACMEConfig{}
+		}
+
+		if !config.Cluster.Certificates.ACME.Enabled {
+			fmt.Printf("Enabling ACME certificate issuer\n")
+			config.Cluster.Certificates.ACME.Enabled = true
+			acmeChanged = true
+		}
+
+		if c.Opts.ACMEIssuerName != "" && config.Cluster.Certificates.ACME.Name != c.Opts.ACMEIssuerName {
+			fmt.Printf("Updating ACME issuer name: %s -> %s\n", config.Cluster.Certificates.ACME.Name, c.Opts.ACMEIssuerName)
+			config.Cluster.Certificates.ACME.Name = c.Opts.ACMEIssuerName
+			acmeChanged = true
+		}
+
+		if c.Opts.ACMEEmail != "" && config.Cluster.Certificates.ACME.Email != c.Opts.ACMEEmail {
+			fmt.Printf("Updating ACME email: %s -> %s\n", config.Cluster.Certificates.ACME.Email, c.Opts.ACMEEmail)
+			config.Cluster.Certificates.ACME.Email = c.Opts.ACMEEmail
+			acmeChanged = true
+		}
+
+		if c.Opts.ACMEServer != "" && config.Cluster.Certificates.ACME.Server != c.Opts.ACMEServer {
+			fmt.Printf("Updating ACME server: %s -> %s\n", config.Cluster.Certificates.ACME.Server, c.Opts.ACMEServer)
+			config.Cluster.Certificates.ACME.Server = c.Opts.ACMEServer
+			acmeChanged = true
+		}
+
+		if c.Opts.ACMEEABKeyID != "" && config.Cluster.Certificates.ACME.EABKeyID != c.Opts.ACMEEABKeyID {
+			fmt.Printf("Updating ACME EAB key ID: %s -> %s\n", config.Cluster.Certificates.ACME.EABKeyID, c.Opts.ACMEEABKeyID)
+			config.Cluster.Certificates.ACME.EABKeyID = c.Opts.ACMEEABKeyID
+			acmeChanged = true
+		}
+
+		if c.Opts.ACMEEABMacKey != "" && config.Cluster.Certificates.ACME.EABMacKey != c.Opts.ACMEEABMacKey {
+			fmt.Printf("Updating ACME EAB MAC key\n")
+			config.Cluster.Certificates.ACME.EABMacKey = c.Opts.ACMEEABMacKey
+			acmeChanged = true
+		}
+
+		// Update DNS-01 solver configuration
+		if c.Opts.ACMEDNS01Provider != "" {
+			if config.Cluster.Certificates.ACME.Solver.DNS01 == nil {
+				config.Cluster.Certificates.ACME.Solver.DNS01 = &files.ACMEDNS01Solver{}
+			}
+			if config.Cluster.Certificates.ACME.Solver.DNS01.Provider != c.Opts.ACMEDNS01Provider {
+				fmt.Printf("Updating ACME DNS-01 provider: %s -> %s\n",
+					config.Cluster.Certificates.ACME.Solver.DNS01.Provider, c.Opts.ACMEDNS01Provider)
+				config.Cluster.Certificates.ACME.Solver.DNS01.Provider = c.Opts.ACMEDNS01Provider
+				acmeChanged = true
+			}
+		}
+
+		if acmeChanged {
+			tracker.MarkACMEConfigChanged()
+		}
+	}
+
 	// Codesphere updates
 	if c.Opts.CodesphereDomain != "" && config.Codesphere.Domain != c.Opts.CodesphereDomain {
 		fmt.Printf("Updating Codesphere domain: %s -> %s\n", config.Codesphere.Domain, c.Opts.CodesphereDomain)
@@ -326,6 +404,9 @@ func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTr
 		if tracker.NeedsPostgresReplicaCertRegen() {
 			fmt.Println("  ✓ PostgreSQL replica server certificate")
 		}
+		if tracker.ACMEConfigChanged() {
+			fmt.Println("  ✓ ACME configuration updated")
+		}
 	}
 
 	fmt.Println("\nIMPORTANT: The vault file has been updated with new secrets.")
@@ -336,6 +417,7 @@ func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTr
 type SecretDependencyTracker struct {
 	postgresPrimaryCertNeedsRegen bool
 	postgresReplicaCertNeedsRegen bool
+	acmeConfigChanged             bool
 }
 
 func NewSecretDependencyTracker() *SecretDependencyTracker {
@@ -350,6 +432,10 @@ func (t *SecretDependencyTracker) MarkPostgresReplicaCertNeedsRegen() {
 	t.postgresReplicaCertNeedsRegen = true
 }
 
+func (t *SecretDependencyTracker) MarkACMEConfigChanged() {
+	t.acmeConfigChanged = true
+}
+
 func (t *SecretDependencyTracker) NeedsPostgresPrimaryCertRegen() bool {
 	return t.postgresPrimaryCertNeedsRegen
 }
@@ -358,6 +444,10 @@ func (t *SecretDependencyTracker) NeedsPostgresReplicaCertRegen() bool {
 	return t.postgresReplicaCertNeedsRegen
 }
 
+func (t *SecretDependencyTracker) ACMEConfigChanged() bool {
+	return t.acmeConfigChanged
+}
+
 func (t *SecretDependencyTracker) HasChanges() bool {
-	return t.postgresPrimaryCertNeedsRegen || t.postgresReplicaCertNeedsRegen
+	return t.postgresPrimaryCertNeedsRegen || t.postgresReplicaCertNeedsRegen || t.acmeConfigChanged
 }

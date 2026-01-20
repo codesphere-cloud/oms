@@ -347,5 +347,15 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientSecret = secret.Fields.Password
 	}
 
+	// ACME secrets
+	if g.Config.Cluster.Certificates.ACME != nil {
+		if secret, ok := secretsMap["acmeEabKeyId"]; ok && secret.Fields != nil {
+			g.Config.Cluster.Certificates.ACME.EABKeyID = secret.Fields.Password
+		}
+		if secret, ok := secretsMap["acmeEabMacKey"]; ok && secret.Fields != nil {
+			g.Config.Cluster.Certificates.ACME.EABMacKey = secret.Fields.Password
+		}
+	}
+
 	return nil
 }
