@@ -26,8 +26,9 @@ type Node struct {
 }
 
 type NodeManager struct {
-	FileIO  util.FileIO
-	KeyPath string
+	FileIO       util.FileIO
+	KeyPath      string
+	cachedSigner ssh.Signer // cached signer to avoid repeated passphrase prompts
 }
 
 // getAuthMethods constructs a slice of ssh.AuthMethod, prioritizing the SSH agent.
@@ -41,48 +42,27 @@ func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 			// Create an Agent client and use it for authentication
 			agentClient := agent.NewClient(conn)
 			authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
-			return authMethods, nil
+		} else {
+			fmt.Printf("Could not connect to SSH Agent (%s): %v\n", authSocket, err)
 		}
-		fmt.Printf("Could not connect to SSH Agent (%s): %v\n", authSocket, err)
 	}
 
 	if n.KeyPath != "" {
-		fmt.Println("Falling back to private key file authentication.")
-
-		// This logic is copied from the previous answer
-		key, err := n.FileIO.ReadFile(n.KeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
-		}
-
-		signer, err := ssh.ParsePrivateKey(key)
-		if err == nil {
-			authMethods = append(authMethods, ssh.PublicKeys(signer))
-			return authMethods, nil
-		}
-		if _, ok := err.(*ssh.PassphraseMissingError); ok {
-			// Key is encrypted, prompt for passphrase
-			fmt.Printf("Enter passphrase for key '%s': ", n.KeyPath)
-			passphraseBytes, err := term.ReadPassword(int(syscall.Stdin))
-			fmt.Println()
-
+		// Use cached signer if available to avoid repeated passphrase prompts
+		if n.cachedSigner != nil {
+			authMethods = append(authMethods, ssh.PublicKeys(n.cachedSigner))
+		} else {
+			signer, err := n.loadPrivateKey()
 			if err != nil {
-				return nil, fmt.Errorf("failed to read passphrase: %v", err)
+				if len(authMethods) == 0 {
+					return nil, err
+				}
+				fmt.Printf("Warning: %v\n", err)
+			} else {
+				n.cachedSigner = signer
+				authMethods = append(authMethods, ssh.PublicKeys(signer))
 			}
-
-			signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphraseBytes)
-			// Clear passphrase from memory
-			for i := range passphraseBytes {
-				passphraseBytes[i] = 0
-			}
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
-			}
-			authMethods = append(authMethods, ssh.PublicKeys(signer))
-			return authMethods, nil
 		}
-		return nil, fmt.Errorf("failed to parse private key: %v", err)
 	}
 
 	if len(authMethods) == 0 {
@@ -90,6 +70,42 @@ func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 	}
 
 	return authMethods, nil
+}
+
+// loadPrivateKey reads and parses the private key, prompting for passphrase if needed.
+func (n *NodeManager) loadPrivateKey() (ssh.Signer, error) {
+	key, err := n.FileIO.ReadFile(n.KeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(key)
+	if err == nil {
+		return signer, nil
+	}
+
+	if _, ok := err.(*ssh.PassphraseMissingError); !ok {
+		return nil, fmt.Errorf("failed to parse private key: %v", err)
+	}
+
+	// Key is encrypted, prompt for passphrase
+	fmt.Printf("Enter passphrase for key '%s': ", n.KeyPath)
+	passphrase, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read passphrase: %v", err)
+	}
+
+	signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphrase)
+	// Clear passphrase from memory
+	for i := range passphrase {
+		passphrase[i] = 0
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
+	}
+
+	return signer, nil
 }
 
 func (n *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error) {

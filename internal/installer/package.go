@@ -205,7 +205,7 @@ func (p *Package) GetCodesphereVersion() (string, error) {
 
 	containerImage := ""
 	for _, image := range containerImages {
-		if strings.Contains(image, "codesphere-v") {
+		if strings.Contains(image, ":codesphere") {
 			containerImage = image
 			break
 		}

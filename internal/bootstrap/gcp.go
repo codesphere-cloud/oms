@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -76,7 +77,7 @@ func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironment, gcpCl
 	icg := installer.NewInstallConfigManager()
 	nm := &node.NodeManager{
 		FileIO:  fw,
-		KeyPath: CodesphereEnv.SSHPrivateKeyPath,
+		KeyPath: expandPath(CodesphereEnv.SSHPrivateKeyPath),
 	}
 
 	if fw.Exists(CodesphereEnv.InstallConfig) {
@@ -545,6 +546,12 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 
 			serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
 
+			pubKey, err := readSSHKey(b.env.SSHPublicKeyPath)
+			if err != nil {
+				errCh <- fmt.Errorf("failed to read SSH public key: %w", err)
+				return
+			}
+
 			instance := &computepb.Instance{
 				Name: protoString(vm.Name),
 				ServiceAccounts: []*computepb.ServiceAccount{
@@ -571,7 +578,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 					Items: []*computepb.Items{
 						{
 							Key:   protoString("ssh-keys"),
-							Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", readSSHKey(b.env.SSHPublicKeyPath)+"root", readSSHKey(b.env.SSHPublicKeyPath)) + "ubuntu"),
+							Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")),
 						},
 					},
 				},
@@ -611,6 +618,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 			if err != nil {
 				errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
 			}
+
 			externalIP := ""
 			internalIP := ""
 			if len(resp.GetNetworkInterfaces()) > 0 {
@@ -733,6 +741,7 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 	if err != nil {
 		return fmt.Errorf("timed out waiting for SSH service to start on jumpbox: %w", err)
 	}
+	fmt.Printf("SSH service available on jumpbox '%s'\n", b.env.Jumpbox.Name)
 
 	hasRootLogin := b.env.Jumpbox.HasRootLoginEnabled(nil, b.NodeManager)
 	if !hasRootLogin {
@@ -1308,11 +1317,26 @@ func isAlreadyExistsError(err error) bool {
 	return status.Code(err) == codes.AlreadyExists || strings.Contains(err.Error(), "already exists")
 }
 
-// Helper to read SSH key file
-func readSSHKey(path string) string {
-	data, err := os.ReadFile(os.ExpandEnv(path))
-	if err != nil {
-		return ""
+// expandPath expands ~ to the user's home directory
+func expandPath(path string) string {
+	if strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, path[2:])
+		}
 	}
-	return strings.TrimSpace(string(data))
+	return path
+}
+
+// readSSHKey reads an SSH key file, expanding ~ in the path
+func readSSHKey(path string) (string, error) {
+	realPath := expandPath(path)
+	data, err := os.ReadFile(realPath)
+	if err != nil {
+		return "", fmt.Errorf("error reading SSH key from %s: %w", realPath, err)
+	}
+	key := strings.TrimSpace(string(data))
+	if key == "" {
+		return "", fmt.Errorf("SSH key at %s is empty", realPath)
+	}
+	return key, nil
 }
