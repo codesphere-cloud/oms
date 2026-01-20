@@ -5,6 +5,7 @@ package installer
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
@@ -212,7 +213,7 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 }
 
 func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
-	fmt.Println("\n=== ACME Certificate Configuration (Optional) ===")
+	log.Println("\n=== ACME Certificate Configuration (Optional) ===")
 
 	// Initialize ACME config if it doesn't exist
 	if g.Config.Cluster.Certificates.ACME == nil {
@@ -241,7 +242,7 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 		g.Config.Cluster.Certificates.ACME.Server = g.collectString(prompter, "ACME server URL", defaultServer)
 
 		// External Account Binding (EAB)
-		fmt.Println("\n--- External Account Binding (Optional) ---")
+		log.Println("\n--- External Account Binding (Optional) ---")
 		hasEAB := prompter.Bool("Configure External Account Binding (required by some ACME CAs)", g.Config.Cluster.Certificates.ACME.EABKeyID != "")
 		if hasEAB {
 			g.Config.Cluster.Certificates.ACME.EABKeyID = g.collectString(prompter, "EAB Key ID", g.Config.Cluster.Certificates.ACME.EABKeyID)
@@ -252,7 +253,7 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 		}
 
 		// DNS-01 Challenge Configuration
-		fmt.Println("\n--- DNS-01 Challenge Configuration (Optional) ---")
+		log.Println("\n--- DNS-01 Challenge Configuration (Optional) ---")
 		if g.Config.Cluster.Certificates.ACME.Solver.DNS01 == nil {
 			g.Config.Cluster.Certificates.ACME.Solver.DNS01 = &files.ACMEDNS01Solver{}
 		}
@@ -266,8 +267,8 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 			}
 			g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
 
-			fmt.Println("Note: Additional DNS provider configuration will need to be added to the vault file.")
-			fmt.Println("Provider config and secrets should be added manually after generation.")
+			log.Println("Note: Additional DNS provider configuration will need to be added to the vault file.")
+			log.Println("Provider config and secrets should be added manually after generation.")
 		} else {
 			g.Config.Cluster.Certificates.ACME.Solver.DNS01 = nil
 		}

@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -279,37 +280,37 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, tracker 
 		}
 
 		if !config.Cluster.Certificates.ACME.Enabled {
-			fmt.Printf("Enabling ACME certificate issuer\n")
+			log.Printf("Enabling ACME certificate issuer\n")
 			config.Cluster.Certificates.ACME.Enabled = true
 			acmeChanged = true
 		}
 
 		if c.Opts.ACMEIssuerName != "" && config.Cluster.Certificates.ACME.Name != c.Opts.ACMEIssuerName {
-			fmt.Printf("Updating ACME issuer name: %s -> %s\n", config.Cluster.Certificates.ACME.Name, c.Opts.ACMEIssuerName)
+			log.Printf("Updating ACME issuer name: %s -> %s\n", config.Cluster.Certificates.ACME.Name, c.Opts.ACMEIssuerName)
 			config.Cluster.Certificates.ACME.Name = c.Opts.ACMEIssuerName
 			acmeChanged = true
 		}
 
 		if c.Opts.ACMEEmail != "" && config.Cluster.Certificates.ACME.Email != c.Opts.ACMEEmail {
-			fmt.Printf("Updating ACME email: %s -> %s\n", config.Cluster.Certificates.ACME.Email, c.Opts.ACMEEmail)
+			log.Printf("Updating ACME email: %s -> %s\n", config.Cluster.Certificates.ACME.Email, c.Opts.ACMEEmail)
 			config.Cluster.Certificates.ACME.Email = c.Opts.ACMEEmail
 			acmeChanged = true
 		}
 
 		if c.Opts.ACMEServer != "" && config.Cluster.Certificates.ACME.Server != c.Opts.ACMEServer {
-			fmt.Printf("Updating ACME server: %s -> %s\n", config.Cluster.Certificates.ACME.Server, c.Opts.ACMEServer)
+			log.Printf("Updating ACME server: %s -> %s\n", config.Cluster.Certificates.ACME.Server, c.Opts.ACMEServer)
 			config.Cluster.Certificates.ACME.Server = c.Opts.ACMEServer
 			acmeChanged = true
 		}
 
 		if c.Opts.ACMEEABKeyID != "" && config.Cluster.Certificates.ACME.EABKeyID != c.Opts.ACMEEABKeyID {
-			fmt.Printf("Updating ACME EAB key ID: %s -> %s\n", config.Cluster.Certificates.ACME.EABKeyID, c.Opts.ACMEEABKeyID)
+			log.Printf("Updating ACME EAB key ID: %s -> %s\n", config.Cluster.Certificates.ACME.EABKeyID, c.Opts.ACMEEABKeyID)
 			config.Cluster.Certificates.ACME.EABKeyID = c.Opts.ACMEEABKeyID
 			acmeChanged = true
 		}
 
 		if c.Opts.ACMEEABMacKey != "" && config.Cluster.Certificates.ACME.EABMacKey != c.Opts.ACMEEABMacKey {
-			fmt.Printf("Updating ACME EAB MAC key\n")
+			log.Printf("Updating ACME EAB MAC key\n")
 			config.Cluster.Certificates.ACME.EABMacKey = c.Opts.ACMEEABMacKey
 			acmeChanged = true
 		}
@@ -320,7 +321,7 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, tracker 
 				config.Cluster.Certificates.ACME.Solver.DNS01 = &files.ACMEDNS01Solver{}
 			}
 			if config.Cluster.Certificates.ACME.Solver.DNS01.Provider != c.Opts.ACMEDNS01Provider {
-				fmt.Printf("Updating ACME DNS-01 provider: %s -> %s\n",
+				log.Printf("Updating ACME DNS-01 provider: %s -> %s\n",
 					config.Cluster.Certificates.ACME.Solver.DNS01.Provider, c.Opts.ACMEDNS01Provider)
 				config.Cluster.Certificates.ACME.Solver.DNS01.Provider = c.Opts.ACMEDNS01Provider
 				acmeChanged = true
@@ -405,7 +406,7 @@ func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTr
 			fmt.Println("  ✓ PostgreSQL replica server certificate")
 		}
 		if tracker.ACMEConfigChanged() {
-			fmt.Println("  ✓ ACME configuration updated")
+			log.Println("  ✓ ACME configuration updated")
 		}
 	}
 
