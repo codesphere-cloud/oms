@@ -15,14 +15,14 @@ import (
 
 var _ = Describe("ConfigYaml", func() {
 	var (
-		rootConfig *files.RootConfig
+		rootConfig files.RootConfig
 		tempDir    string
 		configFile string
 		sampleYaml string
 	)
 
 	BeforeEach(func() {
-		rootConfig = &files.RootConfig{}
+		rootConfig = files.NewRootConfig()
 
 		var err error
 		tempDir, err = os.MkdirTemp("", "config_yaml_test")

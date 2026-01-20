@@ -59,6 +59,7 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 		Enabled: false,
 		Pools:   []files.MetalLBPoolDef{},
 	}
+	g.Config.Registry = &files.RegistryConfig{}
 	g.Config.Codesphere.Experiments = []string{}
 	g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
 		Agent: &files.ImageRef{

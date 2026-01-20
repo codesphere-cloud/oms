@@ -42,7 +42,7 @@ type SecretFields struct {
 type RootConfig struct {
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
-	Registry               RegistryConfig                `yaml:"registry,omitempty"`
+	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
 	Ceph                   CephConfig                    `yaml:"ceph"`
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
@@ -398,6 +398,14 @@ func (c *RootConfig) Marshal() ([]byte, error) {
 // Unmarshal deserializes YAML data into the RootConfig
 func (c *RootConfig) Unmarshal(data []byte) error {
 	return yaml.Unmarshal(data, c)
+}
+
+func NewRootConfig() RootConfig {
+	return RootConfig{
+		Registry:               &RegistryConfig{},
+		MetalLB:                &MetalLBConfig{},
+		ManagedServiceBackends: &ManagedServiceBackendsConfig{},
+	}
 }
 
 func (c *RootConfig) ExtractBomRefs() []string {
