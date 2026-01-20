@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -477,8 +476,4 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 	}
 
 	return config
-}
-
-func parseJSON(jsonStr string, target interface{}) error {
-	return json.Unmarshal([]byte(jsonStr), target)
 }

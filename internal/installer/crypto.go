@@ -158,20 +158,6 @@ func GeneratePassword(length int) string {
 	return base64.StdEncoding.EncodeToString(bytes)[:length]
 }
 
-func GenerateRSAPrivateKey(bits int) (string, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, bits)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate RSA private key: %w", err)
-	}
-
-	privKeyPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PRIVATE KEY",
-		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
-	})
-
-	return string(privKeyPEM), nil
-}
-
 func parseCAKeyAndCert(caKeyPEM, caCertPEM string) (*rsa.PrivateKey, *x509.Certificate, error) {
 	caKeyBlock, _ := pem.Decode([]byte(caKeyPEM))
 	if caKeyBlock == nil {
