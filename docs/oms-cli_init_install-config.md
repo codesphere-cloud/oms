@@ -42,6 +42,13 @@ $ oms-cli init install-config --validate -c config.yaml --vault prod.vault.yaml
 ### Options
 
 ```
+      --acme-dns01-provider string   DNS provider for DNS-01 solver (e.g., cloudflare)
+      --acme-eab-key-id string       External Account Binding key ID (required by some ACME providers)
+      --acme-eab-mac-key string      External Account Binding MAC key (required by some ACME providers)
+      --acme-email string            Email address for ACME account registration
+      --acme-enabled                 Enable ACME certificate issuer
+      --acme-issuer-name string      Name for the ACME ClusterIssuer (default "acme-issuer")
+      --acme-server string           ACME server URL (default "https://acme-v02.api.letsencrypt.org/directory")
   -c, --config string                Output file path for config.yaml (default "config.yaml")
       --dc-id int                    Datacenter ID
       --dc-name string               Datacenter name
