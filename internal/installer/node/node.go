@@ -76,7 +76,7 @@ func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
 				n.cachedSigner = signer
 				signers = append(signers, signer)
 			} else {
-				fmt.Printf("Warning: failed to load private key: %v\n", err)
+				log.Printf("Warning: failed to load private key: %v\n", err)
 			}
 		}
 	}
@@ -105,9 +105,9 @@ func (n *NodeManager) loadPrivateKey() (ssh.Signer, error) {
 	}
 
 	// Key is encrypted, prompt for passphrase
-	fmt.Printf("Enter passphrase for key '%s': ", n.KeyPath)
+	log.Printf("Enter passphrase for key '%s': ", n.KeyPath)
 	passphrase, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println()
+	log.Println()
 	if err != nil {
 		return nil, fmt.Errorf("failed to read passphrase: %v", err)
 	}
@@ -146,7 +146,7 @@ func (n *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error)
 
 	// Enable Agent Forwarding on the jumpbox connection
 	if err := n.forwardAgent(jumpboxClient, nil); err != nil {
-		fmt.Printf(" Warning: Agent forwarding setup failed on jumpbox: %v\n", err)
+		log.Printf(" Warning: Agent forwarding setup failed on jumpbox: %v\n", err)
 	}
 
 	return jumpboxClient, nil
@@ -199,7 +199,7 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 	err = n.forwardAgent(client, session)
 
 	if err != nil {
-		fmt.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
+		log.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
 	}
 
 	session.Stdout = os.Stdout
