@@ -33,43 +33,59 @@ type NodeManager struct {
 
 // getAuthMethods constructs a slice of ssh.AuthMethod, prioritizing the SSH agent.
 func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
-	var authMethods []ssh.AuthMethod
+	var signers []ssh.Signer
 
+	// 1. Get Agent Signers
 	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
-		// Connect to the SSH agent's socket
-		conn, err := net.Dial("unix", authSocket)
-		if err == nil {
-			// Create an Agent client and use it for authentication
+		if conn, err := net.Dial("unix", authSocket); err == nil {
 			agentClient := agent.NewClient(conn)
-			authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
-		} else {
-			fmt.Printf("Could not connect to SSH Agent (%s): %v\n", authSocket, err)
-		}
-	}
-
-	if n.KeyPath != "" {
-		// Use cached signer if available to avoid repeated passphrase prompts
-		if n.cachedSigner != nil {
-			authMethods = append(authMethods, ssh.PublicKeys(n.cachedSigner))
-		} else {
-			signer, err := n.loadPrivateKey()
-			if err != nil {
-				if len(authMethods) == 0 {
-					return nil, err
-				}
-				fmt.Printf("Warning: %v\n", err)
-			} else {
-				n.cachedSigner = signer
-				authMethods = append(authMethods, ssh.PublicKeys(signer))
+			if s, err := agentClient.Signers(); err == nil {
+				signers = append(signers, s...)
 			}
 		}
 	}
 
-	if len(authMethods) == 0 {
+	// 2. Add Private Key (File) if needed
+	if n.KeyPath != "" {
+		shouldLoad := true
+
+		// Use cached signer if available
+		if n.cachedSigner != nil {
+			signers = append(signers, n.cachedSigner)
+			shouldLoad = false
+		}
+
+		// Check if key is already in agent (requires .pub file)
+		if shouldLoad && len(signers) > 0 {
+			if pubBytes, err := n.FileIO.ReadFile(n.KeyPath + ".pub"); err == nil {
+				if targetPub, _, _, _, err := ssh.ParseAuthorizedKey(pubBytes); err == nil {
+					targetMarshaled := string(targetPub.Marshal())
+					for _, s := range signers {
+						if string(s.PublicKey().Marshal()) == targetMarshaled {
+							shouldLoad = false
+							break
+						}
+					}
+				}
+			}
+		}
+
+		// Else load from file with passphrase prompt if needed
+		if shouldLoad {
+			if signer, err := n.loadPrivateKey(); err == nil {
+				n.cachedSigner = signer
+				signers = append(signers, signer)
+			} else {
+				fmt.Printf("Warning: failed to load private key: %v\n", err)
+			}
+		}
+	}
+
+	if len(signers) == 0 {
 		return nil, fmt.Errorf("no valid authentication methods configured. Check SSH_AUTH_SOCK and private key path")
 	}
 
-	return authMethods, nil
+	return []ssh.AuthMethod{ssh.PublicKeys(signers...)}, nil
 }
 
 // loadPrivateKey reads and parses the private key, prompting for passphrase if needed.
@@ -202,7 +218,6 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 }
 
 func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
-
 	authMethods, err := n.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get authentication methods: %w", err)
