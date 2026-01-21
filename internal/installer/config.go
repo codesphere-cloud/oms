@@ -27,7 +27,7 @@ func NewConfig() *Config {
 
 // ParseConfigYaml reads and parses the configuration YAML file at the given path.
 func (c *Config) ParseConfigYaml(configPath string) (files.RootConfig, error) {
-	var rootConfig files.RootConfig
+	rootConfig := files.NewRootConfig()
 
 	file, err := c.FileIO.Open(configPath)
 	if err != nil {

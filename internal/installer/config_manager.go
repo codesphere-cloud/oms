@@ -41,9 +41,10 @@ type InstallConfig struct {
 }
 
 func NewInstallConfigManager() InstallConfigManager {
+	config := files.NewRootConfig()
 	return &InstallConfig{
 		fileIO: &util.FilesystemWriter{},
-		Config: &files.RootConfig{},
+		Config: &config,
 		Vault:  &files.InstallVault{},
 	}
 }
@@ -60,12 +61,12 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 		return fmt.Errorf("failed to read %s: %w", configPath, err)
 	}
 
-	config := &files.RootConfig{}
+	config := files.NewRootConfig()
 	if err := config.Unmarshal(data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s: %w", configPath, err)
 	}
 
-	g.Config = config
+	g.Config = &config
 	return nil
 }
 

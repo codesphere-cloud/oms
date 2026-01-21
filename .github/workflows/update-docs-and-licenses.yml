@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           # on push to main, use main; on PR, check out the PR head
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
@@ -25,16 +25,16 @@ jobs:
           token: ${{ secrets.PAT_UPDATE_DOCS }}
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
         with:
-          go-version: '1.25.5'
+          go-version: '1.25.6'
 
       - name: Update docs & licenses
         run: |
           ./hack/update-docs-and-licenses.sh
 
       - name: Commit and push auto-generated changes
-        uses: EndBug/add-and-commit@v9
+        uses: EndBug/add-and-commit@a94899bca583c204427a224a7af87c02f9b325d5 # v9
         with:
           # Use the PR author's identity for the commit
           author_name: ${{ github.event.pull_request.user.login }}
