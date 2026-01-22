@@ -95,9 +95,9 @@ License URL: https://github.com/clipperhouse/uax29/blob/v2.3.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go/pkg/io
-Version: v0.15.1
+Version: v0.15.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.15.1/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.15.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -274,16 +274,10 @@ License: BSD-3-Clause
 License URL: https://github.com/ulikunitz/xz/blob/v0.5.15/LICENSE
  
 ----------
-Module: github.com/yaml/go-yaml
-Version: v2.1.0
-License: Apache-2.0
-License URL: https://github.com/yaml/go-yaml/blob/v2.1.0/LICENSE
- 
-----------
 Module: gitlab.com/gitlab-org/api/client-go
-Version: v1.10.0
+Version: v1.11.0
 License: Apache-2.0
-License URL: https://gitlab.com/gitlab-org/api/client-go/-/blob/v1.10.0/LICENSE
+License URL: https://gitlab.com/gitlab-org/api/client-go/-/blob/v1.11.0/LICENSE
  
 ----------
 Module: go.opentelemetry.io/auto/sdk
@@ -298,9 +292,21 @@ License: Apache-2.0
 License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/google.golang.org/grpc/otelgrpc/v0.64.0/instrumentation/google.golang.org/grpc/otelgrpc/LICENSE
  
 ----------
+Module: go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc
+Version: v0.64.0
+License: BSD-3-Clause
+License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/google.golang.org/grpc/otelgrpc/v0.64.0/instrumentation/google.golang.org/grpc/otelgrpc/LICENSE
+ 
+----------
 Module: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 Version: v0.64.0
 License: Apache-2.0
+License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/net/http/otelhttp/v0.64.0/instrumentation/net/http/otelhttp/LICENSE
+ 
+----------
+Module: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
+Version: v0.64.0
+License: BSD-3-Clause
 License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/net/http/otelhttp/v0.64.0/instrumentation/net/http/otelhttp/LICENSE
  
 ----------
