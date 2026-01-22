@@ -55,5 +55,5 @@ $ oms-cli install k0s --force
 
 ### SEE ALSO
 
-* [oms-cli install](oms-cli_install.md)	 - Coming soon: Install Codesphere and other components
+* [oms-cli install](oms-cli_install.md)	 - Install Codesphere and other components
 

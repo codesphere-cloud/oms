@@ -31,7 +31,7 @@ lint: install-build-deps
 
 install-build-deps:
 ifeq (, $(shell which go-licenses))
-	go install github.com/google/go-licenses@v1.6.0
+	go install github.com/google/go-licenses/v2@v2.0.1
 endif
 ifeq (, $(shell which copywrite))
 	go install github.com/hashicorp/copywrite@v0.22.0

@@ -5,7 +5,8 @@
 package cmd
 
 import (
-	"github.com/blang/semver"
+	"context"
+	"github.com/creativeprojects/go-selfupdate"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -37,31 +38,31 @@ func (_m *MockOMSUpdater) EXPECT() *MockOMSUpdater_Expecter {
 }
 
 // Update provides a mock function for the type MockOMSUpdater
-func (_mock *MockOMSUpdater) Update(v semver.Version, repo string) (semver.Version, string, error) {
-	ret := _mock.Called(v, repo)
+func (_mock *MockOMSUpdater) Update(ctx context.Context, current string, repo selfupdate.Repository) (string, string, error) {
+	ret := _mock.Called(ctx, current, repo)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Update")
 	}
 
-	var r0 semver.Version
+	var r0 string
 	var r1 string
 	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(semver.Version, string) (semver.Version, string, error)); ok {
-		return returnFunc(v, repo)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, selfupdate.Repository) (string, string, error)); ok {
+		return returnFunc(ctx, current, repo)
 	}
-	if returnFunc, ok := ret.Get(0).(func(semver.Version, string) semver.Version); ok {
-		r0 = returnFunc(v, repo)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, selfupdate.Repository) string); ok {
+		r0 = returnFunc(ctx, current, repo)
 	} else {
-		r0 = ret.Get(0).(semver.Version)
+		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(semver.Version, string) string); ok {
-		r1 = returnFunc(v, repo)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, selfupdate.Repository) string); ok {
+		r1 = returnFunc(ctx, current, repo)
 	} else {
 		r1 = ret.Get(1).(string)
 	}
-	if returnFunc, ok := ret.Get(2).(func(semver.Version, string) error); ok {
-		r2 = returnFunc(v, repo)
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, selfupdate.Repository) error); ok {
+		r2 = returnFunc(ctx, current, repo)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -74,36 +75,42 @@ type MockOMSUpdater_Update_Call struct {
 }
 
 // Update is a helper method to define mock.On call
-//   - v semver.Version
-//   - repo string
-func (_e *MockOMSUpdater_Expecter) Update(v interface{}, repo interface{}) *MockOMSUpdater_Update_Call {
-	return &MockOMSUpdater_Update_Call{Call: _e.mock.On("Update", v, repo)}
+//   - ctx context.Context
+//   - current string
+//   - repo selfupdate.Repository
+func (_e *MockOMSUpdater_Expecter) Update(ctx interface{}, current interface{}, repo interface{}) *MockOMSUpdater_Update_Call {
+	return &MockOMSUpdater_Update_Call{Call: _e.mock.On("Update", ctx, current, repo)}
 }
 
-func (_c *MockOMSUpdater_Update_Call) Run(run func(v semver.Version, repo string)) *MockOMSUpdater_Update_Call {
+func (_c *MockOMSUpdater_Update_Call) Run(run func(ctx context.Context, current string, repo selfupdate.Repository)) *MockOMSUpdater_Update_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 semver.Version
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(semver.Version)
+			arg0 = args[0].(context.Context)
 		}
 		var arg1 string
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
+		var arg2 selfupdate.Repository
+		if args[2] != nil {
+			arg2 = args[2].(selfupdate.Repository)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *MockOMSUpdater_Update_Call) Return(version semver.Version, s string, err error) *MockOMSUpdater_Update_Call {
-	_c.Call.Return(version, s, err)
+func (_c *MockOMSUpdater_Update_Call) Return(s string, s1 string, err error) *MockOMSUpdater_Update_Call {
+	_c.Call.Return(s, s1, err)
 	return _c
 }
 
-func (_c *MockOMSUpdater_Update_Call) RunAndReturn(run func(v semver.Version, repo string) (semver.Version, string, error)) *MockOMSUpdater_Update_Call {
+func (_c *MockOMSUpdater_Update_Call) RunAndReturn(run func(ctx context.Context, current string, repo selfupdate.Repository) (string, string, error)) *MockOMSUpdater_Update_Call {
 	_c.Call.Return(run)
 	return _c
 }

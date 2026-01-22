@@ -29,8 +29,9 @@ type Node struct {
 }
 
 type NodeManager struct {
-	FileIO  util.FileIO
-	KeyPath string
+	FileIO       util.FileIO
+	KeyPath      string
+	cachedSigner ssh.Signer // cached signer to avoid repeated passphrase prompts
 }
 
 const (
@@ -70,90 +71,97 @@ func (nm *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 	return hostKeyCallback, nil
 }
 
-func (nm *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
-	var authMethods []ssh.AuthMethod
+// getAuthMethods constructs a slice of ssh.AuthMethod, prioritizing the SSH agent.
+func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
+	var signers []ssh.Signer
 
+	// 1. Get Agent Signers
 	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
-		conn, err := net.Dial("unix", authSocket)
-		if err == nil {
+		if conn, err := net.Dial("unix", authSocket); err == nil {
 			agentClient := agent.NewClient(conn)
-			authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
-			return authMethods, nil
+			if s, err := agentClient.Signers(); err == nil {
+				signers = append(signers, s...)
+			}
 		}
-		fmt.Printf("Could not connect to SSH Agent (%s): %v\n", authSocket, err)
 	}
 
-	if nm.KeyPath != "" {
-		fmt.Printf("Falling back to private key file authentication (key: %s).\n", nm.KeyPath)
+	// 2. Add Private Key (File) if needed
+	if n.KeyPath != "" {
+		shouldLoad := true
 
-		key, err := nm.FileIO.ReadFile(nm.KeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read private key file %s: %v", nm.KeyPath, err)
+		// Use cached signer if available
+		if n.cachedSigner != nil {
+			signers = append(signers, n.cachedSigner)
+			shouldLoad = false
 		}
 
-		log.Printf("Successfully read %d bytes from key file", len(key))
-
-		signer, err := ssh.ParsePrivateKey(key)
-		if err == nil {
-			log.Printf("Successfully parsed private key (type: %s)", signer.PublicKey().Type())
-			authMethods = append(authMethods, ssh.PublicKeys(signer))
-			return authMethods, nil
-		}
-
-		log.Printf("Failed to parse private key: %v", err)
-		if _, ok := err.(*ssh.PassphraseMissingError); ok {
-			// Check if we're in an interactive terminal
-			if !term.IsTerminal(int(syscall.Stdin)) {
-				return nil, fmt.Errorf("passphrase-protected key requires interactive terminal. Use ssh-agent or an unencrypted key for automated scenarios")
-			}
-
-			fmt.Printf("Enter passphrase for key '%s': ", nm.KeyPath)
-
-			// Read passphrase with a timeout using a channel
-			type result struct {
-				password []byte
-				err      error
-			}
-			resultChan := make(chan result, 1)
-			go func() {
-				passphraseBytes, err := term.ReadPassword(int(syscall.Stdin))
-				resultChan <- result{password: passphraseBytes, err: err}
-			}()
-
-			// Wait for passphrase input with 30 second timeout
-			select {
-			case res := <-resultChan:
-				fmt.Println()
-				if res.err != nil {
-					return nil, fmt.Errorf("failed to read passphrase: %v", res.err)
-				}
-
-				defer func() {
-					for i := range res.password {
-						res.password[i] = 0
+		// Check if key is already in agent (requires .pub file)
+		if shouldLoad && len(signers) > 0 {
+			if pubBytes, err := n.FileIO.ReadFile(n.KeyPath + ".pub"); err == nil {
+				if targetPub, _, _, _, err := ssh.ParseAuthorizedKey(pubBytes); err == nil {
+					targetMarshaled := string(targetPub.Marshal())
+					for _, s := range signers {
+						if string(s.PublicKey().Marshal()) == targetMarshaled {
+							shouldLoad = false
+							break
+						}
 					}
-				}()
-
-				signer, err = ssh.ParsePrivateKeyWithPassphrase(key, res.password)
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
 				}
-				authMethods = append(authMethods, ssh.PublicKeys(signer))
-				return authMethods, nil
-
-			case <-time.After(30 * time.Second):
-				fmt.Println()
-				return nil, fmt.Errorf("passphrase input timeout after 30 seconds")
 			}
 		}
-		return nil, fmt.Errorf("failed to parse private key: %v", err)
+
+		// Else load from file with passphrase prompt if needed
+		if shouldLoad {
+			if signer, err := n.loadPrivateKey(); err == nil {
+				n.cachedSigner = signer
+				signers = append(signers, signer)
+			} else {
+				log.Printf("Warning: failed to load private key: %v\n", err)
+			}
+		}
 	}
 
-	if len(authMethods) == 0 {
+	if len(signers) == 0 {
 		return nil, fmt.Errorf("no valid authentication methods configured. Check SSH_AUTH_SOCK and private key path")
 	}
 
-	return authMethods, nil
+	return []ssh.AuthMethod{ssh.PublicKeys(signers...)}, nil
+}
+
+// loadPrivateKey reads and parses the private key, prompting for passphrase if needed.
+func (n *NodeManager) loadPrivateKey() (ssh.Signer, error) {
+	key, err := n.FileIO.ReadFile(n.KeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(key)
+	if err == nil {
+		return signer, nil
+	}
+
+	if _, ok := err.(*ssh.PassphraseMissingError); !ok {
+		return nil, fmt.Errorf("failed to parse private key: %v", err)
+	}
+
+	// Key is encrypted, prompt for passphrase
+	log.Printf("Enter passphrase for key '%s': ", n.KeyPath)
+	passphrase, err := term.ReadPassword(int(syscall.Stdin))
+	log.Println()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read passphrase: %v", err)
+	}
+
+	signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphrase)
+	// Clear passphrase from memory
+	for i := range passphrase {
+		passphrase[i] = 0
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
+	}
+
+	return signer, nil
 }
 
 func (nm *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error) {
@@ -180,8 +188,9 @@ func (nm *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error
 		return nil, fmt.Errorf("failed to dial jumpbox %s: %v", addr, err)
 	}
 
+	// Enable Agent Forwarding on the jumpbox connection
 	if err := nm.forwardAgent(jumpboxClient, nil); err != nil {
-		fmt.Printf(" Warning: Agent forwarding setup failed on jumpbox: %v\n", err)
+		log.Printf(" Warning: Agent forwarding setup failed on jumpbox: %v\n", err)
 	}
 
 	return jumpboxClient, nil
@@ -225,8 +234,10 @@ func (nm *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username strin
 
 	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
 
-	if err := nm.forwardAgent(client, session); err != nil {
-		fmt.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
+	err = nm.forwardAgent(client, session)
+
+	if err != nil {
+		log.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
 	}
 
 	session.Stdout = os.Stdout
@@ -242,20 +253,19 @@ func (nm *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username strin
 	return nil
 }
 
-func (nm *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
-
-	authMethods, err := nm.getAuthMethods()
+func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
+	authMethods, err := n.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get authentication methods: %w", err)
 	}
 
-	hostKeyCallback, err := nm.getHostKeyCallback()
+	hostKeyCallback, err := n.getHostKeyCallback()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get host key callback: %w", err)
 	}
 
 	if jumpboxIp != "" {
-		jbClient, err := nm.connectToJumpbox(jumpboxIp, jumpboxUser)
+		jbClient, err := n.connectToJumpbox(jumpboxIp, jumpboxUser)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to jumpbox: %v", err)
 		}
