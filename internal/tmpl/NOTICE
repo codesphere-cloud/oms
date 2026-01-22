@@ -22,13 +22,7 @@ License: Apache-2.0
 License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt/v0.2.8/auth/oauth2adapt/LICENSE
  
 ----------
-Module: cloud.google.com/go/compute/apiv1
-Version: v1.53.0
-License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.53.0/compute/apiv1/license_codes_client.go
- 
-----------
-Module: cloud.google.com/go/compute/internal
+Module: cloud.google.com/go/compute
 Version: v1.53.0
 License: Apache-2.0
 License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.53.0/compute/LICENSE
@@ -64,10 +58,22 @@ License: Apache-2.0
 License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.9.7/serviceusage/LICENSE
  
 ----------
-Module: github.com/blang/semver
-Version: v3.5.1
+Module: code.gitea.io/sdk/gitea
+Version: v0.22.1
 License: MIT
-License URL: https://github.com/blang/semver/blob/v3.5.1/LICENSE
+License URL: https://gitea.com/gitea/go-sdk/src/tag/gitea/v0.22.1/gitea/LICENSE
+ 
+----------
+Module: github.com/42wim/httpsig
+Version: v1.2.3
+License: BSD-3-Clause
+License URL: https://github.com/42wim/httpsig/blob/v1.2.3/LICENSE
+ 
+----------
+Module: github.com/Masterminds/semver/v3
+Version: v3.4.0
+License: MIT
+License URL: https://github.com/Masterminds/semver/blob/v3.4.0/LICENSE.txt
  
 ----------
 Module: github.com/cespare/xxhash/v2
@@ -89,9 +95,9 @@ License URL: https://github.com/clipperhouse/uax29/blob/v2.3.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go/pkg/io
-Version: v0.15.1
+Version: v0.15.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.15.1/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.15.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -106,6 +112,12 @@ License: MIT
 License URL: https://github.com/cpuguy83/go-md2man/blob/v2.0.7/LICENSE.md
  
 ----------
+Module: github.com/creativeprojects/go-selfupdate
+Version: v1.5.2
+License: MIT
+License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.5.2/LICENSE
+ 
+----------
 Module: github.com/davecgh/go-spew/spew
 Version: v1.1.2-0.20180830191138-d8f796af33cc
 License: ISC
@@ -116,6 +128,12 @@ Module: github.com/felixge/httpsnoop
 Version: v1.0.4
 License: MIT
 License URL: https://github.com/felixge/httpsnoop/blob/v1.0.4/LICENSE.txt
+ 
+----------
+Module: github.com/go-fed/httpsig
+Version: v1.1.0
+License: BSD-3-Clause
+License URL: https://github.com/go-fed/httpsig/blob/v1.1.0/LICENSE
  
 ----------
 Module: github.com/go-logr/logr
@@ -130,10 +148,10 @@ License: Apache-2.0
 License URL: https://github.com/go-logr/stdr/blob/v1.2.2/LICENSE
  
 ----------
-Module: github.com/google/go-github/v30/github
-Version: v30.1.0
+Module: github.com/google/go-github/v74/github
+Version: v74.0.0
 License: BSD-3-Clause
-License URL: https://github.com/google/go-github/blob/v30.1.0/LICENSE
+License URL: https://github.com/google/go-github/blob/v74.0.0/LICENSE
  
 ----------
 Module: github.com/google/go-querystring/query
@@ -166,22 +184,22 @@ License: BSD-3-Clause
 License URL: https://github.com/googleapis/gax-go/blob/v2.16.0/v2/LICENSE
  
 ----------
-Module: github.com/inconshreveable/go-update
-Version: v0.0.0-20160112193335-8152e7eb6ccf
-License: Apache-2.0
-License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/LICENSE
+Module: github.com/hashicorp/go-cleanhttp
+Version: v0.5.2
+License: MPL-2.0
+License URL: https://github.com/hashicorp/go-cleanhttp/blob/v0.5.2/LICENSE
  
 ----------
-Module: github.com/inconshreveable/go-update/internal/binarydist
-Version: v0.0.0-20160112193335-8152e7eb6ccf
-License: MIT
-License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/internal/binarydist/License
+Module: github.com/hashicorp/go-retryablehttp
+Version: v0.7.8
+License: MPL-2.0
+License URL: https://github.com/hashicorp/go-retryablehttp/blob/v0.7.8/LICENSE
  
 ----------
-Module: github.com/inconshreveable/go-update/internal/osext
-Version: v0.0.0-20160112193335-8152e7eb6ccf
-License: BSD-3-Clause
-License URL: https://github.com/inconshreveable/go-update/blob/8152e7eb6ccf/internal/osext/LICENSE
+Module: github.com/hashicorp/go-version
+Version: v1.8.0
+License: MPL-2.0
+License URL: https://github.com/hashicorp/go-version/blob/v1.8.0/LICENSE
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
@@ -220,12 +238,6 @@ License: BSD-3-Clause
 License URL: https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE
  
 ----------
-Module: github.com/rhysd/go-github-selfupdate/selfupdate
-Version: v1.2.3
-License: MIT
-License URL: https://github.com/rhysd/go-github-selfupdate/blob/v1.2.3/LICENSE
- 
-----------
 Module: github.com/russross/blackfriday/v2
 Version: v2.1.0
 License: BSD-2-Clause
@@ -256,16 +268,16 @@ License: MIT
 License URL: https://github.com/stretchr/testify/blob/v1.11.1/LICENSE
  
 ----------
-Module: github.com/tcnksm/go-gitconfig
-Version: v0.1.2
-License: MIT
-License URL: https://github.com/tcnksm/go-gitconfig/blob/v0.1.2/LICENSE
- 
-----------
 Module: github.com/ulikunitz/xz
 Version: v0.5.15
 License: BSD-3-Clause
 License URL: https://github.com/ulikunitz/xz/blob/v0.5.15/LICENSE
+ 
+----------
+Module: gitlab.com/gitlab-org/api/client-go
+Version: v1.11.0
+License: Apache-2.0
+License URL: https://gitlab.com/gitlab-org/api/client-go/-/blob/v1.11.0/LICENSE
  
 ----------
 Module: go.opentelemetry.io/auto/sdk
@@ -280,9 +292,21 @@ License: Apache-2.0
 License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/google.golang.org/grpc/otelgrpc/v0.64.0/instrumentation/google.golang.org/grpc/otelgrpc/LICENSE
  
 ----------
+Module: go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc
+Version: v0.64.0
+License: BSD-3-Clause
+License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/google.golang.org/grpc/otelgrpc/v0.64.0/instrumentation/google.golang.org/grpc/otelgrpc/LICENSE
+ 
+----------
 Module: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
 Version: v0.64.0
 License: Apache-2.0
+License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/net/http/otelhttp/v0.64.0/instrumentation/net/http/otelhttp/LICENSE
+ 
+----------
+Module: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
+Version: v0.64.0
+License: BSD-3-Clause
 License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/instrumentation/net/http/otelhttp/v0.64.0/instrumentation/net/http/otelhttp/LICENSE
  
 ----------
@@ -292,15 +316,33 @@ License: Apache-2.0
 License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.39.0/LICENSE
  
 ----------
+Module: go.opentelemetry.io/otel
+Version: v1.39.0
+License: BSD-3-Clause
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.39.0/LICENSE
+ 
+----------
 Module: go.opentelemetry.io/otel/metric
 Version: v1.39.0
 License: Apache-2.0
 License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.39.0/metric/LICENSE
  
 ----------
+Module: go.opentelemetry.io/otel/metric
+Version: v1.39.0
+License: BSD-3-Clause
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.39.0/metric/LICENSE
+ 
+----------
 Module: go.opentelemetry.io/otel/trace
 Version: v1.39.0
 License: Apache-2.0
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.39.0/trace/LICENSE
+ 
+----------
+Module: go.opentelemetry.io/otel/trace
+Version: v1.39.0
+License: BSD-3-Clause
 License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.39.0/trace/LICENSE
  
 ----------
