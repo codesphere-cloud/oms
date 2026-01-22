@@ -331,7 +331,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	localRegistryServer := b.env.PostgreSQLNode.InternalIP + ":5000"
 
 	// Figure out if registry is already running
-	checkCommand := `test "$(docker ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
+	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
 	err := b.env.PostgreSQLNode.RunSSHCommand(&b.env.Jumpbox, b.NodeManager, "root", checkCommand)
 	if err == nil && b.InstallConfig.Registry != nil && b.InstallConfig.Registry.Server == localRegistryServer &&
 		b.InstallConfig.Registry.Username != "" && b.InstallConfig.Registry.Password != "" {
