@@ -473,14 +473,30 @@ func (n *Node) WaitForSSH(jumpbox *Node, nm *NodeManager, timeout time.Duration)
 }
 
 func (n *Node) HasInotifyWatchesConfigured(jumpbox *Node, nm *NodeManager) bool {
-	checkCommand := "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1"
+	return n.HasSysctlLine(jumpbox, "fs.inotify.max_user_watches=1048576", nm)
+}
+
+func (n *Node) ConfigureInotifyWatches(jumpbox *Node, nm *NodeManager) error {
+	return n.ConfigureSysctlLine(jumpbox, "fs.inotify.max_user_watches=1048576", nm)
+}
+
+func (n *Node) HasMemoryMapConfigured(jumpbox *Node, nm *NodeManager) bool {
+	return n.HasSysctlLine(jumpbox, "vm.max_map_count=262144", nm)
+}
+
+func (n *Node) ConfigureMemoryMap(jumpbox *Node, nm *NodeManager) error {
+	return n.ConfigureSysctlLine(jumpbox, "vm.max_map_count=262144", nm)
+}
+
+func (n *Node) HasSysctlLine(jumpbox *Node, line string, nm *NodeManager) bool {
+	checkCommand := fmt.Sprintf("sudo grep -E '^%s' /etc/sysctl.conf >/dev/null 2>&1", line)
 	err := n.RunSSHCommand(jumpbox, nm, "root", checkCommand)
 	return err == nil
 }
 
-func (n *Node) ConfigureInotifyWatches(jumpbox *Node, nm *NodeManager) error {
+func (n *Node) ConfigureSysctlLine(jumpbox *Node, line string, nm *NodeManager) error {
 	cmds := []string{
-		"echo 'fs.inotify.max_user_watches=1048576' | sudo tee -a /etc/sysctl.conf",
+		fmt.Sprintf("echo '%s' | sudo tee -a /etc/sysctl.conf", line),
 		"sudo sysctl -p",
 	}
 	for _, cmd := range cmds {
