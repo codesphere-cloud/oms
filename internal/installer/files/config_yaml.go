@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yaml/go-yaml"
+	"go.yaml.in/yaml/v3"
 )
 
 // Vault
@@ -42,7 +42,7 @@ type SecretFields struct {
 type RootConfig struct {
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
-	Registry               RegistryConfig                `yaml:"registry,omitempty"`
+	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
 	Ceph                   CephConfig                    `yaml:"ceph"`
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
@@ -268,13 +268,56 @@ type ImageConfig struct {
 }
 
 type FlavorConfig struct {
+	// Image can be a referenced image or a plain string
 	Image ImageRef    `yaml:"image"`
 	Pool  map[int]int `yaml:"pool"`
 }
 
 type ImageRef struct {
-	BomRef     string `yaml:"bomRef"`
-	Dockerfile string `yaml:"dockerfile"`
+	BomRef     string `yaml:"bomRef,omitempty"`
+	Dockerfile string `yaml:"dockerfile,omitempty"`
+	// ImageName Contains the image name when it's just a plain string
+	ImageName string `yaml:"-"`
+}
+
+// Type alias to avoid recursion in yaml handling
+type imageRefAlias ImageRef
+
+// UnmarshalYAML implements custom unmarshaling to support both string and object formats
+func (i *ImageRef) UnmarshalYAML(node *yaml.Node) error {
+	// Try to unmarshal as a plain string first
+	var imageStr string
+	if err := node.Decode(&imageStr); err == nil {
+		i.ImageName = imageStr
+		return nil
+	}
+
+	// If that fails, unmarshal as a struct with BomRef/Dockerfile
+	var ref imageRefAlias
+	if err := node.Decode(&ref); err != nil {
+		return err
+	}
+	i.BomRef = ref.BomRef
+	i.Dockerfile = ref.Dockerfile
+	return nil
+}
+
+// MarshalYAML implements custom marshaling
+func (i ImageRef) MarshalYAML() (interface{}, error) {
+	// If it's a plain string, marshal as string
+	if i.ImageName != "" {
+		return i.ImageName, nil
+	}
+	// Otherwise, marshal as object
+	return imageRefAlias(i), nil
+}
+
+// GetImageReference returns the actual image reference
+func (i *ImageRef) GetImageReference() string {
+	if i.ImageName != "" {
+		return i.ImageName
+	}
+	return i.BomRef
 }
 
 type PlansConfig struct {
@@ -398,6 +441,14 @@ func (c *RootConfig) Marshal() ([]byte, error) {
 // Unmarshal deserializes YAML data into the RootConfig
 func (c *RootConfig) Unmarshal(data []byte) error {
 	return yaml.Unmarshal(data, c)
+}
+
+func NewRootConfig() RootConfig {
+	return RootConfig{
+		Registry:               &RegistryConfig{},
+		MetalLB:                &MetalLBConfig{},
+		ManagedServiceBackends: &ManagedServiceBackendsConfig{},
+	}
 }
 
 func (c *RootConfig) ExtractBomRefs() []string {

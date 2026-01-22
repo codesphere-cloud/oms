@@ -138,7 +138,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			c.Opts.Config = "config-without-registry.yaml"
 			configWithoutRegistry := files.RootConfig{
-				Registry: files.RegistryConfig{
+				Registry: &files.RegistryConfig{
 					// Empty server
 				},
 				Codesphere: files.CodesphereConfig{
@@ -174,7 +174,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			c.Opts.Config = "config-without-dockerfile.yaml"
 			configWithoutDockerfile := files.RootConfig{
-				Registry: files.RegistryConfig{
+				Registry: &files.RegistryConfig{
 					Server: "registry.example.com",
 				},
 				Codesphere: files.CodesphereConfig{
@@ -211,7 +211,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			c.Opts.Config = "config-with-dockerfile.yaml"
 			configWithDockerfile := files.RootConfig{
-				Registry: files.RegistryConfig{
+				Registry: &files.RegistryConfig{
 					Server: "registry.example.com",
 				},
 				Codesphere: files.CodesphereConfig{
@@ -250,7 +250,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			c.Opts.Config = "config-with-dockerfile.yaml"
 			configWithDockerfile := files.RootConfig{
-				Registry: files.RegistryConfig{
+				Registry: &files.RegistryConfig{
 					Server: "registry.example.com",
 				},
 				Codesphere: files.CodesphereConfig{
@@ -290,7 +290,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			c.Opts.Config = "config-with-dockerfile.yaml"
 			configWithDockerfile := files.RootConfig{
-				Registry: files.RegistryConfig{
+				Registry: &files.RegistryConfig{
 					Server: "registry.example.com",
 				},
 				Codesphere: files.CodesphereConfig{
@@ -329,7 +329,7 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			c.Opts.Config = "config-with-multiple-images.yaml"
 			configWithMultipleImages := files.RootConfig{
-				Registry: files.RegistryConfig{
+				Registry: &files.RegistryConfig{
 					Server: "registry.example.com",
 				},
 				Codesphere: files.CodesphereConfig{

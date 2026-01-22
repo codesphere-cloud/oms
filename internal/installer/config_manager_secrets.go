@@ -5,25 +5,27 @@ package installer
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
 func (g *InstallConfig) GenerateSecrets() error {
-	fmt.Println("Generating domain authentication keys...")
+	log.Println("Generating domain authentication keys...")
+
 	var err error
 	g.Config.Codesphere.DomainAuthPublicKey, g.Config.Codesphere.DomainAuthPrivateKey, err = GenerateECDSAKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to generate domain auth keys: %w", err)
 	}
 
-	fmt.Println("Generating ingress CA certificate...")
+	log.Println("Generating ingress CA certificate...")
 	g.Config.Cluster.IngressCAKey, g.Config.Cluster.Certificates.CA.CertPem, err = GenerateCA("Cluster Ingress CA", "DE", "Karlsruhe", "Codesphere")
 	if err != nil {
 		return fmt.Errorf("failed to generate ingress CA: %w", err)
 	}
 
-	fmt.Println("Generating Ceph SSH keys...")
+	log.Println("Generating Ceph SSH keys...")
 	g.Config.Ceph.SshPrivateKey, g.Config.Ceph.CephAdmSSHKey.PublicKey, err = GenerateSSHKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to generate Ceph SSH keys: %w", err)
@@ -39,7 +41,8 @@ func (g *InstallConfig) GenerateSecrets() error {
 }
 
 func (g *InstallConfig) generatePostgresSecrets(config *files.RootConfig) error {
-	fmt.Println("Generating PostgreSQL certificates and passwords...")
+	log.Println("Generating PostgreSQL certificates and passwords...")
+
 	var err error
 	config.Postgres.CaCertPrivateKey, config.Postgres.CACertPem, err = GenerateCA("PostgreSQL CA", "DE", "Karlsruhe", "Codesphere")
 	if err != nil {

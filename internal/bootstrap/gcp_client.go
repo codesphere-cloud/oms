@@ -151,12 +151,16 @@ func (c *RealGCPClient) EnableAPIs(ctx context.Context, projectID string, apis [
 	for _, api := range apis {
 		serviceName := fmt.Sprintf("projects/%s/services/%s", projectID, api)
 		wg.Add(1)
+
 		go func(serviceName, api string) {
 			defer wg.Done()
-			log.Printf("Enabling API %s\n", api)
+
+			log.Printf("Enabling API %s", api)
+
 			op, err := client.EnableService(ctx, &serviceusagepb.EnableServiceRequest{Name: serviceName})
 			if status.Code(err) == codes.AlreadyExists {
-				log.Printf("API %s already enabled\n", api)
+				log.Printf("API %s already enabled", api)
+
 				return
 			}
 			if err != nil {
@@ -165,9 +169,11 @@ func (c *RealGCPClient) EnableAPIs(ctx context.Context, projectID string, apis [
 			if _, err := op.Wait(ctx); err != nil {
 				errCh <- fmt.Errorf("failed to enable API %s: %w", api, err)
 			}
-			log.Printf("API %s enabled\n", api)
+
+			log.Printf("API %s enabled", api)
 		}(serviceName, api)
 	}
+
 	wg.Wait()
 	close(errCh)
 	errStr := ""
@@ -186,6 +192,7 @@ func (c *RealGCPClient) CreateArtifactRegistry(ctx context.Context, projectID, r
 		return nil, err
 	}
 	defer util.IgnoreError(client.Close)
+
 	parent := fmt.Sprintf("projects/%s/locations/%s", projectID, region)
 	repoReq := &artifactpb.CreateRepositoryRequest{
 		Parent:       parent,
@@ -195,17 +202,23 @@ func (c *RealGCPClient) CreateArtifactRegistry(ctx context.Context, projectID, r
 			Description: "Codesphere managed registry",
 		},
 	}
+
 	op, err := client.CreateRepository(ctx, repoReq)
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return nil, err
 	}
-	var repo *artifactpb.Repository
-	if err == nil {
-		repo, err = op.Wait(ctx)
-		if err != nil {
-			return nil, err
-		}
+
+	_, err = op.Wait(ctx)
+	if err != nil {
+		return nil, err
 	}
+
+	// get repo again to ensure all infos are stored, else e.g. uri would be missing
+	repo, err := c.GetArtifactRegistry(ctx, projectID, region, repoName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get newly created artifact registry: %w", err)
+	}
+
 	return repo, nil
 }
 
@@ -368,7 +381,8 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 			return fmt.Errorf("failed to wait for router creation: %w", err)
 		}
 	}
-	fmt.Printf("Router %s ensured\n", routerName)
+
+	log.Printf("Router %s ensured", routerName)
 
 	// Create NAT Gateway
 	natsClient, err := compute.NewRoutersRESTClient(ctx)
@@ -399,7 +413,9 @@ func (c *RealGCPClient) CreateVPC(ctx context.Context, projectID, region, networ
 	if err != nil && !isAlreadyExistsError(err) {
 		return fmt.Errorf("failed to create NAT gateway: %w", err)
 	}
-	fmt.Printf("NAT gateway %s ensured\n", natName)
+
+	log.Printf("NAT gateway %s ensured", natName)
+
 	return nil
 }
 

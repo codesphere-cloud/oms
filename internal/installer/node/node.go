@@ -26,70 +26,102 @@ type Node struct {
 }
 
 type NodeManager struct {
-	FileIO  util.FileIO
-	KeyPath string
+	FileIO       util.FileIO
+	KeyPath      string
+	cachedSigner ssh.Signer // cached signer to avoid repeated passphrase prompts
 }
 
 // getAuthMethods constructs a slice of ssh.AuthMethod, prioritizing the SSH agent.
 func (n *NodeManager) getAuthMethods() ([]ssh.AuthMethod, error) {
-	var authMethods []ssh.AuthMethod
+	var signers []ssh.Signer
 
+	// 1. Get Agent Signers
 	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
-		// Connect to the SSH agent's socket
-		conn, err := net.Dial("unix", authSocket)
-		if err == nil {
-			// Create an Agent client and use it for authentication
+		if conn, err := net.Dial("unix", authSocket); err == nil {
 			agentClient := agent.NewClient(conn)
-			authMethods = append(authMethods, ssh.PublicKeysCallback(agentClient.Signers))
-			return authMethods, nil
+			if s, err := agentClient.Signers(); err == nil {
+				signers = append(signers, s...)
+			}
 		}
-		fmt.Printf("Could not connect to SSH Agent (%s): %v\n", authSocket, err)
 	}
 
+	// 2. Add Private Key (File) if needed
 	if n.KeyPath != "" {
-		fmt.Println("Falling back to private key file authentication.")
+		shouldLoad := true
 
-		// This logic is copied from the previous answer
-		key, err := n.FileIO.ReadFile(n.KeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
+		// Use cached signer if available
+		if n.cachedSigner != nil {
+			signers = append(signers, n.cachedSigner)
+			shouldLoad = false
 		}
 
-		signer, err := ssh.ParsePrivateKey(key)
-		if err == nil {
-			authMethods = append(authMethods, ssh.PublicKeys(signer))
-			return authMethods, nil
+		// Check if key is already in agent (requires .pub file)
+		if shouldLoad && len(signers) > 0 {
+			if pubBytes, err := n.FileIO.ReadFile(n.KeyPath + ".pub"); err == nil {
+				if targetPub, _, _, _, err := ssh.ParseAuthorizedKey(pubBytes); err == nil {
+					targetMarshaled := string(targetPub.Marshal())
+					for _, s := range signers {
+						if string(s.PublicKey().Marshal()) == targetMarshaled {
+							shouldLoad = false
+							break
+						}
+					}
+				}
+			}
 		}
-		if _, ok := err.(*ssh.PassphraseMissingError); ok {
-			// Key is encrypted, prompt for passphrase
-			fmt.Printf("Enter passphrase for key '%s': ", n.KeyPath)
-			passphraseBytes, err := term.ReadPassword(int(syscall.Stdin))
-			fmt.Println()
 
-			if err != nil {
-				return nil, fmt.Errorf("failed to read passphrase: %v", err)
+		// Else load from file with passphrase prompt if needed
+		if shouldLoad {
+			if signer, err := n.loadPrivateKey(); err == nil {
+				n.cachedSigner = signer
+				signers = append(signers, signer)
+			} else {
+				log.Printf("Warning: failed to load private key: %v\n", err)
 			}
-
-			signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphraseBytes)
-			// Clear passphrase from memory
-			for i := range passphraseBytes {
-				passphraseBytes[i] = 0
-			}
-
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
-			}
-			authMethods = append(authMethods, ssh.PublicKeys(signer))
-			return authMethods, nil
 		}
-		return nil, fmt.Errorf("failed to parse private key: %v", err)
 	}
 
-	if len(authMethods) == 0 {
+	if len(signers) == 0 {
 		return nil, fmt.Errorf("no valid authentication methods configured. Check SSH_AUTH_SOCK and private key path")
 	}
 
-	return authMethods, nil
+	return []ssh.AuthMethod{ssh.PublicKeys(signers...)}, nil
+}
+
+// loadPrivateKey reads and parses the private key, prompting for passphrase if needed.
+func (n *NodeManager) loadPrivateKey() (ssh.Signer, error) {
+	key, err := n.FileIO.ReadFile(n.KeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
+	}
+
+	signer, err := ssh.ParsePrivateKey(key)
+	if err == nil {
+		return signer, nil
+	}
+
+	if _, ok := err.(*ssh.PassphraseMissingError); !ok {
+		return nil, fmt.Errorf("failed to parse private key: %v", err)
+	}
+
+	// Key is encrypted, prompt for passphrase
+	log.Printf("Enter passphrase for key '%s': ", n.KeyPath)
+	passphrase, err := term.ReadPassword(int(syscall.Stdin))
+	log.Println()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read passphrase: %v", err)
+	}
+
+	signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphrase)
+	// Clear passphrase from memory
+	for i := range passphrase {
+		passphrase[i] = 0
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
+	}
+
+	return signer, nil
 }
 
 func (n *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error) {
@@ -114,7 +146,7 @@ func (n *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error)
 
 	// Enable Agent Forwarding on the jumpbox connection
 	if err := n.forwardAgent(jumpboxClient, nil); err != nil {
-		fmt.Printf(" Warning: Agent forwarding setup failed on jumpbox: %v\n", err)
+		log.Printf(" Warning: Agent forwarding setup failed on jumpbox: %v\n", err)
 	}
 
 	return jumpboxClient, nil
@@ -167,7 +199,7 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 	err = n.forwardAgent(client, session)
 
 	if err != nil {
-		fmt.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
+		log.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
 	}
 
 	session.Stdout = os.Stdout
@@ -186,7 +218,6 @@ func (n *NodeManager) RunSSHCommand(jumpboxIp string, ip string, username string
 }
 
 func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
-
 	authMethods, err := n.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get authentication methods: %w", err)
@@ -418,7 +449,23 @@ func (n *Node) WaitForSSH(jumpbox *Node, nm *NodeManager, timeout time.Duration)
 }
 
 func (n *Node) HasInotifyWatchesConfigured(jumpbox *Node, nm *NodeManager) bool {
-	checkCommand := "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1"
+	return n.HasSysctlLine(jumpbox, "fs.inotify.max_user_watches=1048576", nm)
+}
+
+func (n *Node) ConfigureInotifyWatches(jumpbox *Node, nm *NodeManager) error {
+	return n.ConfigureSysctlLine(jumpbox, "fs.inotify.max_user_watches=1048576", nm)
+}
+
+func (n *Node) HasMemoryMapConfigured(jumpbox *Node, nm *NodeManager) bool {
+	return n.HasSysctlLine(jumpbox, "vm.max_map_count=262144", nm)
+}
+
+func (n *Node) ConfigureMemoryMap(jumpbox *Node, nm *NodeManager) error {
+	return n.ConfigureSysctlLine(jumpbox, "vm.max_map_count=262144", nm)
+}
+
+func (n *Node) HasSysctlLine(jumpbox *Node, line string, nm *NodeManager) bool {
+	checkCommand := fmt.Sprintf("sudo grep -E '^%s' /etc/sysctl.conf >/dev/null 2>&1", line)
 	err := n.RunSSHCommand(jumpbox, nm, "root", checkCommand)
 	if err != nil {
 		// If the command returns a NON-zero exit status, it means the setting is not configured
@@ -427,9 +474,9 @@ func (n *Node) HasInotifyWatchesConfigured(jumpbox *Node, nm *NodeManager) bool 
 	return true
 }
 
-func (n *Node) ConfigureInotifyWatches(jumpbox *Node, nm *NodeManager) error {
+func (n *Node) ConfigureSysctlLine(jumpbox *Node, line string, nm *NodeManager) error {
 	cmds := []string{
-		"echo 'fs.inotify.max_user_watches=1048576' | sudo tee -a /etc/sysctl.conf",
+		fmt.Sprintf("echo '%s' | sudo tee -a /etc/sysctl.conf", line),
 		"sudo sysctl -p",
 	}
 	for _, cmd := range cmds {
