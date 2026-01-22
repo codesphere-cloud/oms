@@ -190,7 +190,8 @@ var _ = Describe("Node", func() {
 
 				client, err := nm.GetClient("", "10.0.0.1", "root")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to read private key file"))
+				// With caching, key loading failures log warnings and result in no valid auth methods
+				Expect(err.Error()).To(ContainSubstring("no valid authentication methods"))
 				Expect(client).To(BeNil())
 			})
 
@@ -211,7 +212,8 @@ var _ = Describe("Node", func() {
 
 				client, err := nm.GetClient("", "10.0.0.1", "root")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to parse private key"))
+				// With caching, key parsing failures log warnings and result in no valid auth methods
+				Expect(err.Error()).To(ContainSubstring("no valid authentication methods"))
 				Expect(client).To(BeNil())
 			})
 		})
@@ -228,6 +230,8 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 
 				nm.KeyPath = "/path/to/key"
 				mockFileWriter.EXPECT().ReadFile("/path/to/key").Return(privateKey, nil).Maybe()
+				// Mock the .pub file read for deduplication check
+				mockFileWriter.EXPECT().ReadFile("/path/to/key.pub").Return(nil, errors.New("file not found")).Maybe()
 
 				client, err := nm.GetClient("", "192.0.2.1", "root")
 				Expect(err).To(HaveOccurred())
@@ -251,6 +255,8 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 
 				nm.KeyPath = "/path/to/key"
 				mockFileWriter.EXPECT().ReadFile("/path/to/key").Return(privateKey, nil).Maybe()
+				// Mock the .pub file read for deduplication check
+				mockFileWriter.EXPECT().ReadFile("/path/to/key.pub").Return(nil, errors.New("file not found")).Maybe()
 
 				client, err := nm.GetClient("192.0.2.1", "192.0.2.2", "root")
 				Expect(err).To(HaveOccurred())
