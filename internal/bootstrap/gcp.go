@@ -27,6 +27,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type RegistryType string
+
+const (
+	RegistryTypeLocalContainer   RegistryType = "local-container"
+	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
+)
+
 type GCPBootstrapper struct {
 	ctx           context.Context
 	env           *CodesphereEnvironment
@@ -38,20 +45,21 @@ type GCPBootstrapper struct {
 }
 
 type CodesphereEnvironment struct {
-	ProjectID                string      `json:"project_id"`
-	ProjectName              string      `json:"project_name"`
-	DNSProjectID             string      `json:"dns_project_id"`
-	PostgreSQLNode           node.Node   `json:"postgresql_node"`
-	ControlPlaneNodes        []node.Node `json:"control_plane_nodes"`
-	CephNodes                []node.Node `json:"ceph_nodes"`
-	Jumpbox                  node.Node   `json:"jumpbox"`
-	ContainerRegistryURL     string      `json:"container_registry_url"`
-	ExistingConfigUsed       bool        `json:"existing_config_used"`
-	InstallCodesphereVersion string      `json:"install_codesphere_version"`
-	Preemptible              bool        `json:"preemptible"`
-	WriteConfig              bool        `json:"write_config"`
-	GatewayIP                string      `json:"gateway_ip"`
-	PublicGatewayIP          string      `json:"public_gateway_ip"`
+	ProjectID                string       `json:"project_id"`
+	ProjectName              string       `json:"project_name"`
+	DNSProjectID             string       `json:"dns_project_id"`
+	PostgreSQLNode           node.Node    `json:"postgresql_node"`
+	ControlPlaneNodes        []node.Node  `json:"control_plane_nodes"`
+	CephNodes                []node.Node  `json:"ceph_nodes"`
+	Jumpbox                  node.Node    `json:"jumpbox"`
+	ContainerRegistryURL     string       `json:"container_registry_url"`
+	ExistingConfigUsed       bool         `json:"existing_config_used"`
+	InstallCodesphereVersion string       `json:"install_codesphere_version"`
+	Preemptible              bool         `json:"preemptible"`
+	WriteConfig              bool         `json:"write_config"`
+	GatewayIP                string       `json:"gateway_ip"`
+	PublicGatewayIP          string       `json:"public_gateway_ip"`
+	RegistryType             RegistryType `json:"registry_type"`
 
 	ProjectDisplayName    string
 	BillingAccount        string
@@ -136,9 +144,11 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironment, error) {
 		return b.env, fmt.Errorf("failed to enable required APIs: %w", err)
 	}
 
-	err = b.EnsureArtifactRegistry()
-	if err != nil {
-		return b.env, fmt.Errorf("failed to ensure artifact registry: %w", err)
+	if b.env.RegistryType == RegistryTypeArtifactRegistry {
+		err = b.EnsureArtifactRegistry()
+		if err != nil {
+			return b.env, fmt.Errorf("failed to ensure artifact registry: %w", err)
+		}
 	}
 
 	err = b.EnsureServiceAccounts()
@@ -184,6 +194,13 @@ func (b *GCPBootstrapper) Bootstrap() (*CodesphereEnvironment, error) {
 	err = b.EnsureHostsConfigured()
 	if err != nil {
 		return b.env, fmt.Errorf("failed to ensure hosts are configured: %w", err)
+	}
+
+	if b.env.RegistryType == RegistryTypeLocalContainer {
+		err = b.EnsureLocalContainerRegistry()
+		if err != nil {
+			return b.env, fmt.Errorf("failed to ensure local container registry: %w", err)
+		}
 	}
 
 	if b.env.WriteConfig {
@@ -309,39 +326,104 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	return nil
 }
 
+// Installs a docker registry on the postgres node to speed up image loading time
+func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
+	localRegistryServer := b.env.PostgreSQLNode.InternalIP + ":5000"
+
+	// Figure out if registry is already running
+	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
+	err := b.env.PostgreSQLNode.RunSSHCommand(&b.env.Jumpbox, b.NodeManager, "root", checkCommand)
+	if err == nil && b.InstallConfig.Registry != nil && b.InstallConfig.Registry.Server == localRegistryServer &&
+		b.InstallConfig.Registry.Username != "" && b.InstallConfig.Registry.Password != "" {
+		log.Println("Local container registry already running on postgres node")
+		return nil
+	}
+
+	log.Println("Installing registry")
+
+	b.InstallConfig.Registry.Server = localRegistryServer
+	b.InstallConfig.Registry.Username = "custom-registry"
+	b.InstallConfig.Registry.Password = shortuuid.New()
+
+	commands := []string{
+		"apt-get update",
+		"apt-get install -y podman apache2-utils",
+		"htpasswd -bBc /root/registry.password " + b.InstallConfig.Registry.Username + " " + b.InstallConfig.Registry.Password,
+		"openssl req -newkey rsa:4096 -nodes -sha256 -keyout /root/registry.key -x509 -days 365 -out /root/registry.crt -subj \"/C=DE/ST=BW/L=Karlsruhe/O=Codesphere/CN=" + b.env.PostgreSQLNode.InternalIP + "\" -addext \"subjectAltName = DNS:postgres,IP:" + b.env.PostgreSQLNode.InternalIP + "\"",
+		"podman rm -f registry || true",
+		`podman run -d \
+		--restart=always --name registry --net=host\
+		--env REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
+		--env REGISTRY_AUTH=htpasswd \
+		--env REGISTRY_AUTH_HTPASSWD_REALM='Registry Realm' \
+		--env REGISTRY_AUTH_HTPASSWD_PATH=/auth/registry.password \
+		-v /root/registry.password:/auth/registry.password \
+		--env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
+		--env REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
+		-v /root/registry.crt:/certs/registry.crt \
+		-v /root/registry.key:/certs/registry.key \
+		registry:2`,
+		`mkdir -p /etc/docker/certs.d/` + b.InstallConfig.Registry.Server,
+		`cp /root/registry.crt /etc/docker/certs.d/` + b.InstallConfig.Registry.Server + `/ca.crt`,
+	}
+	for _, cmd := range commands {
+		err := b.env.PostgreSQLNode.RunSSHCommand(&b.env.Jumpbox, b.NodeManager, "root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to run command on postgres node: %w", err)
+		}
+	}
+
+	allNodes := append(b.env.ControlPlaneNodes, b.env.CephNodes...)
+	for _, node := range allNodes {
+		err := b.env.PostgreSQLNode.RunSSHCommand(&b.env.Jumpbox, b.NodeManager, "root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.InternalIP+":/usr/local/share/ca-certificates/registry.crt")
+		if err != nil {
+			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.InternalIP, err)
+		}
+		err = node.RunSSHCommand(&b.env.Jumpbox, b.NodeManager, "root", "update-ca-certificates")
+		if err != nil {
+			return fmt.Errorf("failed to update CA certificates on node %s: %w", node.InternalIP, err)
+		}
+		err = node.RunSSHCommand(&b.env.Jumpbox, b.NodeManager, "root", "systemctl restart docker.service || true") // docker is probably not yet installed
+		if err != nil {
+			return fmt.Errorf("failed to restart docker service on node %s: %w", node.InternalIP, err)
+		}
+	}
+
+	return nil
+}
+
 func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 	_, _, err := b.EnsureServiceAccount("cloud-controller")
 	if err != nil {
 		return err
 	}
-	sa, newSa, err := b.EnsureServiceAccount("artifact-registry-writer")
-	if err != nil {
-		return err
-	}
 
-	if !newSa && b.InstallConfig.Registry.Password != "" {
-		return nil
-	}
-
-	for retries := range 5 {
-		privateKey, err := b.GCPClient.CreateServiceAccountKey(b.ctx, b.env.ProjectID, sa)
-
-		if err != nil && status.Code(err) != codes.AlreadyExists {
-			if retries > 3 {
-				return fmt.Errorf("failed to create service account key: %w", err)
-			}
-
-			log.Printf("got response %d trying to create service account key for %s, retrying...", status.Code(err), sa)
-
-			time.Sleep(5 * time.Second)
-			continue
+	if b.env.RegistryType == RegistryTypeArtifactRegistry {
+		sa, newSa, err := b.EnsureServiceAccount("artifact-registry-writer")
+		if err != nil {
+			return err
 		}
 
-		log.Printf("Service account key for %s ensured", sa)
-		b.InstallConfig.Registry.Password = string(privateKey)
-		b.InstallConfig.Registry.Username = "_json_key_base64"
+		if !newSa && b.InstallConfig.Registry.Password != "" {
+			return nil
+		}
 
-		break
+		for retries := range 5 {
+			privateKey, err := b.GCPClient.CreateServiceAccountKey(b.ctx, b.env.ProjectID, sa)
+
+			if err != nil && status.Code(err) != codes.AlreadyExists {
+				if retries > 3 {
+					return fmt.Errorf("failed to create service account key: %w", err)
+				}
+				log.Printf("got response %d trying to create service account key for %s, retrying...", status.Code(err), sa)
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			log.Printf("Service account key for %s ensured", sa)
+			b.InstallConfig.Registry.Password = string(privateKey)
+			b.InstallConfig.Registry.Username = "_json_key_base64"
+			break
+		}
 	}
 
 	return nil
@@ -352,11 +434,16 @@ func (b *GCPBootstrapper) EnsureServiceAccount(name string) (string, bool, error
 }
 
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.GCPClient.AssignIAMRole(b.ctx, b.env.ProjectID, "artifact-registry-writer", "roles/artifactregistry.writer")
+	err := b.GCPClient.AssignIAMRole(b.ctx, b.env.ProjectID, "cloud-controller", "roles/compute.admin")
 	if err != nil {
 		return err
 	}
-	err = b.GCPClient.AssignIAMRole(b.ctx, b.env.ProjectID, "cloud-controller", "roles/compute.admin")
+
+	if b.env.RegistryType != RegistryTypeArtifactRegistry {
+		return nil
+	}
+
+	err = b.GCPClient.AssignIAMRole(b.ctx, b.env.ProjectID, "artifact-registry-writer", "roles/artifactregistry.writer")
 	return err
 }
 
@@ -498,7 +585,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 
 	vmDefs := []VMDef{
 		{"jumpbox", "e2-medium", []string{"jumpbox", "ssh"}, []int64{}, true},
-		{"postgres", "e2-medium", []string{"postgres"}, []int64{50}, true},
+		{"postgres", "e2-standard-8", []string{"postgres"}, []int64{}, true},
 		{"ceph-1", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
 		{"ceph-2", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
 		{"ceph-3", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
@@ -741,7 +828,7 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 	if err != nil {
 		return fmt.Errorf("timed out waiting for SSH service to start on jumpbox: %w", err)
 	}
-	fmt.Printf("SSH service available on jumpbox '%s'\n", b.env.Jumpbox.Name)
+	log.Printf("SSH service available on jumpbox '%s'", b.env.Jumpbox.Name)
 
 	hasRootLogin := b.env.Jumpbox.HasRootLoginEnabled(nil, b.NodeManager)
 	if !hasRootLogin {
