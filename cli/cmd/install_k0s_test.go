@@ -64,14 +64,16 @@ var _ = Describe("InstallK0sCmd", func() {
 
 	Context("InstallK0s method", func() {
 		var (
-			mockPM  *installer.MockPackageManager
-			mockK0s *installer.MockK0sManager
-			tempDir string
+			mockPM     *installer.MockPackageManager
+			mockK0s    *installer.MockK0sManager
+			mockK0sctl *installer.MockK0sctlManager
+			tempDir    string
 		)
 
 		BeforeEach(func() {
 			mockPM = installer.NewMockPackageManager(GinkgoT())
 			mockK0s = installer.NewMockK0sManager(GinkgoT())
+			mockK0sctl = installer.NewMockK0sctlManager(GinkgoT())
 			var err error
 			tempDir, err = os.MkdirTemp("", "install-k0s-test-*")
 			Expect(err).NotTo(HaveOccurred())
@@ -80,6 +82,7 @@ var _ = Describe("InstallK0sCmd", func() {
 		AfterEach(func() {
 			mockPM.AssertExpectations(GinkgoT())
 			mockK0s.AssertExpectations(GinkgoT())
+			mockK0sctl.AssertExpectations(GinkgoT())
 			if tempDir != "" {
 				_ = os.RemoveAll(tempDir)
 			}
@@ -117,7 +120,7 @@ var _ = Describe("InstallK0sCmd", func() {
 		It("fails when install-config file does not exist", func() {
 			c.Opts.InstallConfig = "/nonexistent/install-config.yaml"
 
-			err := c.InstallK0s(mockPM, mockK0s)
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load install-config"))
 		})
@@ -132,12 +135,12 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			c.Opts.InstallConfig = configPath
 
-			err = c.InstallK0s(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("external Kubernetes"))
 		})
 
-		It("successfully installs k0s locally with valid config", func() {
+		It("successfully installs k0s with valid config using k0sctl", func() {
 			config := createTestConfig(true)
 			configPath := filepath.Join(tempDir, "install-config.yaml")
 			configData, err := yaml.Marshal(config)
@@ -147,12 +150,14 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			c.Opts.InstallConfig = configPath
 			c.Opts.Package = "test-package.tar.gz"
+			c.Opts.Version = "v1.30.0+k0s.0"
 			c.Opts.Force = true
 
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0s.EXPECT().Install(mock.Anything, "/test/path/k0s", true, mock.Anything).Return(nil)
+			mockK0sctl.EXPECT().Download("", true, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", true).Return(nil)
 
-			err = c.InstallK0s(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -168,11 +173,11 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Package = ""
 			c.Opts.Version = "v1.29.0+k0s.0"
 
-			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0s.EXPECT().Download("v1.29.0+k0s.0", false, false).Return("/downloaded/k0s", nil)
-			mockK0s.EXPECT().Install(mock.Anything, "/downloaded/k0s", false, mock.Anything).Return(nil)
+			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
-			err = c.InstallK0s(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -187,15 +192,15 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.InstallConfig = configPath
 			c.Opts.Package = ""
 
-			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0s.EXPECT().Download("", false, false).Return("", os.ErrNotExist)
+			mockK0s.EXPECT().GetLatestVersion().Return("v1.30.0+k0s.0", nil)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", false, false).Return("", os.ErrNotExist)
 
-			err = c.InstallK0s(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to download k0s"))
 		})
 
-		It("fails when k0s install fails", func() {
+		It("fails when k0sctl download fails", func() {
 			config := createTestConfig(true)
 			configPath := filepath.Join(tempDir, "install-config.yaml")
 			configData, err := yaml.Marshal(config)
@@ -205,16 +210,17 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			c.Opts.InstallConfig = configPath
 			c.Opts.Package = "test-package.tar.gz"
+			c.Opts.Version = "v1.30.0+k0s.0"
 
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0s.EXPECT().Install(mock.Anything, "/test/path/k0s", false, mock.Anything).Return(os.ErrPermission)
+			mockK0sctl.EXPECT().Download("", false, false).Return("", os.ErrPermission)
 
-			err = c.InstallK0s(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s"))
+			Expect(err.Error()).To(ContainSubstring("failed to download k0sctl"))
 		})
 
-		It("handles remote installation when remote-host is specified", func() {
+		It("fails when k0sctl apply fails", func() {
 			config := createTestConfig(true)
 			configPath := filepath.Join(tempDir, "install-config.yaml")
 			configData, err := yaml.Marshal(config)
@@ -224,151 +230,15 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			c.Opts.InstallConfig = configPath
 			c.Opts.Package = "test-package.tar.gz"
-			c.Opts.RemoteHost = "192.168.1.50"
-			c.Opts.SSHKeyPath = "/path/to/key"
+			c.Opts.Version = "v1.30.0+k0s.0"
 
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("invalid-key-data"), nil).Maybe()
+			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(os.ErrPermission)
 
-			// Remote installation will fail because we can't actually connect,
-			// but we're testing that it attempts remote installation
-			err = c.InstallK0s(mockPM, mockK0s)
+			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-	})
-
-	Context("InstallK0sRemote method", func() {
-		var (
-			config *files.RootConfig
-		)
-
-		BeforeEach(func() {
-			config = &files.RootConfig{
-				Datacenter: files.DatacenterConfig{
-					ID:   1,
-					Name: "test-dc",
-				},
-				Kubernetes: files.KubernetesConfig{
-					ManagedByCodesphere: true,
-					ControlPlanes: []files.K8sNode{
-						{IPAddress: "192.168.1.100"},
-					},
-				},
-			}
-		})
-
-		It("fails when SSH connection cannot be established", func() {
-			c.Opts.RemoteHost = "192.0.2.1" // TEST-NET-1, should fail to connect
-			c.Opts.SSHKeyPath = "/tmp/nonexistent-key"
-
-			mockFileWriter.EXPECT().ReadFile("/tmp/nonexistent-key").Return([]byte("invalid-key-data"), nil).Maybe()
-
-			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-
-		It("fails when SSH key file does not exist", func() {
-			c.Opts.RemoteHost = "192.168.1.50"
-			c.Opts.SSHKeyPath = "/nonexistent/ssh/key"
-
-			mockFileWriter.EXPECT().ReadFile("/nonexistent/ssh/key").Return(nil, os.ErrNotExist).Maybe()
-
-			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-
-		It("fails when SSH key file is invalid", func() {
-			c.Opts.RemoteHost = "192.168.1.50"
-			c.Opts.SSHKeyPath = "/path/to/invalid/key"
-
-			mockFileWriter.EXPECT().ReadFile("/path/to/invalid/key").Return([]byte("not-a-valid-key"), nil).Maybe()
-
-			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-
-		It("uses correct remote host IP for node configuration", func() {
-			c.Opts.RemoteHost = "10.0.0.50"
-			c.Opts.SSHKeyPath = "/path/to/key"
-
-			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
-
-			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-
-		It("passes correct paths to InstallK0s", func() {
-			c.Opts.RemoteHost = "192.168.1.60"
-			c.Opts.SSHKeyPath = "/custom/ssh/key"
-			c.Opts.Force = true
-
-			mockFileWriter.EXPECT().ReadFile("/custom/ssh/key").Return([]byte("ssh-key-data"), nil).Maybe()
-
-			err := c.InstallK0sRemote(config, "/custom/k0s/path", "/custom/config/path")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-
-		It("respects the force flag", func() {
-			c.Opts.RemoteHost = "192.168.1.70"
-			c.Opts.SSHKeyPath = "/path/to/key"
-			c.Opts.Force = true
-
-			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
-
-			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-
-		It("uses remote user from options", func() {
-			c.Opts.RemoteHost = "192.168.1.80"
-			c.Opts.SSHKeyPath = "/path/to/key"
-			c.Opts.RemoteUser = "ubuntu"
-
-			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
-
-			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-
-		It("handles empty remote host", func() {
-			c.Opts.RemoteHost = ""
-			c.Opts.SSHKeyPath = "/path/to/key"
-
-			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
-
-			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-
-		It("handles timeout during SSH connection", func() {
-			c.Opts.RemoteHost = "192.0.2.1" // TEST-NET-1 address
-			c.Opts.SSHKeyPath = "/path/to/key"
-
-			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("-----BEGIN RSA PRIVATE KEY-----\ntest\n-----END RSA PRIVATE KEY-----"), nil).Maybe()
-
-			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
-		})
-
-		It("wraps errors from InstallK0s with context", func() {
-			c.Opts.RemoteHost = "10.0.0.100"
-			c.Opts.SSHKeyPath = "/path/to/key"
-
-			mockFileWriter.EXPECT().ReadFile("/path/to/key").Return([]byte("ssh-key-data"), nil).Maybe()
-
-			err := c.InstallK0sRemote(config, "/path/to/k0s", "/path/to/config")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to install k0s on remote host"))
+			Expect(err.Error()).To(ContainSubstring("failed to apply k0sctl config"))
 		})
 	})
 })

@@ -15,14 +15,11 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
-	"gopkg.in/yaml.v3"
 )
 
 type K0sManager interface {
 	GetLatestVersion() (string, error)
 	Download(version string, force bool, quiet bool) (string, error)
-	Install(configPath string, k0sPath string, force bool, nodeIP string) error
-	Reset(k0sPath string) error
 }
 
 type K0s struct {
@@ -31,31 +28,6 @@ type K0s struct {
 	FileWriter util.FileIO
 	Goos       string
 	Goarch     string
-}
-
-// valid top-level fields in a k0s ClusterConfig.
-// Reference: https://docs.k0sproject.io/stable/configuration/
-var K0sConfigTopLevelKeys = []string{
-	"apiVersion",
-	"kind",
-	"metadata",
-	"spec",
-}
-
-// valid fields in the spec section of a k0s ClusterConfig.
-// Reference: https://docs.k0sproject.io/stable/configuration/
-var K0sConfigSpecKeys = []string{
-	"api",
-	"controllerManager",
-	"scheduler",
-	"extensions",
-	"network",
-	"storage",
-	"telemetry",
-	"images",
-	"konnectivity",
-	"installConfig",
-	"featureGates",
 }
 
 func NewK0s(hw portal.Http, env env.Env, fw util.FileIO) K0sManager {
@@ -127,118 +99,6 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	return k0sPath, nil
 }
 
-func (k *K0s) Install(configPath string, k0sPath string, force bool, nodeIP string) error {
-	if k.Goos != "linux" || k.Goarch != "amd64" {
-		return fmt.Errorf("k0s installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
-	}
-
-	if !k.FileWriter.Exists(k0sPath) {
-		return fmt.Errorf("k0s binary does not exist in '%s', please download first", k0sPath)
-	}
-
-	if force {
-		if err := k.Reset(k0sPath); err != nil {
-			log.Printf("Warning: failed to reset k0s: %v", err)
-		}
-	}
-
-	args := []string{k0sPath, "install", "controller"}
-
-	// If config path is provided, filter it to only include k0s-compatible fields
-	if configPath != "" {
-		filteredConfigPath, err := k.filterConfigForK0s(configPath)
-		if err != nil {
-			log.Printf("Warning: failed to filter config, using original: %v", err)
-			args = append(args, "--config", configPath)
-		} else {
-			args = append(args, "--config", filteredConfigPath)
-			defer func() { _ = os.Remove(filteredConfigPath) }()
-		}
-	} else {
-		args = append(args, "--single")
-	}
-
-	args = append(args, "--enable-worker")
-	args = append(args, "--no-taints")
-
-	if nodeIP != "" {
-		args = append(args, "--kubelet-extra-args", fmt.Sprintf("--node-ip=%s", nodeIP))
-	}
-
-	if force {
-		args = append(args, "--force")
-	}
-
-	err := util.RunCommand("sudo", args, "")
-	if err != nil {
-		return fmt.Errorf("failed to install k0s: %w", err)
-	}
-
-	if configPath != "" {
-		log.Println("k0s installed successfully with provided configuration.")
-	} else {
-		log.Println("k0s installed successfully in single-node mode.")
-	}
-	log.Printf("You can start it using 'sudo %v start'", k0sPath)
-	log.Printf("You can check the status using 'sudo %v status'", k0sPath)
-
-	return nil
-}
-
-func (k *K0s) filterConfigForK0s(configPath string) (string, error) {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read config: %w", err)
-	}
-
-	var config map[string]interface{}
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return "", fmt.Errorf("failed to parse config: %w", err)
-	}
-
-	keysToKeep := make(map[string]bool, len(K0sConfigTopLevelKeys))
-	for _, key := range K0sConfigTopLevelKeys {
-		keysToKeep[key] = true
-	}
-
-	for key := range config {
-		if !keysToKeep[key] {
-			delete(config, key)
-		}
-	}
-
-	if spec, ok := config["spec"].(map[string]interface{}); ok {
-		specKeysToKeep := make(map[string]bool, len(K0sConfigSpecKeys))
-		for _, key := range K0sConfigSpecKeys {
-			specKeysToKeep[key] = true
-		}
-
-		for key := range spec {
-			if !specKeysToKeep[key] {
-				delete(spec, key)
-			}
-		}
-		config["spec"] = spec
-	}
-
-	filteredData, err := yaml.Marshal(config)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal filtered config: %w", err)
-	}
-
-	tmpFile, err := os.CreateTemp("", "k0s-config-*.yaml")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp config: %w", err)
-	}
-	defer func() { _ = tmpFile.Close() }()
-
-	if _, err := tmpFile.Write(filteredData); err != nil {
-		return "", fmt.Errorf("failed to write temp config: %w", err)
-	}
-
-	return tmpFile.Name(), nil
-}
-
 // GetNodeIPAddress finds the IP address of the current node by matching
 // against the control plane IPs in the config
 func GetNodeIPAddress(controlPlanes []string) (string, error) {
@@ -269,27 +129,4 @@ func GetNodeIPAddress(controlPlanes []string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no suitable IP address found")
-}
-
-// Reset tears down an existing k0s installation by executing `k0s reset`.
-// This command removes all k0s-related resources
-func (k *K0s) Reset(k0sPath string) error {
-	if !k.FileWriter.Exists(k0sPath) {
-		return nil
-	}
-
-	log.Println("Resetting existing k0s installation...")
-
-	log.Println("Stopping k0s service if running...")
-	if err := util.RunCommand("sudo", []string{k0sPath, "stop"}, ""); err != nil {
-		log.Printf("Note: k0s stop returned error, try to continue the reset: %v", err)
-	}
-
-	err := util.RunCommand("sudo", []string{k0sPath, "reset"}, "")
-	if err != nil {
-		return fmt.Errorf("failed to reset k0s: %w", err)
-	}
-
-	log.Println("k0s reset completed successfully")
-	return nil
 }

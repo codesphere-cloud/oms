@@ -14,8 +14,6 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
@@ -31,12 +29,12 @@ type InstallK0sCmd struct {
 type InstallK0sOpts struct {
 	*GlobalOptions
 	Version       string
+	K0sctlVersion string
 	Package       string
 	InstallConfig string
 	SSHKeyPath    string
-	RemoteHost    string
-	RemoteUser    string
 	Force         bool
+	NoDownload    bool
 }
 
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
@@ -44,8 +42,9 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	env := c.Env
 	pm := installer.NewPackage(env.GetOmsWorkdir(), c.Opts.Package)
 	k0s := installer.NewK0s(hw, env, c.FileWriter)
+	k0sctl := installer.NewK0sctl(hw, env, c.FileWriter)
 
-	return c.InstallK0s(pm, k0s)
+	return c.InstallK0s(pm, k0s, k0sctl)
 }
 
 func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
@@ -54,20 +53,20 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 			Use:   "k0s",
 			Short: "Install k0s Kubernetes distribution",
 			Long: packageio.Long(`Install k0s either from the package or by downloading it.
-			This will either download the k0s binary directly to the OMS workdir, if not already present, and install it
-			or load the k0s binary from the provided package file and install it.
-			If no version is specified, the latest version will be downloaded.
+			This command uses k0sctl to deploy k0s clusters from a Codesphere install-config.
 			
 			You must provide a Codesphere install-config file, which will:
 			- Generate a k0s configuration from the install-config
-			- Optionally install k0s on remote nodes via SSH`),
+			- Generate a k0sctl configuration for cluster deployment
+			- Deploy k0s to all nodes defined in the install-config using k0sctl`),
 			Example: formatExamplesWithBinary("install k0s", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
-				{Cmd: "--version <version>", Desc: "Version of k0s to install"},
+				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.30.0+k0s.0)"},
+				{Cmd: "--k0sctl-version <version>", Desc: "Version of k0sctl to use (e.g., v0.17.4)"},
 				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from"},
-				{Cmd: "--remote-host <ip>", Desc: "Remote host IP to install k0s on (requires --ssh-key-path)"},
 				{Cmd: "--ssh-key-path <path>", Desc: "SSH private key path for remote installation"},
-				{Cmd: "--force", Desc: "Force new download and installation even if k0s binary exists or is already installed"},
+				{Cmd: "--force", Desc: "Force new download and installation"},
+				{Cmd: "--no-download", Desc: "Skip downloading k0s binary (expects it to be on remote nodes)"},
 			}, "oms-cli"),
 		},
 		Opts:       InstallK0sOpts{GlobalOptions: opts},
@@ -75,15 +74,14 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 		FileWriter: util.NewFilesystemWriter(),
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to install")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", "", "Version of k0sctl to use")
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file (required)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.SSHKeyPath, "ssh-key-path", "", "SSH private key path for remote installation")
-	k0s.cmd.Flags().StringVar(&k0s.Opts.RemoteHost, "remote-host", "", "Remote host IP to install k0s on")
-	k0s.cmd.Flags().StringVar(&k0s.Opts.RemoteUser, "remote-user", "root", "Remote user for SSH connection")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
+	k0s.cmd.Flags().BoolVar(&k0s.Opts.NoDownload, "no-download", false, "Skip downloading k0s binary")
 
 	_ = k0s.cmd.MarkFlagRequired("install-config")
-	k0s.cmd.MarkFlagsRequiredTogether("remote-host", "ssh-key-path")
 
 	install.AddCommand(k0s.cmd)
 
@@ -91,32 +89,13 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 }
 
 const (
-	defaultK0sPath = "kubernetes/files/k0s"
-	k0sConfigDir   = "/etc/k0s"
-	k0sConfigFile  = "k0s.yaml"
+	defaultK0sPath   = "kubernetes/files/k0s"
+	k0sctlConfigDir  = "/tmp"
+	k0sctlConfigFile = "k0sctl-config.yaml"
 )
 
-// writeK0sConfigFile writes the k0s config to the specified path
-func writeK0sConfigFile(preferredPath string, data []byte) (string, func(), error) {
-	if err := os.MkdirAll(filepath.Dir(preferredPath), 0755); err != nil {
-		// Fall back to temp file
-		tmpPath := filepath.Join(os.TempDir(), "k0s-config.yaml")
-		if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-			return "", nil, err
-		}
-		log.Printf("Generated k0s configuration at %s (using temp path due to permissions)", tmpPath)
-		cleanup := func() { _ = os.Remove(tmpPath) }
-		return tmpPath, cleanup, nil
-	}
-
-	if err := os.WriteFile(preferredPath, data, 0644); err != nil {
-		return "", nil, err
-	}
-	log.Printf("Generated k0s configuration at %s", preferredPath)
-	return preferredPath, nil, nil
-}
-
-func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager) error {
+func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
+	// Load install-config
 	icg := installer.NewInstallConfigManager()
 	if err := icg.LoadInstallConfigFromFile(c.Opts.InstallConfig); err != nil {
 		return fmt.Errorf("failed to load install-config: %w", err)
@@ -128,86 +107,67 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return fmt.Errorf("install-config specifies external Kubernetes, k0s installation is only supported for Codesphere-managed Kubernetes")
 	}
 
-	log.Println("Generating k0s configuration from install-config...")
-	k0sConfig, err := installer.GenerateK0sConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to generate k0s config: %w", err)
-	}
-
-	k0sConfigData, err := k0sConfig.Marshal()
-	if err != nil {
-		return fmt.Errorf("failed to marshal k0s config: %w", err)
-	}
-
-	k0sConfigPath := filepath.Join(k0sConfigDir, k0sConfigFile)
-	k0sConfigPath, cleanup, err := writeK0sConfigFile(k0sConfigPath, k0sConfigData)
-	if err != nil {
-		return fmt.Errorf("failed to write k0s config: %w", err)
-	}
-	if cleanup != nil {
-		defer cleanup()
-	}
-
-	k0sPath := pm.GetDependencyPath(defaultK0sPath)
-	if c.Opts.Package == "" {
-		k0sPath, err = k0s.Download(c.Opts.Version, c.Opts.Force, false)
+	// Determine k0s version
+	k0sVersion := c.Opts.Version
+	if k0sVersion == "" {
+		var err error
+		k0sVersion, err = k0s.GetLatestVersion()
 		if err != nil {
-			return fmt.Errorf("failed to download k0s: %w", err)
+			return fmt.Errorf("failed to get latest k0s version: %w", err)
+		}
+		log.Printf("Using latest k0s version: %s", k0sVersion)
+	}
+
+	// Download or get k0s binary path
+	var k0sBinaryPath string
+	if !c.Opts.NoDownload {
+		if c.Opts.Package != "" {
+			k0sBinaryPath = pm.GetDependencyPath(defaultK0sPath)
+		} else {
+			var err error
+			k0sBinaryPath, err = k0s.Download(k0sVersion, c.Opts.Force, false)
+			if err != nil {
+				return fmt.Errorf("failed to download k0s: %w", err)
+			}
 		}
 	}
 
-	if c.Opts.RemoteHost != "" {
-		return c.InstallK0sRemote(config, k0sPath, k0sConfigPath)
-	}
-
-	controlPlaneIPs := make([]string, 0, len(config.Kubernetes.ControlPlanes))
-	for _, cp := range config.Kubernetes.ControlPlanes {
-		controlPlaneIPs = append(controlPlaneIPs, cp.IPAddress)
-	}
-	nodeIP, err := installer.GetNodeIPAddress(controlPlaneIPs)
+	// Download k0sctl
+	log.Println("Downloading k0sctl...")
+	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, c.Opts.Force, false)
 	if err != nil {
-		log.Printf("Warning: could not determine node IP: %v. Installing without --kubelet-extra-args", err)
-		nodeIP = ""
+		return fmt.Errorf("failed to download k0sctl: %w", err)
 	}
 
-	err = k0s.Install(k0sConfigPath, k0sPath, c.Opts.Force, nodeIP)
+	// Generate k0sctl configuration
+	log.Println("Generating k0sctl configuration from install-config...")
+	k0sctlConfig, err := installer.GenerateK0sctlConfig(config, k0sVersion, c.Opts.SSHKeyPath, k0sBinaryPath)
 	if err != nil {
-		return fmt.Errorf("failed to install k0s: %w", err)
+		return fmt.Errorf("failed to generate k0sctl config: %w", err)
 	}
 
-	log.Println("k0s installed successfully using configuration from install-config")
-	return nil
-}
-
-func (c *InstallK0sCmd) InstallK0sRemote(config *files.RootConfig, k0sBinaryPath string, k0sConfigPath string) error {
-	log.Printf("Installing k0s on remote host %s", c.Opts.RemoteHost)
-
-	nm := &node.NodeManager{
-		FileIO:  c.FileWriter,
-		KeyPath: c.Opts.SSHKeyPath,
-	}
-
-	remoteNode := &node.Node{
-		ExternalIP: c.Opts.RemoteHost,
-		InternalIP: c.Opts.RemoteHost,
-		Name:       "k0s-node",
-		User:       c.Opts.RemoteUser,
-	}
-
-	controlPlaneIPs := make([]string, 0, len(config.Kubernetes.ControlPlanes))
-	for _, cp := range config.Kubernetes.ControlPlanes {
-		controlPlaneIPs = append(controlPlaneIPs, cp.IPAddress)
-	}
-	nodeIP, err := installer.GetNodeIPAddress(controlPlaneIPs)
+	// Write k0sctl config to file
+	k0sctlConfigData, err := k0sctlConfig.Marshal()
 	if err != nil {
-		log.Printf("Warning: could not determine node IP from control planes: %v. Using remote host IP: %s", err, c.Opts.RemoteHost)
-		nodeIP = c.Opts.RemoteHost
+		return fmt.Errorf("failed to marshal k0sctl config: %w", err)
 	}
 
-	if err := remoteNode.InstallK0s(nm, k0sBinaryPath, k0sConfigPath, c.Opts.Force, nodeIP); err != nil {
-		return fmt.Errorf("failed to install k0s on remote host: %w", err)
+	k0sctlConfigPath := filepath.Join(k0sctlConfigDir, k0sctlConfigFile)
+	if err := os.WriteFile(k0sctlConfigPath, k0sctlConfigData, 0644); err != nil {
+		return fmt.Errorf("failed to write k0sctl config: %w", err)
+	}
+	defer func() { _ = os.Remove(k0sctlConfigPath) }()
+
+	log.Printf("Generated k0sctl configuration at %s", k0sctlConfigPath)
+
+	// Apply k0sctl configuration
+	log.Println("Applying k0sctl configuration to deploy k0s cluster...")
+	if err := k0sctl.Apply(k0sctlConfigPath, k0sctlPath, c.Opts.Force); err != nil {
+		return fmt.Errorf("failed to apply k0sctl config: %w", err)
 	}
 
-	log.Printf("k0s successfully installed on remote host %s", c.Opts.RemoteHost)
+	log.Println("k0s cluster deployed successfully!")
+	log.Printf("To manage your cluster, use: %s kubeconfig --config %s", k0sctlPath, k0sctlConfigPath)
+
 	return nil
 }

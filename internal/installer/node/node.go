@@ -35,11 +35,7 @@ type NodeManager struct {
 }
 
 const (
-	jumpboxUser     = "ubuntu"
-	remoteK0sDir    = "/usr/local/bin"
-	remoteK0sConfig = "/etc/k0s/k0s.yaml"
-	tmpK0sBinary    = "/tmp/k0s"
-	tmpK0sConfig    = "/tmp/k0s-config.yaml"
+	jumpboxUser = "ubuntu"
 )
 
 func shellEscape(s string) string {
@@ -505,71 +501,5 @@ func (n *Node) ConfigureSysctlLine(jumpbox *Node, line string, nm *NodeManager) 
 			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
 		}
 	}
-	return nil
-}
-
-func (n *Node) InstallK0s(nm *NodeManager, k0sBinaryPath string, k0sConfigPath string, force bool, nodeIP string) error {
-	remoteK0sBinary := filepath.Join(remoteK0sDir, "k0s")
-	remoteConfigPath := remoteK0sConfig
-
-	user := n.User
-	if user == "" {
-		user = "root"
-	}
-
-	// Copy k0s binary to temp location first, then move with sudo
-	log.Printf("Copying k0s binary to %s:%s", n.ExternalIP, tmpK0sBinary)
-	if err := nm.CopyFile("", n.ExternalIP, user, k0sBinaryPath, tmpK0sBinary); err != nil {
-		return fmt.Errorf("failed to copy k0s binary to temp: %w", err)
-	}
-
-	// Move to final location and make executable with sudo
-	log.Printf("Moving k0s binary to %s", remoteK0sBinary)
-	moveCmd := fmt.Sprintf("sudo mv '%s' '%s' && sudo chmod +x '%s'",
-		shellEscape(tmpK0sBinary), shellEscape(remoteK0sBinary), shellEscape(remoteK0sBinary))
-	if err := nm.RunSSHCommand("", n.ExternalIP, user, moveCmd); err != nil {
-		return fmt.Errorf("failed to move and chmod k0s binary: %w", err)
-	}
-
-	if k0sConfigPath != "" {
-		// Copy config to temp location first
-		log.Printf("Copying k0s config to %s", tmpK0sConfig)
-		if err := nm.CopyFile("", n.ExternalIP, user, k0sConfigPath, tmpK0sConfig); err != nil {
-			return fmt.Errorf("failed to copy k0s config to temp: %w", err)
-		}
-
-		// Create /etc/k0s directory and move config with sudo
-		log.Printf("Moving k0s config to %s", remoteConfigPath)
-		setupConfigCmd := fmt.Sprintf("sudo mkdir -p /etc/k0s && sudo mv '%s' '%s' && sudo chmod 644 '%s'",
-			shellEscape(tmpK0sConfig), shellEscape(remoteConfigPath), shellEscape(remoteConfigPath))
-		if err := nm.RunSSHCommand("", n.ExternalIP, user, setupConfigCmd); err != nil {
-			return fmt.Errorf("failed to setup k0s config: %w", err)
-		}
-	}
-
-	installCmd := fmt.Sprintf("sudo '%s' install controller", shellEscape(remoteK0sBinary))
-	if k0sConfigPath != "" {
-		installCmd += fmt.Sprintf(" --config '%s'", shellEscape(remoteConfigPath))
-	} else {
-		installCmd += " --single"
-	}
-
-	installCmd += " --enable-worker"
-	installCmd += " --no-taints"
-	installCmd += fmt.Sprintf(" --kubelet-extra-args='--node-ip=%s'", shellEscape(nodeIP))
-
-	if force {
-		installCmd += " --force"
-	}
-
-	log.Printf("Installing k0s on %s", n.ExternalIP)
-	if err := nm.RunSSHCommand("", n.ExternalIP, user, installCmd); err != nil {
-		return fmt.Errorf("failed to install k0s: %w", err)
-	}
-
-	log.Printf("k0s successfully installed on %s", n.ExternalIP)
-	log.Printf("You can start it using: ssh %s@%s 'sudo %s start'", user, n.ExternalIP, shellEscape(remoteK0sBinary))
-	log.Printf("You can check the status using: ssh %s@%s 'sudo %s status'", user, n.ExternalIP, shellEscape(remoteK0sBinary))
-
 	return nil
 }

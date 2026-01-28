@@ -151,7 +151,6 @@ message: |
   # Run specific k0s tests
   go test ./cli/cmd -ginkgo.v -ginkgo.focus "InstallK0s"
   go test ./internal/installer -ginkgo.v -ginkgo.focus "k0s"
-  go test ./internal/installer/node -ginkgo.v -ginkgo.focus "InstallK0s"
   ------
   
   Build for different platforms:
