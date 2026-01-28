@@ -4,11 +4,11 @@ go 1.25.5
 
 require (
 	cloud.google.com/go/artifactregistry v1.19.0
-	cloud.google.com/go/compute v1.53.0
+	cloud.google.com/go/compute v1.54.0
 	cloud.google.com/go/iam v1.5.3
 	cloud.google.com/go/resourcemanager v1.10.7
 	cloud.google.com/go/serviceusage v1.9.7
-	github.com/codesphere-cloud/cs-go v0.15.0
+	github.com/codesphere-cloud/cs-go v0.16.1
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/jedib0t/go-pretty/v6 v6.7.8
 	github.com/lithammer/shortuuid v3.0.0+incompatible
@@ -20,7 +20,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/crypto v0.47.0
 	golang.org/x/term v0.39.0
-	google.golang.org/api v0.261.0
+	google.golang.org/api v0.263.0
 	google.golang.org/grpc v1.78.0
 )
 
@@ -31,7 +31,7 @@ require (
 	cel.dev/expr v0.25.1 // indirect
 	charm.land/lipgloss/v2 v2.0.0-beta.3.0.20251120230642-dcccabe2cd63 // indirect
 	cloud.google.com/go v0.123.0 // indirect
-	cloud.google.com/go/auth v0.18.0 // indirect
+	cloud.google.com/go/auth v0.18.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/kms v1.23.2 // indirect
@@ -423,9 +423,9 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sigstore/cosign/v2 v2.6.2 // indirect
 	github.com/sigstore/protobuf-specs v0.5.0 // indirect
-	github.com/sigstore/rekor v1.4.3 // indirect
+	github.com/sigstore/rekor v1.5.0 // indirect
 	github.com/sigstore/rekor-tiles/v2 v2.0.1 // indirect
-	github.com/sigstore/sigstore v1.10.3 // indirect
+	github.com/sigstore/sigstore v1.10.4 // indirect
 	github.com/sigstore/sigstore-go v1.1.4 // indirect
 	github.com/sigstore/timestamp-authority/v2 v2.0.3 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
@@ -444,7 +444,7 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tetafro/godot v1.5.4 // indirect
 	github.com/theupdateframework/go-tuf v0.7.0 // indirect
-	github.com/theupdateframework/go-tuf/v2 v2.3.1 // indirect
+	github.com/theupdateframework/go-tuf/v2 v2.4.1 // indirect
 	github.com/timakin/bodyclose v0.0.0-20241222091800-1db5c5ca4d67 // indirect
 	github.com/timonwong/loggercheck v0.11.0 // indirect
 	github.com/tomarrell/wrapcheck/v2 v2.12.0 // indirect
@@ -499,7 +499,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	google.golang.org/genproto v0.0.0-20251222181119-0a764e51fe1b // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251222181119-0a764e51fe1b // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120174246-409b4a993575 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260122232226-8e98ce8d340d // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/mail.v2 v2.3.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
@@ -522,7 +522,7 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
-	github.com/google/pprof v0.0.0-20251114195745-4902fdda35c8 // indirect
+	github.com/google/pprof v0.0.0-20260106004452-d7df1bf2cac7 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/mattn/go-runewidth v0.0.19 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
