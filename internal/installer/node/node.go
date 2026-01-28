@@ -78,8 +78,12 @@ func (nm *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 		if err := os.MkdirAll(sshDir, 0700); err != nil {
 			return nil, fmt.Errorf("failed to create .ssh directory: %w", err)
 		}
-		if _, err := os.Create(knownHostsPath); err != nil {
+		f, err := os.Create(knownHostsPath)
+		if err != nil {
 			return nil, fmt.Errorf("failed to create known_hosts file: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close known_hosts file: %w", err)
 		}
 		hostKeyCallback, err = knownhosts.New(knownHostsPath)
 		if err != nil {
