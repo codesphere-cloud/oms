@@ -22,16 +22,6 @@ func (m *MockSSHClientFactory) Dial(network, addr string, config *ssh.ClientConf
 	return nil, errors.New("mock SSH client factory not configured")
 }
 
-// MockSSHClient wraps an SSH client for testing purposes.
-type MockSSHClient struct {
-	client *ssh.Client
-}
-
-// NewMockSSHClient creates a mock SSH client that returns errors for all operations.
-func NewMockSSHClient() *MockSSHClient {
-	return &MockSSHClient{}
-}
-
 // MockSSHSession is a mock SSH session for testing.
 type MockSSHSession struct {
 	StartFunc  func(cmd string) error
