@@ -114,7 +114,7 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 	addedIPs := make(map[string]bool)
 
 	// Add controller+worker nodes from control planes
-	for i, cp := range installConfig.Kubernetes.ControlPlanes {
+	for _, cp := range installConfig.Kubernetes.ControlPlanes {
 		host := K0sctlHost{
 			Role: "controller+worker",
 			SSH: K0sctlSSH{
@@ -145,17 +145,12 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 			"KUBELET_EXTRA_ARGS": fmt.Sprintf("--node-ip=%s", cp.IPAddress),
 		}
 
-		// Name hosts for clarity
-		if len(installConfig.Kubernetes.ControlPlanes) > 1 {
-			host.SSH.Address = fmt.Sprintf("%s # controller-%d", cp.IPAddress, i+1)
-		}
-
 		k0sctlConfig.Spec.Hosts = append(k0sctlConfig.Spec.Hosts, host)
 		addedIPs[cp.IPAddress] = true
 	}
 
 	// Add dedicated worker nodes if present
-	for i, worker := range installConfig.Kubernetes.Workers {
+	for _, worker := range installConfig.Kubernetes.Workers {
 		if addedIPs[worker.IPAddress] {
 			continue
 		}
@@ -180,10 +175,6 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 
 		host.Environment = map[string]string{
 			"KUBELET_EXTRA_ARGS": fmt.Sprintf("--node-ip=%s", worker.IPAddress),
-		}
-
-		if len(installConfig.Kubernetes.Workers) > 1 {
-			host.SSH.Address = fmt.Sprintf("%s # worker-%d", worker.IPAddress, i+1)
 		}
 
 		k0sctlConfig.Spec.Hosts = append(k0sctlConfig.Spec.Hosts, host)
