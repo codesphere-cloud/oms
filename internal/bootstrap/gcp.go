@@ -83,10 +83,7 @@ func NewGCPBootstrapper(env env.Env, CodesphereEnv *CodesphereEnvironment, gcpCl
 	ctx := context.Background()
 	fw := util.NewFilesystemWriter()
 	icg := installer.NewInstallConfigManager()
-	nm := &node.NodeManager{
-		FileIO:  fw,
-		KeyPath: expandPath(CodesphereEnv.SSHPrivateKeyPath),
-	}
+	nm := node.NewNodeManager(fw, expandPath(CodesphereEnv.SSHPrivateKeyPath))
 
 	if fw.Exists(CodesphereEnv.InstallConfig) {
 		log.Printf("Reading install config file: %s", CodesphereEnv.InstallConfig)

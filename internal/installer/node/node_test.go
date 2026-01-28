@@ -10,6 +10,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -32,6 +33,11 @@ var _ = Describe("Node", func() {
 				nm := &node.NodeManager{
 					FileIO:  mockFileWriter,
 					KeyPath: "",
+					ClientFactory: &node.MockSSHClientFactory{
+						DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+							return nil, errors.New("connection failed")
+						},
+					},
 				}
 
 				result := testNode.HasCommand(nm, "test'; echo 'injected")
@@ -47,6 +53,11 @@ var _ = Describe("Node", func() {
 				nm := &node.NodeManager{
 					FileIO:  mockFileWriter,
 					KeyPath: "",
+					ClientFactory: &node.MockSSHClientFactory{
+						DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+							return nil, errors.New("connection failed")
+						},
+					},
 				}
 
 				// Test various injection attempts
@@ -74,6 +85,11 @@ var _ = Describe("Node", func() {
 				nm := &node.NodeManager{
 					FileIO:  mockFileWriter,
 					KeyPath: "",
+					ClientFactory: &node.MockSSHClientFactory{
+						DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+							return nil, errors.New("connection failed")
+						},
+					},
 				}
 
 				normalCommands := []string{
@@ -98,6 +114,11 @@ var _ = Describe("Node", func() {
 				nm := &node.NodeManager{
 					FileIO:  mockFileWriter,
 					KeyPath: "",
+					ClientFactory: &node.MockSSHClientFactory{
+						DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+							return nil, errors.New("connection failed")
+						},
+					},
 				}
 
 				result := testNode.HasCommand(nm, "test-文件-αβγ")
@@ -113,6 +134,11 @@ var _ = Describe("Node", func() {
 				nm := &node.NodeManager{
 					FileIO:  mockFileWriter,
 					KeyPath: "",
+					ClientFactory: &node.MockSSHClientFactory{
+						DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+							return nil, errors.New("connection failed")
+						},
+					},
 				}
 
 				result := testNode.HasCommand(nm, "")
@@ -128,6 +154,11 @@ var _ = Describe("Node", func() {
 				nm := &node.NodeManager{
 					FileIO:  mockFileWriter,
 					KeyPath: "",
+					ClientFactory: &node.MockSSHClientFactory{
+						DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+							return nil, errors.New("connection failed")
+						},
+					},
 				}
 
 				result := testNode.HasCommand(nm, "echo 'test \"nested\" quotes'")
@@ -167,6 +198,11 @@ var _ = Describe("Node", func() {
 				_ = os.Unsetenv("SSH_AUTH_SOCK")
 
 				nm.KeyPath = ""
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("mock dial error")
+					},
+				}
 
 				client, err := nm.GetClient("", "10.0.0.1", "root")
 				Expect(err).To(HaveOccurred())
@@ -187,6 +223,11 @@ var _ = Describe("Node", func() {
 
 				nm.KeyPath = "/nonexistent/key"
 				mockFileWriter.EXPECT().ReadFile("/nonexistent/key").Return(nil, errors.New("file not found"))
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("mock dial error")
+					},
+				}
 
 				client, err := nm.GetClient("", "10.0.0.1", "root")
 				Expect(err).To(HaveOccurred())
@@ -209,6 +250,11 @@ var _ = Describe("Node", func() {
 				invalidKey := []byte("not a valid ssh key")
 				nm.KeyPath = "/path/to/invalid/key"
 				mockFileWriter.EXPECT().ReadFile("/path/to/invalid/key").Return(invalidKey, nil)
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("mock dial error")
+					},
+				}
 
 				client, err := nm.GetClient("", "10.0.0.1", "root")
 				Expect(err).To(HaveOccurred())
@@ -232,15 +278,16 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 				mockFileWriter.EXPECT().ReadFile("/path/to/key").Return(privateKey, nil).Maybe()
 				// Mock the .pub file read for deduplication check
 				mockFileWriter.EXPECT().ReadFile("/path/to/key.pub").Return(nil, errors.New("file not found")).Maybe()
+				// Mock the SSH client factory to avoid real network calls
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("failed to dial: connection refused")
+					},
+				}
 
 				client, err := nm.GetClient("", "192.0.2.1", "root")
 				Expect(err).To(HaveOccurred())
-				// Accept either authentication failure or connection failure
-				Expect(err.Error()).To(Or(
-					ContainSubstring("failed to dial"),
-					ContainSubstring("failed to get authentication methods"),
-					ContainSubstring("failed to parse private key"),
-				))
+				Expect(err.Error()).To(ContainSubstring("failed to dial"))
 				Expect(client).To(BeNil())
 			})
 
@@ -257,27 +304,38 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 				mockFileWriter.EXPECT().ReadFile("/path/to/key").Return(privateKey, nil).Maybe()
 				// Mock the .pub file read for deduplication check
 				mockFileWriter.EXPECT().ReadFile("/path/to/key.pub").Return(nil, errors.New("file not found")).Maybe()
+				// Mock the SSH client factory to avoid real network calls
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("failed to dial jumpbox")
+					},
+				}
 
 				client, err := nm.GetClient("192.0.2.1", "192.0.2.2", "root")
 				Expect(err).To(HaveOccurred())
-				// Accept either authentication failure or connection failure
-				Expect(err.Error()).To(Or(
-					ContainSubstring("failed to connect to jumpbox"),
-					ContainSubstring("failed to get authentication methods"),
-					ContainSubstring("failed to parse private key"),
-				))
+				Expect(err.Error()).To(ContainSubstring("failed to connect to jumpbox"))
 				Expect(client).To(BeNil())
 			})
 		})
 
 		Context("file operations", func() {
 			It("should handle directory creation errors", func() {
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
+				}
 				err := nm.EnsureDirectoryExists("", "192.0.2.1", "root", "/tmp/test")
 				Expect(err).To(HaveOccurred())
 			})
 
 			It("should handle copy file errors when source doesn't exist", func() {
 				mockFileWriter.EXPECT().Open("/nonexistent/file").Return(nil, errors.New("file not found")).Maybe()
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
+				}
 
 				err := nm.CopyFile("", "192.0.2.1", "root", "/nonexistent/file", "/tmp/dest")
 				Expect(err).To(HaveOccurred())
@@ -312,11 +370,21 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 
 		Context("HasCommand", func() {
 			It("should return false when SSH connection fails", func() {
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
+				}
 				result := n.HasCommand(nm, "kubectl")
 				Expect(result).To(BeFalse())
 			})
 
 			It("should handle commands with special characters safely", func() {
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
+				}
 				result := n.HasCommand(nm, "kubectl'; rm -rf /; echo '")
 				Expect(result).To(BeFalse())
 			})
@@ -324,11 +392,21 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 
 		Context("HasFile", func() {
 			It("should return false when SSH connection fails", func() {
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
+				}
 				result := n.HasFile(nil, nm, "/etc/k0s/k0s.yaml")
 				Expect(result).To(BeFalse())
 			})
 
 			It("should handle paths with special characters safely", func() {
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
+				}
 				result := n.HasFile(nil, nm, "/path'; rm -rf /; echo '/file.txt")
 				Expect(result).To(BeFalse())
 			})
@@ -338,6 +416,11 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 					ExternalIP: "10.0.0.2",
 					InternalIP: "10.0.0.2",
 				}
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
+				}
 				result := n.HasFile(jumpbox, nm, "/etc/k0s/k0s.yaml")
 				Expect(result).To(BeFalse())
 			})
@@ -345,6 +428,11 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 
 		Context("CopyFile", func() {
 			It("should fail when directory creation fails", func() {
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
+				}
 				err := n.CopyFile(nil, nm, "/some/file", "/remote/path/dest.txt")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to ensure directory exists"))
@@ -353,6 +441,11 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 
 		Context("RunSSHCommand", func() {
 			It("should handle direct connection without jumpbox", func() {
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
+				}
 				err := n.RunSSHCommand(nil, nm, "root", "echo test")
 				Expect(err).To(HaveOccurred())
 			})
@@ -361,6 +454,11 @@ gsUnsokl0FasmM3Ws7VlAAAADnRlc3RAZXhhbXBsZS5jb20BAgMEBQ==
 				jumpbox := &node.Node{
 					ExternalIP: "10.0.0.2",
 					InternalIP: "10.0.0.2",
+				}
+				nm.ClientFactory = &node.MockSSHClientFactory{
+					DialFunc: func(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+						return nil, errors.New("connection failed")
+					},
 				}
 				err := n.RunSSHCommand(jumpbox, nm, "ubuntu", "echo test")
 				Expect(err).To(HaveOccurred())

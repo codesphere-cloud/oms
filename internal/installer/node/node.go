@@ -21,6 +21,12 @@ import (
 	"golang.org/x/term"
 )
 
+// SSHClientFactory is an interface for creating SSH clients, allowing for mocking in tests.
+type SSHClientFactory interface {
+	// Dial creates an SSH connection to the specified network address.
+	Dial(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error)
+}
+
 type Node struct {
 	Name       string `json:"name"`
 	ExternalIP string `json:"external_ip"`
@@ -29,9 +35,26 @@ type Node struct {
 }
 
 type NodeManager struct {
-	FileIO       util.FileIO
-	KeyPath      string
-	cachedSigner ssh.Signer // cached signer to avoid repeated passphrase prompts
+	FileIO        util.FileIO
+	KeyPath       string
+	cachedSigner  ssh.Signer // cached signer to avoid repeated passphrase prompts
+	ClientFactory SSHClientFactory
+}
+
+// defaultSSHClientFactory is the real SSH client factory that makes actual network calls.
+type defaultSSHClientFactory struct{}
+
+func (d *defaultSSHClientFactory) Dial(network, addr string, config *ssh.ClientConfig) (*ssh.Client, error) {
+	return ssh.Dial(network, addr, config)
+}
+
+// NewNodeManager creates a NodeManager with the default SSH client factory.
+func NewNodeManager(fileIO util.FileIO, keyPath string) *NodeManager {
+	return &NodeManager{
+		FileIO:        fileIO,
+		KeyPath:       keyPath,
+		ClientFactory: &defaultSSHClientFactory{},
+	}
 }
 
 const (
@@ -179,7 +202,11 @@ func (nm *NodeManager) connectToJumpbox(ip, username string) (*ssh.Client, error
 	}
 
 	addr := fmt.Sprintf("%s:22", ip)
-	jumpboxClient, err := ssh.Dial("tcp", addr, config)
+	factory := nm.ClientFactory
+	if factory == nil {
+		factory = &defaultSSHClientFactory{}
+	}
+	jumpboxClient, err := factory.Dial("tcp", addr, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial jumpbox %s: %v", addr, err)
 	}
@@ -294,7 +321,11 @@ func (n *NodeManager) GetClient(jumpboxIp string, ip string, username string) (*
 	}
 
 	addr := fmt.Sprintf("%s:22", ip)
-	client, err := ssh.Dial("tcp", addr, config)
+	factory := n.ClientFactory
+	if factory == nil {
+		factory = &defaultSSHClientFactory{}
+	}
+	client, err := factory.Dial("tcp", addr, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial: %v", err)
 	}
