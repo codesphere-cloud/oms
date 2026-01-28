@@ -5,7 +5,6 @@ package installer
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
@@ -121,7 +120,6 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 		g.Config.Codesphere.WorkspaceHostingBaseDomain = "ws.local"
 		g.Config.Codesphere.CustomDomains.CNameBaseDomain = "custom.local"
 		g.Config.Codesphere.DNSServers = []string{"8.8.8.8", "1.1.1.1"}
-		log.Println("Applied 'dev' profile: single-node development setup")
 
 	case PROFILE_PROD, PROFILE_PRODUCTION:
 		g.Config.Datacenter.Name = "production"
@@ -160,7 +158,6 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 				OnDemand:      true,
 			},
 		}
-		log.Println("Applied 'production' profile: HA multi-node setup")
 
 	case PROFILE_MINIMAL:
 		g.Config.Datacenter.Name = "minimal"
@@ -184,7 +181,6 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 				OnDemand:      true,
 			},
 		}
-		log.Println("Applied 'minimal' profile: minimal single-node setup")
 
 	default:
 		return fmt.Errorf("unknown profile: %s, available profiles: dev, prod, minimal", profile)

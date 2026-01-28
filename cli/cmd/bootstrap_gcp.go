@@ -13,21 +13,22 @@ import (
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 type BootstrapGcpCmd struct {
-	cmd           *cobra.Command
-	Opts          *GlobalOptions
-	Env           env.Env
-	CodesphereEnv *bootstrap.CodesphereEnvironment
-
+	cmd               *cobra.Command
+	Opts              *GlobalOptions
+	Env               env.Env
+	CodesphereEnv     *gcp.CodesphereEnvironment
 	InputRegistryType string
 }
 
 func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
-
 	err := c.BootstrapGcp()
 	if err != nil {
 		return fmt.Errorf("failed to bootstrap: %w", err)
@@ -49,7 +50,7 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 		},
 		Opts:          opts,
 		Env:           env.NewEnv(),
-		CodesphereEnv: &bootstrap.CodesphereEnvironment{},
+		CodesphereEnv: &gcp.CodesphereEnvironment{},
 	}
 
 	flags := bootstrapGcpCmd.cmd.Flags()
@@ -65,8 +66,8 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Preemptible, "preemptible", false, "Use preemptible VMs for Codesphere infrastructure (default: false)")
 	flags.IntVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterID, "datacenter-id", 1, "Datacenter ID (default: 1)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CustomPgIP, "custom-pg-ip", "", "Custom PostgreSQL IP (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallConfig, "install-config", "config.yaml", "Path to install config file (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SecretsFile, "secrets-file", "prod.vault.yaml", "Path to secrets files (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallConfigPath, "install-config", "config.yaml", "Path to install config file (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "prod.vault.yaml", "Path to secrets files (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Region, "region", "europe-west4", "GCP Region (default: europe-west4)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSProjectID, "dns-project-id", "", "GCP Project ID for Cloud DNS (optional)")
@@ -84,33 +85,37 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
-	c.CodesphereEnv.RegistryType = bootstrap.RegistryType(c.InputRegistryType)
+	ctx := c.cmd.Context()
+	stlog := bootstrap.NewStepLogger(false)
+	icg := installer.NewInstallConfigManager()
+	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	fw := util.NewFilesystemWriter()
+	nm := node.NewNode(fw, c.CodesphereEnv.SSHPrivateKeyPath)
 
-	gcpClient := bootstrap.NewGCPClient(os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-	bootstrapper, err := bootstrap.NewGCPBootstrapper(c.Env, c.CodesphereEnv, gcpClient)
+	bs, err := gcp.NewGCPBootstrapper(ctx, c.Env, stlog, c.CodesphereEnv, icg, gcpClient, nm, fw)
 	if err != nil {
 		return err
 	}
 
-	env, err := bootstrapper.Bootstrap()
-	envBytes, err2 := json.MarshalIndent(env, "", "  ")
+	c.CodesphereEnv.RegistryType = gcp.RegistryType(c.InputRegistryType)
+
+	err = bs.Bootstrap()
+	envBytes, err2 := json.MarshalIndent(bs.Env, "", "  ")
 	envString := string(envBytes)
 	if err2 != nil {
 		envString = ""
 	}
 	if err != nil {
-		if env.Jumpbox.ExternalIP != "" {
-			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", env.Jumpbox.ExternalIP)
+		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
+			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
 		return fmt.Errorf("failed to bootstrap GCP: %w, env: %s", err, envString)
 	}
-	log.Println("GCP infrastructure bootstrapped:")
 
+	log.Println("\nGCP infrastructure bootstrapped:")
 	log.Println(envString)
-
-	log.Printf("Start the Codesphere installation using OMS from the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", env.Jumpbox.ExternalIP)
-
-	log.Printf("When the installation is done, run the k0s configuration script generated at the k0s-1 host %s /root/configure-k0s.sh.", env.ControlPlaneNodes[0].InternalIP)
+	log.Printf("Start the Codesphere installation using OMS from the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
+	log.Printf("When the installation is done, run the k0s configuration script generated at the k0s-1 host %s /root/configure-k0s.sh.", bs.Env.ControlPlaneNodes[0].GetInternalIP())
 
 	return err
 }
