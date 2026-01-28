@@ -5,13 +5,12 @@ Install k0s Kubernetes distribution
 ### Synopsis
 
 Install k0s either from the package or by downloading it.
-This will either download the k0s binary directly to the OMS workdir, if not already present, and install it
-or load the k0s binary from the provided package file and install it.
-If no version is specified, the latest version will be downloaded.
+This command uses k0sctl to deploy k0s clusters from a Codesphere install-config.
 
 You must provide a Codesphere install-config file, which will:
 - Generate a k0s configuration from the install-config
-- Optionally install k0s on remote nodes via SSH
+- Generate a k0sctl configuration for cluster deployment
+- Deploy k0s to all nodes defined in the install-config using k0sctl
 
 ```
 oms-cli install k0s [flags]
@@ -23,20 +22,23 @@ oms-cli install k0s [flags]
 # Path to Codesphere install-config file to generate k0s config from
 $ oms-cli install k0s --install-config <path>
 
-# Version of k0s to install
+# Version of k0s to install (e.g., v1.30.0+k0s.0)
 $ oms-cli install k0s --version <version>
+
+# Version of k0sctl to use (e.g., v0.17.4)
+$ oms-cli install k0s --k0sctl-version <version>
 
 # Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from
 $ oms-cli install k0s --package <file>
 
-# Remote host IP to install k0s on (requires --ssh-key-path)
-$ oms-cli install k0s --remote-host <ip>
-
 # SSH private key path for remote installation
 $ oms-cli install k0s --ssh-key-path <path>
 
-# Force new download and installation even if k0s binary exists or is already installed
+# Force new download and installation
 $ oms-cli install k0s --force
+
+# Skip downloading k0s binary (expects it to be on remote nodes)
+$ oms-cli install k0s --no-download
 
 ```
 
@@ -46,9 +48,9 @@ $ oms-cli install k0s --force
   -f, --force                   Force new download and installation
   -h, --help                    help for k0s
       --install-config string   Path to Codesphere install-config file (required)
+      --k0sctl-version string   Version of k0sctl to use
+      --no-download             Skip downloading k0s binary
   -p, --package string          Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from
-      --remote-host string      Remote host IP to install k0s on
-      --remote-user string      Remote user for SSH connection (default "root")
       --ssh-key-path string     SSH private key path for remote installation
   -v, --version string          Version of k0s to install
 ```
