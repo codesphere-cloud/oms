@@ -89,17 +89,17 @@ func (n *Node) UpdateNode(name string, externalIP string, internalIP string) {
 	n.InternalIP = internalIP
 }
 
-// GetExternalIP updates the external IP of the node
+// GetExternalIP returns the external IP of the node
 func (n *Node) GetExternalIP() string {
 	return n.ExternalIP
 }
 
-// GetInternalIP updates the internal IP of the node
+// GetInternalIP returns the internal IP of the node
 func (n *Node) GetInternalIP() string {
 	return n.InternalIP
 }
 
-// Name returns the name of the node
+// GetName returns the name of the node
 func (n *Node) GetName() string {
 	return n.Name
 }

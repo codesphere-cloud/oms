@@ -214,7 +214,7 @@ func (c *GCPClient) EnableAPIs(projectID string, apis []string) error {
 	return nil
 }
 
-// GetArtifactRegistry retrieves an Artifact Registry repository by its name.
+// CreateArtifactRegistry creates and returns an Artifact Registry repository by its name.
 func (c *GCPClient) CreateArtifactRegistry(projectID, region, repoName string) (*artifactpb.Repository, error) {
 	client, err := artifact.NewClient(c.ctx)
 	if err != nil {
