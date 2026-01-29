@@ -99,7 +99,7 @@ var _ = Describe("Bootstrap", func() {
 		// Returning a real install config to avoid nil pointer dereferences later
 		icg.EXPECT().GetInstallConfig().RunAndReturn(func() *files.RootConfig {
 			realIcm := installer.NewInstallConfigManager()
-			realIcm.ApplyProfile("dev")
+			_ = realIcm.ApplyProfile("dev")
 			return realIcm.GetInstallConfig()
 		})
 

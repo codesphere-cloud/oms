@@ -237,7 +237,7 @@ func (c *GCPClient) CreateArtifactRegistry(projectID, region, repoName string) (
 	}
 	var repo *artifactpb.Repository
 	if err == nil {
-		repo, err = op.Wait(c.ctx)
+		_, err = op.Wait(c.ctx)
 		if err != nil {
 			return nil, err
 		}
