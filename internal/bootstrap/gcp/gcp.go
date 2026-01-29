@@ -74,36 +74,36 @@ type CodesphereEnvironment struct {
 	PostgreSQLNode           node.NodeManager   `json:"postgresql_node"`
 	ControlPlaneNodes        []node.NodeManager `json:"control_plane_nodes"`
 	CephNodes                []node.NodeManager `json:"ceph_nodes"`
-	ContainerRegistryURL     string             `json:"container_registry_url"`
-	ExistingConfigUsed       bool               `json:"existing_config_used"`
+	ContainerRegistryURL     string             `json:"-"`
+	ExistingConfigUsed       bool               `json:"-"`
 	InstallCodesphereVersion string             `json:"install_codesphere_version"`
 	Preemptible              bool               `json:"preemptible"`
-	WriteConfig              bool               `json:"write_config"`
+	WriteConfig              bool               `json:"-"`
 	GatewayIP                string             `json:"gateway_ip"`
 	PublicGatewayIP          string             `json:"public_gateway_ip"`
 	RegistryType             RegistryType       `json:"registry_type"`
 
 	// Config
-	InstallConfigPath string
-	SecretsFilePath   string
-	InstallConfig     *files.RootConfig
-	Secrets           *files.InstallVault
+	InstallConfigPath string              `json:"-"`
+	SecretsFilePath   string              `json:"-"`
+	InstallConfig     *files.RootConfig   `json:"-"`
+	Secrets           *files.InstallVault `json:"-"`
 
 	// GCP Specific
-	ProjectDisplayName    string
-	BillingAccount        string
-	BaseDomain            string
-	GithubAppClientID     string
-	GithubAppClientSecret string
-	SecretsDir            string
-	FolderID              string
-	SSHPublicKeyPath      string
-	SSHPrivateKeyPath     string
-	DatacenterID          int
-	CustomPgIP            string
-	Region                string
-	Zone                  string
-	DNSZoneName           string
+	ProjectDisplayName    string `json:"project_display_name"`
+	BillingAccount        string `json:"billing_account"`
+	BaseDomain            string `json:"base_domain"`
+	GithubAppClientID     string `json:"-"`
+	GithubAppClientSecret string `json:"-"`
+	SecretsDir            string `json:"secrets_dir"`
+	FolderID              string `json:"folder_id"`
+	SSHPublicKeyPath      string `json:"-"`
+	SSHPrivateKeyPath     string `json:"-"`
+	DatacenterID          int    `json:"-"`
+	CustomPgIP            string `json:"custom_pg_ip"`
+	Region                string `json:"region"`
+	Zone                  string `json:"zone"`
+	DNSZoneName           string `json:"dns_zone_name"`
 }
 
 func NewGCPBootstrapper(ctx context.Context, env env.Env, stlog *bootstrap.StepLogger, CodesphereEnv *CodesphereEnvironment, icg installer.InstallConfigManager, gcpClient GCPClientManager, nm node.NodeManager, fw util.FileIO) (*GCPBootstrapper, error) {

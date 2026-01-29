@@ -26,6 +26,7 @@ type BootstrapGcpCmd struct {
 	Env               env.Env
 	CodesphereEnv     *gcp.CodesphereEnvironment
 	InputRegistryType string
+	SSHQuiet          bool
 }
 
 func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
@@ -75,6 +76,7 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallCodesphereVersion, "install-codesphere-version", "", "Codesphere version to install (default: none)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
+	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", true, "Suppress SSH command output (default: true)")
 
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
@@ -90,7 +92,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	icg := installer.NewInstallConfigManager()
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := util.NewFilesystemWriter()
-	nm := node.NewNode(fw, c.CodesphereEnv.SSHPrivateKeyPath)
+	nm := node.NewNode(fw, c.CodesphereEnv.SSHPrivateKeyPath, c.SSHQuiet)
 
 	bs, err := gcp.NewGCPBootstrapper(ctx, c.Env, stlog, c.CodesphereEnv, icg, gcpClient, nm, fw)
 	if err != nil {
@@ -112,7 +114,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return fmt.Errorf("failed to bootstrap GCP: %w, env: %s", err, envString)
 	}
 
-	log.Println("\nGCP infrastructure bootstrapped:")
+	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
 	log.Println(envString)
 	log.Printf("Start the Codesphere installation using OMS from the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 	log.Printf("When the installation is done, run the k0s configuration script generated at the k0s-1 host %s /root/configure-k0s.sh.", bs.Env.ControlPlaneNodes[0].GetInternalIP())

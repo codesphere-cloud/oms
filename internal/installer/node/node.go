@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -58,27 +59,37 @@ type Node struct {
 	ExternalIP   string     `json:"external_ip"`
 	InternalIP   string     `json:"internal_ip"`
 	cachedSigner ssh.Signer `json:"-"`
+	sshQuiet     bool       `json:"-"`
+	// SSH client cache: map[username]*ssh.Client
+	clientCache map[string]*ssh.Client
+	clientMu    sync.Mutex
 }
 
 const jumpboxUser = "ubuntu"
 
 // NewNode creates a new Node with the given FileIO and SSH key path
-func NewNode(fileIO util.FileIO, keyPath string) *Node {
+func NewNode(fileIO util.FileIO, keyPath string, sshQuiet bool) *Node {
 	return &Node{
-		FileIO:  fileIO,
-		keyPath: util.ExpandPath(keyPath),
+		FileIO:      fileIO,
+		keyPath:     util.ExpandPath(keyPath),
+		clientCache: make(map[string]*ssh.Client),
+		sshQuiet:    sshQuiet,
 	}
 }
 
 // CreateSubNode creates a Node object representing a node behind a jumpbox
 func (n *Node) CreateSubNode(name string, externalIP string, internalIP string) NodeManager {
 	return &Node{
-		FileIO:     n.FileIO,
-		Jumpbox:    n,
-		keyPath:    util.ExpandPath(n.keyPath),
-		Name:       name,
-		ExternalIP: externalIP,
-		InternalIP: internalIP,
+		// Inherited from jumpbox
+		FileIO:   n.FileIO,
+		Jumpbox:  n,
+		keyPath:  util.ExpandPath(n.keyPath),
+		sshQuiet: n.sshQuiet,
+		// Custom
+		Name:        name,
+		ExternalIP:  externalIP,
+		InternalIP:  internalIP,
+		clientCache: make(map[string]*ssh.Client),
 	}
 }
 
@@ -104,7 +115,8 @@ func (n *Node) GetName() string {
 	return n.Name
 }
 
-// WaitForSSH tries to connect to the node via SSH until timeout
+// WaitForSSH tries to connect to the node via SSH until timeout.
+// Once successful, the connection is cached for reuse.
 func (n *Node) WaitForSSH(timeout time.Duration) error {
 	start := time.Now()
 	jumpboxIp := ""
@@ -114,13 +126,14 @@ func (n *Node) WaitForSSH(timeout time.Duration) error {
 		nodeIp = n.InternalIP
 	}
 	for {
-		client, err := n.getClient(jumpboxIp, nodeIp, jumpboxUser)
+		// Try to get or create a cached client
+		_, err := n.getOrCreateClient(jumpboxIp, nodeIp, jumpboxUser)
 		if err == nil {
-			_ = client.Close()
+			// Connection successful and cached
 			return nil
 		}
 		if time.Since(start) > timeout {
-			return fmt.Errorf("timeout waiting for SSH on node %s (%s)", n.Name, n.ExternalIP)
+			return fmt.Errorf("timeout: %w", err)
 		}
 		time.Sleep(5 * time.Second)
 	}
@@ -128,6 +141,7 @@ func (n *Node) WaitForSSH(timeout time.Duration) error {
 
 // RunSSHCommand connects to the node, executes a command and streams the output.
 // If quiet is true, command output is not printed to stdout/stderr.
+// The SSH client connection is cached and reused for subsequent commands.
 func (n *Node) RunSSHCommand(username string, command string, quiet bool) error {
 	var jumpboxIp string
 	var ip string
@@ -139,23 +153,29 @@ func (n *Node) RunSSHCommand(username string, command string, quiet bool) error 
 		ip = n.ExternalIP
 	}
 
-	client, err := n.getClient(jumpboxIp, ip, username)
+	client, err := n.getOrCreateClient(jumpboxIp, ip, username)
 	if err != nil {
 		return fmt.Errorf("failed to get client: %w", err)
 	}
-	defer util.IgnoreError(client.Close)
+	// Don't close the client - it's cached for reuse
 
 	session, err := client.NewSession()
 	if err != nil {
-		return fmt.Errorf("failed to create session on jumpbox: %v", err)
+		// Connection might be stale, try to reconnect
+		n.invalidateClient(username)
+		client, err = n.getOrCreateClient(jumpboxIp, ip, username)
+		if err != nil {
+			return fmt.Errorf("failed to reconnect client: %w", err)
+		}
+		session, err = client.NewSession()
+		if err != nil {
+			return fmt.Errorf("failed to create session: %v", err)
+		}
 	}
 	defer util.IgnoreError(session.Close)
 
 	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
-	err = n.forwardAgent(client, session)
-	if err != nil {
-		log.Printf(" Warning: Agent forwarding setup failed on session: %v\n", err)
-	}
+	_ = agent.RequestAgentForwarding(session) // Best effort, ignore errors
 
 	if !quiet {
 		session.Stdout = os.Stdout
@@ -177,7 +197,7 @@ func (n *Node) RunSSHCommand(username string, command string, quiet bool) error 
 // HasCommand checks if a command exists on the remote node via SSH
 func (n *Node) HasCommand(command string) bool {
 	checkCommand := fmt.Sprintf("command -v %s >/dev/null 2>&1", command)
-	err := n.RunSSHCommand("root", checkCommand, true)
+	err := n.RunSSHCommand("root", checkCommand, n.sshQuiet)
 	if err != nil {
 		// If the command returns a non-zero exit status, it means the command is not found
 		return false
@@ -194,7 +214,7 @@ func (n *Node) InstallOms() error {
 		"wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
 	}
 	for _, cmd := range remoteCommands {
-		err := n.RunSSHCommand("root", cmd, false)
+		err := n.RunSSHCommand("root", cmd, n.sshQuiet)
 		if err != nil {
 			return fmt.Errorf("failed to run remote command '%s': %w", cmd, err)
 		}
@@ -205,7 +225,7 @@ func (n *Node) InstallOms() error {
 // HasAcceptEnvConfigured checks if AcceptEnv is configured
 func (n *Node) HasAcceptEnvConfigured() bool {
 	checkCommand := "sudo grep -E '^AcceptEnv OMS_PORTAL_API_KEY' /etc/ssh/sshd_config >/dev/null 2>&1"
-	err := n.RunSSHCommand("ubuntu", checkCommand, true)
+	err := n.RunSSHCommand("ubuntu", checkCommand, n.sshQuiet)
 	if err != nil {
 		// If the command returns a NON-zero exit status, it means AcceptEnv is not configured
 		return false
@@ -220,7 +240,7 @@ func (n *Node) ConfigureAcceptEnv() error {
 		"sudo systemctl restart sshd",
 	}
 	for _, cmd := range cmds {
-		err := n.RunSSHCommand("ubuntu", cmd, true)
+		err := n.RunSSHCommand("ubuntu", cmd, n.sshQuiet)
 		if err != nil {
 			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
 		}
@@ -231,13 +251,13 @@ func (n *Node) ConfigureAcceptEnv() error {
 // HasRootLoginEnabled checks if root login is enabled on the remote node via SSH
 func (n *Node) HasRootLoginEnabled() bool {
 	checkCommandPermit := "sudo grep -E '^PermitRootLogin yes' /etc/ssh/sshd_config >/dev/null 2>&1"
-	err := n.RunSSHCommand("ubuntu", checkCommandPermit, true)
+	err := n.RunSSHCommand("ubuntu", checkCommandPermit, n.sshQuiet)
 	if err != nil {
 		// If the command returns a NON-zero exit status, it means root login is not permitted
 		return false
 	}
 	checkCommandAuthorizedKeys := "sudo grep -E '^no-port-forwarding' /root/.ssh/authorized_keys >/dev/null 2>&1"
-	err = n.RunSSHCommand("ubuntu", checkCommandAuthorizedKeys, true)
+	err = n.RunSSHCommand("ubuntu", checkCommandAuthorizedKeys, n.sshQuiet)
 	if err == nil {
 		// If the command returns a ZERO exit status, it means root login is prevented
 		return false
@@ -253,7 +273,7 @@ func (n *Node) EnableRootLogin() error {
 		"sudo systemctl restart sshd",
 	}
 	for _, cmd := range cmds {
-		err := n.RunSSHCommand("ubuntu", cmd, true)
+		err := n.RunSSHCommand("ubuntu", cmd, n.sshQuiet)
 		if err != nil {
 			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
 		}
@@ -280,7 +300,7 @@ func (n *Node) ConfigureMemoryMap() error {
 // HasFile checks if a file exists on the remote node via SSH
 func (n *Node) HasFile(filePath string) bool {
 	checkCommand := fmt.Sprintf("test -f '%s'", filePath)
-	err := n.RunSSHCommand("ubuntu", checkCommand, true)
+	err := n.RunSSHCommand("ubuntu", checkCommand, n.sshQuiet)
 	if err != nil {
 		// If the command returns a non-zero exit status, it means the file does not exist
 		return false
@@ -309,7 +329,7 @@ func (n *Node) CopyFile(src string, dst string) error {
 // hasSysctlLine checks if a specific line exists in /etc/sysctl.conf on the remote node via SSH
 func (n *Node) hasSysctlLine(line string) bool {
 	checkCommand := fmt.Sprintf("sudo grep -E '^%s' /etc/sysctl.conf >/dev/null 2>&1", line)
-	err := n.RunSSHCommand("root", checkCommand, true)
+	err := n.RunSSHCommand("root", checkCommand, n.sshQuiet)
 	if err != nil {
 		// If the command returns a NON-zero exit status, it means the setting is not configured
 		return false
@@ -324,7 +344,7 @@ func (n *Node) configureSysctlLine(line string) error {
 		"sudo sysctl -p",
 	}
 	for _, cmd := range cmds {
-		err := n.RunSSHCommand("root", cmd, true)
+		err := n.RunSSHCommand("root", cmd, n.sshQuiet)
 		if err != nil {
 			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
 		}
@@ -332,22 +352,67 @@ func (n *Node) configureSysctlLine(line string) error {
 	return nil
 }
 
-// getClient creates and returns an SSH client connected to the node
-func (n *Node) getClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
+// getOrCreateClient returns a cached SSH client or creates a new one if not cached.
+func (n *Node) getOrCreateClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
+	n.clientMu.Lock()
+	defer n.clientMu.Unlock()
+
+	if client, ok := n.clientCache[username]; ok {
+		if _, _, err := client.SendRequest("keepalive@openssh.com", true, nil); err == nil {
+			return client, nil
+		}
+		util.IgnoreError(client.Close)
+		delete(n.clientCache, username)
+	}
+
+	client, err := n.createClient(jumpboxIp, ip, username)
+	if err != nil {
+		return nil, err
+	}
+
+	// Set up agent forwarding (best effort, ignore errors)
+	err = n.setupAgentForwarding(client)
+	if err != nil {
+		log.Printf("Warning: failed to set up agent forwarding: %v", err)
+	}
+
+	n.clientCache[username] = client
+	return client, nil
+}
+
+// invalidateClient removes a cached client for the given username
+func (n *Node) invalidateClient(username string) {
+	n.clientMu.Lock()
+	defer n.clientMu.Unlock()
+
+	if client, ok := n.clientCache[username]; ok {
+		util.IgnoreError(client.Close)
+		delete(n.clientCache, username)
+	}
+}
+
+// createClient creates and returns a new SSH client connected to the node (internal, no caching)
+func (n *Node) createClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
 	authMethods, err := n.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get authentication methods: %w", err)
 	}
+
 	if jumpboxIp != "" {
-		jbClient, err := n.connectToJumpbox(jumpboxIp, jumpboxUser)
+		// Use the Jumpbox's cached client if available
+		jbClient, err := n.Jumpbox.getOrCreateClient("", jumpboxIp, jumpboxUser)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to jumpbox: %v", err)
 		}
 
 		finalTargetConfig := &ssh.ClientConfig{
-			User:            username,
-			Auth:            authMethods,
-			Timeout:         10 * time.Second,
+			User:    username,
+			Auth:    authMethods,
+			Timeout: 10 * time.Second,
+			// WARNING: This is INSECURE for production!
+			// It tells the client to accept any host key.
+			// For production, you should implement a proper HostKeyCallback
+			// to verify the remote server's identity.
 			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		}
 
@@ -383,23 +448,26 @@ func (n *Node) getClient(jumpboxIp string, ip string, username string) (*ssh.Cli
 	return client, nil
 }
 
-// getSFTPClient creates and returns an SFTP client connected to the node
+// getSFTPClient creates and returns an SFTP client connected to the node.
+// Uses the cached SSH client for the connection.
 func (n *Node) getSFTPClient(jumpboxIp string, ip string, username string) (*sftp.Client, error) {
-	client, err := n.getClient(jumpboxIp, ip, username)
+	client, err := n.getOrCreateClient(jumpboxIp, ip, username)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SSH client: %v", err)
 	}
+
 	sftpClient, err := sftp.NewClient(client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SFTP client: %v", err)
 	}
+
 	return sftpClient, nil
 }
 
 // ensureDirectoryExists creates the directory on the remote node via SSH if it does not exist.
-func (nm *Node) ensureDirectoryExists(username string, dir string) error {
+func (n *Node) ensureDirectoryExists(username string, dir string) error {
 	cmd := fmt.Sprintf("mkdir -p '%s'", dir)
-	return nm.RunSSHCommand(username, cmd, true)
+	return n.RunSSHCommand(username, cmd, n.sshQuiet)
 }
 
 // copyFile copies a file from the local system to the remote node via SFTP.
@@ -523,57 +591,17 @@ func (n *Node) loadPrivateKey() (ssh.Signer, error) {
 	return signer, nil
 }
 
-func (n *Node) connectToJumpbox(ip, username string) (*ssh.Client, error) {
-	authMethods, err := n.getAuthMethods()
-	if err != nil {
-		return nil, fmt.Errorf("jumpbox authentication setup failed: %v", err)
-	}
-
-	config := &ssh.ClientConfig{
-		User:    username,
-		Auth:    authMethods,
-		Timeout: 10 * time.Second,
-		// WARNING: Still using InsecureIgnoreHostKey for simplicity. Use known_hosts in production.
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	}
-
-	addr := fmt.Sprintf("%s:22", ip)
-	jumpboxClient, err := ssh.Dial("tcp", addr, config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to dial jumpbox %s: %v", addr, err)
-	}
-
-	// Enable Agent Forwarding on the jumpbox connection
-	if err := n.forwardAgent(jumpboxClient, nil); err != nil {
-		fmt.Printf(" Warning: Agent forwarding setup failed on jumpbox: %v\n", err)
-	}
-
-	return jumpboxClient, nil
-}
-
-func (n *Node) forwardAgent(client *ssh.Client, session *ssh.Session) error {
+// setupAgentForwarding sets up SSH agent forwarding on the client (best effort)
+func (n *Node) setupAgentForwarding(client *ssh.Client) error {
 	authSocket := os.Getenv("SSH_AUTH_SOCK")
 	if authSocket == "" {
-		log.Printf("SSH_AUTH_SOCK not set. Cannot perform agent forwarding")
-	} else {
-		// Connect to the local SSH Agent socket
-		conn, err := net.Dial("unix", authSocket)
-		if err != nil {
-			log.Printf("failed to dial SSH agent socket: %v", err)
-		} else {
-			// Create an agent client for the local agent
-			ag := agent.NewClient(conn)
-			// This tells the remote server to proxy authentication requests back to us.
-			if err := agent.ForwardToAgent(client, ag); err != nil {
-				log.Printf("failed to forward agent to remote client: %v", err)
-			}
-			if session != nil {
-				if err := agent.RequestAgentForwarding(session); err != nil {
-					log.Printf("failed to request agent forwarding on session: %v", err)
-				}
-			}
-		}
-
+		return nil
 	}
-	return nil
+
+	conn, err := net.Dial("unix", authSocket)
+	if err != nil {
+		return fmt.Errorf("failed to connect to SSH agent: %v", err)
+	}
+
+	return agent.ForwardToAgent(client, agent.NewClient(conn))
 }
