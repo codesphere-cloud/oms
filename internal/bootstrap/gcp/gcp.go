@@ -5,6 +5,7 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -649,12 +650,12 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	close(errCh)
 	close(resultCh)
 
-	errStr := ""
+	var errs []error
 	for err := range errCh {
-		errStr += err.Error() + "; "
+		errs = append(errs, err)
 	}
-	if errStr != "" {
-		return fmt.Errorf("error ensuring compute instances: %s", errStr)
+	if len(errs) > 0 {
+		return fmt.Errorf("error ensuring compute instances: %w", errors.Join(errs...))
 	}
 
 	// Create nodes from results (in main goroutine, not in spawned goroutines)
@@ -879,7 +880,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		if err != nil {
 			return fmt.Errorf("failed to update CA certificates on node %s: %w", node.GetInternalIP(), err)
 		}
-		err = node.RunSSHCommand("root", "systemctl restart docker.service || true", true) // docker is probably not yet instb.sshQuietd
+		err = node.RunSSHCommand("root", "systemctl restart docker.service || true", true) // docker is probably not yet installed
 		if err != nil {
 			return fmt.Errorf("failed to restart docker service on node %s: %w", node.GetInternalIP(), err)
 		}
@@ -1328,8 +1329,6 @@ systemctl restart k0scontroller
 }
 
 // Helper functions
-func protoInt32(i int32) *int32 { return &i }
-func protoInt64(i int64) *int64 { return &i }
 func isAlreadyExistsError(err error) bool {
 	return status.Code(err) == codes.AlreadyExists || strings.Contains(err.Error(), "already exists")
 }

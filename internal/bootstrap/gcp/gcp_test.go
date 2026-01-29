@@ -28,6 +28,8 @@ import (
 	"google.golang.org/api/dns/v1"
 )
 
+func protoString(s string) *string { return &s }
+
 var _ = Describe("NewGCPBootstrapper", func() {
 	It("creates a valid GCPBootstrapper", func() {
 		env := env.NewEnv()
@@ -253,8 +255,6 @@ var _ = Describe("Bootstrap", func() {
 		}
 	})
 })
-
-func protoString(s string) *string { return &s }
 
 var _ = Describe("EnsureInstallConfig", func() {
 	Describe("Valid EnsureInstallConfig", func() {
@@ -867,13 +867,13 @@ var _ = Describe("EnsureLocalContainerRegistry", func() {
 				return strings.Contains(cmd, "podman ps")
 			}), true).Return(fmt.Errorf("not running"))
 
-			// Install commands (8 commands in list)
-			nm.EXPECT().RunSSHCommand("root", mock.Anything, false).Return(nil).Times(8)
+			// Install commands (8 commands) + scp/update-ca/docker commands (3 per 4 nodes = 12)
+			nm.EXPECT().RunSSHCommand("root", mock.Anything, true).Return(nil).Times(8 + 12)
 
 			bs.Env.ControlPlaneNodes = []node.NodeManager{nm, nm}
 			bs.Env.CephNodes = []node.NodeManager{nm, nm}
 
-			nm.EXPECT().RunSSHCommand("root", mock.Anything, true).Return(nil).Times(3 * 4)
+			nm.EXPECT().GetName().Return("mocknode").Maybe()
 
 			err = bs.EnsureLocalContainerRegistry()
 			Expect(err).NotTo(HaveOccurred())
@@ -927,10 +927,10 @@ var _ = Describe("EnsureLocalContainerRegistry", func() {
 			}), true).Return(fmt.Errorf("not running"))
 
 			// First 7 install commands succeed
-			nm.EXPECT().RunSSHCommand("root", mock.Anything, false).Return(nil).Times(7)
+			nm.EXPECT().RunSSHCommand("root", mock.Anything, true).Return(nil).Times(7)
 
 			// 8th install command fails
-			nm.EXPECT().RunSSHCommand("root", mock.Anything, false).Return(fmt.Errorf("ssh error")).Once()
+			nm.EXPECT().RunSSHCommand("root", mock.Anything, true).Return(fmt.Errorf("ssh error")).Once()
 
 			err := bs.EnsureLocalContainerRegistry()
 			Expect(err).To(HaveOccurred())
@@ -938,13 +938,16 @@ var _ = Describe("EnsureLocalContainerRegistry", func() {
 		})
 
 		It("fails when the first scp command fails", func() {
+			// GetName is called in Logf
+			nm.EXPECT().GetName().Return("mocknode").Maybe()
+
 			// First check - registry not running
 			nm.EXPECT().RunSSHCommand("root", mock.MatchedBy(func(cmd string) bool {
 				return strings.Contains(cmd, "podman ps")
 			}), true).Return(fmt.Errorf("not running"))
 
 			// All 8 install commands succeed
-			nm.EXPECT().RunSSHCommand("root", mock.Anything, false).Return(nil).Times(8)
+			nm.EXPECT().RunSSHCommand("root", mock.Anything, true).Return(nil).Times(8)
 
 			// First scp command fails
 			nm.EXPECT().RunSSHCommand("root", mock.MatchedBy(func(cmd string) bool {
@@ -963,6 +966,7 @@ var _ = Describe("EnsureLocalContainerRegistry", func() {
 			bs.Env.CephNodes = []node.NodeManager{}
 
 			node1.EXPECT().GetInternalIP().Return("10.0.0.2").Maybe()
+			node1.EXPECT().GetName().Return("node1").Maybe()
 
 			// First check - registry not running
 			nm.EXPECT().RunSSHCommand("root", mock.MatchedBy(func(cmd string) bool {
@@ -970,7 +974,7 @@ var _ = Describe("EnsureLocalContainerRegistry", func() {
 			}), true).Return(fmt.Errorf("not running"))
 
 			// All 8 install commands succeed
-			nm.EXPECT().RunSSHCommand("root", mock.Anything, false).Return(nil).Times(8)
+			nm.EXPECT().RunSSHCommand("root", mock.Anything, true).Return(nil).Times(8)
 
 			// scp succeeds
 			nm.EXPECT().RunSSHCommand("root", mock.MatchedBy(func(cmd string) bool {
@@ -992,6 +996,7 @@ var _ = Describe("EnsureLocalContainerRegistry", func() {
 			bs.Env.CephNodes = []node.NodeManager{}
 
 			node1.EXPECT().GetInternalIP().Return("10.0.0.2").Maybe()
+			node1.EXPECT().GetName().Return("node1").Maybe()
 
 			// First check - registry not running
 			nm.EXPECT().RunSSHCommand("root", mock.MatchedBy(func(cmd string) bool {
@@ -999,7 +1004,7 @@ var _ = Describe("EnsureLocalContainerRegistry", func() {
 			}), true).Return(fmt.Errorf("not running"))
 
 			// All 8 install commands succeed
-			nm.EXPECT().RunSSHCommand("root", mock.Anything, false).Return(nil).Times(8)
+			nm.EXPECT().RunSSHCommand("root", mock.Anything, true).Return(nil).Times(8)
 
 			// scp succeeds
 			nm.EXPECT().RunSSHCommand("root", mock.MatchedBy(func(cmd string) bool {
@@ -2371,10 +2376,10 @@ var _ = Describe("InstallCodesphere", func() {
 			bs.Env.Jumpbox = nm
 
 			// Expect download package
-			nm.EXPECT().RunSSHCommand("root", "oms-cli download package v1.2.3", false).Return(nil)
+			nm.EXPECT().RunSSHCommand("root", "oms-cli download package v1.2.3", true).Return(nil)
 
 			// Expect install codesphere
-			nm.EXPECT().RunSSHCommand("root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /secrets/age_key.txt -p v1.2.3.tar.gz", false).Return(nil)
+			nm.EXPECT().RunSSHCommand("root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /secrets/age_key.txt -p v1.2.3.tar.gz", true).Return(nil)
 
 			err = bs.InstallCodesphere()
 			Expect(err).NotTo(HaveOccurred())
@@ -2400,7 +2405,7 @@ var _ = Describe("InstallCodesphere", func() {
 			Expect(err).NotTo(HaveOccurred())
 			bs.Env.Jumpbox = nm
 
-			nm.EXPECT().RunSSHCommand("root", "oms-cli download package v1.2.3", false).Return(fmt.Errorf("download error"))
+			nm.EXPECT().RunSSHCommand("root", "oms-cli download package v1.2.3", true).Return(fmt.Errorf("download error"))
 
 			err = bs.InstallCodesphere()
 			Expect(err).To(HaveOccurred())
@@ -2425,8 +2430,8 @@ var _ = Describe("InstallCodesphere", func() {
 			Expect(err).NotTo(HaveOccurred())
 			bs.Env.Jumpbox = nm
 
-			nm.EXPECT().RunSSHCommand("root", "oms-cli download package v1.2.3", false).Return(nil)
-			nm.EXPECT().RunSSHCommand("root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /secrets/age_key.txt -p v1.2.3.tar.gz", false).Return(fmt.Errorf("install error"))
+			nm.EXPECT().RunSSHCommand("root", "oms-cli download package v1.2.3", true).Return(nil)
+			nm.EXPECT().RunSSHCommand("root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /secrets/age_key.txt -p v1.2.3.tar.gz", true).Return(fmt.Errorf("install error"))
 
 			err = bs.InstallCodesphere()
 			Expect(err).To(HaveOccurred())

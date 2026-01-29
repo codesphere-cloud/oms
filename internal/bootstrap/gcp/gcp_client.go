@@ -645,3 +645,5 @@ func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*d
 // Helper functions
 func protoString(s string) *string { return &s }
 func protoBool(b bool) *bool       { return &b }
+func protoInt32(i int32) *int32    { return &i }
+func protoInt64(i int64) *int64    { return &i }
