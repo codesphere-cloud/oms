@@ -10,4 +10,6 @@ make docs
 echo "Running 'make generate-license'"
 make generate-license
 
+make generate
+
 echo "Done!"

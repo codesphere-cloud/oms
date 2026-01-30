@@ -4,7 +4,9 @@
 package cmd_test
 
 import (
-	"github.com/blang/semver"
+	"context"
+
+	"github.com/creativeprojects/go-selfupdate"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -16,9 +18,9 @@ import (
 
 type mockOMSUpdater struct{ mock.Mock }
 
-func (m *mockOMSUpdater) Update(v semver.Version, repo string) (semver.Version, string, error) {
-	args := m.Called(v, repo)
-	return args.Get(0).(semver.Version), args.String(1), args.Error(2)
+func (m *mockOMSUpdater) Update(ctx context.Context, current string, repo selfupdate.Repository) (string, string, error) {
+	args := m.Called(ctx, current, repo)
+	return args.String(0), args.String(1), args.Error(2)
 }
 
 var _ = Describe("Update", func() {
@@ -41,7 +43,7 @@ var _ = Describe("Update", func() {
 		v := "0.0.42"
 		mockVersion.EXPECT().Version().Return(v)
 
-		mockGit.On("Update", semver.MustParse(v), cmd.GitHubRepo).Return(semver.MustParse(v), "", nil)
+		mockGit.On("Update", mock.Anything, v, selfupdate.ParseSlug(cmd.GitHubRepo)).Return(v, "", nil)
 		err := c.SelfUpdate()
 		Expect(err).NotTo(HaveOccurred())
 		mockGit.AssertExpectations(GinkgoT())
@@ -51,7 +53,7 @@ var _ = Describe("Update", func() {
 		current := "0.0.0"
 		latest := "0.0.42"
 		mockVersion.EXPECT().Version().Return(current)
-		mockGit.On("Update", semver.MustParse(current), cmd.GitHubRepo).Return(semver.MustParse(latest), "notes", nil)
+		mockGit.On("Update", mock.Anything, current, selfupdate.ParseSlug(cmd.GitHubRepo)).Return(latest, "notes", nil)
 		err := c.SelfUpdate()
 		Expect(err).NotTo(HaveOccurred())
 		mockGit.AssertExpectations(GinkgoT())
