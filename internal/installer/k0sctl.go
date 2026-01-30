@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -41,6 +42,11 @@ func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) K0sctlManager {
 	}
 }
 
+// githubRelease represents the minimal GitHub release API response
+type githubRelease struct {
+	TagName string `json:"tag_name"`
+}
+
 func (k *K0sctl) GetLatestVersion() (string, error) {
 	// k0sctl uses GitHub releases - fetch latest from API
 	releaseURL := "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
@@ -49,20 +55,16 @@ func (k *K0sctl) GetLatestVersion() (string, error) {
 		return "", fmt.Errorf("failed to fetch latest k0sctl release: %w", err)
 	}
 
-	// Simple parsing - just extract tag_name
-	tagStart := string(responseBody)
-	if idx := strings.Index(tagStart, `"tag_name"`); idx != -1 {
-		tagStart = tagStart[idx:]
-		if start := strings.Index(tagStart, `"`); start != -1 {
-			tagStart = tagStart[start+len(`"tag_name":"`)+1:]
-			if end := strings.Index(tagStart, `"`); end != -1 {
-				version := tagStart[:end]
-				return version, nil
-			}
-		}
+	var release githubRelease
+	if err := json.Unmarshal(responseBody, &release); err != nil {
+		return "", fmt.Errorf("failed to parse GitHub API response: %w", err)
 	}
 
-	return "", fmt.Errorf("failed to parse version from GitHub API response")
+	if release.TagName == "" {
+		return "", fmt.Errorf("no tag_name found in GitHub API response")
+	}
+
+	return release.TagName, nil
 }
 
 func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error) {

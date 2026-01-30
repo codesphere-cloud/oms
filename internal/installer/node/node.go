@@ -118,7 +118,11 @@ func (nm *NodeManager) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 			if err != nil {
 				return fmt.Errorf("failed to open known_hosts for writing: %w", err)
 			}
-			defer f.Close()
+			defer func() {
+				if err := f.Close(); err != nil {
+					log.Printf("Warning: failed to close known_hosts file: %v", err)
+				}
+			}()
 
 			// Format: hostname ssh-keytype base64-encoded-key
 			line := knownhosts.Line([]string{hostname}, key)
@@ -272,6 +276,7 @@ func (nm *NodeManager) forwardAgent(client *ssh.Client, session *ssh.Session) er
 		if err != nil {
 			log.Printf("failed to dial SSH agent socket: %v", err)
 		} else {
+			defer util.IgnoreError(conn.Close)
 			ag := agent.NewClient(conn)
 			if err := agent.ForwardToAgent(client, ag); err != nil {
 				log.Printf("failed to forward agent to remote client: %v", err)
@@ -282,7 +287,6 @@ func (nm *NodeManager) forwardAgent(client *ssh.Client, session *ssh.Session) er
 				}
 			}
 		}
-
 	}
 	return nil
 }
