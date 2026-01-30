@@ -1,16 +1,22 @@
 package cmd
 
 import (
+	"encoding/json"
+	"fmt"
 	"log"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
+	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
 type BootstrapGcpPostconfigCmd struct {
 	cmd *cobra.Command
 
-	Opts *BootstrapGcpPostconfigOpts
+	Opts          *BootstrapGcpPostconfigOpts
+	CodesphereEnv gcp.CodesphereEnvironment
 }
 
 type BootstrapGcpPostconfigOpts struct {
@@ -22,7 +28,26 @@ type BootstrapGcpPostconfigOpts struct {
 func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, args []string) error {
 	log.Printf("running post-configuration steps...")
 
-	return nil
+	icg := installer.NewInstallConfigManager()
+
+	fw := util.NewFilesystemWriter()
+
+	envFileContent, err := fw.ReadFile(gcp.GetInfraFilePath())
+	if err != nil {
+		return fmt.Errorf("failed to read gcp infra file: %w", err)
+	}
+
+	err = json.Unmarshal(envFileContent, &c.CodesphereEnv)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal gcp infra file: %w", err)
+	}
+
+	err = icg.LoadInstallConfigFromFile(c.Opts.InstallConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to load config file: %w", err)
+	}
+
+	return fmt.Errorf("not implemented: run config script on k0s-1 node to install GCP CCM")
 }
 
 func AddBootstrapGcpPostconfigCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions) {

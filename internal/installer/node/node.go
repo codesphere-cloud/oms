@@ -20,35 +20,6 @@ import (
 	"golang.org/x/term"
 )
 
-type NodeManager interface {
-	// Node
-	CreateSubNode(name string, externalIP string, internalIP string) NodeManager
-	UpdateNode(name string, externalIP string, internalIP string)
-	GetExternalIP() string
-	GetInternalIP() string
-	GetName() string
-	// SSH
-	WaitForSSH(timeout time.Duration) error
-	RunSSHCommand(username string, command string, quiet bool) error
-	// OMS
-	HasCommand(command string) bool
-	InstallOms() error
-	// AcceptEnv
-	HasAcceptEnvConfigured() bool
-	ConfigureAcceptEnv() error
-	// Root Login
-	HasRootLoginEnabled() bool
-	EnableRootLogin() error
-	// Host Config
-	HasInotifyWatchesConfigured() bool
-	ConfigureInotifyWatches() error
-	HasMemoryMapConfigured() bool
-	ConfigureMemoryMap() error
-	// Files
-	HasFile(filePath string) bool
-	CopyFile(src string, dst string) error
-}
-
 type Node struct {
 	FileIO util.FileIO `json:"-"`
 	// If connecting via the Jumpbox
@@ -60,31 +31,93 @@ type Node struct {
 	InternalIP   string     `json:"internal_ip"`
 	cachedSigner ssh.Signer `json:"-"`
 	sshQuiet     bool       `json:"-"`
+
+	NodeClient NodeClient `json:"-"`
 	// SSH client cache: map[username]*ssh.Client
 	clientCache map[string]*ssh.Client
 	clientMu    sync.Mutex
 }
 
-const jumpboxUser = "ubuntu"
+type NodeClient interface {
+	RunCommand(n *Node, username string, command string) error
+	CopyFile(n *Node, src string, dst string) error
+	WaitReady(n *Node, timeout time.Duration) error
+	HasFile(n *Node, filePath string) bool
+}
 
-// NewNode creates a new Node with the given FileIO and SSH key path
-func NewNode(fileIO util.FileIO, keyPath string, sshQuiet bool) *Node {
-	return &Node{
-		FileIO:      fileIO,
-		keyPath:     util.ExpandPath(keyPath),
-		clientCache: make(map[string]*ssh.Client),
-		sshQuiet:    sshQuiet,
+type SSHNodeClient struct {
+	Quiet bool
+}
+
+func NewSSHNodeClient(quiet bool) *SSHNodeClient {
+	return &SSHNodeClient{
+		Quiet: quiet,
 	}
 }
 
+func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) error {
+	var jumpboxIp string
+	var ip string
+	if n.Jumpbox != nil {
+		jumpboxIp = n.Jumpbox.ExternalIP
+		ip = n.InternalIP
+	} else {
+		jumpboxIp = ""
+		ip = n.ExternalIP
+	}
+	client, err := n.getOrCreateClient(jumpboxIp, ip, username)
+	if err != nil {
+		return fmt.Errorf("failed to get client: %w", err)
+	}
+	// Don't close the client - it's cached for reuse
+
+	session, err := client.NewSession()
+	if err != nil {
+		// Connection might be stale, try to reconnect
+		n.invalidateClient(username)
+		client, err = n.getOrCreateClient(jumpboxIp, ip, username)
+		if err != nil {
+			return fmt.Errorf("failed to reconnect client: %w", err)
+		}
+		session, err = client.NewSession()
+		if err != nil {
+			return fmt.Errorf("failed to create session: %v", err)
+		}
+	}
+	defer util.IgnoreError(session.Close)
+
+	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
+	_ = agent.RequestAgentForwarding(session) // Best effort, ignore errors
+
+	if !r.Quiet {
+		session.Stdout = os.Stdout
+		session.Stderr = os.Stderr
+	}
+	// Start the command
+	if err := session.Start(command); err != nil {
+		return fmt.Errorf("failed to start command: %v", err)
+	}
+
+	if err := session.Wait(); err != nil {
+		// A non-zero exit status from the remote command is also considered an error
+		return fmt.Errorf("command failed: %w", err)
+	}
+	return nil
+}
+
+const jumpboxUser = "ubuntu"
+
+// NewNode creates a new Node with the given File
 // CreateSubNode creates a Node object representing a node behind a jumpbox
-func (n *Node) CreateSubNode(name string, externalIP string, internalIP string) NodeManager {
+func (n *Node) CreateSubNode(name string, externalIP string, internalIP string) *Node {
 	return &Node{
 		// Inherited from jumpbox
-		FileIO:   n.FileIO,
-		Jumpbox:  n,
-		keyPath:  util.ExpandPath(n.keyPath),
-		sshQuiet: n.sshQuiet,
+		FileIO:     n.FileIO,
+		Jumpbox:    n,
+		keyPath:    util.ExpandPath(n.keyPath),
+		sshQuiet:   n.sshQuiet,
+		NodeClient: n.NodeClient,
+
 		// Custom
 		Name:        name,
 		ExternalIP:  externalIP,
@@ -115,19 +148,17 @@ func (n *Node) GetName() string {
 	return n.Name
 }
 
-// WaitForSSH tries to connect to the node via SSH until timeout.
-// Once successful, the connection is cached for reuse.
-func (n *Node) WaitForSSH(timeout time.Duration) error {
+func (c *SSHNodeClient) WaitReady(node *Node, timeout time.Duration) error {
 	start := time.Now()
 	jumpboxIp := ""
-	nodeIp := n.ExternalIP
-	if n.Jumpbox != nil {
-		jumpboxIp = n.Jumpbox.ExternalIP
-		nodeIp = n.InternalIP
+	nodeIp := node.ExternalIP
+	if node.Jumpbox != nil {
+		jumpboxIp = node.Jumpbox.ExternalIP
+		nodeIp = node.InternalIP
 	}
 	for {
 		// Try to get or create a cached client
-		_, err := n.getOrCreateClient(jumpboxIp, nodeIp, jumpboxUser)
+		_, err := node.getOrCreateClient(jumpboxIp, nodeIp, jumpboxUser)
 		if err == nil {
 			// Connection successful and cached
 			return nil
@@ -142,62 +173,14 @@ func (n *Node) WaitForSSH(timeout time.Duration) error {
 // RunSSHCommand connects to the node, executes a command and streams the output.
 // If quiet is true, command output is not printed to stdout/stderr.
 // The SSH client connection is cached and reused for subsequent commands.
-func (n *Node) RunSSHCommand(username string, command string, quiet bool) error {
-	var jumpboxIp string
-	var ip string
-	if n.Jumpbox != nil {
-		jumpboxIp = n.Jumpbox.ExternalIP
-		ip = n.InternalIP
-	} else {
-		jumpboxIp = ""
-		ip = n.ExternalIP
-	}
-
-	client, err := n.getOrCreateClient(jumpboxIp, ip, username)
-	if err != nil {
-		return fmt.Errorf("failed to get client: %w", err)
-	}
-	// Don't close the client - it's cached for reuse
-
-	session, err := client.NewSession()
-	if err != nil {
-		// Connection might be stale, try to reconnect
-		n.invalidateClient(username)
-		client, err = n.getOrCreateClient(jumpboxIp, ip, username)
-		if err != nil {
-			return fmt.Errorf("failed to reconnect client: %w", err)
-		}
-		session, err = client.NewSession()
-		if err != nil {
-			return fmt.Errorf("failed to create session: %v", err)
-		}
-	}
-	defer util.IgnoreError(session.Close)
-
-	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
-	_ = agent.RequestAgentForwarding(session) // Best effort, ignore errors
-
-	if !quiet {
-		session.Stdout = os.Stdout
-		session.Stderr = os.Stderr
-	}
-	// Start the command
-	if err := session.Start(command); err != nil {
-		return fmt.Errorf("failed to start command: %v", err)
-	}
-
-	if err := session.Wait(); err != nil {
-		// A non-zero exit status from the remote command is also considered an error
-		return fmt.Errorf("command failed: %w", err)
-	}
-
-	return nil
+func (n *Node) RunSSHCommand(username string, command string) error {
+	return n.NodeClient.RunCommand(n, username, command)
 }
 
 // HasCommand checks if a command exists on the remote node via SSH
 func (n *Node) HasCommand(command string) bool {
 	checkCommand := fmt.Sprintf("command -v %s >/dev/null 2>&1", command)
-	err := n.RunSSHCommand("root", checkCommand, n.sshQuiet)
+	err := n.RunSSHCommand("root", checkCommand)
 	if err != nil {
 		// If the command returns a non-zero exit status, it means the command is not found
 		return false
@@ -214,7 +197,7 @@ func (n *Node) InstallOms() error {
 		"wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
 	}
 	for _, cmd := range remoteCommands {
-		err := n.RunSSHCommand("root", cmd, n.sshQuiet)
+		err := n.RunSSHCommand("root", cmd)
 		if err != nil {
 			return fmt.Errorf("failed to run remote command '%s': %w", cmd, err)
 		}
@@ -225,7 +208,7 @@ func (n *Node) InstallOms() error {
 // HasAcceptEnvConfigured checks if AcceptEnv is configured
 func (n *Node) HasAcceptEnvConfigured() bool {
 	checkCommand := "sudo grep -E '^AcceptEnv OMS_PORTAL_API_KEY' /etc/ssh/sshd_config >/dev/null 2>&1"
-	err := n.RunSSHCommand("ubuntu", checkCommand, n.sshQuiet)
+	err := n.RunSSHCommand("ubuntu", checkCommand)
 	if err != nil {
 		// If the command returns a NON-zero exit status, it means AcceptEnv is not configured
 		return false
@@ -240,7 +223,7 @@ func (n *Node) ConfigureAcceptEnv() error {
 		"sudo systemctl restart sshd",
 	}
 	for _, cmd := range cmds {
-		err := n.RunSSHCommand("ubuntu", cmd, n.sshQuiet)
+		err := n.RunSSHCommand("ubuntu", cmd)
 		if err != nil {
 			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
 		}
@@ -251,13 +234,13 @@ func (n *Node) ConfigureAcceptEnv() error {
 // HasRootLoginEnabled checks if root login is enabled on the remote node via SSH
 func (n *Node) HasRootLoginEnabled() bool {
 	checkCommandPermit := "sudo grep -E '^PermitRootLogin yes' /etc/ssh/sshd_config >/dev/null 2>&1"
-	err := n.RunSSHCommand("ubuntu", checkCommandPermit, n.sshQuiet)
+	err := n.RunSSHCommand("ubuntu", checkCommandPermit)
 	if err != nil {
 		// If the command returns a NON-zero exit status, it means root login is not permitted
 		return false
 	}
 	checkCommandAuthorizedKeys := "sudo grep -E '^no-port-forwarding' /root/.ssh/authorized_keys >/dev/null 2>&1"
-	err = n.RunSSHCommand("ubuntu", checkCommandAuthorizedKeys, n.sshQuiet)
+	err = n.RunSSHCommand("ubuntu", checkCommandAuthorizedKeys)
 	if err == nil {
 		// If the command returns a ZERO exit status, it means root login is prevented
 		return false
@@ -273,7 +256,7 @@ func (n *Node) EnableRootLogin() error {
 		"sudo systemctl restart sshd",
 	}
 	for _, cmd := range cmds {
-		err := n.RunSSHCommand("ubuntu", cmd, n.sshQuiet)
+		err := n.RunSSHCommand("ubuntu", cmd)
 		if err != nil {
 			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
 		}
@@ -298,9 +281,9 @@ func (n *Node) ConfigureMemoryMap() error {
 }
 
 // HasFile checks if a file exists on the remote node via SSH
-func (n *Node) HasFile(filePath string) bool {
+func (c *SSHNodeClient) HasFile(n *Node, filePath string) bool {
 	checkCommand := fmt.Sprintf("test -f '%s'", filePath)
-	err := n.RunSSHCommand("ubuntu", checkCommand, n.sshQuiet)
+	err := n.RunSSHCommand("ubuntu", checkCommand)
 	if err != nil {
 		// If the command returns a non-zero exit status, it means the file does not exist
 		return false
@@ -309,7 +292,7 @@ func (n *Node) HasFile(filePath string) bool {
 }
 
 // CopyFile copies a file from the local system to the remote node via SFTP
-func (n *Node) CopyFile(src string, dst string) error {
+func (c *SSHNodeClient) CopyFile(n *Node, src string, dst string) error {
 	if n.Jumpbox == nil {
 		err := n.ensureDirectoryExists("root", filepath.Dir(dst))
 		if err != nil {
@@ -329,7 +312,7 @@ func (n *Node) CopyFile(src string, dst string) error {
 // hasSysctlLine checks if a specific line exists in /etc/sysctl.conf on the remote node via SSH
 func (n *Node) hasSysctlLine(line string) bool {
 	checkCommand := fmt.Sprintf("sudo grep -E '^%s' /etc/sysctl.conf >/dev/null 2>&1", line)
-	err := n.RunSSHCommand("root", checkCommand, n.sshQuiet)
+	err := n.RunSSHCommand("root", checkCommand)
 	if err != nil {
 		// If the command returns a NON-zero exit status, it means the setting is not configured
 		return false
@@ -344,7 +327,7 @@ func (n *Node) configureSysctlLine(line string) error {
 		"sudo sysctl -p",
 	}
 	for _, cmd := range cmds {
-		err := n.RunSSHCommand("root", cmd, n.sshQuiet)
+		err := n.RunSSHCommand("root", cmd)
 		if err != nil {
 			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
 		}
@@ -467,7 +450,7 @@ func (n *Node) getSFTPClient(jumpboxIp string, ip string, username string) (*sft
 // ensureDirectoryExists creates the directory on the remote node via SSH if it does not exist.
 func (n *Node) ensureDirectoryExists(username string, dir string) error {
 	cmd := fmt.Sprintf("mkdir -p '%s'", dir)
-	return n.RunSSHCommand(username, cmd, n.sshQuiet)
+	return n.RunSSHCommand(username, cmd)
 }
 
 // copyFile copies a file from the local system to the remote node via SFTP.
