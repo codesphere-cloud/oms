@@ -21,7 +21,8 @@ vendor/
 go.work
 go.work.sum
 
-# env file
+# local env
+.envrc
 .env
 
 # bin file
@@ -33,3 +34,14 @@ oms-workdir/
 
 # Ignore internal util testdata fixtures
 internal/util/testdata/
+
+# IDE files
+.vscode/
+
+# OS files
+.DS_Store
+
+# Generated config files
+config.yaml
+prod.vault.yaml
+configure-k0s.sh
