@@ -115,12 +115,21 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 
 	// Add controller+worker nodes from control planes
 	for _, cp := range installConfig.Kubernetes.ControlPlanes {
+		sshPort := cp.SSHPort
+		if sshPort == 0 {
+			sshPort = 22
+		}
+		// Use SSHAddress if provided, otherwise fall back to IPAddress
+		sshAddress := cp.SSHAddress
+		if sshAddress == "" {
+			sshAddress = cp.IPAddress
+		}
 		host := K0sctlHost{
 			Role: "controller+worker",
 			SSH: K0sctlSSH{
-				Address: cp.IPAddress,
+				Address: sshAddress,
 				User:    "root",
-				Port:    22,
+				Port:    sshPort,
 			},
 			InstallFlags: []string{
 				"--enable-worker",
@@ -154,12 +163,21 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 		if addedIPs[worker.IPAddress] {
 			continue
 		}
+		sshPort := worker.SSHPort
+		if sshPort == 0 {
+			sshPort = 22
+		}
+		// Use SSHAddress if provided, otherwise fall back to IPAddress
+		sshAddress := worker.SSHAddress
+		if sshAddress == "" {
+			sshAddress = worker.IPAddress
+		}
 		host := K0sctlHost{
 			Role: "worker",
 			SSH: K0sctlSSH{
-				Address: worker.IPAddress,
+				Address: sshAddress,
 				User:    "root",
-				Port:    22,
+				Port:    sshPort,
 			},
 			PrivateAddress: worker.IPAddress,
 		}

@@ -57,6 +57,11 @@ var _ = Describe("K0sConfig", func() {
 				Expect(k0sConfig.Spec.Network.Provider).To(Equal("calico"))
 				Expect(k0sConfig.Spec.Storage.Etcd).ToNot(BeNil())
 				Expect(k0sConfig.Spec.Storage.Etcd.PeerAddress).To(Equal("10.0.1.10"))
+
+				// Check Konnectivity configuration (prevents webhook failures)
+				Expect(k0sConfig.Spec.Konnectivity).ToNot(BeNil())
+				Expect(k0sConfig.Spec.Konnectivity.AdminPort).To(Equal(8133))
+				Expect(k0sConfig.Spec.Konnectivity.AgentPort).To(Equal(8132))
 			})
 
 			It("should handle minimal configuration", func() {

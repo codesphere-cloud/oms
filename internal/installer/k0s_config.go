@@ -22,11 +22,12 @@ type K0sMetadata struct {
 }
 
 type K0sSpec struct {
-	API       *K0sAPI       `yaml:"api,omitempty"`
-	Network   *K0sNetwork   `yaml:"network,omitempty"`
-	Storage   *K0sStorage   `yaml:"storage,omitempty"`
-	Images    *K0sImages    `yaml:"images,omitempty"`
-	Telemetry *K0sTelemetry `yaml:"telemetry,omitempty"`
+	API          *K0sAPI          `yaml:"api,omitempty"`
+	Network      *K0sNetwork      `yaml:"network,omitempty"`
+	Storage      *K0sStorage      `yaml:"storage,omitempty"`
+	Images       *K0sImages       `yaml:"images,omitempty"`
+	Telemetry    *K0sTelemetry    `yaml:"telemetry,omitempty"`
+	Konnectivity *K0sKonnectivity `yaml:"konnectivity,omitempty"`
 }
 
 type K0sAPI struct {
@@ -57,6 +58,11 @@ type K0sImages struct {
 
 type K0sTelemetry struct {
 	Enabled bool `yaml:"enabled"`
+}
+
+type K0sKonnectivity struct {
+	AdminPort int `yaml:"adminPort,omitempty"`
+	AgentPort int `yaml:"agentPort,omitempty"`
 }
 
 func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
@@ -116,6 +122,11 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 
 		k0sConfig.Spec.Telemetry = &K0sTelemetry{
 			Enabled: false,
+		}
+
+		k0sConfig.Spec.Konnectivity = &K0sKonnectivity{
+			AdminPort: 8133,
+			AgentPort: 8132,
 		}
 
 		if len(installConfig.Kubernetes.ControlPlanes) > 0 {

@@ -132,7 +132,7 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
 	}
 
-	args := []string{k0sctlPath, "apply", "--config", configPath}
+	args := []string{"env", "-u", "SSH_AUTH_SOCK", k0sctlPath, "apply", "--config", configPath}
 
 	if force {
 		args = append(args, "--force")
@@ -163,7 +163,7 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 
 	log.Println("Resetting k0s cluster using k0sctl...")
 
-	args := []string{k0sctlPath, "reset", "--config", configPath, "--force"}
+	args := []string{"env", "-u", "SSH_AUTH_SOCK", k0sctlPath, "reset", "--config", configPath, "--force"}
 
 	err := util.RunCommand("sudo", args, "")
 	if err != nil {
