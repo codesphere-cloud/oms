@@ -425,8 +425,21 @@ func (nm *NodeManager) CopyFile(jumpboxIp string, ip string, username string, sr
 }
 
 func (n *Node) HasCommand(nm *NodeManager, command string) bool {
-	checkCommand := fmt.Sprintf("command -v '%s' >/dev/null 2>&1", shellEscape(command))
-	err := nm.RunSSHCommand("", n.ExternalIP, "root", checkCommand)
+	// Normalize to a bare executable name (ignore any arguments)
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return false
+	}
+	executable := fields[0]
+
+	checkCommand := fmt.Sprintf("command -v '%s' >/dev/null 2>&1", shellEscape(executable))
+
+	user := n.User
+	if user == "" {
+		user = "root"
+	}
+
+	err := nm.RunSSHCommand("", n.ExternalIP, user, checkCommand)
 	return err == nil
 }
 
