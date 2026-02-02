@@ -178,7 +178,11 @@ func (n *Node) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 			}()
 
 			// Format: hostname ssh-keytype base64-encoded-key
-			line := knownhosts.Line([]string{hostname}, key)
+			normalizedHosts := []string{hostname}
+			if host, port, splitErr := net.SplitHostPort(hostname); splitErr == nil {
+				normalizedHosts = []string{net.JoinHostPort(host, port)}
+			}
+			line := knownhosts.Line(normalizedHosts, key)
 			if _, err := f.WriteString(line + "\n"); err != nil {
 				return fmt.Errorf("failed to write to known_hosts: %w", err)
 			}
