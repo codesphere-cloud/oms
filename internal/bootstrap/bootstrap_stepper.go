@@ -5,6 +5,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"log"
 )
 
 const (
@@ -36,15 +37,15 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 	b.subSteps = 0
 	b.currentStep = name
 
-	fmt.Printf("%s%s%s...", LINE_RESET, RESET_TEXT, name)
+	log.Printf("%s%s%s...", LINE_RESET, RESET_TEXT, name)
 	err := fn()
 	if err != nil {
-		fmt.Printf("%s%s%s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
+		log.Printf("%s%s%s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
 	} else {
 		for i := 0; i < b.subSteps; i++ {
-			fmt.Printf("%s", MOVE_UP_CLEAR_LINE)
+			log.Printf("%s", MOVE_UP_CLEAR_LINE)
 		}
-		fmt.Printf("%s%s%s %s✓%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, RESET_TEXT)
+		log.Printf("%s%s%s %s✓%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, RESET_TEXT)
 	}
 	return err
 }
@@ -57,12 +58,12 @@ func (b *StepLogger) Substep(name string, fn func() error) error {
 	b.subSteps += 1
 	b.currentStep = name
 
-	fmt.Printf("%s%s   %s...", LINE_RESET, RESET_TEXT, name)
+	log.Printf("%s%s   %s...", LINE_RESET, RESET_TEXT, name)
 	err := fn()
 	if err != nil {
-		fmt.Printf("%s%s   %s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
+		log.Printf("%s%s   %s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
 	} else {
-		fmt.Printf("%s%s   %s %s✓%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, RESET_TEXT)
+		log.Printf("%s%s   %s %s✓%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, RESET_TEXT)
 	}
 	return err
 }
@@ -70,9 +71,9 @@ func (b *StepLogger) Substep(name string, fn func() error) error {
 // LogRetry prints a retry message for the current step.
 func (b *StepLogger) LogRetry() {
 	if b.subSteps > 0 {
-		fmt.Printf("%s%s   Retrying: %s...%s", LINE_RESET, RESET_TEXT, b.currentStep, RESET_TEXT)
+		log.Printf("%s%s   Retrying: %s...%s", LINE_RESET, RESET_TEXT, b.currentStep, RESET_TEXT)
 	} else {
-		fmt.Printf("%s%sRetrying: %s...%s", LINE_RESET, RESET_TEXT, b.currentStep, RESET_TEXT)
+		log.Printf("%s%sRetrying: %s...%s", LINE_RESET, RESET_TEXT, b.currentStep, RESET_TEXT)
 	}
 }
 
@@ -83,5 +84,5 @@ func (b *StepLogger) Logf(message string, args ...interface{}) {
 	}
 
 	b.subSteps += 1
-	fmt.Printf("%s%s      %s%s\n", LINE_RESET, RESET_TEXT, fmt.Sprintf(message, args...), RESET_TEXT)
+	log.Printf("%s%s      %s%s\n", LINE_RESET, RESET_TEXT, fmt.Sprintf(message, args...), RESET_TEXT)
 }

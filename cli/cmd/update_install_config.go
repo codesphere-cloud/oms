@@ -125,19 +125,19 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfigManager) error {
-	fmt.Printf("Loading existing configuration from: %s\n", c.Opts.ConfigFile)
+	log.Printf("Loading existing configuration from: %s\n", c.Opts.ConfigFile)
 	err := icg.LoadInstallConfigFromFile(c.Opts.ConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to load config file: %w", err)
 	}
 
-	fmt.Printf("Loading existing vault from: %s\n", c.Opts.VaultFile)
+	log.Printf("Loading existing vault from: %s\n", c.Opts.VaultFile)
 	err = icg.LoadVaultFromFile(c.Opts.VaultFile)
 	if err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 
-	fmt.Println("Merging vault secrets into configuration...")
+	log.Println("Merging vault secrets into configuration...")
 	err = icg.MergeVaultIntoConfig()
 	if err != nil {
 		return fmt.Errorf("failed to merge vault into config: %w", err)
@@ -154,12 +154,12 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 	}
 
 	if tracker.HasChanges() {
-		fmt.Println("\nRegenerating affected secrets and certificates...")
+		log.Println("\nRegenerating affected secrets and certificates...")
 		if err := c.regenerateSecrets(config, tracker); err != nil {
 			return fmt.Errorf("failed to regenerate secrets: %w", err)
 		}
 	} else {
-		fmt.Println("\nNo changes detected that require secret regeneration.")
+		log.Println("\nNo changes detected that require secret regeneration.")
 	}
 
 	if err := icg.WriteInstallConfig(c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
@@ -180,12 +180,12 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, tracker 
 	if c.Opts.PostgresPrimaryIP != "" || c.Opts.PostgresPrimaryHostname != "" {
 		if config.Postgres.Primary != nil {
 			if c.Opts.PostgresPrimaryIP != "" && config.Postgres.Primary.IP != c.Opts.PostgresPrimaryIP {
-				fmt.Printf("Updating PostgreSQL primary IP: %s -> %s\n", config.Postgres.Primary.IP, c.Opts.PostgresPrimaryIP)
+				log.Printf("Updating PostgreSQL primary IP: %s -> %s\n", config.Postgres.Primary.IP, c.Opts.PostgresPrimaryIP)
 				config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
 			if c.Opts.PostgresPrimaryHostname != "" && config.Postgres.Primary.Hostname != c.Opts.PostgresPrimaryHostname {
-				fmt.Printf("Updating PostgreSQL primary hostname: %s -> %s\n", config.Postgres.Primary.Hostname, c.Opts.PostgresPrimaryHostname)
+				log.Printf("Updating PostgreSQL primary hostname: %s -> %s\n", config.Postgres.Primary.Hostname, c.Opts.PostgresPrimaryHostname)
 				config.Postgres.Primary.Hostname = c.Opts.PostgresPrimaryHostname
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
@@ -195,12 +195,12 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, tracker 
 	if c.Opts.PostgresReplicaIP != "" || c.Opts.PostgresReplicaName != "" {
 		if config.Postgres.Replica != nil {
 			if c.Opts.PostgresReplicaIP != "" && config.Postgres.Replica.IP != c.Opts.PostgresReplicaIP {
-				fmt.Printf("Updating PostgreSQL replica IP: %s -> %s\n", config.Postgres.Replica.IP, c.Opts.PostgresReplicaIP)
+				log.Printf("Updating PostgreSQL replica IP: %s -> %s\n", config.Postgres.Replica.IP, c.Opts.PostgresReplicaIP)
 				config.Postgres.Replica.IP = c.Opts.PostgresReplicaIP
 				tracker.MarkPostgresReplicaCertNeedsRegen()
 			}
 			if c.Opts.PostgresReplicaName != "" && config.Postgres.Replica.Name != c.Opts.PostgresReplicaName {
-				fmt.Printf("Updating PostgreSQL replica name: %s -> %s\n", config.Postgres.Replica.Name, c.Opts.PostgresReplicaName)
+				log.Printf("Updating PostgreSQL replica name: %s -> %s\n", config.Postgres.Replica.Name, c.Opts.PostgresReplicaName)
 				config.Postgres.Replica.Name = c.Opts.PostgresReplicaName
 				tracker.MarkPostgresReplicaCertNeedsRegen()
 			}
@@ -208,76 +208,76 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, tracker 
 	}
 
 	if c.Opts.PostgresServerAddress != "" && config.Postgres.ServerAddress != c.Opts.PostgresServerAddress {
-		fmt.Printf("Updating PostgreSQL server address: %s -> %s\n", config.Postgres.ServerAddress, c.Opts.PostgresServerAddress)
+		log.Printf("Updating PostgreSQL server address: %s -> %s\n", config.Postgres.ServerAddress, c.Opts.PostgresServerAddress)
 		config.Postgres.ServerAddress = c.Opts.PostgresServerAddress
 	}
 
 	// Ceph updates
 	if c.Opts.CephNodesSubnet != "" && config.Ceph.NodesSubnet != c.Opts.CephNodesSubnet {
-		fmt.Printf("Updating Ceph nodes subnet: %s -> %s\n", config.Ceph.NodesSubnet, c.Opts.CephNodesSubnet)
+		log.Printf("Updating Ceph nodes subnet: %s -> %s\n", config.Ceph.NodesSubnet, c.Opts.CephNodesSubnet)
 		config.Ceph.NodesSubnet = c.Opts.CephNodesSubnet
 	}
 
 	// Kubernetes updates
 	if c.Opts.KubernetesAPIServerHost != "" && config.Kubernetes.APIServerHost != c.Opts.KubernetesAPIServerHost {
-		fmt.Printf("Updating Kubernetes API server host: %s -> %s\n", config.Kubernetes.APIServerHost, c.Opts.KubernetesAPIServerHost)
+		log.Printf("Updating Kubernetes API server host: %s -> %s\n", config.Kubernetes.APIServerHost, c.Opts.KubernetesAPIServerHost)
 		config.Kubernetes.APIServerHost = c.Opts.KubernetesAPIServerHost
 	}
 
 	if c.Opts.KubernetesPodCIDR != "" && config.Kubernetes.PodCIDR != c.Opts.KubernetesPodCIDR {
-		fmt.Printf("Updating Kubernetes Pod CIDR: %s -> %s\n", config.Kubernetes.PodCIDR, c.Opts.KubernetesPodCIDR)
+		log.Printf("Updating Kubernetes Pod CIDR: %s -> %s\n", config.Kubernetes.PodCIDR, c.Opts.KubernetesPodCIDR)
 		config.Kubernetes.PodCIDR = c.Opts.KubernetesPodCIDR
 	}
 
 	if c.Opts.KubernetesServiceCIDR != "" && config.Kubernetes.ServiceCIDR != c.Opts.KubernetesServiceCIDR {
-		fmt.Printf("Updating Kubernetes Service CIDR: %s -> %s\n", config.Kubernetes.ServiceCIDR, c.Opts.KubernetesServiceCIDR)
+		log.Printf("Updating Kubernetes Service CIDR: %s -> %s\n", config.Kubernetes.ServiceCIDR, c.Opts.KubernetesServiceCIDR)
 		config.Kubernetes.ServiceCIDR = c.Opts.KubernetesServiceCIDR
 	}
 
 	// Cluster Gateway updates
 	if c.Opts.ClusterGatewayServiceType != "" && config.Cluster.Gateway.ServiceType != c.Opts.ClusterGatewayServiceType {
-		fmt.Printf("Updating cluster gateway service type: %s -> %s\n", config.Cluster.Gateway.ServiceType, c.Opts.ClusterGatewayServiceType)
+		log.Printf("Updating cluster gateway service type: %s -> %s\n", config.Cluster.Gateway.ServiceType, c.Opts.ClusterGatewayServiceType)
 		config.Cluster.Gateway.ServiceType = c.Opts.ClusterGatewayServiceType
 	}
 
 	if len(c.Opts.ClusterGatewayIPAddresses) > 0 {
-		fmt.Printf("Updating cluster gateway IP addresses\n")
+		log.Printf("Updating cluster gateway IP addresses\n")
 		config.Cluster.Gateway.IPAddresses = c.Opts.ClusterGatewayIPAddresses
 	}
 
 	if c.Opts.ClusterPublicGatewayServiceType != "" && config.Cluster.PublicGateway.ServiceType != c.Opts.ClusterPublicGatewayServiceType {
-		fmt.Printf("Updating cluster public gateway service type: %s -> %s\n", config.Cluster.PublicGateway.ServiceType, c.Opts.ClusterPublicGatewayServiceType)
+		log.Printf("Updating cluster public gateway service type: %s -> %s\n", config.Cluster.PublicGateway.ServiceType, c.Opts.ClusterPublicGatewayServiceType)
 		config.Cluster.PublicGateway.ServiceType = c.Opts.ClusterPublicGatewayServiceType
 	}
 
 	if len(c.Opts.ClusterPublicGatewayIPAddresses) > 0 {
-		fmt.Printf("Updating cluster public gateway IP addresses\n")
+		log.Printf("Updating cluster public gateway IP addresses\n")
 		config.Cluster.PublicGateway.IPAddresses = c.Opts.ClusterPublicGatewayIPAddresses
 	}
 
 	// Codesphere updates
 	if c.Opts.CodesphereDomain != "" && config.Codesphere.Domain != c.Opts.CodesphereDomain {
-		fmt.Printf("Updating Codesphere domain: %s -> %s\n", config.Codesphere.Domain, c.Opts.CodesphereDomain)
+		log.Printf("Updating Codesphere domain: %s -> %s\n", config.Codesphere.Domain, c.Opts.CodesphereDomain)
 		config.Codesphere.Domain = c.Opts.CodesphereDomain
 	}
 
 	if c.Opts.CodespherePublicIP != "" && config.Codesphere.PublicIP != c.Opts.CodespherePublicIP {
-		fmt.Printf("Updating Codesphere public IP: %s -> %s\n", config.Codesphere.PublicIP, c.Opts.CodespherePublicIP)
+		log.Printf("Updating Codesphere public IP: %s -> %s\n", config.Codesphere.PublicIP, c.Opts.CodespherePublicIP)
 		config.Codesphere.PublicIP = c.Opts.CodespherePublicIP
 	}
 
 	if c.Opts.CodesphereWorkspaceHostingBaseDomain != "" && config.Codesphere.WorkspaceHostingBaseDomain != c.Opts.CodesphereWorkspaceHostingBaseDomain {
-		fmt.Printf("Updating workspace hosting base domain: %s -> %s\n", config.Codesphere.WorkspaceHostingBaseDomain, c.Opts.CodesphereWorkspaceHostingBaseDomain)
+		log.Printf("Updating workspace hosting base domain: %s -> %s\n", config.Codesphere.WorkspaceHostingBaseDomain, c.Opts.CodesphereWorkspaceHostingBaseDomain)
 		config.Codesphere.WorkspaceHostingBaseDomain = c.Opts.CodesphereWorkspaceHostingBaseDomain
 	}
 
 	if c.Opts.CodesphereCustomDomainsCNameBaseDomain != "" && config.Codesphere.CustomDomains.CNameBaseDomain != c.Opts.CodesphereCustomDomainsCNameBaseDomain {
-		fmt.Printf("Updating custom domains CNAME base domain: %s -> %s\n", config.Codesphere.CustomDomains.CNameBaseDomain, c.Opts.CodesphereCustomDomainsCNameBaseDomain)
+		log.Printf("Updating custom domains CNAME base domain: %s -> %s\n", config.Codesphere.CustomDomains.CNameBaseDomain, c.Opts.CodesphereCustomDomainsCNameBaseDomain)
 		config.Codesphere.CustomDomains.CNameBaseDomain = c.Opts.CodesphereCustomDomainsCNameBaseDomain
 	}
 
 	if len(c.Opts.CodesphereDNSServers) > 0 {
-		fmt.Printf("Updating DNS servers\n")
+		log.Printf("Updating DNS servers\n")
 		config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
 	}
 }
@@ -317,23 +317,23 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, tra
 }
 
 func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTracker) {
-	fmt.Println("\n" + strings.Repeat("=", 70))
-	fmt.Println("Configuration successfully updated!")
-	fmt.Println(strings.Repeat("=", 70))
+	log.Println("\n" + strings.Repeat("=", 70))
+	log.Println("Configuration successfully updated!")
+	log.Println(strings.Repeat("=", 70))
 
 	if tracker.HasChanges() {
-		fmt.Println("\nRegenerated secrets:")
+		log.Println("\nRegenerated secrets:")
 		if tracker.NeedsPostgresPrimaryCertRegen() {
-			fmt.Println("  ✓ PostgreSQL primary server certificate")
+			log.Println("  ✓ PostgreSQL primary server certificate")
 		}
 		if tracker.NeedsPostgresReplicaCertRegen() {
-			fmt.Println("  ✓ PostgreSQL replica server certificate")
+			log.Println("  ✓ PostgreSQL replica server certificate")
 		}
 	}
 
-	fmt.Println("\nIMPORTANT: The vault file has been updated with new secrets.")
-	fmt.Println("   Remember to re-encrypt it with SOPS before storing.")
-	fmt.Println()
+	log.Println("\nIMPORTANT: The vault file has been updated with new secrets.")
+	log.Println("   Remember to re-encrypt it with SOPS before storing.")
+	log.Println()
 }
 
 type SecretDependencyTracker struct {

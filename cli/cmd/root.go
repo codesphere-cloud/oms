@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -31,27 +30,27 @@ func GetRootCmd() *cobra.Command {
 			apiKey := os.Getenv("OMS_PORTAL_API_KEY")
 
 			if len(apiKey) == 25 {
-				fmt.Fprintf(os.Stderr, "Warning: You used an old API key format.\n")
-				fmt.Fprintf(os.Stderr, "Attempting to upgrade to the new format...\n\n")
+				log.Println("Warning: You used an old API key format.")
+				log.Println("Attempting to upgrade to the new format...")
 
 				portalClient := portal.NewPortalClient()
 				keyId, err := portalClient.GetApiKeyId(apiKey)
 
 				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error: Failed to upgrade old API key: %v\n", err)
+					log.Printf("Error: Failed to upgrade old API key: %v\n", err)
 					return
 				}
 
 				newApiKey := keyId + apiKey
 
 				if err := os.Setenv("OMS_PORTAL_API_KEY", newApiKey); err != nil {
-					fmt.Fprintf(os.Stderr, "Error: Failed to set environment variable: %v\n", err)
+					log.Printf("Error: Failed to set environment variable: %v\n", err)
 					return
 				}
 				opts.OmsPortalApiKey = newApiKey
 
-				fmt.Fprintf(os.Stderr, "Please update your environment variable:\n\n")
-				fmt.Fprintf(os.Stderr, "  export OMS_PORTAL_API_KEY='%s'\n\n", newApiKey)
+				log.Println("Please update your environment variable:")
+				log.Printf("  export OMS_PORTAL_API_KEY='%s'\n\n", newApiKey)
 			}
 		},
 	}
