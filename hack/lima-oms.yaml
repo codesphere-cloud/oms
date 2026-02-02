@@ -93,7 +93,7 @@ provision:
 
 message: |
   Your OMS development environment is ready!
-  VM IP: Run 'hostname -I | awk '{print $1}'' to get your VM's IP address
+  VM IP: Run "hostname -I | awk '{print $1}'" to get your VM's IP address
   
   Quick Start:
   ------
