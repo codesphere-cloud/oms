@@ -38,7 +38,7 @@ func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
+func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	bootstrapGcpCmd := BootstrapGcpCmd{
 		cmd: &cobra.Command{
 			Use:   "bootstrap-gcp",
@@ -53,6 +53,7 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 		Env:           env.NewEnv(),
 		CodesphereEnv: &gcp.CodesphereEnvironment{},
 	}
+	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
 
 	flags := bootstrapGcpCmd.cmd.Flags()
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP Project Name (required)")
@@ -82,8 +83,8 @@ func AddBootstrapGcpCmd(root *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
 
-	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
-	root.AddCommand(bootstrapGcpCmd.cmd)
+	parent.AddCommand(bootstrapGcpCmd.cmd)
+	AddBootstrapGcpPostconfigCmd(bootstrapGcpCmd.cmd, opts)
 }
 
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
@@ -92,9 +93,8 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	icg := installer.NewInstallConfigManager()
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := util.NewFilesystemWriter()
-	nm := node.NewNode(fw, c.CodesphereEnv.SSHPrivateKeyPath, c.SSHQuiet)
 
-	bs, err := gcp.NewGCPBootstrapper(ctx, c.Env, stlog, c.CodesphereEnv, icg, gcpClient, nm, fw)
+	bs, err := gcp.NewGCPBootstrapper(ctx, c.Env, stlog, c.CodesphereEnv, icg, gcpClient, fw, node.NewSSHNodeClient(c.SSHQuiet))
 	if err != nil {
 		return err
 	}
@@ -103,21 +103,34 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	err = bs.Bootstrap()
 	envBytes, err2 := json.MarshalIndent(bs.Env, "", "  ")
+
 	envString := string(envBytes)
 	if err2 != nil {
 		envString = ""
 	}
+
 	if err != nil {
-		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
+		if bs.Env.Jumpbox.GetExternalIP() != "" {
 			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
 		return fmt.Errorf("failed to bootstrap GCP: %w, env: %s", err, envString)
 	}
 
+	workdir := env.NewEnv().GetOmsWorkdir()
+	err = fw.MkdirAll(workdir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create workdir: %w", err)
+	}
+	infraFilePath := gcp.GetInfraFilePath()
+	err = fw.WriteFile(infraFilePath, envBytes, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
+	}
+
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
 	log.Println(envString)
+	log.Printf("Infrastructure details written to %s", infraFilePath)
 	log.Printf("Start the Codesphere installation using OMS from the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
-	log.Printf("When the installation is done, run the k0s configuration script generated at the k0s-1 host %s /root/configure-k0s.sh.", bs.Env.ControlPlaneNodes[0].GetInternalIP())
 
-	return err
+	return nil
 }
