@@ -337,6 +337,9 @@ func (n *Node) configureSysctlLine(line string) error {
 
 // getOrCreateClient returns a cached SSH client or creates a new one if not cached.
 func (n *Node) getOrCreateClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
+	if n.clientCache == nil {
+		n.clientCache = make(map[string]*ssh.Client)
+	}
 	n.clientMu.Lock()
 	defer n.clientMu.Unlock()
 
