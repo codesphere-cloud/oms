@@ -62,7 +62,7 @@ type GCPBootstrapper struct {
 	// Environment
 	Env *CodesphereEnvironment
 	// SSH command runner
-	CommandRunner node.NodeClient
+	NodeClient node.NodeClient
 }
 
 type CodesphereEnvironment struct {
@@ -115,13 +115,13 @@ func NewGCPBootstrapper(
 	fw util.FileIO,
 	sshRunner node.NodeClient) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:           ctx,
-		stlog:         stlog,
-		fw:            fw,
-		icg:           icg,
-		GCPClient:     gcpClient,
-		Env:           CodesphereEnv,
-		CommandRunner: sshRunner,
+		ctx:        ctx,
+		stlog:      stlog,
+		fw:         fw,
+		icg:        icg,
+		GCPClient:  gcpClient,
+		Env:        CodesphereEnv,
+		NodeClient: sshRunner,
 	}, nil
 }
 
@@ -404,7 +404,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 }
 
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.GCPClient.AssignIAMRole(b.Env.ProjectID, "cloud-controller", "roles/compute.admin")
+	err := b.ensureIAMRoleWithRetry("cloud-controller", "roles/compute.admin")
 	if err != nil {
 		return err
 	}
@@ -413,8 +413,23 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 		return nil
 	}
 
-	err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, "artifact-registry-writer", "roles/artifactregistry.writer")
+	err = b.ensureIAMRoleWithRetry("artifact-registry-writer", "roles/artifactregistry.writer")
 	return err
+}
+
+func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount, role string) error {
+	var err error
+	for retries := range 5 {
+		err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, serviceAccount, role)
+		if err == nil {
+			return nil
+		}
+		if retries < 4 {
+			b.stlog.LogRetry()
+			time.Sleep(5 * time.Second)
+		}
+	}
+	return fmt.Errorf("failed to assign role %s to service account %s: %w", role, serviceAccount, err)
 }
 
 func (b *GCPBootstrapper) EnsureVPC() error {
@@ -671,7 +686,8 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 
 	// Create nodes from results (in main goroutine, not in spawned goroutines)
 	b.Env.Jumpbox = &node.Node{
-		NodeClient: b.CommandRunner,
+		NodeClient: b.NodeClient,
+		FileIO:     b.fw,
 	}
 	for result := range resultCh {
 		switch result.vmType {
