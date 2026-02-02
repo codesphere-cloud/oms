@@ -81,24 +81,29 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 
 	if installConfig.Kubernetes.ManagedByCodesphere {
 		if len(installConfig.Kubernetes.ControlPlanes) > 0 {
-			firstControlPlane := installConfig.Kubernetes.ControlPlanes[0]
-			k0sConfig.Spec.API = &K0sAPI{
-				Address: firstControlPlane.IPAddress,
-				Port:    6443,
-			}
+			firstControlPlaneIP := installConfig.Kubernetes.ControlPlanes[0].IPAddress
 
-			if installConfig.Kubernetes.APIServerHost != "" {
-				k0sConfig.Spec.API.ExternalAddress = installConfig.Kubernetes.APIServerHost
-			}
-
-			sans := make([]string, 0, len(installConfig.Kubernetes.ControlPlanes))
+			sans := make([]string, 0, len(installConfig.Kubernetes.ControlPlanes)+1)
 			for _, cp := range installConfig.Kubernetes.ControlPlanes {
 				sans = append(sans, cp.IPAddress)
 			}
 			if installConfig.Kubernetes.APIServerHost != "" {
 				sans = append(sans, installConfig.Kubernetes.APIServerHost)
 			}
-			k0sConfig.Spec.API.SANs = sans
+
+			k0sConfig.Spec.API = &K0sAPI{
+				Address:         firstControlPlaneIP,
+				ExternalAddress: installConfig.Kubernetes.APIServerHost,
+				SANs:            sans,
+				Port:            6443,
+			}
+
+			k0sConfig.Spec.Storage = &K0sStorage{
+				Type: "etcd",
+				Etcd: &K0sEtcd{
+					PeerAddress: firstControlPlaneIP,
+				},
+			}
 		}
 
 		k0sConfig.Spec.Network = &K0sNetwork{
@@ -118,15 +123,6 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 		k0sConfig.Spec.Konnectivity = &K0sKonnectivity{
 			AdminPort: 8133,
 			AgentPort: 8132,
-		}
-
-		if len(installConfig.Kubernetes.ControlPlanes) > 0 {
-			k0sConfig.Spec.Storage = &K0sStorage{
-				Type: "etcd",
-				Etcd: &K0sEtcd{
-					PeerAddress: installConfig.Kubernetes.ControlPlanes[0].IPAddress,
-				},
-			}
 		}
 	}
 
