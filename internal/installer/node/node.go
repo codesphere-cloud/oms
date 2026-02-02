@@ -134,7 +134,7 @@ func (n *Node) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 
 	// Create file if it doesn't exist
 	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
-		f, err := os.Create(knownHostsPath)
+		f, err := os.OpenFile(knownHostsPath, os.O_CREATE|os.O_RDONLY, 0600)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create known_hosts file: %w", err)
 		}

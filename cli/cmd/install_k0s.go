@@ -6,7 +6,6 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -152,7 +151,7 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 	}
 
 	k0sctlConfigPath := filepath.Join(c.Env.GetOmsWorkdir(), k0sctlConfigFile)
-	if err := os.WriteFile(k0sctlConfigPath, k0sctlConfigData, 0644); err != nil {
+	if err := c.FileWriter.WriteFile(k0sctlConfigPath, k0sctlConfigData, 0644); err != nil {
 		return fmt.Errorf("failed to write k0sctl config: %w", err)
 	}
 
