@@ -30,6 +30,7 @@ type RegistryType string
 const (
 	RegistryTypeLocalContainer   RegistryType = "local-container"
 	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
+	RegistryTypeGitHub           RegistryType = "github"
 )
 
 type VMDef struct {
@@ -81,6 +82,8 @@ type CodesphereEnvironment struct {
 	GatewayIP                string       `json:"gateway_ip"`
 	PublicGatewayIP          string       `json:"public_gateway_ip"`
 	RegistryType             RegistryType `json:"registry_type"`
+	GitHubPAT                string       `json:"-"`
+	RegistryUser             string       `json:"-"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -212,6 +215,13 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		err = b.stlog.Step("Ensure local container registry", b.EnsureLocalContainerRegistry)
 		if err != nil {
 			return fmt.Errorf("failed to ensure local container registry: %w", err)
+		}
+	}
+
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		err = b.stlog.Step("Ensure GitHub access configured", b.EnsureGitHubAccessConfigured)
+		if err != nil {
+			return fmt.Errorf("failed to update install config: %w", err)
 		}
 	}
 
@@ -563,6 +573,10 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	wg := sync.WaitGroup{}
 	errCh := make(chan error, len(vmDefs))
 	resultCh := make(chan vmResult, len(vmDefs))
+	rootDiskSize := int64(200)
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		rootDiskSize = 50
+	}
 	for _, vm := range vmDefs {
 		wg.Add(1)
 		go func(vm VMDef) {
@@ -574,7 +588,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 					Type:       protoString("PERSISTENT"),
 					InitializeParams: &computepb.AttachedDiskInitializeParams{
 						DiskType:    &diskType,
-						DiskSizeGb:  protoInt64(200),
+						DiskSizeGb:  protoInt64(rootDiskSize),
 						SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
 					},
 				},
@@ -917,6 +931,17 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 	return nil
 }
+func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
+	if b.Env.GitHubPAT == "" {
+		return fmt.Errorf("GitHub PAT is not set")
+	}
+	b.Env.InstallConfig.Registry.Server = "ghcr.io"
+	b.Env.InstallConfig.Registry.Username = b.Env.RegistryUser
+	b.Env.InstallConfig.Registry.Password = b.Env.GitHubPAT
+	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
+	b.Env.InstallConfig.Registry.LoadContainerImages = false
+	return nil
+}
 
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	// Update install config with necessary values
@@ -924,8 +949,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
 	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
 	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
-	b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
-	b.Env.InstallConfig.Registry.LoadContainerImages = true
+	if b.Env.RegistryType != RegistryTypeGitHub {
+		b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
+		b.Env.InstallConfig.Registry.LoadContainerImages = true
+	}
 
 	if b.Env.InstallConfig.Postgres.Primary == nil {
 		b.Env.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
@@ -1245,12 +1272,22 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 }
 
 func (b *GCPBootstrapper) InstallCodesphere() error {
-	err := b.Env.Jumpbox.RunSSHCommand("root", "oms-cli download package "+b.Env.InstallCodesphereVersion)
+	packageFile := "installer.tar.gz"
+	skipSteps := ""
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		skipSteps = " -s load-container-images"
+		packageFile = "installer-lite.tar.gz"
+	}
+
+	downloadCmd := "oms-cli download package -f " + packageFile + " " + b.Env.InstallCodesphereVersion
+	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.RunSSHCommand("root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k "+b.Env.SecretsDir+"/age_key.txt -p "+b.Env.InstallCodesphereVersion+".tar.gz")
+	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s-%s%s",
+		b.Env.SecretsDir, b.Env.InstallCodesphereVersion, packageFile, skipSteps)
+	err = b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
