@@ -134,7 +134,7 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
 	}
 
-	args := []string{"env", "-u", "SSH_AUTH_SOCK", k0sctlPath, "apply", "--config", configPath}
+	args := []string{"apply", "--config", configPath}
 
 	if force {
 		args = append(args, "--force")
@@ -145,7 +145,7 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 
 	log.Printf("Running k0sctl apply with config: %s", configPath)
 
-	err := util.RunCommand("sudo", args, "")
+	err := util.RunCommand(k0sctlPath, args, "")
 	if err != nil {
 		return fmt.Errorf("k0sctl apply failed: %w", err)
 	}
@@ -165,9 +165,9 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 
 	log.Println("Resetting k0s cluster using k0sctl...")
 
-	args := []string{"env", "-u", "SSH_AUTH_SOCK", k0sctlPath, "reset", "--config", configPath, "--force"}
+	args := []string{"reset", "--config", configPath, "--force"}
 
-	err := util.RunCommand("sudo", args, "")
+	err := util.RunCommand(k0sctlPath, args, "")
 	if err != nil {
 		return fmt.Errorf("k0sctl reset failed: %w", err)
 	}

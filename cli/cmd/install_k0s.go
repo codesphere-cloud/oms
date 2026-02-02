@@ -120,6 +120,10 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 	var k0sBinaryPath string
 	if !c.Opts.NoDownload {
 		if c.Opts.Package != "" {
+			// Extract the k0s binary from the package first
+			if err := pm.ExtractDependency(defaultK0sPath, c.Opts.Force); err != nil {
+				return fmt.Errorf("failed to extract k0s from package: %w", err)
+			}
 			k0sBinaryPath = pm.GetDependencyPath(defaultK0sPath)
 		} else {
 			var err error
