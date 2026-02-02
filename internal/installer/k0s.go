@@ -100,32 +100,38 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 }
 
 // GetNodeIPAddress finds the IP address of the current node by matching
-// against the control plane IPs in the config
+// against the control plane IPs in the config. Returns matching control plane IP
+// if found, otherwise returns the first non-loopback IPv4 address.
 func GetNodeIPAddress(controlPlanes []string) (string, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return "", fmt.Errorf("failed to get network interfaces: %w", err)
 	}
 
+	// Build a set of control plane IPs for O(1) lookup
+	cpSet := make(map[string]bool, len(controlPlanes))
+	for _, ip := range controlPlanes {
+		cpSet[ip] = true
+	}
+
+	var fallbackIP string
 	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				ip := ipnet.IP.String()
-				for _, cpIP := range controlPlanes {
-					if ip == cpIP {
-						return ip, nil
-					}
-				}
-			}
+		ipnet, ok := addr.(*net.IPNet)
+		if !ok || ipnet.IP.IsLoopback() || ipnet.IP.To4() == nil {
+			continue
+		}
+
+		ip := ipnet.IP.String()
+		if cpSet[ip] {
+			return ip, nil
+		}
+		if fallbackIP == "" {
+			fallbackIP = ip
 		}
 	}
 
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String(), nil
-			}
-		}
+	if fallbackIP != "" {
+		return fallbackIP, nil
 	}
 
 	return "", fmt.Errorf("no suitable IP address found")

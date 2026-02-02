@@ -102,18 +102,9 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 		}
 
 		k0sConfig.Spec.Network = &K0sNetwork{
-			Provider: "calico",
-		}
-
-		if installConfig.Kubernetes.PodCIDR != "" {
-			k0sConfig.Spec.Network.PodCIDR = installConfig.Kubernetes.PodCIDR
-		} else {
-			k0sConfig.Spec.Network.PodCIDR = "100.96.0.0/11"
-		}
-		if installConfig.Kubernetes.ServiceCIDR != "" {
-			k0sConfig.Spec.Network.ServiceCIDR = installConfig.Kubernetes.ServiceCIDR
-		} else {
-			k0sConfig.Spec.Network.ServiceCIDR = "100.64.0.0/13"
+			Provider:    "calico",
+			PodCIDR:     defaultIfEmpty(installConfig.Kubernetes.PodCIDR, "100.96.0.0/11"),
+			ServiceCIDR: defaultIfEmpty(installConfig.Kubernetes.ServiceCIDR, "100.64.0.0/13"),
 		}
 
 		k0sConfig.Spec.Images = &K0sImages{
@@ -140,6 +131,13 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 	}
 
 	return k0sConfig, nil
+}
+
+func defaultIfEmpty(value, defaultValue string) string {
+	if value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 func (c *K0sConfig) Marshal() ([]byte, error) {

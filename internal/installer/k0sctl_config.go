@@ -68,6 +68,40 @@ type K0sctlApplyHooks struct {
 	After  []string `yaml:"after,omitempty"`
 }
 
+func createK0sctlHost(node files.K8sNode, role string, installFlags []string, sshKeyPath string, k0sBinaryPath string) K0sctlHost {
+	sshPort := node.SSHPort
+	if sshPort == 0 {
+		sshPort = 22
+	}
+
+	sshAddress := node.SSHAddress
+	if sshAddress == "" {
+		sshAddress = node.IPAddress
+	}
+
+	host := K0sctlHost{
+		Role: role,
+		SSH: K0sctlSSH{
+			Address: sshAddress,
+			User:    "root",
+			Port:    sshPort,
+			KeyPath: sshKeyPath,
+		},
+		InstallFlags:   installFlags,
+		PrivateAddress: node.IPAddress,
+		Environment: map[string]string{
+			"KUBELET_EXTRA_ARGS": fmt.Sprintf("--node-ip=%s", node.IPAddress),
+		},
+	}
+
+	if k0sBinaryPath != "" {
+		host.UploadBinary = true
+		host.K0sBinaryPath = k0sBinaryPath
+	}
+
+	return host
+}
+
 // GenerateK0sctlConfig generates a k0sctl configuration from a Codesphere install-config
 func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, sshKeyPath string, k0sBinaryPath string) (*K0sctlConfig, error) {
 	if installConfig == nil {
@@ -114,46 +148,9 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 	addedIPs := make(map[string]bool)
 
 	// Add controller+worker nodes from control planes
+	controllerFlags := []string{"--enable-worker", "--no-taints"}
 	for _, cp := range installConfig.Kubernetes.ControlPlanes {
-		sshPort := cp.SSHPort
-		if sshPort == 0 {
-			sshPort = 22
-		}
-		// Use SSHAddress if provided, otherwise fall back to IPAddress
-		sshAddress := cp.SSHAddress
-		if sshAddress == "" {
-			sshAddress = cp.IPAddress
-		}
-		host := K0sctlHost{
-			Role: "controller+worker",
-			SSH: K0sctlSSH{
-				Address: sshAddress,
-				User:    "root",
-				Port:    sshPort,
-			},
-			InstallFlags: []string{
-				"--enable-worker",
-				"--no-taints",
-			},
-			PrivateAddress: cp.IPAddress,
-		}
-
-		// Add SSH key path if provided
-		if sshKeyPath != "" {
-			host.SSH.KeyPath = sshKeyPath
-		}
-
-		// Add k0s binary path if provided
-		if k0sBinaryPath != "" {
-			host.UploadBinary = true
-			host.K0sBinaryPath = k0sBinaryPath
-		}
-
-		// Set node-ip in kubelet extra args
-		host.Environment = map[string]string{
-			"KUBELET_EXTRA_ARGS": fmt.Sprintf("--node-ip=%s", cp.IPAddress),
-		}
-
+		host := createK0sctlHost(cp, "controller+worker", controllerFlags, sshKeyPath, k0sBinaryPath)
 		k0sctlConfig.Spec.Hosts = append(k0sctlConfig.Spec.Hosts, host)
 		addedIPs[cp.IPAddress] = true
 	}
@@ -163,38 +160,7 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 		if addedIPs[worker.IPAddress] {
 			continue
 		}
-		sshPort := worker.SSHPort
-		if sshPort == 0 {
-			sshPort = 22
-		}
-		// Use SSHAddress if provided, otherwise fall back to IPAddress
-		sshAddress := worker.SSHAddress
-		if sshAddress == "" {
-			sshAddress = worker.IPAddress
-		}
-		host := K0sctlHost{
-			Role: "worker",
-			SSH: K0sctlSSH{
-				Address: sshAddress,
-				User:    "root",
-				Port:    sshPort,
-			},
-			PrivateAddress: worker.IPAddress,
-		}
-
-		if sshKeyPath != "" {
-			host.SSH.KeyPath = sshKeyPath
-		}
-
-		if k0sBinaryPath != "" {
-			host.UploadBinary = true
-			host.K0sBinaryPath = k0sBinaryPath
-		}
-
-		host.Environment = map[string]string{
-			"KUBELET_EXTRA_ARGS": fmt.Sprintf("--node-ip=%s", worker.IPAddress),
-		}
-
+		host := createK0sctlHost(worker, "worker", nil, sshKeyPath, k0sBinaryPath)
 		k0sctlConfig.Spec.Hosts = append(k0sctlConfig.Spec.Hosts, host)
 	}
 
