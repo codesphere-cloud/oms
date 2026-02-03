@@ -94,7 +94,7 @@ License: MIT
 License URL: https://github.com/clipperhouse/uax29/blob/v2.4.0/LICENSE
  
 ----------
-Module: github.com/codesphere-cloud/cs-go/pkg/io
+Module: github.com/codesphere-cloud/cs-go
 Version: v0.16.4
 License: Apache-2.0
 License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.16.4/LICENSE
@@ -440,6 +440,12 @@ Module: google.golang.org/protobuf
 Version: v1.36.11
 License: BSD-3-Clause
 License URL: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.11/LICENSE
+ 
+----------
+Module: gopkg.in/validator.v2
+Version: v2.0.1
+License: Apache-2.0
+License URL: https://github.com/go-validator/validator/blob/v2.0.1/LICENSE
  
 ----------
 Module: gopkg.in/yaml.v3

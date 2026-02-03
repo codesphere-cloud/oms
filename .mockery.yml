@@ -50,3 +50,7 @@ packages:
     config:
       all: true
     interfaces:
+  github.com/codesphere-cloud/oms/pkg/codesphere:
+    config:
+      all: true
+    interfaces:
