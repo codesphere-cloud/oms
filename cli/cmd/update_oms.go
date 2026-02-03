@@ -4,11 +4,11 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"log"
 
-	"github.com/blang/semver"
-	"github.com/rhysd/go-github-selfupdate/selfupdate"
+	"github.com/creativeprojects/go-selfupdate"
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/internal/version"
@@ -17,18 +17,34 @@ import (
 const GitHubRepo = "codesphere-cloud/oms"
 
 type OMSUpdater interface {
-	Update(v semver.Version, repo string) (semver.Version, string, error)
+	Update(ctx context.Context, current string, repo selfupdate.Repository) (string, string, error)
 }
 
 type OMSSelfUpdater struct{}
 
-func (s *OMSSelfUpdater) Update(v semver.Version, repo string) (semver.Version, string, error) {
-	latest, err := selfupdate.UpdateSelf(v, repo)
+func (s *OMSSelfUpdater) Update(ctx context.Context, current string, repo selfupdate.Repository) (string, string, error) {
+	latest, found, err := selfupdate.DetectLatest(ctx, repo)
 	if err != nil {
-		return v, "", err
+		return current, "", err
+	}
+	if !found {
+		return current, "", fmt.Errorf("latest version could not be found from GitHub repository")
 	}
 
-	return latest.Version, latest.ReleaseNotes, nil
+	if latest.LessOrEqual(current) {
+		return current, "", nil
+	}
+
+	exe, err := selfupdate.ExecutablePath()
+	if err != nil {
+		return current, "", fmt.Errorf("could not locate executable path: %w", err)
+	}
+
+	if err := selfupdate.UpdateTo(ctx, latest.AssetURL, latest.AssetName, exe); err != nil {
+		return current, "", fmt.Errorf("error occurred while updating binary: %w", err)
+	}
+
+	return latest.Version(), latest.ReleaseNotes, nil
 }
 
 type UpdateOmsCmd struct {
@@ -52,19 +68,23 @@ func AddOmsUpdateCmd(parentCmd *cobra.Command) {
 	}
 	parentCmd.AddCommand(omsCmd)
 }
+
 func (c *UpdateOmsCmd) SelfUpdate() error {
-	v := semver.MustParse(c.Version.Version())
-	latestVersion, releaseNotes, err := c.Updater.Update(v, GitHubRepo)
+	ctx := context.Background()
+	currentVersion := c.Version.Version()
+	repo := selfupdate.ParseSlug(GitHubRepo)
+
+	latestVersion, releaseNotes, err := c.Updater.Update(ctx, currentVersion, repo)
 	if err != nil {
 		return fmt.Errorf("update failed: %w", err)
 	}
 
-	if latestVersion.Equals(v) {
-		log.Println("Current OMS CLI is the latest version", c.Version.Version())
+	if latestVersion == currentVersion {
+		log.Println("Current OMS CLI is the latest version", currentVersion)
 		return nil
 	}
 
-	log.Printf("Successfully updated from %s to %s\n", v.String(), latestVersion.String())
+	log.Printf("Successfully updated from %s to %s\n", currentVersion, latestVersion)
 	log.Println("Release notes:\n", releaseNotes)
 
 	return nil

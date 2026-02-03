@@ -53,6 +53,7 @@ var _ = Describe("ExtractVault", func() {
 			Kubernetes: files.KubernetesConfig{
 				NeedsKubeConfig: true,
 			},
+			Registry: &files.RegistryConfig{},
 		}
 
 		vault := config.ExtractVault()
@@ -118,14 +119,13 @@ var _ = Describe("ExtractVault", func() {
 	})
 
 	It("does not include kubeconfig for managed k8s", func() {
-		config := &files.RootConfig{
-			Kubernetes: files.KubernetesConfig{
-				NeedsKubeConfig: false,
-			},
-			Codesphere: files.CodesphereConfig{
-				DomainAuthPrivateKey: "test-key",
-				DomainAuthPublicKey:  "test-pub",
-			},
+		config := files.NewRootConfig()
+		config.Kubernetes = files.KubernetesConfig{
+			NeedsKubeConfig: false,
+		}
+		config.Codesphere = files.CodesphereConfig{
+			DomainAuthPrivateKey: "test-key",
+			DomainAuthPublicKey:  "test-pub",
 		}
 
 		vault := config.ExtractVault()
@@ -146,15 +146,14 @@ var _ = Describe("ExtractVault", func() {
 			userPasswords[service] = service + "-pass"
 		}
 
-		config := &files.RootConfig{
-			Postgres: files.PostgresConfig{
-				Primary:       &files.PostgresPrimaryConfig{},
-				UserPasswords: userPasswords,
-			},
-			Codesphere: files.CodesphereConfig{
-				DomainAuthPrivateKey: "test",
-				DomainAuthPublicKey:  "test",
-			},
+		config := files.NewRootConfig()
+		config.Postgres = files.PostgresConfig{
+			Primary:       &files.PostgresPrimaryConfig{},
+			UserPasswords: userPasswords,
+		}
+		config.Codesphere = files.CodesphereConfig{
+			DomainAuthPrivateKey: "test",
+			DomainAuthPublicKey:  "test",
 		}
 
 		vault := config.ExtractVault()

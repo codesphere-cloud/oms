@@ -32,10 +32,12 @@ oms-cli beta bootstrap-gcp [flags]
       --preemptible                         Use preemptible VMs for Codesphere infrastructure (default: false)
       --project-name string                 Unique GCP Project Name (required)
       --region string                       GCP Region (default: europe-west4) (default "europe-west4")
+      --registry-type string                Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry) (default "local-container")
       --secrets-dir string                  Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")
       --secrets-file string                 Path to secrets files (optional) (default "prod.vault.yaml")
       --ssh-private-key-path string         SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string          SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
+      --ssh-quiet                           Suppress SSH command output (default: true) (default true)
       --write-config                        Write generated install config to file (default: true) (default true)
       --zone string                         GCP Zone (default: europe-west4-a) (default "europe-west4-a")
 ```
