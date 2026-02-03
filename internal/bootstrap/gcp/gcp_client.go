@@ -31,11 +31,16 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// OMSManagedLabel is the label key used to identify projects created by OMS
+const OMSManagedLabel = "oms-managed"
+
 // Interface for high-level GCP operations
 type GCPClientManager interface {
 	GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error)
 	CreateProjectID(projectName string) string
 	CreateProject(parent, projectName, displayName string) (string, error)
+	DeleteProject(projectID string) error
+	IsOMSManagedProject(projectID string) (bool, error)
 	GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error)
 	EnableBilling(projectID, billingAccount string) error
 	EnableAPIs(projectID string, apis []string) error
@@ -110,6 +115,7 @@ func (c *GCPClient) CreateProjectID(projectName string) string {
 
 // CreateProject creates a new GCP project under the specified parent (folder or organization).
 // It returns the project ID of the newly created project.
+// The project is labeled with 'oms-managed=true' to identify it as created by OMS.
 func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string, error) {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
@@ -121,6 +127,9 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string
 		ProjectId:   projectID,
 		DisplayName: displayName,
 		Parent:      parent,
+		Labels: map[string]string{
+			OMSManagedLabel: "true",
+		},
 	}
 	op, err := client.CreateProject(c.ctx, &resourcemanagerpb.CreateProjectRequest{Project: project})
 	if err != nil {
@@ -132,6 +141,52 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string
 	}
 
 	return resp.ProjectId, nil
+}
+
+// DeleteProject deletes the specified GCP project.
+func (c *GCPClient) DeleteProject(projectID string) error {
+	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create resource manager client: %w", err)
+	}
+	defer util.IgnoreError(client.Close)
+
+	op, err := client.DeleteProject(c.ctx, &resourcemanagerpb.DeleteProjectRequest{
+		Name: getProjectResourceName(projectID),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initiate project deletion: %w", err)
+	}
+
+	_, err = op.Wait(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for project deletion: %w", err)
+	}
+
+	return nil
+}
+
+// IsOMSManagedProject checks if the given project was created by OMS by verifying the 'oms-managed' label.
+func (c *GCPClient) IsOMSManagedProject(projectID string) (bool, error) {
+	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to create resource manager client: %w", err)
+	}
+	defer util.IgnoreError(client.Close)
+
+	project, err := client.GetProject(c.ctx, &resourcemanagerpb.GetProjectRequest{
+		Name: getProjectResourceName(projectID),
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	if project.Labels == nil {
+		return false, nil
+	}
+
+	value, exists := project.Labels[OMSManagedLabel]
+	return exists && value == "true", nil
 }
 
 func getProjectResourceName(projectID string) string {
