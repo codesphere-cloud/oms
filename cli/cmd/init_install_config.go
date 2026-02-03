@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -205,34 +206,34 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 }
 
 func (c *InitInstallConfigCmd) printWelcomeMessage() {
-	fmt.Println("Welcome to OMS!")
-	fmt.Println("This wizard will help you create config.yaml and prod.vault.yaml for Codesphere installation.")
-	fmt.Println()
+	log.Println("Welcome to OMS!")
+	log.Println("This wizard will help you create config.yaml and prod.vault.yaml for Codesphere installation.")
+	log.Println()
 }
 
 func (c *InitInstallConfigCmd) printSuccessMessage() {
-	fmt.Println("\n" + strings.Repeat("=", 70))
-	fmt.Println("Configuration files successfully generated!")
-	fmt.Println(strings.Repeat("=", 70))
+	log.Println("\n" + strings.Repeat("=", 70))
+	log.Println("Configuration files successfully generated!")
+	log.Println(strings.Repeat("=", 70))
 
-	fmt.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
-	fmt.Println("   Keep the vault file secure and encrypt it with SOPS before storing.")
+	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
+	log.Println("   Keep the vault file secure and encrypt it with SOPS before storing.")
 
-	fmt.Println("\nNext steps:")
-	fmt.Println("1. Review the generated config.yaml and prod.vault.yaml")
-	fmt.Println("2. Install SOPS and Age: brew install sops age")
-	fmt.Println("3. Generate an Age keypair: age-keygen -o age_key.txt")
-	fmt.Println("4. Encrypt the vault file:")
-	fmt.Printf("   age-keygen -y age_key.txt  # Get public key\n")
-	fmt.Printf("   sops --encrypt --age <PUBLIC_KEY> --in-place %s\n", c.Opts.VaultFile)
-	fmt.Println("5. Run the Codesphere installer with these configuration files")
-	fmt.Println()
+	log.Println("\nNext steps:")
+	log.Println("1. Review the generated config.yaml and prod.vault.yaml")
+	log.Println("2. Install SOPS and Age: brew install sops age")
+	log.Println("3. Generate an Age keypair: age-keygen -o age_key.txt")
+	log.Println("4. Encrypt the vault file:")
+	log.Printf("   age-keygen -y age_key.txt  # Get public key\n")
+	log.Printf("   sops --encrypt --age <PUBLIC_KEY> --in-place %s\n", c.Opts.VaultFile)
+	log.Println("5. Run the Codesphere installer with these configuration files")
+	log.Println()
 }
 
 func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) error {
-	fmt.Printf("Validating configuration files...\n")
+	log.Printf("Validating configuration files...\n")
 
-	fmt.Printf("Reading install config file: %s\n", c.Opts.ConfigFile)
+	log.Printf("Reading install config file: %s\n", c.Opts.ConfigFile)
 	err := icg.LoadInstallConfigFromFile(c.Opts.ConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to load config file: %w", err)
@@ -244,7 +245,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	}
 
 	if c.Opts.VaultFile != "" {
-		fmt.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
+		log.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
 		err := icg.LoadVaultFromFile(c.Opts.VaultFile)
 		if err != nil {
 			return fmt.Errorf("failed to load vault file: %w", err)
@@ -256,7 +257,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 		}
 	}
 
-	fmt.Println("Configuration is valid!")
+	log.Println("Configuration is valid!")
 	return nil
 }
 

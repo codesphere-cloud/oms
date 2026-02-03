@@ -59,7 +59,7 @@ func stringSliceToK8sNodes(ips []string) []files.K8sNode {
 }
 
 func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter) {
-	fmt.Println("=== Datacenter Configuration ===")
+	log.Println("=== Datacenter Configuration ===")
 	g.Config.Datacenter.ID = g.collectInt(prompter, "Datacenter ID", g.Config.Datacenter.ID)
 	g.Config.Datacenter.Name = g.collectString(prompter, "Datacenter name", g.Config.Datacenter.Name)
 	g.Config.Datacenter.City = g.collectString(prompter, "Datacenter city", g.Config.Datacenter.City)
@@ -68,7 +68,7 @@ func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter) {
 }
 
 func (g *InstallConfig) collectRegistryConfig(prompter *Prompter) {
-	fmt.Println("\n=== Container Registry Configuration ===")
+	log.Println("\n=== Container Registry Configuration ===")
 	g.Config.Registry.Server = g.collectString(prompter, "Container registry server (e.g., ghcr.io, leave empty to skip)", "")
 	if g.Config.Registry.Server != "" {
 		g.Config.Registry.ReplaceImagesInBom = prompter.Bool("Replace images in BOM", g.Config.Registry.ReplaceImagesInBom)
@@ -77,7 +77,7 @@ func (g *InstallConfig) collectRegistryConfig(prompter *Prompter) {
 }
 
 func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
-	fmt.Println("\n=== PostgreSQL Configuration ===")
+	log.Println("\n=== PostgreSQL Configuration ===")
 	g.Config.Postgres.Mode = g.collectChoice(prompter, "PostgreSQL setup", []string{"install", "external"}, "install")
 
 	if g.Config.Postgres.Mode == "install" {
@@ -111,14 +111,14 @@ func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
 }
 
 func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
-	fmt.Println("\n=== Ceph Configuration ===")
+	log.Println("\n=== Ceph Configuration ===")
 	g.Config.Ceph.NodesSubnet = g.collectString(prompter, "Ceph nodes subnet (CIDR)", "10.53.101.0/24")
 
 	if len(g.Config.Ceph.Hosts) == 0 {
 		numHosts := prompter.Int("Number of Ceph hosts", 3)
 		g.Config.Ceph.Hosts = make([]files.CephHost, numHosts)
 		for i := 0; i < numHosts; i++ {
-			fmt.Printf("\nCeph Host %d:\n", i+1)
+			log.Printf("\nCeph Host %d:\n", i+1)
 			g.Config.Ceph.Hosts[i].Hostname = prompter.String("  Hostname (as shown by 'hostname' command)", fmt.Sprintf("ceph-node-%d", i))
 			g.Config.Ceph.Hosts[i].IPAddress = prompter.String("  IP address", fmt.Sprintf("10.53.101.%d", i+2))
 			g.Config.Ceph.Hosts[i].IsMaster = (i == 0)
@@ -133,7 +133,7 @@ func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
 }
 
 func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
-	fmt.Println("\n=== Kubernetes Configuration ===")
+	log.Println("\n=== Kubernetes Configuration ===")
 	g.Config.Kubernetes.ManagedByCodesphere = prompter.Bool("Use Codesphere-managed Kubernetes (k0s)", g.Config.Kubernetes.ManagedByCodesphere)
 
 	if g.Config.Kubernetes.ManagedByCodesphere {
@@ -159,12 +159,12 @@ func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
 		g.Config.Kubernetes.PodCIDR = g.collectString(prompter, "Pod CIDR of external cluster", "100.96.0.0/11")
 		g.Config.Kubernetes.ServiceCIDR = g.collectString(prompter, "Service CIDR of external cluster", "100.64.0.0/13")
 		g.Config.Kubernetes.NeedsKubeConfig = true
-		fmt.Println("Note: You'll need to provide kubeconfig in the vault file for external Kubernetes")
+		log.Println("Note: You'll need to provide kubeconfig in the vault file for external Kubernetes")
 	}
 }
 
 func (g *InstallConfig) collectGatewayConfig(prompter *Prompter) {
-	fmt.Println("\n=== Cluster Gateway Configuration ===")
+	log.Println("\n=== Cluster Gateway Configuration ===")
 	g.Config.Cluster.Gateway.ServiceType = g.collectChoice(prompter, "Gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
 	if g.Config.Cluster.Gateway.ServiceType == "ExternalIP" {
 		g.Config.Cluster.Gateway.IPAddresses = g.collectStringSlice(prompter, "Gateway IP addresses (comma-separated)", []string{"10.51.0.2", "10.51.0.3"})
@@ -177,7 +177,7 @@ func (g *InstallConfig) collectGatewayConfig(prompter *Prompter) {
 }
 
 func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
-	fmt.Println("\n=== MetalLB Configuration (Optional) ===")
+	log.Println("\n=== MetalLB Configuration (Optional) ===")
 
 	g.Config.MetalLB.Enabled = prompter.Bool("Enable MetalLB", g.Config.MetalLB.Enabled)
 
@@ -190,7 +190,7 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 
 		g.Config.MetalLB.Pools = make([]files.MetalLBPoolDef, numPools)
 		for i := 0; i < numPools; i++ {
-			fmt.Printf("\nMetalLB Pool %d:\n", i+1)
+			log.Printf("\nMetalLB Pool %d:\n", i+1)
 
 			defaultName := fmt.Sprintf("pool-%d", i+1)
 			var defaultIPs []string
@@ -279,7 +279,7 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 }
 
 func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
-	fmt.Println("\n=== Codesphere Application Configuration ===")
+	log.Println("\n=== Codesphere Application Configuration ===")
 	defaultDomain := g.Config.Codesphere.Domain
 	if defaultDomain == "" {
 		defaultDomain = "codesphere.yourcompany.com"
@@ -302,7 +302,7 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	g.Config.Codesphere.CustomDomains.CNameBaseDomain = g.collectString(prompter, "Custom domain CNAME base", defaultCustomDomain)
 	g.Config.Codesphere.DNSServers = g.collectStringSlice(prompter, "DNS servers (comma-separated)", defaultDNSServers)
 
-	fmt.Println("\n=== Workspace Plans Configuration ===")
+	log.Println("\n=== Workspace Plans Configuration ===")
 
 	if g.Config.Codesphere.WorkspaceImages == nil {
 		g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{}
