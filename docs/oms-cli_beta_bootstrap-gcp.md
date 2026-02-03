@@ -26,6 +26,7 @@ oms-cli beta bootstrap-gcp [flags]
       --folder-id string                    GCP Folder ID (optional)
       --github-app-client-id string         Github App Client ID (required)
       --github-app-client-secret string     Github App Client Secret (required)
+      --github-pat string                   GitHub Personal Access Token to use for direct image access. Scope required: package read (optional)
   -h, --help                                help for bootstrap-gcp
       --install-codesphere-version string   Codesphere version to install (default: none)
       --install-config string               Path to install config file (optional) (default "config.yaml")
@@ -33,6 +34,7 @@ oms-cli beta bootstrap-gcp [flags]
       --project-name string                 Unique GCP Project Name (required)
       --region string                       GCP Region (default: europe-west4) (default "europe-west4")
       --registry-type string                Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry) (default "local-container")
+      --registry-user string                Custom Registry username (only for GitHub registry type) (optional)
       --secrets-dir string                  Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")
       --secrets-file string                 Path to secrets files (optional) (default "prod.vault.yaml")
       --ssh-private-key-path string         SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")

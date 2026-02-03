@@ -39,12 +39,21 @@ var _ = Describe("GCP Bootstrapper", func() {
 		csEnv      *gcp.CodesphereEnvironment
 		ctx        context.Context
 		e          env.Env
+
+		icg   *installer.MockInstallConfigManager
+		gc    *gcp.MockGCPClientManager
+		fw    *util.MockFileIO
+		stlog *bootstrap.StepLogger
 	)
 
 	BeforeEach(func() {
 		nodeClient = node.NewMockNodeClient(GinkgoT())
 		ctx = context.Background()
 		e = env.NewEnv()
+		icg = installer.NewMockInstallConfigManager(GinkgoT())
+		gc = gcp.NewMockGCPClientManager(GinkgoT())
+		fw = util.NewMockFileIO(GinkgoT())
+		stlog = bootstrap.NewStepLogger(false)
 
 		csEnv = &gcp.CodesphereEnvironment{
 			InstallConfigPath: "fake-config-file",
@@ -75,11 +84,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("NewGCPBootstrapper", func() {
 		It("creates a valid GCPBootstrapper", func() {
 			csEnv = &gcp.CodesphereEnvironment{}
-			stlog := bootstrap.NewStepLogger(false)
-
-			icg := installer.NewMockInstallConfigManager(GinkgoT())
-			gc := gcp.NewMockGCPClientManager(GinkgoT())
-			fw := util.NewMockFileIO(GinkgoT())
 
 			bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 			Expect(err).NotTo(HaveOccurred())
@@ -89,18 +93,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	Describe("Bootstrap", func() {
 		var (
-			icg *installer.MockInstallConfigManager
-			gc  *gcp.MockGCPClientManager
-			fw  *util.MockFileIO
-			bs  *gcp.GCPBootstrapper
+			bs *gcp.GCPBootstrapper
 		)
 
 		BeforeEach(func() {
-			stlog := bootstrap.NewStepLogger(false)
-
-			icg = installer.NewMockInstallConfigManager(GinkgoT())
-			gc = gcp.NewMockGCPClientManager(GinkgoT())
-			fw = util.NewMockFileIO(GinkgoT())
 
 			csEnv = &gcp.CodesphereEnvironment{
 				InstallConfigPath: "fake-config-file",
@@ -268,11 +264,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					InstallConfigPath: "existing-config-file",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -289,11 +280,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					InstallConfigPath: "nonexistent-config-file",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -314,11 +300,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					InstallConfigPath: "existing-bad-config",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -336,11 +317,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					InstallConfigPath: "missing-config",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -362,11 +338,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					SecretsFilePath: "existing-secrets",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -384,11 +355,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					SecretsFilePath: "missing-secrets",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -406,11 +372,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					SecretsFilePath: "bad-secrets",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -428,11 +389,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					SecretsFilePath: "merr-secrets",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -456,11 +412,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectName: "existing-proj",
 					FolderID:    "123",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -476,11 +427,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectName: "new-proj",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -500,11 +446,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectName: "error-proj",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -521,11 +462,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectName: "fail-create-proj",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -549,11 +485,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID:      "pid",
 					BillingAccount: "billing-123",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -573,11 +504,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID:      "pid",
 					BillingAccount: "billing-123",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -598,11 +524,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectID: "pid",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -620,11 +541,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID:      "pid",
 					BillingAccount: "acc",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -649,11 +565,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectID: "pid",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -675,11 +586,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectID: "pid",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -704,11 +610,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 						Registry: &files.RegistryConfig{},
 					},
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -728,11 +629,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 						Registry: &files.RegistryConfig{},
 					},
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -756,11 +652,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 						Registry: &files.RegistryConfig{},
 					},
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -785,11 +676,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 						Registry: &files.RegistryConfig{},
 					},
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -834,7 +720,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ControlPlaneNodes: []*node.Node{fakeNode("k0s-1", nodeClient), fakeNode("k0s-2", nodeClient)},
 					CephNodes:         []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient)},
 				}
-				stlog := bootstrap.NewStepLogger(false)
 
 				icg = installer.NewMockInstallConfigManager(GinkgoT())
 				gc = gcp.NewMockGCPClientManager(GinkgoT())
@@ -937,6 +822,37 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("EnsureGitHubAccessConfigured", func() {
+		BeforeEach(func() {
+			csEnv.GitHubPAT = "fake-pat"
+			csEnv.RegistryUser = "custom-registry"
+		})
+		It("sets configuration options in installconfig", func() {
+			bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
+			Expect(err).NotTo(HaveOccurred())
+			err = bs.EnsureGitHubAccessConfigured()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
+			Expect(bs.Env.InstallConfig.Registry.Username).To(Equal(csEnv.RegistryUser))
+			Expect(bs.Env.InstallConfig.Registry.Password).To(Equal(csEnv.GitHubPAT))
+			Expect(bs.Env.InstallConfig.Registry.LoadContainerImages).To(BeFalse())
+			Expect(bs.Env.InstallConfig.Registry.ReplaceImagesInBom).To(BeFalse())
+		})
+
+		Context("When GitHub PAT is missing", func() {
+			BeforeEach(func() {
+				csEnv.GitHubPAT = ""
+			})
+			It("returns an error", func() {
+				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
+				Expect(err).NotTo(HaveOccurred())
+				err = bs.EnsureGitHubAccessConfigured()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("GitHub PAT is not set"))
+			})
+		})
+	})
+
 	Describe("EnsureServiceAccounts", func() {
 		Describe("Valid EnsureServiceAccounts", func() {
 			It("creates cloud-controller and skips writer if not artifact registry", func() {
@@ -944,11 +860,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID:    "pid",
 					RegistryType: gcp.RegistryTypeLocalContainer,
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -967,11 +878,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 						Registry: &files.RegistryConfig{},
 					},
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -991,11 +897,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectID: "pid",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1016,11 +917,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID:    "pid",
 					RegistryType: gcp.RegistryTypeArtifactRegistry,
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1038,11 +934,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectID: "pid",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1063,11 +954,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID: "pid",
 					Region:    "us-central1",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1085,11 +971,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID: "pid",
 					Region:    "us-central1",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1110,11 +991,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectID: "pid",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1147,11 +1023,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv = &gcp.CodesphereEnvironment{
 					ProjectID: "pid",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1174,11 +1045,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					Zone:             "us-central1-a",
 					SSHPublicKeyPath: "key.pub",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1220,11 +1086,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					Zone:             "us-central1-a",
 					SSHPublicKeyPath: "key.pub",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1244,11 +1105,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					Zone:             "us-central1-a",
 					SSHPublicKeyPath: "key.pub",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1269,11 +1125,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					Zone:             "us-central1-a",
 					SSHPublicKeyPath: "key.pub",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1297,11 +1148,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID: "pid",
 					Region:    "us-central1",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1332,11 +1178,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID: "pid",
 					Region:    "us-central1",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1355,11 +1196,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ProjectID: "pid",
 					Region:    "us-central1",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1385,12 +1221,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("fails", func() {
 				nodeClient.EXPECT().WaitReady(mock.Anything, mock.Anything).Return(fmt.Errorf("TIMEOUT!"))
 
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1406,11 +1236,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Describe("Valid EnsureRootLoginEnabled", func() {
 				It("enables root login on all nodes", func() {
 					nodeClient.EXPECT().RunCommand(mock.Anything, "ubuntu", mock.Anything).Return(nil)
-					stlog := bootstrap.NewStepLogger(false)
-
-					icg := installer.NewMockInstallConfigManager(GinkgoT())
-					gc := gcp.NewMockGCPClientManager(GinkgoT())
-					fw := util.NewMockFileIO(GinkgoT())
 
 					// Setup nodes
 					bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
@@ -1423,11 +1248,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when EnableRootLogin fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "ubuntu", mock.Anything).Return(fmt.Errorf("ouch"))
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1445,12 +1265,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				// Setup jumpbox node requires some commands to run
 				nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1464,12 +1278,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				// Setup jumpbox node requires some commands to run
 				nodeClient.EXPECT().RunCommand(mock.Anything, "ubuntu", mock.Anything).Return(fmt.Errorf("ouch")).Twice()
 
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1481,11 +1289,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("fails when InstallOms fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "ubuntu", mock.Anything).Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("outch"))
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1501,11 +1304,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Valid EnsureHostsConfigured", func() {
 			It("configures hosts", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1518,11 +1316,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Invalid cases", func() {
 			It("fails when ConfigureInotifyWatches fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch"))
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1533,15 +1326,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when ConfigureMemoryMap fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
 				mock.InOrder(
 					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(1),                // for inotify
 					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch")).Times(2), // for memory map
 				)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1556,12 +1344,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("UpdateInstallConfig", func() {
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
-
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1583,11 +1365,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when GenerateSecrets fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1600,11 +1377,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when WriteInstallConfig fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1618,11 +1390,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when WriteVault fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1637,12 +1404,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when CopyFile config fails", func() {
-
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1659,11 +1420,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when CopyFile secrets fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1685,11 +1441,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureAgeKey", func() {
 		Describe("Valid EnsureAgeKey", func() {
 			It("generates key if missing", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1702,11 +1453,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("skips if key exists", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(true)
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
@@ -1719,11 +1465,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when age-keygen command fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(fmt.Errorf("ouch"))
@@ -1741,11 +1482,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EncryptVault", func() {
 		Describe("Valid EncryptVault", func() {
 			It("encrypts vault using sops", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1765,11 +1501,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when backup vault command fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1784,11 +1515,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when sops encrypt command fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -1818,11 +1545,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					GatewayIP:       "1.1.1.1",
 					PublicGatewayIP: "2.2.2.2",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1848,11 +1570,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					GatewayIP:       "1.1.1.1",
 					PublicGatewayIP: "2.2.2.2",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1873,11 +1590,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 					GatewayIP:       "1.1.1.1",
 					PublicGatewayIP: "2.2.2.2",
 				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1897,21 +1609,35 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.InstallCodesphereVersion = "v1.2.3"
 		})
 		Describe("Valid InstallCodesphere", func() {
+			Context("Direct GitHub access", func() {
+				It("downloads and installs lite package", func() {
+					csEnv.GitHubPAT = "fake-pat"
+					csEnv.RegistryUser = "fake-user"
+					csEnv.RegistryType = "github"
+					bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Expect download package
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer-lite.tar.gz v1.2.3").Return(nil)
+
+					// Expect install codesphere
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
+						"oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-installer-lite.tar.gz -s load-container-images").Return(nil)
+
+					err = bs.InstallCodesphere()
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
 			It("downloads and installs codesphere", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Expect download package
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz v1.2.3").Return(nil)
 
 				// Expect install codesphere
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3.tar.gz").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-installer.tar.gz").Return(nil)
 
 				err = bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1920,16 +1646,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when download package fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
 
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package v1.2.3").Return(fmt.Errorf("download error"))
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz v1.2.3").Return(fmt.Errorf("download error"))
 
 				err = bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
@@ -1937,17 +1657,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when install codesphere fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
 
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3.tar.gz").Return(fmt.Errorf("install error"))
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz v1.2.3").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
 
 				err = bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
@@ -1959,11 +1673,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("GenerateK0sConfigScript", func() {
 		Describe("Valid GenerateK0sConfigScript", func() {
 			It("generates script", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1979,11 +1688,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when WriteFile fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -1996,11 +1700,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when CopyFile fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())
@@ -2014,12 +1713,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when RunSSHCommand chmod fails", func() {
-
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
 				Expect(err).NotTo(HaveOccurred())

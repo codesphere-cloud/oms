@@ -78,6 +78,8 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
 	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", true, "Suppress SSH command output (default: true)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token to use for direct image access. Scope required: package read (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
 
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
@@ -100,6 +102,12 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	c.CodesphereEnv.RegistryType = gcp.RegistryType(c.InputRegistryType)
+	if c.CodesphereEnv.GitHubPAT != "" {
+		c.CodesphereEnv.RegistryType = gcp.RegistryTypeGitHub
+		if c.CodesphereEnv.RegistryUser == "" {
+			return fmt.Errorf("registry-user must be set when using GitHub registry type")
+		}
+	}
 
 	err = bs.Bootstrap()
 	envBytes, err2 := json.MarshalIndent(bs.Env, "", "  ")
@@ -131,6 +139,14 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	log.Println(envString)
 	log.Printf("Infrastructure details written to %s", infraFilePath)
 	log.Printf("Start the Codesphere installation using OMS from the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
+	packageName := "<package-name>-installer"
+	installCmd := "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt"
+	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
+		log.Printf("You set a GitHub PAT for direct image access. Make sure to use a lite package, as VM root disk sizes are reduced.")
+		installCmd += " -s load-container-images"
+		packageName += "-lite"
+	}
+	log.Printf("example install command:\n%s -p %s.tar.gz", installCmd, packageName)
 
 	return nil
 }
