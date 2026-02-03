@@ -33,7 +33,10 @@ var availableSteps = []teststeps.SmokeTestStep{
 }
 
 type SmoketestCodesphereCmd struct {
-	cmd  *cobra.Command
+	cmd *cobra.Command
+	// TODO (Simon)for now I kept the opts in the teststeps package,
+	// but if we add more tests we should move unified opts here and probably use seperate
+	// structs for the different test types (base smoke test, ui test etc.)
 	Opts *teststeps.SmoketestCodesphereOpts
 }
 
