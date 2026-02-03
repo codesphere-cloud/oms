@@ -5,7 +5,7 @@ package installer
 
 import (
 	"bufio"
-	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -29,9 +29,9 @@ func (p *Prompter) String(prompt, defaultValue string) string {
 	}
 
 	if defaultValue != "" {
-		fmt.Printf("%s (default: %s): ", prompt, defaultValue)
+		log.Printf("%s (default: %s): ", prompt, defaultValue)
 	} else {
-		fmt.Printf("%s: ", prompt)
+		log.Printf("%s: ", prompt)
 	}
 
 	input, _ := p.reader.ReadString('\n')
@@ -48,7 +48,7 @@ func (p *Prompter) Int(prompt string, defaultValue int) int {
 		return defaultValue
 	}
 
-	fmt.Printf("%s (default: %d): ", prompt, defaultValue)
+	log.Printf("%s (default: %d): ", prompt, defaultValue)
 
 	input, _ := p.reader.ReadString('\n')
 	input = strings.TrimSpace(input)
@@ -59,7 +59,7 @@ func (p *Prompter) Int(prompt string, defaultValue int) int {
 
 	value, err := strconv.Atoi(input)
 	if err != nil {
-		fmt.Printf("Invalid number, using default: %d\n", defaultValue)
+		log.Printf("Invalid number, using default: %d\n", defaultValue)
 		return defaultValue
 	}
 	return value
@@ -72,9 +72,9 @@ func (p *Prompter) StringSlice(prompt string, defaultValue []string) []string {
 
 	defaultStr := strings.Join(defaultValue, ", ")
 	if defaultStr != "" {
-		fmt.Printf("%s (default: %s): ", prompt, defaultStr)
+		log.Printf("%s (default: %s): ", prompt, defaultStr)
 	} else {
-		fmt.Printf("%s: ", prompt)
+		log.Printf("%s: ", prompt)
 	}
 
 	input, _ := p.reader.ReadString('\n')
@@ -108,7 +108,7 @@ func (p *Prompter) Bool(prompt string, defaultValue bool) bool {
 	if defaultValue {
 		defaultStr = "y"
 	}
-	fmt.Printf("%s (y/n, default: %s): ", prompt, defaultStr)
+	log.Printf("%s (y/n, default: %s): ", prompt, defaultStr)
 
 	input, _ := p.reader.ReadString('\n')
 	input = strings.TrimSpace(strings.ToLower(input))
@@ -125,7 +125,7 @@ func (p *Prompter) Choice(prompt string, choices []string, defaultValue string) 
 		return defaultValue
 	}
 
-	fmt.Printf("%s [%s] (default: %s): ", prompt, strings.Join(choices, "/"), defaultValue)
+	log.Printf("%s [%s] (default: %s): ", prompt, strings.Join(choices, "/"), defaultValue)
 
 	input, _ := p.reader.ReadString('\n')
 	input = strings.TrimSpace(strings.ToLower(input))
@@ -140,6 +140,6 @@ func (p *Prompter) Choice(prompt string, choices []string, defaultValue string) 
 		}
 	}
 
-	fmt.Printf("Invalid choice, using default: %s\n", defaultValue)
+	log.Printf("Invalid choice, using default: %s\n", defaultValue)
 	return defaultValue
 }

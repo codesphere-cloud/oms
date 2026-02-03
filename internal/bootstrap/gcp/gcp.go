@@ -30,6 +30,7 @@ type RegistryType string
 const (
 	RegistryTypeLocalContainer   RegistryType = "local-container"
 	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
+	RegistryTypeGitHub           RegistryType = "github"
 )
 
 type VMDef struct {
@@ -54,34 +55,35 @@ var vmDefs = []VMDef{
 }
 
 type GCPBootstrapper struct {
-	ctx         context.Context
-	stlog       *bootstrap.StepLogger
-	fw          util.FileIO
-	icg         installer.InstallConfigManager
-	NodeManager node.NodeManager
-	GCPClient   GCPClientManager
+	ctx       context.Context
+	stlog     *bootstrap.StepLogger
+	fw        util.FileIO
+	icg       installer.InstallConfigManager
+	GCPClient GCPClientManager
 	// Environment
 	Env *CodesphereEnvironment
-	// SSH options
-	sshQuiet bool
+	// SSH command runner
+	NodeClient node.NodeClient
 }
 
 type CodesphereEnvironment struct {
-	ProjectID                string             `json:"project_id"`
-	ProjectName              string             `json:"project_name"`
-	DNSProjectID             string             `json:"dns_project_id"`
-	Jumpbox                  node.NodeManager   `json:"jumpbox"`
-	PostgreSQLNode           node.NodeManager   `json:"postgresql_node"`
-	ControlPlaneNodes        []node.NodeManager `json:"control_plane_nodes"`
-	CephNodes                []node.NodeManager `json:"ceph_nodes"`
-	ContainerRegistryURL     string             `json:"-"`
-	ExistingConfigUsed       bool               `json:"-"`
-	InstallCodesphereVersion string             `json:"install_codesphere_version"`
-	Preemptible              bool               `json:"preemptible"`
-	WriteConfig              bool               `json:"-"`
-	GatewayIP                string             `json:"gateway_ip"`
-	PublicGatewayIP          string             `json:"public_gateway_ip"`
-	RegistryType             RegistryType       `json:"registry_type"`
+	ProjectID                string       `json:"project_id"`
+	ProjectName              string       `json:"project_name"`
+	DNSProjectID             string       `json:"dns_project_id"`
+	Jumpbox                  *node.Node   `json:"jumpbox"`
+	PostgreSQLNode           *node.Node   `json:"postgres_node"`
+	ControlPlaneNodes        []*node.Node `json:"control_plane_nodes"`
+	CephNodes                []*node.Node `json:"ceph_nodes"`
+	ContainerRegistryURL     string       `json:"-"`
+	ExistingConfigUsed       bool         `json:"-"`
+	InstallCodesphereVersion string       `json:"install_codesphere_version"`
+	Preemptible              bool         `json:"preemptible"`
+	WriteConfig              bool         `json:"-"`
+	GatewayIP                string       `json:"gateway_ip"`
+	PublicGatewayIP          string       `json:"public_gateway_ip"`
+	RegistryType             RegistryType `json:"registry_type"`
+	GitHubPAT                string       `json:"-"`
+	RegistryUser             string       `json:"-"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -106,17 +108,29 @@ type CodesphereEnvironment struct {
 	DNSZoneName           string `json:"dns_zone_name"`
 }
 
-func NewGCPBootstrapper(ctx context.Context, env env.Env, stlog *bootstrap.StepLogger, CodesphereEnv *CodesphereEnvironment, icg installer.InstallConfigManager, gcpClient GCPClientManager, nm node.NodeManager, fw util.FileIO) (*GCPBootstrapper, error) {
+func NewGCPBootstrapper(
+	ctx context.Context,
+	env env.Env,
+	stlog *bootstrap.StepLogger,
+	CodesphereEnv *CodesphereEnvironment,
+	icg installer.InstallConfigManager,
+	gcpClient GCPClientManager,
+	fw util.FileIO,
+	sshRunner node.NodeClient) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:         ctx,
-		stlog:       stlog,
-		fw:          fw,
-		icg:         icg,
-		GCPClient:   gcpClient,
-		NodeManager: nm,
-		Env:         CodesphereEnv,
-		sshQuiet:    true,
+		ctx:        ctx,
+		stlog:      stlog,
+		fw:         fw,
+		icg:        icg,
+		GCPClient:  gcpClient,
+		Env:        CodesphereEnv,
+		NodeClient: sshRunner,
 	}, nil
+}
+
+func GetInfraFilePath() string {
+	workdir := env.NewEnv().GetOmsWorkdir()
+	return fmt.Sprintf("%s/gcp-infra.json", workdir)
 }
 
 func (b *GCPBootstrapper) Bootstrap() error {
@@ -201,6 +215,13 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		err = b.stlog.Step("Ensure local container registry", b.EnsureLocalContainerRegistry)
 		if err != nil {
 			return fmt.Errorf("failed to ensure local container registry: %w", err)
+		}
+	}
+
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		err = b.stlog.Step("Ensure GitHub access configured", b.EnsureGitHubAccessConfigured)
+		if err != nil {
+			return fmt.Errorf("failed to update install config: %w", err)
 		}
 	}
 
@@ -393,7 +414,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 }
 
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.GCPClient.AssignIAMRole(b.Env.ProjectID, "cloud-controller", "roles/compute.admin")
+	err := b.ensureIAMRoleWithRetry("cloud-controller", "roles/compute.admin")
 	if err != nil {
 		return err
 	}
@@ -402,8 +423,23 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 		return nil
 	}
 
-	err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, "artifact-registry-writer", "roles/artifactregistry.writer")
+	err = b.ensureIAMRoleWithRetry("artifact-registry-writer", "roles/artifactregistry.writer")
 	return err
+}
+
+func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount, role string) error {
+	var err error
+	for retries := range 5 {
+		err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, serviceAccount, role)
+		if err == nil {
+			return nil
+		}
+		if retries < 4 {
+			b.stlog.LogRetry()
+			time.Sleep(5 * time.Second)
+		}
+	}
+	return fmt.Errorf("failed to assign role %s to service account %s: %w", role, serviceAccount, err)
 }
 
 func (b *GCPBootstrapper) EnsureVPC() error {
@@ -537,6 +573,10 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	wg := sync.WaitGroup{}
 	errCh := make(chan error, len(vmDefs))
 	resultCh := make(chan vmResult, len(vmDefs))
+	rootDiskSize := int64(200)
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		rootDiskSize = 50
+	}
 	for _, vm := range vmDefs {
 		wg.Add(1)
 		go func(vm VMDef) {
@@ -548,7 +588,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 					Type:       protoString("PERSISTENT"),
 					InitializeParams: &computepb.AttachedDiskInitializeParams{
 						DiskType:    &diskType,
-						DiskSizeGb:  protoInt64(200),
+						DiskSizeGb:  protoInt64(rootDiskSize),
 						SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
 					},
 				},
@@ -659,18 +699,21 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	}
 
 	// Create nodes from results (in main goroutine, not in spawned goroutines)
+	b.Env.Jumpbox = &node.Node{
+		NodeClient: b.NodeClient,
+		FileIO:     b.fw,
+	}
 	for result := range resultCh {
 		switch result.vmType {
 		case "jumpbox":
-			b.NodeManager.UpdateNode(result.name, result.externalIP, result.internalIP)
-			b.Env.Jumpbox = b.NodeManager
+			b.Env.Jumpbox.UpdateNode(result.name, result.externalIP, result.internalIP)
 		case "postgres":
-			b.Env.PostgreSQLNode = b.NodeManager.CreateSubNode(result.name, result.externalIP, result.internalIP)
+			b.Env.PostgreSQLNode = b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
 		case "ceph":
-			node := b.NodeManager.CreateSubNode(result.name, result.externalIP, result.internalIP)
+			node := b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
 			b.Env.CephNodes = append(b.Env.CephNodes, node)
 		case "k0s":
-			node := b.NodeManager.CreateSubNode(result.name, result.externalIP, result.internalIP)
+			node := b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
 			b.Env.ControlPlaneNodes = append(b.Env.ControlPlaneNodes, node)
 		}
 	}
@@ -734,7 +777,7 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 }
 
 func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
-	allNodes := []node.NodeManager{
+	allNodes := []*node.Node{
 		b.Env.Jumpbox,
 	}
 	allNodes = append(allNodes, b.Env.ControlPlaneNodes...)
@@ -753,8 +796,8 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node node.NodeManager) error {
-	err := node.WaitForSSH(30 * time.Second)
+func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
+	err := node.NodeClient.WaitReady(node, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("timed out waiting for SSH service to start on %s: %w", node.GetName(), err)
 	}
@@ -829,7 +872,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	// Figure out if registry is already running
 	b.stlog.Logf("Checking if local container registry is already running on postgres node")
 	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
-	err := b.Env.PostgreSQLNode.RunSSHCommand("root", checkCommand, b.sshQuiet)
+	err := b.Env.PostgreSQLNode.RunSSHCommand("root", checkCommand)
 	if err == nil && b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server == localRegistryServer &&
 		b.Env.InstallConfig.Registry.Username != "" && b.Env.InstallConfig.Registry.Password != "" {
 		b.stlog.Logf("Local container registry already running on postgres node")
@@ -863,7 +906,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	}
 	for _, cmd := range commands {
 		b.stlog.Logf("Running command on postgres node: %s", util.Truncate(cmd, 12))
-		err := b.Env.PostgreSQLNode.RunSSHCommand("root", cmd, b.sshQuiet)
+		err := b.Env.PostgreSQLNode.RunSSHCommand("root", cmd)
 		if err != nil {
 			return fmt.Errorf("failed to run command on postgres node: %w", err)
 		}
@@ -872,20 +915,31 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	allNodes := append(b.Env.ControlPlaneNodes, b.Env.CephNodes...)
 	for _, node := range allNodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
-		err := b.Env.PostgreSQLNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt", b.sshQuiet)
+		err := b.Env.PostgreSQLNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
 		if err != nil {
 			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.GetInternalIP(), err)
 		}
-		err = node.RunSSHCommand("root", "update-ca-certificates", b.sshQuiet)
+		err = node.RunSSHCommand("root", "update-ca-certificates")
 		if err != nil {
 			return fmt.Errorf("failed to update CA certificates on node %s: %w", node.GetInternalIP(), err)
 		}
-		err = node.RunSSHCommand("root", "systemctl restart docker.service || true", true) // docker is probably not yet installed
+		err = node.RunSSHCommand("root", "systemctl restart docker.service || true") // docker is probably not yet installed
 		if err != nil {
 			return fmt.Errorf("failed to restart docker service on node %s: %w", node.GetInternalIP(), err)
 		}
 	}
 
+	return nil
+}
+func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
+	if b.Env.GitHubPAT == "" {
+		return fmt.Errorf("GitHub PAT is not set")
+	}
+	b.Env.InstallConfig.Registry.Server = "ghcr.io"
+	b.Env.InstallConfig.Registry.Username = b.Env.RegistryUser
+	b.Env.InstallConfig.Registry.Password = b.Env.GitHubPAT
+	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
+	b.Env.InstallConfig.Registry.LoadContainerImages = false
 	return nil
 }
 
@@ -895,8 +949,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
 	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
 	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
-	b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
-	b.Env.InstallConfig.Registry.LoadContainerImages = true
+	if b.Env.RegistryType != RegistryTypeGitHub {
+		b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
+		b.Env.InstallConfig.Registry.LoadContainerImages = true
+	}
 
 	if b.Env.InstallConfig.Postgres.Primary == nil {
 		b.Env.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
@@ -1128,12 +1184,12 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	err := b.Env.Jumpbox.CopyFile(b.Env.InstallConfigPath, "/etc/codesphere/config.yaml")
+	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, "/etc/codesphere/config.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.CopyFile(b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
+	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}
@@ -1141,12 +1197,12 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 }
 
 func (b *GCPBootstrapper) EnsureAgeKey() error {
-	hasKey := b.Env.Jumpbox.HasFile(b.Env.SecretsDir + "/age_key.txt")
+	hasKey := b.Env.Jumpbox.NodeClient.HasFile(b.Env.Jumpbox, b.Env.SecretsDir+"/age_key.txt")
 	if hasKey {
 		return nil
 	}
 
-	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("mkdir -p %s; age-keygen -o %s/age_key.txt", b.Env.SecretsDir, b.Env.SecretsDir), b.sshQuiet)
+	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("mkdir -p %s; age-keygen -o %s/age_key.txt", b.Env.SecretsDir, b.Env.SecretsDir))
 	if err != nil {
 		return fmt.Errorf("failed to generate age key on jumpbox: %w", err)
 	}
@@ -1155,12 +1211,12 @@ func (b *GCPBootstrapper) EnsureAgeKey() error {
 }
 
 func (b *GCPBootstrapper) EncryptVault() error {
-	err := b.Env.Jumpbox.RunSSHCommand("root", "cp "+b.Env.SecretsDir+"/prod.vault.yaml{,.bak}", b.sshQuiet)
+	err := b.Env.Jumpbox.RunSSHCommand("root", "cp "+b.Env.SecretsDir+"/prod.vault.yaml{,.bak}")
 	if err != nil {
 		return fmt.Errorf("failed backup vault on jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.RunSSHCommand("root", "sops --encrypt --in-place --age $(age-keygen -y "+b.Env.SecretsDir+"/age_key.txt) "+b.Env.SecretsDir+"/prod.vault.yaml", b.sshQuiet)
+	err = b.Env.Jumpbox.RunSSHCommand("root", "sops --encrypt --in-place --age $(age-keygen -y "+b.Env.SecretsDir+"/age_key.txt) "+b.Env.SecretsDir+"/prod.vault.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to encrypt vault on jumpbox: %w", err)
 	}
@@ -1216,12 +1272,22 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 }
 
 func (b *GCPBootstrapper) InstallCodesphere() error {
-	err := b.Env.Jumpbox.RunSSHCommand("root", "oms-cli download package "+b.Env.InstallCodesphereVersion, b.sshQuiet)
+	packageFile := "installer.tar.gz"
+	skipSteps := ""
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		skipSteps = " -s load-container-images"
+		packageFile = "installer-lite.tar.gz"
+	}
+
+	downloadCmd := "oms-cli download package -f " + packageFile + " " + b.Env.InstallCodesphereVersion
+	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.RunSSHCommand("root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k "+b.Env.SecretsDir+"/age_key.txt -p "+b.Env.InstallCodesphereVersion+".tar.gz", b.sshQuiet)
+	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s-%s%s",
+		b.Env.SecretsDir, b.Env.InstallCodesphereVersion, packageFile, skipSteps)
+	err = b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
@@ -1317,11 +1383,11 @@ systemctl restart k0scontroller
 	if err != nil {
 		return fmt.Errorf("failed to write configure-k0s.sh: %w", err)
 	}
-	err = b.Env.ControlPlaneNodes[0].CopyFile("configure-k0s.sh", "/root/configure-k0s.sh")
+	err = b.Env.ControlPlaneNodes[0].NodeClient.CopyFile(b.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh")
 	if err != nil {
 		return fmt.Errorf("failed to copy configure-k0s.sh to control plane node: %w", err)
 	}
-	err = b.Env.ControlPlaneNodes[0].RunSSHCommand("root", "chmod +x /root/configure-k0s.sh", b.sshQuiet)
+	err = b.Env.ControlPlaneNodes[0].RunSSHCommand("root", "chmod +x /root/configure-k0s.sh")
 	if err != nil {
 		return fmt.Errorf("failed to make configure-k0s.sh executable on control plane node: %w", err)
 	}

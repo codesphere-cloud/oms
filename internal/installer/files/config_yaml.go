@@ -173,13 +173,37 @@ type ClusterConfig struct {
 }
 
 type ClusterCertificates struct {
-	CA CAConfig `yaml:"ca"`
+	CA   CAConfig    `yaml:"ca"`
+	ACME *ACMEConfig `yaml:"acme,omitempty"`
 }
 
 type CAConfig struct {
 	Algorithm   string `yaml:"algorithm"`
 	KeySizeBits int    `yaml:"keySizeBits"`
 	CertPem     string `yaml:"certPem"`
+}
+
+type ACMEConfig struct {
+	Enabled              bool       `yaml:"enabled"`
+	Name                 string     `yaml:"name,omitempty"`
+	Email                string     `yaml:"email,omitempty"`
+	Server               string     `yaml:"server,omitempty"`
+	PrivateKeySecretName string     `yaml:"-"`
+	Solver               ACMESolver `yaml:"solver"`
+
+	EABKeyID  string `yaml:"-"`
+	EABMacKey string `yaml:"-"`
+}
+
+type ACMESolver struct {
+	DNS01 *ACMEDNS01Solver `yaml:"dns01,omitempty"`
+}
+
+type ACMEDNS01Solver struct {
+	Provider string                 `yaml:"provider"`
+	Config   map[string]interface{} `yaml:"config,omitempty"`
+
+	Secrets map[string]string `yaml:"-"`
 }
 
 type GatewayConfig struct {
@@ -483,6 +507,7 @@ func (c *RootConfig) ExtractVault() *InstallVault {
 
 	c.addCodesphereSecrets(vault)
 	c.addIngressCASecret(vault)
+	c.addACMESecrets(vault)
 	c.addCephSecrets(vault)
 	c.addPostgresSecrets(vault)
 	c.addManagedServiceSecrets(vault)
@@ -542,6 +567,41 @@ func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
 				Content: c.Cluster.IngressCAKey,
 			},
 		})
+	}
+}
+
+func (c *RootConfig) addACMESecrets(vault *InstallVault) {
+	if c.Cluster.Certificates.ACME == nil || !c.Cluster.Certificates.ACME.Enabled {
+		return
+	}
+
+	if c.Cluster.Certificates.ACME.EABKeyID != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "acmeEabKeyId",
+			Fields: &SecretFields{
+				Password: c.Cluster.Certificates.ACME.EABKeyID,
+			},
+		})
+	}
+
+	if c.Cluster.Certificates.ACME.EABMacKey != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "acmeEabMacKey",
+			Fields: &SecretFields{
+				Password: c.Cluster.Certificates.ACME.EABMacKey,
+			},
+		})
+	}
+
+	if c.Cluster.Certificates.ACME.Solver.DNS01 != nil {
+		for key, value := range c.Cluster.Certificates.ACME.Solver.DNS01.Secrets {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: fmt.Sprintf("acmeDNS01%s", Capitalize(key)),
+				Fields: &SecretFields{
+					Password: value,
+				},
+			})
+		}
 	}
 }
 
