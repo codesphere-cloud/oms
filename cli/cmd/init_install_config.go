@@ -67,6 +67,14 @@ type InitInstallConfigOpts struct {
 	MetalLBEnabled bool
 	MetalLBPools   []files.MetalLBPool
 
+	ACMEEnabled       bool
+	ACMEIssuerName    string
+	ACMEEmail         string
+	ACMEServer        string
+	ACMEEABKeyID      string
+	ACMEEABMacKey     string
+	ACMEDNS01Provider string
+
 	CodesphereDomain                       string
 	CodespherePublicIP                     string
 	CodesphereWorkspaceHostingBaseDomain   string
@@ -134,6 +142,14 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 
 	c.cmd.Flags().BoolVar(&c.Opts.KubernetesManagedByCodesphere, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
 	c.cmd.Flags().StringSliceVar(&c.Opts.KubernetesControlPlanes, "k8s-control-plane", []string{}, "K8s control plane IPs (comma-separated)")
+
+	c.cmd.Flags().BoolVar(&c.Opts.ACMEEnabled, "acme-enabled", false, "Enable ACME certificate issuer")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEIssuerName, "acme-issuer-name", "acme-issuer", "Name for the ACME ClusterIssuer")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEEmail, "acme-email", "", "Email address for ACME account registration")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEServer, "acme-server", "https://acme-v02.api.letsencrypt.org/directory", "ACME server URL")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEEABKeyID, "acme-eab-key-id", "", "External Account Binding key ID (required by some ACME providers)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEEABMacKey, "acme-eab-mac-key", "", "External Account Binding MAC key (required by some ACME providers)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEDNS01Provider, "acme-dns01-provider", "", "DNS provider for DNS-01 solver (e.g., cloudflare)")
 
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
 
@@ -370,6 +386,38 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 
 		for _, pool := range c.Opts.MetalLBPools {
 			config.MetalLB.Pools = append(config.MetalLB.Pools, files.MetalLBPoolDef(pool))
+		}
+	}
+
+	// ACME configuration
+	if c.Opts.ACMEEnabled {
+		if config.Cluster.Certificates.ACME == nil {
+			config.Cluster.Certificates.ACME = &files.ACMEConfig{}
+		}
+		config.Cluster.Certificates.ACME.Enabled = true
+
+		if c.Opts.ACMEIssuerName != "" {
+			config.Cluster.Certificates.ACME.Name = c.Opts.ACMEIssuerName
+		}
+		if c.Opts.ACMEEmail != "" {
+			config.Cluster.Certificates.ACME.Email = c.Opts.ACMEEmail
+		}
+		if c.Opts.ACMEServer != "" {
+			config.Cluster.Certificates.ACME.Server = c.Opts.ACMEServer
+		}
+
+		if c.Opts.ACMEEABKeyID != "" {
+			config.Cluster.Certificates.ACME.EABKeyID = c.Opts.ACMEEABKeyID
+		}
+		if c.Opts.ACMEEABMacKey != "" {
+			config.Cluster.Certificates.ACME.EABMacKey = c.Opts.ACMEEABMacKey
+		}
+
+		// Configure DNS-01 solver
+		if c.Opts.ACMEDNS01Provider != "" {
+			config.Cluster.Certificates.ACME.Solver.DNS01 = &files.ACMEDNS01Solver{
+				Provider: c.Opts.ACMEDNS01Provider,
+			}
 		}
 	}
 

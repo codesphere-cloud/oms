@@ -5,6 +5,7 @@ package installer
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
@@ -19,6 +20,7 @@ func (g *InstallConfig) CollectInteractively() error {
 	g.collectK8sConfig(prompter)
 	g.collectGatewayConfig(prompter)
 	g.collectMetalLBConfig(prompter)
+	g.collectACMEConfig(prompter)
 	g.collectCodesphereConfig(prompter)
 
 	return nil
@@ -208,6 +210,72 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 			}
 		}
 	}
+}
+
+func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
+	log.Println("\n=== ACME Certificate Configuration (Optional) ===")
+
+	// Initialize ACME config if it doesn't exist
+	if g.Config.Cluster.Certificates.ACME == nil {
+		g.Config.Cluster.Certificates.ACME = &files.ACMEConfig{}
+	}
+
+	g.Config.Cluster.Certificates.ACME.Enabled = prompter.Bool("Enable ACME certificate issuer (e.g., Let's Encrypt)", g.Config.Cluster.Certificates.ACME.Enabled)
+
+	// Early exit if ACME is disabled
+	if !g.Config.Cluster.Certificates.ACME.Enabled {
+		g.Config.Cluster.Certificates.ACME = nil
+		return
+	}
+
+	defaultIssuerName := g.Config.Cluster.Certificates.ACME.Name
+	if defaultIssuerName == "" {
+		defaultIssuerName = "acme-issuer"
+	}
+	g.Config.Cluster.Certificates.ACME.Name = g.collectString(prompter, "ACME issuer name", defaultIssuerName)
+
+	defaultEmail := g.Config.Cluster.Certificates.ACME.Email
+	if defaultEmail == "" {
+		defaultEmail = "admin@example.com"
+	}
+	g.Config.Cluster.Certificates.ACME.Email = g.collectString(prompter, "Email address for ACME account registration", defaultEmail)
+
+	defaultServer := g.Config.Cluster.Certificates.ACME.Server
+	if defaultServer == "" {
+		defaultServer = "https://acme-v02.api.letsencrypt.org/directory"
+	}
+	g.Config.Cluster.Certificates.ACME.Server = g.collectString(prompter, "ACME server URL", defaultServer)
+
+	// External Account Binding (EAB)
+	log.Println("\n--- External Account Binding (Optional) ---")
+	hasEAB := prompter.Bool("Configure External Account Binding (required by some ACME CAs)", g.Config.Cluster.Certificates.ACME.EABKeyID != "")
+
+	g.Config.Cluster.Certificates.ACME.EABKeyID = ""
+	g.Config.Cluster.Certificates.ACME.EABMacKey = ""
+	if hasEAB {
+		g.Config.Cluster.Certificates.ACME.EABKeyID = g.collectString(prompter, "EAB Key ID", g.Config.Cluster.Certificates.ACME.EABKeyID)
+		g.Config.Cluster.Certificates.ACME.EABMacKey = g.collectString(prompter, "EAB MAC Key", g.Config.Cluster.Certificates.ACME.EABMacKey)
+	}
+
+	// DNS-01 Challenge Configuration
+	log.Println("\n--- DNS-01 Challenge Configuration (Optional) ---")
+	if g.Config.Cluster.Certificates.ACME.Solver.DNS01 == nil {
+		g.Config.Cluster.Certificates.ACME.Solver.DNS01 = &files.ACMEDNS01Solver{}
+	}
+
+	useDNS01 := prompter.Bool("Configure DNS-01 challenge solver", g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider != "")
+	if !useDNS01 {
+		g.Config.Cluster.Certificates.ACME.Solver.DNS01 = nil
+		return
+	}
+	providerOptions := []string{"route53", "cloudflare", "azure", "gcp", "other"}
+	defaultProvider := g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider
+	if defaultProvider == "" {
+		defaultProvider = "cloudflare"
+	}
+	g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
+	log.Println("Note: Additional DNS provider configuration will need to be added to the vault file.")
+	log.Println("Provider config and secrets should be added manually after generation.")
 }
 
 func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
