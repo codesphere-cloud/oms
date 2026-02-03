@@ -264,19 +264,18 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 	}
 
 	useDNS01 := prompter.Bool("Configure DNS-01 challenge solver", g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider != "")
-	if useDNS01 {
-		providerOptions := []string{"route53", "cloudflare", "azure", "gcp", "other"}
-		defaultProvider := g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider
-		if defaultProvider == "" {
-			defaultProvider = "cloudflare"
-		}
-		g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
-
-		log.Println("Note: Additional DNS provider configuration will need to be added to the vault file.")
-		log.Println("Provider config and secrets should be added manually after generation.")
-	} else {
+	if !useDNS01 {
 		g.Config.Cluster.Certificates.ACME.Solver.DNS01 = nil
+		return
 	}
+	providerOptions := []string{"route53", "cloudflare", "azure", "gcp", "other"}
+	defaultProvider := g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider
+	if defaultProvider == "" {
+		defaultProvider = "cloudflare"
+	}
+	g.Config.Cluster.Certificates.ACME.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
+	log.Println("Note: Additional DNS provider configuration will need to be added to the vault file.")
+	log.Println("Provider config and secrets should be added manually after generation.")
 }
 
 func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
