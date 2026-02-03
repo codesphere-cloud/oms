@@ -94,7 +94,7 @@ License: MIT
 License URL: https://github.com/clipperhouse/uax29/blob/v2.4.0/LICENSE
  
 ----------
-Module: github.com/codesphere-cloud/cs-go/pkg/io
+Module: github.com/codesphere-cloud/cs-go
 Version: v0.16.2
 License: Apache-2.0
 License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.16.2/LICENSE
