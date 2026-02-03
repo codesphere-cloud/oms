@@ -38,14 +38,11 @@ type SmoketestCodesphereCmd struct {
 }
 
 func (c *SmoketestCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
-	// Initialize client if not set (for testing)
-	if c.Opts.Client == nil {
-		client, err := codesphere.NewClient(c.Opts.BaseURL, c.Opts.Token)
-		if err != nil {
-			return fmt.Errorf("failed to create Codesphere client: %w", err)
-		}
-		c.Opts.Client = client
+	client, err := codesphere.NewClient(c.Opts.BaseURL, c.Opts.Token)
+	if err != nil {
+		return fmt.Errorf("failed to create Codesphere client: %w", err)
 	}
+	c.Opts.Client = client
 
 	return c.RunSmoketest()
 }
