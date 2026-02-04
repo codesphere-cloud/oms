@@ -23,6 +23,8 @@ oms-cli beta bootstrap-gcp [flags]
       --datacenter-id int                   Datacenter ID (default: 1) (default 1)
       --dns-project-id string               GCP Project ID for Cloud DNS (optional)
       --dns-zone-name string                Cloud DNS Zone Name (optional) (default "oms-testing")
+      --experiments stringArray             Experiments to enable in Codesphere installation (optional) (default [managed-services,vcluster,custom-service-image,ms-in-ls,secret-management,sub-path-mount])
+      --feature-flags stringArray           Feature flags to enable in Codesphere installation (optional)
       --folder-id string                    GCP Folder ID (optional)
       --github-app-client-id string         Github App Client ID (required)
       --github-app-client-secret string     Github App Client Secret (required)

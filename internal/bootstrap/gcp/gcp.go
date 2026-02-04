@@ -54,6 +54,15 @@ var vmDefs = []VMDef{
 	{"k0s-3", "e2-standard-16", []string{"k0s"}, []int64{}, false},
 }
 
+var DefaultExperiments []string = []string{
+	"managed-services",
+	"vcluster",
+	"custom-service-image",
+	"ms-in-ls",
+	"secret-management",
+	"sub-path-mount",
+}
+
 type GCPBootstrapper struct {
 	ctx       context.Context
 	stlog     *bootstrap.StepLogger
@@ -84,6 +93,8 @@ type CodesphereEnvironment struct {
 	RegistryType             RegistryType `json:"registry_type"`
 	GitHubPAT                string       `json:"-"`
 	RegistryUser             string       `json:"-"`
+	Experiments              []string     `json:"experiments"`
+	FeatureFlags             []string     `json:"feature_flags"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -1050,7 +1061,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		CNameBaseDomain: "ws." + b.Env.BaseDomain,
 	}
 	b.Env.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
-	b.Env.InstallConfig.Codesphere.Experiments = []string{}
 	b.Env.InstallConfig.Codesphere.DeployConfig = files.DeployConfig{
 		Images: map[string]files.ImageConfig{
 			"ubuntu-24.04": {
@@ -1065,7 +1075,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 							1: 1,
 							2: 1,
 							3: 0,
-							4: 0,
 						},
 					},
 				},
@@ -1075,27 +1084,20 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Codesphere.Plans = files.PlansConfig{
 		HostingPlans: map[int]files.HostingPlan{
 			1: {
-				CPUTenth:      10,
-				GPUParts:      0,
-				MemoryMb:      2048,
-				StorageMb:     20480,
-				TempStorageMb: 1024,
-			},
-			2: {
 				CPUTenth:      20,
 				GPUParts:      0,
 				MemoryMb:      4096,
 				StorageMb:     20480,
 				TempStorageMb: 1024,
 			},
-			3: {
+			2: {
 				CPUTenth:      40,
 				GPUParts:      0,
 				MemoryMb:      8192,
 				StorageMb:     40960,
 				TempStorageMb: 1024,
 			},
-			4: {
+			3: {
 				CPUTenth:      80,
 				GPUParts:      0,
 				MemoryMb:      16384,
@@ -1105,26 +1107,20 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		},
 		WorkspacePlans: map[int]files.WorkspacePlan{
 			1: {
-				Name:          "Micro",
+				Name:          "Standard",
 				HostingPlanID: 1,
 				MaxReplicas:   3,
 				OnDemand:      true,
 			},
 			2: {
-				Name:          "Standard",
+				Name:          "Big",
 				HostingPlanID: 2,
 				MaxReplicas:   3,
 				OnDemand:      true,
 			},
 			3: {
-				Name:          "Big",
-				HostingPlanID: 3,
-				MaxReplicas:   3,
-				OnDemand:      true,
-			},
-			4: {
 				Name:          "Pro",
-				HostingPlanID: 4,
+				HostingPlanID: 3,
 				MaxReplicas:   3,
 				OnDemand:      true,
 			},
@@ -1147,6 +1143,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
+	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
+	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 	b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{}
 
 	if !b.Env.ExistingConfigUsed {
