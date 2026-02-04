@@ -120,7 +120,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	if err != nil {
-		if bs.Env.Jumpbox.GetExternalIP() != "" {
+		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
 			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
 		return fmt.Errorf("failed to bootstrap GCP: %w, env: %s", err, envString)
