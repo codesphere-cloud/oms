@@ -173,8 +173,27 @@ type ClusterConfig struct {
 }
 
 type ClusterCertificates struct {
-	CA   CAConfig    `yaml:"ca"`
-	ACME *ACMEConfig `yaml:"acme,omitempty"`
+	CA       CAConfig               `yaml:"ca"`
+	Override map[string]interface{} `yaml:"override,omitempty"`
+	// TODO: remove unused legacy field
+	ACME *ACMEConfig `yaml:"-"`
+}
+
+type clusterCertificatesAlias struct {
+	CA       CAConfig               `yaml:"ca"`
+	Override map[string]interface{} `yaml:"override,omitempty"`
+	ACME     *ACMEConfig            `yaml:"acme,omitempty"`
+}
+
+func (c *ClusterCertificates) UnmarshalYAML(node *yaml.Node) error {
+	var alias clusterCertificatesAlias
+	if err := node.Decode(&alias); err != nil {
+		return err
+	}
+	c.CA = alias.CA
+	c.Override = alias.Override
+	c.ACME = alias.ACME
+	return nil
 }
 
 type CAConfig struct {
@@ -260,9 +279,22 @@ type CodesphereConfig struct {
 	UnderprovisionFactors      *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
+	CertIssuer                 *CertIssuerConfig      `yaml:"certIssuer,omitempty"`
 
 	DomainAuthPrivateKey string `yaml:"-"`
 	DomainAuthPublicKey  string `yaml:"-"`
+}
+
+type CertIssuerConfig struct {
+	Type string            `yaml:"type"`
+	ACME *ACMEIssuerConfig `yaml:"acme,omitempty"`
+}
+
+type ACMEIssuerConfig struct {
+	Server    string `yaml:"server"`
+	Email     string `yaml:"email"`
+	EABKeyID  string `yaml:"eabKeyId,omitempty"`
+	EABMacKey string `yaml:"-"`
 }
 
 type CustomDomainsConfig struct {
@@ -457,8 +489,43 @@ type MetalLBPool struct {
 	IPAddresses []string
 }
 
+// SyncCertIssuerFromACME populates codesphere.certIssuer and cluster.certificates.override
+func (c *RootConfig) SyncCertIssuerFromACME() {
+	if c.Cluster.Certificates.ACME != nil && c.Cluster.Certificates.ACME.Enabled {
+		c.Codesphere.CertIssuer = &CertIssuerConfig{
+			Type: "acme",
+			ACME: &ACMEIssuerConfig{
+				Server:    c.Cluster.Certificates.ACME.Server,
+				Email:     c.Cluster.Certificates.ACME.Email,
+				EABKeyID:  c.Cluster.Certificates.ACME.EABKeyID,
+				EABMacKey: c.Cluster.Certificates.ACME.EABMacKey,
+			},
+		}
+
+		if c.Cluster.Certificates.ACME.Solver.DNS01 != nil && c.Cluster.Certificates.ACME.Solver.DNS01.Provider != "" {
+			if c.Cluster.Certificates.Override == nil {
+				c.Cluster.Certificates.Override = make(map[string]interface{})
+			}
+			dnsSolverConfig := make(map[string]interface{})
+			if c.Cluster.Certificates.ACME.Solver.DNS01.Config != nil {
+				dnsSolverConfig["config"] = c.Cluster.Certificates.ACME.Solver.DNS01.Config
+			}
+			c.Cluster.Certificates.Override["issuers"] = map[string]interface{}{
+				"acme": map[string]interface{}{
+					"dnsSolver": dnsSolverConfig,
+				},
+			}
+		}
+	} else if c.Codesphere.CertIssuer == nil {
+		c.Codesphere.CertIssuer = &CertIssuerConfig{
+			Type: "self-signed",
+		}
+	}
+}
+
 // Marshal serializes the RootConfig to YAML
 func (c *RootConfig) Marshal() ([]byte, error) {
+	c.SyncCertIssuerFromACME()
 	return yaml.Marshal(c)
 }
 
