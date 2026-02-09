@@ -18,6 +18,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/dns/v1"
@@ -72,20 +73,24 @@ type GCPBootstrapper struct {
 	// Environment
 	Env *CodesphereEnvironment
 	// SSH command runner
-	NodeClient node.NodeClient
+	NodeClient   node.NodeClient
+	PortalClient portal.Portal
 }
 
 type CodesphereEnvironment struct {
 	ProjectID                string       `json:"project_id"`
 	ProjectName              string       `json:"project_name"`
 	DNSProjectID             string       `json:"dns_project_id"`
+	DNSProjectServiceAccount string       `json:"dns_project_service_account"`
 	Jumpbox                  *node.Node   `json:"jumpbox"`
 	PostgreSQLNode           *node.Node   `json:"postgres_node"`
 	ControlPlaneNodes        []*node.Node `json:"control_plane_nodes"`
 	CephNodes                []*node.Node `json:"ceph_nodes"`
 	ContainerRegistryURL     string       `json:"-"`
 	ExistingConfigUsed       bool         `json:"-"`
-	InstallCodesphereVersion string       `json:"install_codesphere_version"`
+	InstallVersion           string       `json:"install_version"`
+	InstallHash              string       `json:"install_hash"`
+	InstallSkipSteps         []string     `json:"install_skip_steps"`
 	Preemptible              bool         `json:"preemptible"`
 	WriteConfig              bool         `json:"-"`
 	GatewayIP                string       `json:"gateway_ip"`
@@ -127,15 +132,18 @@ func NewGCPBootstrapper(
 	icg installer.InstallConfigManager,
 	gcpClient GCPClientManager,
 	fw util.FileIO,
-	sshRunner node.NodeClient) (*GCPBootstrapper, error) {
+	sshRunner node.NodeClient,
+	portalClient portal.Portal,
+) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:        ctx,
-		stlog:      stlog,
-		fw:         fw,
-		icg:        icg,
-		GCPClient:  gcpClient,
-		Env:        CodesphereEnv,
-		NodeClient: sshRunner,
+		ctx:          ctx,
+		stlog:        stlog,
+		fw:           fw,
+		icg:          icg,
+		GCPClient:    gcpClient,
+		Env:          CodesphereEnv,
+		NodeClient:   sshRunner,
+		PortalClient: portalClient,
 	}, nil
 }
 
@@ -145,6 +153,13 @@ func GetInfraFilePath() string {
 }
 
 func (b *GCPBootstrapper) Bootstrap() error {
+	if b.Env.InstallVersion != "" {
+		err := b.stlog.Step("Validate package to install", b.ValidatePackageName)
+		if err != nil {
+			return fmt.Errorf("invalid package name: %w", err)
+		}
+
+	}
 	err := b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
 	if err != nil {
 		return fmt.Errorf("failed to ensure install config: %w", err)
@@ -258,19 +273,46 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure DNS records: %w", err)
 	}
 
-	if b.Env.InstallCodesphereVersion != "" {
-		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
-		if err != nil {
-			return fmt.Errorf("failed to install Codesphere: %w", err)
-		}
-	}
-
 	err = b.stlog.Step("Generate k0s config script", b.GenerateK0sConfigScript)
 	if err != nil {
 		return fmt.Errorf("failed to generate k0s config script: %w", err)
 	}
 
+	if b.Env.InstallVersion != "" {
+		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
+		if err != nil {
+			return fmt.Errorf("failed to install Codesphere: %w", err)
+		}
+
+		err = b.stlog.Step("Run k0s config script", b.RunK0sConfigScript)
+		if err != nil {
+			return fmt.Errorf("failed to run k0s config script: %w", err)
+		}
+	}
+
 	return nil
+}
+
+func (b *GCPBootstrapper) ValidatePackageName() error {
+	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
+	if err != nil {
+		return fmt.Errorf("failed to get codesphere package: %w", err)
+	}
+
+	requiredFilename := "installer.tar.gz"
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		requiredFilename = "installer-lite.tar.gz"
+	}
+	filenames := []string{}
+	// Validate required file exists in package artifacts
+	for _, artifact := range build.Artifacts {
+		filenames = append(filenames, artifact.Filename)
+		if artifact.Filename == requiredFilename {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
 }
 
 func (b *GCPBootstrapper) EnsureInstallConfig() error {
@@ -425,7 +467,12 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 }
 
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.ensureIAMRoleWithRetry("cloud-controller", "roles/compute.admin")
+	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/compute.admin"})
+	if err != nil {
+		return err
+	}
+
+	err = b.ensureDnsPermissions()
 	if err != nil {
 		return err
 	}
@@ -434,14 +481,14 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 		return nil
 	}
 
-	err = b.ensureIAMRoleWithRetry("artifact-registry-writer", "roles/artifactregistry.writer")
+	err = b.ensureIAMRoleWithRetry("artifact-registry-writer", []string{"roles/artifactregistry.writer"})
 	return err
 }
 
-func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount, role string) error {
+func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount string, roles []string) error {
 	var err error
 	for retries := range 5 {
-		err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, serviceAccount, role)
+		err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, serviceAccount, roles)
 		if err == nil {
 			return nil
 		}
@@ -450,7 +497,25 @@ func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount, role string) er
 			time.Sleep(5 * time.Second)
 		}
 	}
-	return fmt.Errorf("failed to assign role %s to service account %s: %w", role, serviceAccount, err)
+	return fmt.Errorf("failed to assign roles %v to service account %s: %w", roles, serviceAccount, err)
+}
+
+func (b *GCPBootstrapper) ensureDnsPermissions() error {
+	if b.Env.DNSProjectID != "" {
+		if b.Env.DNSProjectServiceAccount == "" {
+			return errors.New("dns project service account with role roles/dns.admin must be provided when dns project id is set")
+		}
+		err := b.GCPClient.GrantImpersonation("cloud-controller", b.Env.ProjectID, b.Env.DNSProjectServiceAccount, b.Env.DNSProjectID)
+		if err != nil {
+			return fmt.Errorf("failed to grant impersonization on dns project %s to cloud-controller service account: %w", b.Env.DNSProjectID, err)
+		}
+		return nil
+	}
+	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/dns.admin"})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (b *GCPBootstrapper) EnsureVPC() error {
@@ -1051,7 +1116,34 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		Annotations: map[string]string{
 			"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
 		},
-		//IPAddresses: []string{b.Env.ControlPlaneNodes[1].ExternalIP},
+	}
+
+	dnsProject := b.Env.DNSProjectID
+	if b.Env.DNSProjectID == "" {
+		dnsProject = b.Env.ProjectID
+	}
+	b.Env.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
+		"issuers": map[string]interface{}{
+			"letsEncryptHttp": map[string]interface{}{
+				"enabled": true,
+			},
+			"acme": map[string]interface{}{
+				"dnsSolver": map[string]interface{}{
+					"config": map[string]interface{}{
+						"cloudDNS": map[string]interface{}{
+							"project": dnsProject,
+						},
+					},
+				},
+			},
+		},
+	}
+	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+		Type: "acme",
+		Acme: &files.ACMEConfig{
+			Email:  "oms-testing@" + b.Env.BaseDomain,
+			Server: "https://acme-v02.api.letsencrypt.org/directory",
+		},
 	}
 
 	b.Env.InstallConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
@@ -1271,20 +1363,24 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 
 func (b *GCPBootstrapper) InstallCodesphere() error {
 	packageFile := "installer.tar.gz"
-	skipSteps := ""
+	skipSteps := b.Env.InstallSkipSteps
 	if b.Env.RegistryType == RegistryTypeGitHub {
-		skipSteps = " -s load-container-images"
+		skipSteps = append(skipSteps, "load-container-images")
 		packageFile = "installer-lite.tar.gz"
 	}
+	skipStepsArg := ""
+	if len(skipSteps) > 0 {
+		skipStepsArg = " -s " + strings.Join(skipSteps, ",")
+	}
 
-	downloadCmd := "oms-cli download package -f " + packageFile + " " + b.Env.InstallCodesphereVersion
+	downloadCmd := "oms-cli download package -f " + packageFile + " " + b.Env.InstallVersion
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
 	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s-%s%s",
-		b.Env.SecretsDir, b.Env.InstallCodesphereVersion, packageFile, skipSteps)
+		b.Env.SecretsDir, b.Env.InstallVersion, packageFile, skipStepsArg)
 	err = b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
@@ -1366,9 +1462,9 @@ $KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerI
 
 sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
 
-ssh root@` + b.Env.ControlPlaneNodes[1].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
+ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[1].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
 
-ssh root@` + b.Env.ControlPlaneNodes[2].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
+ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[2].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
 
 systemctl daemon-reload
 systemctl restart k0scontroller
@@ -1389,6 +1485,15 @@ systemctl restart k0scontroller
 	if err != nil {
 		return fmt.Errorf("failed to make configure-k0s.sh executable on control plane node: %w", err)
 	}
+	return nil
+}
+
+func (b *GCPBootstrapper) RunK0sConfigScript() error {
+	err := b.Env.ControlPlaneNodes[0].RunSSHCommand("root", "/root/configure-k0s.sh")
+	if err != nil {
+		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
+	}
+
 	return nil
 }
 
