@@ -3,6 +3,8 @@
 
 package bootstrap
 
+// Note: In this file we need to use fmt.Print for the line reset.
+// Line resets don't work with log.Print as expected.
 import (
 	"fmt"
 )

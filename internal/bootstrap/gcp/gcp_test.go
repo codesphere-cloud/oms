@@ -19,6 +19,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -39,26 +40,49 @@ var _ = Describe("GCP Bootstrapper", func() {
 		csEnv      *gcp.CodesphereEnvironment
 		ctx        context.Context
 		e          env.Env
+
+		icg              *installer.MockInstallConfigManager
+		gc               *gcp.MockGCPClientManager
+		fw               *util.MockFileIO
+		stlog            *bootstrap.StepLogger
+		mockPortalClient *portal.MockPortal
+
+		bs *gcp.GCPBootstrapper
 	)
+
+	JustBeforeEach(func() {
+		var err error
+		bs, err = gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient, mockPortalClient)
+		Expect(err).NotTo(HaveOccurred())
+	})
 
 	BeforeEach(func() {
 		nodeClient = node.NewMockNodeClient(GinkgoT())
 		ctx = context.Background()
 		e = env.NewEnv()
+		icg = installer.NewMockInstallConfigManager(GinkgoT())
+		gc = gcp.NewMockGCPClientManager(GinkgoT())
+		fw = util.NewMockFileIO(GinkgoT())
+		mockPortalClient = portal.NewMockPortal(GinkgoT())
+		stlog = bootstrap.NewStepLogger(false)
 
 		csEnv = &gcp.CodesphereEnvironment{
-			InstallConfigPath: "fake-config-file",
-			SecretsFilePath:   "fake-secret",
-			ProjectName:       "test-project",
-			SecretsDir:        "/etc/codesphere/secrets",
-			BillingAccount:    "test-billing-account",
-			Region:            "us-central1",
-			Zone:              "us-central1-a",
-			DatacenterID:      1,
-			BaseDomain:        "example.com",
-			DNSProjectID:      "dns-project",
-			DNSZoneName:       "test-zone",
-			ProjectID:         "pid",
+			InstallConfigPath:        "fake-config-file",
+			SecretsFilePath:          "fake-secret",
+			ProjectName:              "test-project",
+			SecretsDir:               "/etc/codesphere/secrets",
+			BillingAccount:           "test-billing-account",
+			Region:                   "us-central1",
+			Zone:                     "us-central1-a",
+			DatacenterID:             1,
+			BaseDomain:               "example.com",
+			DNSProjectID:             "dns-project",
+			DNSProjectServiceAccount: "dns-admin",
+			DNSZoneName:              "test-zone",
+			SSHPublicKeyPath:         "key.pub",
+			ProjectID:                "pid",
+			Experiments:              gcp.DefaultExperiments,
+			FeatureFlags:             []string{},
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{
@@ -75,51 +99,18 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("NewGCPBootstrapper", func() {
 		It("creates a valid GCPBootstrapper", func() {
 			csEnv = &gcp.CodesphereEnvironment{}
-			stlog := bootstrap.NewStepLogger(false)
 
-			icg := installer.NewMockInstallConfigManager(GinkgoT())
-			gc := gcp.NewMockGCPClientManager(GinkgoT())
-			fw := util.NewMockFileIO(GinkgoT())
-
-			bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-			Expect(err).NotTo(HaveOccurred())
 			Expect(bs).NotTo(BeNil())
 		})
 	})
 
 	Describe("Bootstrap", func() {
-		var (
-			icg *installer.MockInstallConfigManager
-			gc  *gcp.MockGCPClientManager
-			fw  *util.MockFileIO
-			bs  *gcp.GCPBootstrapper
-		)
-
 		BeforeEach(func() {
-			stlog := bootstrap.NewStepLogger(false)
-
-			icg = installer.NewMockInstallConfigManager(GinkgoT())
-			gc = gcp.NewMockGCPClientManager(GinkgoT())
-			fw = util.NewMockFileIO(GinkgoT())
-
-			csEnv = &gcp.CodesphereEnvironment{
-				InstallConfigPath: "fake-config-file",
-				SecretsFilePath:   "fake-secret",
-				SecretsDir:        "/etc/codesphere/secrets",
-				ProjectName:       "test-project",
-				BillingAccount:    "test-billing-account",
-				Region:            "us-central1",
-				Zone:              "us-central1-a",
-				BaseDomain:        "example.com",
-				DNSProjectID:      "dns-project",
-				DNSZoneName:       "test-zone",
-				InstallConfig: &files.RootConfig{
-					Registry: &files.RegistryConfig{},
-				},
-			}
-			var err error
-			bs, err = gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-			Expect(err).NotTo(HaveOccurred())
+			csEnv.InstallConfig = &files.RootConfig{Registry: &files.RegistryConfig{}}
+			csEnv.ControlPlaneNodes = []*node.Node{}
+			csEnv.CephNodes = []*node.Node{}
+			csEnv.PostgreSQLNode = nil
+			csEnv.Jumpbox = nil
 		})
 
 		It("runs bootstrap successfully", func() {
@@ -162,8 +153,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().CreateServiceAccountKey("test-project-id", "writer@p.iam.gserviceaccount.com").Return("fake-key", nil)
 
 			// 8. EnsureIAMRoles
-			gc.EXPECT().AssignIAMRole("test-project-id", "artifact-registry-writer", "roles/artifactregistry.writer").Return(nil)
-			gc.EXPECT().AssignIAMRole("test-project-id", "cloud-controller", "roles/compute.admin").Return(nil)
+			gc.EXPECT().AssignIAMRole("test-project-id", "artifact-registry-writer", []string{"roles/artifactregistry.writer"}).Return(nil)
+			gc.EXPECT().AssignIAMRole("test-project-id", "cloud-controller", []string{"roles/compute.admin"}).Return(nil)
+			gc.EXPECT().GrantImpersonation("cloud-controller", "test-project-id", bs.Env.DNSProjectServiceAccount, bs.Env.DNSProjectID).Return(nil)
 
 			// 9. EnsureVPC
 			gc.EXPECT().CreateVPC("test-project-id", "us-central1", "test-project-id-vpc", "test-project-id-us-central1-subnet", "test-project-id-router", "test-project-id-nat-gateway").Return(nil)
@@ -262,93 +254,114 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidatePackageName", func() {
+		var (
+			artifacts []portal.Artifact
+		)
+		BeforeEach(func() {
+			mockPortalClient = portal.NewMockPortal(GinkgoT())
+			csEnv.InstallVersion = "v1.2.3"
+			csEnv.InstallHash = "abc123"
+			artifacts = []portal.Artifact{
+				{Filename: "installer-lite.tar.gz"},
+			}
+		})
+		JustBeforeEach(func() {
+			mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, bs.Env.InstallVersion, bs.Env.InstallHash).Return(portal.Build{
+				Artifacts: artifacts,
+				Hash:      csEnv.InstallHash,
+				Version:   csEnv.InstallVersion,
+			}, nil)
+		})
+
+		Context("when GHCR registry is used", func() {
+			BeforeEach(func() {
+				csEnv.RegistryType = gcp.RegistryTypeGitHub
+			})
+
+			It("succeeds when package exists and has the lite package", func() {
+				err := bs.ValidatePackageName()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Context("when package exists but does not have the lite package", func() {
+				BeforeEach(func() {
+					artifacts[0].Filename = "installer.tar.gz"
+				})
+				It("fails", func() {
+					err := bs.ValidatePackageName()
+					Expect(err).To(MatchError(MatchRegexp("artifact installer-lite\\.tar\\.gz")))
+				})
+			})
+		})
+
+		Context("when non-GHCR registry is used", func() {
+			BeforeEach(func() {
+				csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+			})
+
+			Context("when build exists and has the full package", func() {
+				BeforeEach(func() {
+					artifacts[0].Filename = "installer.tar.gz"
+				})
+				It("succeeds", func() {
+					err := bs.ValidatePackageName()
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("when package exists but does not have the full package", func() {
+				BeforeEach(func() {
+					artifacts[0].Filename = "installer-lite.tar.gz"
+				})
+				It("fails", func() {
+					err := bs.ValidatePackageName()
+					Expect(err).To(MatchError(MatchRegexp("artifact installer\\.tar\\.gz")))
+				})
+			})
+		})
+	})
+
 	Describe("EnsureInstallConfig", func() {
 		Describe("Valid EnsureInstallConfig", func() {
+			BeforeEach(func() {
+			})
 			It("uses existing when config file exists", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					InstallConfigPath: "existing-config-file",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().Exists("existing-config-file").Return(true)
-				icg.EXPECT().LoadInstallConfigFromFile("existing-config-file").Return(nil)
+				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
-				err = bs.EnsureInstallConfig()
+				err := bs.EnsureInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("creates install config when missing", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					InstallConfigPath: "nonexistent-config-file",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().Exists("nonexistent-config-file").Return(false)
+				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(false)
 				icg.EXPECT().ApplyProfile("dev").Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
-				err = bs.EnsureInstallConfig()
+				err := bs.EnsureInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(bs.Env.InstallConfigPath).To(Equal("nonexistent-config-file"))
 				Expect(bs.Env.InstallConfig).NotTo(BeNil())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					InstallConfigPath: "existing-bad-config",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().Exists("existing-bad-config").Return(true)
-				icg.EXPECT().LoadInstallConfigFromFile("existing-bad-config").Return(fmt.Errorf("bad format"))
-
-				err = bs.EnsureInstallConfig()
+				err := bs.EnsureInstallConfig()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to load config file"))
 				Expect(err.Error()).To(ContainSubstring("bad format"))
 			})
 
 			It("returns error when config file missing and applying profile fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					InstallConfigPath: "missing-config",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().Exists("missing-config").Return(false)
+				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(false)
 				icg.EXPECT().ApplyProfile("dev").Return(fmt.Errorf("profile error"))
 
-				err = bs.EnsureInstallConfig()
+				err := bs.EnsureInstallConfig()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to apply profile"))
 				Expect(err.Error()).To(ContainSubstring("profile error"))
@@ -359,89 +372,41 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureSecrets", func() {
 		Describe("Valid EnsureSecrets", func() {
 			It("loads existing secrets file", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					SecretsFilePath: "existing-secrets",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().Exists("existing-secrets").Return(true)
-				icg.EXPECT().LoadVaultFromFile("existing-secrets").Return(nil)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
+				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().MergeVaultIntoConfig().Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
-				err = bs.EnsureSecrets()
+				err := bs.EnsureSecrets()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("skips when secrets file missing", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					SecretsFilePath: "missing-secrets",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().Exists("missing-secrets").Return(false)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
-				err = bs.EnsureSecrets()
+				err := bs.EnsureSecrets()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("returns error when secrets file load fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					SecretsFilePath: "bad-secrets",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
+				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().Exists("bad-secrets").Return(true)
-				icg.EXPECT().LoadVaultFromFile("bad-secrets").Return(fmt.Errorf("load error"))
-
-				err = bs.EnsureSecrets()
+				err := bs.EnsureSecrets()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to load vault file"))
 				Expect(err.Error()).To(ContainSubstring("load error"))
 			})
 
 			It("returns error when merge fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					SecretsFilePath: "merr-secrets",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().Exists("merr-secrets").Return(true)
-				icg.EXPECT().LoadVaultFromFile("merr-secrets").Return(nil)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
+				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().MergeVaultIntoConfig().Return(fmt.Errorf("merge error"))
 
-				err = bs.EnsureSecrets()
+				err := bs.EnsureSecrets()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to merge vault into config"))
 				Expect(err.Error()).To(ContainSubstring("merge error"))
@@ -452,44 +417,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureProject", func() {
 		Describe("Valid EnsureProject", func() {
 			It("uses existing project", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectName: "existing-proj",
-					FolderID:    "123",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().GetProjectByName(csEnv.FolderID, csEnv.ProjectName).Return(&resourcemanagerpb.Project{ProjectId: "existing-id", Name: "existing-proj"}, nil)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().GetProjectByName("123", "existing-proj").Return(&resourcemanagerpb.Project{ProjectId: "existing-id", Name: "existing-proj"}, nil)
-
-				err = bs.EnsureProject()
+				err := bs.EnsureProject()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bs.Env.ProjectID).To(Equal("existing-id"))
 			})
 
 			It("creates project when missing", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectName: "new-proj",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().GetProjectByName(csEnv.FolderID, csEnv.ProjectName).Return(nil, fmt.Errorf("project not found: %s", csEnv.ProjectName))
+				gc.EXPECT().CreateProjectID(csEnv.ProjectName).Return("new-proj-id")
+				gc.EXPECT().CreateProject(csEnv.FolderID, "new-proj-id", csEnv.ProjectName).Return("", nil)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().GetProjectByName("", "new-proj").Return(nil, fmt.Errorf("project not found: new-proj"))
-				gc.EXPECT().CreateProjectID("new-proj").Return("new-proj-id")
-				gc.EXPECT().CreateProject("", "new-proj-id", "new-proj").Return("", nil)
-
-				err = bs.EnsureProject()
+				err := bs.EnsureProject()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bs.Env.ProjectID).To(Equal("new-proj-id"))
 			})
@@ -497,44 +437,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("returns error when GetProjectByName fails unexpectedly", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectName: "error-proj",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().GetProjectByName("", "error-proj").Return(nil, fmt.Errorf("api error"))
-
-				err = bs.EnsureProject()
+				gc.EXPECT().GetProjectByName("", csEnv.ProjectName).Return(nil, fmt.Errorf("api error"))
+				err := bs.EnsureProject()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get project"))
 				Expect(err.Error()).To(ContainSubstring("api error"))
 			})
 
 			It("returns error when CreateProject fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectName: "fail-create-proj",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().GetProjectByName("", csEnv.ProjectName).Return(nil, fmt.Errorf("project not found: %s", csEnv.ProjectName))
+				gc.EXPECT().CreateProjectID(csEnv.ProjectName).Return("fake-id")
+				gc.EXPECT().CreateProject("", "fake-id", csEnv.ProjectName).Return("", fmt.Errorf("create error"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().GetProjectByName("", "fail-create-proj").Return(nil, fmt.Errorf("project not found: fail-create-proj"))
-				gc.EXPECT().CreateProjectID("fail-create-proj").Return("fail-create-proj-id")
-				gc.EXPECT().CreateProject("", "fail-create-proj-id", "fail-create-proj").Return("", fmt.Errorf("create error"))
-
-				err = bs.EnsureProject()
+				err := bs.EnsureProject()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create project"))
 				Expect(err.Error()).To(ContainSubstring("create error"))
@@ -545,97 +460,45 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureBilling", func() {
 		Describe("Valid EnsureBilling", func() {
 			It("does nothing if billing already enabled correctly", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:      "pid",
-					BillingAccount: "billing-123",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				bi := &cloudbilling.ProjectBillingInfo{
 					BillingEnabled:     true,
-					BillingAccountName: "billing-123",
+					BillingAccountName: csEnv.BillingAccount,
 				}
-				gc.EXPECT().GetBillingInfo("pid").Return(bi, nil)
-
-				err = bs.EnsureBilling()
+				gc.EXPECT().GetBillingInfo(csEnv.ProjectID).Return(bi, nil)
+				err := bs.EnsureBilling()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("enables billing if not enabled", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:      "pid",
-					BillingAccount: "billing-123",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				bi := &cloudbilling.ProjectBillingInfo{
 					BillingEnabled: false,
 				}
-				gc.EXPECT().GetBillingInfo("pid").Return(bi, nil)
-				gc.EXPECT().EnableBilling("pid", "billing-123").Return(nil)
+				gc.EXPECT().GetBillingInfo(csEnv.ProjectID).Return(bi, nil)
+				gc.EXPECT().EnableBilling(csEnv.ProjectID, csEnv.BillingAccount).Return(nil)
 
-				err = bs.EnsureBilling()
+				err := bs.EnsureBilling()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when GetBillingInfo fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().GetBillingInfo(csEnv.ProjectID).Return(nil, fmt.Errorf("billing info error"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().GetBillingInfo("pid").Return(nil, fmt.Errorf("billing info error"))
-
-				err = bs.EnsureBilling()
+				err := bs.EnsureBilling()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get billing info"))
 				Expect(err.Error()).To(ContainSubstring("billing info error"))
 			})
 
 			It("fails when EnableBilling fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:      "pid",
-					BillingAccount: "acc",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				bi := &cloudbilling.ProjectBillingInfo{
 					BillingEnabled: false,
 				}
-				gc.EXPECT().GetBillingInfo("pid").Return(bi, nil)
-				gc.EXPECT().EnableBilling("pid", "acc").Return(fmt.Errorf("enable error"))
+				gc.EXPECT().GetBillingInfo(csEnv.ProjectID).Return(bi, nil)
+				gc.EXPECT().EnableBilling(csEnv.ProjectID, csEnv.BillingAccount).Return(fmt.Errorf("enable error"))
 
-				err = bs.EnsureBilling()
+				err := bs.EnsureBilling()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to enable billing"))
 				Expect(err.Error()).To(ContainSubstring("enable error"))
@@ -646,47 +509,23 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureAPIsEnabled", func() {
 		Describe("Valid EnsureAPIsEnabled", func() {
 			It("enables default APIs", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().EnableAPIs("pid", []string{
+				gc.EXPECT().EnableAPIs(csEnv.ProjectID, []string{
 					"compute.googleapis.com",
 					"serviceusage.googleapis.com",
 					"artifactregistry.googleapis.com",
 					"dns.googleapis.com",
 				}).Return(nil)
 
-				err = bs.EnsureAPIsEnabled()
+				err := bs.EnsureAPIsEnabled()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when EnableAPIs fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().EnableAPIs(csEnv.ProjectID, mock.Anything).Return(fmt.Errorf("api error"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().EnableAPIs("pid", mock.Anything).Return(fmt.Errorf("api error"))
-
-				err = bs.EnsureAPIsEnabled()
+				err := bs.EnsureAPIsEnabled()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to enable APIs"))
 				Expect(err.Error()).To(ContainSubstring("api error"))
@@ -697,78 +536,30 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureArtifactRegistry", func() {
 		Describe("Valid EnsureArtifactRegistry", func() {
 			It("uses existing registry if present", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-					Region:    "us-central1",
-					InstallConfig: &files.RootConfig{
-						Registry: &files.RegistryConfig{},
-					},
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				repo := &artifactregistrypb.Repository{Name: "projects/" + csEnv.ProjectID + "/locations/" + csEnv.Region + "/repositories/codesphere-registry"}
+				gc.EXPECT().GetArtifactRegistry(csEnv.ProjectID, csEnv.Region, "codesphere-registry").Return(repo, nil)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				repo := &artifactregistrypb.Repository{Name: "projects/pid/locations/us-central1/repositories/codesphere-registry"}
-				gc.EXPECT().GetArtifactRegistry("pid", "us-central1", "codesphere-registry").Return(repo, nil)
-
-				err = bs.EnsureArtifactRegistry()
+				err := bs.EnsureArtifactRegistry()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("creates registry if missing", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-					Region:    "us-central1",
-					InstallConfig: &files.RootConfig{
-						Registry: &files.RegistryConfig{},
-					},
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().GetArtifactRegistry(csEnv.ProjectID, csEnv.Region, "codesphere-registry").Return(nil, fmt.Errorf("not found"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
+				createdRepo := &artifactregistrypb.Repository{Name: "projects/" + csEnv.ProjectID + "/locations/" + csEnv.Region + "/repositories/codesphere-registry"}
+				gc.EXPECT().CreateArtifactRegistry(csEnv.ProjectID, csEnv.Region, "codesphere-registry").Return(createdRepo, nil)
 
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().GetArtifactRegistry("pid", "us-central1", "codesphere-registry").Return(nil, fmt.Errorf("not found"))
-
-				createdRepo := &artifactregistrypb.Repository{Name: "projects/pid/locations/us-central1/repositories/codesphere-registry"}
-				gc.EXPECT().CreateArtifactRegistry("pid", "us-central1", "codesphere-registry").Return(createdRepo, nil)
-
-				err = bs.EnsureArtifactRegistry()
+				err := bs.EnsureArtifactRegistry()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when CreateArtifactRegistry fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-					Region:    "us-central1",
-					InstallConfig: &files.RootConfig{
-						Registry: &files.RegistryConfig{},
-					},
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().GetArtifactRegistry(csEnv.ProjectID, csEnv.Region, "codesphere-registry").Return(nil, fmt.Errorf("not found"))
+				gc.EXPECT().CreateArtifactRegistry(csEnv.ProjectID, csEnv.Region, "codesphere-registry").Return(nil, fmt.Errorf("create error"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().GetArtifactRegistry("pid", "us-central1", "codesphere-registry").Return(nil, fmt.Errorf("not found"))
-				gc.EXPECT().CreateArtifactRegistry("pid", "us-central1", "codesphere-registry").Return(nil, fmt.Errorf("create error"))
-
-				err = bs.EnsureArtifactRegistry()
+				err := bs.EnsureArtifactRegistry()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create artifact registry"))
 				Expect(err.Error()).To(ContainSubstring("create error"))
@@ -779,24 +570,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureLocalContainerRegistry", func() {
 		Describe("Valid EnsureLocalContainerRegistry", func() {
 			It("installs local registry", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-					InstallConfig: &files.RootConfig{
-						Registry: &files.RegistryConfig{},
-					},
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				// Setup mocked node
-				bs.Env.PostgreSQLNode = fakeNode("postgres", nodeClient)
-
 				// Check if running - return error to simulate not running
 				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "podman ps")
@@ -808,21 +582,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient), fakeNode("k0s-2", nodeClient)}
 				bs.Env.CephNodes = []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient)}
 
-				err = bs.EnsureLocalContainerRegistry()
+				err := bs.EnsureLocalContainerRegistry()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bs.Env.InstallConfig.Registry.Username).To(Equal("custom-registry"))
 			})
 		})
 
 		Describe("Invalid cases", func() {
-			var (
-				ctx context.Context
-				icg *installer.MockInstallConfigManager
-				gc  *gcp.MockGCPClientManager
-				fw  *util.MockFileIO
-				bs  *gcp.GCPBootstrapper
-			)
-
 			BeforeEach(func() {
 				ctx = context.Background()
 				csEnv = &gcp.CodesphereEnvironment{
@@ -834,15 +600,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 					ControlPlaneNodes: []*node.Node{fakeNode("k0s-1", nodeClient), fakeNode("k0s-2", nodeClient)},
 					CephNodes:         []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient)},
 				}
-				stlog := bootstrap.NewStepLogger(false)
 
 				icg = installer.NewMockInstallConfigManager(GinkgoT())
 				gc = gcp.NewMockGCPClientManager(GinkgoT())
 				fw = util.NewMockFileIO(GinkgoT())
 
-				var err error
-				bs, err = gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("fails when the 8th install command fails", func() {
@@ -937,72 +699,76 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("EnsureGitHubAccessConfigured", func() {
+		BeforeEach(func() {
+			csEnv.GitHubPAT = "fake-pat"
+			csEnv.RegistryUser = "custom-registry"
+		})
+		It("sets configuration options in installconfig", func() {
+			err := bs.EnsureGitHubAccessConfigured()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
+			Expect(bs.Env.InstallConfig.Registry.Username).To(Equal(csEnv.RegistryUser))
+			Expect(bs.Env.InstallConfig.Registry.Password).To(Equal(csEnv.GitHubPAT))
+			Expect(bs.Env.InstallConfig.Registry.LoadContainerImages).To(BeFalse())
+			Expect(bs.Env.InstallConfig.Registry.ReplaceImagesInBom).To(BeFalse())
+		})
+
+		Context("When GitHub PAT is missing", func() {
+			BeforeEach(func() {
+				csEnv.GitHubPAT = ""
+			})
+			It("returns an error", func() {
+				err := bs.EnsureGitHubAccessConfigured()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("GitHub PAT is not set"))
+			})
+		})
+	})
+
 	Describe("EnsureServiceAccounts", func() {
 		Describe("Valid EnsureServiceAccounts", func() {
-			It("creates cloud-controller and skips writer if not artifact registry", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:    "pid",
-					RegistryType: gcp.RegistryTypeLocalContainer,
-				}
-				stlog := bootstrap.NewStepLogger(false)
+			Context("When using local container registry", func() {
+				BeforeEach(func() {
+					csEnv.RegistryType = gcp.RegistryTypeLocalContainer
+				})
+				It("creates cloud-controller and skips writer", func() {
+					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "cloud-controller", "cloud-controller").Return("email@sa", false, nil)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().CreateServiceAccount("pid", "cloud-controller", "cloud-controller").Return("email@sa", false, nil)
-
-				err = bs.EnsureServiceAccounts()
-				Expect(err).NotTo(HaveOccurred())
+					err := bs.EnsureServiceAccounts()
+					Expect(err).NotTo(HaveOccurred())
+				})
 			})
 
-			It("creates both accounts for artifact registry", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:    "pid",
-					RegistryType: gcp.RegistryTypeArtifactRegistry,
-					InstallConfig: &files.RootConfig{
-						Registry: &files.RegistryConfig{},
-					},
-				}
-				stlog := bootstrap.NewStepLogger(false)
+			Context("When using artifact registry", func() {
+				BeforeEach(func() {
+					csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+				})
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
+				It("creates both accounts", func() {
+					csEnv = &gcp.CodesphereEnvironment{
+						ProjectID:    "pid",
+						RegistryType: gcp.RegistryTypeArtifactRegistry,
+						InstallConfig: &files.RootConfig{
+							Registry: &files.RegistryConfig{},
+						},
+					}
 
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().CreateServiceAccount("pid", "cloud-controller", "cloud-controller").Return("email@sa", false, nil)
-				gc.EXPECT().CreateServiceAccount("pid", "artifact-registry-writer", "artifact-registry-writer").Return("writer@sa", true, nil)
-				gc.EXPECT().CreateServiceAccountKey("pid", "writer@sa").Return("key-content", nil)
-
-				err = bs.EnsureServiceAccounts()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(bs.Env.InstallConfig.Registry.Password).To(Equal("key-content"))
+					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "cloud-controller", "cloud-controller").Return("email@sa", false, nil)
+					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "artifact-registry-writer", "artifact-registry-writer").Return("writer@sa", true, nil)
+					gc.EXPECT().CreateServiceAccountKey(csEnv.ProjectID, "writer@sa").Return("key-content", nil)
+					err := bs.EnsureServiceAccounts()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(bs.Env.InstallConfig.Registry.Password).To(Equal("key-content"))
+				})
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when cloud-controller creation fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "cloud-controller", "cloud-controller").Return("", false, fmt.Errorf("create error"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().CreateServiceAccount("pid", "cloud-controller", "cloud-controller").Return("", false, fmt.Errorf("create error"))
-
-				err = bs.EnsureServiceAccounts()
+				err := bs.EnsureServiceAccounts()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("create error"))
 			})
@@ -1011,47 +777,52 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	Describe("EnsureIAMRoles", func() {
 		Describe("Valid EnsureIAMRoles", func() {
+			BeforeEach(func() {
+				csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+			})
 			It("assigns roles correctly", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:    "pid",
-					RegistryType: gcp.RegistryTypeArtifactRegistry,
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/compute.admin"}).Return(nil)
+				gc.EXPECT().GrantImpersonation("cloud-controller", bs.Env.ProjectID, bs.Env.DNSProjectServiceAccount, bs.Env.DNSProjectID).Return(nil)
+				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", []string{"roles/artifactregistry.writer"}).Return(nil)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
+				err := bs.EnsureIAMRoles()
 				Expect(err).NotTo(HaveOccurred())
+			})
 
-				gc.EXPECT().AssignIAMRole("pid", "cloud-controller", "roles/compute.admin").Return(nil)
-				gc.EXPECT().AssignIAMRole("pid", "artifact-registry-writer", "roles/artifactregistry.writer").Return(nil)
+			Context("When DNS project is unset", func() {
+				BeforeEach(func() {
+					csEnv.DNSProjectID = ""
+				})
+				It("assigns DNS role to cloud-controller in main project", func() {
+					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/compute.admin"}).Return(nil)
+					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/dns.admin"}).Return(nil)
+					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", []string{"roles/artifactregistry.writer"}).Return(nil)
 
-				err = bs.EnsureIAMRoles()
-				Expect(err).NotTo(HaveOccurred())
+					err := bs.EnsureIAMRoles()
+					Expect(err).NotTo(HaveOccurred())
+				})
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when AssignIAMRole fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/compute.admin"}).Return(fmt.Errorf("iam error"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().AssignIAMRole("pid", "cloud-controller", "roles/compute.admin").Return(fmt.Errorf("iam error"))
-
-				err = bs.EnsureIAMRoles()
+				err := bs.EnsureIAMRoles()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("iam error"))
+			})
+
+			Context("When DNS project is set, but DNS service account is unset", func() {
+				BeforeEach(func() {
+					csEnv.DNSProjectServiceAccount = ""
+				})
+				It("fails", func() {
+					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/compute.admin"}).Return(nil)
+
+					err := bs.EnsureIAMRoles()
+					Expect(err).To(MatchError(MatchRegexp("service account.*must be provided")))
+				})
 			})
 		})
 	})
@@ -1059,44 +830,18 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureVPC", func() {
 		Describe("Valid EnsureVPC", func() {
 			It("creates VPC, subnet, router, and nat", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-					Region:    "us-central1",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().CreateVPC(csEnv.ProjectID, csEnv.Region, "pid-vpc", "pid-us-central1-subnet", "pid-router", "pid-nat-gateway").Return(nil)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().CreateVPC("pid", "us-central1", "pid-vpc", "pid-us-central1-subnet", "pid-router", "pid-nat-gateway").Return(nil)
-
-				err = bs.EnsureVPC()
+				err := bs.EnsureVPC()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when CreateVPC fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-					Region:    "us-central1",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().CreateVPC(csEnv.ProjectID, csEnv.Region, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("vpc error"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().CreateVPC("pid", "us-central1", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("vpc error"))
-
-				err = bs.EnsureVPC()
+				err := bs.EnsureVPC()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to ensure VPC"))
 				Expect(err.Error()).To(ContainSubstring("vpc error"))
@@ -1107,58 +852,34 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureFirewallRules", func() {
 		Describe("Valid EnsureFirewallRules", func() {
 			It("creates required firewall rules", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				// Expect 4 rules: allow-ssh-ext, allow-internal, allow-all-egress, allow-ingress-web, allow-ingress-postgres
 				// Wait, code showed 5 blocks? ssh, internal, egress, web, postgres.
-				gc.EXPECT().CreateFirewallRule("pid", mock.MatchedBy(func(r *computepb.Firewall) bool {
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
 					return *r.Name == "allow-ssh-ext"
 				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule("pid", mock.MatchedBy(func(r *computepb.Firewall) bool {
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
 					return *r.Name == "allow-internal"
 				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule("pid", mock.MatchedBy(func(r *computepb.Firewall) bool {
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
 					return *r.Name == "allow-all-egress"
 				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule("pid", mock.MatchedBy(func(r *computepb.Firewall) bool {
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
 					return *r.Name == "allow-ingress-web"
 				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule("pid", mock.MatchedBy(func(r *computepb.Firewall) bool {
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
 					return *r.Name == "allow-ingress-postgres"
 				})).Return(nil)
 
-				err = bs.EnsureFirewallRules()
+				err := bs.EnsureFirewallRules()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when first firewall rule creation fails", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-				}
-				stlog := bootstrap.NewStepLogger(false)
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.Anything).Return(fmt.Errorf("firewall error")).Once()
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().CreateFirewallRule("pid", mock.Anything).Return(fmt.Errorf("firewall error")).Once()
-
-				err = bs.EnsureFirewallRules()
+				err := bs.EnsureFirewallRules()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create jumpbox ssh firewall rule"))
 			})
@@ -1166,28 +887,17 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("EnsureComputeInstances", func() {
+		BeforeEach(func() {
+			csEnv.ControlPlaneNodes = []*node.Node{}
+			csEnv.CephNodes = []*node.Node{}
+		})
 		Describe("Valid EnsureComputeInstances", func() {
 			It("creates all instances", func() {
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:        "pid",
-					Region:           "us-central1",
-					Zone:             "us-central1-a",
-					SSHPublicKeyPath: "key.pub",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				// Mock ReadFile for SSH key (called 9 times in parallel)
-				fw.EXPECT().ReadFile("key.pub").Return([]byte("ssh-rsa AAA..."), nil).Times(9)
+				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
 
 				// Mock CreateInstance (9 times)
-				gc.EXPECT().CreateInstance("pid", "us-central1-a", mock.Anything).Return(nil).Times(9)
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
 
 				// Mock GetInstance (9 times)
 				ipResp := &computepb.Instance{
@@ -1200,9 +910,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 						},
 					},
 				}
-				gc.EXPECT().GetInstance("pid", "us-central1-a", mock.Anything).Return(ipResp, nil).Times(9)
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(9)
 
-				err = bs.EnsureComputeInstances()
+				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(bs.Env.ControlPlaneNodes)).To(Equal(3))
 				Expect(len(bs.Env.CephNodes)).To(Equal(4))
@@ -1213,76 +923,28 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when SSH key read fails", func() {
+				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return(nil, fmt.Errorf("read error")).Maybe()
 
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:        "pid",
-					Region:           "us-central1",
-					Zone:             "us-central1-a",
-					SSHPublicKeyPath: "key.pub",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().ReadFile("key.pub").Return(nil, fmt.Errorf("read error")).Maybe()
-
-				err = bs.EnsureComputeInstances()
+				err := bs.EnsureComputeInstances()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("error ensuring compute instances"))
 			})
 
 			It("fails when CreateInstance fails", func() {
+				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(fmt.Errorf("create error")).Maybe()
 
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:        "pid",
-					Region:           "us-central1",
-					Zone:             "us-central1-a",
-					SSHPublicKeyPath: "key.pub",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().ReadFile("key.pub").Return([]byte("ssh-rsa AAA..."), nil).Maybe()
-				gc.EXPECT().CreateInstance("pid", "us-central1-a", mock.Anything).Return(fmt.Errorf("create error")).Maybe()
-
-				err = bs.EnsureComputeInstances()
+				err := bs.EnsureComputeInstances()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("error ensuring compute instances"))
 			})
 
 			It("fails when GetInstance fails", func() {
+				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Maybe()
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("get error")).Maybe()
 
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID:        "pid",
-					Region:           "us-central1",
-					Zone:             "us-central1-a",
-					SSHPublicKeyPath: "key.pub",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				fw.EXPECT().ReadFile("key.pub").Return([]byte("ssh-rsa AAA..."), nil).Maybe()
-				gc.EXPECT().CreateInstance("pid", "us-central1-a", mock.Anything).Return(nil).Maybe()
-				gc.EXPECT().GetInstance("pid", "us-central1-a", mock.Anything).Return(nil, fmt.Errorf("get error")).Maybe()
-
-				err = bs.EnsureComputeInstances()
+				err := bs.EnsureComputeInstances()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("error ensuring compute instances"))
 			})
@@ -1292,33 +954,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureGatewayIPAddresses", func() {
 		Describe("Valid EnsureGatewayIPAddresses", func() {
 			It("creates two addresses", func() {
-
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-					Region:    "us-central1",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				// Gateway
-				gc.EXPECT().GetAddress("pid", "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
-				gc.EXPECT().CreateAddress("pid", "us-central1", mock.MatchedBy(func(a *computepb.Address) bool {
+				gc.EXPECT().GetAddress(csEnv.ProjectID, csEnv.Region, "gateway").Return(nil, fmt.Errorf("not found"))
+				gc.EXPECT().CreateAddress(csEnv.ProjectID, csEnv.Region, mock.MatchedBy(func(a *computepb.Address) bool {
 					return *a.Name == "gateway"
 				})).Return("1.1.1.1", nil)
 
 				// Public Gateway
-				gc.EXPECT().GetAddress("pid", "us-central1", "public-gateway").Return(nil, fmt.Errorf("not found"))
-				gc.EXPECT().CreateAddress("pid", "us-central1", mock.MatchedBy(func(a *computepb.Address) bool {
+				gc.EXPECT().GetAddress(csEnv.ProjectID, csEnv.Region, "public-gateway").Return(nil, fmt.Errorf("not found"))
+				gc.EXPECT().CreateAddress(csEnv.ProjectID, csEnv.Region, mock.MatchedBy(func(a *computepb.Address) bool {
 					return *a.Name == "public-gateway"
 				})).Return("2.2.2.2", nil)
 
-				err = bs.EnsureGatewayIPAddresses()
+				err := bs.EnsureGatewayIPAddresses()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bs.Env.GatewayIP).To(Equal("1.1.1.1"))
 				Expect(bs.Env.PublicGatewayIP).To(Equal("2.2.2.2"))
@@ -1327,53 +975,25 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when gateway IP creation fails", func() {
+				gc.EXPECT().GetAddress(csEnv.ProjectID, csEnv.Region, "gateway").Return(nil, fmt.Errorf("not found"))
+				gc.EXPECT().CreateAddress(csEnv.ProjectID, csEnv.Region, mock.Anything).Return("", fmt.Errorf("create error"))
 
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-					Region:    "us-central1",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().GetAddress("pid", "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
-				gc.EXPECT().CreateAddress("pid", "us-central1", mock.Anything).Return("", fmt.Errorf("create error"))
-
-				err = bs.EnsureGatewayIPAddresses()
+				err := bs.EnsureGatewayIPAddresses()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to ensure gateway IP"))
 			})
 
 			It("fails when public gateway IP creation fails", func() {
-
-				csEnv = &gcp.CodesphereEnvironment{
-					ProjectID: "pid",
-					Region:    "us-central1",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().GetAddress("pid", "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
-				gc.EXPECT().CreateAddress("pid", "us-central1", mock.MatchedBy(func(a *computepb.Address) bool {
+				gc.EXPECT().GetAddress(csEnv.ProjectID, csEnv.Region, "gateway").Return(nil, fmt.Errorf("not found"))
+				gc.EXPECT().CreateAddress(csEnv.ProjectID, csEnv.Region, mock.MatchedBy(func(a *computepb.Address) bool {
 					return *a.Name == "gateway"
 				})).Return("1.1.1.1", nil)
-				gc.EXPECT().GetAddress("pid", "us-central1", "public-gateway").Return(nil, fmt.Errorf("not found"))
-				gc.EXPECT().CreateAddress("pid", "us-central1", mock.MatchedBy(func(a *computepb.Address) bool {
+				gc.EXPECT().GetAddress(csEnv.ProjectID, csEnv.Region, "public-gateway").Return(nil, fmt.Errorf("not found"))
+				gc.EXPECT().CreateAddress(csEnv.ProjectID, csEnv.Region, mock.MatchedBy(func(a *computepb.Address) bool {
 					return *a.Name == "public-gateway"
 				})).Return("", fmt.Errorf("create error"))
 
-				err = bs.EnsureGatewayIPAddresses()
+				err := bs.EnsureGatewayIPAddresses()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to ensure public gateway IP"))
 			})
@@ -1385,16 +1005,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("fails", func() {
 				nodeClient.EXPECT().WaitReady(mock.Anything, mock.Anything).Return(fmt.Errorf("TIMEOUT!"))
 
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bs.EnsureRootLoginEnabled()
+				err := bs.EnsureRootLoginEnabled()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("timed out waiting for SSH service"))
 			})
@@ -1406,33 +1017,18 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Describe("Valid EnsureRootLoginEnabled", func() {
 				It("enables root login on all nodes", func() {
 					nodeClient.EXPECT().RunCommand(mock.Anything, "ubuntu", mock.Anything).Return(nil)
-					stlog := bootstrap.NewStepLogger(false)
-
-					icg := installer.NewMockInstallConfigManager(GinkgoT())
-					gc := gcp.NewMockGCPClientManager(GinkgoT())
-					fw := util.NewMockFileIO(GinkgoT())
 
 					// Setup nodes
-					bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-					Expect(err).NotTo(HaveOccurred())
 
-					err = bs.EnsureRootLoginEnabled()
+					err := bs.EnsureRootLoginEnabled()
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
 
 			It("fails when EnableRootLogin fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "ubuntu", mock.Anything).Return(fmt.Errorf("ouch"))
-				stlog := bootstrap.NewStepLogger(false)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bs.EnsureRootLoginEnabled()
+				err := bs.EnsureRootLoginEnabled()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to enable root login"))
 			})
@@ -1445,16 +1041,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				// Setup jumpbox node requires some commands to run
 				nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bs.EnsureJumpboxConfigured()
+				err := bs.EnsureJumpboxConfigured()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -1464,16 +1051,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				// Setup jumpbox node requires some commands to run
 				nodeClient.EXPECT().RunCommand(mock.Anything, "ubuntu", mock.Anything).Return(fmt.Errorf("ouch")).Twice()
 
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bs.EnsureJumpboxConfigured()
+				err := bs.EnsureJumpboxConfigured()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to configure AcceptEnv"))
 			})
@@ -1481,16 +1059,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("fails when InstallOms fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "ubuntu", mock.Anything).Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("outch"))
-				stlog := bootstrap.NewStepLogger(false)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bs.EnsureJumpboxConfigured()
+				err := bs.EnsureJumpboxConfigured()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install OMS"))
 			})
@@ -1501,16 +1071,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Valid EnsureHostsConfigured", func() {
 			It("configures hosts", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
-				stlog := bootstrap.NewStepLogger(false)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bs.EnsureHostsConfigured()
+				err := bs.EnsureHostsConfigured()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -1518,35 +1080,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Invalid cases", func() {
 			It("fails when ConfigureInotifyWatches fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch"))
-				stlog := bootstrap.NewStepLogger(false)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bs.EnsureHostsConfigured()
+				err := bs.EnsureHostsConfigured()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to configure inotify watches"))
 			})
 
 			It("fails when ConfigureMemoryMap fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
 				mock.InOrder(
 					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(1),                // for inotify
 					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch")).Times(2), // for memory map
 				)
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bs.EnsureHostsConfigured()
+				err := bs.EnsureHostsConfigured()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to configure memory map"))
 			})
@@ -1556,118 +1102,106 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("UpdateInstallConfig", func() {
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
-
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				// Expectations
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
 
 				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
-				err = bs.UpdateInstallConfig()
+				err := bs.UpdateInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(bs.Env.InstallConfig.Datacenter.ID).To(Equal(1))
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
+				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal([]string{}))
+				Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(gcp.DefaultExperiments))
+				issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+				httpIssuer := issuers["letsEncryptHttp"].(map[string]interface{})
+				Expect(httpIssuer["enabled"]).To(Equal(true))
+
+				acme := issuers["acme"].(map[string]interface{})
+				dnsIssuer := acme["dnsSolver"].(map[string]interface{})
+				dnsConfig := dnsIssuer["config"].(map[string]interface{})
+				cloudDns := dnsConfig["cloudDNS"].(map[string]interface{})
+				Expect(cloudDns["project"]).To(Equal(bs.Env.DNSProjectID))
+			})
+			Context("When Experiments are set in CodesphereEnvironment", func() {
+				BeforeEach(func() {
+					csEnv.Experiments = []string{"fake-exp1", "fake-exp2"}
+				})
+				It("uses those experiments instead of defaults", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal([]string{"fake-exp1", "fake-exp2"}))
+				})
+			})
+			Context("When feature flags are set in CodesphereEnvironment", func() {
+				BeforeEach(func() {
+					csEnv.FeatureFlags = []string{"fake-flag1", "fake-flag2"}
+				})
+				It("uses those feature flags", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal([]string{"fake-flag1", "fake-flag2"}))
+				})
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when GenerateSecrets fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				icg.EXPECT().GenerateSecrets().Return(fmt.Errorf("generate error"))
 
-				err = bs.UpdateInstallConfig()
+				err := bs.UpdateInstallConfig()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to generate secrets"))
 			})
 
 			It("fails when WriteInstallConfig fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(fmt.Errorf("write error"))
 
-				err = bs.UpdateInstallConfig()
+				err := bs.UpdateInstallConfig()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to write config file"))
 			})
 
 			It("fails when WriteVault fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 				icg.EXPECT().WriteVault("fake-secret", true).Return(fmt.Errorf("vault write error"))
 
-				err = bs.UpdateInstallConfig()
+				err := bs.UpdateInstallConfig()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to write vault file"))
 			})
 
 			It("fails when CopyFile config fails", func() {
-
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
 
 				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("copy error")).Once()
 
-				err = bs.UpdateInstallConfig()
+				err := bs.UpdateInstallConfig()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to copy install config to jumpbox"))
 			})
 
 			It("fails when CopyFile secrets fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -1675,7 +1209,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-config-file", mock.Anything).Return(nil).Once()
 				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-secret", mock.Anything).Return(fmt.Errorf("copy error")).Once()
 
-				err = bs.UpdateInstallConfig()
+				err := bs.UpdateInstallConfig()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to copy secrets file to jumpbox"))
 			})
@@ -1685,53 +1219,28 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureAgeKey", func() {
 		Describe("Valid EnsureAgeKey", func() {
 			It("generates key if missing", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(nil)
 
-				err = bs.EnsureAgeKey()
+				err := bs.EnsureAgeKey()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("skips if key exists", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
 				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(true)
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
 
-				err = bs.EnsureAgeKey()
+				err := bs.EnsureAgeKey()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when age-keygen command fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
 
 				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(fmt.Errorf("ouch"))
 
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				err = bs.EnsureAgeKey()
+				err := bs.EnsureAgeKey()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to generate age key on jumpbox"))
 			})
@@ -1741,15 +1250,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EncryptVault", func() {
 		Describe("Valid EncryptVault", func() {
 			It("encrypts vault using sops", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.HasPrefix(cmd, "cp ")
 				})).Return(nil)
@@ -1758,40 +1258,23 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "sops --encrypt")
 				})).Return(nil)
 
-				err = bs.EncryptVault()
+				err := bs.EncryptVault()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when backup vault command fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.HasPrefix(cmd, "cp ")
 				})).Return(fmt.Errorf("backup error"))
 
-				err = bs.EncryptVault()
+				err := bs.EncryptVault()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed backup vault on jumpbox"))
 			})
 
 			It("fails when sops encrypt command fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.HasPrefix(cmd, "cp ")
 				})).Return(nil)
@@ -1800,7 +1283,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "sops --encrypt")
 				})).Return(fmt.Errorf("encrypt error"))
 
-				err = bs.EncryptVault()
+				err := bs.EncryptVault()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to encrypt vault on jumpbox"))
 			})
@@ -1810,82 +1293,31 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureDNSRecords", func() {
 		Describe("Valid EnsureDNSRecords", func() {
 			It("ensures DNS records", func() {
-
-				csEnv = &gcp.CodesphereEnvironment{
-					DNSProjectID:    "dns-proj",
-					DNSZoneName:     "zone",
-					BaseDomain:      "example.com",
-					GatewayIP:       "1.1.1.1",
-					PublicGatewayIP: "2.2.2.2",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().EnsureDNSManagedZone("dns-proj", "zone", "example.com.", mock.Anything).Return(nil)
-				gc.EXPECT().EnsureDNSRecordSets("dns-proj", "zone", mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
+				gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, csEnv.DNSZoneName, csEnv.BaseDomain+".", mock.Anything).Return(nil)
+				gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, csEnv.DNSZoneName, mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
 					// Expect 4 records: *.ws, *.cs, cs, ws
 					return len(records) == 4
 				})).Return(nil)
 
-				err = bs.EnsureDNSRecords()
+				err := bs.EnsureDNSRecords()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when EnsureDNSManagedZone fails", func() {
+				gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, csEnv.DNSZoneName, csEnv.BaseDomain+".", mock.Anything).Return(fmt.Errorf("zone error"))
 
-				csEnv = &gcp.CodesphereEnvironment{
-					DNSProjectID:    "dns-proj",
-					DNSZoneName:     "zone",
-					BaseDomain:      "example.com",
-					GatewayIP:       "1.1.1.1",
-					PublicGatewayIP: "2.2.2.2",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().EnsureDNSManagedZone("dns-proj", "zone", "example.com.", mock.Anything).Return(fmt.Errorf("zone error"))
-
-				err = bs.EnsureDNSRecords()
+				err := bs.EnsureDNSRecords()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to ensure DNS managed zone"))
 			})
 
 			It("fails when EnsureDNSRecordSets fails", func() {
+				gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, csEnv.DNSZoneName, csEnv.BaseDomain+".", mock.Anything).Return(nil)
+				gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, csEnv.DNSZoneName, mock.Anything).Return(fmt.Errorf("record error"))
 
-				csEnv = &gcp.CodesphereEnvironment{
-					DNSProjectID:    "dns-proj",
-					DNSZoneName:     "zone",
-					BaseDomain:      "example.com",
-					GatewayIP:       "1.1.1.1",
-					PublicGatewayIP: "2.2.2.2",
-				}
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				gc.EXPECT().EnsureDNSManagedZone("dns-proj", "zone", "example.com.", mock.Anything).Return(nil)
-				gc.EXPECT().EnsureDNSRecordSets("dns-proj", "zone", mock.Anything).Return(fmt.Errorf("record error"))
-
-				err = bs.EnsureDNSRecords()
+				err := bs.EnsureDNSRecords()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to ensure DNS record sets"))
 			})
@@ -1894,62 +1326,55 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	Describe("InstallCodesphere", func() {
 		BeforeEach(func() {
-			csEnv.InstallCodesphereVersion = "v1.2.3"
+			csEnv.InstallVersion = "v1.2.3"
 		})
 		Describe("Valid InstallCodesphere", func() {
+			Context("Direct GitHub access", func() {
+				BeforeEach(func() {
+					csEnv.GitHubPAT = "fake-pat"
+					csEnv.RegistryUser = "fake-user"
+					csEnv.RegistryType = "github"
+
+				})
+				It("downloads and installs lite package", func() {
+					// Expect download package
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer-lite.tar.gz v1.2.3").Return(nil)
+
+					// Expect install codesphere
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
+						"oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-installer-lite.tar.gz -s load-container-images").Return(nil)
+
+					err := bs.InstallCodesphere()
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
 			It("downloads and installs codesphere", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				// Expect download package
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz v1.2.3").Return(nil)
 
 				// Expect install codesphere
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3.tar.gz").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-installer.tar.gz").Return(nil)
 
-				err = bs.InstallCodesphere()
+				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when download package fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz v1.2.3").Return(fmt.Errorf("download error"))
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package v1.2.3").Return(fmt.Errorf("download error"))
-
-				err = bs.InstallCodesphere()
+				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to download Codesphere package from jumpbox"))
 			})
 
 			It("fails when install codesphere fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz v1.2.3").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
 
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3.tar.gz").Return(fmt.Errorf("install error"))
-
-				err = bs.InstallCodesphere()
+				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install Codesphere from jumpbox"))
 			})
@@ -1959,77 +1384,40 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("GenerateK0sConfigScript", func() {
 		Describe("Valid GenerateK0sConfigScript", func() {
 			It("generates script", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
 				nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
 				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
 
-				err = bs.GenerateK0sConfigScript()
+				err := bs.GenerateK0sConfigScript()
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 
 		Describe("Invalid cases", func() {
 			It("fails when WriteFile fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(fmt.Errorf("write error"))
 
-				err = bs.GenerateK0sConfigScript()
+				err := bs.GenerateK0sConfigScript()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to write configure-k0s.sh"))
 			})
 
 			It("fails when CopyFile fails", func() {
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
 				nodeClient.EXPECT().CopyFile(mock.Anything, "configure-k0s.sh", "/root/configure-k0s.sh").Return(fmt.Errorf("copy error"))
 
-				err = bs.GenerateK0sConfigScript()
+				err := bs.GenerateK0sConfigScript()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to copy configure-k0s.sh to control plane node"))
 			})
 
 			It("fails when RunSSHCommand chmod fails", func() {
-
-				stlog := bootstrap.NewStepLogger(false)
-
-				icg := installer.NewMockInstallConfigManager(GinkgoT())
-				gc := gcp.NewMockGCPClientManager(GinkgoT())
-				fw := util.NewMockFileIO(GinkgoT())
-
-				bs, err := gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient)
-				Expect(err).NotTo(HaveOccurred())
-
 				fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
 
 				nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
 				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(fmt.Errorf("chmod error"))
 
-				err = bs.GenerateK0sConfigScript()
+				err := bs.GenerateK0sConfigScript()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to make configure-k0s.sh executable"))
 			})

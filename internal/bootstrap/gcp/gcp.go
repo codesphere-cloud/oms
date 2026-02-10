@@ -18,6 +18,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/dns/v1"
@@ -30,6 +31,7 @@ type RegistryType string
 const (
 	RegistryTypeLocalContainer   RegistryType = "local-container"
 	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
+	RegistryTypeGitHub           RegistryType = "github"
 )
 
 type VMDef struct {
@@ -53,6 +55,15 @@ var vmDefs = []VMDef{
 	{"k0s-3", "e2-standard-16", []string{"k0s"}, []int64{}, false},
 }
 
+var DefaultExperiments []string = []string{
+	"managed-services",
+	"vcluster",
+	"custom-service-image",
+	"ms-in-ls",
+	"secret-management",
+	"sub-path-mount",
+}
+
 type GCPBootstrapper struct {
 	ctx       context.Context
 	stlog     *bootstrap.StepLogger
@@ -62,25 +73,33 @@ type GCPBootstrapper struct {
 	// Environment
 	Env *CodesphereEnvironment
 	// SSH command runner
-	NodeClient node.NodeClient
+	NodeClient   node.NodeClient
+	PortalClient portal.Portal
 }
 
 type CodesphereEnvironment struct {
 	ProjectID                string       `json:"project_id"`
 	ProjectName              string       `json:"project_name"`
 	DNSProjectID             string       `json:"dns_project_id"`
+	DNSProjectServiceAccount string       `json:"dns_project_service_account"`
 	Jumpbox                  *node.Node   `json:"jumpbox"`
 	PostgreSQLNode           *node.Node   `json:"postgres_node"`
 	ControlPlaneNodes        []*node.Node `json:"control_plane_nodes"`
 	CephNodes                []*node.Node `json:"ceph_nodes"`
 	ContainerRegistryURL     string       `json:"-"`
 	ExistingConfigUsed       bool         `json:"-"`
-	InstallCodesphereVersion string       `json:"install_codesphere_version"`
+	InstallVersion           string       `json:"install_version"`
+	InstallHash              string       `json:"install_hash"`
+	InstallSkipSteps         []string     `json:"install_skip_steps"`
 	Preemptible              bool         `json:"preemptible"`
 	WriteConfig              bool         `json:"-"`
 	GatewayIP                string       `json:"gateway_ip"`
 	PublicGatewayIP          string       `json:"public_gateway_ip"`
 	RegistryType             RegistryType `json:"registry_type"`
+	GitHubPAT                string       `json:"-"`
+	RegistryUser             string       `json:"-"`
+	Experiments              []string     `json:"experiments"`
+	FeatureFlags             []string     `json:"feature_flags"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -113,15 +132,18 @@ func NewGCPBootstrapper(
 	icg installer.InstallConfigManager,
 	gcpClient GCPClientManager,
 	fw util.FileIO,
-	sshRunner node.NodeClient) (*GCPBootstrapper, error) {
+	sshRunner node.NodeClient,
+	portalClient portal.Portal,
+) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:        ctx,
-		stlog:      stlog,
-		fw:         fw,
-		icg:        icg,
-		GCPClient:  gcpClient,
-		Env:        CodesphereEnv,
-		NodeClient: sshRunner,
+		ctx:          ctx,
+		stlog:        stlog,
+		fw:           fw,
+		icg:          icg,
+		GCPClient:    gcpClient,
+		Env:          CodesphereEnv,
+		NodeClient:   sshRunner,
+		PortalClient: portalClient,
 	}, nil
 }
 
@@ -131,6 +153,13 @@ func GetInfraFilePath() string {
 }
 
 func (b *GCPBootstrapper) Bootstrap() error {
+	if b.Env.InstallVersion != "" {
+		err := b.stlog.Step("Validate package to install", b.ValidatePackageName)
+		if err != nil {
+			return fmt.Errorf("invalid package name: %w", err)
+		}
+
+	}
 	err := b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
 	if err != nil {
 		return fmt.Errorf("failed to ensure install config: %w", err)
@@ -215,6 +244,13 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		}
 	}
 
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		err = b.stlog.Step("Ensure GitHub access configured", b.EnsureGitHubAccessConfigured)
+		if err != nil {
+			return fmt.Errorf("failed to update install config: %w", err)
+		}
+	}
+
 	if b.Env.WriteConfig {
 		err = b.stlog.Step("Update install config", b.UpdateInstallConfig)
 		if err != nil {
@@ -237,19 +273,46 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure DNS records: %w", err)
 	}
 
-	if b.Env.InstallCodesphereVersion != "" {
-		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
-		if err != nil {
-			return fmt.Errorf("failed to install Codesphere: %w", err)
-		}
-	}
-
 	err = b.stlog.Step("Generate k0s config script", b.GenerateK0sConfigScript)
 	if err != nil {
 		return fmt.Errorf("failed to generate k0s config script: %w", err)
 	}
 
+	if b.Env.InstallVersion != "" {
+		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
+		if err != nil {
+			return fmt.Errorf("failed to install Codesphere: %w", err)
+		}
+
+		err = b.stlog.Step("Run k0s config script", b.RunK0sConfigScript)
+		if err != nil {
+			return fmt.Errorf("failed to run k0s config script: %w", err)
+		}
+	}
+
 	return nil
+}
+
+func (b *GCPBootstrapper) ValidatePackageName() error {
+	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
+	if err != nil {
+		return fmt.Errorf("failed to get codesphere package: %w", err)
+	}
+
+	requiredFilename := "installer.tar.gz"
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		requiredFilename = "installer-lite.tar.gz"
+	}
+	filenames := []string{}
+	// Validate required file exists in package artifacts
+	for _, artifact := range build.Artifacts {
+		filenames = append(filenames, artifact.Filename)
+		if artifact.Filename == requiredFilename {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
 }
 
 func (b *GCPBootstrapper) EnsureInstallConfig() error {
@@ -404,7 +467,12 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 }
 
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.ensureIAMRoleWithRetry("cloud-controller", "roles/compute.admin")
+	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/compute.admin"})
+	if err != nil {
+		return err
+	}
+
+	err = b.ensureDnsPermissions()
 	if err != nil {
 		return err
 	}
@@ -413,14 +481,14 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 		return nil
 	}
 
-	err = b.ensureIAMRoleWithRetry("artifact-registry-writer", "roles/artifactregistry.writer")
+	err = b.ensureIAMRoleWithRetry("artifact-registry-writer", []string{"roles/artifactregistry.writer"})
 	return err
 }
 
-func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount, role string) error {
+func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount string, roles []string) error {
 	var err error
 	for retries := range 5 {
-		err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, serviceAccount, role)
+		err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, serviceAccount, roles)
 		if err == nil {
 			return nil
 		}
@@ -429,7 +497,25 @@ func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount, role string) er
 			time.Sleep(5 * time.Second)
 		}
 	}
-	return fmt.Errorf("failed to assign role %s to service account %s: %w", role, serviceAccount, err)
+	return fmt.Errorf("failed to assign roles %v to service account %s: %w", roles, serviceAccount, err)
+}
+
+func (b *GCPBootstrapper) ensureDnsPermissions() error {
+	if b.Env.DNSProjectID != "" {
+		if b.Env.DNSProjectServiceAccount == "" {
+			return errors.New("dns project service account with role roles/dns.admin must be provided when dns project id is set")
+		}
+		err := b.GCPClient.GrantImpersonation("cloud-controller", b.Env.ProjectID, b.Env.DNSProjectServiceAccount, b.Env.DNSProjectID)
+		if err != nil {
+			return fmt.Errorf("failed to grant impersonization on dns project %s to cloud-controller service account: %w", b.Env.DNSProjectID, err)
+		}
+		return nil
+	}
+	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/dns.admin"})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (b *GCPBootstrapper) EnsureVPC() error {
@@ -563,6 +649,10 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	wg := sync.WaitGroup{}
 	errCh := make(chan error, len(vmDefs))
 	resultCh := make(chan vmResult, len(vmDefs))
+	rootDiskSize := int64(200)
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		rootDiskSize = 50
+	}
 	for _, vm := range vmDefs {
 		wg.Add(1)
 		go func(vm VMDef) {
@@ -574,7 +664,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 					Type:       protoString("PERSISTENT"),
 					InitializeParams: &computepb.AttachedDiskInitializeParams{
 						DiskType:    &diskType,
-						DiskSizeGb:  protoInt64(200),
+						DiskSizeGb:  protoInt64(rootDiskSize),
 						SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
 					},
 				},
@@ -917,6 +1007,17 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 	return nil
 }
+func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
+	if b.Env.GitHubPAT == "" {
+		return fmt.Errorf("GitHub PAT is not set")
+	}
+	b.Env.InstallConfig.Registry.Server = "ghcr.io"
+	b.Env.InstallConfig.Registry.Username = b.Env.RegistryUser
+	b.Env.InstallConfig.Registry.Password = b.Env.GitHubPAT
+	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
+	b.Env.InstallConfig.Registry.LoadContainerImages = false
+	return nil
+}
 
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	// Update install config with necessary values
@@ -924,8 +1025,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
 	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
 	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
-	b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
-	b.Env.InstallConfig.Registry.LoadContainerImages = true
+	if b.Env.RegistryType != RegistryTypeGitHub {
+		b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
+		b.Env.InstallConfig.Registry.LoadContainerImages = true
+	}
 
 	if b.Env.InstallConfig.Postgres.Primary == nil {
 		b.Env.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
@@ -1013,7 +1116,34 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		Annotations: map[string]string{
 			"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
 		},
-		//IPAddresses: []string{b.Env.ControlPlaneNodes[1].ExternalIP},
+	}
+
+	dnsProject := b.Env.DNSProjectID
+	if b.Env.DNSProjectID == "" {
+		dnsProject = b.Env.ProjectID
+	}
+	b.Env.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
+		"issuers": map[string]interface{}{
+			"letsEncryptHttp": map[string]interface{}{
+				"enabled": true,
+			},
+			"acme": map[string]interface{}{
+				"dnsSolver": map[string]interface{}{
+					"config": map[string]interface{}{
+						"cloudDNS": map[string]interface{}{
+							"project": dnsProject,
+						},
+					},
+				},
+			},
+		},
+	}
+	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+		Type: "acme",
+		Acme: &files.ACMEConfig{
+			Email:  "oms-testing@" + b.Env.BaseDomain,
+			Server: "https://acme-v02.api.letsencrypt.org/directory",
+		},
 	}
 
 	b.Env.InstallConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
@@ -1023,7 +1153,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		CNameBaseDomain: "ws." + b.Env.BaseDomain,
 	}
 	b.Env.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
-	b.Env.InstallConfig.Codesphere.Experiments = []string{}
 	b.Env.InstallConfig.Codesphere.DeployConfig = files.DeployConfig{
 		Images: map[string]files.ImageConfig{
 			"ubuntu-24.04": {
@@ -1038,7 +1167,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 							1: 1,
 							2: 1,
 							3: 0,
-							4: 0,
 						},
 					},
 				},
@@ -1048,27 +1176,20 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Codesphere.Plans = files.PlansConfig{
 		HostingPlans: map[int]files.HostingPlan{
 			1: {
-				CPUTenth:      10,
-				GPUParts:      0,
-				MemoryMb:      2048,
-				StorageMb:     20480,
-				TempStorageMb: 1024,
-			},
-			2: {
 				CPUTenth:      20,
 				GPUParts:      0,
 				MemoryMb:      4096,
 				StorageMb:     20480,
 				TempStorageMb: 1024,
 			},
-			3: {
+			2: {
 				CPUTenth:      40,
 				GPUParts:      0,
 				MemoryMb:      8192,
 				StorageMb:     40960,
 				TempStorageMb: 1024,
 			},
-			4: {
+			3: {
 				CPUTenth:      80,
 				GPUParts:      0,
 				MemoryMb:      16384,
@@ -1078,26 +1199,20 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		},
 		WorkspacePlans: map[int]files.WorkspacePlan{
 			1: {
-				Name:          "Micro",
+				Name:          "Standard",
 				HostingPlanID: 1,
 				MaxReplicas:   3,
 				OnDemand:      true,
 			},
 			2: {
-				Name:          "Standard",
+				Name:          "Big",
 				HostingPlanID: 2,
 				MaxReplicas:   3,
 				OnDemand:      true,
 			},
 			3: {
-				Name:          "Big",
-				HostingPlanID: 3,
-				MaxReplicas:   3,
-				OnDemand:      true,
-			},
-			4: {
 				Name:          "Pro",
-				HostingPlanID: 4,
+				HostingPlanID: 3,
 				MaxReplicas:   3,
 				OnDemand:      true,
 			},
@@ -1120,6 +1235,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
+	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
+	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 	b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{}
 
 	if !b.Env.ExistingConfigUsed {
@@ -1245,12 +1362,26 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 }
 
 func (b *GCPBootstrapper) InstallCodesphere() error {
-	err := b.Env.Jumpbox.RunSSHCommand("root", "oms-cli download package "+b.Env.InstallCodesphereVersion)
+	packageFile := "installer.tar.gz"
+	skipSteps := b.Env.InstallSkipSteps
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		skipSteps = append(skipSteps, "load-container-images")
+		packageFile = "installer-lite.tar.gz"
+	}
+	skipStepsArg := ""
+	if len(skipSteps) > 0 {
+		skipStepsArg = " -s " + strings.Join(skipSteps, ",")
+	}
+
+	downloadCmd := "oms-cli download package -f " + packageFile + " " + b.Env.InstallVersion
+	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.RunSSHCommand("root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k "+b.Env.SecretsDir+"/age_key.txt -p "+b.Env.InstallCodesphereVersion+".tar.gz")
+	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s-%s%s",
+		b.Env.SecretsDir, b.Env.InstallVersion, packageFile, skipStepsArg)
+	err = b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
@@ -1331,9 +1462,9 @@ $KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerI
 
 sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
 
-ssh root@` + b.Env.ControlPlaneNodes[1].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
+ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[1].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
 
-ssh root@` + b.Env.ControlPlaneNodes[2].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
+ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[2].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
 
 systemctl daemon-reload
 systemctl restart k0scontroller
@@ -1354,6 +1485,15 @@ systemctl restart k0scontroller
 	if err != nil {
 		return fmt.Errorf("failed to make configure-k0s.sh executable on control plane node: %w", err)
 	}
+	return nil
+}
+
+func (b *GCPBootstrapper) RunK0sConfigScript() error {
+	err := b.Env.ControlPlaneNodes[0].RunSSHCommand("root", "/root/configure-k0s.sh")
+	if err != nil {
+		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
+	}
+
 	return nil
 }
 

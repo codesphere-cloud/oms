@@ -173,8 +173,9 @@ type ClusterConfig struct {
 }
 
 type ClusterCertificates struct {
-	CA   CAConfig    `yaml:"ca"`
-	ACME *ACMEConfig `yaml:"acme,omitempty"`
+	CA       CAConfig               `yaml:"ca"`
+	ACME     *ACMEConfig            `yaml:"acme,omitempty"`
+	Override map[string]interface{} `yaml:"override,omitempty"`
 }
 
 type CAConfig struct {
@@ -248,9 +249,11 @@ type CodesphereConfig struct {
 	Domain                     string                 `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                 `yaml:"workspaceHostingBaseDomain"`
 	PublicIP                   string                 `yaml:"publicIp"`
+	CertIssuer                 CertIssuerConfig       `yaml:"certIssuer"`
 	CustomDomains              CustomDomainsConfig    `yaml:"customDomains"`
 	DNSServers                 []string               `yaml:"dnsServers"`
 	Experiments                []string               `yaml:"experiments"`
+	Features                   []string               `yaml:"features"`
 	ExtraCAPem                 string                 `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars      map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
 	ExtraWorkspaceFiles        []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
@@ -263,6 +266,18 @@ type CodesphereConfig struct {
 
 	DomainAuthPrivateKey string `yaml:"-"`
 	DomainAuthPublicKey  string `yaml:"-"`
+}
+
+type CertIssuerType string
+
+const (
+	CertIssuerTypeSelfSigned CertIssuerType = "self-signed"
+	CertIssuerTypeACME       CertIssuerType = "acme"
+)
+
+type CertIssuerConfig struct {
+	Type CertIssuerType `yaml:"type"`
+	Acme *ACMEConfig    `yaml:"acme,omitempty"`
 }
 
 type CustomDomainsConfig struct {

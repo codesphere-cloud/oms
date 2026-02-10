@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -280,7 +281,7 @@ var _ = Describe("PortalClient", func() {
 				},
 			}
 
-			fmt.Printf("%s", testfile.Name())
+			log.Printf("%s", testfile.Name())
 
 			// Close the file before using it for verification
 			err := testfile.Close()
