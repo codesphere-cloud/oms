@@ -14,16 +14,16 @@ oms-cli beta bootstrap-gcp cleanup [flags]
 
 ```
   # Clean up using project ID from the local infra file
-  oms beta bootstrap-gcp cleanup
+  oms-cli beta bootstrap-gcp cleanup
 
   # Clean up a specific project
-  oms beta bootstrap-gcp cleanup --project-id my-project-abc123
+  oms-cli beta bootstrap-gcp cleanup --project-id my-project-abc123
 
   # Force cleanup without confirmation (skips OMS-managed check)
-  oms beta bootstrap-gcp cleanup --project-id my-project-abc123 --force
+  oms-cli beta bootstrap-gcp cleanup --project-id my-project-abc123 --force
 
   # Skip DNS record cleanup
-  oms beta bootstrap-gcp cleanup --skip-dns-cleanup
+  oms-cli beta bootstrap-gcp cleanup --skip-dns-cleanup
 ```
 
 ### Options
