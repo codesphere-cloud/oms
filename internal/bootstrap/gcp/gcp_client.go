@@ -5,6 +5,7 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ import (
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
@@ -811,7 +813,13 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 	deletions := []*dns.ResourceRecordSet{}
 	for _, record := range recordNames {
 		existingRecord, err := service.ResourceRecordSets.Get(projectID, zoneName, record.name, record.rtype).Context(c.ctx).Do()
-		if err == nil && existingRecord != nil {
+		if err != nil {
+			if !isNotFoundError(err) {
+				return fmt.Errorf("failed to get DNS record %s: %w", record.name, err)
+			}
+			continue
+		}
+		if existingRecord != nil {
 			deletions = append(deletions, existingRecord)
 		}
 	}
@@ -829,6 +837,19 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 	}
 
 	return nil
+}
+
+// isNotFoundError checks if the error is a Google API "not found" error (HTTP 404).
+func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var googleErr *googleapi.Error
+	if errors.As(err, &googleErr) {
+		return googleErr.Code == 404
+	}
+	return false
 }
 
 // Helper functions

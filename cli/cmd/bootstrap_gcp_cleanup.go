@@ -7,11 +7,12 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
 
-	"github.com/codesphere-cloud/cs-go/pkg/io"
+	csio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -30,20 +31,40 @@ type BootstrapGcpCleanupOpts struct {
 	SkipDNSCleanup bool
 }
 
+type CleanupDeps struct {
+	GCPClient     gcp.GCPClientManager
+	FileIO        util.FileIO
+	StepLogger    *bootstrap.StepLogger
+	ConfirmReader io.Reader
+	InfraFilePath string
+}
+
 func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false)
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := util.NewFilesystemWriter()
 
+	deps := &CleanupDeps{
+		GCPClient:     gcpClient,
+		FileIO:        fw,
+		StepLogger:    stlog,
+		ConfirmReader: os.Stdin,
+		InfraFilePath: gcp.GetInfraFilePath(),
+	}
+
+	return c.ExecuteCleanup(deps)
+}
+
+// ExecuteCleanup performs the cleanup operation with the provided dependencies.
+func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 	projectID := c.Opts.ProjectID
 	var codesphereEnv gcp.CodesphereEnvironment
 
 	// If no project ID provided, try to load from infra file
-	infraFilePath := gcp.GetInfraFilePath()
 	if projectID == "" {
-		if fw.Exists(infraFilePath) {
-			envFileContent, err := fw.ReadFile(infraFilePath)
+		if deps.FileIO.Exists(deps.InfraFilePath) {
+			envFileContent, err := deps.FileIO.ReadFile(deps.InfraFilePath)
 			if err != nil {
 				return fmt.Errorf("failed to read gcp infra file: %w", err)
 			}
@@ -53,12 +74,15 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 				return fmt.Errorf("failed to unmarshal gcp infra file: %w", err)
 			}
 			projectID = codesphereEnv.ProjectID
+			if projectID == "" {
+				return fmt.Errorf("infra file at %s contains empty project ID", deps.InfraFilePath)
+			}
 			log.Printf("Using project ID from infra file: %s", projectID)
 		} else {
-			return fmt.Errorf("no project ID provided and no infra file found at %s", infraFilePath)
+			return fmt.Errorf("no project ID provided and no infra file found at %s", deps.InfraFilePath)
 		}
-	} else if fw.Exists(infraFilePath) {
-		envFileContent, err := fw.ReadFile(infraFilePath)
+	} else if deps.FileIO.Exists(deps.InfraFilePath) {
+		envFileContent, err := deps.FileIO.ReadFile(deps.InfraFilePath)
 		if err == nil {
 			_ = json.Unmarshal(envFileContent, &codesphereEnv)
 		}
@@ -66,7 +90,7 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 
 	// Verify the project was bootstrapped by OMS (skip if --force is used)
 	if !c.Opts.Force {
-		isOMSManaged, err := gcpClient.IsOMSManagedProject(projectID)
+		isOMSManaged, err := deps.GCPClient.IsOMSManagedProject(projectID)
 		if err != nil {
 			return fmt.Errorf("failed to verify project: %w", err)
 		}
@@ -84,7 +108,7 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 		log.Printf("This action cannot be undone.\n")
 
 		log.Println("Type the project ID to confirm deletion: ")
-		reader := bufio.NewReader(os.Stdin)
+		reader := bufio.NewReader(deps.ConfirmReader)
 		confirmation, err := reader.ReadString('\n')
 		if err != nil {
 			return fmt.Errorf("failed to read confirmation: %w", err)
@@ -103,8 +127,8 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 			dnsProjectID = projectID
 		}
 
-		err := stlog.Step("Cleaning up DNS records", func() error {
-			return gcpClient.DeleteDNSRecordSets(dnsProjectID, codesphereEnv.DNSZoneName, codesphereEnv.BaseDomain)
+		err := deps.StepLogger.Step("Cleaning up DNS records", func() error {
+			return deps.GCPClient.DeleteDNSRecordSets(dnsProjectID, codesphereEnv.DNSZoneName, codesphereEnv.BaseDomain)
 		})
 		if err != nil {
 			log.Printf("Warning: failed to clean up DNS records: %v", err)
@@ -115,20 +139,20 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	// Delete the project
-	err := stlog.Step("Deleting GCP project", func() error {
-		return gcpClient.DeleteProject(projectID)
+	err := deps.StepLogger.Step("Deleting GCP project", func() error {
+		return deps.GCPClient.DeleteProject(projectID)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)
 	}
 
 	// Remove the local infra file if it exists
-	if fw.Exists(infraFilePath) {
-		err = os.Remove(infraFilePath)
+	if deps.FileIO.Exists(deps.InfraFilePath) {
+		err = os.Remove(deps.InfraFilePath)
 		if err != nil {
 			log.Printf("Warning: failed to remove local infra file: %v", err)
 		} else {
-			log.Printf("Removed local infra file: %s", infraFilePath)
+			log.Printf("Removed local infra file: %s", deps.InfraFilePath)
 		}
 	}
 
@@ -144,7 +168,7 @@ func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions)
 		cmd: &cobra.Command{
 			Use:   "cleanup",
 			Short: "Clean up GCP infrastructure created by bootstrap-gcp",
-			Long:  io.Long(`Deletes a GCP project that was previously created using the bootstrap-gcp command.`),
+			Long:  csio.Long(`Deletes a GCP project that was previously created using the bootstrap-gcp command.`),
 			Example: `  # Clean up using project ID from the local infra file
   oms beta bootstrap-gcp cleanup
 
