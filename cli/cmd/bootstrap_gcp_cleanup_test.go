@@ -324,7 +324,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 				mockFileIO.EXPECT().ReadFile("/tmp/test-infra.json").Return(envData, nil)
 				mockGCPClient.EXPECT().DeleteDNSRecordSets("test-project", "test-zone", "example.com").Return(nil)
 				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
-				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(false)
+				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
 
 				err := cleanupCmd.ExecuteCleanup(deps)
 				Expect(err).NotTo(HaveOccurred())
@@ -348,7 +348,56 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 				mockFileIO.EXPECT().ReadFile("/tmp/test-infra.json").Return(envData, nil)
 				// DNS deletion should NOT be called
 				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
-				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(false)
+				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
+
+				err := cleanupCmd.ExecuteCleanup(deps)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("when infra file belongs to a different project", func() {
+			It("should skip DNS cleanup and not remove infra file", func() {
+				cleanupCmd.Opts.ProjectID = "other-project"
+				cleanupCmd.Opts.Force = true
+
+				differentEnv := gcp.CodesphereEnvironment{
+					ProjectID:   "test-project",
+					BaseDomain:  "example.com",
+					DNSZoneName: "test-zone",
+				}
+				envData, _ := json.Marshal(differentEnv)
+
+				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
+				mockFileIO.EXPECT().ReadFile("/tmp/test-infra.json").Return(envData, nil)
+				mockGCPClient.EXPECT().DeleteProject("other-project").Return(nil)
+
+				err := cleanupCmd.ExecuteCleanup(deps)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("when infra file read fails with project ID provided", func() {
+			It("should continue with deletion but skip DNS cleanup", func() {
+				cleanupCmd.Opts.ProjectID = "test-project"
+				cleanupCmd.Opts.Force = true
+
+				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
+				mockFileIO.EXPECT().ReadFile("/tmp/test-infra.json").Return(nil, os.ErrPermission)
+				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
+
+				err := cleanupCmd.ExecuteCleanup(deps)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("when infra file contains invalid JSON with project ID provided", func() {
+			It("should continue with deletion but skip DNS cleanup", func() {
+				cleanupCmd.Opts.ProjectID = "test-project"
+				cleanupCmd.Opts.Force = true
+
+				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
+				mockFileIO.EXPECT().ReadFile("/tmp/test-infra.json").Return([]byte("invalid-json"), nil)
+				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
 
 				err := cleanupCmd.ExecuteCleanup(deps)
 				Expect(err).NotTo(HaveOccurred())

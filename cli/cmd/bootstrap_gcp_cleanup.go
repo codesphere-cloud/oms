@@ -60,6 +60,7 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 	projectID := c.Opts.ProjectID
 	var codesphereEnv gcp.CodesphereEnvironment
+	projectIDFromInfraFile := false
 
 	// If no project ID provided, try to load from infra file
 	if projectID == "" {
@@ -77,14 +78,26 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 			if projectID == "" {
 				return fmt.Errorf("infra file at %s contains empty project ID", deps.InfraFilePath)
 			}
+			projectIDFromInfraFile = true
 			log.Printf("Using project ID from infra file: %s", projectID)
 		} else {
 			return fmt.Errorf("no project ID provided and no infra file found at %s", deps.InfraFilePath)
 		}
 	} else if deps.FileIO.Exists(deps.InfraFilePath) {
+		// Load infra file to check if it matches the provided project ID
 		envFileContent, err := deps.FileIO.ReadFile(deps.InfraFilePath)
-		if err == nil {
-			_ = json.Unmarshal(envFileContent, &codesphereEnv)
+		if err != nil {
+			log.Printf("Warning: failed to read infra file: %v", err)
+		} else {
+			err = json.Unmarshal(envFileContent, &codesphereEnv)
+			if err != nil {
+				log.Printf("Warning: failed to parse infra file: %v", err)
+			} else if codesphereEnv.ProjectID != projectID {
+				log.Printf("Warning: infra file contains project ID '%s' but deleting '%s'; ignoring infra file for DNS cleanup", codesphereEnv.ProjectID, projectID)
+				codesphereEnv = gcp.CodesphereEnvironment{}
+			} else {
+				projectIDFromInfraFile = true
+			}
 		}
 	}
 
@@ -146,8 +159,7 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 		return fmt.Errorf("failed to delete project: %w", err)
 	}
 
-	// Remove the local infra file if it exists
-	if deps.FileIO.Exists(deps.InfraFilePath) {
+	if projectIDFromInfraFile && deps.FileIO.Exists(deps.InfraFilePath) {
 		err = os.Remove(deps.InfraFilePath)
 		if err != nil {
 			log.Printf("Warning: failed to remove local infra file: %v", err)
@@ -170,16 +182,16 @@ func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions)
 			Short: "Clean up GCP infrastructure created by bootstrap-gcp",
 			Long:  csio.Long(`Deletes a GCP project that was previously created using the bootstrap-gcp command.`),
 			Example: `  # Clean up using project ID from the local infra file
-  oms beta bootstrap-gcp cleanup
+  oms-cli beta bootstrap-gcp cleanup
 
   # Clean up a specific project
-  oms beta bootstrap-gcp cleanup --project-id my-project-abc123
+  oms-cli beta bootstrap-gcp cleanup --project-id my-project-abc123
 
   # Force cleanup without confirmation (skips OMS-managed check)
-  oms beta bootstrap-gcp cleanup --project-id my-project-abc123 --force
+  oms-cli beta bootstrap-gcp cleanup --project-id my-project-abc123 --force
 
   # Skip DNS record cleanup
-  oms beta bootstrap-gcp cleanup --skip-dns-cleanup`,
+  oms-cli beta bootstrap-gcp cleanup --skip-dns-cleanup`,
 		},
 		Opts: &BootstrapGcpCleanupOpts{
 			GlobalOptions: opts,

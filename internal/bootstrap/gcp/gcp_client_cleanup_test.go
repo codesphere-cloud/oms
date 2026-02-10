@@ -219,28 +219,4 @@ var _ = Describe("GCP Client Cleanup Methods", func() {
 			})
 		})
 	})
-
-	Describe("Project resource name formatting", func() {
-		It("should format project resource name correctly", func() {
-			projectID := "my-test-project-123"
-			expectedFormat := fmt.Sprintf("projects/%s", projectID)
-
-			Expect(expectedFormat).To(Equal("projects/my-test-project-123"))
-		})
-
-		It("should handle project IDs with different formats", func() {
-			testCases := []string{
-				"simple-project",
-				"project-with-multiple-hyphens",
-				"project123",
-				"123-project",
-			}
-
-			for _, projectID := range testCases {
-				resourceName := fmt.Sprintf("projects/%s", projectID)
-				Expect(resourceName).To(HavePrefix("projects/"))
-				Expect(resourceName).To(ContainSubstring(projectID))
-			}
-		})
-	})
 })
