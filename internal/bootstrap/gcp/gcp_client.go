@@ -57,6 +57,7 @@ type GCPClientManager interface {
 	GetAddress(projectID, region, addressName string) (*computepb.Address, error)
 	EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error
 	EnsureDNSRecordSets(projectID, zoneName string, records []*dns.ResourceRecordSet) error
+	DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error
 }
 
 // Concrete implementation
@@ -692,6 +693,47 @@ func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*d
 	_, err = service.Changes.Create(projectID, zoneName, change).Context(c.ctx).Do()
 	if err != nil {
 		return fmt.Errorf("failed to create DNS records: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteDNSRecordSets deletes DNS record sets created by OMS for the given base domain.
+func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error {
+	service, err := dns.NewService(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create DNS service: %w", err)
+	}
+
+	// Define the DNS record names to delete (same pattern as EnsureDNSRecords in gcp.go)
+	recordNames := []struct {
+		name  string
+		rtype string
+	}{
+		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
+	}
+
+	deletions := []*dns.ResourceRecordSet{}
+	for _, record := range recordNames {
+		existingRecord, err := service.ResourceRecordSets.Get(projectID, zoneName, record.name, record.rtype).Context(c.ctx).Do()
+		if err == nil && existingRecord != nil {
+			deletions = append(deletions, existingRecord)
+		}
+	}
+
+	if len(deletions) == 0 {
+		return nil
+	}
+
+	change := &dns.Change{
+		Deletions: deletions,
+	}
+	_, err = service.Changes.Create(projectID, zoneName, change).Context(c.ctx).Do()
+	if err != nil {
+		return fmt.Errorf("failed to delete DNS records: %w", err)
 	}
 
 	return nil
