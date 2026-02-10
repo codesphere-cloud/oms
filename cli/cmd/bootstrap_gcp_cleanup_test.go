@@ -266,7 +266,6 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 				cleanupCmd.Opts.Force = true
 				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(false)
 				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
-				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(false)
 
 				err := cleanupCmd.ExecuteCleanup(deps)
 				Expect(err).NotTo(HaveOccurred())
