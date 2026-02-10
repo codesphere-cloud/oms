@@ -286,9 +286,11 @@ func (c *GCPClient) EnableAPIs(projectID string, apis []string) error {
 			}
 			if err != nil {
 				errCh <- fmt.Errorf("failed to enable API %s: %w", api, err)
+				return
 			}
 			if _, err := op.Wait(c.ctx); err != nil {
 				errCh <- fmt.Errorf("failed to enable API %s: %w", api, err)
+				return
 			}
 
 			c.st.Logf("API %s enabled", api)
