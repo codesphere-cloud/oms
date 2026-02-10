@@ -36,6 +36,45 @@ import (
 // OMSManagedLabel is the label key used to identify projects created by OMS
 const OMSManagedLabel = "oms-managed"
 
+// CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
+// A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
+func CheckOMSManagedLabel(labels map[string]string) bool {
+	if labels == nil {
+		return false
+	}
+	value, exists := labels[OMSManagedLabel]
+	return exists && value == "true"
+}
+
+// GetDNSRecordNames returns the DNS record names that OMS creates for a given base domain.
+func GetDNSRecordNames(baseDomain string) []struct {
+	Name  string
+	Rtype string
+} {
+	return []struct {
+		Name  string
+		Rtype string
+	}{
+		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
+	}
+}
+
+// IsNotFoundError checks if the error is a Google API "not found" error (HTTP 404).
+func IsNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var googleErr *googleapi.Error
+	if errors.As(err, &googleErr) {
+		return googleErr.Code == 404
+	}
+	return false
+}
+
 // Interface for high-level GCP operations
 type GCPClientManager interface {
 	GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error)
@@ -185,12 +224,7 @@ func (c *GCPClient) IsOMSManagedProject(projectID string) (bool, error) {
 		return false, fmt.Errorf("failed to get project: %w", err)
 	}
 
-	if project.Labels == nil {
-		return false, nil
-	}
-
-	value, exists := project.Labels[OMSManagedLabel]
-	return exists && value == "true", nil
+	return CheckOMSManagedLabel(project.Labels), nil
 }
 
 func getProjectResourceName(projectID string) string {
@@ -799,23 +833,14 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 		return fmt.Errorf("failed to create DNS service: %w", err)
 	}
 
-	// Define the DNS record names to delete (same pattern as EnsureDNSRecords in gcp.go)
-	recordNames := []struct {
-		name  string
-		rtype string
-	}{
-		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
-		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
-		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
-		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
-	}
+	recordNames := GetDNSRecordNames(baseDomain)
 
 	deletions := []*dns.ResourceRecordSet{}
 	for _, record := range recordNames {
-		existingRecord, err := service.ResourceRecordSets.Get(projectID, zoneName, record.name, record.rtype).Context(c.ctx).Do()
+		existingRecord, err := service.ResourceRecordSets.Get(projectID, zoneName, record.Name, record.Rtype).Context(c.ctx).Do()
 		if err != nil {
-			if !isNotFoundError(err) {
-				return fmt.Errorf("failed to get DNS record %s: %w", record.name, err)
+			if !IsNotFoundError(err) {
+				return fmt.Errorf("failed to get DNS record %s: %w", record.Name, err)
 			}
 			continue
 		}
@@ -837,19 +862,6 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 	}
 
 	return nil
-}
-
-// isNotFoundError checks if the error is a Google API "not found" error (HTTP 404).
-func isNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	var googleErr *googleapi.Error
-	if errors.As(err, &googleErr) {
-		return googleErr.Code == 404
-	}
-	return false
 }
 
 // Helper functions
