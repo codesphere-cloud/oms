@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -45,7 +46,26 @@ type HttpClient interface {
 func NewPortalClient() *PortalClient {
 	return &PortalClient{
 		Env:        env.NewEnv(),
-		HttpClient: http.DefaultClient,
+		HttpClient: newConfiguredHttpClient(),
+	}
+}
+
+// newConfiguredHttpClient creates an HTTP client with proper timeouts
+func newConfiguredHttpClient() *http.Client {
+	return &http.Client{
+		Timeout: 10 * time.Minute,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   30 * time.Second,
+			ResponseHeaderTimeout: 60 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+			IdleConnTimeout:       90 * time.Second,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+		},
 	}
 }
 
@@ -130,6 +150,7 @@ func (c *PortalClient) GetBody(path string) (body []byte, status int, err error)
 
 // ListBuilds retrieves the list of available builds for the specified product.
 func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, err error) {
+	log.Printf("Fetching available %s packages from portal...", product)
 	res, _, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
 	if err != nil {
 		err = fmt.Errorf("failed to list packages: %w", err)
@@ -218,11 +239,19 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if !quiet && resp.ContentLength > 0 {
+		log.Printf("Starting download of %s...", byteCountToHumanReadable(resp.ContentLength))
+	}
+
 	// Create a WriteCounter to wrap the output file and report progress, unless quiet is requested.
 	// Default behavior: report progress. Quiet callers should pass true for quiet.
 	counter := file
 	if !quiet {
-		counter = NewWriteCounter(file)
+		totalSize := resp.ContentLength
+		if startByte > 0 && totalSize > 0 {
+			totalSize = totalSize + int64(startByte)
+		}
+		counter = NewWriteCounterWithTotal(file, totalSize, int64(startByte))
 	}
 
 	_, err = io.Copy(counter, resp.Body)

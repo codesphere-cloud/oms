@@ -22,7 +22,7 @@ type HttpWrapper struct {
 
 func NewHttpWrapper() *HttpWrapper {
 	return &HttpWrapper{
-		HttpClient: http.DefaultClient,
+		HttpClient: newConfiguredHttpClient(),
 	}
 }
 
@@ -77,7 +77,7 @@ func (c *HttpWrapper) Download(url string, file io.Writer, quiet bool) error {
 
 	counter := file
 	if !quiet {
-		counter = NewWriteCounter(file)
+		counter = NewWriteCounterWithTotal(file, resp.ContentLength, 0)
 	}
 
 	_, err = io.Copy(counter, resp.Body)

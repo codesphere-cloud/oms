@@ -13,7 +13,10 @@ import (
 // WriteCounter is a custom io.Writer that counts bytes written and logs progress.
 type WriteCounter struct {
 	Written     int64
+	Total       int64
+	StartBytes  int64
 	LastUpdate  time.Time
+	StartTime   time.Time
 	Writer      io.Writer
 	currentAnim int
 }
@@ -24,6 +27,18 @@ func NewWriteCounter(writer io.Writer) *WriteCounter {
 		Writer: writer,
 		// Initialize to zero so the first Write triggers an immediate log
 		LastUpdate: time.Time{},
+		StartTime:  time.Now(),
+	}
+}
+
+// NewWriteCounterWithTotal creates a new WriteCounter with known total size.
+func NewWriteCounterWithTotal(writer io.Writer, total int64, startBytes int64) *WriteCounter {
+	return &WriteCounter{
+		Writer:     writer,
+		Total:      total,
+		StartBytes: startBytes,
+		LastUpdate: time.Time{},
+		StartTime:  time.Now(),
 	}
 }
 
@@ -38,7 +53,39 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	wc.Written += int64(n)
 
 	if time.Since(wc.LastUpdate) >= 100*time.Millisecond {
-		_, err = fmt.Fprintf(log.Writer(), "\rDownloading... %s transferred %c \033[K", byteCountToHumanReadable(wc.Written), wc.animate())
+		var progress string
+		if wc.Total > 0 {
+			currentTotal := wc.StartBytes + wc.Written
+			percentage := float64(currentTotal) / float64(wc.Total) * 100
+			elapsed := time.Since(wc.StartTime)
+			speed := float64(wc.Written) / elapsed.Seconds()
+
+			var eta string
+			if speed > 0 {
+				remaining := wc.Total - currentTotal
+				etaSeconds := float64(remaining) / speed
+				eta = formatDuration(time.Duration(etaSeconds) * time.Second)
+			} else {
+				eta = "calculating..."
+			}
+
+			progress = fmt.Sprintf("\rDownloading... %.1f%% (%s / %s) | Speed: %s/s | ETA: %s %c \033[K",
+				percentage,
+				byteCountToHumanReadable(currentTotal),
+				byteCountToHumanReadable(wc.Total),
+				byteCountToHumanReadable(int64(speed)),
+				eta,
+				wc.animate())
+		} else {
+			elapsed := time.Since(wc.StartTime)
+			speed := float64(wc.Written) / elapsed.Seconds()
+			progress = fmt.Sprintf("\rDownloading... %s | Speed: %s/s %c \033[K",
+				byteCountToHumanReadable(wc.Written),
+				byteCountToHumanReadable(int64(speed)),
+				wc.animate())
+		}
+
+		_, err = fmt.Fprint(log.Writer(), progress)
 		if err != nil {
 			log.Printf("error writing progress: %v", err)
 		}
@@ -66,4 +113,22 @@ func (wc *WriteCounter) animate() byte {
 	anim := "/-\\|"
 	wc.currentAnim = (wc.currentAnim + 1) % len(anim)
 	return anim[wc.currentAnim]
+}
+
+// formatDuration formats a duration in a human-readable format.
+func formatDuration(d time.Duration) string {
+	if d < time.Second {
+		return "<1s"
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.0fs", d.Seconds())
+	}
+	if d < time.Hour {
+		minutes := int(d.Minutes())
+		seconds := int(d.Seconds()) % 60
+		return fmt.Sprintf("%dm%ds", minutes, seconds)
+	}
+	hours := int(d.Hours())
+	minutes := int(d.Minutes()) % 60
+	return fmt.Sprintf("%dh%dm", hours, minutes)
 }
