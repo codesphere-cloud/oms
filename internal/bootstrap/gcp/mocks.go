@@ -63,16 +63,32 @@ type MockGCPClientManager_AssignIAMRole_Call struct {
 }
 
 // AssignIAMRole is a helper method to define mock.On call
-//   - saProjectID
-//   - saEmail
-//   - roles
+//   - saProjectID string
+//   - saEmail string
+//   - roles []string
 func (_e *MockGCPClientManager_Expecter) AssignIAMRole(saProjectID interface{}, saEmail interface{}, roles interface{}) *MockGCPClientManager_AssignIAMRole_Call {
 	return &MockGCPClientManager_AssignIAMRole_Call{Call: _e.mock.On("AssignIAMRole", saProjectID, saEmail, roles)}
 }
 
 func (_c *MockGCPClientManager_AssignIAMRole_Call) Run(run func(saProjectID string, saEmail string, roles []string)) *MockGCPClientManager_AssignIAMRole_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].([]string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -119,16 +135,32 @@ type MockGCPClientManager_CreateAddress_Call struct {
 }
 
 // CreateAddress is a helper method to define mock.On call
-//   - projectID
-//   - region
-//   - address
+//   - projectID string
+//   - region string
+//   - address *computepb.Address
 func (_e *MockGCPClientManager_Expecter) CreateAddress(projectID interface{}, region interface{}, address interface{}) *MockGCPClientManager_CreateAddress_Call {
 	return &MockGCPClientManager_CreateAddress_Call{Call: _e.mock.On("CreateAddress", projectID, region, address)}
 }
 
 func (_c *MockGCPClientManager_CreateAddress_Call) Run(run func(projectID string, region string, address *computepb.Address)) *MockGCPClientManager_CreateAddress_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(*computepb.Address))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 *computepb.Address
+		if args[2] != nil {
+			arg2 = args[2].(*computepb.Address)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -177,16 +209,32 @@ type MockGCPClientManager_CreateArtifactRegistry_Call struct {
 }
 
 // CreateArtifactRegistry is a helper method to define mock.On call
-//   - projectID
-//   - region
-//   - repoName
+//   - projectID string
+//   - region string
+//   - repoName string
 func (_e *MockGCPClientManager_Expecter) CreateArtifactRegistry(projectID interface{}, region interface{}, repoName interface{}) *MockGCPClientManager_CreateArtifactRegistry_Call {
 	return &MockGCPClientManager_CreateArtifactRegistry_Call{Call: _e.mock.On("CreateArtifactRegistry", projectID, region, repoName)}
 }
 
 func (_c *MockGCPClientManager_CreateArtifactRegistry_Call) Run(run func(projectID string, region string, repoName string)) *MockGCPClientManager_CreateArtifactRegistry_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -224,15 +272,26 @@ type MockGCPClientManager_CreateFirewallRule_Call struct {
 }
 
 // CreateFirewallRule is a helper method to define mock.On call
-//   - projectID
-//   - rule
+//   - projectID string
+//   - rule *computepb.Firewall
 func (_e *MockGCPClientManager_Expecter) CreateFirewallRule(projectID interface{}, rule interface{}) *MockGCPClientManager_CreateFirewallRule_Call {
 	return &MockGCPClientManager_CreateFirewallRule_Call{Call: _e.mock.On("CreateFirewallRule", projectID, rule)}
 }
 
 func (_c *MockGCPClientManager_CreateFirewallRule_Call) Run(run func(projectID string, rule *computepb.Firewall)) *MockGCPClientManager_CreateFirewallRule_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(*computepb.Firewall))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 *computepb.Firewall
+		if args[1] != nil {
+			arg1 = args[1].(*computepb.Firewall)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -270,16 +329,32 @@ type MockGCPClientManager_CreateInstance_Call struct {
 }
 
 // CreateInstance is a helper method to define mock.On call
-//   - projectID
-//   - zone
-//   - instance
+//   - projectID string
+//   - zone string
+//   - instance *computepb.Instance
 func (_e *MockGCPClientManager_Expecter) CreateInstance(projectID interface{}, zone interface{}, instance interface{}) *MockGCPClientManager_CreateInstance_Call {
 	return &MockGCPClientManager_CreateInstance_Call{Call: _e.mock.On("CreateInstance", projectID, zone, instance)}
 }
 
 func (_c *MockGCPClientManager_CreateInstance_Call) Run(run func(projectID string, zone string, instance *computepb.Instance)) *MockGCPClientManager_CreateInstance_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(*computepb.Instance))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 *computepb.Instance
+		if args[2] != nil {
+			arg2 = args[2].(*computepb.Instance)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -326,16 +401,32 @@ type MockGCPClientManager_CreateProject_Call struct {
 }
 
 // CreateProject is a helper method to define mock.On call
-//   - parent
-//   - projectName
-//   - displayName
+//   - parent string
+//   - projectName string
+//   - displayName string
 func (_e *MockGCPClientManager_Expecter) CreateProject(parent interface{}, projectName interface{}, displayName interface{}) *MockGCPClientManager_CreateProject_Call {
 	return &MockGCPClientManager_CreateProject_Call{Call: _e.mock.On("CreateProject", parent, projectName, displayName)}
 }
 
 func (_c *MockGCPClientManager_CreateProject_Call) Run(run func(parent string, projectName string, displayName string)) *MockGCPClientManager_CreateProject_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -373,14 +464,20 @@ type MockGCPClientManager_CreateProjectID_Call struct {
 }
 
 // CreateProjectID is a helper method to define mock.On call
-//   - projectName
+//   - projectName string
 func (_e *MockGCPClientManager_Expecter) CreateProjectID(projectName interface{}) *MockGCPClientManager_CreateProjectID_Call {
 	return &MockGCPClientManager_CreateProjectID_Call{Call: _e.mock.On("CreateProjectID", projectName)}
 }
 
 func (_c *MockGCPClientManager_CreateProjectID_Call) Run(run func(projectName string)) *MockGCPClientManager_CreateProjectID_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -433,16 +530,32 @@ type MockGCPClientManager_CreateServiceAccount_Call struct {
 }
 
 // CreateServiceAccount is a helper method to define mock.On call
-//   - projectID
-//   - name
-//   - displayName
+//   - projectID string
+//   - name string
+//   - displayName string
 func (_e *MockGCPClientManager_Expecter) CreateServiceAccount(projectID interface{}, name interface{}, displayName interface{}) *MockGCPClientManager_CreateServiceAccount_Call {
 	return &MockGCPClientManager_CreateServiceAccount_Call{Call: _e.mock.On("CreateServiceAccount", projectID, name, displayName)}
 }
 
 func (_c *MockGCPClientManager_CreateServiceAccount_Call) Run(run func(projectID string, name string, displayName string)) *MockGCPClientManager_CreateServiceAccount_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -489,15 +602,26 @@ type MockGCPClientManager_CreateServiceAccountKey_Call struct {
 }
 
 // CreateServiceAccountKey is a helper method to define mock.On call
-//   - projectID
-//   - saEmail
+//   - projectID string
+//   - saEmail string
 func (_e *MockGCPClientManager_Expecter) CreateServiceAccountKey(projectID interface{}, saEmail interface{}) *MockGCPClientManager_CreateServiceAccountKey_Call {
 	return &MockGCPClientManager_CreateServiceAccountKey_Call{Call: _e.mock.On("CreateServiceAccountKey", projectID, saEmail)}
 }
 
 func (_c *MockGCPClientManager_CreateServiceAccountKey_Call) Run(run func(projectID string, saEmail string)) *MockGCPClientManager_CreateServiceAccountKey_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -535,19 +659,50 @@ type MockGCPClientManager_CreateVPC_Call struct {
 }
 
 // CreateVPC is a helper method to define mock.On call
-//   - projectID
-//   - region
-//   - networkName
-//   - subnetName
-//   - routerName
-//   - natName
+//   - projectID string
+//   - region string
+//   - networkName string
+//   - subnetName string
+//   - routerName string
+//   - natName string
 func (_e *MockGCPClientManager_Expecter) CreateVPC(projectID interface{}, region interface{}, networkName interface{}, subnetName interface{}, routerName interface{}, natName interface{}) *MockGCPClientManager_CreateVPC_Call {
 	return &MockGCPClientManager_CreateVPC_Call{Call: _e.mock.On("CreateVPC", projectID, region, networkName, subnetName, routerName, natName)}
 }
 
 func (_c *MockGCPClientManager_CreateVPC_Call) Run(run func(projectID string, region string, networkName string, subnetName string, routerName string, natName string)) *MockGCPClientManager_CreateVPC_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string), args[3].(string), args[4].(string), args[5].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		var arg5 string
+		if args[5] != nil {
+			arg5 = args[5].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+		)
 	})
 	return _c
 }
@@ -585,15 +740,26 @@ type MockGCPClientManager_EnableAPIs_Call struct {
 }
 
 // EnableAPIs is a helper method to define mock.On call
-//   - projectID
-//   - apis
+//   - projectID string
+//   - apis []string
 func (_e *MockGCPClientManager_Expecter) EnableAPIs(projectID interface{}, apis interface{}) *MockGCPClientManager_EnableAPIs_Call {
 	return &MockGCPClientManager_EnableAPIs_Call{Call: _e.mock.On("EnableAPIs", projectID, apis)}
 }
 
 func (_c *MockGCPClientManager_EnableAPIs_Call) Run(run func(projectID string, apis []string)) *MockGCPClientManager_EnableAPIs_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].([]string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []string
+		if args[1] != nil {
+			arg1 = args[1].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -631,15 +797,26 @@ type MockGCPClientManager_EnableBilling_Call struct {
 }
 
 // EnableBilling is a helper method to define mock.On call
-//   - projectID
-//   - billingAccount
+//   - projectID string
+//   - billingAccount string
 func (_e *MockGCPClientManager_Expecter) EnableBilling(projectID interface{}, billingAccount interface{}) *MockGCPClientManager_EnableBilling_Call {
 	return &MockGCPClientManager_EnableBilling_Call{Call: _e.mock.On("EnableBilling", projectID, billingAccount)}
 }
 
 func (_c *MockGCPClientManager_EnableBilling_Call) Run(run func(projectID string, billingAccount string)) *MockGCPClientManager_EnableBilling_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -677,17 +854,38 @@ type MockGCPClientManager_EnsureDNSManagedZone_Call struct {
 }
 
 // EnsureDNSManagedZone is a helper method to define mock.On call
-//   - projectID
-//   - zoneName
-//   - dnsName
-//   - description
+//   - projectID string
+//   - zoneName string
+//   - dnsName string
+//   - description string
 func (_e *MockGCPClientManager_Expecter) EnsureDNSManagedZone(projectID interface{}, zoneName interface{}, dnsName interface{}, description interface{}) *MockGCPClientManager_EnsureDNSManagedZone_Call {
 	return &MockGCPClientManager_EnsureDNSManagedZone_Call{Call: _e.mock.On("EnsureDNSManagedZone", projectID, zoneName, dnsName, description)}
 }
 
 func (_c *MockGCPClientManager_EnsureDNSManagedZone_Call) Run(run func(projectID string, zoneName string, dnsName string, description string)) *MockGCPClientManager_EnsureDNSManagedZone_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string), args[3].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
 	})
 	return _c
 }
@@ -725,16 +923,32 @@ type MockGCPClientManager_EnsureDNSRecordSets_Call struct {
 }
 
 // EnsureDNSRecordSets is a helper method to define mock.On call
-//   - projectID
-//   - zoneName
-//   - records
+//   - projectID string
+//   - zoneName string
+//   - records []*dns.ResourceRecordSet
 func (_e *MockGCPClientManager_Expecter) EnsureDNSRecordSets(projectID interface{}, zoneName interface{}, records interface{}) *MockGCPClientManager_EnsureDNSRecordSets_Call {
 	return &MockGCPClientManager_EnsureDNSRecordSets_Call{Call: _e.mock.On("EnsureDNSRecordSets", projectID, zoneName, records)}
 }
 
 func (_c *MockGCPClientManager_EnsureDNSRecordSets_Call) Run(run func(projectID string, zoneName string, records []*dns.ResourceRecordSet)) *MockGCPClientManager_EnsureDNSRecordSets_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].([]*dns.ResourceRecordSet))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []*dns.ResourceRecordSet
+		if args[2] != nil {
+			arg2 = args[2].([]*dns.ResourceRecordSet)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -783,16 +997,32 @@ type MockGCPClientManager_GetAddress_Call struct {
 }
 
 // GetAddress is a helper method to define mock.On call
-//   - projectID
-//   - region
-//   - addressName
+//   - projectID string
+//   - region string
+//   - addressName string
 func (_e *MockGCPClientManager_Expecter) GetAddress(projectID interface{}, region interface{}, addressName interface{}) *MockGCPClientManager_GetAddress_Call {
 	return &MockGCPClientManager_GetAddress_Call{Call: _e.mock.On("GetAddress", projectID, region, addressName)}
 }
 
 func (_c *MockGCPClientManager_GetAddress_Call) Run(run func(projectID string, region string, addressName string)) *MockGCPClientManager_GetAddress_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -841,16 +1071,32 @@ type MockGCPClientManager_GetArtifactRegistry_Call struct {
 }
 
 // GetArtifactRegistry is a helper method to define mock.On call
-//   - projectID
-//   - region
-//   - repoName
+//   - projectID string
+//   - region string
+//   - repoName string
 func (_e *MockGCPClientManager_Expecter) GetArtifactRegistry(projectID interface{}, region interface{}, repoName interface{}) *MockGCPClientManager_GetArtifactRegistry_Call {
 	return &MockGCPClientManager_GetArtifactRegistry_Call{Call: _e.mock.On("GetArtifactRegistry", projectID, region, repoName)}
 }
 
 func (_c *MockGCPClientManager_GetArtifactRegistry_Call) Run(run func(projectID string, region string, repoName string)) *MockGCPClientManager_GetArtifactRegistry_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -899,14 +1145,20 @@ type MockGCPClientManager_GetBillingInfo_Call struct {
 }
 
 // GetBillingInfo is a helper method to define mock.On call
-//   - projectID
+//   - projectID string
 func (_e *MockGCPClientManager_Expecter) GetBillingInfo(projectID interface{}) *MockGCPClientManager_GetBillingInfo_Call {
 	return &MockGCPClientManager_GetBillingInfo_Call{Call: _e.mock.On("GetBillingInfo", projectID)}
 }
 
 func (_c *MockGCPClientManager_GetBillingInfo_Call) Run(run func(projectID string)) *MockGCPClientManager_GetBillingInfo_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -955,16 +1207,32 @@ type MockGCPClientManager_GetInstance_Call struct {
 }
 
 // GetInstance is a helper method to define mock.On call
-//   - projectID
-//   - zone
-//   - instanceName
+//   - projectID string
+//   - zone string
+//   - instanceName string
 func (_e *MockGCPClientManager_Expecter) GetInstance(projectID interface{}, zone interface{}, instanceName interface{}) *MockGCPClientManager_GetInstance_Call {
 	return &MockGCPClientManager_GetInstance_Call{Call: _e.mock.On("GetInstance", projectID, zone, instanceName)}
 }
 
 func (_c *MockGCPClientManager_GetInstance_Call) Run(run func(projectID string, zone string, instanceName string)) *MockGCPClientManager_GetInstance_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -1013,15 +1281,26 @@ type MockGCPClientManager_GetProjectByName_Call struct {
 }
 
 // GetProjectByName is a helper method to define mock.On call
-//   - folderID
-//   - displayName
+//   - folderID string
+//   - displayName string
 func (_e *MockGCPClientManager_Expecter) GetProjectByName(folderID interface{}, displayName interface{}) *MockGCPClientManager_GetProjectByName_Call {
 	return &MockGCPClientManager_GetProjectByName_Call{Call: _e.mock.On("GetProjectByName", folderID, displayName)}
 }
 
 func (_c *MockGCPClientManager_GetProjectByName_Call) Run(run func(folderID string, displayName string)) *MockGCPClientManager_GetProjectByName_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -1059,17 +1338,38 @@ type MockGCPClientManager_GrantImpersonation_Call struct {
 }
 
 // GrantImpersonation is a helper method to define mock.On call
-//   - impersonatingServiceAccount
-//   - impersonatingProjectID
-//   - imperonatedServiceAccount
-//   - impersonatedProjectID
+//   - impersonatingServiceAccount string
+//   - impersonatingProjectID string
+//   - imperonatedServiceAccount string
+//   - impersonatedProjectID string
 func (_e *MockGCPClientManager_Expecter) GrantImpersonation(impersonatingServiceAccount interface{}, impersonatingProjectID interface{}, imperonatedServiceAccount interface{}, impersonatedProjectID interface{}) *MockGCPClientManager_GrantImpersonation_Call {
 	return &MockGCPClientManager_GrantImpersonation_Call{Call: _e.mock.On("GrantImpersonation", impersonatingServiceAccount, impersonatingProjectID, imperonatedServiceAccount, impersonatedProjectID)}
 }
 
 func (_c *MockGCPClientManager_GrantImpersonation_Call) Run(run func(impersonatingServiceAccount string, impersonatingProjectID string, imperonatedServiceAccount string, impersonatedProjectID string)) *MockGCPClientManager_GrantImpersonation_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string), args[3].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
 	})
 	return _c
 }
