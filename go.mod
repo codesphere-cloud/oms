@@ -8,12 +8,12 @@ require (
 	cloud.google.com/go/iam v1.5.3
 	cloud.google.com/go/resourcemanager v1.10.7
 	cloud.google.com/go/serviceusage v1.9.7
-	github.com/codesphere-cloud/cs-go v0.16.2
+	github.com/codesphere-cloud/cs-go v0.16.4
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/jedib0t/go-pretty/v6 v6.7.8
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.28.1
-	github.com/onsi/gomega v1.39.0
+	github.com/onsi/gomega v1.39.1
 	github.com/pkg/sftp v1.13.10
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
@@ -500,6 +500,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260128011058-8636f8732409 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/mail.v2 v2.3.1 // indirect
+	gopkg.in/validator.v2 v2.0.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	honnef.co/go/tools v0.6.1 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect

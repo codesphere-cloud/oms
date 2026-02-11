@@ -35,6 +35,13 @@ $ oms-cli update install-config --k8s-api-server 10.0.0.10 --config config.yaml 
 ### Options
 
 ```
+      --acme-dns01-provider string                   DNS provider for DNS-01 solver
+      --acme-eab-key-id string                       External Account Binding key ID (required by some ACME providers)
+      --acme-eab-mac-key string                      External Account Binding MAC key (required by some ACME providers)
+      --acme-email string                            Email address for ACME account registration
+      --acme-enabled                                 Enable ACME certificate issuer
+      --acme-issuer-name string                      Name for the ACME ClusterIssuer
+      --acme-server string                           ACME server URL
       --ceph-nodes-subnet string                     Ceph nodes subnet
       --cluster-gateway-ips strings                  Cluster gateway IP addresses (comma-separated)
       --cluster-gateway-service-type string          Cluster gateway service type
