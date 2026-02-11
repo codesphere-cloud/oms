@@ -13,6 +13,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
@@ -93,75 +94,112 @@ const (
 )
 
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
-	// Load install-config
+	config, err := c.loadInstallConfig()
+	if err != nil {
+		return err
+	}
+
+	k0sVersion, err := c.determineK0sVersion(k0s)
+	if err != nil {
+		return err
+	}
+
+	k0sBinaryPath, err := c.getK0sBinaryPath(pm, k0s, k0sVersion)
+	if err != nil {
+		return err
+	}
+
+	k0sctlPath, err := c.downloadK0sctl(k0sctl)
+	if err != nil {
+		return err
+	}
+
+	k0sctlConfigPath, err := c.generateK0sctlConfig(config, k0sVersion, k0sBinaryPath)
+	if err != nil {
+		return err
+	}
+
+	return c.deployK0sCluster(k0sctl, k0sctlPath, k0sctlConfigPath)
+}
+
+func (c *InstallK0sCmd) loadInstallConfig() (*files.RootConfig, error) {
 	icg := installer.NewInstallConfigManager()
 	if err := icg.LoadInstallConfigFromFile(c.Opts.InstallConfig); err != nil {
-		return fmt.Errorf("failed to load install-config: %w", err)
+		return nil, fmt.Errorf("failed to load install-config: %w", err)
 	}
 
 	config := icg.GetInstallConfig()
 
 	if !config.Kubernetes.ManagedByCodesphere {
-		return fmt.Errorf("install-config specifies external Kubernetes, k0s installation is only supported for Codesphere-managed Kubernetes")
+		return nil, fmt.Errorf("install-config specifies external Kubernetes, k0s installation is only supported for Codesphere-managed Kubernetes")
 	}
 
-	// Determine k0s version
+	return config, nil
+}
+
+func (c *InstallK0sCmd) determineK0sVersion(k0s installer.K0sManager) (string, error) {
 	k0sVersion := c.Opts.Version
 	if k0sVersion == "" {
 		var err error
 		k0sVersion, err = k0s.GetLatestVersion()
 		if err != nil {
-			return fmt.Errorf("failed to get latest k0s version: %w", err)
+			return "", fmt.Errorf("failed to get latest k0s version: %w", err)
 		}
 		log.Printf("Using latest k0s version: %s", k0sVersion)
 	}
+	return k0sVersion, nil
+}
 
-	// Download or get k0s binary path
-	var k0sBinaryPath string
-	if !c.Opts.NoDownload {
-		if c.Opts.Package != "" {
-			// Extract the k0s binary from the package first
-			if err := pm.ExtractDependency(defaultK0sPath, c.Opts.Force); err != nil {
-				return fmt.Errorf("failed to extract k0s from package: %w", err)
-			}
-			k0sBinaryPath = pm.GetDependencyPath(defaultK0sPath)
-		} else {
-			var err error
-			k0sBinaryPath, err = k0s.Download(k0sVersion, c.Opts.Force, false)
-			if err != nil {
-				return fmt.Errorf("failed to download k0s: %w", err)
-			}
-		}
+func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
+	if c.Opts.NoDownload {
+		return "", nil
 	}
 
-	// Download k0sctl
+	if c.Opts.Package != "" {
+		if err := pm.ExtractDependency(defaultK0sPath, c.Opts.Force); err != nil {
+			return "", fmt.Errorf("failed to extract k0s from package: %w", err)
+		}
+		return pm.GetDependencyPath(defaultK0sPath), nil
+	}
+
+	k0sBinaryPath, err := k0s.Download(k0sVersion, c.Opts.Force, false)
+	if err != nil {
+		return "", fmt.Errorf("failed to download k0s: %w", err)
+	}
+	return k0sBinaryPath, nil
+}
+
+func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
 	log.Println("Downloading k0sctl...")
 	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, c.Opts.Force, false)
 	if err != nil {
-		return fmt.Errorf("failed to download k0sctl: %w", err)
+		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}
+	return k0sctlPath, nil
+}
 
-	// Generate k0sctl configuration
+func (c *InstallK0sCmd) generateK0sctlConfig(config *files.RootConfig, k0sVersion string, k0sBinaryPath string) (string, error) {
 	log.Println("Generating k0sctl configuration from install-config...")
 	k0sctlConfig, err := installer.GenerateK0sctlConfig(config, k0sVersion, c.Opts.SSHKeyPath, k0sBinaryPath)
 	if err != nil {
-		return fmt.Errorf("failed to generate k0sctl config: %w", err)
+		return "", fmt.Errorf("failed to generate k0sctl config: %w", err)
 	}
 
-	// Write k0sctl config to file
 	k0sctlConfigData, err := k0sctlConfig.Marshal()
 	if err != nil {
-		return fmt.Errorf("failed to marshal k0sctl config: %w", err)
+		return "", fmt.Errorf("failed to marshal k0sctl config: %w", err)
 	}
 
 	k0sctlConfigPath := filepath.Join(c.Env.GetOmsWorkdir(), k0sctlConfigFile)
 	if err := c.FileWriter.WriteFile(k0sctlConfigPath, k0sctlConfigData, 0644); err != nil {
-		return fmt.Errorf("failed to write k0sctl config: %w", err)
+		return "", fmt.Errorf("failed to write k0sctl config: %w", err)
 	}
 
 	log.Printf("Generated k0sctl configuration at %s", k0sctlConfigPath)
+	return k0sctlConfigPath, nil
+}
 
-	// Apply k0sctl configuration
+func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlPath string, k0sctlConfigPath string) error {
 	log.Println("Applying k0sctl configuration to deploy k0s cluster...")
 	if err := k0sctl.Apply(k0sctlConfigPath, k0sctlPath, c.Opts.Force); err != nil {
 		return fmt.Errorf("failed to apply k0sctl config: %w", err)

@@ -114,7 +114,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return fmt.Errorf("failed to bootstrap GCP: %w, env: %s", err, envString)
 	}
 
-	log.Println("\nGCP infrastructure bootstrapped successfully!")
+	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
 	log.Println(envString)
 	log.Printf("Start the Codesphere installation using OMS from the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 	log.Printf("When the installation is done, run the k0s configuration script generated at the k0s-1 host %s /root/configure-k0s.sh.", bs.Env.ControlPlaneNodes[0].GetInternalIP())

@@ -99,16 +99,13 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	return k0sPath, nil
 }
 
-// GetNodeIPAddress finds the IP address of the current node by matching
-// against the control plane IPs in the config. Returns matching control plane IP
-// if found, otherwise returns the first non-loopback IPv4 address.
+// GetNodeIPAddress finds the IP address of the current node and returns matching control plane IP
 func GetNodeIPAddress(controlPlanes []string) (string, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return "", fmt.Errorf("failed to get network interfaces: %w", err)
 	}
 
-	// Build a set of control plane IPs for O(1) lookup
 	cpSet := make(map[string]bool, len(controlPlanes))
 	for _, ip := range controlPlanes {
 		cpSet[ip] = true

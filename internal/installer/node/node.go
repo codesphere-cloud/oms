@@ -156,14 +156,12 @@ func (n *Node) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 			return nil
 		}
 
-		// Check if this is a "host key not found" error (new host)
 		var keyErr *knownhosts.KeyError
 		if errors, ok := err.(*knownhosts.KeyError); ok {
 			keyErr = errors
 		}
 
 		if keyErr != nil && len(keyErr.Want) == 0 {
-			// Host key not in known_hosts - auto-accept for provisioning
 			log.Printf("Warning: Adding new host %s to known_hosts (first connection)", hostname)
 
 			// Append the new host key to known_hosts
@@ -190,7 +188,6 @@ func (n *Node) getHostKeyCallback() (ssh.HostKeyCallback, error) {
 			return nil
 		}
 
-		// Host key mismatch (potential MITM attack) - reject
 		return fmt.Errorf("host key verification failed: %w", err)
 	}, nil
 }

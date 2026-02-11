@@ -42,13 +42,11 @@ func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) K0sctlManager {
 	}
 }
 
-// githubRelease represents the minimal GitHub release API response
 type githubRelease struct {
 	TagName string `json:"tag_name"`
 }
 
 func (k *K0sctl) GetLatestVersion() (string, error) {
-	// k0sctl uses GitHub releases - fetch latest from API
 	releaseURL := "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
 	responseBody, err := k.Http.Get(releaseURL)
 	if err != nil {

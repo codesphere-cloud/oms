@@ -191,26 +191,15 @@ type MockNodeManager_CopyFile_Call struct {
 }
 
 // CopyFile is a helper method to define mock.On call
-//   - src string
-//   - dst string
+//   - src
+//   - dst
 func (_e *MockNodeManager_Expecter) CopyFile(src interface{}, dst interface{}) *MockNodeManager_CopyFile_Call {
 	return &MockNodeManager_CopyFile_Call{Call: _e.mock.On("CopyFile", src, dst)}
 }
 
 func (_c *MockNodeManager_CopyFile_Call) Run(run func(src string, dst string)) *MockNodeManager_CopyFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(
-			arg0,
-			arg1,
-		)
+		run(args[0].(string), args[1].(string))
 	})
 	return _c
 }
@@ -250,32 +239,16 @@ type MockNodeManager_CreateSubNode_Call struct {
 }
 
 // CreateSubNode is a helper method to define mock.On call
-//   - name string
-//   - externalIP string
-//   - internalIP string
+//   - name
+//   - externalIP
+//   - internalIP
 func (_e *MockNodeManager_Expecter) CreateSubNode(name interface{}, externalIP interface{}, internalIP interface{}) *MockNodeManager_CreateSubNode_Call {
 	return &MockNodeManager_CreateSubNode_Call{Call: _e.mock.On("CreateSubNode", name, externalIP, internalIP)}
 }
 
 func (_c *MockNodeManager_CreateSubNode_Call) Run(run func(name string, externalIP string, internalIP string)) *MockNodeManager_CreateSubNode_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
+		run(args[0].(string), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -533,20 +506,14 @@ type MockNodeManager_HasCommand_Call struct {
 }
 
 // HasCommand is a helper method to define mock.On call
-//   - command string
+//   - command
 func (_e *MockNodeManager_Expecter) HasCommand(command interface{}) *MockNodeManager_HasCommand_Call {
 	return &MockNodeManager_HasCommand_Call{Call: _e.mock.On("HasCommand", command)}
 }
 
 func (_c *MockNodeManager_HasCommand_Call) Run(run func(command string)) *MockNodeManager_HasCommand_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(string))
 	})
 	return _c
 }
@@ -584,20 +551,14 @@ type MockNodeManager_HasFile_Call struct {
 }
 
 // HasFile is a helper method to define mock.On call
-//   - filePath string
+//   - filePath
 func (_e *MockNodeManager_Expecter) HasFile(filePath interface{}) *MockNodeManager_HasFile_Call {
 	return &MockNodeManager_HasFile_Call{Call: _e.mock.On("HasFile", filePath)}
 }
 
 func (_c *MockNodeManager_HasFile_Call) Run(run func(filePath string)) *MockNodeManager_HasFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(string))
 	})
 	return _c
 }
@@ -811,32 +772,16 @@ type MockNodeManager_RunSSHCommand_Call struct {
 }
 
 // RunSSHCommand is a helper method to define mock.On call
-//   - username string
-//   - command string
-//   - quiet bool
+//   - username
+//   - command
+//   - quiet
 func (_e *MockNodeManager_Expecter) RunSSHCommand(username interface{}, command interface{}, quiet interface{}) *MockNodeManager_RunSSHCommand_Call {
 	return &MockNodeManager_RunSSHCommand_Call{Call: _e.mock.On("RunSSHCommand", username, command, quiet)}
 }
 
 func (_c *MockNodeManager_RunSSHCommand_Call) Run(run func(username string, command string, quiet bool)) *MockNodeManager_RunSSHCommand_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 bool
-		if args[2] != nil {
-			arg2 = args[2].(bool)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
+		run(args[0].(string), args[1].(string), args[2].(bool))
 	})
 	return _c
 }
@@ -863,32 +808,16 @@ type MockNodeManager_UpdateNode_Call struct {
 }
 
 // UpdateNode is a helper method to define mock.On call
-//   - name string
-//   - externalIP string
-//   - internalIP string
+//   - name
+//   - externalIP
+//   - internalIP
 func (_e *MockNodeManager_Expecter) UpdateNode(name interface{}, externalIP interface{}, internalIP interface{}) *MockNodeManager_UpdateNode_Call {
 	return &MockNodeManager_UpdateNode_Call{Call: _e.mock.On("UpdateNode", name, externalIP, internalIP)}
 }
 
 func (_c *MockNodeManager_UpdateNode_Call) Run(run func(name string, externalIP string, internalIP string)) *MockNodeManager_UpdateNode_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
+		run(args[0].(string), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -926,20 +855,14 @@ type MockNodeManager_WaitForSSH_Call struct {
 }
 
 // WaitForSSH is a helper method to define mock.On call
-//   - timeout time.Duration
+//   - timeout
 func (_e *MockNodeManager_Expecter) WaitForSSH(timeout interface{}) *MockNodeManager_WaitForSSH_Call {
 	return &MockNodeManager_WaitForSSH_Call{Call: _e.mock.On("WaitForSSH", timeout)}
 }
 
 func (_c *MockNodeManager_WaitForSSH_Call) Run(run func(timeout time.Duration)) *MockNodeManager_WaitForSSH_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 time.Duration
-		if args[0] != nil {
-			arg0 = args[0].(time.Duration)
-		}
-		run(
-			arg0,
-		)
+		run(args[0].(time.Duration))
 	})
 	return _c
 }
