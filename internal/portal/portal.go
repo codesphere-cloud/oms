@@ -60,7 +60,7 @@ func newConfiguredHttpClient() *http.Client {
 				KeepAlive: 30 * time.Second,
 			}).DialContext,
 			TLSHandshakeTimeout:   30 * time.Second,
-			ResponseHeaderTimeout: 60 * time.Second,
+			ResponseHeaderTimeout: 2 * time.Minute,
 			ExpectContinueTimeout: 1 * time.Second,
 			IdleConnTimeout:       90 * time.Second,
 			MaxIdleConns:          100,
@@ -76,6 +76,27 @@ const (
 	OmsProduct        Product = "oms"
 )
 
+// truncateHTMLResponse detects HTML responses and truncates them to avoid verbose error messages.
+func truncateHTMLResponse(body string) string {
+	// Check if response looks like HTML
+	if strings.HasPrefix(strings.TrimSpace(body), "<!DOCTYPE") || strings.HasPrefix(strings.TrimSpace(body), "<html") {
+		// Extract title if present
+		if idx := strings.Index(body, "<title>"); idx != -1 {
+			endIdx := strings.Index(body[idx:], "</title>")
+			if endIdx != -1 {
+				title := body[idx+7 : idx+endIdx]
+				return fmt.Sprintf("Server says: %s", title)
+			}
+		}
+		return "Received HTML response instead of JSON"
+	}
+
+	if len(body) <= 500 {
+		return body
+	}
+	return body[:500] + "... (truncated)"
+}
+
 // AuthorizedHttpRequest sends a HTTP request with the necessary authorization headers.
 func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Response, err error) {
 	apiKey, err := c.Env.GetOmsPortalApiKey()
@@ -85,6 +106,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 	}
 
 	req.Header.Set("X-API-Key", apiKey)
+	req.Header.Set("Accept", "application/json")
 
 	resp, err = c.HttpClient.Do(req)
 	if err != nil {
@@ -101,8 +123,10 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 		if resp.Body != nil {
 			respBody, _ = io.ReadAll(resp.Body)
 		}
-		log.Printf("Non-2xx response received - Status: %d, Body: %s", resp.StatusCode, string(respBody))
-		err = fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
+		truncatedBody := truncateHTMLResponse(string(respBody))
+		log.Printf("Non-2xx response received - Status: %d", resp.StatusCode)
+		log.Printf("%s", truncatedBody)
+		err = fmt.Errorf("unexpected response status: %d - %s (%s)", resp.StatusCode, http.StatusText(resp.StatusCode), truncatedBody)
 		return
 	}
 
@@ -126,6 +150,7 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	req.Header.Set("Accept", "application/json")
 	return c.AuthorizedHttpRequest(req)
 }
 
@@ -151,30 +176,64 @@ func (c *PortalClient) GetBody(path string) (body []byte, status int, err error)
 // ListBuilds retrieves the list of available builds for the specified product.
 func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, err error) {
 	log.Printf("Fetching available %s packages from portal...", product)
-	res, _, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
-	if err != nil {
-		err = fmt.Errorf("failed to list packages: %w", err)
-		return
-	}
 
-	err = json.Unmarshal(res, &availablePackages)
-	if err != nil {
-		err = fmt.Errorf("failed to parse list packages response: %w", err)
-		return
-	}
+	// Retry logic for cold-starting servers
+	maxRetries := 5
+	retryDelay := 10 * time.Second
 
-	compareBuilds := func(l, r Build) int {
-		if l.Date.Before(r.Date) {
-			return -1
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		res, status, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
+
+		shouldRetry := false
+		if err != nil {
+			if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "connection") {
+				shouldRetry = true
+			}
+		} else if status >= 500 && status < 600 {
+			shouldRetry = true
 		}
-		if l.Date.Equal(r.Date) && l.Internal == r.Internal {
-			return 0
-		}
-		return 1
-	}
-	slices.SortFunc(availablePackages.Builds, compareBuilds)
 
-	return
+		if !shouldRetry {
+			if err != nil {
+				return availablePackages, fmt.Errorf("failed to list packages: %w", err)
+			}
+
+			err = json.Unmarshal(res, &availablePackages)
+			if err != nil {
+				return availablePackages, fmt.Errorf("failed to parse list packages response: %w", err)
+			}
+
+			compareBuilds := func(l, r Build) int {
+				if l.Date.Before(r.Date) {
+					return -1
+				}
+				if l.Date.Equal(r.Date) && l.Internal == r.Internal {
+					return 0
+				}
+				return 1
+			}
+			slices.SortFunc(availablePackages.Builds, compareBuilds)
+
+			return availablePackages, nil
+		}
+
+		if attempt < maxRetries {
+			if strings.Contains(err.Error(), "timeout") {
+				log.Printf("Request timed out (attempt %d/%d). Server may be starting up, waiting %v before retry...", attempt, maxRetries, retryDelay)
+			} else {
+				log.Printf("Request failed (attempt %d/%d), retrying in %v...", attempt, maxRetries, retryDelay)
+			}
+			time.Sleep(retryDelay)
+			retryDelay = time.Duration(float64(retryDelay) * 1.5) // Gradual backoff
+		} else {
+			if err != nil {
+				return availablePackages, fmt.Errorf("failed to list packages after %d attempts: %w", maxRetries, err)
+			}
+			return availablePackages, fmt.Errorf("failed to list packages after %d attempts: received status %d", maxRetries, status)
+		}
+	}
+
+	return availablePackages, fmt.Errorf("failed to list packages: max retries exceeded")
 }
 
 // GetBuild retrieves a specific build for the given product, version, and hash.
@@ -233,6 +292,7 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 
 	// Download the file from startByte to allow resuming
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	resp, err := c.AuthorizedHttpRequest(req)
 	if err != nil {
 		return fmt.Errorf("GET request to download build failed: %w", err)
@@ -405,6 +465,7 @@ func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 	}
 
 	req.Header.Set("X-API-Key", oldKey)
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
@@ -414,7 +475,8 @@ func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 
 	if resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
+		truncatedBody := truncateHTMLResponse(string(respBody))
+		return "", fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), truncatedBody)
 	}
 
 	var result struct {
