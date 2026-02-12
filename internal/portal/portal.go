@@ -106,7 +106,9 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 	}
 
 	req.Header.Set("X-API-Key", apiKey)
-	req.Header.Set("Accept", "application/json")
+	if req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "application/json")
+	}
 
 	resp, err = c.HttpClient.Do(req)
 	if err != nil {
