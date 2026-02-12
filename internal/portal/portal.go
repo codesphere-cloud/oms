@@ -78,8 +78,10 @@ const (
 
 // TruncateHTMLResponse detects HTML responses and truncates them to avoid verbose error messages.
 func TruncateHTMLResponse(body string) string {
-	// Check if response looks like HTML
-	if strings.HasPrefix(strings.TrimSpace(body), "<!DOCTYPE") || strings.HasPrefix(strings.TrimSpace(body), "<html") {
+	// Check if response looks like HTML (case-insensitive) using a single trimmed value
+	trimmed := strings.TrimSpace(body)
+	normalized := strings.ToLower(trimmed)
+	if strings.HasPrefix(normalized, "<!doctype") || strings.HasPrefix(normalized, "<html") {
 		// Extract title if present
 		if idx := strings.Index(body, "<title>"); idx != -1 {
 			endIdx := strings.Index(body[idx:], "</title>")
