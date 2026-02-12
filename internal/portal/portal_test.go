@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -530,5 +531,62 @@ var _ = Describe("PortalClient", func() {
 				Expect(keys[1].KeyID).To(Equal("key-2"))
 			})
 		})
+	})
+})
+
+var _ = Describe("truncateHTMLResponse", func() {
+	It("returns short non-HTML response unchanged", func() {
+		body := `{"error": "not found"}`
+		result := portal.TruncateHTMLResponse(body)
+		Expect(result).To(Equal(body))
+	})
+
+	It("truncates long non-HTML responses", func() {
+		body := strings.Repeat("a", 600)
+		result := portal.TruncateHTMLResponse(body)
+		Expect(result).To(HaveLen(500 + len("... (truncated)")))
+		Expect(result).To(HaveSuffix("... (truncated)"))
+	})
+
+	It("extracts title from HTML response with DOCTYPE", func() {
+		body := `<!DOCTYPE html><html><head><title>502 Bad Gateway</title></head><body>...</body></html>`
+		result := portal.TruncateHTMLResponse(body)
+		Expect(result).To(Equal("Server says: 502 Bad Gateway"))
+	})
+
+	It("extracts title from HTML response starting with html tag", func() {
+		body := `<html><head><title>Service Unavailable</title></head><body>...</body></html>`
+		result := portal.TruncateHTMLResponse(body)
+		Expect(result).To(Equal("Server says: Service Unavailable"))
+	})
+
+	It("handles HTML without title tag", func() {
+		body := `<!DOCTYPE html><html><body>Error page</body></html>`
+		result := portal.TruncateHTMLResponse(body)
+		Expect(result).To(Equal("Received HTML response instead of JSON"))
+	})
+
+	It("handles HTML with whitespace before DOCTYPE", func() {
+		body := `   <!DOCTYPE html><html><head><title>Error</title></head></html>`
+		result := portal.TruncateHTMLResponse(body)
+		Expect(result).To(Equal("Server says: Error"))
+	})
+})
+
+var _ = Describe("newConfiguredHttpClient", func() {
+	It("creates an HTTP client with configured timeouts", func() {
+		client := portal.NewConfiguredHttpClient()
+
+		Expect(client).NotTo(BeNil())
+		Expect(client.Timeout).To(Equal(10 * time.Minute))
+
+		transport, ok := client.Transport.(*http.Transport)
+		Expect(ok).To(BeTrue())
+		Expect(transport.TLSHandshakeTimeout).To(Equal(30 * time.Second))
+		Expect(transport.ResponseHeaderTimeout).To(Equal(2 * time.Minute))
+		Expect(transport.ExpectContinueTimeout).To(Equal(1 * time.Second))
+		Expect(transport.IdleConnTimeout).To(Equal(90 * time.Second))
+		Expect(transport.MaxIdleConns).To(Equal(100))
+		Expect(transport.MaxIdleConnsPerHost).To(Equal(10))
 	})
 })

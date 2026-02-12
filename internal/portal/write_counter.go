@@ -64,24 +64,24 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 			if speed > 0 {
 				remaining := wc.Total - currentTotal
 				etaSeconds := float64(remaining) / speed
-				eta = formatDuration(time.Duration(etaSeconds) * time.Second)
+				eta = FormatDuration(time.Duration(etaSeconds) * time.Second)
 			} else {
 				eta = "calculating..."
 			}
 
 			progress = fmt.Sprintf("\rDownloading... %.1f%% (%s / %s) | Speed: %s/s | ETA: %s %c \033[K",
 				percentage,
-				byteCountToHumanReadable(currentTotal),
-				byteCountToHumanReadable(wc.Total),
-				byteCountToHumanReadable(int64(speed)),
+				ByteCountToHumanReadable(currentTotal),
+				ByteCountToHumanReadable(wc.Total),
+				ByteCountToHumanReadable(int64(speed)),
 				eta,
 				wc.animate())
 		} else {
 			elapsed := time.Since(wc.StartTime)
 			speed := float64(wc.Written) / elapsed.Seconds()
 			progress = fmt.Sprintf("\rDownloading... %s | Speed: %s/s %c \033[K",
-				byteCountToHumanReadable(wc.Written),
-				byteCountToHumanReadable(int64(speed)),
+				ByteCountToHumanReadable(wc.Written),
+				ByteCountToHumanReadable(int64(speed)),
 				wc.animate())
 		}
 
@@ -95,8 +95,8 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	return n, nil
 }
 
-// byteCountToHumanReadable converts a byte count to a human-readable format (e.g., KB, MB, GB).
-func byteCountToHumanReadable(b int64) string {
+// ByteCountToHumanReadable converts a byte count to a human-readable format (e.g., KB, MB, GB).
+func ByteCountToHumanReadable(b int64) string {
 	const unit = 1024
 	if b < unit {
 		return fmt.Sprintf("%d B", b)
@@ -115,8 +115,8 @@ func (wc *WriteCounter) animate() byte {
 	return anim[wc.currentAnim]
 }
 
-// formatDuration formats a duration in a human-readable format.
-func formatDuration(d time.Duration) string {
+// FormatDuration formats a duration in a human-readable format.
+func FormatDuration(d time.Duration) string {
 	if d < time.Second {
 		return "<1s"
 	}

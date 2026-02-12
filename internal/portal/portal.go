@@ -46,12 +46,12 @@ type HttpClient interface {
 func NewPortalClient() *PortalClient {
 	return &PortalClient{
 		Env:        env.NewEnv(),
-		HttpClient: newConfiguredHttpClient(),
+		HttpClient: NewConfiguredHttpClient(),
 	}
 }
 
-// newConfiguredHttpClient creates an HTTP client with proper timeouts
-func newConfiguredHttpClient() *http.Client {
+// NewConfiguredHttpClient creates an HTTP client with proper timeouts
+func NewConfiguredHttpClient() *http.Client {
 	return &http.Client{
 		Timeout: 10 * time.Minute,
 		Transport: &http.Transport{
@@ -76,8 +76,8 @@ const (
 	OmsProduct        Product = "oms"
 )
 
-// truncateHTMLResponse detects HTML responses and truncates them to avoid verbose error messages.
-func truncateHTMLResponse(body string) string {
+// TruncateHTMLResponse detects HTML responses and truncates them to avoid verbose error messages.
+func TruncateHTMLResponse(body string) string {
 	// Check if response looks like HTML
 	if strings.HasPrefix(strings.TrimSpace(body), "<!DOCTYPE") || strings.HasPrefix(strings.TrimSpace(body), "<html") {
 		// Extract title if present
@@ -123,7 +123,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 		if resp.Body != nil {
 			respBody, _ = io.ReadAll(resp.Body)
 		}
-		truncatedBody := truncateHTMLResponse(string(respBody))
+		truncatedBody := TruncateHTMLResponse(string(respBody))
 		log.Printf("Non-2xx response received - Status: %d", resp.StatusCode)
 		log.Printf("%s", truncatedBody)
 		err = fmt.Errorf("unexpected response status: %d - %s (%s)", resp.StatusCode, http.StatusText(resp.StatusCode), truncatedBody)
@@ -265,7 +265,7 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 	defer func() { _ = resp.Body.Close() }()
 
 	if !quiet && resp.ContentLength > 0 {
-		log.Printf("Starting download of %s...", byteCountToHumanReadable(resp.ContentLength))
+		log.Printf("Starting download of %s...", ByteCountToHumanReadable(resp.ContentLength))
 	}
 
 	// Create a WriteCounter to wrap the output file and report progress, unless quiet is requested.
@@ -440,7 +440,7 @@ func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 
 	if resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
-		truncatedBody := truncateHTMLResponse(string(respBody))
+		truncatedBody := TruncateHTMLResponse(string(respBody))
 		return "", fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), truncatedBody)
 	}
 

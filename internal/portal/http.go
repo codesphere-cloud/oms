@@ -22,7 +22,7 @@ type HttpWrapper struct {
 
 func NewHttpWrapper() *HttpWrapper {
 	return &HttpWrapper{
-		HttpClient: newConfiguredHttpClient(),
+		HttpClient: NewConfiguredHttpClient(),
 	}
 }
 
