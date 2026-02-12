@@ -138,7 +138,11 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 			strings.Contains(errMsg, "connection") ||
 			strings.Contains(errMsg, "eof") ||
 			strings.Contains(errMsg, "reset by peer") ||
-			strings.Contains(errMsg, "temporary failure")
+			strings.Contains(errMsg, "temporary failure") ||
+			strings.Contains(errMsg, "no such host") ||
+			strings.Contains(errMsg, "dial tcp") ||
+			strings.Contains(errMsg, "network is unreachable") ||
+			strings.Contains(errMsg, "i/o timeout")
 
 		if !shouldRetry || attempt == maxRetries {
 			return fmt.Errorf("failed to download build after %d attempts: %w", attempt, downloadErr)

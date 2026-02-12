@@ -55,16 +55,23 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 	if time.Since(wc.LastUpdate) >= 100*time.Millisecond {
 		var progress string
 		if wc.Total > 0 {
-			currentTotal := wc.StartBytes + wc.Written
+			currentTotal := min(wc.StartBytes+wc.Written, wc.Total)
 			percentage := float64(currentTotal) / float64(wc.Total) * 100
 			elapsed := time.Since(wc.StartTime)
-			speed := float64(wc.Written) / elapsed.Seconds()
+
+			// Guard against division by zero when elapsed is very small
+			var speed float64
+			if elapsed.Seconds() > 0.001 {
+				speed = float64(wc.Written) / elapsed.Seconds()
+			}
 
 			var eta string
-			if speed > 0 {
-				remaining := wc.Total - currentTotal
+			remaining := wc.Total - currentTotal
+			if speed > 0 && remaining > 0 {
 				etaSeconds := float64(remaining) / speed
 				eta = FormatDuration(time.Duration(etaSeconds) * time.Second)
+			} else if remaining <= 0 {
+				eta = "done"
 			} else {
 				eta = "calculating..."
 			}
@@ -78,7 +85,11 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 				wc.animate())
 		} else {
 			elapsed := time.Since(wc.StartTime)
-			speed := float64(wc.Written) / elapsed.Seconds()
+			// Guard against division by zero when elapsed is very small
+			var speed float64
+			if elapsed.Seconds() > 0.001 {
+				speed = float64(wc.Written) / elapsed.Seconds()
+			}
 			progress = fmt.Sprintf("\rDownloading... %s | Speed: %s/s %c \033[K",
 				ByteCountToHumanReadable(wc.Written),
 				ByteCountToHumanReadable(int64(speed)),

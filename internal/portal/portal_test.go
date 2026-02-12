@@ -578,10 +578,11 @@ var _ = Describe("newConfiguredHttpClient", func() {
 		client := portal.NewConfiguredHttpClient()
 
 		Expect(client).NotTo(BeNil())
-		Expect(client.Timeout).To(Equal(10 * time.Minute))
+		Expect(client.Timeout).To(Equal(time.Duration(0)))
 
 		transport, ok := client.Transport.(*http.Transport)
 		Expect(ok).To(BeTrue())
+		Expect(transport.Proxy).NotTo(BeNil())
 		Expect(transport.TLSHandshakeTimeout).To(Equal(30 * time.Second))
 		Expect(transport.ResponseHeaderTimeout).To(Equal(2 * time.Minute))
 		Expect(transport.ExpectContinueTimeout).To(Equal(1 * time.Second))

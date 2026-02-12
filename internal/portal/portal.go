@@ -53,8 +53,8 @@ func NewPortalClient() *PortalClient {
 // NewConfiguredHttpClient creates an HTTP client with proper timeouts
 func NewConfiguredHttpClient() *http.Client {
 	return &http.Client{
-		Timeout: 10 * time.Minute,
 		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
 			DialContext: (&net.Dialer{
 				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
