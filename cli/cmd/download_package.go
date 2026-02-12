@@ -133,5 +133,13 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 		return fmt.Errorf("failed to verify artifact: %w", err)
 	}
 
+	if download.Artifacts[0].Md5Sum != "" {
+		checksumFilename := fullFilename + ".md5"
+		err = c.FileWriter.WriteFile(checksumFilename, []byte(download.Artifacts[0].Md5Sum), 0644)
+		if err != nil {
+			log.Printf("Warning: failed to save checksum file: %v", err)
+		}
+	}
+
 	return nil
 }

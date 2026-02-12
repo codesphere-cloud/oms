@@ -183,6 +183,32 @@ var _ = Describe("DownloadPackages", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
+		It("Saves MD5 checksum to sidecar file when available", func() {
+			md5Sum := "d41d8cd98f00b204e9800998ecf8427e"
+			buildWithMd5 := portal.Build{
+				Version: version,
+				Artifacts: []portal.Artifact{
+					{Filename: filename, Md5Sum: md5Sum},
+					{Filename: "otherFilename.tar.gz"},
+				},
+			}
+			expectedBuildToDownload := portal.Build{
+				Version: version,
+				Artifacts: []portal.Artifact{
+					{Filename: filename, Md5Sum: md5Sum},
+				},
+			}
+
+			fakeFile := os.NewFile(uintptr(0), filename)
+			mockFileWriter.EXPECT().OpenAppend(version+"-"+filename).Return(fakeFile, nil)
+			mockFileWriter.EXPECT().Open(version+"-"+filename).Return(fakeFile, nil)
+			mockFileWriter.EXPECT().WriteFile(version+"-"+filename+".md5", []byte(md5Sum), os.FileMode(0644)).Return(nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
+			err := c.DownloadBuild(mockPortal, buildWithMd5, filename)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		Context("Version contains a slash", func() {
 			BeforeEach(func() {
 				version = "other/version/v1.42.0"
