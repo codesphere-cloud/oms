@@ -133,11 +133,12 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 		}
 
 		// Determine if error is retryable
-		shouldRetry := strings.Contains(downloadErr.Error(), "timeout") ||
-			strings.Contains(downloadErr.Error(), "connection") ||
-			strings.Contains(downloadErr.Error(), "EOF") ||
-			strings.Contains(downloadErr.Error(), "reset by peer") ||
-			strings.Contains(downloadErr.Error(), "temporary failure")
+		errMsg := strings.ToLower(downloadErr.Error())
+		shouldRetry := strings.Contains(errMsg, "timeout") ||
+			strings.Contains(errMsg, "connection") ||
+			strings.Contains(errMsg, "eof") ||
+			strings.Contains(errMsg, "reset by peer") ||
+			strings.Contains(errMsg, "temporary failure")
 
 		if !shouldRetry || attempt == maxRetries {
 			return fmt.Errorf("failed to download build after %d attempts: %w", attempt, downloadErr)
