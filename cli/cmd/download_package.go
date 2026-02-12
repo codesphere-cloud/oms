@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
@@ -24,10 +25,11 @@ type DownloadPackageCmd struct {
 
 type DownloadPackageOpts struct {
 	*GlobalOptions
-	Version  string
-	Hash     string
-	Filename string
-	Quiet    bool
+	Version    string
+	Hash       string
+	Filename   string
+	Quiet      bool
+	MaxRetries int
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
@@ -89,6 +91,7 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Hash, "hash", "H", "", "Hash of the version to download if multiple builds exist for the same version")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer.tar.gz", "Specify artifact to download")
 	pkg.cmd.Flags().BoolVarP(&pkg.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
+	pkg.cmd.Flags().IntVarP(&pkg.Opts.MaxRetries, "max-retries", "r", 5, "Maximum number of download retry attempts")
 	download.AddCommand(pkg.cmd)
 
 	pkg.cmd.RunE = pkg.RunE
@@ -101,25 +104,52 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	}
 
 	fullFilename := strings.ReplaceAll(build.Version, "/", "-") + "-" + filename
-	out, err := c.FileWriter.OpenAppend(fullFilename)
-	if err != nil {
-		out, err = c.FileWriter.Create(fullFilename)
+
+	maxRetries := max(c.Opts.MaxRetries, 1)
+	retryDelay := 5 * time.Second
+
+	var downloadErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		out, err := c.FileWriter.OpenAppend(fullFilename)
 		if err != nil {
-			return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
+			out, err = c.FileWriter.Create(fullFilename)
+			if err != nil {
+				return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
+			}
 		}
-	}
-	defer util.CloseFileIgnoreError(out)
 
-	// get already downloaded file size of fullFilename
-	fileSize := 0
-	fileInfo, err := out.Stat()
-	if err == nil {
-		fileSize = int(fileInfo.Size())
+		// Get current file size for resume functionality
+		fileSize := 0
+		fileInfo, err := out.Stat()
+		if err == nil {
+			fileSize = int(fileInfo.Size())
+		}
+
+		downloadErr = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet)
+		util.CloseFileIgnoreError(out)
+
+		if downloadErr == nil {
+			break
+		}
+
+		// Determine if error is retryable
+		shouldRetry := strings.Contains(downloadErr.Error(), "timeout") ||
+			strings.Contains(downloadErr.Error(), "connection") ||
+			strings.Contains(downloadErr.Error(), "EOF") ||
+			strings.Contains(downloadErr.Error(), "reset by peer") ||
+			strings.Contains(downloadErr.Error(), "temporary failure")
+
+		if !shouldRetry || attempt == maxRetries {
+			return fmt.Errorf("failed to download build after %d attempts: %w", attempt, downloadErr)
+		}
+
+		log.Printf("Download interrupted (attempt %d/%d). Retrying in %v...", attempt, maxRetries, retryDelay)
+		time.Sleep(retryDelay)
+		retryDelay = time.Duration(float64(retryDelay) * 1.5) // Exponential backoff
 	}
 
-	err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet)
-	if err != nil {
-		return fmt.Errorf("failed to download build: %w", err)
+	if downloadErr != nil {
+		return fmt.Errorf("failed to download build: %w", downloadErr)
 	}
 
 	verifyFile, err := c.FileWriter.Open(fullFilename)
