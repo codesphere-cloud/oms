@@ -126,7 +126,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 	if resp.StatusCode >= 300 {
 		if resp.Body != nil {
 			respBody, _ = io.ReadAll(resp.Body)
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 		truncatedBody := TruncateHTMLResponse(string(respBody))
 		log.Printf("Non-2xx response received - Status: %d", resp.StatusCode)
