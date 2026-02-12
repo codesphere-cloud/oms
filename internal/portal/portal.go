@@ -175,65 +175,30 @@ func (c *PortalClient) GetBody(path string) (body []byte, status int, err error)
 
 // ListBuilds retrieves the list of available builds for the specified product.
 func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, err error) {
-	log.Printf("Fetching available %s packages from portal...", product)
-
-	// Retry logic for cold-starting servers
-	maxRetries := 5
-	retryDelay := 10 * time.Second
-
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		res, status, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
-
-		shouldRetry := false
-		if err != nil {
-			if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "connection") {
-				shouldRetry = true
-			}
-		} else if status >= 500 && status < 600 {
-			shouldRetry = true
-		}
-
-		if !shouldRetry {
-			if err != nil {
-				return availablePackages, fmt.Errorf("failed to list packages: %w", err)
-			}
-
-			err = json.Unmarshal(res, &availablePackages)
-			if err != nil {
-				return availablePackages, fmt.Errorf("failed to parse list packages response: %w", err)
-			}
-
-			compareBuilds := func(l, r Build) int {
-				if l.Date.Before(r.Date) {
-					return -1
-				}
-				if l.Date.Equal(r.Date) && l.Internal == r.Internal {
-					return 0
-				}
-				return 1
-			}
-			slices.SortFunc(availablePackages.Builds, compareBuilds)
-
-			return availablePackages, nil
-		}
-
-		if attempt < maxRetries {
-			if strings.Contains(err.Error(), "timeout") {
-				log.Printf("Request timed out (attempt %d/%d). Server may be starting up, waiting %v before retry...", attempt, maxRetries, retryDelay)
-			} else {
-				log.Printf("Request failed (attempt %d/%d), retrying in %v...", attempt, maxRetries, retryDelay)
-			}
-			time.Sleep(retryDelay)
-			retryDelay = time.Duration(float64(retryDelay) * 1.5) // Gradual backoff
-		} else {
-			if err != nil {
-				return availablePackages, fmt.Errorf("failed to list packages after %d attempts: %w", maxRetries, err)
-			}
-			return availablePackages, fmt.Errorf("failed to list packages after %d attempts: received status %d", maxRetries, status)
-		}
+	res, _, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
+	if err != nil {
+		err = fmt.Errorf("failed to list packages: %w", err)
+		return
 	}
 
-	return availablePackages, fmt.Errorf("failed to list packages: max retries exceeded")
+	err = json.Unmarshal(res, &availablePackages)
+	if err != nil {
+		err = fmt.Errorf("failed to parse list packages response: %w", err)
+		return
+	}
+
+	compareBuilds := func(l, r Build) int {
+		if l.Date.Before(r.Date) {
+			return -1
+		}
+		if l.Date.Equal(r.Date) && l.Internal == r.Internal {
+			return 0
+		}
+		return 1
+	}
+	slices.SortFunc(availablePackages.Builds, compareBuilds)
+
+	return
 }
 
 // GetBuild retrieves a specific build for the given product, version, and hash.
