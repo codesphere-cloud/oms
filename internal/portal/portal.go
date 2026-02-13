@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -45,7 +46,26 @@ type HttpClient interface {
 func NewPortalClient() *PortalClient {
 	return &PortalClient{
 		Env:        env.NewEnv(),
-		HttpClient: http.DefaultClient,
+		HttpClient: NewConfiguredHttpClient(),
+	}
+}
+
+// NewConfiguredHttpClient creates an HTTP client with proper timeouts
+func NewConfiguredHttpClient() *http.Client {
+	return &http.Client{
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   30 * time.Second,
+			ResponseHeaderTimeout: 2 * time.Minute,
+			ExpectContinueTimeout: 1 * time.Second,
+			IdleConnTimeout:       90 * time.Second,
+			MaxIdleConns:          100,
+			MaxIdleConnsPerHost:   10,
+		},
 	}
 }
 
@@ -56,6 +76,29 @@ const (
 	OmsProduct        Product = "oms"
 )
 
+// TruncateHTMLResponse detects HTML responses and truncates them to avoid verbose error messages.
+func TruncateHTMLResponse(body string) string {
+	// Check if response looks like HTML (case-insensitive) using a single trimmed value
+	trimmed := strings.TrimSpace(body)
+	normalized := strings.ToLower(trimmed)
+	if strings.HasPrefix(normalized, "<!doctype") || strings.HasPrefix(normalized, "<html") {
+		// Extract title if present
+		if idx := strings.Index(body, "<title>"); idx != -1 {
+			endIdx := strings.Index(body[idx:], "</title>")
+			if endIdx != -1 {
+				title := body[idx+7 : idx+endIdx]
+				return fmt.Sprintf("Server says: %s", title)
+			}
+		}
+		return "Received HTML response instead of JSON"
+	}
+
+	if len(body) <= 500 {
+		return body
+	}
+	return body[:500] + "... (truncated)"
+}
+
 // AuthorizedHttpRequest sends a HTTP request with the necessary authorization headers.
 func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Response, err error) {
 	apiKey, err := c.Env.GetOmsPortalApiKey()
@@ -65,6 +108,9 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 	}
 
 	req.Header.Set("X-API-Key", apiKey)
+	if req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "application/json")
+	}
 
 	resp, err = c.HttpClient.Do(req)
 	if err != nil {
@@ -80,9 +126,12 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 	if resp.StatusCode >= 300 {
 		if resp.Body != nil {
 			respBody, _ = io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
 		}
-		log.Printf("Non-2xx response received - Status: %d, Body: %s", resp.StatusCode, string(respBody))
-		err = fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
+		truncatedBody := TruncateHTMLResponse(string(respBody))
+		log.Printf("Non-2xx response received - Status: %d", resp.StatusCode)
+		log.Printf("%s", truncatedBody)
+		err = fmt.Errorf("unexpected response status: %d - %s (%s)", resp.StatusCode, http.StatusText(resp.StatusCode), truncatedBody)
 		return
 	}
 
@@ -106,6 +155,7 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	req.Header.Set("Accept", "application/json")
 	return c.AuthorizedHttpRequest(req)
 }
 
@@ -212,17 +262,26 @@ func (c *PortalClient) DownloadBuildArtifact(product Product, build Build, file 
 
 	// Download the file from startByte to allow resuming
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 	resp, err := c.AuthorizedHttpRequest(req)
 	if err != nil {
 		return fmt.Errorf("GET request to download build failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	if !quiet && resp.ContentLength > 0 {
+		log.Printf("Starting download of %s...", ByteCountToHumanReadable(resp.ContentLength))
+	}
+
 	// Create a WriteCounter to wrap the output file and report progress, unless quiet is requested.
 	// Default behavior: report progress. Quiet callers should pass true for quiet.
 	counter := file
 	if !quiet {
-		counter = NewWriteCounter(file)
+		totalSize := resp.ContentLength
+		if startByte > 0 && totalSize > 0 {
+			totalSize = totalSize + int64(startByte)
+		}
+		counter = NewWriteCounterWithTotal(file, totalSize, int64(startByte))
 	}
 
 	_, err = io.Copy(counter, resp.Body)
@@ -376,6 +435,7 @@ func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 	}
 
 	req.Header.Set("X-API-Key", oldKey)
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
@@ -385,7 +445,8 @@ func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 
 	if resp.StatusCode >= 300 {
 		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
+		truncatedBody := TruncateHTMLResponse(string(respBody))
+		return "", fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), truncatedBody)
 	}
 
 	var result struct {

@@ -28,11 +28,12 @@ $ oms-cli download package --version codesphere-v1.55.0 --file installer-lite.ta
 ### Options
 
 ```
-  -f, --file string      Specify artifact to download (default "installer.tar.gz")
-  -H, --hash string      Hash of the version to download if multiple builds exist for the same version
-  -h, --help             help for package
-  -q, --quiet            Suppress progress output during download
-  -V, --version string   Codesphere version to download
+  -f, --file string       Specify artifact to download (default "installer.tar.gz")
+  -H, --hash string       Hash of the version to download if multiple builds exist for the same version
+  -h, --help              help for package
+  -r, --max-retries int   Maximum number of download retry attempts (default 5)
+  -q, --quiet             Suppress progress output during download
+  -V, --version string    Codesphere version to download
 ```
 
 ### SEE ALSO
