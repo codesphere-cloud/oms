@@ -360,8 +360,8 @@ github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5 h1:6xNmx7iTtyBRev0+D/T
 github.com/cncf/xds/go v0.0.0-20251210132809-ee656c7534f5/go.mod h1:KdCmV+x/BuvyMxRnYBlmVaq4OLiKW6iRQfvC62cvdkI=
 github.com/codahale/rfc6979 v0.0.0-20141003034818-6a90f24967eb h1:EDmT6Q9Zs+SbUoc7Ik9EfrFqcylYqgPZ9ANSbTAntnE=
 github.com/codahale/rfc6979 v0.0.0-20141003034818-6a90f24967eb/go.mod h1:ZjrT6AXHbDs86ZSdt/osfBi5qfexBrKUdONk989Wnk4=
-github.com/codesphere-cloud/cs-go v0.16.4 h1:nYpYPExM1/kdKtz9w9RyLBn+1XTltou2G5MR5WOgegY=
-github.com/codesphere-cloud/cs-go v0.16.4/go.mod h1:MHU8ghEoCPpajd1i5icQ2f0jdcY3DLxYT1Gaftley/g=
+github.com/codesphere-cloud/cs-go v0.17.0 h1:Zxues46+iZNQ9cvakR+kLqbDoDSr6W5c9R3cNYv2O30=
+github.com/codesphere-cloud/cs-go v0.17.0/go.mod h1:E5PZo6QkLw41bXwAVD0GaBQHLqABv3JMWdZ3kWgJrns=
 github.com/containerd/continuity v0.4.5 h1:ZRoN1sXq9u7V6QoHMcVWGhOwDFqZ4B9i5H6un1Wh0x4=
 github.com/containerd/continuity v0.4.5/go.mod h1:/lNJvtJKUQStBzpVQ1+rasXO1LAWtUQssk28EZvJ3nE=
 github.com/containerd/errdefs v1.0.0 h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI=
