@@ -136,7 +136,7 @@ require (
 	github.com/bombsimon/wsl/v5 v5.6.0 // indirect
 	github.com/breml/bidichk v0.3.3 // indirect
 	github.com/breml/errchkjson v0.4.1 // indirect
-	github.com/brunoga/deep v1.2.5 // indirect
+	github.com/brunoga/deep v1.3.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/butuzov/ireturn v0.4.0 // indirect
 	github.com/butuzov/mirror v1.3.0 // indirect
@@ -331,7 +331,7 @@ require (
 	github.com/knadh/koanf/providers/file v1.2.1 // indirect
 	github.com/knadh/koanf/providers/posflag v1.0.1 // indirect
 	github.com/knadh/koanf/providers/structs v1.0.0 // indirect
-	github.com/knadh/koanf/v2 v2.3.0 // indirect
+	github.com/knadh/koanf/v2 v2.3.2 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/kulti/thelper v0.7.1 // indirect
 	github.com/kunwardeep/paralleltest v1.0.15 // indirect
@@ -454,7 +454,7 @@ require (
 	github.com/uudashr/gocognit v1.2.0 // indirect
 	github.com/uudashr/iface v1.4.1 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
-	github.com/vektra/mockery/v3 v3.6.3 // indirect
+	github.com/vektra/mockery/v3 v3.6.4 // indirect
 	github.com/wagoodman/go-progress v0.0.0-20230925121702-07e42b3cdba0 // indirect
 	github.com/whyrusleeping/cbor-gen v0.3.1 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
@@ -489,7 +489,7 @@ require (
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	gocloud.dev v0.44.0 // indirect
-	golang.org/x/exp v0.0.0-20251219203646-944ab1f22d93 // indirect
+	golang.org/x/exp v0.0.0-20260212183809-81e46e3db34a // indirect
 	golang.org/x/exp/typeparams v0.0.0-20251219203646-944ab1f22d93 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
