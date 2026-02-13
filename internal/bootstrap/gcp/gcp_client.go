@@ -5,6 +5,7 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -25,17 +26,62 @@ import (
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+// OMSManagedLabel is the label key used to identify projects created by OMS
+const OMSManagedLabel = "oms-managed"
+
+// CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
+// A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
+func CheckOMSManagedLabel(labels map[string]string) bool {
+	if labels == nil {
+		return false
+	}
+	value, exists := labels[OMSManagedLabel]
+	return exists && value == "true"
+}
+
+// GetDNSRecordNames returns the DNS record names that OMS creates for a given base domain.
+func GetDNSRecordNames(baseDomain string) []struct {
+	Name  string
+	Rtype string
+} {
+	return []struct {
+		Name  string
+		Rtype string
+	}{
+		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
+	}
+}
+
+// IsNotFoundError checks if the error is a Google API "not found" error (HTTP 404).
+func IsNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var googleErr *googleapi.Error
+	if errors.As(err, &googleErr) {
+		return googleErr.Code == 404
+	}
+	return false
+}
+
 // Interface for high-level GCP operations
 type GCPClientManager interface {
 	GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error)
 	CreateProjectID(projectName string) string
 	CreateProject(parent, projectName, displayName string) (string, error)
+	DeleteProject(projectID string) error
+	IsOMSManagedProject(projectID string) (bool, error)
 	GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error)
 	EnableBilling(projectID, billingAccount string) error
 	EnableAPIs(projectID string, apis []string) error
@@ -53,6 +99,7 @@ type GCPClientManager interface {
 	GetAddress(projectID, region, addressName string) (*computepb.Address, error)
 	EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error
 	EnsureDNSRecordSets(projectID, zoneName string, records []*dns.ResourceRecordSet) error
+	DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error
 }
 
 // Concrete implementation
@@ -111,6 +158,7 @@ func (c *GCPClient) CreateProjectID(projectName string) string {
 
 // CreateProject creates a new GCP project under the specified parent (folder or organization).
 // It returns the project ID of the newly created project.
+// The project is labeled with 'oms-managed=true' to identify it as created by OMS.
 func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string, error) {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
@@ -122,6 +170,9 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string
 		ProjectId:   projectID,
 		DisplayName: displayName,
 		Parent:      parent,
+		Labels: map[string]string{
+			OMSManagedLabel: "true",
+		},
 	}
 	op, err := client.CreateProject(c.ctx, &resourcemanagerpb.CreateProjectRequest{Project: project})
 	if err != nil {
@@ -133,6 +184,47 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string
 	}
 
 	return resp.ProjectId, nil
+}
+
+// DeleteProject deletes the specified GCP project.
+func (c *GCPClient) DeleteProject(projectID string) error {
+	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create resource manager client: %w", err)
+	}
+	defer util.IgnoreError(client.Close)
+
+	op, err := client.DeleteProject(c.ctx, &resourcemanagerpb.DeleteProjectRequest{
+		Name: getProjectResourceName(projectID),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initiate project deletion: %w", err)
+	}
+
+	_, err = op.Wait(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to wait for project deletion: %w", err)
+	}
+
+	return nil
+}
+
+// IsOMSManagedProject checks if the given project was created by OMS by verifying the 'oms-managed' label.
+func (c *GCPClient) IsOMSManagedProject(projectID string) (bool, error) {
+	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to create resource manager client: %w", err)
+	}
+	defer util.IgnoreError(client.Close)
+
+	project, err := client.GetProject(c.ctx, &resourcemanagerpb.GetProjectRequest{
+		Name: getProjectResourceName(projectID),
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	return CheckOMSManagedLabel(project.Labels), nil
 }
 
 func getProjectResourceName(projectID string) string {
@@ -194,9 +286,11 @@ func (c *GCPClient) EnableAPIs(projectID string, apis []string) error {
 			}
 			if err != nil {
 				errCh <- fmt.Errorf("failed to enable API %s: %w", api, err)
+				return
 			}
 			if _, err := op.Wait(c.ctx); err != nil {
 				errCh <- fmt.Errorf("failed to enable API %s: %w", api, err)
+				return
 			}
 
 			c.st.Logf("API %s enabled", api)
@@ -729,6 +823,44 @@ func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*d
 	_, err = service.Changes.Create(projectID, zoneName, change).Context(c.ctx).Do()
 	if err != nil {
 		return fmt.Errorf("failed to create DNS records: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteDNSRecordSets deletes DNS record sets created by OMS for the given base domain.
+func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error {
+	service, err := dns.NewService(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create DNS service: %w", err)
+	}
+
+	recordNames := GetDNSRecordNames(baseDomain)
+
+	deletions := []*dns.ResourceRecordSet{}
+	for _, record := range recordNames {
+		existingRecord, err := service.ResourceRecordSets.Get(projectID, zoneName, record.Name, record.Rtype).Context(c.ctx).Do()
+		if err != nil {
+			if !IsNotFoundError(err) {
+				return fmt.Errorf("failed to get DNS record %s: %w", record.Name, err)
+			}
+			continue
+		}
+		if existingRecord != nil {
+			deletions = append(deletions, existingRecord)
+		}
+	}
+
+	if len(deletions) == 0 {
+		return nil
+	}
+
+	change := &dns.Change{
+		Deletions: deletions,
+	}
+	_, err = service.Changes.Create(projectID, zoneName, change).Context(c.ctx).Do()
+	if err != nil {
+		return fmt.Errorf("failed to delete DNS records: %w", err)
 	}
 
 	return nil
