@@ -408,6 +408,8 @@ type OAuthConfig struct {
 	TokenEndpoint         string `yaml:"tokenEndpoint"`
 	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
 	Scope                 string `yaml:"scope,omitempty"`
+	RedirectURI           string `yaml:"redirectUri,omitempty"`
+	InstallationURI       string `yaml:"installationUri,omitempty"`
 
 	ClientID     string `yaml:"-"`
 	ClientSecret string `yaml:"-"`

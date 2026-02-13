@@ -97,6 +97,7 @@ type CodesphereEnvironment struct {
 	PublicGatewayIP          string       `json:"public_gateway_ip"`
 	RegistryType             RegistryType `json:"registry_type"`
 	GitHubPAT                string       `json:"-"`
+	GitHubAppName            string       `json:"-"`
 	RegistryUser             string       `json:"-"`
 	Experiments              []string     `json:"experiments"`
 	FeatureFlags             []string     `json:"feature_flags"`
@@ -1229,6 +1230,9 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				Issuer:                "https://github.com",
 				AuthorizationEndpoint: "https://github.com/login/oauth/authorize",
 				TokenEndpoint:         "https://github.com/login/oauth/access_token",
+				ClientAuthMethod:      "client_secret_post",
+				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/github/callback",
+				InstallationURI:       "https://github.com/apps/" + b.Env.GitHubAppName + "/installations/new",
 
 				ClientID:     b.Env.GithubAppClientID,
 				ClientSecret: b.Env.GithubAppClientSecret,
