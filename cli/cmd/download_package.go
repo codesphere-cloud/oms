@@ -4,12 +4,17 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"strings"
+	"syscall"
 	"time"
 
-	"github.com/codesphere-cloud/cs-go/pkg/io"
+	csio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/internal/portal"
@@ -62,9 +67,9 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 		cmd: &cobra.Command{
 			Use:   "package [VERSION]",
 			Short: "Download a codesphere package",
-			Long: io.Long(`Download a specific version of a Codesphere package
+			Long: csio.Long(`Download a specific version of a Codesphere package
 				To list available packages, run oms list packages.`),
-			Example: formatExamplesWithBinary("download package", []io.Example{
+			Example: formatExamplesWithBinary("download package", []csio.Example{
 				{Cmd: "codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
@@ -132,18 +137,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 			break
 		}
 
-		// Determine if error is retryable
-		errMsg := strings.ToLower(downloadErr.Error())
-		shouldRetry := strings.Contains(errMsg, "timeout") ||
-			strings.Contains(errMsg, "connection") ||
-			strings.Contains(errMsg, "eof") ||
-			strings.Contains(errMsg, "reset by peer") ||
-			strings.Contains(errMsg, "temporary failure") ||
-			strings.Contains(errMsg, "no such host") ||
-			strings.Contains(errMsg, "dial tcp") ||
-			strings.Contains(errMsg, "network is unreachable") ||
-			strings.Contains(errMsg, "i/o timeout")
-
+		shouldRetry := isRetryableError(downloadErr)
 		if !shouldRetry || attempt == maxRetries {
 			return fmt.Errorf("failed to download build after %d attempts: %w", attempt, downloadErr)
 		}
@@ -169,4 +163,49 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	}
 
 	return nil
+}
+
+// isRetryableError determines if an error is transient and worth retrying.
+// It uses typed error checking rather than string matching for reliability.
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() {
+			return true
+		}
+	}
+
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return true
+	}
+
+	if errors.Is(err, syscall.ECONNRESET) || // connection reset by peer
+		errors.Is(err, syscall.ECONNREFUSED) || // connection refused
+		errors.Is(err, syscall.ECONNABORTED) || // connection aborted
+		errors.Is(err, syscall.ENETUNREACH) || // network is unreachable
+		errors.Is(err, syscall.EHOSTUNREACH) || // host is unreachable
+		errors.Is(err, syscall.ETIMEDOUT) || // connection timed out
+		errors.Is(err, syscall.EPIPE) { // broken pipe
+		return true
+	}
+
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return true
+	}
+
+	return false
 }
