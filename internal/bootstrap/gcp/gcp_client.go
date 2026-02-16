@@ -201,8 +201,7 @@ func (c *GCPClient) DeleteProject(projectID string) error {
 		return fmt.Errorf("failed to initiate project deletion: %w", err)
 	}
 
-	_, err = op.Wait(c.ctx)
-	if err != nil {
+	if _, err = op.Wait(c.ctx); err != nil {
 		return fmt.Errorf("failed to wait for project deletion: %w", err)
 	}
 
@@ -835,34 +834,25 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 		return fmt.Errorf("failed to create DNS service: %w", err)
 	}
 
-	recordNames := GetDNSRecordNames(baseDomain)
-
-	deletions := []*dns.ResourceRecordSet{}
-	for _, record := range recordNames {
-		existingRecord, err := service.ResourceRecordSets.Get(projectID, zoneName, record.Name, record.Rtype).Context(c.ctx).Do()
-		if err != nil {
-			if !IsNotFoundError(err) {
-				return fmt.Errorf("failed to get DNS record %s: %w", record.Name, err)
-			}
+	var deletions []*dns.ResourceRecordSet
+	for _, record := range GetDNSRecordNames(baseDomain) {
+		existing, err := service.ResourceRecordSets.Get(projectID, zoneName, record.Name, record.Rtype).Context(c.ctx).Do()
+		if IsNotFoundError(err) {
 			continue
 		}
-		if existingRecord != nil {
-			deletions = append(deletions, existingRecord)
+		if err != nil {
+			return fmt.Errorf("failed to get DNS record %s: %w", record.Name, err)
 		}
+		deletions = append(deletions, existing)
 	}
 
 	if len(deletions) == 0 {
 		return nil
 	}
 
-	change := &dns.Change{
-		Deletions: deletions,
-	}
-	_, err = service.Changes.Create(projectID, zoneName, change).Context(c.ctx).Do()
-	if err != nil {
+	if _, err = service.Changes.Create(projectID, zoneName, &dns.Change{Deletions: deletions}).Context(c.ctx).Do(); err != nil {
 		return fmt.Errorf("failed to delete DNS records: %w", err)
 	}
-
 	return nil
 }
 
