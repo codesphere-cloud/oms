@@ -41,16 +41,16 @@ func (_m *MockGCPClientManager) EXPECT() *MockGCPClientManager_Expecter {
 }
 
 // AssignIAMRole provides a mock function for the type MockGCPClientManager
-func (_mock *MockGCPClientManager) AssignIAMRole(saProjectID string, saEmail string, roles []string) error {
-	ret := _mock.Called(saProjectID, saEmail, roles)
+func (_mock *MockGCPClientManager) AssignIAMRole(projectID string, saEmail string, saProjectID string, roles []string) error {
+	ret := _mock.Called(projectID, saEmail, saProjectID, roles)
 
 	if len(ret) == 0 {
 		panic("no return value specified for AssignIAMRole")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, []string) error); ok {
-		r0 = returnFunc(saProjectID, saEmail, roles)
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, []string) error); ok {
+		r0 = returnFunc(projectID, saEmail, saProjectID, roles)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -63,14 +63,15 @@ type MockGCPClientManager_AssignIAMRole_Call struct {
 }
 
 // AssignIAMRole is a helper method to define mock.On call
-//   - saProjectID string
+//   - projectID string
 //   - saEmail string
+//   - saProjectID string
 //   - roles []string
-func (_e *MockGCPClientManager_Expecter) AssignIAMRole(saProjectID interface{}, saEmail interface{}, roles interface{}) *MockGCPClientManager_AssignIAMRole_Call {
-	return &MockGCPClientManager_AssignIAMRole_Call{Call: _e.mock.On("AssignIAMRole", saProjectID, saEmail, roles)}
+func (_e *MockGCPClientManager_Expecter) AssignIAMRole(projectID interface{}, saEmail interface{}, saProjectID interface{}, roles interface{}) *MockGCPClientManager_AssignIAMRole_Call {
+	return &MockGCPClientManager_AssignIAMRole_Call{Call: _e.mock.On("AssignIAMRole", projectID, saEmail, saProjectID, roles)}
 }
 
-func (_c *MockGCPClientManager_AssignIAMRole_Call) Run(run func(saProjectID string, saEmail string, roles []string)) *MockGCPClientManager_AssignIAMRole_Call {
+func (_c *MockGCPClientManager_AssignIAMRole_Call) Run(run func(projectID string, saEmail string, saProjectID string, roles []string)) *MockGCPClientManager_AssignIAMRole_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -80,14 +81,19 @@ func (_c *MockGCPClientManager_AssignIAMRole_Call) Run(run func(saProjectID stri
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
-		var arg2 []string
+		var arg2 string
 		if args[2] != nil {
-			arg2 = args[2].([]string)
+			arg2 = args[2].(string)
+		}
+		var arg3 []string
+		if args[3] != nil {
+			arg3 = args[3].([]string)
 		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
@@ -98,7 +104,7 @@ func (_c *MockGCPClientManager_AssignIAMRole_Call) Return(err error) *MockGCPCli
 	return _c
 }
 
-func (_c *MockGCPClientManager_AssignIAMRole_Call) RunAndReturn(run func(saProjectID string, saEmail string, roles []string) error) *MockGCPClientManager_AssignIAMRole_Call {
+func (_c *MockGCPClientManager_AssignIAMRole_Call) RunAndReturn(run func(projectID string, saEmail string, saProjectID string, roles []string) error) *MockGCPClientManager_AssignIAMRole_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1311,75 +1317,6 @@ func (_c *MockGCPClientManager_GetProjectByName_Call) Return(project *resourcema
 }
 
 func (_c *MockGCPClientManager_GetProjectByName_Call) RunAndReturn(run func(folderID string, displayName string) (*resourcemanagerpb.Project, error)) *MockGCPClientManager_GetProjectByName_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// GrantImpersonation provides a mock function for the type MockGCPClientManager
-func (_mock *MockGCPClientManager) GrantImpersonation(impersonatingServiceAccount string, impersonatingProjectID string, imperonatedServiceAccount string, impersonatedProjectID string) error {
-	ret := _mock.Called(impersonatingServiceAccount, impersonatingProjectID, imperonatedServiceAccount, impersonatedProjectID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GrantImpersonation")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, string, string) error); ok {
-		r0 = returnFunc(impersonatingServiceAccount, impersonatingProjectID, imperonatedServiceAccount, impersonatedProjectID)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockGCPClientManager_GrantImpersonation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GrantImpersonation'
-type MockGCPClientManager_GrantImpersonation_Call struct {
-	*mock.Call
-}
-
-// GrantImpersonation is a helper method to define mock.On call
-//   - impersonatingServiceAccount string
-//   - impersonatingProjectID string
-//   - imperonatedServiceAccount string
-//   - impersonatedProjectID string
-func (_e *MockGCPClientManager_Expecter) GrantImpersonation(impersonatingServiceAccount interface{}, impersonatingProjectID interface{}, imperonatedServiceAccount interface{}, impersonatedProjectID interface{}) *MockGCPClientManager_GrantImpersonation_Call {
-	return &MockGCPClientManager_GrantImpersonation_Call{Call: _e.mock.On("GrantImpersonation", impersonatingServiceAccount, impersonatingProjectID, imperonatedServiceAccount, impersonatedProjectID)}
-}
-
-func (_c *MockGCPClientManager_GrantImpersonation_Call) Run(run func(impersonatingServiceAccount string, impersonatingProjectID string, imperonatedServiceAccount string, impersonatedProjectID string)) *MockGCPClientManager_GrantImpersonation_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 string
-		if args[3] != nil {
-			arg3 = args[3].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-		)
-	})
-	return _c
-}
-
-func (_c *MockGCPClientManager_GrantImpersonation_Call) Return(err error) *MockGCPClientManager_GrantImpersonation_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockGCPClientManager_GrantImpersonation_Call) RunAndReturn(run func(impersonatingServiceAccount string, impersonatingProjectID string, imperonatedServiceAccount string, impersonatedProjectID string) error) *MockGCPClientManager_GrantImpersonation_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -67,22 +67,24 @@ var _ = Describe("GCP Bootstrapper", func() {
 		stlog = bootstrap.NewStepLogger(false)
 
 		csEnv = &gcp.CodesphereEnvironment{
-			InstallConfigPath:        "fake-config-file",
-			SecretsFilePath:          "fake-secret",
-			ProjectName:              "test-project",
-			SecretsDir:               "/etc/codesphere/secrets",
-			BillingAccount:           "test-billing-account",
-			Region:                   "us-central1",
-			Zone:                     "us-central1-a",
-			DatacenterID:             1,
-			BaseDomain:               "example.com",
-			DNSProjectID:             "dns-project",
-			DNSProjectServiceAccount: "dns-admin",
-			DNSZoneName:              "test-zone",
-			SSHPublicKeyPath:         "key.pub",
-			ProjectID:                "pid",
-			Experiments:              gcp.DefaultExperiments,
-			FeatureFlags:             []string{},
+			GitHubAppName:         "fake-app",
+			GithubAppClientID:     "fake-client-id",
+			GithubAppClientSecret: "fake-secret",
+			InstallConfigPath:     "fake-config-file",
+			SecretsFilePath:       "fake-secret",
+			ProjectName:           "test-project",
+			SecretsDir:            "/etc/codesphere/secrets",
+			BillingAccount:        "test-billing-account",
+			Region:                "us-central1",
+			Zone:                  "us-central1-a",
+			DatacenterID:          1,
+			BaseDomain:            "example.com",
+			DNSProjectID:          "dns-project",
+			DNSZoneName:           "test-zone",
+			SSHPublicKeyPath:      "key.pub",
+			ProjectID:             "pid",
+			Experiments:           gcp.DefaultExperiments,
+			FeatureFlags:          []string{},
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{
@@ -111,6 +113,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.CephNodes = []*node.Node{}
 			csEnv.PostgreSQLNode = nil
 			csEnv.Jumpbox = nil
+			csEnv.ProjectID = ""
 		})
 
 		It("runs bootstrap successfully", func() {
@@ -127,44 +130,46 @@ var _ = Describe("GCP Bootstrapper", func() {
 				return realIcm.GetInstallConfig()
 			})
 
+			projectId := "test-project-12345"
+
 			// 2. EnsureSecrets
 			fw.EXPECT().Exists("fake-secret").Return(false)
 			icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 			// 3. EnsureProject
 			gc.EXPECT().GetProjectByName(mock.Anything, "test-project").Return(nil, fmt.Errorf("project not found: test-project"))
-			gc.EXPECT().CreateProjectID("test-project").Return("test-project-id")
+			gc.EXPECT().CreateProjectID("test-project").Return(projectId)
 			gc.EXPECT().CreateProject(mock.Anything, mock.Anything, "test-project").Return(mock.Anything, nil)
 
 			// 4. EnsureBilling
-			gc.EXPECT().GetBillingInfo("test-project-id").Return(&cloudbilling.ProjectBillingInfo{BillingEnabled: false}, nil)
-			gc.EXPECT().EnableBilling("test-project-id", "test-billing-account").Return(nil)
+			gc.EXPECT().GetBillingInfo(projectId).Return(&cloudbilling.ProjectBillingInfo{BillingEnabled: false}, nil)
+			gc.EXPECT().EnableBilling(projectId, "test-billing-account").Return(nil)
 
 			// 5. EnsureAPIsEnabled
-			gc.EXPECT().EnableAPIs("test-project-id", mock.Anything).Return(nil)
+			gc.EXPECT().EnableAPIs(projectId, mock.Anything).Return(nil)
 
 			// 6. EnsureArtifactRegistry
-			gc.EXPECT().GetArtifactRegistry("test-project-id", "us-central1", "codesphere-registry").Return(nil, fmt.Errorf("not found"))
-			gc.EXPECT().CreateArtifactRegistry("test-project-id", "us-central1", "codesphere-registry").Return(&artifactregistrypb.Repository{Name: "codesphere-registry"}, nil)
+			gc.EXPECT().GetArtifactRegistry(projectId, "us-central1", "codesphere-registry").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateArtifactRegistry(projectId, "us-central1", "codesphere-registry").Return(&artifactregistrypb.Repository{Name: "codesphere-registry"}, nil)
 
 			// 7. EnsureServiceAccounts
-			gc.EXPECT().CreateServiceAccount("test-project-id", "cloud-controller", "cloud-controller").Return("cloud-controller@p.iam.gserviceaccount.com", false, nil)
-			gc.EXPECT().CreateServiceAccount("test-project-id", "artifact-registry-writer", "artifact-registry-writer").Return("writer@p.iam.gserviceaccount.com", true, nil)
-			gc.EXPECT().CreateServiceAccountKey("test-project-id", "writer@p.iam.gserviceaccount.com").Return("fake-key", nil)
+			gc.EXPECT().CreateServiceAccount(projectId, "cloud-controller", "cloud-controller").Return("cloud-controller@p.iam.gserviceaccount.com", false, nil)
+			gc.EXPECT().CreateServiceAccount(projectId, "artifact-registry-writer", "artifact-registry-writer").Return("writer@p.iam.gserviceaccount.com", true, nil)
+			gc.EXPECT().CreateServiceAccountKey(projectId, "writer@p.iam.gserviceaccount.com").Return("fake-key", nil)
 
 			// 8. EnsureIAMRoles
-			gc.EXPECT().AssignIAMRole("test-project-id", "artifact-registry-writer", []string{"roles/artifactregistry.writer"}).Return(nil)
-			gc.EXPECT().AssignIAMRole("test-project-id", "cloud-controller", []string{"roles/compute.admin"}).Return(nil)
-			gc.EXPECT().GrantImpersonation("cloud-controller", "test-project-id", bs.Env.DNSProjectServiceAccount, bs.Env.DNSProjectID).Return(nil)
+			gc.EXPECT().AssignIAMRole(projectId, "artifact-registry-writer", projectId, []string{"roles/artifactregistry.writer"}).Return(nil)
+			gc.EXPECT().AssignIAMRole(projectId, "cloud-controller", projectId, []string{"roles/compute.admin"}).Return(nil)
+			gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", projectId, []string{"roles/dns.admin"}).Return(nil)
 
 			// 9. EnsureVPC
-			gc.EXPECT().CreateVPC("test-project-id", "us-central1", "test-project-id-vpc", "test-project-id-us-central1-subnet", "test-project-id-router", "test-project-id-nat-gateway").Return(nil)
+			gc.EXPECT().CreateVPC(projectId, "us-central1", projectId+"-vpc", projectId+"-us-central1-subnet", projectId+"-router", projectId+"-nat-gateway").Return(nil)
 
 			// 10. EnsureFirewallRules (5 times)
-			gc.EXPECT().CreateFirewallRule("test-project-id", mock.Anything).Return(nil).Times(5)
+			gc.EXPECT().CreateFirewallRule(projectId, mock.Anything).Return(nil).Times(5)
 
 			// 11. EnsureComputeInstances
-			gc.EXPECT().CreateInstance("test-project-id", "us-central1-a", mock.Anything).Return(nil).Times(9)
+			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(9)
 			// GetInstance calls to retrieve IPs
 			ipResp := &computepb.Instance{
 				NetworkInterfaces: []*computepb.NetworkInterface{
@@ -177,16 +182,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 				},
 			}
 
-			gc.EXPECT().GetInstance("test-project-id", "us-central1-a", mock.Anything).Return(ipResp, nil).Times(9)
+			gc.EXPECT().GetInstance(projectId, "us-central1-a", mock.Anything).Return(ipResp, nil).Times(9)
 			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(9)
 
 			// 12. EnsureGatewayIPAddresses
-			gc.EXPECT().GetAddress("test-project-id", "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
-			gc.EXPECT().CreateAddress("test-project-id", "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "gateway" })).Return("1.1.1.1", nil)
-			gc.EXPECT().GetAddress("test-project-id", "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
-			gc.EXPECT().GetAddress("test-project-id", "us-central1", "public-gateway").Return(nil, fmt.Errorf("not found"))
-			gc.EXPECT().CreateAddress("test-project-id", "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "public-gateway" })).Return("2.2.2.2", nil)
-			gc.EXPECT().GetAddress("test-project-id", "us-central1", "public-gateway").Return(&computepb.Address{Address: protoString("2.2.2.2")}, nil)
+			gc.EXPECT().GetAddress(projectId, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "gateway" })).Return("1.1.1.1", nil)
+			gc.EXPECT().GetAddress(projectId, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().GetAddress(projectId, "us-central1", "public-gateway").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "public-gateway" })).Return("2.2.2.2", nil)
+			gc.EXPECT().GetAddress(projectId, "us-central1", "public-gateway").Return(&computepb.Address{Address: protoString("2.2.2.2")}, nil)
 
 			// 16. UpdateInstallConfig
 			icg.EXPECT().GenerateSecrets().Return(nil)
@@ -210,8 +215,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})).Return(nil)
 
 			// 19. EnsureDNSRecords
-			gc.EXPECT().EnsureDNSManagedZone("dns-project", "test-zone", "example.com.", mock.Anything).Return(nil)
-			gc.EXPECT().EnsureDNSRecordSets("dns-project", "test-zone", mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
+			gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, "test-zone", "example.com.", mock.Anything).Return(nil)
+			gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, "test-zone", mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
 				return len(records) == 4
 			})).Return(nil)
 
@@ -254,7 +259,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
-	Describe("ValidatePackageName", func() {
+	Describe("ValidateInput", func() {
 		var (
 			artifacts []portal.Artifact
 		)
@@ -274,13 +279,23 @@ var _ = Describe("GCP Bootstrapper", func() {
 			}, nil)
 		})
 
+		Context("when GitHub arguments are partially set", func() {
+			BeforeEach(func() {
+				csEnv.GitHubAppName = ""
+			})
+			It("fails", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(MatchRegexp("GitHub app credentials are not fully specified")))
+			})
+		})
+
 		Context("when GHCR registry is used", func() {
 			BeforeEach(func() {
 				csEnv.RegistryType = gcp.RegistryTypeGitHub
 			})
 
 			It("succeeds when package exists and has the lite package", func() {
-				err := bs.ValidatePackageName()
+				err := bs.ValidateInput()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -289,7 +304,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					artifacts[0].Filename = "installer.tar.gz"
 				})
 				It("fails", func() {
-					err := bs.ValidatePackageName()
+					err := bs.ValidateInput()
 					Expect(err).To(MatchError(MatchRegexp("artifact installer-lite\\.tar\\.gz")))
 				})
 			})
@@ -305,7 +320,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					artifacts[0].Filename = "installer.tar.gz"
 				})
 				It("succeeds", func() {
-					err := bs.ValidatePackageName()
+					err := bs.ValidateInput()
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -315,7 +330,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					artifacts[0].Filename = "installer-lite.tar.gz"
 				})
 				It("fails", func() {
-					err := bs.ValidatePackageName()
+					err := bs.ValidateInput()
 					Expect(err).To(MatchError(MatchRegexp("artifact installer\\.tar\\.gz")))
 				})
 			})
@@ -781,9 +796,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
 			})
 			It("assigns roles correctly", func() {
-				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/compute.admin"}).Return(nil)
-				gc.EXPECT().GrantImpersonation("cloud-controller", bs.Env.ProjectID, bs.Env.DNSProjectServiceAccount, bs.Env.DNSProjectID).Return(nil)
-				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", []string{"roles/artifactregistry.writer"}).Return(nil)
+				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/compute.admin"}).Return(nil)
+				gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/dns.admin"}).Return(nil)
+				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", csEnv.ProjectID, []string{"roles/artifactregistry.writer"}).Return(nil)
 
 				err := bs.EnsureIAMRoles()
 				Expect(err).NotTo(HaveOccurred())
@@ -794,9 +809,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 					csEnv.DNSProjectID = ""
 				})
 				It("assigns DNS role to cloud-controller in main project", func() {
-					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/compute.admin"}).Return(nil)
-					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/dns.admin"}).Return(nil)
-					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", []string{"roles/artifactregistry.writer"}).Return(nil)
+					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/compute.admin"}).Return(nil)
+					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/dns.admin"}).Return(nil)
+					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", csEnv.ProjectID, []string{"roles/artifactregistry.writer"}).Return(nil)
 
 					err := bs.EnsureIAMRoles()
 					Expect(err).NotTo(HaveOccurred())
@@ -806,23 +821,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when AssignIAMRole fails", func() {
-				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/compute.admin"}).Return(fmt.Errorf("iam error"))
+				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/compute.admin"}).Return(fmt.Errorf("iam error"))
 
 				err := bs.EnsureIAMRoles()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("iam error"))
-			})
-
-			Context("When DNS project is set, but DNS service account is unset", func() {
-				BeforeEach(func() {
-					csEnv.DNSProjectServiceAccount = ""
-				})
-				It("fails", func() {
-					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", []string{"roles/compute.admin"}).Return(nil)
-
-					err := bs.EnsureIAMRoles()
-					Expect(err).To(MatchError(MatchRegexp("service account.*must be provided")))
-				})
 			})
 		})
 	})
@@ -1100,6 +1103,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("UpdateInstallConfig", func() {
+		BeforeEach(func() {
+			csEnv.GitHubAppName = "fake-app-name"
+		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
 				icg.EXPECT().GenerateSecrets().Return(nil)
@@ -1115,6 +1121,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal([]string{}))
 				Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(gcp.DefaultExperiments))
+
+				expectedInstallURI := "https://github.com/apps/" + bs.Env.GitHubAppName + "/installations/new"
+				Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub.OAuth.InstallationURI).To(Equal(expectedInstallURI))
+				expectedRedirectURI := "https://cs." + bs.Env.BaseDomain + "/ide/auth/github/callback"
+				Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub.OAuth.RedirectURI).To(Equal(expectedRedirectURI))
+				Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub.OAuth.ClientAuthMethod).To(Equal("client_secret_post"))
+
 				issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
 				httpIssuer := issuers["letsEncryptHttp"].(map[string]interface{})
 				Expect(httpIssuer["enabled"]).To(Equal(true))
@@ -1158,6 +1171,24 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal([]string{"fake-flag1", "fake-flag2"}))
 				})
+			})
+			Context("When GitHub App name is not set ", func() {
+				BeforeEach(func() {
+					csEnv.GitHubAppName = ""
+				})
+				It("skips setting GitHub OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub).To(BeNil())
+				})
+
 			})
 		})
 
