@@ -63,12 +63,12 @@ func (c *BootstrapGcpCleanupCmd) loadInfraFile(deps *CleanupDeps) (gcp.Codespher
 
 	content, err := deps.FileIO.ReadFile(deps.InfraFilePath)
 	if err != nil {
-		return gcp.CodesphereEnvironment{}, fmt.Errorf("failed to read infra file: %w", err)
+		return gcp.CodesphereEnvironment{}, fmt.Errorf("failed to read gcp infra file: %w", err)
 	}
 
 	var env gcp.CodesphereEnvironment
 	if err := json.Unmarshal(content, &env); err != nil {
-		return gcp.CodesphereEnvironment{}, fmt.Errorf("failed to parse infra file: %w", err)
+		return gcp.CodesphereEnvironment{}, fmt.Errorf("failed to unmarshal gcp infra file: %w", err)
 	}
 	return env, nil
 }
@@ -102,6 +102,9 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 	projectID := c.Opts.ProjectID
 	useInfraFile := false
 	if projectID == "" {
+		if deps.FileIO.Exists(deps.InfraFilePath) && infraEnv.ProjectID == "" {
+			return fmt.Errorf("infra file at %s contains empty project ID", deps.InfraFilePath)
+		}
 		if infraEnv.ProjectID == "" {
 			return fmt.Errorf("no project ID provided and no infra file found at %s", deps.InfraFilePath)
 		}
