@@ -125,7 +125,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 			fileSize = int(fileInfo.Size())
 		}
 
-		downloadErr = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet)
+		downloadErr = p.DownloadBuildArtifact(portal.CodesphereProduct, download, out, fileSize, c.Opts.Quiet)
 		util.CloseFileIgnoreError(out)
 
 		if downloadErr == nil {
