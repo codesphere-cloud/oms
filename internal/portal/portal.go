@@ -82,11 +82,12 @@ func TruncateHTMLResponse(body string) string {
 	trimmed := strings.TrimSpace(body)
 	normalized := strings.ToLower(trimmed)
 	if strings.HasPrefix(normalized, "<!doctype") || strings.HasPrefix(normalized, "<html") {
-		// Extract title if present
-		if idx := strings.Index(body, "<title>"); idx != -1 {
-			endIdx := strings.Index(body[idx:], "</title>")
+		// Extract title if present (case-insensitive on tag name)
+		lowerBody := strings.ToLower(body)
+		if idx := strings.Index(lowerBody, "<title>"); idx != -1 {
+			endIdx := strings.Index(lowerBody[idx:], "</title>")
 			if endIdx != -1 {
-				title := body[idx+7 : idx+endIdx]
+				title := body[idx+len("<title>") : idx+endIdx]
 				return fmt.Sprintf("Server says: %s", title)
 			}
 		}
