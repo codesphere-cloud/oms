@@ -67,21 +67,24 @@ var _ = Describe("GCP Bootstrapper", func() {
 		stlog = bootstrap.NewStepLogger(false)
 
 		csEnv = &gcp.CodesphereEnvironment{
-			InstallConfigPath: "fake-config-file",
-			SecretsFilePath:   "fake-secret",
-			ProjectName:       "test-project",
-			SecretsDir:        "/etc/codesphere/secrets",
-			BillingAccount:    "test-billing-account",
-			Region:            "us-central1",
-			Zone:              "us-central1-a",
-			DatacenterID:      1,
-			BaseDomain:        "example.com",
-			DNSProjectID:      "dns-project",
-			DNSZoneName:       "test-zone",
-			SSHPublicKeyPath:  "key.pub",
-			ProjectID:         "pid",
-			Experiments:       gcp.DefaultExperiments,
-			FeatureFlags:      []string{},
+			GitHubAppName:         "fake-app",
+			GithubAppClientID:     "fake-client-id",
+			GithubAppClientSecret: "fake-secret",
+			InstallConfigPath:     "fake-config-file",
+			SecretsFilePath:       "fake-secret",
+			ProjectName:           "test-project",
+			SecretsDir:            "/etc/codesphere/secrets",
+			BillingAccount:        "test-billing-account",
+			Region:                "us-central1",
+			Zone:                  "us-central1-a",
+			DatacenterID:          1,
+			BaseDomain:            "example.com",
+			DNSProjectID:          "dns-project",
+			DNSZoneName:           "test-zone",
+			SSHPublicKeyPath:      "key.pub",
+			ProjectID:             "pid",
+			Experiments:           gcp.DefaultExperiments,
+			FeatureFlags:          []string{},
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{
@@ -256,7 +259,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
-	Describe("ValidatePackageName", func() {
+	Describe("ValidateInput", func() {
 		var (
 			artifacts []portal.Artifact
 		)
@@ -276,13 +279,23 @@ var _ = Describe("GCP Bootstrapper", func() {
 			}, nil)
 		})
 
+		Context("when GitHub arguments are partially set", func() {
+			BeforeEach(func() {
+				csEnv.GitHubAppName = ""
+			})
+			It("fails", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(MatchRegexp("GitHub app credentials are not fully specified")))
+			})
+		})
+
 		Context("when GHCR registry is used", func() {
 			BeforeEach(func() {
 				csEnv.RegistryType = gcp.RegistryTypeGitHub
 			})
 
 			It("succeeds when package exists and has the lite package", func() {
-				err := bs.ValidatePackageName()
+				err := bs.ValidateInput()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -291,7 +304,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					artifacts[0].Filename = "installer.tar.gz"
 				})
 				It("fails", func() {
-					err := bs.ValidatePackageName()
+					err := bs.ValidateInput()
 					Expect(err).To(MatchError(MatchRegexp("artifact installer-lite\\.tar\\.gz")))
 				})
 			})
@@ -307,7 +320,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					artifacts[0].Filename = "installer.tar.gz"
 				})
 				It("succeeds", func() {
-					err := bs.ValidatePackageName()
+					err := bs.ValidateInput()
 					Expect(err).NotTo(HaveOccurred())
 				})
 			})
@@ -317,7 +330,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					artifacts[0].Filename = "installer-lite.tar.gz"
 				})
 				It("fails", func() {
-					err := bs.ValidatePackageName()
+					err := bs.ValidateInput()
 					Expect(err).To(MatchError(MatchRegexp("artifact installer\\.tar\\.gz")))
 				})
 			})
@@ -1091,7 +1104,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	Describe("UpdateInstallConfig", func() {
 		BeforeEach(func() {
-			bs.Env.GitHubAppName = "fake-app-name"
+			csEnv.GitHubAppName = "fake-app-name"
 		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
@@ -1158,6 +1171,24 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal([]string{"fake-flag1", "fake-flag2"}))
 				})
+			})
+			Context("When GitHub App name is not set ", func() {
+				BeforeEach(func() {
+					csEnv.GitHubAppName = ""
+				})
+				It("skips setting GitHub OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub).To(BeNil())
+				})
+
 			})
 		})
 

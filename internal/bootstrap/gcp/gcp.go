@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -154,9 +155,9 @@ func GetInfraFilePath() string {
 
 func (b *GCPBootstrapper) Bootstrap() error {
 	if b.Env.InstallVersion != "" {
-		err := b.stlog.Step("Validate package to install", b.ValidatePackageName)
+		err := b.stlog.Step("Validate input", b.ValidateInput)
 		if err != nil {
-			return fmt.Errorf("invalid package name: %w", err)
+			return fmt.Errorf("invalid input: %w", err)
 		}
 
 	}
@@ -293,7 +294,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) ValidatePackageName() error {
+func (b *GCPBootstrapper) ValidateInput() error {
 	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
@@ -310,6 +311,11 @@ func (b *GCPBootstrapper) ValidatePackageName() error {
 		if artifact.Filename == requiredFilename {
 			return nil
 		}
+	}
+
+	ghParams := []string{b.Env.GitHubAppName, b.Env.GithubAppClientID, b.Env.GithubAppClientSecret}
+	if slices.Contains(ghParams, "") && strings.Join(ghParams, "") != "" {
+		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GithubAppClientID, GithubAppClientSecret must be set)")
 	}
 
 	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
@@ -1212,8 +1218,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
-	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{
-		GitHub: &files.GitProviderConfig{
+
+	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
+	if b.Env.GitHubAppName != "" && b.Env.GithubAppClientID != "" && b.Env.GithubAppClientSecret != "" {
+		b.Env.InstallConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://github.com",
 			API: files.APIConfig{
@@ -1230,7 +1238,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				ClientID:     b.Env.GithubAppClientID,
 				ClientSecret: b.Env.GithubAppClientSecret,
 			},
-		},
+		}
 	}
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
