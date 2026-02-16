@@ -1090,6 +1090,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("UpdateInstallConfig", func() {
+		BeforeEach(func() {
+			bs.Env.GitHubAppName = "fake-app-name"
+		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
 				icg.EXPECT().GenerateSecrets().Return(nil)
@@ -1105,6 +1108,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal([]string{}))
 				Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(gcp.DefaultExperiments))
+
+				expectedInstallURI := "https://github.com/apps/" + bs.Env.GitHubAppName + "/installations/new"
+				Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub.OAuth.InstallationURI).To(Equal(expectedInstallURI))
+				expectedRedirectURI := "https://cs." + bs.Env.BaseDomain + "/ide/auth/github/callback"
+				Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub.OAuth.RedirectURI).To(Equal(expectedRedirectURI))
+				Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub.OAuth.ClientAuthMethod).To(Equal("client_secret_post"))
+
 				issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
 				httpIssuer := issuers["letsEncryptHttp"].(map[string]interface{})
 				Expect(httpIssuer["enabled"]).To(Equal(true))
