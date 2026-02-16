@@ -78,29 +78,28 @@ type GCPBootstrapper struct {
 }
 
 type CodesphereEnvironment struct {
-	ProjectID                string       `json:"project_id"`
-	ProjectName              string       `json:"project_name"`
-	DNSProjectID             string       `json:"dns_project_id"`
-	DNSProjectServiceAccount string       `json:"dns_project_service_account"`
-	Jumpbox                  *node.Node   `json:"jumpbox"`
-	PostgreSQLNode           *node.Node   `json:"postgres_node"`
-	ControlPlaneNodes        []*node.Node `json:"control_plane_nodes"`
-	CephNodes                []*node.Node `json:"ceph_nodes"`
-	ContainerRegistryURL     string       `json:"-"`
-	ExistingConfigUsed       bool         `json:"-"`
-	InstallVersion           string       `json:"install_version"`
-	InstallHash              string       `json:"install_hash"`
-	InstallSkipSteps         []string     `json:"install_skip_steps"`
-	Preemptible              bool         `json:"preemptible"`
-	WriteConfig              bool         `json:"-"`
-	GatewayIP                string       `json:"gateway_ip"`
-	PublicGatewayIP          string       `json:"public_gateway_ip"`
-	RegistryType             RegistryType `json:"registry_type"`
-	GitHubPAT                string       `json:"-"`
-	GitHubAppName            string       `json:"-"`
-	RegistryUser             string       `json:"-"`
-	Experiments              []string     `json:"experiments"`
-	FeatureFlags             []string     `json:"feature_flags"`
+	ProjectID            string       `json:"project_id"`
+	ProjectName          string       `json:"project_name"`
+	DNSProjectID         string       `json:"dns_project_id"`
+	Jumpbox              *node.Node   `json:"jumpbox"`
+	PostgreSQLNode       *node.Node   `json:"postgres_node"`
+	ControlPlaneNodes    []*node.Node `json:"control_plane_nodes"`
+	CephNodes            []*node.Node `json:"ceph_nodes"`
+	ContainerRegistryURL string       `json:"-"`
+	ExistingConfigUsed   bool         `json:"-"`
+	InstallVersion       string       `json:"install_version"`
+	InstallHash          string       `json:"install_hash"`
+	InstallSkipSteps     []string     `json:"install_skip_steps"`
+	Preemptible          bool         `json:"preemptible"`
+	WriteConfig          bool         `json:"-"`
+	GatewayIP            string       `json:"gateway_ip"`
+	PublicGatewayIP      string       `json:"public_gateway_ip"`
+	RegistryType         RegistryType `json:"registry_type"`
+	GitHubPAT            string       `json:"-"`
+	GitHubAppName        string       `json:"-"`
+	RegistryUser         string       `json:"-"`
+	Experiments          []string     `json:"experiments"`
+	FeatureFlags         []string     `json:"feature_flags"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -468,7 +467,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 }
 
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/compute.admin"})
+	err := b.ensureIAMRoleWithRetry(b.Env.ProjectID, "cloud-controller", b.Env.ProjectID, []string{"roles/compute.admin"})
 	if err != nil {
 		return err
 	}
@@ -482,14 +481,14 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 		return nil
 	}
 
-	err = b.ensureIAMRoleWithRetry("artifact-registry-writer", []string{"roles/artifactregistry.writer"})
+	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, "artifact-registry-writer", b.Env.ProjectID, []string{"roles/artifactregistry.writer"})
 	return err
 }
 
-func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount string, roles []string) error {
+func (b *GCPBootstrapper) ensureIAMRoleWithRetry(projectID string, serviceAccount string, serviceAccountProjectID string, roles []string) error {
 	var err error
 	for retries := range 5 {
-		err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, serviceAccount, roles)
+		err = b.GCPClient.AssignIAMRole(projectID, serviceAccount, serviceAccountProjectID, roles)
 		if err == nil {
 			return nil
 		}
@@ -502,17 +501,11 @@ func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount string, roles []
 }
 
 func (b *GCPBootstrapper) ensureDnsPermissions() error {
-	if b.Env.DNSProjectID != "" {
-		if b.Env.DNSProjectServiceAccount == "" {
-			return errors.New("dns project service account with role roles/dns.admin must be provided when dns project id is set")
-		}
-		err := b.GCPClient.GrantImpersonation("cloud-controller", b.Env.ProjectID, b.Env.DNSProjectServiceAccount, b.Env.DNSProjectID)
-		if err != nil {
-			return fmt.Errorf("failed to grant impersonization on dns project %s to cloud-controller service account: %w", b.Env.DNSProjectID, err)
-		}
-		return nil
+	dnsProject := b.Env.DNSProjectID
+	if b.Env.DNSProjectID == "" {
+		dnsProject = b.Env.ProjectID
 	}
-	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/dns.admin"})
+	err := b.ensureIAMRoleWithRetry(dnsProject, "cloud-controller", b.Env.ProjectID, []string{"roles/dns.admin"})
 	if err != nil {
 		return err
 	}
