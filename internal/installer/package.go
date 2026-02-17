@@ -74,36 +74,29 @@ func (p *Package) alreadyExtracted(dir string) (bool, error) {
 	return isDir, nil
 }
 
-// getPackageChecksum reads the checksum from the sidecar .md5 file created during download.
 func (p *Package) getPackageChecksum() string {
-	checksumFile := p.Filename + ".md5"
-	data, err := p.fileIO.ReadFile(checksumFile)
+	data, err := p.fileIO.ReadFile(p.Filename + ".md5")
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
 }
 
-// getExtractedChecksum reads the checksum stored in the workdir's marker file.
 func (p *Package) getExtractedChecksum(workDir string) string {
-	markerPath := path.Join(workDir, checksumMarkerFile)
-	data, err := p.fileIO.ReadFile(markerPath)
+	data, err := p.fileIO.ReadFile(path.Join(workDir, checksumMarkerFile))
 	if err != nil {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
 }
 
-// saveExtractedChecksum writes the checksum to the workdir's marker file.
 func (p *Package) saveExtractedChecksum(workDir, checksum string) error {
 	if checksum == "" {
 		return nil
 	}
-	markerPath := path.Join(workDir, checksumMarkerFile)
-	return p.fileIO.WriteFile(markerPath, []byte(checksum), 0644)
+	return p.fileIO.WriteFile(path.Join(workDir, checksumMarkerFile), []byte(checksum), 0644)
 }
 
-// packageChanged checks if the package is different from the one that was previously extracted.
 func (p *Package) packageChanged(workDir string) bool {
 	packageChecksum := p.getPackageChecksum()
 	if packageChecksum == "" {

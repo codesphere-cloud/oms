@@ -158,18 +158,15 @@ var _ = Describe("Package", func() {
 				var checksumFile string
 
 				BeforeEach(func() {
-					// Create checksums sidecar file (simulating what download does)
 					checksumFile = pkg.Filename + ".md5"
 					err := os.WriteFile(checksumFile, []byte("original-checksum-123"), 0644)
 					Expect(err).ToNot(HaveOccurred())
 
-					// First extraction
 					err = pkg.Extract(false)
 					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("re-extracts when checksum changes", func() {
-					// Verify marker file was created
 					workDir := pkg.GetWorkDir()
 					markerFile := filepath.Join(workDir, ".oms-package-checksum")
 					Expect(markerFile).To(BeAnExistingFile())
@@ -177,46 +174,37 @@ var _ = Describe("Package", func() {
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(content)).To(Equal("original-checksum-123"))
 
-					// Modify a file in workdir to detect re-extraction
 					testFile := filepath.Join(workDir, "test-file.txt")
 					err = os.WriteFile(testFile, []byte("modified content"), 0644)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Change the checksum (simulating a new package download)
 					err = os.WriteFile(checksumFile, []byte("new-checksum-456"), 0644)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Extract again without force - should re-extract due to checksum change
 					err = pkg.Extract(false)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Verify the file was overwritten with original package content
 					actualContent, err := os.ReadFile(testFile)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(actualContent)).To(Equal("test content"))
 
-					// Verify marker file was updated
 					content, err = os.ReadFile(markerFile)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(content)).To(Equal("new-checksum-456"))
 				})
 
 				It("skips extraction when checksum is the same", func() {
-					// Verify marker file was created
 					workDir := pkg.GetWorkDir()
 					markerFile := filepath.Join(workDir, ".oms-package-checksum")
 					Expect(markerFile).To(BeAnExistingFile())
 
-					// Modify a file in workdir to verify it doesn't get overwritten
 					testFile := filepath.Join(workDir, "test-file.txt")
 					err := os.WriteFile(testFile, []byte("modified content"), 0644)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Extract again without force - checksum is same, should skip
 					err = pkg.Extract(false)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Verify the file was NOT overwritten (still has modified content)
 					actualContent, err := os.ReadFile(testFile)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(actualContent)).To(Equal("modified content"))
@@ -226,20 +214,16 @@ var _ = Describe("Package", func() {
 					workDir := pkg.GetWorkDir()
 					markerFile := filepath.Join(workDir, ".oms-package-checksum")
 
-					// Delete the marker file to simulate old extraction
 					err := os.Remove(markerFile)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Modify a file in workdir to detect re-extraction
 					testFile := filepath.Join(workDir, "test-file.txt")
 					err = os.WriteFile(testFile, []byte("modified content"), 0644)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Extract again - should re-extract because marker is missing
 					err = pkg.Extract(false)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Verify the file was overwritten
 					actualContent, err := os.ReadFile(testFile)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(actualContent)).To(Equal("test content"))
@@ -248,23 +232,19 @@ var _ = Describe("Package", func() {
 
 			Context("when no checksum sidecar file exists", func() {
 				BeforeEach(func() {
-					// First extraction without a checksum file
 					err := pkg.Extract(false)
 					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("skips extraction without checksum (backward compatibility)", func() {
-					// Modify a file in workdir to verify it doesn't get overwritten
 					workDir := pkg.GetWorkDir()
 					testFile := filepath.Join(workDir, "test-file.txt")
 					err := os.WriteFile(testFile, []byte("modified content"), 0644)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Extract again without force - no checksum available, should skip
 					err = pkg.Extract(false)
 					Expect(err).ToNot(HaveOccurred())
 
-					// Verify the file was NOT overwritten
 					actualContent, err := os.ReadFile(testFile)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(string(actualContent)).To(Equal("modified content"))
