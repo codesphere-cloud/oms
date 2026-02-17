@@ -43,8 +43,7 @@ type GCPClientManager interface {
 	CreateArtifactRegistry(projectID, region, repoName string) (*artifactpb.Repository, error)
 	CreateServiceAccount(projectID, name, displayName string) (string, bool, error)
 	CreateServiceAccountKey(projectID, saEmail string) (string, error)
-	AssignIAMRole(saProjectID, saEmail string, roles []string) error
-	GrantImpersonation(impersonatingServiceAccount, impersonatingProjectID, imperonatedServiceAccount, impersonatedProjectID string) error
+	AssignIAMRole(projectID, saEmail string, saProjectID string, roles []string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
@@ -318,14 +317,13 @@ func (c *GCPClient) CreateServiceAccountKey(projectID, saEmail string) (string, 
 }
 
 // AssignIAMRole assigns the specified IAM role to a service account in a project.
-func (c *GCPClient) AssignIAMRole(projectID, saName string, roles []string) error {
-	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, projectID)
+func (c *GCPClient) AssignIAMRole(projectID, saName string, saProjectID string, roles []string) error {
+	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, saProjectID)
 	member := fmt.Sprintf("serviceAccount:%s", saEmail)
 	resource := fmt.Sprintf("projects/%s", projectID)
 	return c.addRoleBindingToProject(member, roles, resource)
 }
 
-// Types between ServiceAccount and Project IAM API differ, so we need a separate function
 func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resource string) error {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
@@ -378,73 +376,6 @@ func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resou
 	}
 	_, err = client.SetIamPolicy(c.ctx, setReq)
 	return err
-}
-
-// Types between ServiceAccount and Project IAM API differ, so we need a separate function
-func (c *GCPClient) addRoleBindingToServiceAccount(member string, roles []string, resource string) error {
-	iamService, err := iam.NewService(c.ctx)
-	if err != nil {
-		return err
-	}
-
-	// Get current policy
-	policy, err := iamService.Projects.ServiceAccounts.GetIamPolicy(resource).Context(c.ctx).Do()
-	if err != nil {
-		return fmt.Errorf("failed to get IAM policy for service account: %w", err)
-	}
-
-	// Add role bindings directly to iam.Policy
-	updated := false
-	for _, role := range roles {
-		bindingExists := false
-		for _, binding := range policy.Bindings {
-			if binding.Role == role {
-				if !slices.Contains(binding.Members, member) {
-					binding.Members = append(binding.Members, member)
-					updated = true
-				}
-				bindingExists = true
-				break
-			}
-		}
-		if bindingExists {
-			continue
-		}
-
-		// Assign role
-		policy.Bindings = append(policy.Bindings, &iam.Binding{
-			Role:    role,
-			Members: []string{member},
-		})
-		updated = true
-	}
-
-	if !updated {
-		return nil
-	}
-
-	// Set the updated policy
-	setReq := &iam.SetIamPolicyRequest{
-		Policy: policy,
-	}
-	_, err = iamService.Projects.ServiceAccounts.SetIamPolicy(resource, setReq).Context(c.ctx).Do()
-	if err != nil {
-		return fmt.Errorf("failed to set IAM policy for service account: %w", err)
-	}
-
-	return nil
-}
-
-// GrantImpersonation grants the "roles/iam.serviceAccountTokenCreator" role to the impersonating service account on the impersonated service account,
-// allowing the impersonating service account to generate access tokens for the impersonated service account, which is necessary for cross-project impersonation.
-func (c *GCPClient) GrantImpersonation(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID string) error {
-	impersonatingSAEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", impersonatingServiceAccount, impersonatingProjectID)
-	impersonatedSAEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", impersonatedServiceAccount, impersonatedProjectID)
-
-	resourceName := fmt.Sprintf("projects/%s/serviceAccounts/%s", impersonatedProjectID, impersonatedSAEmail)
-	member := fmt.Sprintf("serviceAccount:%s", impersonatingSAEmail)
-
-	return c.addRoleBindingToServiceAccount(member, []string{"roles/iam.serviceAccountTokenCreator"}, resourceName)
 }
 
 // CreateVPC creates a VPC network with the specified subnet, router, and NAT gateway.
