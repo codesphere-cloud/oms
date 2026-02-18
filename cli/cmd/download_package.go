@@ -100,7 +100,11 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 		return fmt.Errorf("failed to find artifact in package: %w", err)
 	}
 
-	fullFilename := strings.ReplaceAll(build.Version, "/", "-") + "-" + filename
+	shortHash := build.Hash
+	if len(shortHash) > 10 {
+		shortHash = shortHash[:10]
+	}
+	fullFilename := strings.ReplaceAll(build.Version, "/", "-") + "-" + shortHash + "-" + filename
 	out, err := c.FileWriter.OpenAppend(fullFilename)
 	if err != nil {
 		out, err = c.FileWriter.Create(fullFilename)
@@ -131,14 +135,6 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	err = p.VerifyBuildArtifactDownload(verifyFile, download)
 	if err != nil {
 		return fmt.Errorf("failed to verify artifact: %w", err)
-	}
-
-	if download.Artifacts[0].Md5Sum != "" {
-		checksumFilename := fullFilename + ".md5"
-		err = c.FileWriter.WriteFile(checksumFilename, []byte(download.Artifacts[0].Md5Sum), 0644)
-		if err != nil {
-			log.Printf("Warning: failed to save checksum file: %v", err)
-		}
 	}
 
 	return nil

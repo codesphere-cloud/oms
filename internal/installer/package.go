@@ -17,7 +17,6 @@ import (
 
 const depsDir = "deps"
 const depsTar = "deps.tar.gz"
-const checksumMarkerFile = ".oms-package-checksum"
 
 type PackageManager interface {
 	FileIO() util.FileIO
@@ -74,52 +73,8 @@ func (p *Package) alreadyExtracted(dir string) (bool, error) {
 	return isDir, nil
 }
 
-func (p *Package) getPackageChecksum() string {
-	data, err := p.fileIO.ReadFile(p.Filename + ".md5")
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
-}
-
-func (p *Package) getExtractedChecksum(workDir string) string {
-	data, err := p.fileIO.ReadFile(path.Join(workDir, checksumMarkerFile))
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
-}
-
-func (p *Package) saveExtractedChecksum(workDir, checksum string) error {
-	if checksum == "" {
-		return nil
-	}
-	return p.fileIO.WriteFile(path.Join(workDir, checksumMarkerFile), []byte(checksum), 0644)
-}
-
-func (p *Package) packageChanged(workDir string) bool {
-	packageChecksum := p.getPackageChecksum()
-	if packageChecksum == "" {
-		return false
-	}
-
-	extractedChecksum := p.getExtractedChecksum(workDir)
-	if extractedChecksum == "" {
-		log.Println("No checksum marker found in extracted directory, will re-extract to ensure consistency.")
-		return true
-	}
-
-	if packageChecksum != extractedChecksum {
-		log.Printf("Package checksum changed (was: %s, now: %s), will re-extract.", extractedChecksum, packageChecksum)
-		return true
-	}
-
-	return false
-}
-
 // Extract extracts the package tar.gz file into its working directory.
 // If force is true, it will overwrite existing files.
-// If the package checksum has changed since last extraction, it will also re-extract.
 func (p *Package) Extract(force bool) error {
 	workDir := p.GetWorkDir()
 	err := os.MkdirAll(p.OmsWorkdir, 0755)
@@ -132,16 +87,9 @@ func (p *Package) Extract(force bool) error {
 		return fmt.Errorf("failed to figure out if package %s is already extracted in %s: %w", p.Filename, workDir, err)
 	}
 
-	// Check if the package has changed since last extraction
-	needsReExtraction := p.packageChanged(workDir)
-
-	if alreadyExtracted && !force && !needsReExtraction {
+	if alreadyExtracted && !force {
 		log.Println("Skipping extraction, package already unpacked. Use force option to overwrite.")
 		return nil
-	}
-
-	if needsReExtraction && !force {
-		log.Println("Package has changed, re-extracting...")
 	}
 
 	err = util.ExtractTarGz(p.fileIO, p.Filename, workDir)
@@ -156,12 +104,6 @@ func (p *Package) Extract(force bool) error {
 		if err != nil {
 			return fmt.Errorf("failed to extract deps.tar.gz to %s: %w", depsTargetDir, err)
 		}
-	}
-
-	packageChecksum := p.getPackageChecksum()
-	err = p.saveExtractedChecksum(workDir, packageChecksum)
-	if err != nil {
-		log.Printf("Warning: failed to save checksum marker: %v", err)
 	}
 
 	return nil
