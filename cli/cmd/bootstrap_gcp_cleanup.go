@@ -151,6 +151,17 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 		log.Printf("Skipping DNS cleanup: no infrastructure information available (provide infra file or use --skip-dns-cleanup)")
 	}
 
+	// Revoke impersonation permissions in DNS project (if using external DNS project)
+	if infraEnv.DNSProjectID != "" && infraEnv.DNSProjectID != projectID && infraEnv.DNSProjectServiceAccount != "" {
+		if err := deps.StepLogger.Step("Revoking DNS project permissions", func() error {
+			return deps.GCPClient.RevokeImpersonation("cloud-controller", projectID, infraEnv.DNSProjectServiceAccount, infraEnv.DNSProjectID)
+		}); err != nil {
+			log.Printf("Warning: failed to revoke DNS project permissions: %v", err)
+			log.Printf("You may need to manually remove the IAM binding for cloud-controller@%s.iam.gserviceaccount.com from service account %s in project %s",
+				projectID, infraEnv.DNSProjectServiceAccount, infraEnv.DNSProjectID)
+		}
+	}
+
 	// Delete the project
 	if err := deps.StepLogger.Step("Deleting GCP project", func() error {
 		return deps.GCPClient.DeleteProject(projectID)

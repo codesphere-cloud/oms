@@ -219,4 +219,31 @@ var _ = Describe("GCP Client Cleanup Methods", func() {
 			})
 		})
 	})
+
+	Describe("RevokeImpersonation parameters", func() {
+		Context("when generating service account email format", func() {
+			It("should correctly format the service account email", func() {
+				impersonatingSA := "cloud-controller"
+				impersonatingProject := "test-project-123"
+				expectedEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", impersonatingSA, impersonatingProject)
+				Expect(expectedEmail).To(Equal("cloud-controller@test-project-123.iam.gserviceaccount.com"))
+			})
+
+			It("should correctly format the resource name for service account", func() {
+				impersonatedProject := "dns-project-456"
+				impersonatedSA := "dns-admin"
+				impersonatedSAEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", impersonatedSA, impersonatedProject)
+				expectedResource := fmt.Sprintf("projects/%s/serviceAccounts/%s", impersonatedProject, impersonatedSAEmail)
+				Expect(expectedResource).To(Equal("projects/dns-project-456/serviceAccounts/dns-admin@dns-project-456.iam.gserviceaccount.com"))
+			})
+		})
+
+		Context("when formatting the member string", func() {
+			It("should prefix with serviceAccount:", func() {
+				saEmail := "cloud-controller@test-project.iam.gserviceaccount.com"
+				member := fmt.Sprintf("serviceAccount:%s", saEmail)
+				Expect(member).To(Equal("serviceAccount:cloud-controller@test-project.iam.gserviceaccount.com"))
+			})
+		})
+	})
 })

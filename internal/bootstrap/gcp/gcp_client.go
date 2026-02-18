@@ -91,6 +91,7 @@ type GCPClientManager interface {
 	CreateServiceAccountKey(projectID, saEmail string) (string, error)
 	AssignIAMRole(saProjectID, saEmail string, roles []string) error
 	GrantImpersonation(impersonatingServiceAccount, impersonatingProjectID, imperonatedServiceAccount, impersonatedProjectID string) error
+	RevokeImpersonation(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
@@ -538,6 +539,69 @@ func (c *GCPClient) GrantImpersonation(impersonatingServiceAccount, impersonatin
 	member := fmt.Sprintf("serviceAccount:%s", impersonatingSAEmail)
 
 	return c.addRoleBindingToServiceAccount(member, []string{"roles/iam.serviceAccountTokenCreator"}, resourceName)
+}
+
+// RevokeImpersonation revokes the "roles/iam.serviceAccountTokenCreator" role from the impersonating service account on the impersonated service account.
+// This removes the cross-project impersonation permission that was previously granted.
+func (c *GCPClient) RevokeImpersonation(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID string) error {
+	impersonatingSAEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", impersonatingServiceAccount, impersonatingProjectID)
+	impersonatedSAEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", impersonatedServiceAccount, impersonatedProjectID)
+
+	resourceName := fmt.Sprintf("projects/%s/serviceAccounts/%s", impersonatedProjectID, impersonatedSAEmail)
+	member := fmt.Sprintf("serviceAccount:%s", impersonatingSAEmail)
+
+	return c.removeRoleBindingFromServiceAccount(member, []string{"roles/iam.serviceAccountTokenCreator"}, resourceName)
+}
+
+// removeRoleBindingFromServiceAccount removes the specified role bindings for a member from a service account's IAM policy.
+func (c *GCPClient) removeRoleBindingFromServiceAccount(member string, roles []string, resource string) error {
+	iamService, err := iam.NewService(c.ctx)
+	if err != nil {
+		return err
+	}
+
+	policy, err := iamService.Projects.ServiceAccounts.GetIamPolicy(resource).Context(c.ctx).Do()
+	if err != nil {
+		if IsNotFoundError(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to get IAM policy for service account: %w", err)
+	}
+
+	updated := false
+	for _, role := range roles {
+		for i, binding := range policy.Bindings {
+			if binding.Role == role {
+				// Find and remove the member from this binding
+				for j, m := range binding.Members {
+					if m == member {
+						binding.Members = append(binding.Members[:j], binding.Members[j+1:]...)
+						updated = true
+						break
+					}
+				}
+				// If the binding has no more members, remove it entirely
+				if len(binding.Members) == 0 {
+					policy.Bindings = append(policy.Bindings[:i], policy.Bindings[i+1:]...)
+				}
+				break
+			}
+		}
+	}
+
+	if !updated {
+		return nil
+	}
+
+	setReq := &iam.SetIamPolicyRequest{
+		Policy: policy,
+	}
+	_, err = iamService.Projects.ServiceAccounts.SetIamPolicy(resource, setReq).Context(c.ctx).Do()
+	if err != nil {
+		return fmt.Errorf("failed to set IAM policy for service account: %w", err)
+	}
+
+	return nil
 }
 
 // CreateVPC creates a VPC network with the specified subnet, router, and NAT gateway.
