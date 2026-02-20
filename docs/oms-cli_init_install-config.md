@@ -58,6 +58,10 @@ $ oms-cli init install-config --validate -c config.yaml --vault prod.vault.yaml
       --interactive                  Enable interactive prompting (when true, other config flags are ignored) (default true)
       --k8s-control-plane strings    K8s control plane IPs (comma-separated)
       --k8s-managed                  Use Codesphere-managed Kubernetes (default true)
+      --openbao-engine string        Engine for OpenBao (default "cs-secrets-engine")
+      --openbao-password string      Password for OpenBao authentication
+      --openbao-uri string           URI for OpenBao (e.g., https://openbao.example.com)
+      --openbao-user string          Username for OpenBao authentication (default "admin")
       --postgres-mode string         PostgreSQL setup mode (install/external)
       --postgres-primary-ip string   Primary PostgreSQL server IP
       --profile string               Use a predefined configuration profile (dev, production, minimal)

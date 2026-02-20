@@ -87,6 +87,11 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
 
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoURI, "openbao-uri", "", "URI for OpenBao (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoUser, "openbao-user", "admin", "OpenBao username (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoPassword, "openbao-password", "", "OpenBao password (optional)")
+
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
@@ -143,7 +148,6 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
-	log.Println(envString)
 	log.Printf("Infrastructure details written to %s", infraFilePath)
 	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 	if bs.Env.InstallVersion != "" {
