@@ -22,6 +22,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/dns/v1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -33,6 +34,48 @@ const (
 	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
 	RegistryTypeGitHub           RegistryType = "github"
 )
+
+// OMSManagedLabel is the label key used to identify projects created by OMS
+const OMSManagedLabel = "oms-managed"
+
+// CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
+// A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
+func CheckOMSManagedLabel(labels map[string]string) bool {
+	if labels == nil {
+		return false
+	}
+	value, exists := labels[OMSManagedLabel]
+	return exists && value == "true"
+}
+
+// GetDNSRecordNames returns the DNS record names that OMS creates for a given base domain.
+func GetDNSRecordNames(baseDomain string) []struct {
+	Name  string
+	Rtype string
+} {
+	return []struct {
+		Name  string
+		Rtype string
+	}{
+		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
+	}
+}
+
+// IsNotFoundError checks if the error is a Google API "not found" error (HTTP 404).
+func IsNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var googleErr *googleapi.Error
+	if errors.As(err, &googleErr) {
+		return googleErr.Code == 404
+	}
+	return false
+}
 
 type VMDef struct {
 	Name            string

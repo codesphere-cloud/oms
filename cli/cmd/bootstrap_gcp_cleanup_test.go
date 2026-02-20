@@ -331,23 +331,12 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 		})
 
 		Context("when skip-dns-cleanup flag is set", func() {
-			It("should skip DNS cleanup even when infra has DNS info", func() {
+			It("should skip DNS cleanup and skip loading infra file when project-id is provided", func() {
 				cleanupCmd.Opts.ProjectID = "test-project"
 				cleanupCmd.Opts.Force = true
 				cleanupCmd.Opts.SkipDNSCleanup = true
 
-				validEnv := gcp.CodesphereEnvironment{
-					ProjectID:   "test-project",
-					BaseDomain:  "example.com",
-					DNSZoneName: "test-zone",
-				}
-				envData, _ := json.Marshal(validEnv)
-
-				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
-				mockFileIO.EXPECT().ReadFile("/tmp/test-infra.json").Return(envData, nil)
-				// DNS deletion should NOT be called
 				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
-				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
 
 				err := cleanupCmd.ExecuteCleanup(deps)
 				Expect(err).NotTo(HaveOccurred())
