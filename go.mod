@@ -22,6 +22,7 @@ require (
 	golang.org/x/term v0.40.0
 	google.golang.org/api v0.267.0
 	google.golang.org/grpc v1.79.1
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -538,7 +539,6 @@ require (
 	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/tools v0.42.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 tool (

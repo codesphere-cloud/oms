@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
 	"golang.org/x/term"
 )
 
@@ -146,6 +147,82 @@ func (n *Node) GetInternalIP() string {
 // GetName returns the name of the node
 func (n *Node) GetName() string {
 	return n.Name
+}
+
+// getHostKeyCallback returns a host key callback that uses known_hosts file
+// and auto-accepts new hosts for provisioning.
+func (n *Node) getHostKeyCallback() (ssh.HostKeyCallback, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user home directory: %w", err)
+	}
+
+	knownHostsPath := filepath.Join(homeDir, ".ssh", "known_hosts")
+
+	// Ensure known_hosts file exists
+	sshDir := filepath.Join(homeDir, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create .ssh directory: %w", err)
+	}
+
+	// Create file if it doesn't exist
+	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
+		f, err := os.OpenFile(knownHostsPath, os.O_CREATE|os.O_RDONLY, 0600)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create known_hosts file: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return nil, fmt.Errorf("failed to close known_hosts file: %w", err)
+		}
+	}
+
+	hostKeyCallback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load known_hosts: %w", err)
+	}
+
+	// Wrap the callback to auto-accept new hosts for provisioning
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := hostKeyCallback(hostname, remote, key)
+		if err == nil {
+			// Host key is already known and valid
+			return nil
+		}
+
+		var keyErr *knownhosts.KeyError
+		if errors, ok := err.(*knownhosts.KeyError); ok {
+			keyErr = errors
+		}
+
+		if keyErr != nil && len(keyErr.Want) == 0 {
+			log.Printf("Warning: Adding new host %s to known_hosts (first connection)", hostname)
+
+			// Append the new host key to known_hosts
+			f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
+			if err != nil {
+				return fmt.Errorf("failed to open known_hosts for writing: %w", err)
+			}
+			defer func() {
+				if err := f.Close(); err != nil {
+					log.Printf("Warning: failed to close known_hosts file: %v", err)
+				}
+			}()
+
+			// Format: hostname ssh-keytype base64-encoded-key
+			normalizedHosts := []string{hostname}
+			if host, port, splitErr := net.SplitHostPort(hostname); splitErr == nil {
+				normalizedHosts = []string{net.JoinHostPort(host, port)}
+			}
+			line := knownhosts.Line(normalizedHosts, key)
+			if _, err := f.WriteString(line + "\n"); err != nil {
+				return fmt.Errorf("failed to write to known_hosts: %w", err)
+			}
+
+			return nil
+		}
+
+		return fmt.Errorf("host key verification failed: %w", err)
+	}, nil
 }
 
 func (c *SSHNodeClient) WaitReady(node *Node, timeout time.Duration) error {
@@ -384,6 +461,11 @@ func (n *Node) createClient(jumpboxIp string, ip string, username string) (*ssh.
 		return nil, fmt.Errorf("failed to get authentication methods: %w", err)
 	}
 
+	hostKeyCallback, err := n.getHostKeyCallback()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get host key callback: %w", err)
+	}
+
 	if jumpboxIp != "" {
 		// Use the Jumpbox's cached client if available
 		jbClient, err := n.Jumpbox.getOrCreateClient("", jumpboxIp, jumpboxUser)
@@ -392,14 +474,10 @@ func (n *Node) createClient(jumpboxIp string, ip string, username string) (*ssh.
 		}
 
 		finalTargetConfig := &ssh.ClientConfig{
-			User:    username,
-			Auth:    authMethods,
-			Timeout: 10 * time.Second,
-			// WARNING: This is INSECURE for production!
-			// It tells the client to accept any host key.
-			// For production, you should implement a proper HostKeyCallback
-			// to verify the remote server's identity.
-			HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+			User:            username,
+			Auth:            authMethods,
+			Timeout:         10 * time.Second,
+			HostKeyCallback: hostKeyCallback,
 		}
 
 		finalAddr := fmt.Sprintf("%s:22", ip)
@@ -416,14 +494,10 @@ func (n *Node) createClient(jumpboxIp string, ip string, username string) (*ssh.
 	}
 
 	config := &ssh.ClientConfig{
-		User:    username,
-		Auth:    authMethods,
-		Timeout: 10 * time.Second,
-		// WARNING: This is INSECURE for production!
-		// It tells the client to accept any host key.
-		// For production, you should implement a proper HostKeyCallback
-		// to verify the remote server's identity.
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		User:            username,
+		Auth:            authMethods,
+		Timeout:         10 * time.Second,
+		HostKeyCallback: hostKeyCallback,
 	}
 
 	addr := fmt.Sprintf("%s:22", ip)

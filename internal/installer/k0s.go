@@ -6,6 +6,7 @@ package installer
 import (
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,7 +20,6 @@ import (
 type K0sManager interface {
 	GetLatestVersion() (string, error)
 	Download(version string, force bool, quiet bool) (string, error)
-	Install(configPath string, k0sPath string, force bool) error
 }
 
 type K0s struct {
@@ -62,6 +62,12 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 
 	// Check if k0s binary already exists and create destination file
 	workdir := k.Env.GetOmsWorkdir()
+
+	// Ensure workdir exists
+	if err := os.MkdirAll(workdir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create workdir: %w", err)
+	}
+
 	k0sPath := filepath.Join(workdir, "k0s")
 	if k.FileWriter.Exists(k0sPath) && !force {
 		return "", fmt.Errorf("k0s binary already exists at %s. Use --force to overwrite", k0sPath)
@@ -93,38 +99,37 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	return k0sPath, nil
 }
 
-func (k *K0s) Install(configPath string, k0sPath string, force bool) error {
-	if k.Goos != "linux" || k.Goarch != "amd64" {
-		return fmt.Errorf("k0s installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
-	}
-
-	if !k.FileWriter.Exists(k0sPath) {
-		return fmt.Errorf("k0s binary does not exist in '%s', please download first", k0sPath)
-	}
-
-	args := []string{k0sPath, "install", "controller"}
-	if configPath != "" {
-		args = append(args, "--config", configPath)
-	} else {
-		args = append(args, "--single")
-	}
-
-	if force {
-		args = append(args, "--force")
-	}
-
-	err := util.RunCommand("sudo", args, "")
+// GetNodeIPAddress finds the IP address of the current node and returns matching control plane IP
+func GetNodeIPAddress(controlPlanes []string) (string, error) {
+	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return fmt.Errorf("failed to install k0s: %w", err)
+		return "", fmt.Errorf("failed to get network interfaces: %w", err)
 	}
 
-	if configPath != "" {
-		log.Println("k0s installed successfully with provided configuration.")
-	} else {
-		log.Println("k0s installed successfully in single-node mode.")
+	cpSet := make(map[string]bool, len(controlPlanes))
+	for _, ip := range controlPlanes {
+		cpSet[ip] = true
 	}
-	log.Printf("You can start it using 'sudo %v start'", k0sPath)
-	log.Printf("You can check the status using 'sudo %v status'", k0sPath)
 
-	return nil
+	var fallbackIP string
+	for _, addr := range addrs {
+		ipnet, ok := addr.(*net.IPNet)
+		if !ok || ipnet.IP.IsLoopback() || ipnet.IP.To4() == nil {
+			continue
+		}
+
+		ip := ipnet.IP.String()
+		if cpSet[ip] {
+			return ip, nil
+		}
+		if fallbackIP == "" {
+			fallbackIP = ip
+		}
+	}
+
+	if fallbackIP != "" {
+		return fallbackIP, nil
+	}
+
+	return "", fmt.Errorf("no suitable IP address found")
 }

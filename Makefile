@@ -3,6 +3,9 @@ all: build-cli build-service
 build-cli:
 	cd cli && go build -v && mv cli ../oms-cli
 
+build-cli-linux:
+	GOOS=linux GOARCH=amd64 go build -C cli -o ../oms-cli
+
 build-service:
 	cd service && go build -v && mv service ../oms-service
 
