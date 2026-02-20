@@ -218,6 +218,51 @@ var _ = Describe("ConfigManager", func() {
 					Expect(errors).To(ContainElement(ContainSubstring("postgres server address is required")))
 				})
 			})
+
+		})
+
+		Context("openBao validation", func() {
+			BeforeEach(func() {
+				configManager.Config.Codesphere.OpenBao = &files.OpenBaoConfig{
+					URI:    "https://openbao.example.com",
+					Engine: "openbao-engine",
+					User:   "fake-user",
+				}
+			})
+
+			It("should require OpenBao URI", func() {
+				configManager.Config.Codesphere.OpenBao.URI = ""
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("OpenBao URI is required")))
+			})
+
+			It("should require OpenBao engine", func() {
+				configManager.Config.Codesphere.OpenBao.Engine = ""
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("OpenBao engine name is required")))
+			})
+
+			It("should require OpenBao user", func() {
+				configManager.Config.Codesphere.OpenBao.User = ""
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("OpenBao username is required")))
+			})
+
+			It("should validate OpenBao URI format", func() {
+				configManager.Config.Codesphere.OpenBao.URI = "not-a-valid-url"
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("OpenBao URI must be a valid URL")))
+			})
+
+			It("should require OpenBao password in vault", func() {
+				configManager.Vault = &files.InstallVault{
+					Secrets: []files.SecretEntry{
+						{Name: "cephSshPrivateKey"},
+					},
+				}
+				errors := configManager.ValidateVault()
+				Expect(errors).To(ContainElement(ContainSubstring("required OpenBao secret missing: openBaoPassword")))
+			})
 		})
 
 		Context("ceph validation", func() {
