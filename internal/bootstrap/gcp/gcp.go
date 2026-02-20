@@ -102,6 +102,12 @@ type CodesphereEnvironment struct {
 	Experiments          []string     `json:"experiments"`
 	FeatureFlags         []string     `json:"feature_flags"`
 
+	// OpenBao
+	OpenBaoURI      string `json:"-"`
+	OpenBaoEngine   string `json:"-"`
+	OpenBaoUser     string `json:"-"`
+	OpenBaoPassword string `json:"-"`
+
 	// Config
 	InstallConfigPath string              `json:"-"`
 	SecretsFilePath   string              `json:"-"`
@@ -1268,6 +1274,30 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			if err != nil {
 				return fmt.Errorf("failed to generate replica server certificate: %w", err)
 			}
+		}
+	}
+
+	b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
+		{
+			Name:    "postgres",
+			Version: "v1",
+		},
+		{
+			Name:    "babelfish",
+			Version: "v1",
+		},
+		{
+			Name:    "s3",
+			Version: "v1",
+		},
+	}
+
+	if b.Env.OpenBaoURI != "" {
+		b.Env.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
+			Engine:   b.Env.OpenBaoEngine,
+			URI:      b.Env.OpenBaoURI,
+			User:     b.Env.OpenBaoUser,
+			Password: b.Env.OpenBaoPassword,
 		}
 	}
 
