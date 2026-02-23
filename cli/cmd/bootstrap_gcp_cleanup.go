@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -58,23 +57,6 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.ExecuteCleanup(deps)
 }
 
-func (c *BootstrapGcpCleanupCmd) loadInfraFile(deps *CleanupDeps) (gcp.CodesphereEnvironment, bool, error) {
-	if !deps.FileIO.Exists(deps.InfraFilePath) {
-		return gcp.CodesphereEnvironment{}, false, nil
-	}
-
-	content, err := deps.FileIO.ReadFile(deps.InfraFilePath)
-	if err != nil {
-		return gcp.CodesphereEnvironment{}, true, fmt.Errorf("failed to read gcp infra file: %w", err)
-	}
-
-	var env gcp.CodesphereEnvironment
-	if err := json.Unmarshal(content, &env); err != nil {
-		return gcp.CodesphereEnvironment{}, true, fmt.Errorf("failed to unmarshal gcp infra file: %w", err)
-	}
-	return env, true, nil
-}
-
 func (c *BootstrapGcpCleanupCmd) confirmDeletion(deps *CleanupDeps, projectID string) error {
 	log.Printf("WARNING: This will permanently delete the GCP project '%s' and all its resources.", projectID)
 	log.Printf("This action cannot be undone.\n")
@@ -102,7 +84,7 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 	needsInfraFile := projectID == "" || (!c.Opts.SkipDNSCleanup && c.Opts.BaseDomain == "")
 	if needsInfraFile {
 		var err error
-		infraEnv, infraFileExists, err = c.loadInfraFile(deps)
+		infraEnv, infraFileExists, err = gcp.LoadInfraFile(deps.FileIO, deps.InfraFilePath)
 		if err != nil {
 			if projectID == "" {
 				return fmt.Errorf("failed to load infra file: %w", err)
