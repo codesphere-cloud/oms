@@ -1137,6 +1137,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				dnsConfig := dnsIssuer["config"].(map[string]interface{})
 				cloudDns := dnsConfig["cloudDNS"].(map[string]interface{})
 				Expect(cloudDns["project"]).To(Equal(bs.Env.DNSProjectID))
+
+				Expect(bs.Env.InstallConfig.Codesphere.OpenBao).To(BeNil())
+				Expect(len(bs.Env.InstallConfig.Codesphere.ManagedServices)).To(Equal(3))
 			})
 			Context("When Experiments are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
@@ -1189,6 +1192,30 @@ var _ = Describe("GCP Bootstrapper", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub).To(BeNil())
 				})
 
+			})
+
+			Context("When OpenBao config is set", func() {
+				BeforeEach(func() {
+					csEnv.OpenBaoURI = "https://openbao.example.com"
+					csEnv.OpenBaoPassword = "fake-password"
+					csEnv.OpenBaoUser = "fake-username"
+					csEnv.OpenBaoEngine = "fake-engine"
+				})
+				It("sets OpenBao config in install config", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.URI).To(Equal("https://openbao.example.com"))
+					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.Password).To(Equal("fake-password"))
+					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.User).To(Equal("fake-username"))
+					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.Engine).To(Equal("fake-engine"))
+				})
 			})
 		})
 
