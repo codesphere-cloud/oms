@@ -1382,22 +1382,17 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		skipStepsArg = " -s " + strings.Join(skipSteps, ",")
 	}
 
-	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
-	if err != nil {
-		return fmt.Errorf("failed to get build info: %w", err)
-	}
-
 	downloadCmd := "oms-cli download package -f " + packageFile
 	if b.Env.InstallHash != "" {
 		downloadCmd += " -H " + b.Env.InstallHash
 	}
 	downloadCmd += " " + b.Env.InstallVersion
-	err = b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
+	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
-	fullPackageFilename := portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, build.Hash, packageFile)
+	fullPackageFilename := portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFile)
 	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
 		b.Env.SecretsDir, fullPackageFilename, skipStepsArg)
 	err = b.Env.Jumpbox.RunSSHCommand("root", installCmd)

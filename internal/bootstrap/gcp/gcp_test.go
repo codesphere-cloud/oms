@@ -1369,11 +1369,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				})
 				It("downloads and installs lite package", func() {
-					mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "v1.2.3", "abc1234567890").Return(portal.Build{
-						Version: "v1.2.3",
-						Hash:    "abc1234567890",
-					}, nil)
-
 					// Expect download package
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 
@@ -1388,16 +1383,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			Context("without explicit hash", func() {
 				BeforeEach(func() {
-					csEnv.InstallHash = ""
+					// Simulate that ValidateInput has populated the hash
+					csEnv.InstallHash = "def9876543210"
 				})
 				It("downloads and installs codesphere", func() {
-					mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "v1.2.3", "").Return(portal.Build{
-						Version: "v1.2.3",
-						Hash:    "def9876543210",
-					}, nil)
-
 					// Expect download package
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz v1.2.3").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz -H def9876543210 v1.2.3").Return(nil)
 
 					// Expect install codesphere
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
@@ -1408,11 +1399,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("downloads and installs codesphere with hash", func() {
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "v1.2.3", "abc1234567890").Return(portal.Build{
-					Version: "v1.2.3",
-					Hash:    "abc1234567890",
-				}, nil)
-
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
 
@@ -1422,19 +1408,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 
 		Describe("Invalid cases", func() {
-			It("fails when GetBuild fails", func() {
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "v1.2.3", "abc1234567890").Return(portal.Build{}, fmt.Errorf("portal error"))
-
-				err := bs.InstallCodesphere()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to get build info"))
-			})
-
 			It("fails when download package fails", func() {
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "v1.2.3", "abc1234567890").Return(portal.Build{
-					Version: "v1.2.3",
-					Hash:    "abc1234567890",
-				}, nil)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(fmt.Errorf("download error"))
 
 				err := bs.InstallCodesphere()
@@ -1443,10 +1417,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when install codesphere fails", func() {
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "v1.2.3", "abc1234567890").Return(portal.Build{
-					Version: "v1.2.3",
-					Hash:    "abc1234567890",
-				}, nil)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
 
