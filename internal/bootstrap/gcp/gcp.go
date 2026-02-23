@@ -943,7 +943,7 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		}
 	}
 
-	hasOms := b.Env.Jumpbox.HasCommand("oms-cli")
+	hasOms := b.Env.Jumpbox.HasCommand("oms")
 	if hasOms {
 		return nil
 	}
@@ -1450,7 +1450,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 		return "", fmt.Errorf("install hash must be set when install version is set")
 	}
 	b.stlog.Logf("Downloading Codesphere package...")
-	downloadCmd := fmt.Sprintf("oms-cli download package -f %s -H %s %s", packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
+	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s", packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
@@ -1461,7 +1461,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 
 func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere...")
-	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
+	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
 		b.Env.SecretsDir, packageFilename, b.generateSkipStepsArg())
 	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 }
