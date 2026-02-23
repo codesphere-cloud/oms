@@ -36,16 +36,16 @@ var _ = Describe("GetBuildForDownload", func() {
 
 var _ = Describe("BuildPackageFilename", func() {
 	Describe("BuildPackageFilename method", func() {
-		It("generates filename with truncated hash", func() {
+		It("generates filename with long hash", func() {
 			build := portal.Build{
 				Version: "v1.2.3",
 				Hash:    "abc1234567890def",
 			}
 			filename := build.BuildPackageFilename("installer.tar.gz")
-			Expect(filename).To(Equal("v1.2.3-abc1234567-installer.tar.gz"))
+			Expect(filename).To(Equal("v1.2.3-abc1234567890def-installer.tar.gz"))
 		})
 
-		It("handles short hash without truncation", func() {
+		It("handles short hash", func() {
 			build := portal.Build{
 				Version: "v1.2.3",
 				Hash:    "abc123",
@@ -60,19 +60,19 @@ var _ = Describe("BuildPackageFilename", func() {
 				Hash:    "abc1234567890",
 			}
 			filename := build.BuildPackageFilename("installer-lite.tar.gz")
-			Expect(filename).To(Equal("feature-my-branch-abc1234567-installer-lite.tar.gz"))
+			Expect(filename).To(Equal("feature-my-branch-abc1234567890-installer-lite.tar.gz"))
 		})
 	})
 
 	Describe("BuildPackageFilenameFromParts function", func() {
-		It("generates filename from parts with truncated hash", func() {
+		It("generates filename from parts with long hash", func() {
 			filename := portal.BuildPackageFilenameFromParts("v1.2.3", "abc1234567890def", "installer.tar.gz")
-			Expect(filename).To(Equal("v1.2.3-abc1234567-installer.tar.gz"))
+			Expect(filename).To(Equal("v1.2.3-abc1234567890def-installer.tar.gz"))
 		})
 
 		It("handles branch versions with slashes", func() {
 			filename := portal.BuildPackageFilenameFromParts("feature/test", "abc1234567890", "installer.tar.gz")
-			Expect(filename).To(Equal("feature-test-abc1234567-installer.tar.gz"))
+			Expect(filename).To(Equal("feature-test-abc1234567890-installer.tar.gz"))
 		})
 
 		It("handles exact 10 character hash", func() {

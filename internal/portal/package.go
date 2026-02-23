@@ -45,20 +45,16 @@ func (b *Build) GetBuildForDownload(filename string) (Build, error) {
 }
 
 // BuildPackageFilename generates the standard package filename for a given build
-// Format: {version}-{shortHash}-{filename}
-// Hash is truncated to 10 characters, version slashes are replaced with dashes.
+// Format: {version}-{hash}-{filename}
+// Version slashes are replaced with dashes.
 func (b *Build) BuildPackageFilename(filename string) string {
 	return BuildPackageFilenameFromParts(b.Version, b.Hash, filename)
 }
 
 // BuildPackageFilenameFromParts generates the standard package filename from individual parts
-// Format: {version}-{shortHash}-{filename}
-// Hash is truncated to 10 characters, version slashes are replaced with dashes.
+// Format: {version}-{hash}-{filename}
+// Version slashes are replaced with dashes.
 func BuildPackageFilenameFromParts(version, hash, filename string) string {
-	shortHash := hash
-	if len(shortHash) > 10 {
-		shortHash = shortHash[:10]
-	}
 	sanitizedVersion := strings.ReplaceAll(version, "/", "-")
-	return sanitizedVersion + "-" + shortHash + "-" + filename
+	return sanitizedVersion + "-" + hash + "-" + filename
 }

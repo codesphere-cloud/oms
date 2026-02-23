@@ -300,6 +300,10 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
 	}
 
+	if b.Env.InstallHash == "" {
+		b.Env.InstallHash = build.Hash
+	}
+
 	requiredFilename := "installer.tar.gz"
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		requiredFilename = "installer-lite.tar.gz"

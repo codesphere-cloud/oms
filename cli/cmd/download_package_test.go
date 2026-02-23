@@ -187,7 +187,7 @@ var _ = Describe("DownloadPackages", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("Truncates long hash to 10 characters in filename", func() {
+		It("Uses long hash in filename", func() {
 			longHash := "abc1234567890defghij"
 			buildWithLongHash := portal.Build{
 				Version: version,
@@ -206,8 +206,8 @@ var _ = Describe("DownloadPackages", func() {
 			}
 
 			fakeFile := os.NewFile(uintptr(0), filename)
-			mockFileWriter.EXPECT().OpenAppend(version+"-abc1234567-"+filename).Return(fakeFile, nil)
-			mockFileWriter.EXPECT().Open(version+"-abc1234567-"+filename).Return(fakeFile, nil)
+			mockFileWriter.EXPECT().OpenAppend(version+"-"+longHash+"-"+filename).Return(fakeFile, nil)
+			mockFileWriter.EXPECT().Open(version+"-"+longHash+"-"+filename).Return(fakeFile, nil)
 			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
 			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
 			err := c.DownloadBuild(mockPortal, buildWithLongHash, filename)
