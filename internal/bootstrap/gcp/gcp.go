@@ -306,6 +306,10 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
 	}
 
+	if b.Env.InstallHash == "" {
+		b.Env.InstallHash = build.Hash
+	}
+
 	requiredFilename := "installer.tar.gz"
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		requiredFilename = "installer-lite.tar.gz"
@@ -1408,14 +1412,19 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		skipStepsArg = " -s " + strings.Join(skipSteps, ",")
 	}
 
-	downloadCmd := "oms-cli download package -f " + packageFile + " " + b.Env.InstallVersion
+	downloadCmd := "oms-cli download package -f " + packageFile
+	if b.Env.InstallHash != "" {
+		downloadCmd += " -H " + b.Env.InstallHash
+	}
+	downloadCmd += " " + b.Env.InstallVersion
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
-	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s-%s%s",
-		b.Env.SecretsDir, b.Env.InstallVersion, packageFile, skipStepsArg)
+	fullPackageFilename := portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFile)
+	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
+		b.Env.SecretsDir, fullPackageFilename, skipStepsArg)
 	err = b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
