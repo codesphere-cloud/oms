@@ -57,10 +57,10 @@ func AddUpdateDockerfileCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 
 This command extracts the base image from a Codesphere package and updates the FROM statement
 in the specified Dockerfile to use that base image. The base image is loaded into the local Docker daemon so it can be used for building.`,
-			Example: formatExamplesWithBinary("update dockerfile", []io.Example{
+			Example: formatExamples("update dockerfile", []io.Example{
 				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz", Desc: "Update Dockerfile to use the default base image from the package (workspace-agent-24.04)"},
 				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz --baseimage workspace-agent-20.04.tar", Desc: "Update Dockerfile to use the workspace-agent-20.04 base image from the package"},
-			}, "oms-cli"),
+			}),
 			Args: cobra.ExactArgs(0),
 		},
 		Opts: UpdateDockerfileOpts{GlobalOptions: opts},

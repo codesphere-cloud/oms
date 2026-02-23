@@ -152,7 +152,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return nil
 	}
 	packageName := "<package-name>-installer"
-	installCmd := "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt"
+	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt"
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
 		log.Printf("You set a GitHub PAT for direct image access. Make sure to use a lite package, as VM root disk sizes are reduced.")
 		installCmd += " -s load-container-images"

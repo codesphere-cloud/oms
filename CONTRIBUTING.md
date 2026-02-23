@@ -31,7 +31,7 @@ Run the generated `AddInstallComponent()` function in the parent `cli/cmd/instal
 This will add the following command to the CLI:
 
 ```
-oms-cli install component
+oms install component
 ```
 
 ## Contributing Code
