@@ -122,33 +122,30 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	err = bs.Bootstrap()
-	envBytes, err2 := json.MarshalIndent(bs.Env, "", "  ")
+	envBytes, errMarshal := json.MarshalIndent(bs.Env, "", "  ")
 
-	envString := string(envBytes)
-	if err2 != nil {
-		envString = ""
+	if errMarshal == nil {
+		workdir := env.NewEnv().GetOmsWorkdir()
+		err = fw.MkdirAll(workdir, 0755)
+		if err != nil {
+			log.Printf("warning: failed to create workdir: %v", err)
+		}
+		infraFilePath := gcp.GetInfraFilePath()
+		err = fw.WriteFile(infraFilePath, envBytes, 0644)
+		if err != nil {
+			log.Printf("warning: failed to write gcp bootstrap env file: %v", err)
+		}
+		log.Printf("Infrastructure details written to %s", infraFilePath)
 	}
 
 	if err != nil {
 		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
 			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
-		return fmt.Errorf("failed to bootstrap GCP: %w, env: %s", err, envString)
-	}
-
-	workdir := env.NewEnv().GetOmsWorkdir()
-	err = fw.MkdirAll(workdir, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create workdir: %w", err)
-	}
-	infraFilePath := gcp.GetInfraFilePath()
-	err = fw.WriteFile(infraFilePath, envBytes, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
+		return fmt.Errorf("failed to bootstrap GCP: %w", err)
 	}
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
-	log.Printf("Infrastructure details written to %s", infraFilePath)
 	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 	if bs.Env.InstallVersion != "" {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
