@@ -88,6 +88,11 @@ type InitInstallConfigOpts struct {
 	CodesphereHostingPlanTempStorageMb     int
 	CodesphereWorkspacePlanName            string
 	CodesphereWorkspacePlanMaxReplicas     int
+
+	CodesphereOpenBaoUri      string
+	CodesphereOpenBaoEngine   string
+	CodesphereOpenBaoUser     string
+	CodesphereOpenBaoPassword string
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
@@ -153,6 +158,11 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.ACMEDNS01Provider, "acme-dns01-provider", "", "DNS provider for DNS-01 solver (e.g., cloudflare)")
 
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
+
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUri, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoEngine, "openbao-engine", "cs-secrets-engine", "Engine for OpenBao")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUser, "openbao-user", "admin", "Username for OpenBao authentication")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoPassword, "openbao-password", "", "Password for OpenBao authentication")
 
 	util.MarkFlagRequired(c.cmd, "config")
 	util.MarkFlagRequired(c.cmd, "vault")
@@ -446,6 +456,16 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 		config.Codesphere.WorkspaceImages.Agent = &files.ImageRef{
 			BomRef: c.Opts.CodesphereWorkspaceImageBomRef,
 		}
+	}
+
+	if c.Opts.CodesphereOpenBaoUri != "" {
+		if config.Codesphere.OpenBao == nil {
+			config.Codesphere.OpenBao = &files.OpenBaoConfig{}
+		}
+		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoUri
+		config.Codesphere.OpenBao.Engine = c.Opts.CodesphereOpenBaoEngine
+		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser
+		config.Codesphere.OpenBao.Password = c.Opts.CodesphereOpenBaoPassword
 	}
 
 	// Plans
