@@ -63,7 +63,7 @@ func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *GlobalOptions) {
 			Long: io.Long(`Run automated smoke tests for a Codesphere installation by creating a workspace,
 				setting environment variables, executing commands, syncing landscape, and running a pipeline stage.
 				The workspace is automatically deleted after the test completes.`),
-			Example: formatExamplesWithBinary("smoketest codesphere", []io.Example{
+			Example: formatExamples("smoketest codesphere", []io.Example{
 				{
 					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID",
 					Desc: "Run smoke tests against a Codesphere installation",
@@ -84,7 +84,7 @@ func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *GlobalOptions) {
 					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID --steps createWorkspace,syncLandscape,deleteWorkspace",
 					Desc: "Run specific steps and delete the workspace afterwards",
 				},
-			}, "oms-cli"),
+			}),
 		},
 		Opts: &teststeps.SmoketestCodesphereOpts{},
 	}
