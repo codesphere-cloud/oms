@@ -18,8 +18,8 @@ disk: "60GiB"
 
 # Mount your OMS project
 mounts:
-- location: "."
-  mountPoint: "/home/user/oms"
+- location: "~"
+  mountPoint: "/home/user/host-home"
   writable: true
 
 # Ports and SSH
@@ -61,27 +61,110 @@ provision:
     set -eux -o pipefail
     
     # Install Docker in rootless mode
-    dockerd-rootless-setuptool.sh install
+    dockerd-rootless-setuptool.sh install || true
     
-    # Set up the OMS project
-    cd /home/user/oms
-    export PATH=$PATH:/usr/local/go/bin
-    go mod download
-    cd cli && go build -a -buildvcs=false && mv cli ../oms-cli
+    # Clone OMS repository locally for better build performance
+    if [ ! -d ~/oms ]; then
+      git clone https://github.com/codesphere-cloud/oms.git ~/oms
+    fi
+    
+    # Create a test install-config for k0s testing
+    VM_IP=$(hostname -I | awk '{print $1}')
+    cat > ~/oms/test-install-config.yaml << EOFCONFIG
+    datacenter:
+      id: 1
+      name: test-dc
+      city: Test City
+      countryCode: US
+    kubernetes:
+      managedByCodesphere: true
+      controlPlanes:
+        - ipAddress: ${VM_IP}
+      apiServerHost: api.test.local
+    codesphere:
+      domain: test.local
+      publicIP: ${VM_IP}
+      deployConfig:
+        images: {}
+      plans:
+        hostingPlans: {}
+        workspacePlans: {}
+    EOFCONFIG
 
 message: |
   Your OMS development environment is ready!
+  VM IP: Run "hostname -I | awk '{print $1}'" to get your VM's IP address
   
-  To access it:
+  Quick Start:
   ------
   limactl shell lima-oms
-  cd /home/user/oms
-  ./oms-cli --help
+  cd oms
+  make build-cli
   ------
-
-  To install Codesphere eg.:
+  
+  Test k0s installation locally:
   ------
-  ./oms-cli install codesphere --package codesphere-v1.66.0-installer --config config.yaml --priv-key ./path-to-private-key
+  limactl shell lima-oms
+  cd oms
+  
+  # Build the CLI
+  make build-cli
+  
+  # Install k0s (uses test-install-config.yaml which is auto-generated)
+  sudo ./oms-cli install k0s --install-config test-install-config.yaml --version v1.30.0+k0s.0 --force
+  
+  # Check k0s installation
+  sudo systemctl status k0scontroller
+  sudo oms-workdir/k0s kubectl get nodes
+  
+  # Stop and cleanup k0s
+  sudo systemctl stop k0scontroller
+  sudo systemctl disable k0scontroller
+  sudo oms-workdir/k0s reset
   ------
-
-  Go 1.24 and Docker are installed and ready to use.
+  
+  Check k0s config that was generated:
+  ------
+  sudo cat /etc/k0s/k0s.yaml
+  ------
+  
+  Test with package instead of download:
+  ------
+  # First, create a package (run on your host machine with access to real install-config)
+  ./oms-cli download package --version v1.x.x
+  
+  # Then in Lima:
+  limactl shell lima-oms
+  cd oms
+  sudo ./oms-cli install k0s --install-config test-install-config.yaml \
+    --package codesphere-vX.X.X-installer.tar.gz --force
+  ------
+  
+  Run tests:
+  ------
+  limactl shell lima-oms
+  cd oms
+  
+  # Run all tests
+  go test ./...
+  
+  # Run specific k0s tests
+  go test ./cli/cmd -ginkgo.v -ginkgo.focus "InstallK0s"
+  go test ./internal/installer -ginkgo.v -ginkgo.focus "k0s"
+  ------
+  
+  Build for different platforms:
+  ------
+  # From your Mac (cross-compile to Linux)
+  make build-cli-linux
+  
+  # Inside Lima (native Linux build)
+  limactl shell lima-oms
+  cd oms
+  make build-cli
+  ------
+  
+  Notes:
+  - test-install-config.yaml is automatically created in ~/oms with your VM's IP
+  - Remote installation requires proper SSH setup
+  ------
