@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -121,28 +122,34 @@ type GCPBootstrapper struct {
 }
 
 type CodesphereEnvironment struct {
-	ProjectID                string       `json:"project_id"`
-	ProjectName              string       `json:"project_name"`
-	DNSProjectID             string       `json:"dns_project_id"`
-	DNSProjectServiceAccount string       `json:"dns_project_service_account"`
-	Jumpbox                  *node.Node   `json:"jumpbox"`
-	PostgreSQLNode           *node.Node   `json:"postgres_node"`
-	ControlPlaneNodes        []*node.Node `json:"control_plane_nodes"`
-	CephNodes                []*node.Node `json:"ceph_nodes"`
-	ContainerRegistryURL     string       `json:"-"`
-	ExistingConfigUsed       bool         `json:"-"`
-	InstallVersion           string       `json:"install_version"`
-	InstallHash              string       `json:"install_hash"`
-	InstallSkipSteps         []string     `json:"install_skip_steps"`
-	Preemptible              bool         `json:"preemptible"`
-	WriteConfig              bool         `json:"-"`
-	GatewayIP                string       `json:"gateway_ip"`
-	PublicGatewayIP          string       `json:"public_gateway_ip"`
-	RegistryType             RegistryType `json:"registry_type"`
-	GitHubPAT                string       `json:"-"`
-	RegistryUser             string       `json:"-"`
-	Experiments              []string     `json:"experiments"`
-	FeatureFlags             []string     `json:"feature_flags"`
+	ProjectID            string       `json:"project_id"`
+	ProjectName          string       `json:"project_name"`
+	DNSProjectID         string       `json:"dns_project_id"`
+	Jumpbox              *node.Node   `json:"jumpbox"`
+	PostgreSQLNode       *node.Node   `json:"postgres_node"`
+	ControlPlaneNodes    []*node.Node `json:"control_plane_nodes"`
+	CephNodes            []*node.Node `json:"ceph_nodes"`
+	ContainerRegistryURL string       `json:"-"`
+	ExistingConfigUsed   bool         `json:"-"`
+	InstallVersion       string       `json:"install_version"`
+	InstallHash          string       `json:"install_hash"`
+	InstallSkipSteps     []string     `json:"install_skip_steps"`
+	Preemptible          bool         `json:"preemptible"`
+	WriteConfig          bool         `json:"-"`
+	GatewayIP            string       `json:"gateway_ip"`
+	PublicGatewayIP      string       `json:"public_gateway_ip"`
+	RegistryType         RegistryType `json:"registry_type"`
+	GitHubPAT            string       `json:"-"`
+	GitHubAppName        string       `json:"-"`
+	RegistryUser         string       `json:"-"`
+	Experiments          []string     `json:"experiments"`
+	FeatureFlags         []string     `json:"feature_flags"`
+
+	// OpenBao
+	OpenBaoURI      string `json:"-"`
+	OpenBaoEngine   string `json:"-"`
+	OpenBaoUser     string `json:"-"`
+	OpenBaoPassword string `json:"-"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -197,9 +204,9 @@ func GetInfraFilePath() string {
 
 func (b *GCPBootstrapper) Bootstrap() error {
 	if b.Env.InstallVersion != "" {
-		err := b.stlog.Step("Validate package to install", b.ValidatePackageName)
+		err := b.stlog.Step("Validate input", b.ValidateInput)
 		if err != nil {
-			return fmt.Errorf("invalid package name: %w", err)
+			return fmt.Errorf("invalid input: %w", err)
 		}
 
 	}
@@ -336,7 +343,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) ValidatePackageName() error {
+func (b *GCPBootstrapper) ValidateInput() error {
 	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
@@ -353,6 +360,11 @@ func (b *GCPBootstrapper) ValidatePackageName() error {
 		if artifact.Filename == requiredFilename {
 			return nil
 		}
+	}
+
+	ghParams := []string{b.Env.GitHubAppName, b.Env.GithubAppClientID, b.Env.GithubAppClientSecret}
+	if slices.Contains(ghParams, "") && strings.Join(ghParams, "") != "" {
+		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GithubAppClientID, GithubAppClientSecret must be set)")
 	}
 
 	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
@@ -510,7 +522,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 }
 
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/compute.admin"})
+	err := b.ensureIAMRoleWithRetry(b.Env.ProjectID, "cloud-controller", b.Env.ProjectID, []string{"roles/compute.admin"})
 	if err != nil {
 		return err
 	}
@@ -524,14 +536,14 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 		return nil
 	}
 
-	err = b.ensureIAMRoleWithRetry("artifact-registry-writer", []string{"roles/artifactregistry.writer"})
+	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, "artifact-registry-writer", b.Env.ProjectID, []string{"roles/artifactregistry.writer"})
 	return err
 }
 
-func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount string, roles []string) error {
+func (b *GCPBootstrapper) ensureIAMRoleWithRetry(projectID string, serviceAccount string, serviceAccountProjectID string, roles []string) error {
 	var err error
 	for retries := range 5 {
-		err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, serviceAccount, roles)
+		err = b.GCPClient.AssignIAMRole(projectID, serviceAccount, serviceAccountProjectID, roles)
 		if err == nil {
 			return nil
 		}
@@ -544,17 +556,11 @@ func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount string, roles []
 }
 
 func (b *GCPBootstrapper) ensureDnsPermissions() error {
-	if b.Env.DNSProjectID != "" {
-		if b.Env.DNSProjectServiceAccount == "" {
-			return errors.New("dns project service account with role roles/dns.admin must be provided when dns project id is set")
-		}
-		err := b.GCPClient.GrantImpersonation("cloud-controller", b.Env.ProjectID, b.Env.DNSProjectServiceAccount, b.Env.DNSProjectID)
-		if err != nil {
-			return fmt.Errorf("failed to grant impersonization on dns project %s to cloud-controller service account: %w", b.Env.DNSProjectID, err)
-		}
-		return nil
+	dnsProject := b.Env.DNSProjectID
+	if b.Env.DNSProjectID == "" {
+		dnsProject = b.Env.ProjectID
 	}
-	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/dns.admin"})
+	err := b.ensureIAMRoleWithRetry(dnsProject, "cloud-controller", b.Env.ProjectID, []string{"roles/dns.admin"})
 	if err != nil {
 		return err
 	}
@@ -1261,8 +1267,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
-	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{
-		GitHub: &files.GitProviderConfig{
+
+	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
+	if b.Env.GitHubAppName != "" && b.Env.GithubAppClientID != "" && b.Env.GithubAppClientSecret != "" {
+		b.Env.InstallConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://github.com",
 			API: files.APIConfig{
@@ -1272,11 +1280,14 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				Issuer:                "https://github.com",
 				AuthorizationEndpoint: "https://github.com/login/oauth/authorize",
 				TokenEndpoint:         "https://github.com/login/oauth/access_token",
+				ClientAuthMethod:      "client_secret_post",
+				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/github/callback",
+				InstallationURI:       "https://github.com/apps/" + b.Env.GitHubAppName + "/installations/new",
 
 				ClientID:     b.Env.GithubAppClientID,
 				ClientSecret: b.Env.GithubAppClientSecret,
 			},
-		},
+		}
 	}
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
@@ -1306,6 +1317,30 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			if err != nil {
 				return fmt.Errorf("failed to generate replica server certificate: %w", err)
 			}
+		}
+	}
+
+	b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
+		{
+			Name:    "postgres",
+			Version: "v1",
+		},
+		{
+			Name:    "babelfish",
+			Version: "v1",
+		},
+		{
+			Name:    "s3",
+			Version: "v1",
+		},
+	}
+
+	if b.Env.OpenBaoURI != "" {
+		b.Env.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
+			Engine:   b.Env.OpenBaoEngine,
+			URI:      b.Env.OpenBaoURI,
+			User:     b.Env.OpenBaoUser,
+			Password: b.Env.OpenBaoPassword,
 		}
 	}
 

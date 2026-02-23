@@ -263,9 +263,18 @@ type CodesphereConfig struct {
 	UnderprovisionFactors      *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
+	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
 
 	DomainAuthPrivateKey string `yaml:"-"`
 	DomainAuthPublicKey  string `yaml:"-"`
+}
+
+type OpenBaoConfig struct {
+	Engine string `yaml:"engine,omitempty"`
+	URI    string `yaml:"uri,omitempty"`
+	User   string `yaml:"user,omitempty"`
+
+	Password string `yaml:"-"`
 }
 
 type CertIssuerType string
@@ -408,6 +417,8 @@ type OAuthConfig struct {
 	TokenEndpoint         string `yaml:"tokenEndpoint"`
 	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
 	Scope                 string `yaml:"scope,omitempty"`
+	RedirectURI           string `yaml:"redirectUri,omitempty"`
+	InstallationURI       string `yaml:"installationUri,omitempty"`
 
 	ClientID     string `yaml:"-"`
 	ClientSecret string `yaml:"-"`
@@ -415,16 +426,16 @@ type OAuthConfig struct {
 
 type ManagedServiceConfig struct {
 	Name          string                 `yaml:"name"`
-	API           ManagedServiceAPI      `yaml:"api"`
-	Author        string                 `yaml:"author"`
-	Category      string                 `yaml:"category"`
-	ConfigSchema  map[string]interface{} `yaml:"configSchema"`
-	DetailsSchema map[string]interface{} `yaml:"detailsSchema"`
-	SecretsSchema map[string]interface{} `yaml:"secretsSchema"`
-	Description   string                 `yaml:"description"`
-	DisplayName   string                 `yaml:"displayName"`
-	IconURL       string                 `yaml:"iconUrl"`
-	Plans         []ServicePlan          `yaml:"plans"`
+	API           ManagedServiceAPI      `yaml:"api,omitempty"`
+	Author        string                 `yaml:"author,omitempty"`
+	Category      string                 `yaml:"category,omitempty"`
+	ConfigSchema  map[string]interface{} `yaml:"configSchema,omitempty"`
+	DetailsSchema map[string]interface{} `yaml:"detailsSchema,omitempty"`
+	SecretsSchema map[string]interface{} `yaml:"secretsSchema,omitempty"`
+	Description   string                 `yaml:"description,omitempty"`
+	DisplayName   string                 `yaml:"displayName,omitempty"`
+	IconURL       string                 `yaml:"iconUrl,omitempty"`
+	Plans         []ServicePlan          `yaml:"plans,omitempty"`
 	Version       string                 `yaml:"version"`
 }
 
@@ -528,6 +539,7 @@ func (c *RootConfig) ExtractVault() *InstallVault {
 	c.addManagedServiceSecrets(vault)
 	c.addRegistrySecrets(vault)
 	c.addKubeConfigSecret(vault)
+	c.addOpenBaoSecrets(vault)
 
 	return vault
 }
@@ -737,6 +749,17 @@ func (c *RootConfig) addKubeConfigSecret(vault *InstallVault) {
 			File: &SecretFile{
 				Name:    "kubeConfig",
 				Content: "# YOUR KUBECONFIG CONTENT HERE\n# Replace this with your actual kubeconfig for the external cluster\n",
+			},
+		})
+	}
+}
+
+func (c *RootConfig) addOpenBaoSecrets(vault *InstallVault) {
+	if c.Codesphere.OpenBao != nil && c.Codesphere.OpenBao.Password != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "openBaoPassword",
+			Fields: &SecretFields{
+				Password: c.Codesphere.OpenBao.Password,
 			},
 		})
 	}

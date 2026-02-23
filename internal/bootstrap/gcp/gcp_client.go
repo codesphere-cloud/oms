@@ -45,7 +45,7 @@ type GCPClientManager interface {
 	CreateArtifactRegistry(projectID, region, repoName string) (*artifactpb.Repository, error)
 	CreateServiceAccount(projectID, name, displayName string) (string, bool, error)
 	CreateServiceAccountKey(projectID, saEmail string) (string, error)
-	AssignIAMRole(saProjectID, saEmail string, roles []string) error
+	AssignIAMRole(projectID, saEmail string, saProjectID string, roles []string) error
 	GrantImpersonation(impersonatingServiceAccount, impersonatingProjectID, imperonatedServiceAccount, impersonatedProjectID string) error
 	RevokeImpersonation(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
@@ -368,14 +368,13 @@ func (c *GCPClient) CreateServiceAccountKey(projectID, saEmail string) (string, 
 }
 
 // AssignIAMRole assigns the specified IAM role to a service account in a project.
-func (c *GCPClient) AssignIAMRole(projectID, saName string, roles []string) error {
-	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, projectID)
+func (c *GCPClient) AssignIAMRole(projectID, saName string, saProjectID string, roles []string) error {
+	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, saProjectID)
 	member := fmt.Sprintf("serviceAccount:%s", saEmail)
 	resource := fmt.Sprintf("projects/%s", projectID)
 	return c.addRoleBindingToProject(member, roles, resource)
 }
 
-// Types between ServiceAccount and Project IAM API differ, so we need a separate function
 func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resource string) error {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {

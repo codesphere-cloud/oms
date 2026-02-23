@@ -41,16 +41,16 @@ func (_m *MockGCPClientManager) EXPECT() *MockGCPClientManager_Expecter {
 }
 
 // AssignIAMRole provides a mock function for the type MockGCPClientManager
-func (_mock *MockGCPClientManager) AssignIAMRole(saProjectID string, saEmail string, roles []string) error {
-	ret := _mock.Called(saProjectID, saEmail, roles)
+func (_mock *MockGCPClientManager) AssignIAMRole(projectID string, saEmail string, saProjectID string, roles []string) error {
+	ret := _mock.Called(projectID, saEmail, saProjectID, roles)
 
 	if len(ret) == 0 {
 		panic("no return value specified for AssignIAMRole")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, []string) error); ok {
-		r0 = returnFunc(saProjectID, saEmail, roles)
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, []string) error); ok {
+		r0 = returnFunc(projectID, saEmail, saProjectID, roles)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -63,16 +63,38 @@ type MockGCPClientManager_AssignIAMRole_Call struct {
 }
 
 // AssignIAMRole is a helper method to define mock.On call
-//   - saProjectID
-//   - saEmail
-//   - roles
-func (_e *MockGCPClientManager_Expecter) AssignIAMRole(saProjectID interface{}, saEmail interface{}, roles interface{}) *MockGCPClientManager_AssignIAMRole_Call {
-	return &MockGCPClientManager_AssignIAMRole_Call{Call: _e.mock.On("AssignIAMRole", saProjectID, saEmail, roles)}
+//   - projectID string
+//   - saEmail string
+//   - saProjectID string
+//   - roles []string
+func (_e *MockGCPClientManager_Expecter) AssignIAMRole(projectID interface{}, saEmail interface{}, saProjectID interface{}, roles interface{}) *MockGCPClientManager_AssignIAMRole_Call {
+	return &MockGCPClientManager_AssignIAMRole_Call{Call: _e.mock.On("AssignIAMRole", projectID, saEmail, saProjectID, roles)}
 }
 
-func (_c *MockGCPClientManager_AssignIAMRole_Call) Run(run func(saProjectID string, saEmail string, roles []string)) *MockGCPClientManager_AssignIAMRole_Call {
+func (_c *MockGCPClientManager_AssignIAMRole_Call) Run(run func(projectID string, saEmail string, saProjectID string, roles []string)) *MockGCPClientManager_AssignIAMRole_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].([]string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 []string
+		if args[3] != nil {
+			arg3 = args[3].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
 	})
 	return _c
 }
@@ -82,7 +104,7 @@ func (_c *MockGCPClientManager_AssignIAMRole_Call) Return(err error) *MockGCPCli
 	return _c
 }
 
-func (_c *MockGCPClientManager_AssignIAMRole_Call) RunAndReturn(run func(saProjectID string, saEmail string, roles []string) error) *MockGCPClientManager_AssignIAMRole_Call {
+func (_c *MockGCPClientManager_AssignIAMRole_Call) RunAndReturn(run func(projectID string, saEmail string, saProjectID string, roles []string) error) *MockGCPClientManager_AssignIAMRole_Call {
 	_c.Call.Return(run)
 	return _c
 }
