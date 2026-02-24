@@ -5,5 +5,13 @@
     ":enableVulnerabilityAlerts",
     ":semanticCommitTypeAll(update)"
   ],
+
+  "packageRules": [
+    {
+      "matchDatasources": ["golang-version"],
+      "rangeStrategy": "bump"
+    }
+  ],
+  
   "postUpdateOptions": ["gomodTidy"]
 }
