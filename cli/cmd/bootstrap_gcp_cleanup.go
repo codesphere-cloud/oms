@@ -30,6 +30,7 @@ type BootstrapGcpCleanupOpts struct {
 	SkipDNSCleanup bool
 	BaseDomain     string
 	DNSZoneName    string
+	DNSProjectID   string
 }
 
 type CleanupDeps struct {
@@ -141,7 +142,10 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 
 	// Clean up DNS records
 	if !c.Opts.SkipDNSCleanup && baseDomain != "" && dnsZoneName != "" {
-		dnsProjectID := infraEnv.DNSProjectID
+		dnsProjectID := c.Opts.DNSProjectID
+		if dnsProjectID == "" {
+			dnsProjectID = infraEnv.DNSProjectID
+		}
 		if dnsProjectID == "" {
 			dnsProjectID = projectID
 		}
@@ -197,7 +201,7 @@ func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions)
   oms-cli beta bootstrap-gcp cleanup --skip-dns-cleanup
 
   # Clean up with manual DNS settings (when infra file is not available)
-  oms-cli beta bootstrap-gcp cleanup --project-id my-project --base-domain example.com --dns-zone-name my-zone`,
+  oms-cli beta bootstrap-gcp cleanup --project-id my-project --base-domain example.com --dns-zone-name my-zone --dns-project-id dns-project`,
 		},
 		Opts: &BootstrapGcpCleanupOpts{
 			GlobalOptions: opts,
@@ -210,6 +214,7 @@ func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions)
 	flags.BoolVar(&cleanup.Opts.SkipDNSCleanup, "skip-dns-cleanup", false, "Skip cleaning up DNS records")
 	flags.StringVar(&cleanup.Opts.BaseDomain, "base-domain", "", "Base domain for DNS cleanup (optional, will use infra file if not provided)")
 	flags.StringVar(&cleanup.Opts.DNSZoneName, "dns-zone-name", "", "DNS zone name for DNS cleanup (optional, will use infra file if not provided)")
+	flags.StringVar(&cleanup.Opts.DNSProjectID, "dns-project-id", "", "GCP Project ID for DNS zone (optional, will use infra file if not provided)")
 
 	cleanup.cmd.RunE = cleanup.RunE
 	bootstrapGcp.AddCommand(cleanup.cmd)
