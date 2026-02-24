@@ -6,7 +6,6 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
@@ -100,7 +99,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 		return fmt.Errorf("failed to find artifact in package: %w", err)
 	}
 
-	fullFilename := strings.ReplaceAll(build.Version, "/", "-") + "-" + filename
+	fullFilename := build.BuildPackageFilename(filename)
 	out, err := c.FileWriter.OpenAppend(fullFilename)
 	if err != nil {
 		out, err = c.FileWriter.Create(fullFilename)
