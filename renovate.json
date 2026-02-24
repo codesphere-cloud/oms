@@ -1,9 +1,4 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:best-practices",
-    ":enableVulnerabilityAlerts",
-    ":semanticCommitTypeAll(update)"
-  ],
-  "postUpdateOptions": ["gomodTidy"]
+  "extends": ["github>codesphere-cloud/renovate-config:go-config"]
 }
