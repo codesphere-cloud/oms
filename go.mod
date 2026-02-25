@@ -1,6 +1,6 @@
 module github.com/codesphere-cloud/oms
 
-go 1.25.5
+go 1.26.0
 
 require (
 	cloud.google.com/go/artifactregistry v1.20.0
