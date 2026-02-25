@@ -48,7 +48,7 @@ docs:
 	cp docs/oms-cli.md docs/README.md
 
 generate-license: generate
-	go tool go-licenses report --template .NOTICE.template  ./... > NOTICE
+	go tool go-licenses report --template .NOTICE.template ./... > NOTICE
 	copywrite headers apply
 
 run-lima:
