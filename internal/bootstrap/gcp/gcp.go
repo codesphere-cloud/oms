@@ -89,6 +89,7 @@ type CodesphereEnvironment struct {
 	ContainerRegistryURL string       `json:"-"`
 	ExistingConfigUsed   bool         `json:"-"`
 	InstallVersion       string       `json:"install_version"`
+	InstallLocal         string       `json:"install_local"`
 	InstallHash          string       `json:"install_hash"`
 	InstallSkipSteps     []string     `json:"install_skip_steps"`
 	Preemptible          bool         `json:"preemptible"`
@@ -160,14 +161,12 @@ func GetInfraFilePath() string {
 }
 
 func (b *GCPBootstrapper) Bootstrap() error {
-	if b.Env.InstallVersion != "" {
-		err := b.stlog.Step("Validate input", b.ValidateInput)
-		if err != nil {
-			return fmt.Errorf("invalid input: %w", err)
-		}
-
+	err := b.stlog.Step("Validate input", b.ValidateInput)
+	if err != nil {
+		return fmt.Errorf("invalid input: %w", err)
 	}
-	err := b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
+
+	err = b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
 	if err != nil {
 		return fmt.Errorf("failed to ensure install config: %w", err)
 	}
@@ -285,7 +284,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to generate k0s config script: %w", err)
 	}
 
-	if b.Env.InstallVersion != "" {
+	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
 		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
 		if err != nil {
 			return fmt.Errorf("failed to install Codesphere: %w", err)
@@ -300,7 +299,30 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	return nil
 }
 
+// ValidateInput checks that the required input parameters are set and valid
 func (b *GCPBootstrapper) ValidateInput() error {
+	err := b.validateInstallVersion()
+	if err != nil {
+		return err
+	}
+
+	return b.validateGithubParams()
+}
+
+// validateInstallVersion checks if the specified install version exists and contains the required installer artifact
+func (b *GCPBootstrapper) validateInstallVersion() error {
+	if b.Env.InstallLocal != "" {
+		if b.Env.InstallVersion != "" || b.Env.InstallHash != "" {
+			return fmt.Errorf("cannot specify both install-local and install-version/install-hash")
+		}
+		if !b.fw.Exists(b.Env.InstallLocal) {
+			return fmt.Errorf("local installer package not found at path: %s", b.Env.InstallLocal)
+		}
+		return nil
+	}
+	if b.Env.InstallVersion == "" {
+		return nil
+	}
 	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
@@ -323,12 +345,17 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		}
 	}
 
+	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
+}
+
+// validateGithubParams checks if the GitHub credentials are fully specified if GitHub registry is selected
+func (b *GCPBootstrapper) validateGithubParams() error {
 	ghParams := []string{b.Env.GitHubAppName, b.Env.GithubAppClientID, b.Env.GithubAppClientSecret}
 	if slices.Contains(ghParams, "") && strings.Join(ghParams, "") != "" {
 		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GithubAppClientID, GithubAppClientSecret must be set)")
 	}
 
-	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
+	return nil
 }
 
 func (b *GCPBootstrapper) EnsureInstallConfig() error {
@@ -1401,36 +1428,70 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 }
 
 func (b *GCPBootstrapper) InstallCodesphere() error {
-	packageFile := "installer.tar.gz"
-	skipSteps := b.Env.InstallSkipSteps
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		skipSteps = append(skipSteps, "load-container-images")
-		packageFile = "installer-lite.tar.gz"
-	}
-	skipStepsArg := ""
-	if len(skipSteps) > 0 {
-		skipStepsArg = " -s " + strings.Join(skipSteps, ",")
-	}
-
-	downloadCmd := "oms-cli download package -f " + packageFile
-	if b.Env.InstallHash != "" {
-		downloadCmd += " -H " + b.Env.InstallHash
-	}
-	downloadCmd += " " + b.Env.InstallVersion
-	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
+	fullPackageFilename, err := b.ensureCodespherePackageOnJumpbox()
 	if err != nil {
-		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
+		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
-	fullPackageFilename := portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFile)
-	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
-		b.Env.SecretsDir, fullPackageFilename, skipStepsArg)
-	err = b.Env.Jumpbox.RunSSHCommand("root", installCmd)
+	err = b.runInstallCommand(fullPackageFilename)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
 
 	return nil
+}
+
+func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
+	packageFilename := "installer.tar.gz"
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		packageFilename = "installer-lite.tar.gz"
+	}
+
+	if b.Env.InstallLocal != "" {
+		b.stlog.Logf("Copying local package %s to jumpbox...", b.Env.InstallLocal)
+		fullPackageFilename := fmt.Sprintf("local-%s", packageFilename)
+		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallLocal, "/root/"+fullPackageFilename)
+		if err != nil {
+			return "", fmt.Errorf("failed to copy local install package to jumpbox: %w", err)
+		}
+		return fullPackageFilename, nil
+	}
+
+	if b.Env.InstallVersion == "" {
+		return "", errors.New("either install version or a local package must be specified to install Codesphere")
+	}
+
+	fullPackageFilename := portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFilename)
+	if b.Env.InstallHash == "" {
+		return "", fmt.Errorf("install hash must be set when install version is set")
+	}
+	b.stlog.Logf("Downloading Codesphere package...")
+	downloadCmd := fmt.Sprintf("oms-cli download package -f %s -H %s %s", packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
+	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
+	}
+
+	return fullPackageFilename, nil
+}
+
+func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
+	b.stlog.Logf("Installing Codesphere...")
+	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
+		b.Env.SecretsDir, packageFilename, b.generateSkipStepsArg())
+	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
+}
+
+func (b *GCPBootstrapper) generateSkipStepsArg() string {
+	skipSteps := b.Env.InstallSkipSteps
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		skipSteps = append(skipSteps, "load-container-images")
+	}
+	if len(skipSteps) == 0 {
+		return ""
+	}
+
+	return " -s " + strings.Join(skipSteps, ",")
 }
 
 func (b *GCPBootstrapper) GenerateK0sConfigScript() error {
