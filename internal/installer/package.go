@@ -86,6 +86,7 @@ func (p *Package) Extract(force bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to figure out if package %s is already extracted in %s: %w", p.Filename, workDir, err)
 	}
+
 	if alreadyExtracted && !force {
 		log.Println("Skipping extraction, package already unpacked. Use force option to overwrite.")
 		return nil
@@ -205,7 +206,7 @@ func (p *Package) GetCodesphereVersion() (string, error) {
 
 	containerImage := ""
 	for _, image := range containerImages {
-		if strings.Contains(image, "codesphere-v") {
+		if strings.Contains(image, ":codesphere") {
 			containerImage = image
 			break
 		}

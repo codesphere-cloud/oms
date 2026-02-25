@@ -240,6 +240,8 @@ func (c *PortalClient) VerifyBuildArtifactDownload(file io.Reader, download Buil
 		return nil
 	}
 
+	log.Println("Calculating MD5 checksum to verify download integrity...")
+
 	hash := md5.New()
 
 	_, err := io.Copy(hash, file)

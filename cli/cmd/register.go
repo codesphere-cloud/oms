@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -39,7 +40,7 @@ func (c *RegisterCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	if newKey != nil {
-		fmt.Printf("API key registered successfully!\nOwner: %s\nOrganisation: %s\nKey: %s\n", newKey.Owner, newKey.Organization, newKey.ApiKey)
+		log.Printf("API key registered successfully!\nOwner: %s\nOrganisation: %s\nKey: %s\n", newKey.Owner, newKey.Organization, newKey.ApiKey)
 	}
 
 	return nil

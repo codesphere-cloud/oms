@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -41,9 +42,10 @@ type InstallConfig struct {
 }
 
 func NewInstallConfigManager() InstallConfigManager {
+	config := files.NewRootConfig()
 	return &InstallConfig{
 		fileIO: &util.FilesystemWriter{},
-		Config: &files.RootConfig{},
+		Config: &config,
 		Vault:  &files.InstallVault{},
 	}
 }
@@ -60,12 +62,12 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 		return fmt.Errorf("failed to read %s: %w", configPath, err)
 	}
 
-	config := &files.RootConfig{}
+	config := files.NewRootConfig()
 	if err := config.Unmarshal(data); err != nil {
 		return fmt.Errorf("failed to unmarshal %s: %w", configPath, err)
 	}
 
-	g.Config = config
+	g.Config = &config
 	return nil
 }
 
@@ -154,6 +156,21 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		errors = append(errors, "Codesphere domain is required")
 	}
 
+	if g.Config.Codesphere.OpenBao != nil {
+		if g.Config.Codesphere.OpenBao.URI == "" {
+			errors = append(errors, "OpenBao URI is required when OpenBao integration is enabled")
+		}
+		if _, err := url.ParseRequestURI(g.Config.Codesphere.OpenBao.URI); err != nil {
+			errors = append(errors, "OpenBao URI must be a valid URL")
+		}
+		if g.Config.Codesphere.OpenBao.Engine == "" {
+			errors = append(errors, "OpenBao engine name is required when OpenBao integration is enabled")
+		}
+		if g.Config.Codesphere.OpenBao.User == "" {
+			errors = append(errors, "OpenBao username is required when OpenBao integration is enabled")
+		}
+	}
+
 	return errors
 }
 
@@ -173,6 +190,12 @@ func (g *InstallConfig) ValidateVault() []string {
 	for _, required := range requiredSecrets {
 		if !foundSecrets[required] {
 			errors = append(errors, fmt.Sprintf("required secret missing: %s", required))
+		}
+	}
+
+	if g.Config.Codesphere.OpenBao != nil {
+		if !foundSecrets["openBaoPassword"] {
+			errors = append(errors, "required OpenBao secret missing: openBaoPassword")
 		}
 	}
 
@@ -345,6 +368,23 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 	}
 	if secret, ok := secretsMap["githubAppsClientSecret"]; ok && secret.Fields != nil {
 		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientSecret = secret.Fields.Password
+	}
+
+	// ACME secrets
+	if g.Config.Cluster.Certificates.ACME != nil {
+		if secret, ok := secretsMap["acmeEabKeyId"]; ok && secret.Fields != nil {
+			g.Config.Cluster.Certificates.ACME.EABKeyID = secret.Fields.Password
+		}
+		if secret, ok := secretsMap["acmeEabMacKey"]; ok && secret.Fields != nil {
+			g.Config.Cluster.Certificates.ACME.EABMacKey = secret.Fields.Password
+		}
+	}
+
+	// OpenBao secrets
+	if g.Config.Codesphere.OpenBao != nil {
+		if secret, ok := secretsMap["openBaoPassword"]; ok && secret.Fields != nil {
+			g.Config.Codesphere.OpenBao.Password = secret.Fields.Password
+		}
 	}
 
 	return nil

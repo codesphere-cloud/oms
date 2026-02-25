@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yaml/go-yaml"
+	"go.yaml.in/yaml/v3"
 )
 
 // Vault
@@ -42,7 +42,7 @@ type SecretFields struct {
 type RootConfig struct {
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
-	Registry               RegistryConfig                `yaml:"registry,omitempty"`
+	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
 	Ceph                   CephConfig                    `yaml:"ceph"`
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
@@ -173,13 +173,38 @@ type ClusterConfig struct {
 }
 
 type ClusterCertificates struct {
-	CA CAConfig `yaml:"ca"`
+	CA       CAConfig               `yaml:"ca"`
+	ACME     *ACMEConfig            `yaml:"acme,omitempty"`
+	Override map[string]interface{} `yaml:"override,omitempty"`
 }
 
 type CAConfig struct {
 	Algorithm   string `yaml:"algorithm"`
 	KeySizeBits int    `yaml:"keySizeBits"`
 	CertPem     string `yaml:"certPem"`
+}
+
+type ACMEConfig struct {
+	Enabled              bool       `yaml:"enabled"`
+	Name                 string     `yaml:"name,omitempty"`
+	Email                string     `yaml:"email,omitempty"`
+	Server               string     `yaml:"server,omitempty"`
+	PrivateKeySecretName string     `yaml:"-"`
+	Solver               ACMESolver `yaml:"solver"`
+
+	EABKeyID  string `yaml:"-"`
+	EABMacKey string `yaml:"-"`
+}
+
+type ACMESolver struct {
+	DNS01 *ACMEDNS01Solver `yaml:"dns01,omitempty"`
+}
+
+type ACMEDNS01Solver struct {
+	Provider string                 `yaml:"provider"`
+	Config   map[string]interface{} `yaml:"config,omitempty"`
+
+	Secrets map[string]string `yaml:"-"`
 }
 
 type GatewayConfig struct {
@@ -224,9 +249,11 @@ type CodesphereConfig struct {
 	Domain                     string                 `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                 `yaml:"workspaceHostingBaseDomain"`
 	PublicIP                   string                 `yaml:"publicIp"`
+	CertIssuer                 CertIssuerConfig       `yaml:"certIssuer"`
 	CustomDomains              CustomDomainsConfig    `yaml:"customDomains"`
 	DNSServers                 []string               `yaml:"dnsServers"`
 	Experiments                []string               `yaml:"experiments"`
+	Features                   []string               `yaml:"features"`
 	ExtraCAPem                 string                 `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars      map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
 	ExtraWorkspaceFiles        []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
@@ -236,9 +263,30 @@ type CodesphereConfig struct {
 	UnderprovisionFactors      *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
+	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
 
 	DomainAuthPrivateKey string `yaml:"-"`
 	DomainAuthPublicKey  string `yaml:"-"`
+}
+
+type OpenBaoConfig struct {
+	Engine string `yaml:"engine,omitempty"`
+	URI    string `yaml:"uri,omitempty"`
+	User   string `yaml:"user,omitempty"`
+
+	Password string `yaml:"-"`
+}
+
+type CertIssuerType string
+
+const (
+	CertIssuerTypeSelfSigned CertIssuerType = "self-signed"
+	CertIssuerTypeACME       CertIssuerType = "acme"
+)
+
+type CertIssuerConfig struct {
+	Type CertIssuerType `yaml:"type"`
+	Acme *ACMEConfig    `yaml:"acme,omitempty"`
 }
 
 type CustomDomainsConfig struct {
@@ -268,13 +316,56 @@ type ImageConfig struct {
 }
 
 type FlavorConfig struct {
+	// Image can be a referenced image or a plain string
 	Image ImageRef    `yaml:"image"`
 	Pool  map[int]int `yaml:"pool"`
 }
 
 type ImageRef struct {
-	BomRef     string `yaml:"bomRef"`
-	Dockerfile string `yaml:"dockerfile"`
+	BomRef     string `yaml:"bomRef,omitempty"`
+	Dockerfile string `yaml:"dockerfile,omitempty"`
+	// ImageName Contains the image name when it's just a plain string
+	ImageName string `yaml:"-"`
+}
+
+// Type alias to avoid recursion in yaml handling
+type imageRefAlias ImageRef
+
+// UnmarshalYAML implements custom unmarshaling to support both string and object formats
+func (i *ImageRef) UnmarshalYAML(node *yaml.Node) error {
+	// Try to unmarshal as a plain string first
+	var imageStr string
+	if err := node.Decode(&imageStr); err == nil {
+		i.ImageName = imageStr
+		return nil
+	}
+
+	// If that fails, unmarshal as a struct with BomRef/Dockerfile
+	var ref imageRefAlias
+	if err := node.Decode(&ref); err != nil {
+		return err
+	}
+	i.BomRef = ref.BomRef
+	i.Dockerfile = ref.Dockerfile
+	return nil
+}
+
+// MarshalYAML implements custom marshaling
+func (i ImageRef) MarshalYAML() (interface{}, error) {
+	// If it's a plain string, marshal as string
+	if i.ImageName != "" {
+		return i.ImageName, nil
+	}
+	// Otherwise, marshal as object
+	return imageRefAlias(i), nil
+}
+
+// GetImageReference returns the actual image reference
+func (i *ImageRef) GetImageReference() string {
+	if i.ImageName != "" {
+		return i.ImageName
+	}
+	return i.BomRef
 }
 
 type PlansConfig struct {
@@ -326,6 +417,8 @@ type OAuthConfig struct {
 	TokenEndpoint         string `yaml:"tokenEndpoint"`
 	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
 	Scope                 string `yaml:"scope,omitempty"`
+	RedirectURI           string `yaml:"redirectUri,omitempty"`
+	InstallationURI       string `yaml:"installationUri,omitempty"`
 
 	ClientID     string `yaml:"-"`
 	ClientSecret string `yaml:"-"`
@@ -333,16 +426,16 @@ type OAuthConfig struct {
 
 type ManagedServiceConfig struct {
 	Name          string                 `yaml:"name"`
-	API           ManagedServiceAPI      `yaml:"api"`
-	Author        string                 `yaml:"author"`
-	Category      string                 `yaml:"category"`
-	ConfigSchema  map[string]interface{} `yaml:"configSchema"`
-	DetailsSchema map[string]interface{} `yaml:"detailsSchema"`
-	SecretsSchema map[string]interface{} `yaml:"secretsSchema"`
-	Description   string                 `yaml:"description"`
-	DisplayName   string                 `yaml:"displayName"`
-	IconURL       string                 `yaml:"iconUrl"`
-	Plans         []ServicePlan          `yaml:"plans"`
+	API           ManagedServiceAPI      `yaml:"api,omitempty"`
+	Author        string                 `yaml:"author,omitempty"`
+	Category      string                 `yaml:"category,omitempty"`
+	ConfigSchema  map[string]interface{} `yaml:"configSchema,omitempty"`
+	DetailsSchema map[string]interface{} `yaml:"detailsSchema,omitempty"`
+	SecretsSchema map[string]interface{} `yaml:"secretsSchema,omitempty"`
+	Description   string                 `yaml:"description,omitempty"`
+	DisplayName   string                 `yaml:"displayName,omitempty"`
+	IconURL       string                 `yaml:"iconUrl,omitempty"`
+	Plans         []ServicePlan          `yaml:"plans,omitempty"`
 	Version       string                 `yaml:"version"`
 }
 
@@ -400,6 +493,14 @@ func (c *RootConfig) Unmarshal(data []byte) error {
 	return yaml.Unmarshal(data, c)
 }
 
+func NewRootConfig() RootConfig {
+	return RootConfig{
+		Registry:               &RegistryConfig{},
+		MetalLB:                &MetalLBConfig{},
+		ManagedServiceBackends: &ManagedServiceBackendsConfig{},
+	}
+}
+
 func (c *RootConfig) ExtractBomRefs() []string {
 	var bomRefs []string
 	for _, imageConfig := range c.Codesphere.DeployConfig.Images {
@@ -432,11 +533,13 @@ func (c *RootConfig) ExtractVault() *InstallVault {
 
 	c.addCodesphereSecrets(vault)
 	c.addIngressCASecret(vault)
+	c.addACMESecrets(vault)
 	c.addCephSecrets(vault)
 	c.addPostgresSecrets(vault)
 	c.addManagedServiceSecrets(vault)
 	c.addRegistrySecrets(vault)
 	c.addKubeConfigSecret(vault)
+	c.addOpenBaoSecrets(vault)
 
 	return vault
 }
@@ -491,6 +594,41 @@ func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
 				Content: c.Cluster.IngressCAKey,
 			},
 		})
+	}
+}
+
+func (c *RootConfig) addACMESecrets(vault *InstallVault) {
+	if c.Cluster.Certificates.ACME == nil || !c.Cluster.Certificates.ACME.Enabled {
+		return
+	}
+
+	if c.Cluster.Certificates.ACME.EABKeyID != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "acmeEabKeyId",
+			Fields: &SecretFields{
+				Password: c.Cluster.Certificates.ACME.EABKeyID,
+			},
+		})
+	}
+
+	if c.Cluster.Certificates.ACME.EABMacKey != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "acmeEabMacKey",
+			Fields: &SecretFields{
+				Password: c.Cluster.Certificates.ACME.EABMacKey,
+			},
+		})
+	}
+
+	if c.Cluster.Certificates.ACME.Solver.DNS01 != nil {
+		for key, value := range c.Cluster.Certificates.ACME.Solver.DNS01.Secrets {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: fmt.Sprintf("acmeDNS01%s", Capitalize(key)),
+				Fields: &SecretFields{
+					Password: value,
+				},
+			})
+		}
 	}
 }
 
@@ -611,6 +749,17 @@ func (c *RootConfig) addKubeConfigSecret(vault *InstallVault) {
 			File: &SecretFile{
 				Name:    "kubeConfig",
 				Content: "# YOUR KUBECONFIG CONTENT HERE\n# Replace this with your actual kubeconfig for the external cluster\n",
+			},
+		})
+	}
+}
+
+func (c *RootConfig) addOpenBaoSecrets(vault *InstallVault) {
+	if c.Codesphere.OpenBao != nil && c.Codesphere.OpenBao.Password != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "openBaoPassword",
+			Fields: &SecretFields{
+				Password: c.Codesphere.OpenBao.Password,
 			},
 		})
 	}

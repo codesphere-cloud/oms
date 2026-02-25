@@ -5,6 +5,7 @@ package util
 
 import (
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -43,7 +44,7 @@ func (fs *FilesystemWriter) CreateAndWrite(filePath string, data []byte, fileTyp
 		return fmt.Errorf("failed to write %s file: %w", fileType, err)
 	}
 
-	fmt.Printf("\n%s file created: %s\n", fileType, filePath)
+	log.Printf("\n%s file created: %s", fileType, filePath)
 	return nil
 }
 

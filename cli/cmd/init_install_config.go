@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -67,6 +68,14 @@ type InitInstallConfigOpts struct {
 	MetalLBEnabled bool
 	MetalLBPools   []files.MetalLBPool
 
+	ACMEEnabled       bool
+	ACMEIssuerName    string
+	ACMEEmail         string
+	ACMEServer        string
+	ACMEEABKeyID      string
+	ACMEEABMacKey     string
+	ACMEDNS01Provider string
+
 	CodesphereDomain                       string
 	CodespherePublicIP                     string
 	CodesphereWorkspaceHostingBaseDomain   string
@@ -79,6 +88,11 @@ type InitInstallConfigOpts struct {
 	CodesphereHostingPlanTempStorageMb     int
 	CodesphereWorkspacePlanName            string
 	CodesphereWorkspacePlanMaxReplicas     int
+
+	CodesphereOpenBaoUri      string
+	CodesphereOpenBaoEngine   string
+	CodesphereOpenBaoUser     string
+	CodesphereOpenBaoPassword string
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
@@ -135,7 +149,20 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().BoolVar(&c.Opts.KubernetesManagedByCodesphere, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
 	c.cmd.Flags().StringSliceVar(&c.Opts.KubernetesControlPlanes, "k8s-control-plane", []string{}, "K8s control plane IPs (comma-separated)")
 
+	c.cmd.Flags().BoolVar(&c.Opts.ACMEEnabled, "acme-enabled", false, "Enable ACME certificate issuer")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEIssuerName, "acme-issuer-name", "acme-issuer", "Name for the ACME ClusterIssuer")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEEmail, "acme-email", "", "Email address for ACME account registration")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEServer, "acme-server", "https://acme-v02.api.letsencrypt.org/directory", "ACME server URL")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEEABKeyID, "acme-eab-key-id", "", "External Account Binding key ID (required by some ACME providers)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEEABMacKey, "acme-eab-mac-key", "", "External Account Binding MAC key (required by some ACME providers)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMEDNS01Provider, "acme-dns01-provider", "", "DNS provider for DNS-01 solver (e.g., cloudflare)")
+
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
+
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUri, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoEngine, "openbao-engine", "cs-secrets-engine", "Engine for OpenBao")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUser, "openbao-user", "admin", "Username for OpenBao authentication")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoPassword, "openbao-password", "", "Password for OpenBao authentication")
 
 	util.MarkFlagRequired(c.cmd, "config")
 	util.MarkFlagRequired(c.cmd, "vault")
@@ -189,34 +216,34 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 }
 
 func (c *InitInstallConfigCmd) printWelcomeMessage() {
-	fmt.Println("Welcome to OMS!")
-	fmt.Println("This wizard will help you create config.yaml and prod.vault.yaml for Codesphere installation.")
-	fmt.Println()
+	log.Println("Welcome to OMS!")
+	log.Println("This wizard will help you create config.yaml and prod.vault.yaml for Codesphere installation.")
+	log.Println()
 }
 
 func (c *InitInstallConfigCmd) printSuccessMessage() {
-	fmt.Println("\n" + strings.Repeat("=", 70))
-	fmt.Println("Configuration files successfully generated!")
-	fmt.Println(strings.Repeat("=", 70))
+	log.Println("\n" + strings.Repeat("=", 70))
+	log.Println("Configuration files successfully generated!")
+	log.Println(strings.Repeat("=", 70))
 
-	fmt.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
-	fmt.Println("   Keep the vault file secure and encrypt it with SOPS before storing.")
+	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
+	log.Println("   Keep the vault file secure and encrypt it with SOPS before storing.")
 
-	fmt.Println("\nNext steps:")
-	fmt.Println("1. Review the generated config.yaml and prod.vault.yaml")
-	fmt.Println("2. Install SOPS and Age: brew install sops age")
-	fmt.Println("3. Generate an Age keypair: age-keygen -o age_key.txt")
-	fmt.Println("4. Encrypt the vault file:")
-	fmt.Printf("   age-keygen -y age_key.txt  # Get public key\n")
-	fmt.Printf("   sops --encrypt --age <PUBLIC_KEY> --in-place %s\n", c.Opts.VaultFile)
-	fmt.Println("5. Run the Codesphere installer with these configuration files")
-	fmt.Println()
+	log.Println("\nNext steps:")
+	log.Println("1. Review the generated config.yaml and prod.vault.yaml")
+	log.Println("2. Install SOPS and Age: brew install sops age")
+	log.Println("3. Generate an Age keypair: age-keygen -o age_key.txt")
+	log.Println("4. Encrypt the vault file:")
+	log.Printf("   age-keygen -y age_key.txt  # Get public key\n")
+	log.Printf("   sops --encrypt --age <PUBLIC_KEY> --in-place %s\n", c.Opts.VaultFile)
+	log.Println("5. Run the Codesphere installer with these configuration files")
+	log.Println()
 }
 
 func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) error {
-	fmt.Printf("Validating configuration files...\n")
+	log.Printf("Validating configuration files...\n")
 
-	fmt.Printf("Reading install config file: %s\n", c.Opts.ConfigFile)
+	log.Printf("Reading install config file: %s\n", c.Opts.ConfigFile)
 	err := icg.LoadInstallConfigFromFile(c.Opts.ConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to load config file: %w", err)
@@ -228,7 +255,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	}
 
 	if c.Opts.VaultFile != "" {
-		fmt.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
+		log.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
 		err := icg.LoadVaultFromFile(c.Opts.VaultFile)
 		if err != nil {
 			return fmt.Errorf("failed to load vault file: %w", err)
@@ -240,7 +267,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 		}
 	}
 
-	fmt.Println("Configuration is valid!")
+	log.Println("Configuration is valid!")
 	return nil
 }
 
@@ -373,6 +400,38 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 		}
 	}
 
+	// ACME configuration
+	if c.Opts.ACMEEnabled {
+		if config.Cluster.Certificates.ACME == nil {
+			config.Cluster.Certificates.ACME = &files.ACMEConfig{}
+		}
+		config.Cluster.Certificates.ACME.Enabled = true
+
+		if c.Opts.ACMEIssuerName != "" {
+			config.Cluster.Certificates.ACME.Name = c.Opts.ACMEIssuerName
+		}
+		if c.Opts.ACMEEmail != "" {
+			config.Cluster.Certificates.ACME.Email = c.Opts.ACMEEmail
+		}
+		if c.Opts.ACMEServer != "" {
+			config.Cluster.Certificates.ACME.Server = c.Opts.ACMEServer
+		}
+
+		if c.Opts.ACMEEABKeyID != "" {
+			config.Cluster.Certificates.ACME.EABKeyID = c.Opts.ACMEEABKeyID
+		}
+		if c.Opts.ACMEEABMacKey != "" {
+			config.Cluster.Certificates.ACME.EABMacKey = c.Opts.ACMEEABMacKey
+		}
+
+		// Configure DNS-01 solver
+		if c.Opts.ACMEDNS01Provider != "" {
+			config.Cluster.Certificates.ACME.Solver.DNS01 = &files.ACMEDNS01Solver{
+				Provider: c.Opts.ACMEDNS01Provider,
+			}
+		}
+	}
+
 	// Codesphere settings
 	if c.Opts.CodesphereDomain != "" {
 		config.Codesphere.Domain = c.Opts.CodesphereDomain
@@ -397,6 +456,16 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 		config.Codesphere.WorkspaceImages.Agent = &files.ImageRef{
 			BomRef: c.Opts.CodesphereWorkspaceImageBomRef,
 		}
+	}
+
+	if c.Opts.CodesphereOpenBaoUri != "" {
+		if config.Codesphere.OpenBao == nil {
+			config.Codesphere.OpenBao = &files.OpenBaoConfig{}
+		}
+		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoUri
+		config.Codesphere.OpenBao.Engine = c.Opts.CodesphereOpenBaoEngine
+		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser
+		config.Codesphere.OpenBao.Password = c.Opts.CodesphereOpenBaoPassword
 	}
 
 	// Plans

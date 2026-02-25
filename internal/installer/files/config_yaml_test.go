@@ -15,14 +15,14 @@ import (
 
 var _ = Describe("ConfigYaml", func() {
 	var (
-		rootConfig *files.RootConfig
+		rootConfig files.RootConfig
 		tempDir    string
 		configFile string
 		sampleYaml string
 	)
 
 	BeforeEach(func() {
-		rootConfig = &files.RootConfig{}
+		rootConfig = files.NewRootConfig()
 
 		var err error
 		tempDir, err = os.MkdirTemp("", "config_yaml_test")
@@ -53,6 +53,10 @@ codesphere:
               dockerfile: dockerfile-24.04-minimal
             pool:
               4: 1
+          directref:
+            image: custom-fake-image:latest
+            pool:
+              4: 2
       workspace-agent-20.04:
         name: ubuntu-20.04
         supportedUntil: "2025-04-01"
@@ -108,6 +112,12 @@ codesphere:
 			Expect(defaultFlavor.Image.Dockerfile).To(Equal("dockerfile-24.04"))
 			Expect(defaultFlavor.Pool).To(HaveKeyWithValue(8, 2))
 			Expect(defaultFlavor.Pool).To(HaveKeyWithValue(16, 1))
+
+			directReferencedFlavor := workspaceAgent24.Flavors["directref"]
+			Expect(directReferencedFlavor.Image.ImageName).To(Equal("custom-fake-image:latest"))
+			Expect(directReferencedFlavor.Image.BomRef).To(Equal(""))
+			Expect(directReferencedFlavor.Image.Dockerfile).To(Equal(""))
+			Expect(directReferencedFlavor.Pool).To(HaveKeyWithValue(4, 2))
 		})
 
 		It("should return error for non-existent file", func() {
