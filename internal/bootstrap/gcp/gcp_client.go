@@ -46,7 +46,7 @@ type GCPClientManager interface {
 	CreateServiceAccount(projectID, name, displayName string) (string, bool, error)
 	CreateServiceAccountKey(projectID, saEmail string) (string, error)
 	AssignIAMRole(projectID, saEmail string, saProjectID string, roles []string) error
-	GrantImpersonation(impersonatingServiceAccount, impersonatingProjectID, imperonatedServiceAccount, impersonatedProjectID string) error
+	GrantImpersonation(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID string) error
 	RevokeImpersonation(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
