@@ -82,7 +82,8 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 	var infraEnv gcp.CodesphereEnvironment
 
 	// Only load infra file if we need information from it (project ID or DNS info)
-	needsInfraFile := projectID == "" || (!c.Opts.SkipDNSCleanup && c.Opts.BaseDomain == "")
+	missingDNSInfo := c.Opts.BaseDomain == "" || c.Opts.DNSZoneName == "" || c.Opts.DNSProjectID == ""
+	needsInfraFile := projectID == "" || (!c.Opts.SkipDNSCleanup && missingDNSInfo)
 	if needsInfraFile {
 		var err error
 		infraEnv, infraFileExists, err = gcp.LoadInfraFile(deps.FileIO, deps.InfraFilePath)
