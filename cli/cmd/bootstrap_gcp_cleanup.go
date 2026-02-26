@@ -126,7 +126,7 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 
 	// Verify project is OMS-managed
 	if c.Opts.Force {
-		log.Printf("Skipping OMS-managed verification (--force flag used)")
+		log.Printf("Skipping OMS-managed verification and deletion confirmation (--force flag used)")
 	} else {
 		isOMSManaged, err := deps.GCPClient.IsOMSManagedProject(projectID)
 		if err != nil {
