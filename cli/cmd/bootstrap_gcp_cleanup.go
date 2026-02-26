@@ -169,7 +169,7 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 
 	// Clean up local infra file only if it matches the deleted project
 	if infraFileLoaded && infraEnv.ProjectID == projectID {
-		if err := os.Remove(deps.InfraFilePath); err != nil {
+		if err := deps.FileIO.Remove(deps.InfraFilePath); err != nil {
 			log.Printf("Warning: failed to remove local infra file: %v", err)
 		} else {
 			log.Printf("Removed local infra file: %s", deps.InfraFilePath)
