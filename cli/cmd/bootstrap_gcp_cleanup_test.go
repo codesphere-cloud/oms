@@ -323,7 +323,6 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 				mockFileIO.EXPECT().ReadFile("/tmp/test-infra.json").Return(envData, nil)
 				mockGCPClient.EXPECT().DeleteDNSRecordSets("test-project", "test-zone", "example.com").Return(nil)
 				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
-				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
 
 				err := cleanupCmd.ExecuteCleanup(deps)
 				Expect(err).NotTo(HaveOccurred())
