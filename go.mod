@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	cloud.google.com/go/artifactregistry v1.20.0
-	cloud.google.com/go/compute v1.54.0
+	cloud.google.com/go/compute v1.55.0
 	cloud.google.com/go/iam v1.5.3
 	cloud.google.com/go/resourcemanager v1.10.7
 	cloud.google.com/go/serviceusage v1.9.7
