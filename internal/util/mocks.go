@@ -70,15 +70,26 @@ type MockDockerfileManager_UpdateFromStatement_Call struct {
 }
 
 // UpdateFromStatement is a helper method to define mock.On call
-//   - dockerfile
-//   - baseImage
+//   - dockerfile io.Reader
+//   - baseImage string
 func (_e *MockDockerfileManager_Expecter) UpdateFromStatement(dockerfile interface{}, baseImage interface{}) *MockDockerfileManager_UpdateFromStatement_Call {
 	return &MockDockerfileManager_UpdateFromStatement_Call{Call: _e.mock.On("UpdateFromStatement", dockerfile, baseImage)}
 }
 
 func (_c *MockDockerfileManager_UpdateFromStatement_Call) Run(run func(dockerfile io.Reader, baseImage string)) *MockDockerfileManager_UpdateFromStatement_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(io.Reader), args[1].(string))
+		var arg0 io.Reader
+		if args[0] != nil {
+			arg0 = args[0].(io.Reader)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -154,14 +165,20 @@ type MockFileIO_Create_Call struct {
 }
 
 // Create is a helper method to define mock.On call
-//   - filename
+//   - filename string
 func (_e *MockFileIO_Expecter) Create(filename interface{}) *MockFileIO_Create_Call {
 	return &MockFileIO_Create_Call{Call: _e.mock.On("Create", filename)}
 }
 
 func (_c *MockFileIO_Create_Call) Run(run func(filename string)) *MockFileIO_Create_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -199,16 +216,32 @@ type MockFileIO_CreateAndWrite_Call struct {
 }
 
 // CreateAndWrite is a helper method to define mock.On call
-//   - filePath
-//   - data
-//   - fileType
+//   - filePath string
+//   - data []byte
+//   - fileType string
 func (_e *MockFileIO_Expecter) CreateAndWrite(filePath interface{}, data interface{}, fileType interface{}) *MockFileIO_CreateAndWrite_Call {
 	return &MockFileIO_CreateAndWrite_Call{Call: _e.mock.On("CreateAndWrite", filePath, data, fileType)}
 }
 
 func (_c *MockFileIO_CreateAndWrite_Call) Run(run func(filePath string, data []byte, fileType string)) *MockFileIO_CreateAndWrite_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].([]byte), args[2].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []byte
+		if args[1] != nil {
+			arg1 = args[1].([]byte)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -246,14 +279,20 @@ type MockFileIO_Exists_Call struct {
 }
 
 // Exists is a helper method to define mock.On call
-//   - filename
+//   - filename string
 func (_e *MockFileIO_Expecter) Exists(filename interface{}) *MockFileIO_Exists_Call {
 	return &MockFileIO_Exists_Call{Call: _e.mock.On("Exists", filename)}
 }
 
 func (_c *MockFileIO_Exists_Call) Run(run func(filename string)) *MockFileIO_Exists_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -300,14 +339,20 @@ type MockFileIO_IsDirectory_Call struct {
 }
 
 // IsDirectory is a helper method to define mock.On call
-//   - filename
+//   - filename string
 func (_e *MockFileIO_Expecter) IsDirectory(filename interface{}) *MockFileIO_IsDirectory_Call {
 	return &MockFileIO_IsDirectory_Call{Call: _e.mock.On("IsDirectory", filename)}
 }
 
 func (_c *MockFileIO_IsDirectory_Call) Run(run func(filename string)) *MockFileIO_IsDirectory_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -345,15 +390,26 @@ type MockFileIO_MkdirAll_Call struct {
 }
 
 // MkdirAll is a helper method to define mock.On call
-//   - path
-//   - perm
+//   - path string
+//   - perm os.FileMode
 func (_e *MockFileIO_Expecter) MkdirAll(path interface{}, perm interface{}) *MockFileIO_MkdirAll_Call {
 	return &MockFileIO_MkdirAll_Call{Call: _e.mock.On("MkdirAll", path, perm)}
 }
 
 func (_c *MockFileIO_MkdirAll_Call) Run(run func(path string, perm os.FileMode)) *MockFileIO_MkdirAll_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(os.FileMode))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 os.FileMode
+		if args[1] != nil {
+			arg1 = args[1].(os.FileMode)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -402,14 +458,20 @@ type MockFileIO_Open_Call struct {
 }
 
 // Open is a helper method to define mock.On call
-//   - filename
+//   - filename string
 func (_e *MockFileIO_Expecter) Open(filename interface{}) *MockFileIO_Open_Call {
 	return &MockFileIO_Open_Call{Call: _e.mock.On("Open", filename)}
 }
 
 func (_c *MockFileIO_Open_Call) Run(run func(filename string)) *MockFileIO_Open_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -458,14 +520,20 @@ type MockFileIO_OpenAppend_Call struct {
 }
 
 // OpenAppend is a helper method to define mock.On call
-//   - filename
+//   - filename string
 func (_e *MockFileIO_Expecter) OpenAppend(filename interface{}) *MockFileIO_OpenAppend_Call {
 	return &MockFileIO_OpenAppend_Call{Call: _e.mock.On("OpenAppend", filename)}
 }
 
 func (_c *MockFileIO_OpenAppend_Call) Run(run func(filename string)) *MockFileIO_OpenAppend_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -514,16 +582,32 @@ type MockFileIO_OpenFile_Call struct {
 }
 
 // OpenFile is a helper method to define mock.On call
-//   - name
-//   - flag
-//   - perm
+//   - name string
+//   - flag int
+//   - perm os.FileMode
 func (_e *MockFileIO_Expecter) OpenFile(name interface{}, flag interface{}, perm interface{}) *MockFileIO_OpenFile_Call {
 	return &MockFileIO_OpenFile_Call{Call: _e.mock.On("OpenFile", name, flag, perm)}
 }
 
 func (_c *MockFileIO_OpenFile_Call) Run(run func(name string, flag int, perm os.FileMode)) *MockFileIO_OpenFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(int), args[2].(os.FileMode))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		var arg2 os.FileMode
+		if args[2] != nil {
+			arg2 = args[2].(os.FileMode)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -572,14 +656,20 @@ type MockFileIO_ReadDir_Call struct {
 }
 
 // ReadDir is a helper method to define mock.On call
-//   - dirname
+//   - dirname string
 func (_e *MockFileIO_Expecter) ReadDir(dirname interface{}) *MockFileIO_ReadDir_Call {
 	return &MockFileIO_ReadDir_Call{Call: _e.mock.On("ReadDir", dirname)}
 }
 
 func (_c *MockFileIO_ReadDir_Call) Run(run func(dirname string)) *MockFileIO_ReadDir_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -628,14 +718,20 @@ type MockFileIO_ReadFile_Call struct {
 }
 
 // ReadFile is a helper method to define mock.On call
-//   - filename
+//   - filename string
 func (_e *MockFileIO_Expecter) ReadFile(filename interface{}) *MockFileIO_ReadFile_Call {
 	return &MockFileIO_ReadFile_Call{Call: _e.mock.On("ReadFile", filename)}
 }
 
 func (_c *MockFileIO_ReadFile_Call) Run(run func(filename string)) *MockFileIO_ReadFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -673,14 +769,20 @@ type MockFileIO_Remove_Call struct {
 }
 
 // Remove is a helper method to define mock.On call
-//   - path
+//   - path string
 func (_e *MockFileIO_Expecter) Remove(path interface{}) *MockFileIO_Remove_Call {
 	return &MockFileIO_Remove_Call{Call: _e.mock.On("Remove", path)}
 }
 
 func (_c *MockFileIO_Remove_Call) Run(run func(path string)) *MockFileIO_Remove_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -718,16 +820,32 @@ type MockFileIO_WriteFile_Call struct {
 }
 
 // WriteFile is a helper method to define mock.On call
-//   - filename
-//   - data
-//   - perm
+//   - filename string
+//   - data []byte
+//   - perm os.FileMode
 func (_e *MockFileIO_Expecter) WriteFile(filename interface{}, data interface{}, perm interface{}) *MockFileIO_WriteFile_Call {
 	return &MockFileIO_WriteFile_Call{Call: _e.mock.On("WriteFile", filename, data, perm)}
 }
 
 func (_c *MockFileIO_WriteFile_Call) Run(run func(filename string, data []byte, perm os.FileMode)) *MockFileIO_WriteFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].([]byte), args[2].(os.FileMode))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []byte
+		if args[1] != nil {
+			arg1 = args[1].([]byte)
+		}
+		var arg2 os.FileMode
+		if args[2] != nil {
+			arg2 = args[2].(os.FileMode)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -857,8 +975,8 @@ type MockTableWriter_AppendHeader_Call struct {
 }
 
 // AppendHeader is a helper method to define mock.On call
-//   - row
-//   - configs
+//   - row table.Row
+//   - configs ...table.RowConfig
 func (_e *MockTableWriter_Expecter) AppendHeader(row interface{}, configs ...interface{}) *MockTableWriter_AppendHeader_Call {
 	return &MockTableWriter_AppendHeader_Call{Call: _e.mock.On("AppendHeader",
 		append([]interface{}{row}, configs...)...)}
@@ -866,13 +984,20 @@ func (_e *MockTableWriter_Expecter) AppendHeader(row interface{}, configs ...int
 
 func (_c *MockTableWriter_AppendHeader_Call) Run(run func(row table.Row, configs ...table.RowConfig)) *MockTableWriter_AppendHeader_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]table.RowConfig, len(args)-1)
-		for i, a := range args[1:] {
-			if a != nil {
-				variadicArgs[i] = a.(table.RowConfig)
-			}
+		var arg0 table.Row
+		if args[0] != nil {
+			arg0 = args[0].(table.Row)
 		}
-		run(args[0].(table.Row), variadicArgs...)
+		var arg1 []table.RowConfig
+		var variadicArgs []table.RowConfig
+		if len(args) > 1 {
+			variadicArgs = args[1].([]table.RowConfig)
+		}
+		arg1 = variadicArgs
+		run(
+			arg0,
+			arg1...,
+		)
 	})
 	return _c
 }
@@ -904,8 +1029,8 @@ type MockTableWriter_AppendRow_Call struct {
 }
 
 // AppendRow is a helper method to define mock.On call
-//   - row
-//   - configs
+//   - row table.Row
+//   - configs ...table.RowConfig
 func (_e *MockTableWriter_Expecter) AppendRow(row interface{}, configs ...interface{}) *MockTableWriter_AppendRow_Call {
 	return &MockTableWriter_AppendRow_Call{Call: _e.mock.On("AppendRow",
 		append([]interface{}{row}, configs...)...)}
@@ -913,13 +1038,20 @@ func (_e *MockTableWriter_Expecter) AppendRow(row interface{}, configs ...interf
 
 func (_c *MockTableWriter_AppendRow_Call) Run(run func(row table.Row, configs ...table.RowConfig)) *MockTableWriter_AppendRow_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		variadicArgs := make([]table.RowConfig, len(args)-1)
-		for i, a := range args[1:] {
-			if a != nil {
-				variadicArgs[i] = a.(table.RowConfig)
-			}
+		var arg0 table.Row
+		if args[0] != nil {
+			arg0 = args[0].(table.Row)
 		}
-		run(args[0].(table.Row), variadicArgs...)
+		var arg1 []table.RowConfig
+		var variadicArgs []table.RowConfig
+		if len(args) > 1 {
+			variadicArgs = args[1].([]table.RowConfig)
+		}
+		arg1 = variadicArgs
+		run(
+			arg0,
+			arg1...,
+		)
 	})
 	return _c
 }
