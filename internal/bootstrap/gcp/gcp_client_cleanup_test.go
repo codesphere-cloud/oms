@@ -80,7 +80,7 @@ var _ = Describe("GCP Client Cleanup Methods", func() {
 						gcp.OMSManagedLabel: tc.value,
 					}
 					Expect(gcp.CheckOMSManagedLabel(labels)).To(Equal(tc.expected),
-						"Label value '%s' should result in %v", tc.value, tc.expected)
+						fmt.Sprintf("Label value '%s' should result in %v", tc.value, tc.expected))
 				}
 			})
 		})
