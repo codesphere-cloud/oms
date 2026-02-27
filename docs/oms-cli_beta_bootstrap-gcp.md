@@ -33,6 +33,7 @@ oms-cli beta bootstrap-gcp [flags]
   -h, --help                              help for bootstrap-gcp
       --install-config string             Path to install config file (optional) (default "config.yaml")
       --install-hash string               Codesphere package hash to install (default: none)
+      --install-local string              Install Codesphere from local package (default: none)
   -s, --install-skip-steps stringArray    Installation steps to skip during Codesphere installation (optional)
       --install-version string            Codesphere version to install (default: none)
       --openbao-engine string             OpenBao engine name (default: cs-secrets-engine) (default "cs-secrets-engine")
