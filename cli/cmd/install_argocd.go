@@ -27,7 +27,8 @@ type InstallArgoCDOpts struct {
 
 func (c *InstallArgoCD) RunE(_ *cobra.Command, args []string) error {
 	argocd := installer.NewArgoCD()
-	err := argocd.Install()
+	err := argocd.PreInstall()
+	// err := argocd.Install()
 	if err != nil {
 		return fmt.Errorf("failed to install chart ArgoCD: %w", err)
 	}
