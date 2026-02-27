@@ -1308,21 +1308,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
-	b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
-		{
-			Name:    "postgres",
-			Version: "v1",
-		},
-		{
-			Name:    "babelfish",
-			Version: "v1",
-		},
-		{
-			Name:    "s3",
-			Version: "v1",
-		},
-	}
-
 	if b.Env.OpenBaoURI != "" {
 		b.Env.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
 			Engine:   b.Env.OpenBaoEngine,

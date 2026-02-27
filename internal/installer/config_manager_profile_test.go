@@ -223,6 +223,10 @@ var _ = Describe("ConfigManagerProfile", func() {
 					Expect(config.ManagedServiceBackends).ToNot(BeNil())
 					Expect(config.ManagedServiceBackends.Postgres).ToNot(BeNil())
 
+					// Managed service config
+					Expect(config.Codesphere.ManagedServices).ToNot(BeNil())
+					Expect(len(config.Codesphere.ManagedServices)).To(Equal(3))
+
 					// Secrets
 					Expect(config.Secrets.BaseDir).To(Equal("/root/secrets"))
 				})

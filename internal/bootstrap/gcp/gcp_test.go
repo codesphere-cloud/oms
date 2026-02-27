@@ -1188,7 +1188,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(cloudDns["project"]).To(Equal(bs.Env.DNSProjectID))
 
 				Expect(bs.Env.InstallConfig.Codesphere.OpenBao).To(BeNil())
-				Expect(len(bs.Env.InstallConfig.Codesphere.ManagedServices)).To(Equal(3))
 			})
 			Context("When Experiments are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
