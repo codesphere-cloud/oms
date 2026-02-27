@@ -103,6 +103,20 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 	g.Config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{
 		Postgres: make(map[string]interface{}),
 	}
+	g.Config.Codesphere.ManagedServices = []files.ManagedServiceConfig{
+		{
+			Name:    "postgres",
+			Version: "v1",
+		},
+		{
+			Name:    "babelfish",
+			Version: "v1",
+		},
+		{
+			Name:    "s3",
+			Version: "v1",
+		},
+	}
 	g.Config.Secrets.BaseDir = "/root/secrets"
 
 	switch profile {
