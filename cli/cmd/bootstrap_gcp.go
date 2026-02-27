@@ -77,6 +77,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSProjectID, "dns-project-id", "", "GCP Project ID for Cloud DNS (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSZoneName, "dns-zone-name", "oms-testing", "Cloud DNS Zone Name (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallLocal, "install-local", "", "Install Codesphere from local package (default: none)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (default: none)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")

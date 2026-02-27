@@ -442,7 +442,9 @@ func (n *Node) getSFTPClient(jumpboxIp string, ip string, username string) (*sft
 		return nil, fmt.Errorf("failed to get SSH client: %v", err)
 	}
 
-	sftpClient, err := sftp.NewClient(client)
+	sftpClient, err := sftp.NewClient(client,
+		sftp.UseConcurrentWrites(true),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create SFTP client: %v", err)
 	}
