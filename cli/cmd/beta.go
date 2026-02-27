@@ -25,4 +25,5 @@ func AddBetaCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 
 	AddExtendCmd(beta.cmd, opts)
 	AddBootstrapGcpCmd(beta.cmd, opts)
+	AddInstallArgoCD(beta.cmd, opts)
 }
