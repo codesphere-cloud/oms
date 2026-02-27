@@ -916,7 +916,7 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		}
 	}
 
-	hasOms := b.Env.Jumpbox.HasCommand("oms-cli")
+	hasOms := b.Env.Jumpbox.HasCommand("oms")
 	if hasOms {
 		return nil
 	}
@@ -1412,7 +1412,7 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		skipStepsArg = " -s " + strings.Join(skipSteps, ",")
 	}
 
-	downloadCmd := "oms-cli download package -f " + packageFile
+	downloadCmd := "oms download package -f " + packageFile
 	if b.Env.InstallHash != "" {
 		downloadCmd += " -H " + b.Env.InstallHash
 	}
@@ -1423,7 +1423,7 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 	}
 
 	fullPackageFilename := portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFile)
-	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
+	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
 		b.Env.SecretsDir, fullPackageFilename, skipStepsArg)
 	err = b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 	if err != nil {

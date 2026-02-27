@@ -27,8 +27,7 @@ go.work.sum
 
 # bin file
 bin/
-oms-cli
-oms-service
+oms
 dist/
 oms-workdir/
 

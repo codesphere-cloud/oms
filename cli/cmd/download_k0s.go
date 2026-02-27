@@ -51,12 +51,12 @@ func AddDownloadK0sCmd(download *cobra.Command, opts *GlobalOptions) {
 			Short: "Download k0s Kubernetes distribution",
 			Long: packageio.Long(`Download a k0s binary directly to the OMS workdir.
 			Will download the latest version if no version is specified.`),
-			Example: formatExamplesWithBinary("download k0s", []packageio.Example{
+			Example: formatExamples("download k0s", []packageio.Example{
 				{Cmd: "", Desc: "Download k0s using the Go-native implementation"},
 				{Cmd: "--version 1.22.0", Desc: "Download a specific version of k0s"},
 				{Cmd: "--quiet", Desc: "Download k0s with minimal output"},
 				{Cmd: "--force", Desc: "Force download even if k0s binary exists"},
-			}, "oms-cli"),
+			}),
 		},
 		Opts:       DownloadK0sOpts{GlobalOptions: opts},
 		Env:        env.NewEnv(),
