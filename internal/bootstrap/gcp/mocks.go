@@ -723,6 +723,120 @@ func (_c *MockGCPClientManager_CreateVPC_Call) RunAndReturn(run func(projectID s
 	return _c
 }
 
+// DeleteDNSRecordSets provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) DeleteDNSRecordSets(projectID string, zoneName string, baseDomain string) error {
+	ret := _mock.Called(projectID, zoneName, baseDomain)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteDNSRecordSets")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string) error); ok {
+		r0 = returnFunc(projectID, zoneName, baseDomain)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGCPClientManager_DeleteDNSRecordSets_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteDNSRecordSets'
+type MockGCPClientManager_DeleteDNSRecordSets_Call struct {
+	*mock.Call
+}
+
+// DeleteDNSRecordSets is a helper method to define mock.On call
+//   - projectID string
+//   - zoneName string
+//   - baseDomain string
+func (_e *MockGCPClientManager_Expecter) DeleteDNSRecordSets(projectID interface{}, zoneName interface{}, baseDomain interface{}) *MockGCPClientManager_DeleteDNSRecordSets_Call {
+	return &MockGCPClientManager_DeleteDNSRecordSets_Call{Call: _e.mock.On("DeleteDNSRecordSets", projectID, zoneName, baseDomain)}
+}
+
+func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) Run(run func(projectID string, zoneName string, baseDomain string)) *MockGCPClientManager_DeleteDNSRecordSets_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) Return(err error) *MockGCPClientManager_DeleteDNSRecordSets_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) RunAndReturn(run func(projectID string, zoneName string, baseDomain string) error) *MockGCPClientManager_DeleteDNSRecordSets_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteProject provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) DeleteProject(projectID string) error {
+	ret := _mock.Called(projectID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteProject")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(projectID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGCPClientManager_DeleteProject_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteProject'
+type MockGCPClientManager_DeleteProject_Call struct {
+	*mock.Call
+}
+
+// DeleteProject is a helper method to define mock.On call
+//   - projectID string
+func (_e *MockGCPClientManager_Expecter) DeleteProject(projectID interface{}) *MockGCPClientManager_DeleteProject_Call {
+	return &MockGCPClientManager_DeleteProject_Call{Call: _e.mock.On("DeleteProject", projectID)}
+}
+
+func (_c *MockGCPClientManager_DeleteProject_Call) Run(run func(projectID string)) *MockGCPClientManager_DeleteProject_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_DeleteProject_Call) Return(err error) *MockGCPClientManager_DeleteProject_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_DeleteProject_Call) RunAndReturn(run func(projectID string) error) *MockGCPClientManager_DeleteProject_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // EnableAPIs provides a mock function for the type MockGCPClientManager
 func (_mock *MockGCPClientManager) EnableAPIs(projectID string, apis []string) error {
 	ret := _mock.Called(projectID, apis)
@@ -1317,6 +1431,204 @@ func (_c *MockGCPClientManager_GetProjectByName_Call) Return(project *resourcema
 }
 
 func (_c *MockGCPClientManager_GetProjectByName_Call) RunAndReturn(run func(folderID string, displayName string) (*resourcemanagerpb.Project, error)) *MockGCPClientManager_GetProjectByName_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GrantImpersonation provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) GrantImpersonation(impersonatingServiceAccount string, impersonatingProjectID string, impersonatedServiceAccount string, impersonatedProjectID string) error {
+	ret := _mock.Called(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GrantImpersonation")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, string) error); ok {
+		r0 = returnFunc(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGCPClientManager_GrantImpersonation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GrantImpersonation'
+type MockGCPClientManager_GrantImpersonation_Call struct {
+	*mock.Call
+}
+
+// GrantImpersonation is a helper method to define mock.On call
+//   - impersonatingServiceAccount string
+//   - impersonatingProjectID string
+//   - impersonatedServiceAccount string
+//   - impersonatedProjectID string
+func (_e *MockGCPClientManager_Expecter) GrantImpersonation(impersonatingServiceAccount interface{}, impersonatingProjectID interface{}, impersonatedServiceAccount interface{}, impersonatedProjectID interface{}) *MockGCPClientManager_GrantImpersonation_Call {
+	return &MockGCPClientManager_GrantImpersonation_Call{Call: _e.mock.On("GrantImpersonation", impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID)}
+}
+
+func (_c *MockGCPClientManager_GrantImpersonation_Call) Run(run func(impersonatingServiceAccount string, impersonatingProjectID string, impersonatedServiceAccount string, impersonatedProjectID string)) *MockGCPClientManager_GrantImpersonation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_GrantImpersonation_Call) Return(err error) *MockGCPClientManager_GrantImpersonation_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_GrantImpersonation_Call) RunAndReturn(run func(impersonatingServiceAccount string, impersonatingProjectID string, impersonatedServiceAccount string, impersonatedProjectID string) error) *MockGCPClientManager_GrantImpersonation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// IsOMSManagedProject provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) IsOMSManagedProject(projectID string) (bool, error) {
+	ret := _mock.Called(projectID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for IsOMSManagedProject")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (bool, error)); ok {
+		return returnFunc(projectID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) bool); ok {
+		r0 = returnFunc(projectID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(projectID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockGCPClientManager_IsOMSManagedProject_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsOMSManagedProject'
+type MockGCPClientManager_IsOMSManagedProject_Call struct {
+	*mock.Call
+}
+
+// IsOMSManagedProject is a helper method to define mock.On call
+//   - projectID string
+func (_e *MockGCPClientManager_Expecter) IsOMSManagedProject(projectID interface{}) *MockGCPClientManager_IsOMSManagedProject_Call {
+	return &MockGCPClientManager_IsOMSManagedProject_Call{Call: _e.mock.On("IsOMSManagedProject", projectID)}
+}
+
+func (_c *MockGCPClientManager_IsOMSManagedProject_Call) Run(run func(projectID string)) *MockGCPClientManager_IsOMSManagedProject_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_IsOMSManagedProject_Call) Return(b bool, err error) *MockGCPClientManager_IsOMSManagedProject_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_IsOMSManagedProject_Call) RunAndReturn(run func(projectID string) (bool, error)) *MockGCPClientManager_IsOMSManagedProject_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RevokeImpersonation provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) RevokeImpersonation(impersonatingServiceAccount string, impersonatingProjectID string, impersonatedServiceAccount string, impersonatedProjectID string) error {
+	ret := _mock.Called(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RevokeImpersonation")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, string) error); ok {
+		r0 = returnFunc(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGCPClientManager_RevokeImpersonation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RevokeImpersonation'
+type MockGCPClientManager_RevokeImpersonation_Call struct {
+	*mock.Call
+}
+
+// RevokeImpersonation is a helper method to define mock.On call
+//   - impersonatingServiceAccount string
+//   - impersonatingProjectID string
+//   - impersonatedServiceAccount string
+//   - impersonatedProjectID string
+func (_e *MockGCPClientManager_Expecter) RevokeImpersonation(impersonatingServiceAccount interface{}, impersonatingProjectID interface{}, impersonatedServiceAccount interface{}, impersonatedProjectID interface{}) *MockGCPClientManager_RevokeImpersonation_Call {
+	return &MockGCPClientManager_RevokeImpersonation_Call{Call: _e.mock.On("RevokeImpersonation", impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID)}
+}
+
+func (_c *MockGCPClientManager_RevokeImpersonation_Call) Run(run func(impersonatingServiceAccount string, impersonatingProjectID string, impersonatedServiceAccount string, impersonatedProjectID string)) *MockGCPClientManager_RevokeImpersonation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_RevokeImpersonation_Call) Return(err error) *MockGCPClientManager_RevokeImpersonation_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_RevokeImpersonation_Call) RunAndReturn(run func(impersonatingServiceAccount string, impersonatingProjectID string, impersonatedServiceAccount string, impersonatedProjectID string) error) *MockGCPClientManager_RevokeImpersonation_Call {
 	_c.Call.Return(run)
 	return _c
 }

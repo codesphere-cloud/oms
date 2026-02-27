@@ -21,6 +21,7 @@ type FileIO interface {
 	ReadDir(dirname string) ([]os.DirEntry, error)
 	ReadFile(filename string) ([]byte, error)
 	CreateAndWrite(filePath string, data []byte, fileType string) error
+	Remove(path string) error
 }
 
 type FilesystemWriter struct{}
@@ -91,6 +92,10 @@ func (fs *FilesystemWriter) ReadDir(dirname string) ([]os.DirEntry, error) {
 
 func (fs *FilesystemWriter) ReadFile(filename string) ([]byte, error) {
 	return os.ReadFile(filename)
+}
+
+func (fs *FilesystemWriter) Remove(path string) error {
+	return os.Remove(path)
 }
 
 type ClosableFile interface {

@@ -56,5 +56,6 @@ oms-cli beta bootstrap-gcp [flags]
 ### SEE ALSO
 
 * [oms-cli beta](oms-cli_beta.md)	 - Commands for early testing
+* [oms-cli beta bootstrap-gcp cleanup](oms-cli_beta_bootstrap-gcp_cleanup.md)	 - Clean up GCP infrastructure created by bootstrap-gcp
 * [oms-cli beta bootstrap-gcp postconfig](oms-cli_beta_bootstrap-gcp_postconfig.md)	 - Run post-configuration steps for GCP bootstrapping
 
