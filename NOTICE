@@ -23,9 +23,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.54.0
+Version: v1.55.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.54.0/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.55.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
@@ -95,9 +95,9 @@ License URL: https://github.com/clipperhouse/uax29/blob/v2.4.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v0.17.2
+Version: v0.19.1
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.17.2/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.19.1/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
