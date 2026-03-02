@@ -51,6 +51,10 @@ func (c *GetAdminPasswordCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+type Config struct {
+	cmd *cobra.Command
+}
+
 func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	argocd := ArgoCDCmd{
 		cmd: &cobra.Command{

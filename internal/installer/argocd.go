@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/Masterminds/semver/v3"
 	"helm.sh/helm/v4/pkg/action"
@@ -16,18 +15,10 @@ import (
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/release"
-
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 type ArgoCDManager interface {
-	PreInstall() error
 	Install() error
-	PostInstall() error
 }
 
 type ArgoCD struct {
@@ -38,54 +29,6 @@ func NewArgoCD(version string) ArgoCDManager {
 	return &ArgoCD{
 		Version: version,
 	}
-}
-
-func createArgocdNamespace() error {
-	home, _ := os.UserHomeDir()
-	kubeconfigPath := filepath.Join(home, ".kube", "config")
-
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath},
-		&clientcmd.ConfigOverrides{CurrentContext: ""}, // Empty string means the current select context
-	).ClientConfig()
-
-	if err != nil {
-		return fmt.Errorf("Error loading current context: %v", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return err
-	}
-	namespace := "argocd"
-	_, err = clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
-
-	if err == nil {
-		fmt.Printf("Namespace %s already exists\n", namespace)
-		return nil
-	}
-
-	if errors.IsNotFound(err) {
-		ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}
-		_, err = clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
-
-		if err != nil {
-			return fmt.Errorf("Error: %v\n", err)
-		} else {
-			log.Println("Created namespace 'argocd' using the active context.")
-		}
-	}
-	return err
-}
-
-// Install resources needed by ArgoCD
-func (a *ArgoCD) PreInstall() error {
-	panic("unimplemented")
-}
-
-// PostInstall implements ArgoCDManager.
-func (a *ArgoCD) PostInstall() error {
-	panic("unimplemented")
 }
 
 // Install the ArgoCD chart
