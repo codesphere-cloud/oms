@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -31,9 +32,9 @@ type InstallArgoCDOpts struct {
 }
 
 func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
-	argocd := installer.NewArgoCD()
+	install := installer.NewArgoCD(c.Opts.Version)
 	// err := argocd.PreInstall()
-	err := argocd.Install()
+	err := install.Install()
 	if err != nil {
 		return fmt.Errorf("failed to install chart ArgoCD: %w", err)
 	}
@@ -46,6 +47,7 @@ type GetAdminPasswordCmd struct {
 }
 
 func (c *GetAdminPasswordCmd) RunE(_ *cobra.Command, args []string) error {
+	log.Println("Not implemented")
 	return nil
 }
 
