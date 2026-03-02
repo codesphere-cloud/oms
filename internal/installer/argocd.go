@@ -77,13 +77,7 @@ func createArgocdNamespace() error {
 
 // Install resources needed by ArgoCD
 func (a *ArgoCD) PreInstall() error {
-	err := createArgocdNamespace()
-	if err != nil {
-		return fmt.Errorf("Error creating namespace argocd: %v", err)
-	}
-
-	// TODO: argocd secret
-	return nil
+	panic("unimplemented")
 }
 
 // PostInstall implements ArgoCDManager.
@@ -93,7 +87,7 @@ func (a *ArgoCD) PostInstall() error {
 
 // Install the ArgoCD chart
 func (a *ArgoCD) Install() error {
-	log.Println("Installing ArgoCD helm chart version %s", a.Version)
+	log.Printf("Installing ArgoCD helm chart version %s\n", a.Version)
 	settings := cli.New()
 	ctx := context.Background()
 
@@ -125,11 +119,6 @@ func (a *ArgoCD) Install() error {
 	vals := map[string]interface{}{
 		"dex": map[string]interface{}{
 			"enabled": false,
-		},
-		"configs": map[string]interface{}{
-			"secret": map[string]interface{}{
-				"createSecret": true,
-			},
 		},
 	}
 
