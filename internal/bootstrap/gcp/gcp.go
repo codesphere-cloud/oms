@@ -93,6 +93,7 @@ type CodesphereEnvironment struct {
 	InstallHash          string       `json:"install_hash"`
 	InstallSkipSteps     []string     `json:"install_skip_steps"`
 	Preemptible          bool         `json:"preemptible"`
+	Spot                 bool         `json:"spot"`
 	WriteConfig          bool         `json:"-"`
 	GatewayIP            string       `json:"gateway_ip"`
 	PublicGatewayIP      string       `json:"public_gateway_ip"`
@@ -306,7 +307,20 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
+	err = b.validateVMProvisioningOptions()
+	if err != nil {
+		return err
+	}
+
 	return b.validateGithubParams()
+}
+
+// validateVMProvisioningOptions checks that spot and preemptible options are not both set
+func (b *GCPBootstrapper) validateVMProvisioningOptions() error {
+	if b.Env.Spot && b.Env.Preemptible {
+		return fmt.Errorf("cannot specify both --spot and --preemptible flags; use --spot for the newer spot VM model")
+	}
+	return nil
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -694,6 +708,43 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		wg.Add(1)
 		go func(vm VMDef) {
 			defer wg.Done()
+
+			existingInstance, err := b.GCPClient.GetInstance(projectID, zone, vm.Name)
+			if err == nil && existingInstance != nil {
+				instanceStatus := existingInstance.GetStatus()
+				if instanceStatus == "TERMINATED" || instanceStatus == "STOPPED" || instanceStatus == "SUSPENDED" {
+					// Start the stopped instance
+					err = b.GCPClient.StartInstance(projectID, zone, vm.Name)
+					if err != nil {
+						errCh <- fmt.Errorf("failed to start stopped instance %s: %w", vm.Name, err)
+						return
+					}
+					// Re-fetch instance to get updated IPs after start
+					existingInstance, err = b.GCPClient.GetInstance(projectID, zone, vm.Name)
+					if err != nil {
+						errCh <- fmt.Errorf("failed to get instance %s after start: %w", vm.Name, err)
+						return
+					}
+				}
+
+				externalIP := ""
+				internalIP := ""
+				if len(existingInstance.GetNetworkInterfaces()) > 0 {
+					internalIP = existingInstance.GetNetworkInterfaces()[0].GetNetworkIP()
+					if len(existingInstance.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
+						externalIP = existingInstance.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
+					}
+				}
+				resultCh <- vmResult{
+					vmType:     vm.Tags[0],
+					name:       vm.Name,
+					externalIP: externalIP,
+					internalIP: internalIP,
+				}
+				return
+			}
+
+			// Instance doesn't exist, create it
 			disks := []*computepb.AttachedDisk{
 				{
 					Boot:       protoBool(true),
@@ -737,9 +788,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				Tags: &computepb.Tags{
 					Items: vm.Tags,
 				},
-				Scheduling: &computepb.Scheduling{
-					Preemptible: &b.Env.Preemptible,
-				},
+				Scheduling: b.buildSchedulingConfig(),
 				NetworkInterfaces: []*computepb.NetworkInterface{
 					{
 						Network:    protoString(network),
@@ -767,9 +816,9 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				}
 			}
 
-			err = b.GCPClient.CreateInstance(projectID, zone, instance)
-			if err != nil && !isAlreadyExistsError(err) {
-				errCh <- fmt.Errorf("failed to create instance %s: %w", vm.Name, err)
+			err = b.createInstanceWithFallback(projectID, zone, instance, vm.Name)
+			if err != nil {
+				errCh <- err
 				return
 			}
 
@@ -841,6 +890,64 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	})
 
 	return nil
+}
+
+// buildSchedulingConfig creates the scheduling configuration based on spot/preemptible settings
+func (b *GCPBootstrapper) buildSchedulingConfig() *computepb.Scheduling {
+	if b.Env.Spot {
+		return &computepb.Scheduling{
+			ProvisioningModel:         protoString("SPOT"),
+			OnHostMaintenance:         protoString("TERMINATE"),
+			AutomaticRestart:          protoBool(false),
+			InstanceTerminationAction: protoString("STOP"),
+		}
+	}
+	if b.Env.Preemptible {
+		return &computepb.Scheduling{
+			Preemptible: protoBool(true),
+		}
+	}
+
+	return &computepb.Scheduling{}
+}
+
+// createInstanceWithFallback attempts to create an instance with the configured settings.
+// If spot VMs are enabled and creation fails due to capacity issues, it falls back to standard VMs.
+func (b *GCPBootstrapper) createInstanceWithFallback(projectID, zone string, instance *computepb.Instance, vmName string) error {
+	err := b.GCPClient.CreateInstance(projectID, zone, instance)
+	if err == nil {
+		return nil
+	}
+
+	if isAlreadyExistsError(err) {
+		return nil
+	}
+
+	if b.Env.Spot && isSpotCapacityError(err) {
+		b.stlog.Logf("Spot capacity unavailable for %s, falling back to standard VM", vmName)
+		instance.Scheduling = &computepb.Scheduling{}
+		err = b.GCPClient.CreateInstance(projectID, zone, instance)
+		if err != nil && !isAlreadyExistsError(err) {
+			return fmt.Errorf("failed to create instance %s (fallback to standard VM): %w", vmName, err)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("failed to create instance %s: %w", vmName, err)
+}
+
+// isSpotCapacityError checks if the error is related to spot VM capacity issues
+func isSpotCapacityError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "ZONE_RESOURCE_POOL_EXHAUSTED") ||
+		strings.Contains(errStr, "UNSUPPORTED_OPERATION") ||
+		strings.Contains(errStr, "stockout") ||
+		strings.Contains(errStr, "does not have enough resources") ||
+		strings.Contains(errStr, "quota") ||
+		status.Code(err) == codes.ResourceExhausted
 }
 
 // EnsureGatewayIPAddresses reserves 2 static external IP addresses for the ingress

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"os"
 
@@ -169,9 +170,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().CreateFirewallRule(projectId, mock.Anything).Return(nil).Times(5)
 
 			// 11. EnsureComputeInstances
-			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(9)
-			// GetInstance calls to retrieve IPs
+			// Track GetInstance calls per VM name
+			instanceCalls := make(map[string]int)
+			var instanceMu sync.Mutex
 			ipResp := &computepb.Instance{
+				Status: protoString("RUNNING"),
 				NetworkInterfaces: []*computepb.NetworkInterface{
 					{
 						NetworkIP: protoString("10.0.0.1"),
@@ -181,9 +184,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 					},
 				},
 			}
-
-			gc.EXPECT().GetInstance(projectId, "us-central1-a", mock.Anything).Return(ipResp, nil).Times(9)
+			gc.EXPECT().GetInstance(projectId, "us-central1-a", mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
+				instanceMu.Lock()
+				defer instanceMu.Unlock()
+				instanceCalls[name]++
+				if instanceCalls[name] == 1 {
+					// First call, instance doesn't exist
+					return nil, fmt.Errorf("not found")
+				}
+				// Second call, return instance with IPs
+				return ipResp, nil
+			}).Times(18)
 			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(9)
+			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(9)
 
 			// 12. EnsureGatewayIPAddresses
 			gc.EXPECT().GetAddress(projectId, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
@@ -382,6 +395,17 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 			})
 
+		})
+
+		Context("When both --spot and --preemptible are specified", func() {
+			BeforeEach(func() {
+				csEnv.Spot = true
+				csEnv.Preemptible = true
+			})
+			It("fails with a clear error message", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(MatchRegexp("cannot specify both --spot and --preemptible")))
+			})
 		})
 
 	})
@@ -945,14 +969,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 		Describe("Valid EnsureComputeInstances", func() {
 			It("creates all instances", func() {
-				// Mock ReadFile for SSH key (called 9 times in parallel)
-				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
-
-				// Mock CreateInstance (9 times)
-				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
-
-				// Mock GetInstance (9 times)
+				instanceCalls := make(map[string]int)
+				var mu sync.Mutex
 				ipResp := &computepb.Instance{
+					Status: protoString("RUNNING"),
 					NetworkInterfaces: []*computepb.NetworkInterface{
 						{
 							NetworkIP: protoString("10.0.0.x"),
@@ -962,7 +982,20 @@ var _ = Describe("GCP Bootstrapper", func() {
 						},
 					},
 				}
-				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(9)
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					instanceCalls[name]++
+					if instanceCalls[name] == 1 {
+						// First call, instance doesn't exist
+						return nil, fmt.Errorf("not found")
+					}
+					// Second call, return instance with IPs
+					return ipResp, nil
+				}).Times(18)
+
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
@@ -975,7 +1008,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when SSH key read fails", func() {
-				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return(nil, fmt.Errorf("read error")).Maybe()
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("not found")).Maybe()
+				fw.EXPECT().ReadFile(mock.Anything).Return(nil, fmt.Errorf("read error")).Maybe()
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).To(HaveOccurred())
@@ -983,7 +1017,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when CreateInstance fails", func() {
-				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("not found")).Maybe()
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(fmt.Errorf("create error")).Maybe()
 
 				err := bs.EnsureComputeInstances()
@@ -992,13 +1027,180 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when GetInstance fails", func() {
-				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("not found")).Maybe()
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Maybe()
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("get error")).Maybe()
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("error ensuring compute instances"))
+			})
+		})
+
+		Describe("Spot VM functionality", func() {
+			It("creates spot VMs when spot flag is enabled", func() {
+				csEnv.Spot = true
+
+				// Track GetInstance calls per VM name
+				instanceCalls := make(map[string]int)
+				var mu sync.Mutex
+				ipResp := &computepb.Instance{
+					Status: protoString("RUNNING"),
+					NetworkInterfaces: []*computepb.NetworkInterface{
+						{
+							NetworkIP: protoString("10.0.0.x"),
+							AccessConfigs: []*computepb.AccessConfig{
+								{NatIP: protoString("1.2.3.x")},
+							},
+						},
+					},
+				}
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					instanceCalls[name]++
+					if instanceCalls[name] == 1 {
+						return nil, fmt.Errorf("not found")
+					}
+					return ipResp, nil
+				}).Times(18)
+
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
+
+				// Verify CreateInstance is called with SPOT provisioning model
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.MatchedBy(func(instance *computepb.Instance) bool {
+					return instance.Scheduling != nil &&
+						instance.Scheduling.ProvisioningModel != nil &&
+						*instance.Scheduling.ProvisioningModel == "SPOT"
+				})).Return(nil).Times(9)
+
+				err := bs.EnsureComputeInstances()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("falls back to standard VM when spot capacity is exhausted", func() {
+				csEnv.Spot = true
+
+				// Track GetInstance calls per VM name
+				instanceCalls := make(map[string]int)
+				var mu sync.Mutex
+				ipResp := &computepb.Instance{
+					Status: protoString("RUNNING"),
+					NetworkInterfaces: []*computepb.NetworkInterface{
+						{
+							NetworkIP: protoString("10.0.0.x"),
+							AccessConfigs: []*computepb.AccessConfig{
+								{NatIP: protoString("1.2.3.x")},
+							},
+						},
+					},
+				}
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					instanceCalls[name]++
+					if instanceCalls[name] == 1 {
+						return nil, fmt.Errorf("not found")
+					}
+					return ipResp, nil
+				}).Times(18)
+
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
+
+				createCalls := make(map[string]int)
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
+					mu.Lock()
+					defer mu.Unlock()
+					name := *instance.Name
+					createCalls[name]++
+					if createCalls[name] == 1 {
+						return fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED")
+					}
+					return nil
+				}).Times(18)
+
+				err := bs.EnsureComputeInstances()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("restarts stopped VMs instead of creating new ones", func() {
+				instanceCalls := make(map[string]int)
+				var mu sync.Mutex
+				stoppedResp := &computepb.Instance{
+					Status: protoString("TERMINATED"),
+					NetworkInterfaces: []*computepb.NetworkInterface{
+						{
+							NetworkIP: protoString("10.0.0.x"),
+							AccessConfigs: []*computepb.AccessConfig{
+								{NatIP: protoString("1.2.3.x")},
+							},
+						},
+					},
+				}
+				runningResp := &computepb.Instance{
+					Status: protoString("RUNNING"),
+					NetworkInterfaces: []*computepb.NetworkInterface{
+						{
+							NetworkIP: protoString("10.0.0.x"),
+							AccessConfigs: []*computepb.AccessConfig{
+								{NatIP: protoString("1.2.3.x")},
+							},
+						},
+					},
+				}
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					instanceCalls[name]++
+					if instanceCalls[name] == 1 {
+						// First call, VM exists but is stopped
+						return stoppedResp, nil
+					}
+					// After StartInstance, VM is running
+					return runningResp, nil
+				}).Times(18)
+
+				gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
+
+				err := bs.EnsureComputeInstances()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("uses existing running VMs without starting them", func() {
+				runningResp := &computepb.Instance{
+					Status: protoString("RUNNING"),
+					NetworkInterfaces: []*computepb.NetworkInterface{
+						{
+							NetworkIP: protoString("10.0.0.x"),
+							AccessConfigs: []*computepb.AccessConfig{
+								{NatIP: protoString("1.2.3.x")},
+							},
+						},
+					},
+				}
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(runningResp, nil).Times(9)
+
+				err := bs.EnsureComputeInstances()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("handles VMs in intermediate states (STAGING/PROVISIONING)", func() {
+				provisioningResp := &computepb.Instance{
+					Status: protoString("STAGING"),
+					NetworkInterfaces: []*computepb.NetworkInterface{
+						{
+							NetworkIP: protoString("10.0.0.x"),
+							AccessConfigs: []*computepb.AccessConfig{
+								{NatIP: protoString("1.2.3.x")},
+							},
+						},
+					},
+				}
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(provisioningResp, nil).Times(9)
+
+				err := bs.EnsureComputeInstances()
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})
