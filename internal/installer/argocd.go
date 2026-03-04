@@ -15,9 +15,6 @@ import (
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/release"
-	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 type ArgoCDManager interface {
@@ -35,19 +32,9 @@ func NewArgoCD(version string) ArgoCDManager {
 }
 
 func applyPostInstallResources() error {
-	cfg, err := rest.InClusterConfig()
+	clientset, dynClient, err := newClients()
 	if err != nil {
-		return fmt.Errorf("getting in-cluster config: %w", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("creating kubernetes clientset: %w", err)
-	}
-
-	dynClient, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return fmt.Errorf("creating dynamic client: %w", err)
+		return fmt.Errorf("creating kubernetes clients: %w", err)
 	}
 
 	ctx := context.TODO()
@@ -56,15 +43,21 @@ func applyPostInstallResources() error {
 		return fmt.Errorf("applying app projects: %w", err)
 	}
 
-	if err := applyLocalCluster(ctx, clientset, os.Getenv("DC_NUMBER")); err != nil {
+	dcNumber := "1"
+
+	if err := applyLocalCluster(ctx, clientset, dcNumber); err != nil {
 		return fmt.Errorf("applying local cluster secret: %w", err)
 	}
 
-	if err := applyHelmRegistrySecret(ctx, clientset, os.Getenv("SECRET_CODESPHERE_OCI_READ")); err != nil {
+	secretOci := "abc"
+
+	if err := applyHelmRegistrySecret(ctx, clientset, secretOci); err != nil {
 		return fmt.Errorf("applying helm registry secret: %w", err)
 	}
 
-	if err := applyGitRepoSecret(ctx, clientset, os.Getenv("SECRET_CODESPHERE_REPOS_READ")); err != nil {
+	secretGit := "xyz"
+
+	if err := applyGitRepoSecret(ctx, clientset, secretGit); err != nil {
 		return fmt.Errorf("applying git repo secret: %w", err)
 	}
 
