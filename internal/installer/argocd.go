@@ -31,6 +31,22 @@ func NewArgoCD(version string) ArgoCDManager {
 	}
 }
 
+func applyAppProjects() {
+
+}
+
+func applyLocalCluster() {
+
+}
+
+func applyHelmRegistrySecret() {
+
+}
+
+func applyGitRepoSecret() {
+
+}
+
 // Install the ArgoCD chart
 func (a *ArgoCD) Install() error {
 	if a.Version == "" {

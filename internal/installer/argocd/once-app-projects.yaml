@@ -1,0 +1,83 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/argoproj.io/appproject_v1alpha1.json
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Project containing production apps
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  destinations:
+    - namespace: "*"
+      name: dc-0
+    - namespace: "*"
+      name: dc-2
+    - namespace: "*"
+      name: dc-4
+    - namespace: "*"
+      name: dc-6
+  sourceRepos:
+    - "https://github.com/codesphere-cloud/charts.git"
+    - "ghcr.io/codesphere-cloud/charts"
+  roles:
+    - name: admin
+      description: Admin privileges to prod
+      policies:
+        - p, proj:prod:admin, *, *, */*, allow
+      groups:
+        - ops@codesphere.com
+    - name: read-only
+      description: Read-only privileges to prod
+      policies:
+        - p, proj:prod:read-only, *, get, prod/*, allow
+      groups:
+        - development@codesphere.com
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/argoproj.io/appproject_v1alpha1.json
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: dev
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: Project containing dev apps
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  destinations:
+    - namespace: "codesphere-dev"
+      name: "*"
+    - namespace: "*"
+      name: dc-5
+  sourceRepos:
+    - "*"
+  roles:
+    - name: admin
+      description: Admin privileges to dev
+      policies:
+        - p, proj:dev:admin, *, *, */*, allow
+      groups:
+        - ops@codesphere.com
+        - development@codesphere.com
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/argoproj.io/appproject_v1alpha1.json
+# The default project has the most permissive settings and needs to be explicitly restricted
+# https://argo-cd.readthedocs.io/en/stable/user-guide/projects/#the-default-project
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: default
+  namespace: argocd
+spec:
+  sourceRepos: []
+  sourceNamespaces: []
+  destinations: []
+  namespaceResourceBlacklist:
+    - group: "*"
+      kind: "*"
