@@ -69,7 +69,6 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 }
 
 // ExecuteCleanup performs the cleanup operation with the provided dependencies.
-// It follows the same step-based pattern used by the main bootstrap command.
 func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
 	state, err := c.resolveCleanupConfig(deps)
 	if err != nil {
