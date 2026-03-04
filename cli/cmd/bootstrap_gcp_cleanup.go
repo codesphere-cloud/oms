@@ -41,6 +41,16 @@ type CleanupDeps struct {
 	InfraFilePath string
 }
 
+// cleanupState holds intermediate state shared across cleanup steps.
+type cleanupState struct {
+	projectID       string
+	infraEnv        gcp.CodesphereEnvironment
+	infraFileLoaded bool
+	baseDomain      string
+	dnsZoneName     string
+	dnsProjectID    string
+}
+
 func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false)
@@ -56,6 +66,126 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	return c.ExecuteCleanup(deps)
+}
+
+// ExecuteCleanup performs the cleanup operation with the provided dependencies.
+// It follows the same step-based pattern used by the main bootstrap command.
+func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
+	state, err := c.resolveCleanupConfig(deps)
+	if err != nil {
+		return fmt.Errorf("failed to resolve cleanup configuration: %w", err)
+	}
+
+	err = c.verifyAndConfirm(deps, state)
+	if err != nil {
+		return err
+	}
+
+	if !c.Opts.SkipDNSCleanup && state.baseDomain != "" && state.dnsZoneName != "" {
+		err = deps.StepLogger.Step("Clean up DNS records", func() error {
+			return deps.GCPClient.DeleteDNSRecordSets(state.dnsProjectID, state.dnsZoneName, state.baseDomain)
+		})
+		if err != nil {
+			log.Printf("Warning: DNS cleanup failed: %v", err)
+			log.Printf("You may need to manually delete DNS records for %s in project %s", state.baseDomain, state.dnsProjectID)
+		}
+	} else if !c.Opts.SkipDNSCleanup {
+		log.Printf("Skipping DNS cleanup: missing base domain or DNS zone name (provide --base-domain/--dns-zone-name or use --skip-dns-cleanup)")
+	}
+
+	err = deps.StepLogger.Step("Delete GCP project", func() error {
+		return deps.GCPClient.DeleteProject(state.projectID)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete project: %w", err)
+	}
+
+	c.removeLocalInfraFile(deps, state)
+
+	log.Println("\nGCP project cleanup completed successfully!")
+	log.Printf("Project '%s' has been scheduled for deletion.", state.projectID)
+	log.Printf("Note: GCP projects are retained for 30 days before permanent deletion. You can restore the project within this period from the GCP Console.")
+
+	return nil
+}
+
+// resolveCleanupConfig loads the infra file (if needed) and determines the project ID
+// and DNS settings from flags and/or the infra file.
+func (c *BootstrapGcpCleanupCmd) resolveCleanupConfig(deps *CleanupDeps) (*cleanupState, error) {
+	state := &cleanupState{
+		projectID: c.Opts.ProjectID,
+	}
+
+	// Only load infra file if we need information from it (project ID or DNS info)
+	missingDNSInfo := c.Opts.BaseDomain == "" || c.Opts.DNSZoneName == "" || c.Opts.DNSProjectID == ""
+	needsInfraFile := state.projectID == "" || (!c.Opts.SkipDNSCleanup && missingDNSInfo)
+	if needsInfraFile {
+		infraEnv, infraFileExists, err := gcp.LoadInfraFile(deps.FileIO, deps.InfraFilePath)
+		if err != nil {
+			if state.projectID == "" {
+				return nil, fmt.Errorf("failed to load infra file: %w", err)
+			}
+			log.Printf("Warning: %v", err)
+		} else if infraEnv.ProjectID != "" {
+			state.infraEnv = infraEnv
+			state.infraFileLoaded = true
+		} else if infraFileExists {
+			if state.projectID == "" {
+				return nil, fmt.Errorf("infra file at %s contains empty project ID", deps.InfraFilePath)
+			}
+		}
+	}
+
+	// Determine project ID
+	if state.projectID == "" {
+		if state.infraEnv.ProjectID == "" {
+			return nil, fmt.Errorf("no project ID provided and no infra file found at %s", deps.InfraFilePath)
+		}
+		state.projectID = state.infraEnv.ProjectID
+		log.Printf("Using project ID from infra file: %s", state.projectID)
+	} else if state.infraFileLoaded && state.infraEnv.ProjectID != state.projectID {
+		log.Printf("Warning: infra file contains project ID '%s' but deleting '%s'; ignoring infra file for DNS cleanup", state.infraEnv.ProjectID, state.projectID)
+		state.infraEnv = gcp.CodesphereEnvironment{}
+		state.infraFileLoaded = false
+	}
+
+	// Resolve DNS settings from flags with infra file fallback
+	state.baseDomain = c.Opts.BaseDomain
+	if state.baseDomain == "" {
+		state.baseDomain = state.infraEnv.BaseDomain
+	}
+	state.dnsZoneName = c.Opts.DNSZoneName
+	if state.dnsZoneName == "" {
+		state.dnsZoneName = state.infraEnv.DNSZoneName
+	}
+	state.dnsProjectID = c.Opts.DNSProjectID
+	if state.dnsProjectID == "" {
+		state.dnsProjectID = state.infraEnv.DNSProjectID
+	}
+	if state.dnsProjectID == "" {
+		state.dnsProjectID = state.projectID
+	}
+
+	return state, nil
+}
+
+// verifyAndConfirm checks that the project is OMS-managed and prompts the user
+// for deletion confirmation, unless --force is set.
+func (c *BootstrapGcpCleanupCmd) verifyAndConfirm(deps *CleanupDeps, state *cleanupState) error {
+	if c.Opts.Force {
+		log.Printf("Skipping OMS-managed verification and deletion confirmation (--force flag used)")
+		return nil
+	}
+
+	isOMSManaged, err := deps.GCPClient.IsOMSManagedProject(state.projectID)
+	if err != nil {
+		return fmt.Errorf("failed to verify project: %w", err)
+	}
+	if !isOMSManaged {
+		return fmt.Errorf("project %s was not bootstrapped by OMS (missing 'oms-managed' label). Use --force to override this check", state.projectID)
+	}
+
+	return c.confirmDeletion(deps, state.projectID)
 }
 
 func (c *BootstrapGcpCleanupCmd) confirmDeletion(deps *CleanupDeps, projectID string) error {
@@ -74,113 +204,16 @@ func (c *BootstrapGcpCleanupCmd) confirmDeletion(deps *CleanupDeps, projectID st
 	return nil
 }
 
-// ExecuteCleanup performs the cleanup operation with the provided dependencies.
-func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *CleanupDeps) error {
-	projectID := c.Opts.ProjectID
-	infraFileLoaded := false
-	infraFileExists := false
-	var infraEnv gcp.CodesphereEnvironment
-
-	// Only load infra file if we need information from it (project ID or DNS info)
-	missingDNSInfo := c.Opts.BaseDomain == "" || c.Opts.DNSZoneName == "" || c.Opts.DNSProjectID == ""
-	needsInfraFile := projectID == "" || (!c.Opts.SkipDNSCleanup && missingDNSInfo)
-	if needsInfraFile {
-		var err error
-		infraEnv, infraFileExists, err = gcp.LoadInfraFile(deps.FileIO, deps.InfraFilePath)
-		if err != nil {
-			if projectID == "" {
-				return fmt.Errorf("failed to load infra file: %w", err)
-			}
-			log.Printf("Warning: %v", err)
-			infraEnv = gcp.CodesphereEnvironment{}
-		} else if infraEnv.ProjectID != "" {
-			infraFileLoaded = true
-		}
+// removeLocalInfraFile removes the local infra file if it matches the deleted project.
+func (c *BootstrapGcpCleanupCmd) removeLocalInfraFile(deps *CleanupDeps, state *cleanupState) {
+	if !state.infraFileLoaded || state.infraEnv.ProjectID != state.projectID {
+		return
 	}
-
-	// Determine project ID to use
-	if projectID == "" {
-		if infraFileExists && infraEnv.ProjectID == "" {
-			return fmt.Errorf("infra file at %s contains empty project ID", deps.InfraFilePath)
-		}
-		if infraEnv.ProjectID == "" {
-			return fmt.Errorf("no project ID provided and no infra file found at %s", deps.InfraFilePath)
-		}
-		projectID = infraEnv.ProjectID
-		log.Printf("Using project ID from infra file: %s", projectID)
-	} else if infraFileLoaded && infraEnv.ProjectID != projectID {
-		log.Printf("Warning: infra file contains project ID '%s' but deleting '%s'; ignoring infra file for DNS cleanup", infraEnv.ProjectID, projectID)
-		infraEnv = gcp.CodesphereEnvironment{}
-		infraFileLoaded = false
-	}
-
-	// Apply command-line overrides for DNS settings
-	baseDomain := c.Opts.BaseDomain
-	if baseDomain == "" {
-		baseDomain = infraEnv.BaseDomain
-	}
-	dnsZoneName := c.Opts.DNSZoneName
-	if dnsZoneName == "" {
-		dnsZoneName = infraEnv.DNSZoneName
-	}
-
-	// Verify project is OMS-managed
-	if c.Opts.Force {
-		log.Printf("Skipping OMS-managed verification and deletion confirmation (--force flag used)")
+	if err := deps.FileIO.Remove(deps.InfraFilePath); err != nil {
+		log.Printf("Warning: failed to remove local infra file: %v", err)
 	} else {
-		isOMSManaged, err := deps.GCPClient.IsOMSManagedProject(projectID)
-		if err != nil {
-			return fmt.Errorf("failed to verify project: %w", err)
-		}
-		if !isOMSManaged {
-			return fmt.Errorf("project %s was not bootstrapped by OMS (missing 'oms-managed' label). Use --force to override this check", projectID)
-		}
-
-		if err := c.confirmDeletion(deps, projectID); err != nil {
-			return fmt.Errorf("deletion confirmation failed: %w", err)
-		}
+		log.Printf("Removed local infra file: %s", deps.InfraFilePath)
 	}
-
-	// Clean up DNS records
-	if !c.Opts.SkipDNSCleanup && baseDomain != "" && dnsZoneName != "" {
-		dnsProjectID := c.Opts.DNSProjectID
-		if dnsProjectID == "" {
-			dnsProjectID = infraEnv.DNSProjectID
-		}
-		if dnsProjectID == "" {
-			dnsProjectID = projectID
-		}
-		if err := deps.StepLogger.Step("Cleaning up DNS records", func() error {
-			return deps.GCPClient.DeleteDNSRecordSets(dnsProjectID, dnsZoneName, baseDomain)
-		}); err != nil {
-			log.Printf("Warning: failed to clean up DNS records: %v", err)
-			log.Printf("You may need to manually delete DNS records for %s in project %s", baseDomain, dnsProjectID)
-		}
-	} else if !c.Opts.SkipDNSCleanup && baseDomain == "" {
-		log.Printf("Skipping DNS cleanup: no base domain available (provide --base-domain or infra file, or use --skip-dns-cleanup)")
-	}
-
-	// Delete the project
-	if err := deps.StepLogger.Step("Deleting GCP project", func() error {
-		return deps.GCPClient.DeleteProject(projectID)
-	}); err != nil {
-		return fmt.Errorf("failed to delete project: %w", err)
-	}
-
-	// Clean up local infra file only if it matches the deleted project
-	if infraFileLoaded && infraEnv.ProjectID == projectID {
-		if err := deps.FileIO.Remove(deps.InfraFilePath); err != nil {
-			log.Printf("Warning: failed to remove local infra file: %v", err)
-		} else {
-			log.Printf("Removed local infra file: %s", deps.InfraFilePath)
-		}
-	}
-
-	log.Println("\nGCP project cleanup completed successfully!")
-	log.Printf("Project '%s' has been scheduled for deletion.", projectID)
-	log.Printf("Note: GCP projects are retained for 30 days before permanent deletion. You can restore the project within this period from the GCP Console.")
-
-	return nil
 }
 
 func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions) {

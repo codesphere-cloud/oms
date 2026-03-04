@@ -59,32 +59,16 @@ type MockNodeClient_CopyFile_Call struct {
 }
 
 // CopyFile is a helper method to define mock.On call
-//   - n *Node
-//   - src string
-//   - dst string
+//   - n
+//   - src
+//   - dst
 func (_e *MockNodeClient_Expecter) CopyFile(n interface{}, src interface{}, dst interface{}) *MockNodeClient_CopyFile_Call {
 	return &MockNodeClient_CopyFile_Call{Call: _e.mock.On("CopyFile", n, src, dst)}
 }
 
 func (_c *MockNodeClient_CopyFile_Call) Run(run func(n *Node, src string, dst string)) *MockNodeClient_CopyFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 *Node
-		if args[0] != nil {
-			arg0 = args[0].(*Node)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
+		run(args[0].(*Node), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -122,26 +106,15 @@ type MockNodeClient_HasFile_Call struct {
 }
 
 // HasFile is a helper method to define mock.On call
-//   - n *Node
-//   - filePath string
+//   - n
+//   - filePath
 func (_e *MockNodeClient_Expecter) HasFile(n interface{}, filePath interface{}) *MockNodeClient_HasFile_Call {
 	return &MockNodeClient_HasFile_Call{Call: _e.mock.On("HasFile", n, filePath)}
 }
 
 func (_c *MockNodeClient_HasFile_Call) Run(run func(n *Node, filePath string)) *MockNodeClient_HasFile_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 *Node
-		if args[0] != nil {
-			arg0 = args[0].(*Node)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(
-			arg0,
-			arg1,
-		)
+		run(args[0].(*Node), args[1].(string))
 	})
 	return _c
 }
@@ -179,32 +152,16 @@ type MockNodeClient_RunCommand_Call struct {
 }
 
 // RunCommand is a helper method to define mock.On call
-//   - n *Node
-//   - username string
-//   - command string
+//   - n
+//   - username
+//   - command
 func (_e *MockNodeClient_Expecter) RunCommand(n interface{}, username interface{}, command interface{}) *MockNodeClient_RunCommand_Call {
 	return &MockNodeClient_RunCommand_Call{Call: _e.mock.On("RunCommand", n, username, command)}
 }
 
 func (_c *MockNodeClient_RunCommand_Call) Run(run func(n *Node, username string, command string)) *MockNodeClient_RunCommand_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 *Node
-		if args[0] != nil {
-			arg0 = args[0].(*Node)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
+		run(args[0].(*Node), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -242,26 +199,15 @@ type MockNodeClient_WaitReady_Call struct {
 }
 
 // WaitReady is a helper method to define mock.On call
-//   - n *Node
-//   - timeout time.Duration
+//   - n
+//   - timeout
 func (_e *MockNodeClient_Expecter) WaitReady(n interface{}, timeout interface{}) *MockNodeClient_WaitReady_Call {
 	return &MockNodeClient_WaitReady_Call{Call: _e.mock.On("WaitReady", n, timeout)}
 }
 
 func (_c *MockNodeClient_WaitReady_Call) Run(run func(n *Node, timeout time.Duration)) *MockNodeClient_WaitReady_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 *Node
-		if args[0] != nil {
-			arg0 = args[0].(*Node)
-		}
-		var arg1 time.Duration
-		if args[1] != nil {
-			arg1 = args[1].(time.Duration)
-		}
-		run(
-			arg0,
-			arg1,
-		)
+		run(args[0].(*Node), args[1].(time.Duration))
 	})
 	return _c
 }
