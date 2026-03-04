@@ -1279,7 +1279,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
-	b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{}
 
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
@@ -1306,21 +1305,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				return fmt.Errorf("failed to generate replica server certificate: %w", err)
 			}
 		}
-	}
-
-	b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
-		{
-			Name:    "postgres",
-			Version: "v1",
-		},
-		{
-			Name:    "babelfish",
-			Version: "v1",
-		},
-		{
-			Name:    "s3",
-			Version: "v1",
-		},
 	}
 
 	if b.Env.OpenBaoURI != "" {
