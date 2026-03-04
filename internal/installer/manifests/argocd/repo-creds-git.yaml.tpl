@@ -11,3 +11,4 @@ stringData:
   type: git
   username: github
   password: "${SECRET_CODESPHERE_REPOS_READ}"
+

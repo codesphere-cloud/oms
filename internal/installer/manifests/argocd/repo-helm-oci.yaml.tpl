@@ -13,3 +13,4 @@ stringData:
   username: github
   password: "${SECRET_CODESPHERE_OCI_READ}"
   enableOCI: "true"
+

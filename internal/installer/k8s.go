@@ -1,0 +1,118 @@
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+package installer
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"io"
+	"strings"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+	sigyaml "sigs.k8s.io/yaml"
+)
+
+// decodeMultiDocYAML splits a multi-document YAML byte slice into
+// individual unstructured objects. This handles the "---" separators.
+func decodeMultiDocYAML(data []byte) ([]*unstructured.Unstructured, error) {
+	var objects []*unstructured.Unstructured
+
+	reader := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
+	for {
+		obj := &unstructured.Unstructured{}
+		if err := reader.Decode(obj); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("decoding yaml document: %w", err)
+		}
+		if obj.Object == nil {
+			continue
+		}
+		objects = append(objects, obj)
+	}
+
+	return objects, nil
+}
+
+// renderTemplate performs simple ${VAR} substitution on a raw byte slice.
+func renderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
+	content := string(raw)
+	for key, val := range vars {
+		content = strings.ReplaceAll(content, "${"+key+"}", val)
+	}
+	return []byte(content), nil
+}
+
+// gvrForUnstructured maps an unstructured object's GVK to the appropriate GVR.
+func gvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
+	gvk := obj.GroupVersionKind()
+
+	switch gvk.Kind {
+	case "AppProject":
+		return schema.GroupVersionResource{
+			Group:    gvk.Group,
+			Version:  gvk.Version,
+			Resource: "appprojects",
+		}, nil
+	default:
+		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s", gvk)
+	}
+}
+
+// applyUnstructured creates or updates an unstructured resource using the dynamic client.
+func applyUnstructured(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, obj *unstructured.Unstructured) error {
+	ns := obj.GetNamespace()
+	name := obj.GetName()
+	resource := dynClient.Resource(gvr).Namespace(ns)
+
+	existing, err := resource.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		_, err = resource.Create(ctx, obj, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("creating %s %s/%s: %w", gvr.Resource, ns, name, err)
+		}
+		return nil
+	}
+
+	obj.SetResourceVersion(existing.GetResourceVersion())
+	_, err = resource.Update(ctx, obj, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("updating %s %s/%s: %w", gvr.Resource, ns, name, err)
+	}
+	return nil
+}
+
+// applySecretFromYAML creates or updates a corev1.Secret parsed from YAML bytes.
+func applySecretFromYAML(ctx context.Context, clientset kubernetes.Interface, data []byte) error {
+	secret := &corev1.Secret{}
+	if err := sigyaml.Unmarshal(data, secret); err != nil {
+		return fmt.Errorf("unmarshaling secret yaml: %w", err)
+	}
+
+	secretsClient := clientset.CoreV1().Secrets(secret.Namespace)
+
+	existing, err := secretsClient.Get(ctx, secret.Name, metav1.GetOptions{})
+	if err != nil {
+		_, err = secretsClient.Create(ctx, secret, metav1.CreateOptions{})
+		if err != nil {
+			return fmt.Errorf("creating secret %s/%s: %w", secret.Namespace, secret.Name, err)
+		}
+		return nil
+	}
+
+	secret.ResourceVersion = existing.ResourceVersion
+	_, err = secretsClient.Update(ctx, secret, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("updating secret %s/%s: %w", secret.Namespace, secret.Name, err)
+	}
+	return nil
+}
