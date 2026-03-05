@@ -1,0 +1,40 @@
+## oms update dockerfile
+
+Update FROM statement in Dockerfile with base image from package
+
+### Synopsis
+
+Update the FROM statement in a Dockerfile to use the base image from a Codesphere package.
+
+This command extracts the base image from a Codesphere package and updates the FROM statement
+in the specified Dockerfile to use that base image. The base image is loaded into the local Docker daemon so it can be used for building.
+
+```
+oms update dockerfile [flags]
+```
+
+### Examples
+
+```
+# Update Dockerfile to use the default base image from the package (workspace-agent-24.04)
+$ oms update dockerfile --dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz
+
+# Update Dockerfile to use the workspace-agent-20.04 base image from the package
+$ oms update dockerfile --dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz --baseimage workspace-agent-20.04.tar
+
+```
+
+### Options
+
+```
+  -b, --baseimage string    Name of the base image to use (default "workspace-agent-24.04")
+  -d, --dockerfile string   Path to the Dockerfile to update (required)
+  -f, --force               Force re-extraction of the package
+  -h, --help                help for dockerfile
+  -p, --package string      Path to the Codesphere package (required)
+```
+
+### SEE ALSO
+
+* [oms update](oms_update.md)	 - Update OMS related resources
+

@@ -1,0 +1,19 @@
+## oms beta extend
+
+Extend Codesphere ressources such as base images.
+
+### Synopsis
+
+Extend Codesphere ressources such as base images to customize them for your needs.
+
+### Options
+
+```
+  -h, --help   help for extend
+```
+
+### SEE ALSO
+
+* [oms beta](oms_beta.md)	 - Commands for early testing
+* [oms beta extend baseimage](oms_beta_extend_baseimage.md)	 - Extend Codesphere's workspace base image for customization
+
