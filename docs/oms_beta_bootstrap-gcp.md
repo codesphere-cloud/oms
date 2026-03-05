@@ -49,7 +49,7 @@ oms beta bootstrap-gcp [flags]
       --secrets-file string               Path to secrets files (optional) (default "prod.vault.yaml")
       --ssh-private-key-path string       SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string        SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
-      --ssh-quiet                         Suppress SSH command output (default: true)
+      --ssh-quiet                         Suppress SSH command output (default: false)
       --write-config                      Write generated install config to file (default: true) (default true)
       --zone string                       GCP Zone (default: europe-west4-a) (default "europe-west4-a")
 ```
