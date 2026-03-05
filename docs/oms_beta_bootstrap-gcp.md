@@ -47,6 +47,7 @@ oms beta bootstrap-gcp [flags]
       --registry-user string              Custom Registry username (only for GitHub registry type) (optional)
       --secrets-dir string                Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")
       --secrets-file string               Path to secrets files (optional) (default "prod.vault.yaml")
+      --spot                              Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable (default: false)
       --ssh-private-key-path string       SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string        SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
       --ssh-quiet                         Suppress SSH command output (default: true) (default true)
