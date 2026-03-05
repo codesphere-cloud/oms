@@ -16,19 +16,25 @@ oms-cli smoketest codesphere [flags]
 
 ```
 # Run smoke tests against a Codesphere installation
+$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN
+
+# Run smoke tests against a specific team within your Codesphere installation
+$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID
+
+# Run smoke tests against a specific team within your Codesphere installation, using a specific workspace plan
 $ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID
 
 # Run smoke tests in quiet mode (no progress logging)
-$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID --quiet
+$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --quiet
 
 # Run smoke tests with custom timeout
-$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID --timeout 15m
+$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --timeout 15m
 
 # Run only specific steps of the smoke test (workspace won't be deleted)
-$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID --steps createWorkspace,syncLandscape
+$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --steps createWorkspace,syncLandscape
 
 # Run specific steps and delete the workspace afterwards
-$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID --steps createWorkspace,syncLandscape,deleteWorkspace
+$ oms-cli smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --steps createWorkspace,syncLandscape,deleteWorkspace
 
 ```
 

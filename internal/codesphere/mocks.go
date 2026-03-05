@@ -5,7 +5,7 @@
 package codesphere
 
 import (
-	"context"
+	"github.com/codesphere-cloud/cs-go/api"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -37,8 +37,8 @@ func (_m *MockClient) EXPECT() *MockClient_Expecter {
 }
 
 // CreateWorkspace provides a mock function for the type MockClient
-func (_mock *MockClient) CreateWorkspace(ctx context.Context, teamID int, planID int, name string, repoURL *string) (int, error) {
-	ret := _mock.Called(ctx, teamID, planID, name, repoURL)
+func (_mock *MockClient) CreateWorkspace(teamID int, planID int, name string, repoURL *string) (int, error) {
+	ret := _mock.Called(teamID, planID, name, repoURL)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateWorkspace")
@@ -46,16 +46,16 @@ func (_mock *MockClient) CreateWorkspace(ctx context.Context, teamID int, planID
 
 	var r0 int
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int, int, string, *string) (int, error)); ok {
-		return returnFunc(ctx, teamID, planID, name, repoURL)
+	if returnFunc, ok := ret.Get(0).(func(int, int, string, *string) (int, error)); ok {
+		return returnFunc(teamID, planID, name, repoURL)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int, int, string, *string) int); ok {
-		r0 = returnFunc(ctx, teamID, planID, name, repoURL)
+	if returnFunc, ok := ret.Get(0).(func(int, int, string, *string) int); ok {
+		r0 = returnFunc(teamID, planID, name, repoURL)
 	} else {
 		r0 = ret.Get(0).(int)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, int, int, string, *string) error); ok {
-		r1 = returnFunc(ctx, teamID, planID, name, repoURL)
+	if returnFunc, ok := ret.Get(1).(func(int, int, string, *string) error); ok {
+		r1 = returnFunc(teamID, planID, name, repoURL)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -68,18 +68,38 @@ type MockClient_CreateWorkspace_Call struct {
 }
 
 // CreateWorkspace is a helper method to define mock.On call
-//   - ctx
-//   - teamID
-//   - planID
-//   - name
-//   - repoURL
-func (_e *MockClient_Expecter) CreateWorkspace(ctx interface{}, teamID interface{}, planID interface{}, name interface{}, repoURL interface{}) *MockClient_CreateWorkspace_Call {
-	return &MockClient_CreateWorkspace_Call{Call: _e.mock.On("CreateWorkspace", ctx, teamID, planID, name, repoURL)}
+//   - teamID int
+//   - planID int
+//   - name string
+//   - repoURL *string
+func (_e *MockClient_Expecter) CreateWorkspace(teamID interface{}, planID interface{}, name interface{}, repoURL interface{}) *MockClient_CreateWorkspace_Call {
+	return &MockClient_CreateWorkspace_Call{Call: _e.mock.On("CreateWorkspace", teamID, planID, name, repoURL)}
 }
 
-func (_c *MockClient_CreateWorkspace_Call) Run(run func(ctx context.Context, teamID int, planID int, name string, repoURL *string)) *MockClient_CreateWorkspace_Call {
+func (_c *MockClient_CreateWorkspace_Call) Run(run func(teamID int, planID int, name string, repoURL *string)) *MockClient_CreateWorkspace_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(int), args[2].(int), args[3].(string), args[4].(*string))
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 *string
+		if args[3] != nil {
+			arg3 = args[3].(*string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
 	})
 	return _c
 }
@@ -89,22 +109,22 @@ func (_c *MockClient_CreateWorkspace_Call) Return(workspaceID int, err error) *M
 	return _c
 }
 
-func (_c *MockClient_CreateWorkspace_Call) RunAndReturn(run func(ctx context.Context, teamID int, planID int, name string, repoURL *string) (int, error)) *MockClient_CreateWorkspace_Call {
+func (_c *MockClient_CreateWorkspace_Call) RunAndReturn(run func(teamID int, planID int, name string, repoURL *string) (int, error)) *MockClient_CreateWorkspace_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // DeleteWorkspace provides a mock function for the type MockClient
-func (_mock *MockClient) DeleteWorkspace(ctx context.Context, workspaceID int) error {
-	ret := _mock.Called(ctx, workspaceID)
+func (_mock *MockClient) DeleteWorkspace(workspaceID int) error {
+	ret := _mock.Called(workspaceID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteWorkspace")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int) error); ok {
-		r0 = returnFunc(ctx, workspaceID)
+	if returnFunc, ok := ret.Get(0).(func(int) error); ok {
+		r0 = returnFunc(workspaceID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -117,15 +137,20 @@ type MockClient_DeleteWorkspace_Call struct {
 }
 
 // DeleteWorkspace is a helper method to define mock.On call
-//   - ctx
-//   - workspaceID
-func (_e *MockClient_Expecter) DeleteWorkspace(ctx interface{}, workspaceID interface{}) *MockClient_DeleteWorkspace_Call {
-	return &MockClient_DeleteWorkspace_Call{Call: _e.mock.On("DeleteWorkspace", ctx, workspaceID)}
+//   - workspaceID int
+func (_e *MockClient_Expecter) DeleteWorkspace(workspaceID interface{}) *MockClient_DeleteWorkspace_Call {
+	return &MockClient_DeleteWorkspace_Call{Call: _e.mock.On("DeleteWorkspace", workspaceID)}
 }
 
-func (_c *MockClient_DeleteWorkspace_Call) Run(run func(ctx context.Context, workspaceID int)) *MockClient_DeleteWorkspace_Call {
+func (_c *MockClient_DeleteWorkspace_Call) Run(run func(workspaceID int)) *MockClient_DeleteWorkspace_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(int))
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -135,22 +160,22 @@ func (_c *MockClient_DeleteWorkspace_Call) Return(err error) *MockClient_DeleteW
 	return _c
 }
 
-func (_c *MockClient_DeleteWorkspace_Call) RunAndReturn(run func(ctx context.Context, workspaceID int) error) *MockClient_DeleteWorkspace_Call {
+func (_c *MockClient_DeleteWorkspace_Call) RunAndReturn(run func(workspaceID int) error) *MockClient_DeleteWorkspace_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ExecuteCommand provides a mock function for the type MockClient
-func (_mock *MockClient) ExecuteCommand(ctx context.Context, workspaceID int, command string) error {
-	ret := _mock.Called(ctx, workspaceID, command)
+func (_mock *MockClient) ExecuteCommand(workspaceID int, command string) error {
+	ret := _mock.Called(workspaceID, command)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ExecuteCommand")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int, string) error); ok {
-		r0 = returnFunc(ctx, workspaceID, command)
+	if returnFunc, ok := ret.Get(0).(func(int, string) error); ok {
+		r0 = returnFunc(workspaceID, command)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -163,16 +188,26 @@ type MockClient_ExecuteCommand_Call struct {
 }
 
 // ExecuteCommand is a helper method to define mock.On call
-//   - ctx
-//   - workspaceID
-//   - command
-func (_e *MockClient_Expecter) ExecuteCommand(ctx interface{}, workspaceID interface{}, command interface{}) *MockClient_ExecuteCommand_Call {
-	return &MockClient_ExecuteCommand_Call{Call: _e.mock.On("ExecuteCommand", ctx, workspaceID, command)}
+//   - workspaceID int
+//   - command string
+func (_e *MockClient_Expecter) ExecuteCommand(workspaceID interface{}, command interface{}) *MockClient_ExecuteCommand_Call {
+	return &MockClient_ExecuteCommand_Call{Call: _e.mock.On("ExecuteCommand", workspaceID, command)}
 }
 
-func (_c *MockClient_ExecuteCommand_Call) Run(run func(ctx context.Context, workspaceID int, command string)) *MockClient_ExecuteCommand_Call {
+func (_c *MockClient_ExecuteCommand_Call) Run(run func(workspaceID int, command string)) *MockClient_ExecuteCommand_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(int), args[2].(string))
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -182,22 +217,132 @@ func (_c *MockClient_ExecuteCommand_Call) Return(err error) *MockClient_ExecuteC
 	return _c
 }
 
-func (_c *MockClient_ExecuteCommand_Call) RunAndReturn(run func(ctx context.Context, workspaceID int, command string) error) *MockClient_ExecuteCommand_Call {
+func (_c *MockClient_ExecuteCommand_Call) RunAndReturn(run func(workspaceID int, command string) error) *MockClient_ExecuteCommand_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListTeams provides a mock function for the type MockClient
+func (_mock *MockClient) ListTeams() ([]api.Team, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListTeams")
+	}
+
+	var r0 []api.Team
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]api.Team, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []api.Team); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]api.Team)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_ListTeams_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTeams'
+type MockClient_ListTeams_Call struct {
+	*mock.Call
+}
+
+// ListTeams is a helper method to define mock.On call
+func (_e *MockClient_Expecter) ListTeams() *MockClient_ListTeams_Call {
+	return &MockClient_ListTeams_Call{Call: _e.mock.On("ListTeams")}
+}
+
+func (_c *MockClient_ListTeams_Call) Run(run func()) *MockClient_ListTeams_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockClient_ListTeams_Call) Return(vs []api.Team, err error) *MockClient_ListTeams_Call {
+	_c.Call.Return(vs, err)
+	return _c
+}
+
+func (_c *MockClient_ListTeams_Call) RunAndReturn(run func() ([]api.Team, error)) *MockClient_ListTeams_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListWorkspacePlans provides a mock function for the type MockClient
+func (_mock *MockClient) ListWorkspacePlans() ([]api.WorkspacePlan, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListWorkspacePlans")
+	}
+
+	var r0 []api.WorkspacePlan
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() ([]api.WorkspacePlan, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() []api.WorkspacePlan); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]api.WorkspacePlan)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_ListWorkspacePlans_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListWorkspacePlans'
+type MockClient_ListWorkspacePlans_Call struct {
+	*mock.Call
+}
+
+// ListWorkspacePlans is a helper method to define mock.On call
+func (_e *MockClient_Expecter) ListWorkspacePlans() *MockClient_ListWorkspacePlans_Call {
+	return &MockClient_ListWorkspacePlans_Call{Call: _e.mock.On("ListWorkspacePlans")}
+}
+
+func (_c *MockClient_ListWorkspacePlans_Call) Run(run func()) *MockClient_ListWorkspacePlans_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockClient_ListWorkspacePlans_Call) Return(vs []api.WorkspacePlan, err error) *MockClient_ListWorkspacePlans_Call {
+	_c.Call.Return(vs, err)
+	return _c
+}
+
+func (_c *MockClient_ListWorkspacePlans_Call) RunAndReturn(run func() ([]api.WorkspacePlan, error)) *MockClient_ListWorkspacePlans_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // SetEnvVar provides a mock function for the type MockClient
-func (_mock *MockClient) SetEnvVar(ctx context.Context, workspaceID int, key string, value string) error {
-	ret := _mock.Called(ctx, workspaceID, key, value)
+func (_mock *MockClient) SetEnvVar(workspaceID int, key string, value string) error {
+	ret := _mock.Called(workspaceID, key, value)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SetEnvVar")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int, string, string) error); ok {
-		r0 = returnFunc(ctx, workspaceID, key, value)
+	if returnFunc, ok := ret.Get(0).(func(int, string, string) error); ok {
+		r0 = returnFunc(workspaceID, key, value)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -210,17 +355,32 @@ type MockClient_SetEnvVar_Call struct {
 }
 
 // SetEnvVar is a helper method to define mock.On call
-//   - ctx
-//   - workspaceID
-//   - key
-//   - value
-func (_e *MockClient_Expecter) SetEnvVar(ctx interface{}, workspaceID interface{}, key interface{}, value interface{}) *MockClient_SetEnvVar_Call {
-	return &MockClient_SetEnvVar_Call{Call: _e.mock.On("SetEnvVar", ctx, workspaceID, key, value)}
+//   - workspaceID int
+//   - key string
+//   - value string
+func (_e *MockClient_Expecter) SetEnvVar(workspaceID interface{}, key interface{}, value interface{}) *MockClient_SetEnvVar_Call {
+	return &MockClient_SetEnvVar_Call{Call: _e.mock.On("SetEnvVar", workspaceID, key, value)}
 }
 
-func (_c *MockClient_SetEnvVar_Call) Run(run func(ctx context.Context, workspaceID int, key string, value string)) *MockClient_SetEnvVar_Call {
+func (_c *MockClient_SetEnvVar_Call) Run(run func(workspaceID int, key string, value string)) *MockClient_SetEnvVar_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(int), args[2].(string), args[3].(string))
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -230,22 +390,22 @@ func (_c *MockClient_SetEnvVar_Call) Return(err error) *MockClient_SetEnvVar_Cal
 	return _c
 }
 
-func (_c *MockClient_SetEnvVar_Call) RunAndReturn(run func(ctx context.Context, workspaceID int, key string, value string) error) *MockClient_SetEnvVar_Call {
+func (_c *MockClient_SetEnvVar_Call) RunAndReturn(run func(workspaceID int, key string, value string) error) *MockClient_SetEnvVar_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // StartPipeline provides a mock function for the type MockClient
-func (_mock *MockClient) StartPipeline(ctx context.Context, workspaceID int, profile string, stage string) error {
-	ret := _mock.Called(ctx, workspaceID, profile, stage)
+func (_mock *MockClient) StartPipeline(workspaceID int, profile string, stage string) error {
+	ret := _mock.Called(workspaceID, profile, stage)
 
 	if len(ret) == 0 {
 		panic("no return value specified for StartPipeline")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int, string, string) error); ok {
-		r0 = returnFunc(ctx, workspaceID, profile, stage)
+	if returnFunc, ok := ret.Get(0).(func(int, string, string) error); ok {
+		r0 = returnFunc(workspaceID, profile, stage)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -258,17 +418,32 @@ type MockClient_StartPipeline_Call struct {
 }
 
 // StartPipeline is a helper method to define mock.On call
-//   - ctx
-//   - workspaceID
-//   - profile
-//   - stage
-func (_e *MockClient_Expecter) StartPipeline(ctx interface{}, workspaceID interface{}, profile interface{}, stage interface{}) *MockClient_StartPipeline_Call {
-	return &MockClient_StartPipeline_Call{Call: _e.mock.On("StartPipeline", ctx, workspaceID, profile, stage)}
+//   - workspaceID int
+//   - profile string
+//   - stage string
+func (_e *MockClient_Expecter) StartPipeline(workspaceID interface{}, profile interface{}, stage interface{}) *MockClient_StartPipeline_Call {
+	return &MockClient_StartPipeline_Call{Call: _e.mock.On("StartPipeline", workspaceID, profile, stage)}
 }
 
-func (_c *MockClient_StartPipeline_Call) Run(run func(ctx context.Context, workspaceID int, profile string, stage string)) *MockClient_StartPipeline_Call {
+func (_c *MockClient_StartPipeline_Call) Run(run func(workspaceID int, profile string, stage string)) *MockClient_StartPipeline_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(int), args[2].(string), args[3].(string))
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -278,22 +453,22 @@ func (_c *MockClient_StartPipeline_Call) Return(err error) *MockClient_StartPipe
 	return _c
 }
 
-func (_c *MockClient_StartPipeline_Call) RunAndReturn(run func(ctx context.Context, workspaceID int, profile string, stage string) error) *MockClient_StartPipeline_Call {
+func (_c *MockClient_StartPipeline_Call) RunAndReturn(run func(workspaceID int, profile string, stage string) error) *MockClient_StartPipeline_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // SyncLandscape provides a mock function for the type MockClient
-func (_mock *MockClient) SyncLandscape(ctx context.Context, workspaceID int, profile string) error {
-	ret := _mock.Called(ctx, workspaceID, profile)
+func (_mock *MockClient) SyncLandscape(workspaceID int, profile string) error {
+	ret := _mock.Called(workspaceID, profile)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SyncLandscape")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, int, string) error); ok {
-		r0 = returnFunc(ctx, workspaceID, profile)
+	if returnFunc, ok := ret.Get(0).(func(int, string) error); ok {
+		r0 = returnFunc(workspaceID, profile)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -306,16 +481,26 @@ type MockClient_SyncLandscape_Call struct {
 }
 
 // SyncLandscape is a helper method to define mock.On call
-//   - ctx
-//   - workspaceID
-//   - profile
-func (_e *MockClient_Expecter) SyncLandscape(ctx interface{}, workspaceID interface{}, profile interface{}) *MockClient_SyncLandscape_Call {
-	return &MockClient_SyncLandscape_Call{Call: _e.mock.On("SyncLandscape", ctx, workspaceID, profile)}
+//   - workspaceID int
+//   - profile string
+func (_e *MockClient_Expecter) SyncLandscape(workspaceID interface{}, profile interface{}) *MockClient_SyncLandscape_Call {
+	return &MockClient_SyncLandscape_Call{Call: _e.mock.On("SyncLandscape", workspaceID, profile)}
 }
 
-func (_c *MockClient_SyncLandscape_Call) Run(run func(ctx context.Context, workspaceID int, profile string)) *MockClient_SyncLandscape_Call {
+func (_c *MockClient_SyncLandscape_Call) Run(run func(workspaceID int, profile string)) *MockClient_SyncLandscape_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(int), args[2].(string))
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
 	})
 	return _c
 }
@@ -325,7 +510,7 @@ func (_c *MockClient_SyncLandscape_Call) Return(err error) *MockClient_SyncLands
 	return _c
 }
 
-func (_c *MockClient_SyncLandscape_Call) RunAndReturn(run func(ctx context.Context, workspaceID int, profile string) error) *MockClient_SyncLandscape_Call {
+func (_c *MockClient_SyncLandscape_Call) RunAndReturn(run func(workspaceID int, profile string) error) *MockClient_SyncLandscape_Call {
 	_c.Call.Return(run)
 	return _c
 }
