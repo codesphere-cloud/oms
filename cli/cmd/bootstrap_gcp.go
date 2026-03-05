@@ -122,28 +122,18 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		}
 	}
 
-	err = bs.Bootstrap()
-	envBytes, errMarshal := json.MarshalIndent(bs.Env, "", "  ")
+	bootstrapErr := bs.Bootstrap()
 
-	if errMarshal == nil {
-		workdir := env.NewEnv().GetOmsWorkdir()
-		err = fw.MkdirAll(workdir, 0755)
-		if err != nil {
-			log.Printf("warning: failed to create workdir: %v", err)
-		}
-		infraFilePath := gcp.GetInfraFilePath()
-		err = fw.WriteFile(infraFilePath, envBytes, 0644)
-		if err != nil {
-			log.Printf("warning: failed to write gcp bootstrap env file: %v", err)
-		}
-		log.Printf("Infrastructure details written to %s", infraFilePath)
+	err = writeInfraDetails(bs.Env)
+	if err != nil {
+		log.Printf("warning: failed to write infra details: %v", err)
 	}
 
-	if err != nil {
+	if bootstrapErr != nil {
 		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
 			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
-		return fmt.Errorf("failed to bootstrap GCP: %w", err)
+		return fmt.Errorf("failed to bootstrap GCP: %w", bootstrapErr)
 	}
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
@@ -160,6 +150,32 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		packageName += "-lite"
 	}
 	log.Printf("example install command (run from jumpbox):\n%s -p %s.tar.gz", installCmd, packageName)
+
+	return nil
+}
+
+// writeInfraDetails writes details about the bootstrapped codesphere environment into a file.
+func writeInfraDetails(csEnv *gcp.CodesphereEnvironment) error {
+	envBytes, err := json.MarshalIndent(csEnv, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal codesphere env: %w", err)
+	}
+
+	workdir := env.NewEnv().GetOmsWorkdir()
+	fw := util.NewFilesystemWriter()
+
+	err = fw.MkdirAll(workdir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create workdir %w", err)
+	}
+
+	infraFilePath := gcp.GetInfraFilePath()
+	err = fw.WriteFile(infraFilePath, envBytes, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
+	}
+
+	log.Printf("Infrastructure details written to %s", infraFilePath)
 
 	return nil
 }
