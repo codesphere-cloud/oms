@@ -1029,10 +1029,21 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when GetInstance fails", func() {
-				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("not found")).Maybe()
+				instanceCalls := make(map[string]int)
+				var mu sync.Mutex
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
+					func(projectID, zone, name string) (*computepb.Instance, error) {
+						mu.Lock()
+						defer mu.Unlock()
+						instanceCalls[name]++
+						if instanceCalls[name] == 1 {
+							return nil, fmt.Errorf("not found")
+						}
+						return nil, fmt.Errorf("get error")
+					},
+				).Maybe()
 				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Maybe()
-				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("get error")).Maybe()
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).To(HaveOccurred())

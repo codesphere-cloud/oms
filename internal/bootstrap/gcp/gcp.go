@@ -712,8 +712,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 
 			existingInstance, err := b.GCPClient.GetInstance(projectID, zone, vm.Name)
 			if err != nil {
-				st, ok := status.FromError(err)
-				if !ok || st.Code() != codes.NotFound {
+				if !isNotFoundError(err) {
 					errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
 					return
 				}
@@ -1709,6 +1708,10 @@ func (b *GCPBootstrapper) RunK0sConfigScript() error {
 // Helper functions
 func isAlreadyExistsError(err error) bool {
 	return status.Code(err) == codes.AlreadyExists || strings.Contains(err.Error(), "already exists")
+}
+
+func isNotFoundError(err error) bool {
+	return status.Code(err) == codes.NotFound || strings.Contains(err.Error(), "not found")
 }
 
 // readSSHKey reads an SSH key file, expanding ~ in the path
