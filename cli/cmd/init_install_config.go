@@ -119,12 +119,12 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 			- dev: Single-node development setup
 			- production: HA multi-node setup
 			- minimal: Minimal testing setup`),
-			Example: formatExamplesWithBinary("init install-config", []csio.Example{
+			Example: formatExamples("init install-config", []csio.Example{
 				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
 				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
 				{Cmd: "--profile production -c config.yaml --vault prod.vault.yaml", Desc: "Use production profile"},
 				{Cmd: "--validate -c config.yaml --vault prod.vault.yaml", Desc: "Validate existing configuration files"},
-			}, "oms-cli"),
+			}),
 		},
 		Opts:       &InitInstallConfigOpts{GlobalOptions: opts},
 		FileWriter: util.NewFilesystemWriter(),

@@ -191,8 +191,8 @@ func (n *Node) HasCommand(command string) bool {
 // InstallOms installs the OMS CLI on the remote node via SSH
 func (n *Node) InstallOms() error {
 	remoteCommands := []string{
-		"wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms-cli.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms-cli",
-		"chmod +x oms-cli; sudo mv oms-cli /usr/local/bin/",
+		"wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms",
+		"chmod +x oms; sudo mv oms /usr/local/bin/",
 		"curl -LO https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64; sudo mv sops-v3.11.0.linux.amd64 /usr/local/bin/sops; sudo chmod +x /usr/local/bin/sops",
 		"wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
 	}

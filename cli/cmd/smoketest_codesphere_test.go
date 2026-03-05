@@ -5,9 +5,11 @@ package cmd_test
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/codesphere-cloud/cs-go/api"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
@@ -18,20 +20,78 @@ import (
 	"github.com/codesphere-cloud/oms/internal/codesphere/teststeps"
 )
 
+func mockFullTestRun(mockClient *codesphere.MockClient, teamId, planId, workspaceId int) {
+	// Expect the rest of the steps to run with the fetched plan ID
+	mockClient.EXPECT().CreateWorkspace(
+		teamId,                        // teamID
+		planId,                        // fetched planID
+		mock.AnythingOfType("string"), // workspace name is timestamped
+		(*string)(nil),                // empty workspace
+	).Return(workspaceId, nil).Once()
+
+	mockClient.EXPECT().SetEnvVar(
+		workspaceId,
+		"TEST_VAR",
+		"smoketest",
+	).Return(nil).Once()
+
+	mockClient.EXPECT().ExecuteCommand(
+		workspaceId,
+		mock.MatchedBy(func(cmd string) bool {
+			return strings.Contains(cmd, "> ci.yml")
+		}),
+	).Return(nil).Once()
+
+	mockClient.EXPECT().ExecuteCommand(
+		workspaceId,
+		mock.MatchedBy(func(cmd string) bool {
+			return strings.Contains(cmd, "> index.html")
+		}),
+	).Return(nil).Once()
+
+	mockClient.EXPECT().SyncLandscape(
+		workspaceId,
+		"ci.yml",
+	).Return(nil).Once()
+
+	mockClient.EXPECT().StartPipeline(
+		workspaceId,
+		"ci.yml",
+		"run",
+	).Return(nil).Once()
+
+	mockClient.EXPECT().DeleteWorkspace(
+		workspaceId,
+	).Return(nil).Once()
+}
+
 var _ = Describe("SmoketestCodesphereCmd", func() {
 	var (
-		mockClient *codesphere.MockClient
-		c          cmd.SmoketestCodesphereCmd
-		opts       *teststeps.SmoketestCodesphereOpts
+		mockClient  *codesphere.MockClient
+		c           cmd.SmoketestCodesphereCmd
+		opts        *teststeps.SmoketestCodesphereOpts
+		planId      string
+		teamId      string
+		planIdInt   int
+		teamIdInt   int
+		workspaceId int
 	)
 
 	BeforeEach(func() {
+		planId = "456"
+		teamId = "123"
+		workspaceId = 789
+	})
+
+	JustBeforeEach(func() {
+		planIdInt, _ = strconv.Atoi(planId)
+		teamIdInt, _ = strconv.Atoi(teamId)
 		mockClient = codesphere.NewMockClient(GinkgoT())
 		opts = &teststeps.SmoketestCodesphereOpts{
 			BaseURL: "https://test.codesphere.com/api",
 			Token:   "test-token",
-			TeamID:  "123",
-			PlanID:  "456",
+			TeamID:  teamId,
+			PlanID:  planId,
 			Quiet:   true, // Suppress log output in tests
 			Timeout: 10 * time.Minute,
 			Profile: "ci.yml",
@@ -48,70 +108,80 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 	})
 
 	Context("RunSmoketest", func() {
+		Context("when no teamId is provided", func() {
+			BeforeEach(func() {
+				teamId = ""
+			})
+			Context("when no teams are returned by the API", func() {
+				It("returns an error indicating no teams are available", func() {
+					mockClient.EXPECT().ListTeams().Return([]api.Team{}, nil).Once()
+
+					err := c.RunSmoketest()
+					Expect(err).To(MatchError(ContainSubstring("no teams available")))
+				})
+			})
+			Context("when no primary team is returned by the API", func() {
+				It("uses the first team", func() {
+					falseVal := false
+					mockClient.EXPECT().ListTeams().Return([]api.Team{
+						{Id: 99, Name: "other team", IsFirst: &falseVal},
+						{Id: 21, Name: "primary team", IsFirst: &falseVal},
+					}, nil).Once()
+
+					mockFullTestRun(mockClient, 99, 456, 789)
+
+					err := c.RunSmoketest()
+					Expect(err).To(BeNil())
+				})
+			})
+			It("uses the primary team of the user", func() {
+				falseVal := false
+				trueVal := true
+				mockClient.EXPECT().ListTeams().Return([]api.Team{
+					{Id: 99, Name: "other team", IsFirst: &falseVal},
+					{Id: 21, Name: "primary team", IsFirst: &trueVal},
+				}, nil).Once()
+
+				mockFullTestRun(mockClient, 21, 456, 789)
+
+				err := c.RunSmoketest()
+				Expect(err).To(BeNil())
+			})
+		})
+		Context("when no planId is provided", func() {
+			BeforeEach(func() {
+				planId = ""
+			})
+			Context("when no plans are returned by the API", func() {
+				It("returns an error indicating no workspace plans are available", func() {
+					mockClient.EXPECT().ListWorkspacePlans().Return([]api.WorkspacePlan{}, nil).Once()
+
+					err := c.RunSmoketest()
+					Expect(err).To(MatchError(ContainSubstring("no workspace plans available")))
+				})
+			})
+			It("fetches the first available plan ID", func() {
+				mockClient.EXPECT().ListWorkspacePlans().Return([]api.WorkspacePlan{
+					{Id: 42, Title: "small"},
+					{Id: 1000, Title: "big"},
+				}, nil).Once()
+
+				mockFullTestRun(mockClient, teamIdInt, 42, 789)
+
+				err := c.RunSmoketest()
+				Expect(err).To(BeNil())
+			})
+		})
 		It("completes successfully with all steps", func() {
-			workspaceID := 789
-
-			// Expect all API calls in order
-			mockClient.EXPECT().CreateWorkspace(
-				mock.Anything,
-				123,                           // teamID
-				456,                           // planID
-				mock.AnythingOfType("string"), // workspace name is timestamped
-				(*string)(nil),                // empty workspace
-			).Return(workspaceID, nil).Once()
-
-			mockClient.EXPECT().SetEnvVar(
-				mock.Anything,
-				workspaceID,
-				"TEST_VAR",
-				"smoketest",
-			).Return(nil).Once()
-
-			// Create ci.yml
-			mockClient.EXPECT().ExecuteCommand(
-				mock.Anything,
-				workspaceID,
-				mock.MatchedBy(func(cmd string) bool {
-					return strings.Contains(cmd, "> ci.yml")
-				}),
-			).Return(nil).Once()
-
-			// Create index.html
-			mockClient.EXPECT().ExecuteCommand(
-				mock.Anything,
-				workspaceID,
-				mock.MatchedBy(func(cmd string) bool {
-					return strings.Contains(cmd, "> index.html")
-				}),
-			).Return(nil).Once()
-
-			mockClient.EXPECT().SyncLandscape(
-				mock.Anything,
-				workspaceID,
-				"ci.yml",
-			).Return(nil).Once()
-
-			mockClient.EXPECT().StartPipeline(
-				mock.Anything,
-				workspaceID,
-				"ci.yml",
-				"run",
-			).Return(nil).Once()
-
-			mockClient.EXPECT().DeleteWorkspace(
-				mock.Anything,
-				workspaceID,
-			).Return(nil).Once()
-
+			mockFullTestRun(mockClient, teamIdInt, planIdInt, 789)
 			err := c.RunSmoketest()
 			Expect(err).To(BeNil())
 		})
 
 		It("deletes workspace even on CreateWorkspace failure", func() {
 			mockClient.EXPECT().CreateWorkspace(
-				mock.Anything,
-				123, // teamID
-				456, // planID
+				teamIdInt, // teamID
+				planIdInt, // planID
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(0, fmt.Errorf("create failed")).Once()
@@ -124,22 +194,19 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			workspaceID := 789
 
 			mockClient.EXPECT().CreateWorkspace(
-				mock.Anything,
-				123, // teamID
-				456, // planID
+				teamIdInt, // teamID
+				planIdInt, // planID
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceID, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
-				mock.Anything,
 				workspaceID,
 				"TEST_VAR",
 				"smoketest",
 			).Return(fmt.Errorf("setenv failed")).Once()
 
 			mockClient.EXPECT().DeleteWorkspace(
-				mock.Anything,
 				workspaceID,
 			).Return(nil).Once()
 
@@ -148,35 +215,29 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 		})
 
 		It("deletes workspace on ExecuteCommand failure", func() {
-			workspaceID := 789
-
 			mockClient.EXPECT().CreateWorkspace(
-				mock.Anything,
-				123, // teamID
-				456, // planID
+				teamIdInt, // teamID
+				planIdInt, // planID
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
-			).Return(workspaceID, nil).Once()
+			).Return(workspaceId, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"TEST_VAR",
 				"smoketest",
 			).Return(nil).Once()
 
 			// Create ci.yml fails
 			mockClient.EXPECT().ExecuteCommand(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "> ci.yml")
 				}),
 			).Return(fmt.Errorf("exec failed")).Once()
 
 			mockClient.EXPECT().DeleteWorkspace(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 			).Return(nil).Once()
 
 			err := c.RunSmoketest()
@@ -184,27 +245,22 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 		})
 
 		It("deletes workspace on SyncLandscape failure", func() {
-			workspaceID := 789
-
 			mockClient.EXPECT().CreateWorkspace(
-				mock.Anything,
-				123, // teamID
-				456, // planID
+				teamIdInt, // teamID
+				planIdInt, // planID
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
-			).Return(workspaceID, nil).Once()
+			).Return(workspaceId, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"TEST_VAR",
 				"smoketest",
 			).Return(nil).Once()
 
 			// Create ci.yml
 			mockClient.EXPECT().ExecuteCommand(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "> ci.yml")
 				}),
@@ -212,22 +268,19 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 			// Create index.html
 			mockClient.EXPECT().ExecuteCommand(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "> index.html")
 				}),
 			).Return(nil).Once()
 
 			mockClient.EXPECT().SyncLandscape(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"ci.yml",
 			).Return(fmt.Errorf("sync failed")).Once()
 
 			mockClient.EXPECT().DeleteWorkspace(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 			).Return(nil).Once()
 
 			err := c.RunSmoketest()
@@ -235,27 +288,22 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 		})
 
 		It("deletes workspace on StartPipeline failure", func() {
-			workspaceID := 789
-
 			mockClient.EXPECT().CreateWorkspace(
-				mock.Anything,
-				123, // teamID
-				456, // planID
+				teamIdInt, // teamID
+				planIdInt, // planID
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
-			).Return(workspaceID, nil).Once()
+			).Return(workspaceId, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"TEST_VAR",
 				"smoketest",
 			).Return(nil).Once()
 
 			// Create ci.yml
 			mockClient.EXPECT().ExecuteCommand(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "> ci.yml")
 				}),
@@ -263,29 +311,25 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 			// Create index.html
 			mockClient.EXPECT().ExecuteCommand(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "> index.html")
 				}),
 			).Return(nil).Once()
 
 			mockClient.EXPECT().SyncLandscape(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"ci.yml",
 			).Return(nil).Once()
 
 			mockClient.EXPECT().StartPipeline(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"ci.yml",
 				"run",
 			).Return(fmt.Errorf("pipeline failed")).Once()
 
 			mockClient.EXPECT().DeleteWorkspace(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 			).Return(nil).Once()
 
 			err := c.RunSmoketest()
@@ -293,27 +337,22 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 		})
 
 		It("returns cleanup error when DeleteWorkspace fails", func() {
-			workspaceID := 789
-
 			mockClient.EXPECT().CreateWorkspace(
-				mock.Anything,
-				123, // teamID
-				456, // planID
+				teamIdInt, // teamID
+				planIdInt, // planID
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
-			).Return(workspaceID, nil).Once()
+			).Return(workspaceId, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"TEST_VAR",
 				"smoketest",
 			).Return(nil).Once()
 
 			// Create ci.yml
 			mockClient.EXPECT().ExecuteCommand(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "> ci.yml")
 				}),
@@ -321,29 +360,25 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 			// Create index.html
 			mockClient.EXPECT().ExecuteCommand(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "> index.html")
 				}),
 			).Return(nil).Once()
 
 			mockClient.EXPECT().SyncLandscape(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"ci.yml",
 			).Return(nil).Once()
 
 			mockClient.EXPECT().StartPipeline(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"ci.yml",
 				"run",
 			).Return(nil).Once()
 
 			mockClient.EXPECT().DeleteWorkspace(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 			).Return(fmt.Errorf("delete failed")).Once()
 
 			err := c.RunSmoketest()
@@ -351,20 +386,17 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 		})
 
 		It("runs only specified steps when steps flag is set", func() {
-			workspaceID := 789
 			opts.Steps = []string{"createWorkspace", "setEnvVar"}
 
 			mockClient.EXPECT().CreateWorkspace(
-				mock.Anything,
-				123, // teamID
-				456, // planID
+				teamIdInt, // teamID
+				planIdInt, // planID
 				mock.AnythingOfType("string"),
 				(*string)(nil),
-			).Return(workspaceID, nil).Once()
+			).Return(workspaceId, nil).Once()
 
 			mockClient.EXPECT().SetEnvVar(
-				mock.Anything,
-				workspaceID,
+				workspaceId,
 				"TEST_VAR",
 				"smoketest",
 			).Return(nil).Once()

@@ -67,7 +67,7 @@ provision:
     cd /home/user/oms
     export PATH=$PATH:/usr/local/go/bin
     go mod download
-    cd cli && go build -a -buildvcs=false && mv cli ../oms-cli
+    cd cli && go build -a -buildvcs=false && mv cli ../oms
 
 message: |
   Your OMS development environment is ready!
@@ -76,12 +76,12 @@ message: |
   ------
   limactl shell lima-oms
   cd /home/user/oms
-  ./oms-cli --help
+  ./oms --help
   ------
 
   To install Codesphere eg.:
   ------
-  ./oms-cli install codesphere --package codesphere-v1.66.0-installer --config config.yaml --priv-key ./path-to-private-key
+  ./oms install codesphere --package codesphere-v1.66.0-installer --config config.yaml --priv-key ./path-to-private-key
   ------
 
   Go 1.24 and Docker are installed and ready to use.
