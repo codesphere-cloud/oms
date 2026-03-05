@@ -194,5 +194,10 @@ func (a *ArgoCD) Install() error {
 		fmt.Printf("Successfully installed Argo CD (chart version: %s)\n", a.Version)
 	}
 
+	err = applyPostInstallResources()
+	if err != nil {
+		return fmt.Errorf("failed apply post chart install resources: %v", err)
+	}
+
 	return nil
 }

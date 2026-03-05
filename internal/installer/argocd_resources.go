@@ -7,6 +7,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"log"
 
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -25,6 +26,7 @@ var helmRegistryTpl []byte
 var gitRepoTpl []byte
 
 func applyAppProjects(ctx context.Context, dynClient dynamic.Interface) error {
+	log.Println("Applying AppProjects... ")
 	objects, err := decodeMultiDocYAML(appProjectsYAML)
 	if err != nil {
 		return fmt.Errorf("decoding app projects yaml: %w", err)
@@ -43,6 +45,7 @@ func applyAppProjects(ctx context.Context, dynClient dynamic.Interface) error {
 }
 
 func applyLocalCluster(ctx context.Context, clientset kubernetes.Interface, dcNumber string) error {
+	log.Println("Applying local cluster secret... ")
 	rendered, err := renderTemplate(localClusterTpl, map[string]string{
 		"DC_NUMBER": dcNumber,
 	})
@@ -54,6 +57,7 @@ func applyLocalCluster(ctx context.Context, clientset kubernetes.Interface, dcNu
 }
 
 func applyHelmRegistrySecret(ctx context.Context, clientset kubernetes.Interface, ociReadPassword string) error {
+	log.Println("Applying helm registry secret... ")
 	rendered, err := renderTemplate(helmRegistryTpl, map[string]string{
 		"SECRET_CODESPHERE_OCI_READ": ociReadPassword,
 	})
@@ -65,6 +69,7 @@ func applyHelmRegistrySecret(ctx context.Context, clientset kubernetes.Interface
 }
 
 func applyGitRepoSecret(ctx context.Context, clientset kubernetes.Interface, reposReadPassword string) error {
+	log.Println("Applying git repo secret... ")
 	rendered, err := renderTemplate(gitRepoTpl, map[string]string{
 		"SECRET_CODESPHERE_REPOS_READ": reposReadPassword,
 	})
