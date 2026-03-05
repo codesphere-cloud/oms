@@ -958,7 +958,6 @@ func isSpotCapacityError(err error) bool {
 		strings.Contains(errStr, "UNSUPPORTED_OPERATION") ||
 		strings.Contains(errStr, "stockout") ||
 		strings.Contains(errStr, "does not have enough resources") ||
-		strings.Contains(errStr, "quota") ||
 		status.Code(err) == codes.ResourceExhausted
 }
 
