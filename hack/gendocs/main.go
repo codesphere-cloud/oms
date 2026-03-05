@@ -13,7 +13,7 @@ import (
 func main() {
 	// Ensure the generated docs use the stable project command name.
 	root := oms.GetRootCmd()
-	root.Use = "oms-cli"
+	root.Use = "oms"
 
 	root.DisableAutoGenTag = true
 

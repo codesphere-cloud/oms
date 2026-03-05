@@ -1,0 +1,26 @@
+## oms register
+
+Register a new API key
+
+### Synopsis
+
+Register a new API key for accessing the OMS portal.
+
+```
+oms register [flags]
+```
+
+### Options
+
+```
+  -e, --expires string        Expiration date of the new API key. Default is 1 year from now. Format: RFC3339 (e.g., 2024-12-31T23:59:59Z)
+  -h, --help                  help for register
+  -g, --organization string   Organization of the new API key
+  -o, --owner string          Owner of the new API key
+  -r, --role string           Role of the new API key. Available roles: Admin, Dev, Ext (default "Ext")
+```
+
+### SEE ALSO
+
+* [oms](oms.md)	 - Codesphere Operations Management System (OMS)
+

@@ -44,9 +44,9 @@ func AddBuildImageCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 			Use:   "image",
 			Short: "Build and push Docker image using Dockerfile and Codesphere package version",
 			Long:  `Build a Docker image from a Dockerfile and push it to a registry, tagged with the Codesphere version from the package.`,
-			Example: formatExamplesWithBinary("build image", []io.Example{
+			Example: formatExamples("build image", []io.Example{
 				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz --registry my-registry.com/my-image", Desc: "Build image for Codesphere version 1.68.0 and push to specified registry"},
-			}, "oms-cli"),
+			}),
 			Args: cobra.ExactArgs(0),
 		},
 		Opts: BuildImageOpts{GlobalOptions: opts},
