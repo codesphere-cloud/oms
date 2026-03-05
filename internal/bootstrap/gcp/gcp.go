@@ -726,21 +726,19 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 						errCh <- fmt.Errorf("failed to start stopped instance %s: %w", vm.Name, err)
 						return
 					}
-					// Re-fetch instance to get updated IPs after start
-					existingInstance, err = b.GCPClient.GetInstance(projectID, zone, vm.Name)
-					if err != nil {
-						errCh <- fmt.Errorf("failed to get instance %s after start: %w", vm.Name, err)
-						return
-					}
+				}
+
+				// Wait until the instance is RUNNING and IPs are populated.
+				readyInstance, err := b.waitForInstanceRunning(projectID, zone, vm.Name, vm.ExternalIP)
+				if err != nil {
+					errCh <- fmt.Errorf("instance %s did not become ready: %w", vm.Name, err)
+					return
 				}
 
 				externalIP := ""
-				internalIP := ""
-				if len(existingInstance.GetNetworkInterfaces()) > 0 {
-					internalIP = existingInstance.GetNetworkInterfaces()[0].GetNetworkIP()
-					if len(existingInstance.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
-						externalIP = existingInstance.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
-					}
+				internalIP := readyInstance.GetNetworkInterfaces()[0].GetNetworkIP()
+				if len(readyInstance.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
+					externalIP = readyInstance.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
 				}
 				resultCh <- vmResult{
 					vmType:     vm.Tags[0],
@@ -946,6 +944,36 @@ func (b *GCPBootstrapper) createInstanceWithFallback(projectID, zone string, ins
 	}
 
 	return fmt.Errorf("failed to create instance %s: %w", vmName, err)
+}
+
+// waitForInstanceRunning polls GetInstance until the instance status is RUNNING
+// and its internal IP (and external IP, when needsExternalIP is true) are populated.
+// It returns the ready instance or an error if the deadline is exceeded.
+func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, needsExternalIP bool) (*computepb.Instance, error) {
+	const (
+		maxAttempts  = 60
+		pollInterval = 5 * time.Second
+	)
+	for attempt := range maxAttempts {
+		inst, err := b.GCPClient.GetInstance(projectID, zone, name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to poll instance %s: %w", name, err)
+		}
+
+		if inst.GetStatus() == "RUNNING" &&
+			len(inst.GetNetworkInterfaces()) > 0 &&
+			inst.GetNetworkInterfaces()[0].GetNetworkIP() != "" &&
+			(!needsExternalIP || (len(inst.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 &&
+				inst.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP() != "")) {
+			return inst, nil
+		}
+
+		if attempt < maxAttempts-1 {
+			time.Sleep(pollInterval)
+		}
+	}
+	return nil, fmt.Errorf("timed out waiting for instance %s to be RUNNING with IPs assigned after %s",
+		name, time.Duration(maxAttempts)*pollInterval)
 }
 
 // isSpotCapacityError checks if the error is related to spot VM capacity issues
