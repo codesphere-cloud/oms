@@ -710,7 +710,14 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 			defer wg.Done()
 
 			existingInstance, err := b.GCPClient.GetInstance(projectID, zone, vm.Name)
-			if err == nil && existingInstance != nil {
+			if err != nil {
+				st, ok := status.FromError(err)
+				if !ok || st.Code() != codes.NotFound {
+					errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
+					return
+				}
+			}
+			if existingInstance != nil {
 				instanceStatus := existingInstance.GetStatus()
 				if instanceStatus == "TERMINATED" || instanceStatus == "STOPPED" || instanceStatus == "SUSPENDED" {
 					// Start the stopped instance
