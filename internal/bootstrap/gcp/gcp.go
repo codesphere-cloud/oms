@@ -700,6 +700,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	wg := sync.WaitGroup{}
 	errCh := make(chan error, len(vmDefs))
 	resultCh := make(chan vmResult, len(vmDefs))
+	logCh := make(chan string, len(vmDefs))
 	rootDiskSize := int64(200)
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		rootDiskSize = 50
@@ -816,7 +817,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				}
 			}
 
-			err = b.createInstanceWithFallback(projectID, zone, instance, vm.Name)
+			err = b.createInstanceWithFallback(projectID, zone, instance, vm.Name, logCh)
 			if err != nil {
 				errCh <- err
 				return
@@ -851,6 +852,11 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 
 	close(errCh)
 	close(resultCh)
+	close(logCh)
+
+	for msg := range logCh {
+		b.stlog.Logf("%s", msg)
+	}
 
 	var errs []error
 	for err := range errCh {
@@ -913,7 +919,7 @@ func (b *GCPBootstrapper) buildSchedulingConfig() *computepb.Scheduling {
 
 // createInstanceWithFallback attempts to create an instance with the configured settings.
 // If spot VMs are enabled and creation fails due to capacity issues, it falls back to standard VMs.
-func (b *GCPBootstrapper) createInstanceWithFallback(projectID, zone string, instance *computepb.Instance, vmName string) error {
+func (b *GCPBootstrapper) createInstanceWithFallback(projectID, zone string, instance *computepb.Instance, vmName string, logCh chan<- string) error {
 	err := b.GCPClient.CreateInstance(projectID, zone, instance)
 	if err == nil {
 		return nil
@@ -924,7 +930,7 @@ func (b *GCPBootstrapper) createInstanceWithFallback(projectID, zone string, ins
 	}
 
 	if b.Env.Spot && isSpotCapacityError(err) {
-		b.stlog.Logf("Spot capacity unavailable for %s, falling back to standard VM", vmName)
+		logCh <- fmt.Sprintf("Spot capacity unavailable for %s, falling back to standard VM", vmName)
 		instance.Scheduling = &computepb.Scheduling{}
 		err = b.GCPClient.CreateInstance(projectID, zone, instance)
 		if err != nil && !isAlreadyExistsError(err) {
