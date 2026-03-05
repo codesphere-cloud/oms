@@ -126,7 +126,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	err = writeInfraDetails(bs.Env)
 	if err != nil {
-		log.Printf("failed to write infra details: %v", err)
+		log.Printf("warning: failed to write infra details: %v", err)
 	}
 
 	if bootstrapErr != nil {
@@ -158,7 +158,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 func writeInfraDetails(csEnv *gcp.CodesphereEnvironment) error {
 	envBytes, err := json.MarshalIndent(csEnv, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal codesphere env: %w", err)
 	}
 
 	workdir := env.NewEnv().GetOmsWorkdir()
@@ -166,13 +166,13 @@ func writeInfraDetails(csEnv *gcp.CodesphereEnvironment) error {
 
 	err = fw.MkdirAll(workdir, 0755)
 	if err != nil {
-		log.Printf("warning: failed to create workdir: %v", err)
+		return fmt.Errorf("failed to create workdir %w", err)
 	}
 
 	infraFilePath := gcp.GetInfraFilePath()
 	err = fw.WriteFile(infraFilePath, envBytes, 0644)
 	if err != nil {
-		log.Printf("warning: failed to write gcp bootstrap env file: %v", err)
+		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
 	}
 
 	log.Printf("Infrastructure details written to %s", infraFilePath)
