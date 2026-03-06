@@ -63,28 +63,36 @@ func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *GlobalOptions) {
 			Long: io.Long(`Run automated smoke tests for a Codesphere installation by creating a workspace,
 				setting environment variables, executing commands, syncing landscape, and running a pipeline stage.
 				The workspace is automatically deleted after the test completes.`),
-			Example: formatExamplesWithBinary("smoketest codesphere", []io.Example{
+			Example: formatExamples("smoketest codesphere", []io.Example{
 				{
-					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID",
+					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN",
 					Desc: "Run smoke tests against a Codesphere installation",
 				},
 				{
-					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID --quiet",
+					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID",
+					Desc: "Run smoke tests against a specific team within your Codesphere installation",
+				},
+				{
+					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID",
+					Desc: "Run smoke tests against a specific team within your Codesphere installation, using a specific workspace plan",
+				},
+				{
+					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --quiet",
 					Desc: "Run smoke tests in quiet mode (no progress logging)",
 				},
 				{
-					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID --timeout 15m",
+					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --timeout 15m",
 					Desc: "Run smoke tests with custom timeout",
 				},
 				{
-					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID --steps createWorkspace,syncLandscape",
+					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --steps createWorkspace,syncLandscape",
 					Desc: "Run only specific steps of the smoke test (workspace won't be deleted)",
 				},
 				{
-					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID --steps createWorkspace,syncLandscape,deleteWorkspace",
+					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --steps createWorkspace,syncLandscape,deleteWorkspace",
 					Desc: "Run specific steps and delete the workspace afterwards",
 				},
-			}, "oms-cli"),
+			}),
 		},
 		Opts: &teststeps.SmoketestCodesphereOpts{},
 	}
@@ -99,8 +107,6 @@ func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *GlobalOptions) {
 
 	util.MarkFlagRequired(c.cmd, "baseurl")
 	util.MarkFlagRequired(c.cmd, "token")
-	util.MarkFlagRequired(c.cmd, "team-id")
-	util.MarkFlagRequired(c.cmd, "plan-id")
 
 	c.cmd.RunE = c.RunE
 

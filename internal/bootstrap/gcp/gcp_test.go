@@ -256,6 +256,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(cpNode.GetExternalIP()).To(Equal("1.2.3.4"))
 				Expect(cpNode.GetInternalIP()).To(Equal("10.0.0.1"))
 			}
+
+			Expect(len(bs.Env.InstallConfig.Codesphere.ManagedServices)).To(Equal(4))
 		})
 	})
 
@@ -263,78 +265,127 @@ var _ = Describe("GCP Bootstrapper", func() {
 		var (
 			artifacts []portal.Artifact
 		)
-		BeforeEach(func() {
-			mockPortalClient = portal.NewMockPortal(GinkgoT())
-			csEnv.InstallVersion = "v1.2.3"
-			csEnv.InstallHash = "abc123"
-			artifacts = []portal.Artifact{
-				{Filename: "installer-lite.tar.gz"},
-			}
-		})
-		JustBeforeEach(func() {
-			mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, bs.Env.InstallVersion, bs.Env.InstallHash).Return(portal.Build{
-				Artifacts: artifacts,
-				Hash:      csEnv.InstallHash,
-				Version:   csEnv.InstallVersion,
-			}, nil)
-		})
-
-		Context("when GitHub arguments are partially set", func() {
+		Context("When a version and hash are specified", func() {
 			BeforeEach(func() {
-				csEnv.GitHubAppName = ""
+				mockPortalClient = portal.NewMockPortal(GinkgoT())
+				csEnv.InstallVersion = "v1.2.3"
+				csEnv.InstallHash = "abc123"
+				artifacts = []portal.Artifact{
+					{Filename: "installer-lite.tar.gz"},
+				}
 			})
-			It("fails", func() {
-				err := bs.ValidateInput()
-				Expect(err).To(MatchError(MatchRegexp("GitHub app credentials are not fully specified")))
-			})
-		})
-
-		Context("when GHCR registry is used", func() {
-			BeforeEach(func() {
-				csEnv.RegistryType = gcp.RegistryTypeGitHub
-			})
-
-			It("succeeds when package exists and has the lite package", func() {
-				err := bs.ValidateInput()
-				Expect(err).NotTo(HaveOccurred())
+			JustBeforeEach(func() {
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, bs.Env.InstallVersion, bs.Env.InstallHash).Return(portal.Build{
+					Artifacts: artifacts,
+					Hash:      csEnv.InstallHash,
+					Version:   csEnv.InstallVersion,
+				}, nil)
 			})
 
-			Context("when package exists but does not have the lite package", func() {
+			Context("when GHCR registry is used", func() {
 				BeforeEach(func() {
-					artifacts[0].Filename = "installer.tar.gz"
+					csEnv.RegistryType = gcp.RegistryTypeGitHub
 				})
-				It("fails", func() {
-					err := bs.ValidateInput()
-					Expect(err).To(MatchError(MatchRegexp("artifact installer-lite\\.tar\\.gz")))
-				})
-			})
-		})
 
-		Context("when non-GHCR registry is used", func() {
-			BeforeEach(func() {
-				csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
-			})
-
-			Context("when build exists and has the full package", func() {
-				BeforeEach(func() {
-					artifacts[0].Filename = "installer.tar.gz"
+				Context("when GitHub arguments are partially set", func() {
+					BeforeEach(func() {
+						csEnv.GitHubAppName = ""
+					})
+					It("fails", func() {
+						err := bs.ValidateInput()
+						Expect(err).To(MatchError(MatchRegexp("GitHub app credentials are not fully specified")))
+					})
 				})
-				It("succeeds", func() {
+
+				It("succeeds when package exists and has the lite package", func() {
 					err := bs.ValidateInput()
 					Expect(err).NotTo(HaveOccurred())
 				})
+
+				Context("when package exists but does not have the lite package", func() {
+					BeforeEach(func() {
+						artifacts[0].Filename = "installer.tar.gz"
+					})
+					It("fails", func() {
+						err := bs.ValidateInput()
+						Expect(err).To(MatchError(MatchRegexp("artifact installer-lite\\.tar\\.gz")))
+					})
+				})
 			})
 
-			Context("when package exists but does not have the full package", func() {
+			Context("when non-GHCR registry is used", func() {
 				BeforeEach(func() {
-					artifacts[0].Filename = "installer-lite.tar.gz"
+					csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
 				})
-				It("fails", func() {
-					err := bs.ValidateInput()
-					Expect(err).To(MatchError(MatchRegexp("artifact installer\\.tar\\.gz")))
+
+				Context("when build exists and has the full package", func() {
+					BeforeEach(func() {
+						artifacts[0].Filename = "installer.tar.gz"
+					})
+					It("succeeds", func() {
+						err := bs.ValidateInput()
+						Expect(err).NotTo(HaveOccurred())
+					})
+				})
+
+				Context("when package exists but does not have the full package", func() {
+					BeforeEach(func() {
+						artifacts[0].Filename = "installer-lite.tar.gz"
+					})
+					It("fails", func() {
+						err := bs.ValidateInput()
+						Expect(err).To(MatchError(MatchRegexp("artifact installer\\.tar\\.gz")))
+					})
 				})
 			})
 		})
+
+		Context("When a local package is specified", func() {
+			BeforeEach(func() {
+				csEnv.InstallLocal = "fake-installer-lite.tar.gz"
+			})
+
+			Context("when a version is also specified", func() {
+				BeforeEach(func() {
+					csEnv.InstallVersion = "v1.2.3"
+				})
+				It("fails", func() {
+					err := bs.ValidateInput()
+					Expect(err).To(MatchError(MatchRegexp("cannot specify both install-local and install-version/install-hash")))
+				})
+			})
+			Context("when a hash is also specified", func() {
+				BeforeEach(func() {
+					csEnv.InstallHash = "abc123"
+				})
+				It("fails", func() {
+					err := bs.ValidateInput()
+					Expect(err).To(MatchError(MatchRegexp("cannot specify both install-local and install-version/install-hash")))
+				})
+			})
+			Context("when no version or hash is specified", func() {
+				Context("when the local file does not exist", func() {
+					BeforeEach(func() {
+						fw.EXPECT().Exists(csEnv.InstallLocal).Return(false)
+					})
+					It("fails", func() {
+						err := bs.ValidateInput()
+						Expect(err).To(MatchError(MatchRegexp("local installer package not found at path: " + csEnv.InstallLocal)))
+					})
+				})
+				Context("when the local file exists", func() {
+					BeforeEach(func() {
+						fw.EXPECT().Exists(csEnv.InstallLocal).Return(true)
+					})
+					It("succeeds", func() {
+						err := bs.ValidateInput()
+						Expect(err).NotTo(HaveOccurred())
+					})
+				})
+			})
+
+		})
+
 	})
 
 	Describe("EnsureInstallConfig", func() {
@@ -1139,7 +1190,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(cloudDns["project"]).To(Equal(bs.Env.DNSProjectID))
 
 				Expect(bs.Env.InstallConfig.Codesphere.OpenBao).To(BeNil())
-				Expect(len(bs.Env.InstallConfig.Codesphere.ManagedServices)).To(Equal(3))
 			})
 			Context("When Experiments are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
@@ -1397,11 +1447,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 				It("downloads and installs lite package", func() {
 					// Expect download package
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 
 					// Expect install codesphere
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
-						"oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer-lite.tar.gz -s load-container-images").Return(nil)
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer-lite.tar.gz -s load-container-images").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1415,10 +1465,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 				It("downloads and installs codesphere", func() {
 					// Expect download package
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz -H def9876543210 v1.2.3").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer.tar.gz -H def9876543210 v1.2.3").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1426,17 +1476,76 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("downloads and installs codesphere with hash", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			Context("with local package", func() {
+				BeforeEach(func() {
+					csEnv.InstallLocal = "fake-installer-lite.tar.gz"
+					csEnv.InstallVersion = ""
+					csEnv.InstallHash = ""
+				})
+				Context("using the github registry", func() {
+					BeforeEach(func() {
+						csEnv.RegistryType = gcp.RegistryTypeGitHub
+					})
+					It("installs codesphere from local package", func() {
+						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer-lite.tar.gz").Return(nil)
+						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
+							"oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer-lite.tar.gz -s load-container-images").Return(nil)
+
+						err := bs.InstallCodesphere()
+						Expect(err).NotTo(HaveOccurred())
+					})
+				})
+				Context("using the local registry", func() {
+					BeforeEach(func() {
+						csEnv.RegistryType = gcp.RegistryTypeLocalContainer
+						csEnv.InstallLocal = "fake-installer-lite.tar.gz"
+					})
+					It("installs codesphere from local package", func() {
+						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer.tar.gz").Return(nil)
+						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
+							"oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer.tar.gz").Return(nil)
+
+						err := bs.InstallCodesphere()
+						Expect(err).NotTo(HaveOccurred())
+					})
+				})
+			})
 		})
 
 		Describe("Invalid cases", func() {
+			Context("without explicit hash", func() {
+				BeforeEach(func() {
+					// Simulate that ValidateInput has not populated the hash
+					csEnv.InstallHash = ""
+				})
+				It("fails", func() {
+					err := bs.InstallCodesphere()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("install hash must be set when install version is set"))
+				})
+			})
+
+			Context("neither local nor install version specified", func() {
+				BeforeEach(func() {
+					csEnv.InstallVersion = ""
+					csEnv.InstallHash = ""
+				})
+				It("fails", func() {
+					err := bs.InstallCodesphere()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("either install version or a local package must be specified"))
+				})
+			})
+
 			It("fails when download package fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(fmt.Errorf("download error"))
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(fmt.Errorf("download error"))
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
@@ -1444,8 +1553,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when install codesphere fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())

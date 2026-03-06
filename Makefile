@@ -1,13 +1,9 @@
-all: build-cli build-service
+all: build-cli
 
 build-cli:
-	cd cli && go build -v && mv cli ../oms-cli
+	cd cli && go build -v && mv cli ../oms
 
-build-service:
-	cd service && go build -v && mv service ../oms-service
-
-test:
-	go test -count=1 -v ./...
+test: test-cli
 
 test-cli:
 	# -count=1 to disable caching test results
@@ -16,9 +12,6 @@ test-cli:
 test-integration:
 	# Run integration tests with build tag
 	go test -count=1 -v -tags=integration ./cli/...
-
-test-service:
-	go test -count=1 -v ./service/...
 
 format:
 	go fmt ./...
@@ -44,8 +37,8 @@ release-local: install-build-deps
 docs:
 	rm -rf docs
 	mkdir docs
-	go run -ldflags="-X 'github.com/codesphere-cloud/oms/internal/version.binName=oms-cli'" hack/gendocs/main.go
-	cp docs/oms-cli.md docs/README.md
+	go run -ldflags="-X 'github.com/codesphere-cloud/oms/internal/version.binName=oms'" hack/gendocs/main.go
+	cp docs/oms.md docs/README.md
 
 generate-license: generate
 	go tool go-licenses report --template .NOTICE.template ./... > NOTICE

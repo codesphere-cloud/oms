@@ -61,11 +61,11 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 			Short: "Download a codesphere package",
 			Long: io.Long(`Download a specific version of a Codesphere package
 				To list available packages, run oms list packages.`),
-			Example: formatExamplesWithBinary("download package", []io.Example{
+			Example: formatExamples("download package", []io.Example{
 				{Cmd: "codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
-			}, "oms-cli"),
+			}),
 			PreRunE: func(cmd *cobra.Command, args []string) error {
 				// if version flag is not set, expect version as argument
 				cmd.Args = cobra.NoArgs

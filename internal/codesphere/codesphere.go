@@ -14,12 +14,14 @@ import (
 
 // Client interface abstracts Codesphere API operations for testing
 type Client interface {
-	CreateWorkspace(ctx context.Context, teamID, planID int, name string, repoURL *string) (workspaceID int, err error)
-	SetEnvVar(ctx context.Context, workspaceID int, key, value string) error
-	ExecuteCommand(ctx context.Context, workspaceID int, command string) error
-	SyncLandscape(ctx context.Context, workspaceID int, profile string) error
-	StartPipeline(ctx context.Context, workspaceID int, profile, stage string) error
-	DeleteWorkspace(ctx context.Context, workspaceID int) error
+	CreateWorkspace(teamID, planID int, name string, repoURL *string) (workspaceID int, err error)
+	SetEnvVar(workspaceID int, key, value string) error
+	ExecuteCommand(workspaceID int, command string) error
+	SyncLandscape(workspaceID int, profile string) error
+	StartPipeline(workspaceID int, profile, stage string) error
+	DeleteWorkspace(workspaceID int) error
+	ListWorkspacePlans() ([]api.WorkspacePlan, error)
+	ListTeams() ([]api.Team, error)
 }
 
 // APIClient wraps the cs-go API client
@@ -28,7 +30,7 @@ type APIClient struct {
 }
 
 // NewClient creates a new Codesphere API client
-func NewClient(baseURL, token string) (Client, error) {
+func NewClient(baseURL, token string) (*APIClient, error) {
 	if baseURL == "" {
 		return nil, fmt.Errorf("baseURL is required")
 	}
@@ -51,7 +53,7 @@ func NewClient(baseURL, token string) (Client, error) {
 }
 
 // CreateWorkspace creates a new workspace and waits for it to be running
-func (c *APIClient) CreateWorkspace(ctx context.Context, teamID, planID int, name string, repoURL *string) (int, error) {
+func (c *APIClient) CreateWorkspace(teamID, planID int, name string, repoURL *string) (int, error) {
 	workspace, err := c.client.DeployWorkspace(api.DeployWorkspaceArgs{
 		TeamId:        teamID,
 		PlanId:        planID,
@@ -68,7 +70,7 @@ func (c *APIClient) CreateWorkspace(ctx context.Context, teamID, planID int, nam
 }
 
 // SetEnvVar sets an environment variable in the workspace
-func (c *APIClient) SetEnvVar(ctx context.Context, workspaceID int, key, value string) error {
+func (c *APIClient) SetEnvVar(workspaceID int, key, value string) error {
 	envVars := map[string]string{key: value}
 	err := c.client.SetEnvVarOnWorkspace(workspaceID, envVars)
 	if err != nil {
@@ -78,7 +80,7 @@ func (c *APIClient) SetEnvVar(ctx context.Context, workspaceID int, key, value s
 }
 
 // ExecuteCommand executes a command in the workspace
-func (c *APIClient) ExecuteCommand(ctx context.Context, workspaceID int, command string) error {
+func (c *APIClient) ExecuteCommand(workspaceID int, command string) error {
 	_, _, err := c.client.ExecCommand(workspaceID, command, "", map[string]string{})
 	if err != nil {
 		return fmt.Errorf("failed to execute command: %w", err)
@@ -87,7 +89,7 @@ func (c *APIClient) ExecuteCommand(ctx context.Context, workspaceID int, command
 }
 
 // SyncLandscape syncs the landscape/CI configuration
-func (c *APIClient) SyncLandscape(ctx context.Context, workspaceID int, profile string) error {
+func (c *APIClient) SyncLandscape(workspaceID int, profile string) error {
 	err := c.client.DeployLandscape(workspaceID, profile)
 	if err != nil {
 		return fmt.Errorf("failed to sync landscape: %w", err)
@@ -96,7 +98,7 @@ func (c *APIClient) SyncLandscape(ctx context.Context, workspaceID int, profile 
 }
 
 // StartPipeline starts a pipeline stage
-func (c *APIClient) StartPipeline(ctx context.Context, workspaceID int, profile, stage string) error {
+func (c *APIClient) StartPipeline(workspaceID int, profile, stage string) error {
 	err := c.client.StartPipelineStage(workspaceID, profile, stage)
 	if err != nil {
 		return fmt.Errorf("failed to start pipeline: %w", err)
@@ -105,10 +107,28 @@ func (c *APIClient) StartPipeline(ctx context.Context, workspaceID int, profile,
 }
 
 // DeleteWorkspace deletes a workspace
-func (c *APIClient) DeleteWorkspace(ctx context.Context, workspaceID int) error {
+func (c *APIClient) DeleteWorkspace(workspaceID int) error {
 	err := c.client.DeleteWorkspace(workspaceID)
 	if err != nil {
 		return fmt.Errorf("failed to delete workspace: %w", err)
 	}
 	return nil
+}
+
+// ListTeams lists the teams available
+func (c *APIClient) ListTeams() ([]api.Team, error) {
+	teams, err := c.client.ListTeams()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list teams: %w", err)
+	}
+	return teams, nil
+}
+
+// ListWorkspacePlans lists the plans available
+func (c *APIClient) ListWorkspacePlans() ([]api.WorkspacePlan, error) {
+	plans, err := c.client.ListWorkspacePlans()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list workspace plans: %w", err)
+	}
+	return plans, nil
 }
