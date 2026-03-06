@@ -64,6 +64,13 @@ func (a *ArgoCD) applyPostInstallResources() error {
 	return nil
 }
 
+func showPostInstallHints() {
+	log.Println(`To get ArgoCD admin password:`)
+	log.Println(`  kubectl get secrets/argocd-initial-admin-secret -nargocd -ojson | jq -r ".data.password" | base64 -d`)
+	log.Println(`To port-forward ArgoCD UI to localhost:8080:`)
+	log.Println(`  kubectl port-forward svc/argocd-server 8080:80 -nargocd`)
+}
+
 // Install the ArgoCD chart
 func (a *ArgoCD) Install() error {
 	if a.Version == "" {
@@ -198,6 +205,8 @@ func (a *ArgoCD) Install() error {
 	if err != nil {
 		return fmt.Errorf("failed apply post chart install resources: %v", err)
 	}
+
+	showPostInstallHints()
 
 	return nil
 }
