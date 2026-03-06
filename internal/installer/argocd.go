@@ -73,10 +73,11 @@ func showPostInstallHints() {
 
 // Install the ArgoCD chart
 func (a *ArgoCD) Install() error {
-	if a.Version == "" {
-		a.Version = "9.1.4"
+	if a.Version != "" {
+		log.Printf("Installing/Upgrading ArgoCD helm chart version %s\n", a.Version)
+	} else {
+		log.Println("Installing/Upgrading ArgoCD helm chart (latest version)")
 	}
-	log.Printf("Installing/Upgrading ArgoCD helm chart version %s\n", a.Version)
 
 	settings := cli.New()
 	ctx := context.Background()
@@ -129,29 +130,34 @@ func (a *ArgoCD) Install() error {
 		installedVersion, _ := metadata["Version"].(string)
 		log.Printf("Found existing ArgoCD release with chart version %s\n", installedVersion)
 
-		installedSemver, err := semver.NewVersion(installedVersion)
-		if err != nil {
-			return fmt.Errorf("failed to parse installed version %q: %w", installedVersion, err)
-		}
-		requestedSemver, err := semver.NewVersion(a.Version)
-		if err != nil {
-			return fmt.Errorf("failed to parse requested version %q: %w", a.Version, err)
+		// Only perform version comparison if a specific version was requested
+		if a.Version != "" {
+			installedSemver, err := semver.NewVersion(installedVersion)
+			if err != nil {
+				return fmt.Errorf("failed to parse installed version %q: %w", installedVersion, err)
+			}
+			requestedSemver, err := semver.NewVersion(a.Version)
+			if err != nil {
+				return fmt.Errorf("failed to parse requested version %q: %w", a.Version, err)
+			}
+
+			if requestedSemver.LessThan(installedSemver) {
+				return fmt.Errorf(
+					"requested version %s is older than installed version %s; downgrade is not allowed",
+					a.Version, installedVersion,
+				)
+			}
+
+			log.Printf("Upgrading ArgoCD from %s to %s\n", installedVersion, a.Version)
+		} else {
+			log.Printf("Upgrading ArgoCD from %s to latest\n", installedVersion)
 		}
 
-		if requestedSemver.LessThan(installedSemver) {
-			return fmt.Errorf(
-				"requested version %s is older than installed version %s; downgrade is not allowed",
-				a.Version, installedVersion,
-			)
-		}
-
-		// Version is equal or larger — perform an upgrade
-		log.Printf("Upgrading ArgoCD from %s to %s\n", installedVersion, a.Version)
-
+		// Version is equal, larger, or latest — perform an upgrade
 		upgradeClient := action.NewUpgrade(actionConfig)
 		upgradeClient.Namespace = "argocd"
 		upgradeClient.WaitStrategy = "watcher"
-		upgradeClient.Version = a.Version
+		upgradeClient.Version = a.Version // empty string means latest
 		upgradeClient.ChartPathOptions.RepoURL = repoURL
 
 		chartPath, err := upgradeClient.ChartPathOptions.LocateChart(chartName, settings)
@@ -169,7 +175,11 @@ func (a *ArgoCD) Install() error {
 			return fmt.Errorf("upgrade failed: %w", err)
 		}
 
-		fmt.Printf("Successfully upgraded Argo CD to chart version %s\n", a.Version)
+		if a.Version != "" {
+			fmt.Printf("Successfully upgraded Argo CD to chart version %s\n", a.Version)
+		} else {
+			fmt.Println("Successfully upgraded Argo CD to the latest chart version")
+		}
 	} else {
 		// No existing release — perform a fresh install
 		log.Println("No existing ArgoCD release found, performing fresh install")
@@ -180,7 +190,7 @@ func (a *ArgoCD) Install() error {
 		installClient.CreateNamespace = true
 		installClient.DryRunStrategy = "none"
 		installClient.WaitStrategy = "watcher"
-		installClient.Version = a.Version
+		installClient.Version = a.Version // empty string means latest
 		installClient.ChartPathOptions.RepoURL = repoURL
 
 		chartPath, err := installClient.ChartPathOptions.LocateChart(chartName, settings)
@@ -198,7 +208,11 @@ func (a *ArgoCD) Install() error {
 			return fmt.Errorf("install failed: %w", err)
 		}
 
-		fmt.Printf("Successfully installed Argo CD (chart version: %s)\n", a.Version)
+		if a.Version != "" {
+			fmt.Printf("Successfully installed Argo CD (chart version: %s)\n", a.Version)
+		} else {
+			fmt.Println("Successfully installed Argo CD (latest chart version)")
+		}
 	}
 
 	err = a.applyPostInstallResources()
