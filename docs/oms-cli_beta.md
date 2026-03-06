@@ -16,6 +16,7 @@ Be aware that that usage and behavior may change as the features are developed.
 ### SEE ALSO
 
 * [oms-cli](oms-cli.md)	 - Codesphere Operations Management System (OMS)
+* [oms-cli beta argocd](oms-cli_beta_argocd.md)	 - Commands to interact with ArgoCD
 * [oms-cli beta bootstrap-gcp](oms-cli_beta_bootstrap-gcp.md)	 - Bootstrap GCP infrastructure for Codesphere
 * [oms-cli beta extend](oms-cli_beta_extend.md)	 - Extend Codesphere ressources such as base images.
 
