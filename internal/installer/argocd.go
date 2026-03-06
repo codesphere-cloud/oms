@@ -158,9 +158,9 @@ func (a *ArgoCD) Install() error {
 		upgradeClient.Namespace = "argocd"
 		upgradeClient.WaitStrategy = "watcher"
 		upgradeClient.Version = a.Version // empty string means latest
-		upgradeClient.ChartPathOptions.RepoURL = repoURL
+		upgradeClient.RepoURL = repoURL
 
-		chartPath, err := upgradeClient.ChartPathOptions.LocateChart(chartName, settings)
+		chartPath, err := upgradeClient.LocateChart(chartName, settings)
 		if err != nil {
 			return fmt.Errorf("LocateChart failed: %w", err)
 		}
@@ -191,9 +191,9 @@ func (a *ArgoCD) Install() error {
 		installClient.DryRunStrategy = "none"
 		installClient.WaitStrategy = "watcher"
 		installClient.Version = a.Version // empty string means latest
-		installClient.ChartPathOptions.RepoURL = repoURL
+		installClient.RepoURL = repoURL
 
-		chartPath, err := installClient.ChartPathOptions.LocateChart(chartName, settings)
+		chartPath, err := installClient.LocateChart(chartName, settings)
 		if err != nil {
 			return fmt.Errorf("LocateChart failed: %w", err)
 		}
