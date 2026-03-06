@@ -49,21 +49,15 @@ func (a *ArgoCD) applyPostInstallResources() error {
 		return fmt.Errorf("applying app projects: %w", err)
 	}
 
-	dcNumber := "1"
-
-	if err := applyLocalCluster(ctx, clientset, dcNumber); err != nil {
+	if err := applyLocalCluster(ctx, clientset, a.DcNumber); err != nil {
 		return fmt.Errorf("applying local cluster secret: %w", err)
 	}
 
-	secretOci := "abc"
-
-	if err := applyHelmRegistrySecret(ctx, clientset, secretOci); err != nil {
+	if err := applyHelmRegistrySecret(ctx, clientset, a.PasswordOCI); err != nil {
 		return fmt.Errorf("applying helm registry secret: %w", err)
 	}
 
-	secretGit := "xyz"
-
-	if err := applyGitRepoSecret(ctx, clientset, secretGit); err != nil {
+	if err := applyGitRepoSecret(ctx, clientset, a.PasswordGit); err != nil {
 		return fmt.Errorf("applying git repo secret: %w", err)
 	}
 

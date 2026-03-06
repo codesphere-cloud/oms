@@ -5,17 +5,12 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/spf13/cobra"
 )
-
-type ArgoCDCmd struct {
-	cmd *cobra.Command
-}
 
 // InstallArgoCDCmd represents the argocd command
 type InstallArgoCDCmd struct {
@@ -41,31 +36,14 @@ func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-type GetAdminPasswordCmd struct {
-	cmd *cobra.Command
-}
-
-func (c *GetAdminPasswordCmd) RunE(_ *cobra.Command, args []string) error {
-	log.Println("Not implemented")
-	return nil
-}
-
 type Config struct {
 	cmd *cobra.Command
 }
 
 func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
-	argocd := ArgoCDCmd{
+	argocd := InstallArgoCDCmd{
 		cmd: &cobra.Command{
 			Use:   "argocd",
-			Short: "Commands to interact with ArgoCD",
-		},
-	}
-
-	// argocd install
-	install := InstallArgoCDCmd{
-		cmd: &cobra.Command{
-			Use:   "install",
 			Short: "Install an ArgoCD helm release",
 			Long:  io.Long(`Install an ArgoCD helm release`),
 			Example: formatExamplesWithBinary("install ArgoCD", []packageio.Example{
@@ -74,25 +52,14 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 			}, "oms-cli"),
 		},
 	}
-	install.cmd.Flags().StringVarP(&install.Opts.GitPassword, "git-password", "c", "", "Password/token to read from the git repo where ArgoCD Application manifests are stored")
-	install.cmd.MarkFlagRequired("git-password")
-	install.cmd.Flags().StringVar(&install.Opts.RegistryPassword, "registry-password", "", "Password/token to read from the OCI registry (e.g. ghcr.io) where Helm chart artifacts are stored")
-	install.cmd.MarkFlagRequired("registry-password")
-	install.cmd.Flags().StringVar(&install.Opts.DatacenterId, "dc-id", "", "Codesphere Datacenter ID where this ArgoCD is installed")
-	install.cmd.MarkFlagRequired("dc-id")
-	install.cmd.Flags().StringVarP(&install.Opts.Version, "version", "v", "", "Version of the ArgoCD helm chart to install")
-	install.cmd.RunE = install.RunE
-	argocd.cmd.AddCommand(install.cmd)
-
-	// argocd get-admin-password
-	getAdminPassword := GetAdminPasswordCmd{
-		cmd: &cobra.Command{
-			Use:   "get-admin-password",
-			Short: "Retrieve the initial ArgoCD admin password",
-		},
-	}
-	getAdminPassword.cmd.RunE = getAdminPassword.RunE
-	argocd.cmd.AddCommand(getAdminPassword.cmd)
+	argocd.cmd.Flags().StringVarP(&argocd.Opts.GitPassword, "git-password", "c", "", "Password/token to read from the git repo where ArgoCD Application manifests are stored")
+	argocd.cmd.MarkFlagRequired("git-password")
+	argocd.cmd.Flags().StringVar(&argocd.Opts.RegistryPassword, "registry-password", "", "Password/token to read from the OCI registry (e.g. ghcr.io) where Helm chart artifacts are stored")
+	argocd.cmd.MarkFlagRequired("registry-password")
+	argocd.cmd.Flags().StringVar(&argocd.Opts.DatacenterId, "dc-id", "", "Codesphere Datacenter ID where this ArgoCD is installed")
+	argocd.cmd.MarkFlagRequired("dc-id")
+	argocd.cmd.Flags().StringVarP(&argocd.Opts.Version, "version", "v", "", "Version of the ArgoCD helm chart to install")
+	argocd.cmd.RunE = argocd.RunE
 
 	parentCmd.AddCommand(argocd.cmd)
 }
