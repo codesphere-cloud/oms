@@ -46,10 +46,10 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 			Use:   "argocd",
 			Short: "Install an ArgoCD helm release",
 			Long:  io.Long(`Install an ArgoCD helm release`),
-			Example: formatExamplesWithBinary("install ArgoCD", []packageio.Example{
+			Example: formatExamples("install ArgoCD", []packageio.Example{
 				{Cmd: "", Desc: "Install an ArgoCD helm release of chart https://argoproj.github.io/argo-helm/argo-cd "},
 				{Cmd: "--version <version>", Desc: "Version of the ArgoCD helm chart to install"},
-			}, "oms-cli"),
+			}),
 		},
 	}
 	argocd.cmd.Flags().StringVarP(&argocd.Opts.GitPassword, "git-password", "c", "", "Password/token to read from the git repo where ArgoCD Application manifests are stored")
