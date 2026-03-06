@@ -25,15 +25,14 @@ type InstallArgoCDCmd struct {
 
 type InstallArgoCDOpts struct {
 	*GlobalOptions
-	Version string
-	Package string
-	Config  string
-	Force   bool
+	Version          string
+	DatacenterId     string
+	GitPassword      string
+	RegistryPassword string
 }
 
 func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
-	install := installer.NewArgoCD(c.Opts.Version)
-	// err := argocd.PreInstall()
+	install := installer.NewArgoCD(c.Opts.Version, c.Opts.DatacenterId, c.Opts.RegistryPassword, c.Opts.GitPassword)
 	err := install.Install()
 	if err != nil {
 		return fmt.Errorf("failed to install chart ArgoCD: %w", err)
@@ -75,6 +74,12 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 			}, "oms-cli"),
 		},
 	}
+	install.cmd.Flags().StringVarP(&install.Opts.GitPassword, "git-password", "c", "", "Password/token to read from the git repo where ArgoCD Application manifests are stored")
+	install.cmd.MarkFlagRequired("git-password")
+	install.cmd.Flags().StringVar(&install.Opts.RegistryPassword, "registry-password", "", "Password/token to read from the OCI registry (e.g. ghcr.io) where Helm chart artifacts are stored")
+	install.cmd.MarkFlagRequired("registry-password")
+	install.cmd.Flags().StringVar(&install.Opts.DatacenterId, "dc-id", "", "Codesphere Datacenter ID where this ArgoCD is installed")
+	install.cmd.MarkFlagRequired("dc-id")
 	install.cmd.Flags().StringVarP(&install.Opts.Version, "version", "v", "", "Version of the ArgoCD helm chart to install")
 	install.cmd.RunE = install.RunE
 	argocd.cmd.AddCommand(install.cmd)

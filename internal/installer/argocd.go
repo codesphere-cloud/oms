@@ -22,16 +22,22 @@ type ArgoCDManager interface {
 }
 
 type ArgoCD struct {
-	Version string
+	Version     string
+	DcNumber    string
+	PasswordOCI string
+	PasswordGit string
 }
 
-func NewArgoCD(version string) ArgoCDManager {
+func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string) ArgoCDManager {
 	return &ArgoCD{
-		Version: version,
+		Version:     version,
+		DcNumber:    dcId,
+		PasswordOCI: passwordOCI,
+		PasswordGit: passwordGit,
 	}
 }
 
-func applyPostInstallResources() error {
+func (a *ArgoCD) applyPostInstallResources() error {
 	clientset, dynClient, err := newClients()
 	if err != nil {
 		return fmt.Errorf("creating kubernetes clients: %w", err)
@@ -194,7 +200,7 @@ func (a *ArgoCD) Install() error {
 		fmt.Printf("Successfully installed Argo CD (chart version: %s)\n", a.Version)
 	}
 
-	err = applyPostInstallResources()
+	err = a.applyPostInstallResources()
 	if err != nil {
 		return fmt.Errorf("failed apply post chart install resources: %v", err)
 	}
