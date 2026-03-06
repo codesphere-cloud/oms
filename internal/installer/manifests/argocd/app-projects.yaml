@@ -60,6 +60,8 @@ spec:
       name: "*"
     - namespace: "*"
       name: dc-5
+    - namespace: "*"
+      name: dc-7
   sourceRepos:
     - "*"
   roles:
