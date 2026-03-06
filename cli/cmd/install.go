@@ -14,7 +14,7 @@ type InstallCmd struct {
 }
 
 func AddInstallCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
-	install := BetaInstallCmd{
+	install := InstallCmd{
 		cmd: &cobra.Command{
 			Use:   "install",
 			Short: "Install Codesphere and other components",
