@@ -359,9 +359,9 @@ License URL: https://cs.opensource.google/go/x/crypto/+/v0.48.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.50.0
+Version: v0.51.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.50.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.51.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
