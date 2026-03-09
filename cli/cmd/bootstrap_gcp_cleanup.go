@@ -280,13 +280,13 @@ func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions)
 			Use:   "cleanup",
 			Short: "Clean up GCP infrastructure created by bootstrap-gcp",
 			Long:  csio.Long(`Deletes a GCP project that was previously created using the bootstrap-gcp command.`),
-			Example: formatExamplesWithBinary("beta bootstrap-gcp cleanup", []csio.Example{
+			Example: formatExamples("beta bootstrap-gcp cleanup", []csio.Example{
 				{Desc: "Clean up using project ID from the local infra file"},
 				{Cmd: "--project-id my-project-abc123", Desc: "Clean up a specific project"},
 				{Cmd: "--project-id my-project-abc123 --force", Desc: "Force cleanup without confirmation (skips OMS-managed check)"},
 				{Cmd: "--skip-dns-cleanup", Desc: "Skip DNS record cleanup"},
 				{Cmd: "--project-id my-project --base-domain example.com --dns-zone-name my-zone --dns-project-id dns-project", Desc: "Clean up with manual DNS settings (when infra file is not available)"},
-			}, "oms-cli"),
+			}),
 		},
 		Opts: &BootstrapGcpCleanupOpts{
 			GlobalOptions: opts,
