@@ -285,7 +285,7 @@ const (
 )
 
 type CertIssuerConfig struct {
-	Type CertIssuerType `yaml:"type"`
+	Type CertIssuerType `yaml:"type,omitempty"`
 	Acme *ACMEConfig    `yaml:"acme,omitempty"`
 }
 

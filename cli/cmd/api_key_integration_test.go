@@ -231,7 +231,7 @@ var _ = Describe("API Key Integration Tests", func() {
 
 	Describe("Old API Key Detection and Warning", func() {
 		var (
-			cliPath = "../../oms-cli"
+			cliPath = "../../oms"
 		)
 
 		Context("when using a 25-character old API key format", func() {
@@ -310,7 +310,7 @@ var _ = Describe("API Key Integration Tests", func() {
 
 	Describe("PreRun Hook Execution", func() {
 		var (
-			cliPath = "../../oms-cli"
+			cliPath = "../../oms"
 		)
 
 		Context("when running any OMS command", func() {

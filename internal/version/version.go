@@ -10,7 +10,7 @@ var (
 	date    string = "unknown"
 	os      string = "unknown"
 	arch    string = "unknown"
-	binName string = "oms-cli"
+	binName string = "oms"
 )
 
 type Version interface {

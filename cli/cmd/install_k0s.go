@@ -55,13 +55,13 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 			or load the k0s binary from the provided package file and install it.
 			If no version is specified, the latest version will be downloaded.
 			If no install config is provided, k0s will be installed with the '--single' flag.`),
-			Example: formatExamplesWithBinary("install k0s", []packageio.Example{
+			Example: formatExamples("install k0s", []packageio.Example{
 				{Cmd: "", Desc: "Install k0s using the Go-native implementation"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install"},
 				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from"},
 				{Cmd: "--k0s-config <path>", Desc: "Path to k0s configuration file, if not set k0s will be installed with the '--single' flag"},
 				{Cmd: "--force", Desc: "Force new download and installation even if k0s binary exists or is already installed"},
-			}, "oms-cli"),
+			}),
 		},
 		Opts:       InstallK0sOpts{GlobalOptions: opts},
 		Env:        env.NewEnv(),

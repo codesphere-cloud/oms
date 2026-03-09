@@ -56,23 +56,60 @@ run:
 `
 )
 
+// getTeamID returns either the teamID given in the parameters or the team marked as first.
+// returns an error if no team was found
+func getTeamID(c *SmoketestCodesphereOpts) (int, error) {
+	if c.TeamID != "" {
+		return strconv.Atoi(c.TeamID)
+	}
+	teams, err := c.Client.ListTeams()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get teams: %w", err)
+	}
+	if len(teams) == 0 {
+		return 0, fmt.Errorf("no teams available")
+	}
+	for _, team := range teams {
+		if team.IsFirst != nil && *team.IsFirst {
+			return team.Id, nil
+		}
+	}
+	return teams[0].Id, nil
+}
+
+// getPlanID returns either the PlanID given in the parameters or the first plan found in the Codesphere instance
+// returns an error if no plan was found
+func getPlanID(c *SmoketestCodesphereOpts) (int, error) {
+	if c.PlanID != "" {
+		return strconv.Atoi(c.PlanID)
+	}
+	plans, err := c.Client.ListWorkspacePlans()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get plans: %w", err)
+	}
+	if len(plans) == 0 {
+		return 0, fmt.Errorf("no workspace plans available")
+	}
+	return plans[0].Id, nil
+}
+
 type CreateWorkspaceStep struct{}
 
 func (s *CreateWorkspaceStep) Name() string { return stepNameCreateWorkspace }
 
 func (s *CreateWorkspaceStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
-	teamID, parseErr := strconv.Atoi(c.TeamID)
+	teamID, parseErr := getTeamID(c)
 	if parseErr != nil {
-		return fmt.Errorf("invalid team-id: %w", parseErr)
+		return fmt.Errorf("failed to determine team-id: %w", parseErr)
 	}
-	planID, parseErr := strconv.Atoi(c.PlanID)
+	planID, parseErr := getPlanID(c)
 	if parseErr != nil {
-		return fmt.Errorf("invalid plan-id: %w", parseErr)
+		return fmt.Errorf("failed to determine plan-id: %w", parseErr)
 	}
 	workspaceName := fmt.Sprintf("smoketest-%s", time.Now().Format("20060102-150405"))
 
 	c.logStep(fmt.Sprintf("Creating empty workspace '%s'", workspaceName))
-	id, err := c.Client.CreateWorkspace(ctx, teamID, planID, workspaceName, nil)
+	id, err := c.Client.CreateWorkspace(teamID, planID, workspaceName, nil)
 	if err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to create workspace: %w", err)
@@ -88,7 +125,7 @@ func (s *SetEnvVarStep) Name() string { return stepNameSetEnvVar }
 
 func (s *SetEnvVarStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("Setting environment variable %s=%s", smoketestEnvVarKey, smoketestEnvVarValue))
-	if err := c.Client.SetEnvVar(ctx, *workspaceID, smoketestEnvVarKey, smoketestEnvVarValue); err != nil {
+	if err := c.Client.SetEnvVar(*workspaceID, smoketestEnvVarKey, smoketestEnvVarValue); err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to set environment variable: %w", err)
 	}
@@ -103,7 +140,7 @@ func (s *CreateFilesStep) Name() string { return stepNameCreateFiles }
 func (s *CreateFilesStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep("Creating ci.yml file")
 	ciYmlCmd := fmt.Sprintf(`echo '%s' > ci.yml`, ciYmlContent)
-	err := c.Client.ExecuteCommand(ctx, *workspaceID, ciYmlCmd)
+	err := c.Client.ExecuteCommand(*workspaceID, ciYmlCmd)
 	if err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to create ci.yml: %w", err)
@@ -112,7 +149,7 @@ func (s *CreateFilesStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, w
 
 	c.logStep("Creating index.html file")
 	indexHtmlCmd := fmt.Sprintf(`echo '%s' > index.html`, indexHtmlContent)
-	err = c.Client.ExecuteCommand(ctx, *workspaceID, indexHtmlCmd)
+	err = c.Client.ExecuteCommand(*workspaceID, indexHtmlCmd)
 	if err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to create index.html: %w", err)
@@ -127,7 +164,7 @@ func (s *SyncLandscapeStep) Name() string { return stepNameSyncLandscape }
 
 func (s *SyncLandscapeStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("Syncing landscape with profile '%s'", c.Profile))
-	if err := c.Client.SyncLandscape(ctx, *workspaceID, c.Profile); err != nil {
+	if err := c.Client.SyncLandscape(*workspaceID, c.Profile); err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to sync landscape: %w", err)
 	}
@@ -141,7 +178,7 @@ func (s *StartPipelineStep) Name() string { return stepNameStartPipeline }
 
 func (s *StartPipelineStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("Starting '%s' pipeline stage", smoketestPipelineStage))
-	if err := c.Client.StartPipeline(ctx, *workspaceID, c.Profile, smoketestPipelineStage); err != nil {
+	if err := c.Client.StartPipeline(*workspaceID, c.Profile, smoketestPipelineStage); err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to start pipeline: %w", err)
 	}
@@ -155,7 +192,7 @@ func (s *DeleteWorkspaceStep) Name() string { return stepNameDeleteWorkspace }
 
 func (s *DeleteWorkspaceStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("\nDeleting workspace %d", *workspaceID))
-	deleteErr := c.Client.DeleteWorkspace(ctx, *workspaceID)
+	deleteErr := c.Client.DeleteWorkspace(*workspaceID)
 	if deleteErr != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to delete workspace: %w", deleteErr)
