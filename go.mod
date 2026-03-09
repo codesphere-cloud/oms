@@ -1,10 +1,10 @@
 module github.com/codesphere-cloud/oms
 
-go 1.26.0
+go 1.26.1
 
 require (
 	cloud.google.com/go/artifactregistry v1.20.0
-	cloud.google.com/go/compute v1.54.0
+	cloud.google.com/go/compute v1.56.0
 	cloud.google.com/go/iam v1.5.3
 	cloud.google.com/go/resourcemanager v1.10.7
 	cloud.google.com/go/serviceusage v1.9.7
@@ -22,11 +22,11 @@ require (
 	golang.org/x/crypto v0.48.0
 	golang.org/x/term v0.40.0
 	google.golang.org/api v0.269.0
-	google.golang.org/grpc v1.79.1
 	helm.sh/helm/v4 v4.1.1
 	k8s.io/api v0.35.1
 	k8s.io/apimachinery v0.35.1
 	k8s.io/client-go v0.35.1
+	google.golang.org/grpc v1.79.2
 )
 
 require (
