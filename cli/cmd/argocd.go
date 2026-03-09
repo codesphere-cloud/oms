@@ -22,10 +22,24 @@ type InstallArgoCDOpts struct {
 	DatacenterId     string
 	GitPassword      string
 	RegistryPassword string
+	FullInstall      bool
 }
 
 func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
-	install := installer.NewArgoCD(c.Opts.Version, c.Opts.DatacenterId, c.Opts.RegistryPassword, c.Opts.GitPassword)
+	if c.Opts.FullInstall {
+		requiredFlags := map[string]string{
+			"git-password":      c.Opts.GitPassword,
+			"registry-password": c.Opts.RegistryPassword,
+			"dc-id":             c.Opts.DatacenterId,
+		}
+
+		for flagName, value := range requiredFlags {
+			if value == "" {
+				return fmt.Errorf("flag --%s is required when --full-install is true", flagName)
+			}
+		}
+	}
+	install := installer.NewArgoCD(c.Opts.Version, c.Opts.DatacenterId, c.Opts.RegistryPassword, c.Opts.GitPassword, c.Opts.FullInstall)
 	err := install.Install()
 	if err != nil {
 		return fmt.Errorf("failed to install chart ArgoCD: %w", err)
@@ -46,13 +60,11 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 			}),
 		},
 	}
-	argocd.cmd.Flags().StringVarP(&argocd.Opts.GitPassword, "git-password", "c", "", "Password/token to read from the git repo where ArgoCD Application manifests are stored")
-	_ = argocd.cmd.MarkFlagRequired("git-password")
+	argocd.cmd.Flags().StringVar(&argocd.Opts.GitPassword, "git-password", "", "Password/token to read from the git repo where ArgoCD Application manifests are stored")
 	argocd.cmd.Flags().StringVar(&argocd.Opts.RegistryPassword, "registry-password", "", "Password/token to read from the OCI registry (e.g. ghcr.io) where Helm chart artifacts are stored")
-	_ = argocd.cmd.MarkFlagRequired("registry-password")
 	argocd.cmd.Flags().StringVar(&argocd.Opts.DatacenterId, "dc-id", "", "Codesphere Datacenter ID where this ArgoCD is installed")
-	_ = argocd.cmd.MarkFlagRequired("dc-id")
 	argocd.cmd.Flags().StringVarP(&argocd.Opts.Version, "version", "v", "", "Version of the ArgoCD helm chart to install")
+	argocd.cmd.Flags().BoolVar(&argocd.Opts.FullInstall, "full-install", false, "Install other resources (AppProjects, Repo Creds, ...) after installing the chart")
 	argocd.cmd.RunE = argocd.RunE
 
 	parentCmd.AddCommand(argocd.cmd)

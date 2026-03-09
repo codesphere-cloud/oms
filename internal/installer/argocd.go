@@ -22,18 +22,20 @@ type ArgoCDManager interface {
 }
 
 type ArgoCD struct {
-	Version     string
-	DcNumber    string
-	PasswordOCI string
-	PasswordGit string
+	Version      string
+	DatacenterId string
+	OciPassword  string
+	GitPassword  string
+	FullInstall  bool
 }
 
-func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string) ArgoCDManager {
+func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool) ArgoCDManager {
 	return &ArgoCD{
-		Version:     version,
-		DcNumber:    dcId,
-		PasswordOCI: passwordOCI,
-		PasswordGit: passwordGit,
+		Version:      version,
+		DatacenterId: dcId,
+		OciPassword:  passwordOCI,
+		GitPassword:  passwordGit,
+		FullInstall:  fullInstall,
 	}
 }
 
@@ -49,15 +51,15 @@ func (a *ArgoCD) applyPostInstallResources() error {
 		return fmt.Errorf("applying app projects: %w", err)
 	}
 
-	if err := applyLocalCluster(ctx, clientset, a.DcNumber); err != nil {
+	if err := applyLocalCluster(ctx, clientset, a.DatacenterId); err != nil {
 		return fmt.Errorf("applying local cluster secret: %w", err)
 	}
 
-	if err := applyHelmRegistrySecret(ctx, clientset, a.PasswordOCI); err != nil {
+	if err := applyHelmRegistrySecret(ctx, clientset, a.OciPassword); err != nil {
 		return fmt.Errorf("applying helm registry secret: %w", err)
 	}
 
-	if err := applyGitRepoSecret(ctx, clientset, a.PasswordGit); err != nil {
+	if err := applyGitRepoSecret(ctx, clientset, a.GitPassword); err != nil {
 		return fmt.Errorf("applying git repo secret: %w", err)
 	}
 
@@ -215,9 +217,11 @@ func (a *ArgoCD) Install() error {
 		}
 	}
 
-	err = a.applyPostInstallResources()
-	if err != nil {
-		return fmt.Errorf("failed apply post chart install resources: %v", err)
+	if a.FullInstall {
+		err = a.applyPostInstallResources()
+		if err != nil {
+			return fmt.Errorf("failed apply post chart install resources: %v", err)
+		}
 	}
 
 	showPostInstallHints()
