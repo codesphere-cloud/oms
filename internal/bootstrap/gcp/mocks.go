@@ -109,75 +109,6 @@ func (_c *MockGCPClientManager_AssignIAMRole_Call) RunAndReturn(run func(project
 	return _c
 }
 
-// RemoveIAMRoleBinding provides a mock function for the type MockGCPClientManager
-func (_mock *MockGCPClientManager) RemoveIAMRoleBinding(projectID string, saName string, saProjectID string, roles []string) error {
-	ret := _mock.Called(projectID, saName, saProjectID, roles)
-
-	if len(ret) == 0 {
-		panic("no return value specified for RemoveIAMRoleBinding")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, string, []string) error); ok {
-		r0 = returnFunc(projectID, saName, saProjectID, roles)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockGCPClientManager_RemoveIAMRoleBinding_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveIAMRoleBinding'
-type MockGCPClientManager_RemoveIAMRoleBinding_Call struct {
-	*mock.Call
-}
-
-// RemoveIAMRoleBinding is a helper method to define mock.On call
-//   - projectID string
-//   - saName string
-//   - saProjectID string
-//   - roles []string
-func (_e *MockGCPClientManager_Expecter) RemoveIAMRoleBinding(projectID interface{}, saName interface{}, saProjectID interface{}, roles interface{}) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
-	return &MockGCPClientManager_RemoveIAMRoleBinding_Call{Call: _e.mock.On("RemoveIAMRoleBinding", projectID, saName, saProjectID, roles)}
-}
-
-func (_c *MockGCPClientManager_RemoveIAMRoleBinding_Call) Run(run func(projectID string, saName string, saProjectID string, roles []string)) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 []string
-		if args[3] != nil {
-			arg3 = args[3].([]string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-		)
-	})
-	return _c
-}
-
-func (_c *MockGCPClientManager_RemoveIAMRoleBinding_Call) Return(err error) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockGCPClientManager_RemoveIAMRoleBinding_Call) RunAndReturn(run func(projectID string, saName string, saProjectID string, roles []string) error) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // CreateAddress provides a mock function for the type MockGCPClientManager
 func (_mock *MockGCPClientManager) CreateAddress(projectID string, region string, address *computepb.Address) (string, error) {
 	ret := _mock.Called(projectID, region, address)
@@ -1560,6 +1491,75 @@ func (_c *MockGCPClientManager_IsOMSManagedProject_Call) Return(b bool, err erro
 }
 
 func (_c *MockGCPClientManager_IsOMSManagedProject_Call) RunAndReturn(run func(projectID string) (bool, error)) *MockGCPClientManager_IsOMSManagedProject_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RemoveIAMRoleBinding provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) RemoveIAMRoleBinding(projectID string, saName string, saProjectID string, roles []string) error {
+	ret := _mock.Called(projectID, saName, saProjectID, roles)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RemoveIAMRoleBinding")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, []string) error); ok {
+		r0 = returnFunc(projectID, saName, saProjectID, roles)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGCPClientManager_RemoveIAMRoleBinding_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveIAMRoleBinding'
+type MockGCPClientManager_RemoveIAMRoleBinding_Call struct {
+	*mock.Call
+}
+
+// RemoveIAMRoleBinding is a helper method to define mock.On call
+//   - projectID string
+//   - saName string
+//   - saProjectID string
+//   - roles []string
+func (_e *MockGCPClientManager_Expecter) RemoveIAMRoleBinding(projectID interface{}, saName interface{}, saProjectID interface{}, roles interface{}) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
+	return &MockGCPClientManager_RemoveIAMRoleBinding_Call{Call: _e.mock.On("RemoveIAMRoleBinding", projectID, saName, saProjectID, roles)}
+}
+
+func (_c *MockGCPClientManager_RemoveIAMRoleBinding_Call) Run(run func(projectID string, saName string, saProjectID string, roles []string)) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 []string
+		if args[3] != nil {
+			arg3 = args[3].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_RemoveIAMRoleBinding_Call) Return(err error) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_RemoveIAMRoleBinding_Call) RunAndReturn(run func(projectID string, saName string, saProjectID string, roles []string) error) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
 	_c.Call.Return(run)
 	return _c
 }

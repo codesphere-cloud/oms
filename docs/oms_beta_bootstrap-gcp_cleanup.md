@@ -1,4 +1,4 @@
-## oms-cli beta bootstrap-gcp cleanup
+## oms beta bootstrap-gcp cleanup
 
 Clean up GCP infrastructure created by bootstrap-gcp
 
@@ -7,26 +7,27 @@ Clean up GCP infrastructure created by bootstrap-gcp
 Deletes a GCP project that was previously created using the bootstrap-gcp command.
 
 ```
-oms-cli beta bootstrap-gcp cleanup [flags]
+oms beta bootstrap-gcp cleanup [flags]
 ```
 
 ### Examples
 
 ```
-  # Clean up using project ID from the local infra file
-  oms-cli beta bootstrap-gcp cleanup
+# Clean up using project ID from the local infra file
+$ oms beta bootstrap-gcp cleanup
 
-  # Clean up a specific project
-  oms-cli beta bootstrap-gcp cleanup --project-id my-project-abc123
+# Clean up a specific project
+$ oms beta bootstrap-gcp cleanup --project-id my-project-abc123
 
-  # Force cleanup without confirmation (skips OMS-managed check)
-  oms-cli beta bootstrap-gcp cleanup --project-id my-project-abc123 --force
+# Force cleanup without confirmation (skips OMS-managed check)
+$ oms beta bootstrap-gcp cleanup --project-id my-project-abc123 --force
 
-  # Skip DNS record cleanup
-  oms-cli beta bootstrap-gcp cleanup --skip-dns-cleanup
+# Skip DNS record cleanup
+$ oms beta bootstrap-gcp cleanup --skip-dns-cleanup
 
-  # Clean up with manual DNS settings (when infra file is not available)
-  oms-cli beta bootstrap-gcp cleanup --project-id my-project --base-domain example.com --dns-zone-name my-zone --dns-project-id dns-project
+# Clean up with manual DNS settings (when infra file is not available)
+$ oms beta bootstrap-gcp cleanup --project-id my-project --base-domain example.com --dns-zone-name my-zone --dns-project-id dns-project
+
 ```
 
 ### Options
@@ -43,5 +44,5 @@ oms-cli beta bootstrap-gcp cleanup [flags]
 
 ### SEE ALSO
 
-* [oms-cli beta bootstrap-gcp](oms-cli_beta_bootstrap-gcp.md)	 - Bootstrap GCP infrastructure for Codesphere
+* [oms beta bootstrap-gcp](oms_beta_bootstrap-gcp.md)	 - Bootstrap GCP infrastructure for Codesphere
 
