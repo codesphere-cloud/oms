@@ -46,6 +46,7 @@ type GCPClientManager interface {
 	CreateServiceAccount(projectID, name, displayName string) (string, bool, error)
 	CreateServiceAccountKey(projectID, saEmail string) (string, error)
 	AssignIAMRole(projectID, saEmail string, saProjectID string, roles []string) error
+	RemoveIAMRoleBinding(projectID, saName string, saProjectID string, roles []string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
@@ -424,6 +425,54 @@ func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resou
 		Policy:   policy,
 	}
 	_, err = client.SetIamPolicy(c.ctx, setReq)
+	return err
+}
+
+// RemoveIAMRoleBinding removes the specified IAM role bindings for a service account from a project.
+func (c *GCPClient) RemoveIAMRoleBinding(projectID, saName string, saProjectID string, roles []string) error {
+	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, saProjectID)
+	member := fmt.Sprintf("serviceAccount:%s", saEmail)
+	resource := fmt.Sprintf("projects/%s", projectID)
+	return c.removeRoleBindingFromProject(member, roles, resource)
+}
+
+func (c *GCPClient) removeRoleBindingFromProject(member string, roles []string, resource string) error {
+	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	if err != nil {
+		return err
+	}
+	defer util.IgnoreError(client.Close)
+
+	policy, err := client.GetIamPolicy(c.ctx, &iampb.GetIamPolicyRequest{Resource: resource})
+	if err != nil {
+		return err
+	}
+
+	updated := false
+	for _, role := range roles {
+		for i, binding := range policy.Bindings {
+			if binding.Role != role {
+				continue
+			}
+			before := len(binding.Members)
+			policy.Bindings[i].Members = slices.DeleteFunc(binding.Members, func(m string) bool {
+				return m == member
+			})
+			if len(policy.Bindings[i].Members) != before {
+				updated = true
+			}
+			break
+		}
+	}
+
+	if !updated {
+		return nil
+	}
+
+	_, err = client.SetIamPolicy(c.ctx, &iampb.SetIamPolicyRequest{
+		Resource: resource,
+		Policy:   policy,
+	})
 	return err
 }
 

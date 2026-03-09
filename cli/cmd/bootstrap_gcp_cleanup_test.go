@@ -331,11 +331,12 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 		})
 
 		Context("when skip-dns-cleanup flag is set", func() {
-			It("should skip DNS cleanup and skip loading infra file when project-id is provided", func() {
+			It("should skip DNS record cleanup but still delete the project", func() {
 				cleanupCmd.Opts.ProjectID = "test-project"
 				cleanupCmd.Opts.Force = true
 				cleanupCmd.Opts.SkipDNSCleanup = true
 
+				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(false)
 				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
 
 				err := cleanupCmd.ExecuteCleanup(deps)
