@@ -39,13 +39,11 @@ func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit stri
 	}
 }
 
-func (a *ArgoCD) applyPostInstallResources() error {
+func (a *ArgoCD) applyPostInstallResources(ctx context.Context) error {
 	clientset, dynClient, err := newClients()
 	if err != nil {
 		return fmt.Errorf("creating kubernetes clients: %w", err)
 	}
-
-	ctx := context.TODO()
 
 	if err := applyAppProjects(ctx, dynClient); err != nil {
 		return fmt.Errorf("applying app projects: %w", err)
@@ -218,7 +216,7 @@ func (a *ArgoCD) Install() error {
 	}
 
 	if a.FullInstall {
-		err = a.applyPostInstallResources()
+		err = a.applyPostInstallResources(ctx)
 		if err != nil {
 			return fmt.Errorf("failed apply post chart install resources: %v", err)
 		}
