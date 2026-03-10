@@ -8,7 +8,7 @@ require (
 	cloud.google.com/go/iam v1.5.3
 	cloud.google.com/go/resourcemanager v1.10.7
 	cloud.google.com/go/serviceusage v1.9.7
-	github.com/codesphere-cloud/cs-go v0.19.2
+	github.com/codesphere-cloud/cs-go v0.19.4
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/jedib0t/go-pretty/v6 v6.7.8
 	github.com/lithammer/shortuuid v3.0.0+incompatible
@@ -275,7 +275,7 @@ require (
 	github.com/gordonklaus/ineffassign v0.2.0 // indirect
 	github.com/goreleaser/chglog v0.7.4 // indirect
 	github.com/goreleaser/fileglob v1.4.0 // indirect
-	github.com/goreleaser/goreleaser/v2 v2.14.2 // indirect
+	github.com/goreleaser/goreleaser/v2 v2.14.3 // indirect
 	github.com/goreleaser/nfpm/v2 v2.45.0 // indirect
 	github.com/goreleaser/quill v0.0.0-20251224035235-ab943733386f // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
