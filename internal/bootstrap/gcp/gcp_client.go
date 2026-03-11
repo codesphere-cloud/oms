@@ -36,7 +36,7 @@ import (
 type GCPClientManager interface {
 	GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error)
 	CreateProjectID(projectName string) string
-	CreateProject(parent, projectName, displayName string) (string, error)
+	CreateProject(parent, projectName, displayName string, ttl time.Duration) (string, error)
 	GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error)
 	EnableBilling(projectID, billingAccount string) error
 	EnableAPIs(projectID string, apis []string) error
@@ -111,21 +111,15 @@ func (c *GCPClient) CreateProjectID(projectName string) string {
 
 // CreateProject creates a new GCP project under the specified parent (folder or organization).
 // It returns the project ID of the newly created project.
-func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string, error) {
+func (c *GCPClient) CreateProject(parent, projectID, displayName string, ttl time.Duration) (string, error) {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
 		return "", err
 	}
 	defer util.IgnoreError(client.Close)
 
-	// calculate deletion time for the automatic github action cleanup workflow
-	hoursToLive := 2
-	if strings.Contains(projectID, "qa") {
-		hoursToLive = 48
-	}
-
 	gcpLabelLayout := "2006-01-02_15-04-05"
-	deleteProjectAfter := time.Now().UTC().Add(time.Duration(hoursToLive) * time.Hour).Format(gcpLabelLayout)
+	deleteProjectAfter := time.Now().UTC().Add(ttl).Format(gcpLabelLayout)
 	deleteProjectAfter = fmt.Sprintf("%s_utc", deleteProjectAfter) // GCP Labels are very limited. This is the only way to add TZ info.
 
 	project := &resourcemanagerpb.Project{
@@ -139,7 +133,7 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string
 
 	op, err := client.CreateProject(c.ctx, &resourcemanagerpb.CreateProjectRequest{Project: project})
 	if err != nil {
-		return "", fmt.Errorf("failed to create create project %s with config %v: %w", projectID, project, err)
+		return "", fmt.Errorf("failed to create project %s with config %v: %w", projectID, project, err)
 	}
 
 	resp, err := op.Wait(c.ctx)
