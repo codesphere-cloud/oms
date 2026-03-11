@@ -19,17 +19,23 @@ type ArgoCD struct {
 	GitPassword  string
 	FullInstall  bool
 	Helm         HelmClient // inject a real or mock client
+	Resources    ArgoCDResources
 }
 
 func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool) (*ArgoCD, error) {
 	settings := cli.New()
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(settings.RESTClientGetter(), "argocd", os.Getenv("HELM_DRIVER")); err != nil {
-		return nil, fmt.Errorf("init failed: %w", err)
+		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
 	helm, err := NewHelmClient("argocd")
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	resources, err := NewArgoCDResources(dcId, passwordOCI, passwordGit)
+	if err != nil {
+		return nil, fmt.Errorf("init argocd resources client failed: %v", err)
 	}
 	return &ArgoCD{
 		Version:      version,
@@ -38,6 +44,7 @@ func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit stri
 		GitPassword:  passwordGit,
 		FullInstall:  fullInstall,
 		Helm:         helm,
+		Resources:    resources,
 	}, nil
 }
 
@@ -85,13 +92,14 @@ func (a *ArgoCD) Install() error {
 	}
 
 	// 3. Optional post-install resources
-	// if a.FullInstall {
-	// 	if err := a.applyPostInstallResources(ctx); err != nil {
-	// 		return fmt.Errorf("failed apply post chart install resources: %v", err)
-	// 	}
-	// }
-	//
-	// showPostInstallHints()
+	if a.FullInstall {
+		err = a.Resources.ApplyAll(ctx)
+		if err != nil {
+			return fmt.Errorf("failed apply post chart install resources: %v", err)
+		}
+	}
+
+	a.showPostInstallHints()
 
 	return nil
 }
@@ -148,4 +156,11 @@ func (a *ArgoCD) upgrade(ctx context.Context, cfg ChartConfig, existing *Release
 		fmt.Println("Successfully upgraded Argo CD to the latest chart version")
 	}
 	return nil
+}
+
+func (a *ArgoCD) showPostInstallHints() {
+	log.Println(`To get ArgoCD admin password:`)
+	log.Println(`  kubectl get secrets/argocd-initial-admin-secret -nargocd -ojson | jq -r ".data.password" | base64 -d`)
+	log.Println(`To port-forward ArgoCD UI to localhost:8080:`)
+	log.Println(`  kubectl port-forward svc/argocd-server 8080:80 -nargocd`)
 }

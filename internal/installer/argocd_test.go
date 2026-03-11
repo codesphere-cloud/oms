@@ -12,12 +12,15 @@ import (
 var _ = Describe("ArgoCD.Install", func() {
 
 	var (
-		helmMock *installer.MockHelmClient
-		a        *installer.ArgoCD
+		helmMock            *installer.MockHelmClient
+		argoCDResourcesMock *installer.MockArgoCDResources
+		a                   *installer.ArgoCD
 	)
 
 	BeforeEach(func() {
-		helmMock = new(installer.MockHelmClient)
+		helmMock = installer.NewMockHelmClient(GinkgoT())
+		argoCDResourcesMock = installer.NewMockArgoCDResources(GinkgoT())
+		a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock, Resources: argoCDResourcesMock}
 	})
 
 	Context("when no existing release is found", func() {
@@ -32,8 +35,6 @@ var _ = Describe("ArgoCD.Install", func() {
 					cfg.Namespace == "argocd" &&
 					cfg.CreateNamespace == true
 			})).Return(nil)
-
-			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
 
 			err := a.Install()
 			Expect(err).ToNot(HaveOccurred())
@@ -61,8 +62,6 @@ var _ = Describe("ArgoCD.Install", func() {
 			helmMock.On("InstallChart", mock.Anything, mock.Anything).
 				Return(errors.New("chart not found"))
 
-			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
-
 			err := a.Install()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("chart not found"))
@@ -80,8 +79,6 @@ var _ = Describe("ArgoCD.Install", func() {
 			helmMock.On("UpgradeChart", mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.Version == "7.0.0"
 			})).Return(nil)
-
-			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
 
 			err := a.Install()
 			Expect(err).ToNot(HaveOccurred())
@@ -187,7 +184,28 @@ var _ = Describe("ArgoCD.Install", func() {
 		})
 	})
 
-	AfterEach(func() {
-		helmMock.AssertExpectations(GinkgoT())
+	Context("full installation", func() {
+		BeforeEach(func() {
+			helmMock.On("FindRelease", "argocd").Return(nil, nil)
+			helmMock.On("InstallChart", mock.Anything, mock.Anything).Return(nil)
+		})
+		It("installs extra ArgoCD resources when FullInstall option in true", func() {
+			argoCDResourcesMock.On("ApplyAll", mock.Anything).Return(nil)
+			a.FullInstall = true
+
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+
+			argoCDResourcesMock.AssertCalled(GinkgoT(), "ApplyAll", mock.Anything)
+		})
+		It("does not install extra ArgoCD resources when FullInstall option in false", func() {
+			a.FullInstall = false
+
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+
+			argoCDResourcesMock.AssertNotCalled(GinkgoT(), "ApplyAll")
+		})
 	})
+
 })

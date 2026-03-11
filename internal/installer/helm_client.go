@@ -54,7 +54,6 @@ type helmClient struct {
 	actionConfig *action.Configuration
 }
 
-// NewHelmClient initialises a real Helm SDK client scoped to `namespace`.
 func NewHelmClient(namespace string) (HelmClient, error) {
 	settings := cli.New()
 	actionConfig := new(action.Configuration)
