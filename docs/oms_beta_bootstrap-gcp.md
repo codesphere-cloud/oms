@@ -30,6 +30,8 @@ oms beta bootstrap-gcp [flags]
       --github-app-client-secret string   Github App Client Secret (required)
       --github-app-name string            Github App Name (optional)
       --github-pat string                 GitHub Personal Access Token to use for direct image access. Scope required: package read (optional)
+      --github-team-org string            GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug)
+      --github-team-slug string           GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org)
   -h, --help                              help for bootstrap-gcp
       --install-config string             Path to install config file (optional) (default "config.yaml")
       --install-hash string               Codesphere package hash to install (default: none)

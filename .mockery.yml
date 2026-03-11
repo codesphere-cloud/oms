@@ -9,7 +9,7 @@ formatter: gofmt
 log-level: info
 structname: "{{.Mock}}{{.InterfaceName}}"
 pkgname: "{{.SrcPackageName}}"
-recursive: false
+recursive: true
 require-template-schema-exists: true
 template: testify
 template-schema: "{{.Template}}.schema.json"
@@ -18,39 +18,11 @@ packages:
     config:
       all: true
     interfaces:
-  github.com/codesphere-cloud/oms/internal/env:
-    config:
-      all: true
-    interfaces:
-  github.com/codesphere-cloud/oms/internal/installer:
-    config:
-      all: true
-    interfaces:
-  github.com/codesphere-cloud/oms/internal/installer/node:
-    config:
-      all: true
-    interfaces:
-  github.com/codesphere-cloud/oms/internal/portal:
-    config:
-      all: true
-    interfaces:
-  github.com/codesphere-cloud/oms/internal/system:
-    config:
-      all: true
-    interfaces:
-  github.com/codesphere-cloud/oms/internal/util:
-    config:
-      all: true
-    interfaces:
-  github.com/codesphere-cloud/oms/internal/version:
+  github.com/codesphere-cloud/oms/internal:
     config:
       all: true
     interfaces:
   github.com/codesphere-cloud/oms/cli/cmd:
-    config:
-      all: true
-    interfaces:
-  github.com/codesphere-cloud/oms/internal/codesphere:
     config:
       all: true
     interfaces:

@@ -17,6 +17,7 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
@@ -122,6 +123,7 @@ type GCPBootstrapper struct {
 	// SSH command runner
 	NodeClient   node.NodeClient
 	PortalClient portal.Portal
+	GitHubClient github.GitHubClient
 }
 
 type CodesphereEnvironment struct {
@@ -146,6 +148,8 @@ type CodesphereEnvironment struct {
 	RegistryType         RegistryType `json:"registry_type"`
 	GitHubPAT            string       `json:"-"`
 	GitHubAppName        string       `json:"-"`
+	GitHubTeamOrg        string       `json:"github_team_org"`
+	GitHubTeamSlug       string       `json:"github_team_slug"`
 	RegistryUser         string       `json:"-"`
 	Experiments          []string     `json:"experiments"`
 	FeatureFlags         []string     `json:"feature_flags"`
@@ -166,8 +170,8 @@ type CodesphereEnvironment struct {
 	ProjectDisplayName    string `json:"project_display_name"`
 	BillingAccount        string `json:"billing_account"`
 	BaseDomain            string `json:"base_domain"`
-	GithubAppClientID     string `json:"-"`
-	GithubAppClientSecret string `json:"-"`
+	GitHubAppClientID     string `json:"-"`
+	GitHubAppClientSecret string `json:"-"`
 	SecretsDir            string `json:"secrets_dir"`
 	FolderID              string `json:"folder_id"`
 	SSHPublicKeyPath      string `json:"-"`
@@ -190,6 +194,7 @@ func NewGCPBootstrapper(
 	sshRunner node.NodeClient,
 	portalClient portal.Portal,
 	time util.Time,
+	gitHubClient github.GitHubClient,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
 		ctx:          ctx,
@@ -201,6 +206,7 @@ func NewGCPBootstrapper(
 		NodeClient:   sshRunner,
 		PortalClient: portalClient,
 		Time:         time,
+		GitHubClient: gitHubClient,
 	}, nil
 }
 
@@ -375,7 +381,7 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	return b.validateGithubParams()
+	return b.validateGitHubParams()
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -417,11 +423,20 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
 }
 
-// validateGithubParams checks if the GitHub credentials are fully specified if GitHub registry is selected
-func (b *GCPBootstrapper) validateGithubParams() error {
-	ghParams := []string{b.Env.GitHubAppName, b.Env.GithubAppClientID, b.Env.GithubAppClientSecret}
-	if slices.Contains(ghParams, "") && strings.Join(ghParams, "") != "" {
-		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GithubAppClientID, GithubAppClientSecret must be set)")
+// validateGitHubParams checks if the GitHub credentials are fully specified if GitHub registry is selected
+func (b *GCPBootstrapper) validateGitHubParams() error {
+	if b.Env.GitHubTeamSlug != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubPAT == "" {
+		return fmt.Errorf("GitHub PAT is required to extract public keys of GitHub team members")
+	}
+
+	ghTeamParams := []string{b.Env.GitHubTeamSlug, b.Env.GitHubTeamOrg}
+	if slices.Contains(ghTeamParams, "") && strings.Join(ghTeamParams, "") != "" {
+		return fmt.Errorf("GitHub team parameters are not fully specified (all or none of GitHubTeamSlug, GitHubTeamOrg must be set)")
+	}
+
+	ghAppParams := []string{b.Env.GitHubAppName, b.Env.GitHubAppClientID, b.Env.GitHubAppClientSecret}
+	if slices.Contains(ghAppParams, "") && strings.Join(ghAppParams, "") != "" {
+		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GitHubAppClientID, GitHubAppClientSecret must be set)")
 	}
 
 	return nil
@@ -757,14 +772,30 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	subnetwork := fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s-%s-subnet", projectID, region, projectID, region)
 	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-ssd", projectID, zone)
 
-	// Create VMs in parallel
-	wg := sync.WaitGroup{}
-	errCh := make(chan error, len(vmDefs))
-	resultCh := make(chan vmResult, len(vmDefs))
 	rootDiskSize := int64(200)
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		rootDiskSize = 50
 	}
+	sshKeys := ""
+	var err error
+	if b.Env.GitHubPAT != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubTeamSlug != "" {
+		sshKeys, err = github.GetSSHKeysFromGitHubTeam(b.GitHubClient, b.Env.GitHubTeamOrg, b.Env.GitHubTeamSlug)
+		if err != nil {
+			return fmt.Errorf("failed to get SSH keys from GitHub team: %w", err)
+		}
+	}
+
+	pubKey, err := b.readSSHKey(b.Env.SSHPublicKeyPath)
+	if err != nil {
+		return err
+	}
+
+	sshKeys += fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")
+
+	// Create VMs in parallel
+	wg := sync.WaitGroup{}
+	errCh := make(chan error, len(vmDefs))
+	resultCh := make(chan vmResult, len(vmDefs))
 	for _, vm := range vmDefs {
 		wg.Add(1)
 		go func(vm VMDef) {
@@ -791,12 +822,6 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 						DiskType:   &diskType,
 					},
 				})
-			}
-
-			pubKey, err := b.readSSHKey(b.Env.SSHPublicKeyPath)
-			if err != nil {
-				errCh <- fmt.Errorf("failed to read SSH public key: %w", err)
-				return
 			}
 
 			serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
@@ -826,7 +851,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 					Items: []*computepb.Items{
 						{
 							Key:   protoString("ssh-keys"),
-							Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")),
+							Value: protoString(sshKeys),
 						},
 					},
 				},
@@ -930,6 +955,7 @@ func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 	if err != nil {
 		return fmt.Errorf("failed to ensure public gateway IP: %w", err)
 	}
+
 	return nil
 }
 
@@ -961,6 +987,7 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 	if err == nil && address != nil {
 		return address.GetAddress(), nil
 	}
+
 	return "", fmt.Errorf("failed to get address %s after creation", name)
 }
 
@@ -1332,7 +1359,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 
 	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
-	if b.Env.GitHubAppName != "" && b.Env.GithubAppClientID != "" && b.Env.GithubAppClientSecret != "" {
+	if b.Env.GitHubAppName != "" && b.Env.GitHubAppClientID != "" && b.Env.GitHubAppClientSecret != "" {
 		b.Env.InstallConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://github.com",
@@ -1347,8 +1374,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/github/callback",
 				InstallationURI:       "https://github.com/apps/" + b.Env.GitHubAppName + "/installations/new",
 
-				ClientID:     b.Env.GithubAppClientID,
-				ClientSecret: b.Env.GithubAppClientSecret,
+				ClientID:     b.Env.GitHubAppClientID,
+				ClientSecret: b.Env.GitHubAppClientSecret,
 			},
 		}
 	}
