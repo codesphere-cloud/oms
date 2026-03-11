@@ -1,0 +1,193 @@
+package installer_test
+
+import (
+	"errors"
+
+	"github.com/codesphere-cloud/oms/internal/installer"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
+)
+
+var _ = Describe("ArgoCD.Install", func() {
+
+	var (
+		helmMock *installer.MockHelmClient
+		a        *installer.ArgoCD
+	)
+
+	BeforeEach(func() {
+		helmMock = new(installer.MockHelmClient)
+	})
+
+	Context("when no existing release is found", func() {
+		BeforeEach(func() {
+			helmMock.On("FindRelease", "argocd").Return(nil, nil)
+		})
+
+		It("performs a fresh install with a specific version", func() {
+			helmMock.On("InstallChart", mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.Version == "7.0.0" &&
+					cfg.ReleaseName == "argocd" &&
+					cfg.Namespace == "argocd" &&
+					cfg.CreateNamespace == true
+			})).Return(nil)
+
+			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.AssertCalled(GinkgoT(), "FindRelease", "argocd")
+			helmMock.AssertCalled(GinkgoT(), "InstallChart", mock.Anything, mock.Anything)
+			helmMock.AssertNotCalled(GinkgoT(), "UpgradeChart", mock.Anything, mock.Anything)
+		})
+
+		It("performs a fresh install with latest version when Version is empty", func() {
+			helmMock.On("InstallChart", mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.Version == ""
+			})).Return(nil)
+
+			a = &installer.ArgoCD{Version: "", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.AssertNumberOfCalls(GinkgoT(), "InstallChart", 1)
+			helmMock.AssertNotCalled(GinkgoT(), "UpgradeChart", mock.Anything, mock.Anything)
+		})
+
+		It("returns an error when InstallChart fails", func() {
+			helmMock.On("InstallChart", mock.Anything, mock.Anything).
+				Return(errors.New("chart not found"))
+
+			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("chart not found"))
+		})
+	})
+
+	Context("when an existing release is found", func() {
+		existingRelease := &installer.ReleaseInfo{Name: "argocd", InstalledVersion: "6.0.0"}
+
+		BeforeEach(func() {
+			helmMock.On("FindRelease", "argocd").Return(existingRelease, nil)
+		})
+
+		It("upgrades to a newer version", func() {
+			helmMock.On("UpgradeChart", mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.Version == "7.0.0"
+			})).Return(nil)
+
+			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.AssertNumberOfCalls(GinkgoT(), "UpgradeChart", 1)
+			helmMock.AssertNotCalled(GinkgoT(), "InstallChart", mock.Anything, mock.Anything)
+		})
+
+		It("upgrades to the same version (no-op upgrade)", func() {
+			helmMock.On("UpgradeChart", mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.Version == "6.0.0"
+			})).Return(nil)
+
+			a = &installer.ArgoCD{Version: "6.0.0", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.AssertNumberOfCalls(GinkgoT(), "UpgradeChart", 1)
+		})
+
+		It("upgrades to latest when Version is empty", func() {
+			helmMock.On("UpgradeChart", mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.Version == ""
+			})).Return(nil)
+
+			a = &installer.ArgoCD{Version: "", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.AssertNumberOfCalls(GinkgoT(), "UpgradeChart", 1)
+		})
+
+		It("rejects a downgrade", func() {
+			a = &installer.ArgoCD{Version: "5.0.0", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("downgrade is not allowed"))
+
+			helmMock.AssertNotCalled(GinkgoT(), "UpgradeChart", mock.Anything, mock.Anything)
+			helmMock.AssertNotCalled(GinkgoT(), "InstallChart", mock.Anything, mock.Anything)
+		})
+
+		It("returns an error when UpgradeChart fails", func() {
+			helmMock.On("UpgradeChart", mock.Anything, mock.Anything).
+				Return(errors.New("timeout waiting for condition"))
+
+			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("timeout"))
+		})
+	})
+
+	Context("when FindRelease returns an error", func() {
+		It("propagates the error without installing or upgrading", func() {
+			helmMock.On("FindRelease", "argocd").
+				Return(nil, errors.New("cluster unreachable"))
+
+			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cluster unreachable"))
+
+			helmMock.AssertNotCalled(GinkgoT(), "InstallChart", mock.Anything, mock.Anything)
+			helmMock.AssertNotCalled(GinkgoT(), "UpgradeChart", mock.Anything, mock.Anything)
+		})
+	})
+
+	Context("chart configuration", func() {
+		It("always uses the correct chart name and repo URL", func() {
+			helmMock.On("FindRelease", "argocd").Return(nil, nil)
+			helmMock.On("InstallChart", mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ChartName == "argo-cd" &&
+					cfg.RepoURL == "https://argoproj.github.io/argo-helm"
+			})).Return(nil)
+
+			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.AssertExpectations(GinkgoT())
+		})
+
+		It("disables dex in the values", func() {
+			helmMock.On("FindRelease", "argocd").Return(nil, nil)
+			helmMock.On("InstallChart", mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				dex, ok := cfg.Values["dex"].(map[string]interface{})
+				return ok && dex["enabled"] == false
+			})).Return(nil)
+
+			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
+
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.AssertExpectations(GinkgoT())
+		})
+	})
+
+	AfterEach(func() {
+		helmMock.AssertExpectations(GinkgoT())
+	})
+})
