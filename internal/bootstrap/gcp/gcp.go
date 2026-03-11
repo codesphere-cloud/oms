@@ -92,7 +92,7 @@ type CodesphereEnvironment struct {
 	InstallLocal         string       `json:"install_local"`
 	InstallHash          string       `json:"install_hash"`
 	InstallSkipSteps     []string     `json:"install_skip_steps"`
-	Preemptible          bool         `json:"preemptible"`
+	Spot                 bool         `json:"spot"`
 	WriteConfig          bool         `json:"-"`
 	GatewayIP            string       `json:"gateway_ip"`
 	PublicGatewayIP      string       `json:"public_gateway_ip"`
@@ -725,6 +725,14 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 			}
 
 			serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
+			scheduling := &computepb.Scheduling{}
+			if b.Env.Spot {
+				scheduling = &computepb.Scheduling{
+					Preemptible:               protoBool(true),
+					ProvisioningModel:         protoString("SPOT"),
+					InstanceTerminationAction: protoString("STOP"),
+				}
+			}
 			instance := &computepb.Instance{
 				Name: protoString(vm.Name),
 				ServiceAccounts: []*computepb.ServiceAccount{
@@ -737,9 +745,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				Tags: &computepb.Tags{
 					Items: vm.Tags,
 				},
-				Scheduling: &computepb.Scheduling{
-					Preemptible: &b.Env.Preemptible,
-				},
+				Scheduling: scheduling,
 				NetworkInterfaces: []*computepb.NetworkInterface{
 					{
 						Network:    protoString(network),
@@ -767,17 +773,31 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				}
 			}
 
-			err = b.GCPClient.CreateInstance(projectID, zone, instance)
-			if err != nil && !isAlreadyExistsError(err) {
-				errCh <- fmt.Errorf("failed to create instance %s: %w", vm.Name, err)
+			createErr := b.GCPClient.CreateInstance(projectID, zone, instance)
+			if createErr != nil && !isAlreadyExistsError(createErr) {
+				errCh <- fmt.Errorf("failed to create instance %s: %w", vm.Name, createErr)
 				return
 			}
 
 			// Find out the IP addresses of the created instance
-			resp, err := b.GCPClient.GetInstance(projectID, zone, vm.Name)
-			if err != nil {
-				errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
+			resp, getErr := b.GCPClient.GetInstance(projectID, zone, vm.Name)
+			if getErr != nil {
+				errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, getErr)
 				return
+			}
+
+			if getErr == nil && (resp.GetStatus() == "STOPPED" || resp.GetStatus() == "TERMINATED") {
+				startErr := b.GCPClient.StartInstance(projectID, zone, vm.Name)
+				if startErr != nil {
+					errCh <- fmt.Errorf("failed to start existing stopped instance %s: %w", vm.Name, startErr)
+					return
+				}
+
+				resp, getErr = b.GCPClient.GetInstance(projectID, zone, vm.Name)
+				if getErr != nil {
+					errCh <- fmt.Errorf("failed to refresh instance %s after start: %w", vm.Name, getErr)
+					return
+				}
 			}
 
 			externalIP := ""

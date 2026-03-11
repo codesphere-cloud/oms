@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"os"
 
@@ -972,6 +973,69 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(len(bs.Env.CephNodes)).To(Equal(4))
 				Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
 				Expect(bs.Env.Jumpbox).NotTo(BeNil())
+			})
+
+			It("uses spot scheduling when spot is enabled", func() {
+				csEnv.Spot = true
+				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
+
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
+					s := instance.GetScheduling()
+					if s == nil {
+						return fmt.Errorf("expected scheduling to be set")
+					}
+					if !s.GetPreemptible() {
+						return fmt.Errorf("expected preemptible=true for spot")
+					}
+					if s.GetProvisioningModel() != "SPOT" {
+						return fmt.Errorf("expected provisioning model SPOT")
+					}
+					if s.GetInstanceTerminationAction() != "STOP" {
+						return fmt.Errorf("expected termination action STOP")
+					}
+					return nil
+				}).Times(9)
+
+				ipResp := &computepb.Instance{
+					NetworkInterfaces: []*computepb.NetworkInterface{{
+						NetworkIP:     protoString("10.0.0.x"),
+						AccessConfigs: []*computepb.AccessConfig{{NatIP: protoString("1.2.3.x")}},
+					}},
+				}
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(9)
+
+				err := bs.EnsureComputeInstances()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("starts stopped existing instances on rerun", func() {
+				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(fmt.Errorf("already exists")).Times(9)
+				gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
+
+				var mu sync.Mutex
+				calls := map[string]int{}
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone, instanceName string) (*computepb.Instance, error) {
+					mu.Lock()
+					defer mu.Unlock()
+					calls[instanceName]++
+
+					status := "RUNNING"
+					if calls[instanceName] == 1 {
+						status = "STOPPED"
+					}
+
+					return &computepb.Instance{
+						Status: protoString(status),
+						NetworkInterfaces: []*computepb.NetworkInterface{{
+							NetworkIP:     protoString("10.0.0.x"),
+							AccessConfigs: []*computepb.AccessConfig{{NatIP: protoString("1.2.3.x")}},
+						}},
+					}, nil
+				}).Times(18)
+
+				err := bs.EnsureComputeInstances()
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 

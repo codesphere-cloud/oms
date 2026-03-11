@@ -47,6 +47,7 @@ type GCPClientManager interface {
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
+	StartInstance(projectID, zone, instanceName string) error
 	GetInstance(projectID, zone, instanceName string) (*computepb.Instance, error)
 	CreateAddress(projectID, region string, address *computepb.Address) (string, error)
 	GetAddress(projectID, region, addressName string) (*computepb.Address, error)
@@ -529,6 +530,26 @@ func (c *GCPClient) CreateInstance(projectID, zone string, instance *computepb.I
 		Project:          projectID,
 		Zone:             zone,
 		InstanceResource: instance,
+	})
+	if err != nil {
+		return err
+	}
+
+	return op.Wait(c.ctx)
+}
+
+// StartInstance starts an existing Compute Engine instance in the specified project and zone.
+func (c *GCPClient) StartInstance(projectID, zone, instanceName string) error {
+	client, err := compute.NewInstancesRESTClient(c.ctx)
+	if err != nil {
+		return err
+	}
+	defer util.IgnoreError(client.Close)
+
+	op, err := client.Start(c.ctx, &computepb.StartInstanceRequest{
+		Project:  projectID,
+		Zone:     zone,
+		Instance: instanceName,
 	})
 	if err != nil {
 		return err
