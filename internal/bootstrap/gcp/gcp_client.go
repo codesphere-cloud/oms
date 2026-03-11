@@ -125,7 +125,8 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string
 	}
 
 	gcpLabelLayout := "2006-01-02_15-04-05"
-	deleteProjectAfter := time.Now().Add(time.Duration(hoursToLive) * time.Hour).Format(gcpLabelLayout)
+	deleteProjectAfter := time.Now().UTC().Add(time.Duration(hoursToLive) * time.Hour).Format(gcpLabelLayout)
+	deleteProjectAfter = fmt.Sprintf("%s_utc", deleteProjectAfter) // GCP Labels are very limited. This is the only way to add TZ info.
 
 	project := &resourcemanagerpb.Project{
 		ProjectId:   projectID,
