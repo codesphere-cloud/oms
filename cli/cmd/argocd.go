@@ -39,7 +39,7 @@ func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
 			}
 		}
 	}
-	install, err := installer.NewArgoCD2(c.Opts.Version, c.Opts.DatacenterId, c.Opts.RegistryPassword, c.Opts.GitPassword, c.Opts.FullInstall)
+	install, err := installer.NewArgoCD(c.Opts.Version, c.Opts.DatacenterId, c.Opts.RegistryPassword, c.Opts.GitPassword, c.Opts.FullInstall)
 	if err != nil {
 		return fmt.Errorf("failed to initialize ArgoCD installer")
 	}

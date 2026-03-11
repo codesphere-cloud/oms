@@ -12,7 +12,7 @@ import (
 )
 
 // ArgoCD holds the user-facing configuration for the install/upgrade command.
-type ArgoCD2 struct {
+type ArgoCD struct {
 	Version      string
 	DatacenterId string
 	OciPassword  string
@@ -21,7 +21,7 @@ type ArgoCD2 struct {
 	Helm         HelmClient // inject a real or mock client
 }
 
-func NewArgoCD2(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool) (*ArgoCD2, error) {
+func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool) (*ArgoCD, error) {
 	settings := cli.New()
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(settings.RESTClientGetter(), "argocd", os.Getenv("HELM_DRIVER")); err != nil {
@@ -31,7 +31,7 @@ func NewArgoCD2(version string, dcId string, passwordOCI string, passwordGit str
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &ArgoCD2{
+	return &ArgoCD{
 		Version:      version,
 		DatacenterId: dcId,
 		OciPassword:  passwordOCI,
@@ -43,7 +43,7 @@ func NewArgoCD2(version string, dcId string, passwordOCI string, passwordGit str
 
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
-func (a *ArgoCD2) Install() error {
+func (a *ArgoCD) Install() error {
 	if a.Version != "" {
 		log.Printf("Installing/Upgrading ArgoCD helm chart version %s\n", a.Version)
 	} else {
@@ -97,7 +97,7 @@ func (a *ArgoCD2) Install() error {
 }
 
 // install performs a fresh Helm install.
-func (a *ArgoCD2) install(ctx context.Context, cfg ChartConfig) error {
+func (a *ArgoCD) install(ctx context.Context, cfg ChartConfig) error {
 	log.Println("No existing ArgoCD release found, performing fresh install")
 
 	if err := a.Helm.InstallChart(ctx, cfg); err != nil {
@@ -113,7 +113,7 @@ func (a *ArgoCD2) install(ctx context.Context, cfg ChartConfig) error {
 }
 
 // upgrade validates the version constraint and then performs a Helm upgrade.
-func (a *ArgoCD2) upgrade(ctx context.Context, cfg ChartConfig, existing *ReleaseInfo) error {
+func (a *ArgoCD) upgrade(ctx context.Context, cfg ChartConfig, existing *ReleaseInfo) error {
 	log.Printf("Found existing ArgoCD release with chart version %s\n", existing.InstalledVersion)
 
 	// Prevent downgrades when a specific version is requested
