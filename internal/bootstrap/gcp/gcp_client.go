@@ -111,7 +111,7 @@ func (c *GCPClient) CreateProjectID(projectName string) string {
 
 // CreateProject creates a new GCP project under the specified parent (folder or organization).
 // It returns the project ID of the newly created project.
-func (c *GCPClient) CreateProject(parent, projectID, displayName string, ttl time.Duration) (string, error) {
+func (c *GCPClient) CreateProject(parent, projectID, displayName string, projectTTL time.Duration) (string, error) {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
 		return "", err
@@ -119,7 +119,7 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string, ttl tim
 	defer util.IgnoreError(client.Close)
 
 	gcpLabelLayout := "2006-01-02_15-04-05"
-	deleteProjectAfter := time.Now().UTC().Add(ttl).Format(gcpLabelLayout)
+	deleteProjectAfter := time.Now().UTC().Add(projectTTL).Format(gcpLabelLayout)
 	deleteProjectAfter = fmt.Sprintf("%s_utc", deleteProjectAfter) // GCP Labels are very limited. This is the only way to add TZ info.
 
 	project := &resourcemanagerpb.Project{
