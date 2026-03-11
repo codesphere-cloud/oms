@@ -1,0 +1,46 @@
+package installer_test
+
+import (
+	"github.com/codesphere-cloud/oms/internal/installer"
+	. "github.com/onsi/ginkgo/v2"
+	"github.com/stretchr/testify/mock"
+	"helm.sh/helm/v4/pkg/release"
+)
+
+var _ = Describe("ArgoCD Installer", func() {
+	var (
+		argoCD        *installer.ArgoCD
+		mockInstaller *installer.MockHelmInstaller
+
+		fullInstall bool
+	)
+	BeforeEach(func() {
+		fullInstall = true
+		mockInstaller = installer.NewMockHelmInstaller(GinkgoT())
+	})
+
+	JustBeforeEach(func() {
+		argoCD = &installer.ArgoCD{
+			Version:      "v2.0.0",
+			DatacenterId: "some-dc",
+			OciPassword:  "secret",
+			GitPassword:  "secret",
+			FullInstall:  fullInstall,
+
+			HelmInstaller: mockInstaller,
+		}
+	})
+	Describe("NewArgoCD", func() {
+		Context("when full install is false", func() {
+			BeforeEach(func() {
+				fullInstall = false
+			})
+			It("initializes without error", func() {
+				mockInstaller.EXPECT().SetInstallValues(mock.Anything)
+				mockInstaller.EXPECT().RunWithContext(mock.Anything, mock.Anything, mock.Anything).Return(release.Releaser{})
+
+				argoCD.Install()
+			})
+		})
+	})
+})

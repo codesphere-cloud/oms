@@ -27,16 +27,29 @@ type ArgoCD struct {
 	OciPassword  string
 	GitPassword  string
 	FullInstall  bool
+
+	HelmInstaller HelmInstaller
 }
 
-func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool) ArgoCDManager {
+func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool) (*ArgoCD, error) {
+
+	settings := cli.New()
+
+	actionConfig := new(action.Configuration)
+	if err := actionConfig.Init(settings.RESTClientGetter(), "argocd", os.Getenv("HELM_DRIVER")); err != nil {
+		return nil, fmt.Errorf("init failed: %w", err)
+	}
 	return &ArgoCD{
 		Version:      version,
 		DatacenterId: dcId,
 		OciPassword:  passwordOCI,
 		GitPassword:  passwordGit,
 		FullInstall:  fullInstall,
-	}
+
+		HelmInstaller: &RealHelmInstaller{
+			helmInstallClient: action.NewInstall(actionConfig),
+		},
+	}, nil
 }
 
 func (a *ArgoCD) applyPostInstallResources(ctx context.Context) error {
@@ -71,20 +84,33 @@ func showPostInstallHints() {
 	log.Println(`  kubectl port-forward svc/argocd-server 8080:80 -nargocd`)
 }
 
-// Install the ArgoCD chart
-func (a *ArgoCD) Install() error {
-	if a.Version != "" {
-		log.Printf("Installing/Upgrading ArgoCD helm chart version %s\n", a.Version)
-	} else {
-		log.Println("Installing/Upgrading ArgoCD helm chart (latest version)")
-	}
+type RealHelmInstaller struct {
+	helmInstallClient *action.Install
+	helmInstallValues HelmInstallValues
+}
 
+func (h *RealHelmInstaller) SetInstallValues(v HelmInstallValues) {
+	h.helmInstallClient.ReleaseName = v.ReleaseName
+	h.helmInstallClient.Namespace = v.Namespace
+	h.helmInstallClient.CreateNamespace = v.CreateNamespace
+	h.helmInstallClient.DryRunStrategy = v.DryRunStrategy
+	h.helmInstallClient.WaitStrategy = v.WaitStrategy
+	h.helmInstallClient.Version = v.Version
+	h.helmInstallClient.RepoURL = v.RepoURL
+}
+func (h *RealHelmInstaller) LocateChart(name string, settings *cli.EnvSettings) (string, error) {
+	return h.helmInstallClient.LocateChart(name, settings)
+}
+func (h *RealHelmInstaller) RunWithContext(ctx context.Context, ch chart.Charter, vals map[string]interface{}) (release.Releaser, error) {
+	return h.helmInstallClient.RunWithContext(ctx, ch, vals)
+}
+
+func (h *RealHelmInstaller) getRelease() (release.Accessor, error) {
 	settings := cli.New()
-	ctx := context.Background()
 
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(settings.RESTClientGetter(), "argocd", os.Getenv("HELM_DRIVER")); err != nil {
-		return fmt.Errorf("init failed: %w", err)
+		return nil, fmt.Errorf("init failed: %w", err)
 	}
 
 	// Check if a release already exists
@@ -95,7 +121,7 @@ func (a *ArgoCD) Install() error {
 
 	releases, err := listClient.Run()
 	if err != nil {
-		return fmt.Errorf("list releases failed: %w", err)
+		return nil, fmt.Errorf("list releases failed: %w", err)
 	}
 
 	// Find existing "argocd" release using the Accessor interface
@@ -111,6 +137,26 @@ func (a *ArgoCD) Install() error {
 			break
 		}
 	}
+	return existingAccessor, nil
+}
+
+func (h *RealHelmInstaller) installRelease(version string) {
+
+}
+
+func (h *RealHelmInstaller) upgradeRelease(version string) {
+
+}
+
+// Install the ArgoCD chart
+func (a *ArgoCD) Install() error {
+	if a.Version != "" {
+		log.Printf("Installing/Upgrading ArgoCD helm chart version %s\n", a.Version)
+	} else {
+		log.Println("Installing/Upgrading ArgoCD helm chart (latest version)")
+	}
+
+	ctx := context.Background()
 
 	chartName := "argo-cd"
 	repoURL := "https://argoproj.github.io/argo-helm"
@@ -119,6 +165,8 @@ func (a *ArgoCD) Install() error {
 			"enabled": false,
 		},
 	}
+
+	existingAccessor := a.HelmInstaller.getRelease()
 
 	if existingAccessor != nil {
 		// A release already exists — compare versions using the chart accessor
@@ -184,16 +232,29 @@ func (a *ArgoCD) Install() error {
 		// No existing release — perform a fresh install
 		log.Println("No existing ArgoCD release found, performing fresh install")
 
-		installClient := action.NewInstall(actionConfig)
-		installClient.ReleaseName = "argocd"
-		installClient.Namespace = "argocd"
-		installClient.CreateNamespace = true
-		installClient.DryRunStrategy = "none"
-		installClient.WaitStrategy = "watcher"
-		installClient.Version = a.Version // empty string means latest
-		installClient.RepoURL = repoURL
+		//installClient := action.NewInstall(actionConfig)
 
-		chartPath, err := installClient.LocateChart(chartName, settings)
+		installValues := HelmInstallValues{
+			ReleaseName:     "argocd",
+			Namespace:       "argocd",
+			CreateNamespace: true,
+			DryRunStrategy:  "none",
+			WaitStrategy:    "watcher",
+			Version:         a.Version, // empty string means latest
+			RepoURL:         repoURL,
+		}
+
+		a.HelmInstaller.SetInstallValues(installValues)
+
+		//		installClient.ReleaseName = "argocd"
+		//		installClient.Namespace = "argocd"
+		//		installClient.CreateNamespace = true
+		//		installClient.DryRunStrategy = "none"
+		//		installClient.WaitStrategy = "watcher"
+		//		installClient.Version = a.Version // empty string means latest
+		//		installClient.RepoURL = repoURL
+
+		chartPath, err := a.HelmInstaller.LocateChart(chartName, settings)
 		if err != nil {
 			return fmt.Errorf("LocateChart failed: %w", err)
 		}
@@ -203,7 +264,7 @@ func (a *ArgoCD) Install() error {
 			return fmt.Errorf("load failed: %w", err)
 		}
 
-		_, err = installClient.RunWithContext(ctx, chartRequested, vals)
+		_, err = a.HelmInstaller.RunWithContext(ctx, chartRequested, vals)
 		if err != nil {
 			return fmt.Errorf("install failed: %w", err)
 		}
