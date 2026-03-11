@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"slices"
 
@@ -117,15 +118,29 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string
 	}
 	defer util.IgnoreError(client.Close)
 
+	// calculate deletion time for the automatic github action cleanup workflow
+	hoursToLive := 2
+	if strings.Contains(projectID, "qa") {
+		hoursToLive = 48
+	}
+
+	gcpLabelLayout := "2006-01-02_15-04-05"
+	deleteProjectAfter := time.Now().Add(time.Duration(hoursToLive) * time.Hour).Format(gcpLabelLayout)
+
 	project := &resourcemanagerpb.Project{
 		ProjectId:   projectID,
 		DisplayName: displayName,
 		Parent:      parent,
+		Labels: map[string]string{
+			"delete_after": deleteProjectAfter,
+		},
 	}
+
 	op, err := client.CreateProject(c.ctx, &resourcemanagerpb.CreateProjectRequest{Project: project})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create create project %s with config %v: %w", projectID, project, err)
 	}
+
 	resp, err := op.Wait(c.ctx)
 	if err != nil {
 		return "", err
