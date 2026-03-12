@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-var _ = Describe("decodeMultiDocYAML", func() {
+var _ = Describe("DecodeMultiDocYAML", func() {
 	It("decodes a single YAML document", func() {
 		yaml := []byte(`
 apiVersion: v1
@@ -85,7 +85,7 @@ metadata:
 	})
 })
 
-var _ = Describe("renderTemplate", func() {
+var _ = Describe("DenderTemplate", func() {
 	It("replaces a single variable", func() {
 		tpl := []byte(`name: "dc-${DC_NUMBER}"`)
 		rendered, err := util.RenderTemplate(tpl, map[string]string{
@@ -132,7 +132,7 @@ var _ = Describe("renderTemplate", func() {
 	})
 })
 
-var _ = Describe("gvrForUnstructured", func() {
+var _ = Describe("GvrForUnstructured", func() {
 	It("returns the correct GVR for AppProject", func() {
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("argoproj.io/v1alpha1")
