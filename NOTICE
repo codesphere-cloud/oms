@@ -142,12 +142,6 @@ License: BSD-3-Clause
 License URL: https://github.com/chai2010/gettext-go/blob/v1.0.2/LICENSE
  
 ----------
-Module: github.com/clipperhouse/stringish
-Version: v0.1.1
-License: MIT
-License URL: https://github.com/clipperhouse/stringish/blob/v0.1.1/LICENSE
-
-----------
 Module: github.com/clipperhouse/uax29/v2/graphemes
 Version: v2.7.0
 License: MIT
@@ -509,9 +503,9 @@ License URL: https://github.com/lann/ps/blob/62de8c46ede0/LICENSE
  
 ----------
 Module: github.com/lib/pq
-Version: v1.11.1
+Version: v1.11.2
 License: MIT
-License URL: https://github.com/lib/pq/blob/v1.11.1/LICENSE
+License URL: https://github.com/lib/pq/blob/v1.11.2/LICENSE
  
 ----------
 Module: github.com/liggitt/tabwriter
@@ -803,9 +797,9 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.4/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.48.0
+Version: v0.49.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.48.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.49.0:LICENSE
  
 ----------
 Module: golang.org/x/net
@@ -820,28 +814,28 @@ License: BSD-3-Clause
 License URL: https://cs.opensource.google/go/x/oauth2/+/v0.36.0:LICENSE
  
 ----------
-Module: golang.org/x/sync/semaphore
+Module: golang.org/x/sync
 Version: v0.20.0
 License: BSD-3-Clause
 License URL: https://cs.opensource.google/go/x/sync/+/v0.20.0:LICENSE
  
 ----------
 Module: golang.org/x/sys
-Version: v0.41.0
+Version: v0.42.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sys/+/v0.41.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sys/+/v0.42.0:LICENSE
  
 ----------
 Module: golang.org/x/term
-Version: v0.40.0
+Version: v0.41.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/term/+/v0.40.0:LICENSE
+License URL: https://cs.opensource.google/go/x/term/+/v0.41.0:LICENSE
  
 ----------
 Module: golang.org/x/text
-Version: v0.34.0
+Version: v0.35.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/text/+/v0.34.0:LICENSE
+License URL: https://cs.opensource.google/go/x/text/+/v0.35.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
@@ -923,9 +917,9 @@ License URL: https://github.com/helm/helm/blob/v4.1.1/LICENSE
  
 ----------
 Module: k8s.io/api
-Version: v0.35.1
+Version: v0.35.2
 License: Apache-2.0
-License URL: https://github.com/kubernetes/api/blob/v0.35.1/LICENSE
+License URL: https://github.com/kubernetes/api/blob/v0.35.2/LICENSE
  
 ----------
 Module: k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
@@ -935,15 +929,15 @@ License URL: https://github.com/kubernetes/apiextensions-apiserver/blob/v0.35.0/
  
 ----------
 Module: k8s.io/apimachinery/pkg
-Version: v0.35.1
+Version: v0.35.2
 License: Apache-2.0
-License URL: https://github.com/kubernetes/apimachinery/blob/v0.35.1/LICENSE
+License URL: https://github.com/kubernetes/apimachinery/blob/v0.35.2/LICENSE
  
 ----------
 Module: k8s.io/apimachinery/third_party/forked/golang
-Version: v0.35.1
+Version: v0.35.2
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/apimachinery/blob/v0.35.1/third_party/forked/golang/LICENSE
+License URL: https://github.com/kubernetes/apimachinery/blob/v0.35.2/third_party/forked/golang/LICENSE
  
 ----------
 Module: k8s.io/apiserver/pkg/endpoints/deprecation
@@ -953,21 +947,21 @@ License URL: https://github.com/kubernetes/apiserver/blob/v0.35.0/LICENSE
  
 ----------
 Module: k8s.io/cli-runtime/pkg
-Version: v0.35.1
+Version: v0.35.2
 License: Apache-2.0
-License URL: https://github.com/kubernetes/cli-runtime/blob/v0.35.1/LICENSE
+License URL: https://github.com/kubernetes/cli-runtime/blob/v0.35.2/LICENSE
  
 ----------
 Module: k8s.io/client-go
-Version: v0.35.1
+Version: v0.35.2
 License: Apache-2.0
-License URL: https://github.com/kubernetes/client-go/blob/v0.35.1/LICENSE
+License URL: https://github.com/kubernetes/client-go/blob/v0.35.2/LICENSE
  
 ----------
 Module: k8s.io/client-go/third_party/forked/golang/template
-Version: v0.35.1
+Version: v0.35.2
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/client-go/blob/v0.35.1/third_party/forked/golang/LICENSE
+License URL: https://github.com/kubernetes/client-go/blob/v0.35.2/third_party/forked/golang/LICENSE
  
 ----------
 Module: k8s.io/component-base/version
