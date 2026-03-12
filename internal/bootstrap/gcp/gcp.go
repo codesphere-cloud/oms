@@ -39,6 +39,7 @@ const (
 
 // OMSManagedLabel is the label key used to identify projects created by OMS
 const OMSManagedLabel = "oms-managed"
+const DeleteAfterLabel = "delete-after"
 
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
 // A project is considered OMS-managed if it has the 'oms-managed' label set to "true".

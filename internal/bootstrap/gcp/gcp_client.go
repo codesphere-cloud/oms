@@ -132,8 +132,8 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string, project
 		DisplayName: displayName,
 		Parent:      parent,
 		Labels: map[string]string{
-			OMSManagedLabel: "true",
-			"delete_after":  deleteProjectAfter,
+			OMSManagedLabel:  "true",
+			DeleteAfterLabel: deleteProjectAfter,
 		},
 	}
 
