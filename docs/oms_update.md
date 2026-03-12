@@ -19,5 +19,4 @@ Updates resources, e.g. OMS or OMS API keys.
 * [oms update dockerfile](oms_update_dockerfile.md)	 - Update FROM statement in Dockerfile with base image from package
 * [oms update install-config](oms_update_install-config.md)	 - Update an existing Codesphere installer configuration
 * [oms update oms](oms_update_oms.md)	 - Update the OMS CLI
-* [oms update package](oms_update_package.md)	 - Download a codesphere package
 
