@@ -1,10 +1,10 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer_test
+package util_test
 
 import (
-	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -20,7 +20,7 @@ metadata:
   name: my-secret
   namespace: argocd
 `)
-		objects, err := installer.DecodeMultiDocYAML(yaml)
+		objects, err := util.DecodeMultiDocYAML(yaml)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(objects).To(HaveLen(1))
 		Expect(objects[0].GetName()).To(Equal("my-secret"))
@@ -48,7 +48,7 @@ metadata:
   name: default
   namespace: argocd
 `)
-		objects, err := installer.DecodeMultiDocYAML(yaml)
+		objects, err := util.DecodeMultiDocYAML(yaml)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(objects).To(HaveLen(3))
 		Expect(objects[0].GetName()).To(Equal("prod"))
@@ -66,21 +66,21 @@ metadata:
   namespace: argocd
 ---
 `)
-		objects, err := installer.DecodeMultiDocYAML(yaml)
+		objects, err := util.DecodeMultiDocYAML(yaml)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(objects).To(HaveLen(1))
 		Expect(objects[0].GetName()).To(Equal("only-one"))
 	})
 
 	It("returns empty slice for empty input", func() {
-		objects, err := installer.DecodeMultiDocYAML([]byte(""))
+		objects, err := util.DecodeMultiDocYAML([]byte(""))
 		Expect(err).ToNot(HaveOccurred())
 		Expect(objects).To(BeEmpty())
 	})
 
 	It("returns an error for invalid YAML", func() {
 		yaml := []byte(`not: valid: yaml: [`)
-		_, err := installer.DecodeMultiDocYAML(yaml)
+		_, err := util.DecodeMultiDocYAML(yaml)
 		Expect(err).To(HaveOccurred())
 	})
 })
@@ -88,7 +88,7 @@ metadata:
 var _ = Describe("renderTemplate", func() {
 	It("replaces a single variable", func() {
 		tpl := []byte(`name: "dc-${DC_NUMBER}"`)
-		rendered, err := installer.RenderTemplate(tpl, map[string]string{
+		rendered, err := util.RenderTemplate(tpl, map[string]string{
 			"DC_NUMBER": "5",
 		})
 		Expect(err).ToNot(HaveOccurred())
@@ -97,7 +97,7 @@ var _ = Describe("renderTemplate", func() {
 
 	It("replaces multiple variables", func() {
 		tpl := []byte(`server: ${HOST}, port: ${PORT}`)
-		rendered, err := installer.RenderTemplate(tpl, map[string]string{
+		rendered, err := util.RenderTemplate(tpl, map[string]string{
 			"HOST": "localhost",
 			"PORT": "8080",
 		})
@@ -107,7 +107,7 @@ var _ = Describe("renderTemplate", func() {
 
 	It("replaces multiple occurrences of the same variable", func() {
 		tpl := []byte(`a: ${VAR}, b: ${VAR}`)
-		rendered, err := installer.RenderTemplate(tpl, map[string]string{
+		rendered, err := util.RenderTemplate(tpl, map[string]string{
 			"VAR": "value",
 		})
 		Expect(err).ToNot(HaveOccurred())
@@ -116,7 +116,7 @@ var _ = Describe("renderTemplate", func() {
 
 	It("leaves unmatched placeholders intact", func() {
 		tpl := []byte(`name: ${KNOWN}, secret: ${UNKNOWN}`)
-		rendered, err := installer.RenderTemplate(tpl, map[string]string{
+		rendered, err := util.RenderTemplate(tpl, map[string]string{
 			"KNOWN": "replaced",
 		})
 		Expect(err).ToNot(HaveOccurred())
@@ -126,7 +126,7 @@ var _ = Describe("renderTemplate", func() {
 
 	It("returns input unchanged when vars map is empty", func() {
 		tpl := []byte(`nothing: to replace`)
-		rendered, err := installer.RenderTemplate(tpl, map[string]string{})
+		rendered, err := util.RenderTemplate(tpl, map[string]string{})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(string(rendered)).To(Equal(`nothing: to replace`))
 	})
@@ -138,7 +138,7 @@ var _ = Describe("gvrForUnstructured", func() {
 		obj.SetAPIVersion("argoproj.io/v1alpha1")
 		obj.SetKind("AppProject")
 
-		gvr, err := installer.GvrForUnstructured(obj)
+		gvr, err := util.GvrForUnstructured(obj)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(gvr.Group).To(Equal("argoproj.io"))
 		Expect(gvr.Version).To(Equal("v1alpha1"))
@@ -150,7 +150,7 @@ var _ = Describe("gvrForUnstructured", func() {
 		obj.SetAPIVersion("v1")
 		obj.SetKind("ConfigMap")
 
-		_, err := installer.GvrForUnstructured(obj)
+		_, err := util.GvrForUnstructured(obj)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("no GVR mapping"))
 	})

@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+package util
 
 import (
 	"bytes"
@@ -121,7 +121,7 @@ func ApplySecretFromYAML(ctx context.Context, clientset kubernetes.Interface, da
 // newClients creates both a typed and dynamic Kubernetes client
 // using the current kubeconfig context (respects KUBECONFIG env var
 // and defaults to ~/.kube/config).
-func newClients() (kubernetes.Interface, dynamic.Interface, error) {
+func NewClients() (kubernetes.Interface, dynamic.Interface, error) {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	configOverrides := &clientcmd.ConfigOverrides{}
 	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)

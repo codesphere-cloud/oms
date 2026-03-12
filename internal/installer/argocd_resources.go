@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 
+	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
@@ -27,7 +28,7 @@ type argoCDResources struct {
 }
 
 func NewArgoCDResources(dataCenterId string, ociPassword string, gitPassword string) (ArgoCDResources, error) {
-	clientset, dynClient, err := newClients()
+	clientset, dynClient, err := k8s.NewClients()
 	if err != nil {
 		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 	}
@@ -75,17 +76,17 @@ func (a *argoCDResources) ApplyAll(ctx context.Context) error {
 
 func (a *argoCDResources) applyAppProjects(ctx context.Context) error {
 	log.Println("Applying AppProjects... ")
-	objects, err := DecodeMultiDocYAML(appProjectsYAML)
+	objects, err := k8s.DecodeMultiDocYAML(appProjectsYAML)
 	if err != nil {
 		return fmt.Errorf("decoding app projects yaml: %w", err)
 	}
 
 	for _, obj := range objects {
-		gvr, err := GvrForUnstructured(obj)
+		gvr, err := k8s.GvrForUnstructured(obj)
 		if err != nil {
 			return err
 		}
-		if err := ApplyUnstructured(ctx, a.dynClient, gvr, obj); err != nil {
+		if err := k8s.ApplyUnstructured(ctx, a.dynClient, gvr, obj); err != nil {
 			return fmt.Errorf("applying app project %q: %w", obj.GetName(), err)
 		}
 	}
@@ -94,36 +95,36 @@ func (a *argoCDResources) applyAppProjects(ctx context.Context) error {
 
 func (a *argoCDResources) applyLocalCluster(ctx context.Context) error {
 	log.Println("Applying local cluster secret... ")
-	rendered, err := RenderTemplate(localClusterTpl, map[string]string{
+	rendered, err := k8s.RenderTemplate(localClusterTpl, map[string]string{
 		"DC_NUMBER": a.DatacenterId,
 	})
 	if err != nil {
 		return fmt.Errorf("rendering local cluster template: %w", err)
 	}
 
-	return ApplySecretFromYAML(ctx, a.clientset, rendered)
+	return k8s.ApplySecretFromYAML(ctx, a.clientset, rendered)
 }
 
 func (a *argoCDResources) applyHelmRegistrySecret(ctx context.Context) error {
 	log.Println("Applying helm registry secret... ")
-	rendered, err := RenderTemplate(helmRegistryTpl, map[string]string{
+	rendered, err := k8s.RenderTemplate(helmRegistryTpl, map[string]string{
 		"SECRET_CODESPHERE_OCI_READ": a.OciPassword,
 	})
 	if err != nil {
 		return fmt.Errorf("rendering helm registry template: %w", err)
 	}
 
-	return ApplySecretFromYAML(ctx, a.clientset, rendered)
+	return k8s.ApplySecretFromYAML(ctx, a.clientset, rendered)
 }
 
 func (a *argoCDResources) applyGitRepoSecret(ctx context.Context) error {
 	log.Println("Applying git repo secret... ")
-	rendered, err := RenderTemplate(gitRepoTpl, map[string]string{
+	rendered, err := k8s.RenderTemplate(gitRepoTpl, map[string]string{
 		"SECRET_CODESPHERE_REPOS_READ": a.GitPassword,
 	})
 	if err != nil {
 		return fmt.Errorf("rendering git repo template: %w", err)
 	}
 
-	return ApplySecretFromYAML(ctx, a.clientset, rendered)
+	return k8s.ApplySecretFromYAML(ctx, a.clientset, rendered)
 }
