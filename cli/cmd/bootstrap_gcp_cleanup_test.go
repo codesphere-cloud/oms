@@ -146,7 +146,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 				stlog := bootstrap.NewStepLogger(false)
 				confirmReader := bytes.NewBufferString("test-project\n")
 
-				deps := &cmd.CleanupDeps{
+				deps := &gcp.CleanupDeps{
 					GCPClient:     mockGCPClient,
 					FileIO:        mockFileIO,
 					StepLogger:    stlog,
@@ -168,7 +168,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 			cleanupCmd    *cmd.BootstrapGcpCleanupCmd
 			mockGCPClient *gcp.MockGCPClientManager
 			mockFileIO    *util.MockFileIO
-			deps          *cmd.CleanupDeps
+			deps          *gcp.CleanupDeps
 		)
 
 		BeforeEach(func() {
@@ -184,7 +184,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 				},
 			}
 
-			deps = &cmd.CleanupDeps{
+			deps = &gcp.CleanupDeps{
 				GCPClient:     mockGCPClient,
 				FileIO:        mockFileIO,
 				StepLogger:    bootstrap.NewStepLogger(false),

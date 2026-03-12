@@ -469,6 +469,14 @@ func (c *GCPClient) removeRoleBindingFromProject(member string, roles []string, 
 		return nil
 	}
 
+	var validBindings []*iampb.Binding
+	for _, b := range policy.Bindings {
+		if len(b.Members) > 0 {
+			validBindings = append(validBindings, b)
+		}
+	}
+	policy.Bindings = validBindings
+
 	_, err = client.SetIamPolicy(c.ctx, &iampb.SetIamPolicyRequest{
 		Resource: resource,
 		Policy:   policy,
