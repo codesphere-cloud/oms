@@ -35,7 +35,7 @@ func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
 
 		for flagName, value := range requiredFlags {
 			if value == "" {
-				return fmt.Errorf("flag --%s is required when --full-install is true", flagName)
+				return fmt.Errorf("flag --%s is required when --deploy-dc-config is true", flagName)
 			}
 		}
 	}
@@ -67,7 +67,7 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	argocd.cmd.Flags().StringVar(&argocd.Opts.RegistryPassword, "registry-password", "", "Password/token to read from the OCI registry (e.g. ghcr.io) where Helm chart artifacts are stored")
 	argocd.cmd.Flags().StringVar(&argocd.Opts.DatacenterId, "dc-id", "", "Codesphere Datacenter ID where this ArgoCD is installed")
 	argocd.cmd.Flags().StringVarP(&argocd.Opts.Version, "version", "v", "", "Version of the ArgoCD helm chart to install")
-	argocd.cmd.Flags().BoolVar(&argocd.Opts.FullInstall, "full-install", false, "Install other resources (AppProjects, Repo Creds, ...) after installing the chart")
+	argocd.cmd.Flags().BoolVar(&argocd.Opts.FullInstall, "deploy-dc-config", false, "Install Codesphere-managed resources (AppProjects, Repo Creds, ...) after installing the chart")
 	argocd.cmd.RunE = argocd.RunE
 
 	parentCmd.AddCommand(argocd.cmd)
