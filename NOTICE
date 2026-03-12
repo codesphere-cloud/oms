@@ -23,9 +23,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.54.0
+Version: v1.56.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.54.0/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.56.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
@@ -146,12 +146,12 @@ Module: github.com/clipperhouse/stringish
 Version: v0.1.1
 License: MIT
 License URL: https://github.com/clipperhouse/stringish/blob/v0.1.1/LICENSE
- 
+
 ----------
-Module: github.com/clipperhouse/uax29/v2
-Version: v2.4.0
+Module: github.com/clipperhouse/uax29/v2/graphemes
+Version: v2.7.0
 License: MIT
-License URL: https://github.com/clipperhouse/uax29/blob/v2.4.0/LICENSE
+License URL: https://github.com/clipperhouse/uax29/blob/v2.7.0/LICENSE
  
 ----------
 Module: github.com/cloudflare/circl
@@ -161,9 +161,9 @@ License URL: https://github.com/cloudflare/circl/blob/v1.6.3/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v0.17.2
+Version: v0.19.4
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.17.2/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.19.4/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -413,9 +413,9 @@ License URL: https://github.com/google/uuid/blob/v1.6.0/LICENSE
  
 ----------
 Module: github.com/googleapis/enterprise-certificate-proxy/client
-Version: v0.3.12
+Version: v0.3.14
 License: Apache-2.0
-License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.12/LICENSE
+License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.14/LICENSE
  
 ----------
 Module: github.com/googleapis/gax-go/v2
@@ -713,9 +713,9 @@ License URL: https://github.com/xlab/treeprint/blob/v1.2.0/LICENSE
  
 ----------
 Module: gitlab.com/gitlab-org/api/client-go
-Version: v1.39.0
+Version: v1.46.0
 License: Apache-2.0
-License URL: https://gitlab.com/gitlab-org/api/client-go/-/blob/v1.39.0/LICENSE
+License URL: https://gitlab.com/gitlab-org/api/client-go/-/blob/v1.46.0/LICENSE
  
 ----------
 Module: go.opentelemetry.io/auto/sdk
@@ -809,21 +809,21 @@ License URL: https://cs.opensource.google/go/x/crypto/+/v0.48.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.50.0
+Version: v0.51.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.50.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.51.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
-Version: v0.35.0
+Version: v0.36.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/oauth2/+/v0.35.0:LICENSE
+License URL: https://cs.opensource.google/go/x/oauth2/+/v0.36.0:LICENSE
  
 ----------
-Module: golang.org/x/sync
-Version: v0.19.0
+Module: golang.org/x/sync/semaphore
+Version: v0.20.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sync/+/v0.19.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sync/+/v0.20.0:LICENSE
  
 ----------
 Module: golang.org/x/sys
@@ -845,21 +845,21 @@ License URL: https://cs.opensource.google/go/x/text/+/v0.34.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
-Version: v0.14.0
+Version: v0.15.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/time/+/v0.14.0:LICENSE
+License URL: https://cs.opensource.google/go/x/time/+/v0.15.0:LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.269.0
+Version: v0.271.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.269.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.271.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.269.0
+Version: v0.271.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.269.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.271.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -875,15 +875,15 @@ License URL: https://github.com/googleapis/go-genproto/blob/546029d2fa20/googlea
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20260217215200-42d3e9bedb6d
+Version: v0.0.0-20260226221140-a57be14db171
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/42d3e9bedb6d/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/a57be14db171/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc
-Version: v1.79.1
+Version: v1.79.2
 License: Apache-2.0
-License URL: https://github.com/grpc/grpc-go/blob/v1.79.1/LICENSE
+License URL: https://github.com/grpc/grpc-go/blob/v1.79.2/LICENSE
  
 ----------
 Module: google.golang.org/protobuf
