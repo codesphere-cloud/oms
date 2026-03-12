@@ -21,9 +21,9 @@ import (
 	sigyaml "sigs.k8s.io/yaml"
 )
 
-// decodeMultiDocYAML splits a multi-document YAML byte slice into
+// DecodeMultiDocYAML splits a multi-document YAML byte slice into
 // individual unstructured objects. This handles the "---" separators.
-func decodeMultiDocYAML(data []byte) ([]*unstructured.Unstructured, error) {
+func DecodeMultiDocYAML(data []byte) ([]*unstructured.Unstructured, error) {
 	var objects []*unstructured.Unstructured
 
 	reader := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
@@ -44,8 +44,8 @@ func decodeMultiDocYAML(data []byte) ([]*unstructured.Unstructured, error) {
 	return objects, nil
 }
 
-// renderTemplate performs simple ${VAR} substitution on a raw byte slice.
-func renderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
+// RenderTemplate performs simple ${VAR} substitution on a raw byte slice.
+func RenderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
 	content := string(raw)
 	for key, val := range vars {
 		content = strings.ReplaceAll(content, "${"+key+"}", val)
@@ -53,8 +53,8 @@ func renderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
 	return []byte(content), nil
 }
 
-// gvrForUnstructured maps an unstructured object's GVK to the appropriate GVR.
-func gvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
+// GvrForUnstructured maps an unstructured object's GVK to the appropriate GVR.
+func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
 	gvk := obj.GroupVersionKind()
 
 	switch gvk.Kind {
@@ -69,8 +69,8 @@ func gvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionReso
 	}
 }
 
-// applyUnstructured creates or updates an unstructured resource using the dynamic client.
-func applyUnstructured(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, obj *unstructured.Unstructured) error {
+// ApplyUnstructured creates or updates an unstructured resource using the dynamic client.
+func ApplyUnstructured(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, obj *unstructured.Unstructured) error {
 	ns := obj.GetNamespace()
 	name := obj.GetName()
 	resource := dynClient.Resource(gvr).Namespace(ns)
@@ -92,8 +92,8 @@ func applyUnstructured(ctx context.Context, dynClient dynamic.Interface, gvr sch
 	return nil
 }
 
-// applySecretFromYAML creates or updates a corev1.Secret parsed from YAML bytes.
-func applySecretFromYAML(ctx context.Context, clientset kubernetes.Interface, data []byte) error {
+// ApplySecretFromYAML creates or updates a corev1.Secret parsed from YAML bytes.
+func ApplySecretFromYAML(ctx context.Context, clientset kubernetes.Interface, data []byte) error {
 	secret := &corev1.Secret{}
 	if err := sigyaml.Unmarshal(data, secret); err != nil {
 		return fmt.Errorf("unmarshaling secret yaml: %w", err)

@@ -75,17 +75,17 @@ func (a *argoCDResources) ApplyAll(ctx context.Context) error {
 
 func (a *argoCDResources) applyAppProjects(ctx context.Context) error {
 	log.Println("Applying AppProjects... ")
-	objects, err := decodeMultiDocYAML(appProjectsYAML)
+	objects, err := DecodeMultiDocYAML(appProjectsYAML)
 	if err != nil {
 		return fmt.Errorf("decoding app projects yaml: %w", err)
 	}
 
 	for _, obj := range objects {
-		gvr, err := gvrForUnstructured(obj)
+		gvr, err := GvrForUnstructured(obj)
 		if err != nil {
 			return err
 		}
-		if err := applyUnstructured(ctx, a.dynClient, gvr, obj); err != nil {
+		if err := ApplyUnstructured(ctx, a.dynClient, gvr, obj); err != nil {
 			return fmt.Errorf("applying app project %q: %w", obj.GetName(), err)
 		}
 	}
@@ -94,36 +94,36 @@ func (a *argoCDResources) applyAppProjects(ctx context.Context) error {
 
 func (a *argoCDResources) applyLocalCluster(ctx context.Context) error {
 	log.Println("Applying local cluster secret... ")
-	rendered, err := renderTemplate(localClusterTpl, map[string]string{
+	rendered, err := RenderTemplate(localClusterTpl, map[string]string{
 		"DC_NUMBER": a.DatacenterId,
 	})
 	if err != nil {
 		return fmt.Errorf("rendering local cluster template: %w", err)
 	}
 
-	return applySecretFromYAML(ctx, a.clientset, rendered)
+	return ApplySecretFromYAML(ctx, a.clientset, rendered)
 }
 
 func (a *argoCDResources) applyHelmRegistrySecret(ctx context.Context) error {
 	log.Println("Applying helm registry secret... ")
-	rendered, err := renderTemplate(helmRegistryTpl, map[string]string{
+	rendered, err := RenderTemplate(helmRegistryTpl, map[string]string{
 		"SECRET_CODESPHERE_OCI_READ": a.OciPassword,
 	})
 	if err != nil {
 		return fmt.Errorf("rendering helm registry template: %w", err)
 	}
 
-	return applySecretFromYAML(ctx, a.clientset, rendered)
+	return ApplySecretFromYAML(ctx, a.clientset, rendered)
 }
 
 func (a *argoCDResources) applyGitRepoSecret(ctx context.Context) error {
 	log.Println("Applying git repo secret... ")
-	rendered, err := renderTemplate(gitRepoTpl, map[string]string{
+	rendered, err := RenderTemplate(gitRepoTpl, map[string]string{
 		"SECRET_CODESPHERE_REPOS_READ": a.GitPassword,
 	})
 	if err != nil {
 		return fmt.Errorf("rendering git repo template: %w", err)
 	}
 
-	return applySecretFromYAML(ctx, a.clientset, rendered)
+	return ApplySecretFromYAML(ctx, a.clientset, rendered)
 }
