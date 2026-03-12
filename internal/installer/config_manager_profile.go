@@ -22,6 +22,8 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 		g.Config = &files.RootConfig{}
 	}
 
+	g.Config.Ceph.NodesSubnet = "127.0.0.1/32"
+	g.Config.Ceph.Hosts = []files.CephHost{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
 	g.Config.Ceph.OSDs = []files.CephOSD{
 		{
 			SpecID: "default",
@@ -42,10 +44,19 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 	g.Config.Datacenter.ID = 1
 	g.Config.Datacenter.City = "Karlsruhe"
 	g.Config.Datacenter.CountryCode = "DE"
+
 	g.Config.Postgres.Mode = "install"
-	g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{}
+	g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{
+		IP:       "127.0.0.1",
+		Hostname: "localhost",
+	}
+
 	g.Config.Kubernetes.ManagedByCodesphere = true
 	g.Config.Kubernetes.NeedsKubeConfig = false
+	g.Config.Kubernetes.APIServerHost = "127.0.0.1"
+	g.Config.Kubernetes.ControlPlanes = []files.K8sNode{{IPAddress: "127.0.0.1"}}
+	g.Config.Kubernetes.Workers = []files.K8sNode{{IPAddress: "127.0.0.1"}}
+
 	g.Config.Cluster.Certificates = files.ClusterCertificates{
 		CA: files.CAConfig{
 			Algorithm:   "RSA",
@@ -59,6 +70,11 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 		Pools:   []files.MetalLBPoolDef{},
 	}
 	g.Config.Registry = &files.RegistryConfig{}
+
+	g.Config.Codesphere.Domain = "codesphere.local"
+	g.Config.Codesphere.WorkspaceHostingBaseDomain = "ws.local"
+	g.Config.Codesphere.CustomDomains.CNameBaseDomain = "custom.local"
+	g.Config.Codesphere.DNSServers = []string{"8.8.8.8", "1.1.1.1"}
 	g.Config.Codesphere.Experiments = []string{}
 	g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
 		Agent: &files.ImageRef{
@@ -126,48 +142,23 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 	switch profile {
 	case PROFILE_DEV, PROFILE_DEVELOPMENT:
 		g.Config.Datacenter.Name = "dev"
-		g.Config.Postgres.Primary.IP = "127.0.0.1"
-		g.Config.Postgres.Primary.Hostname = "localhost"
-		g.Config.Postgres.Replica = nil
-		g.Config.Ceph.NodesSubnet = "127.0.0.1/32"
-		g.Config.Ceph.Hosts = []files.CephHost{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
-		g.Config.Kubernetes.APIServerHost = "127.0.0.1"
-		g.Config.Kubernetes.ControlPlanes = []files.K8sNode{{IPAddress: "127.0.0.1"}}
-		g.Config.Kubernetes.Workers = []files.K8sNode{{IPAddress: "127.0.0.1"}}
-		g.Config.Codesphere.Domain = "codesphere.local"
-		g.Config.Codesphere.WorkspaceHostingBaseDomain = "ws.local"
-		g.Config.Codesphere.CustomDomains.CNameBaseDomain = "custom.local"
-		g.Config.Codesphere.DNSServers = []string{"8.8.8.8", "1.1.1.1"}
+		if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+			return fmt.Errorf("applying resource profile: %w", err)
+		}
+		g.Config.Cluster.Monitoring = &files.MonitoringConfig{
+			Prometheus: &files.PrometheusConfig{
+				RemoteWrite: &files.RemoteWriteConfig{
+					Enabled:     false,
+					ClusterName: "local-test",
+				},
+			},
+			Loki:         &files.LokiConfig{Enabled: false},
+			Grafana:      &files.GrafanaConfig{Enabled: false},
+			GrafanaAlloy: &files.GrafanaAlloyConfig{Enabled: false},
+		}
 
 	case PROFILE_PROD, PROFILE_PRODUCTION:
 		g.Config.Datacenter.Name = "production"
-		g.Config.Postgres.Primary.IP = "10.50.0.2"
-		g.Config.Postgres.Primary.Hostname = "pg-primary"
-		g.Config.Postgres.Replica = &files.PostgresReplicaConfig{
-			IP:   "10.50.0.3",
-			Name: "replica1",
-		}
-		g.Config.Postgres.Replica.SSLConfig = files.SSLConfig{}
-		g.Config.Ceph.NodesSubnet = "10.53.101.0/24"
-		g.Config.Ceph.Hosts = []files.CephHost{
-			{Hostname: "ceph-node-0", IPAddress: "10.53.101.2", IsMaster: true},
-			{Hostname: "ceph-node-1", IPAddress: "10.53.101.3", IsMaster: false},
-			{Hostname: "ceph-node-2", IPAddress: "10.53.101.4", IsMaster: false},
-		}
-		g.Config.Kubernetes.ManagedByCodesphere = true
-		g.Config.Kubernetes.APIServerHost = "10.50.0.2"
-		g.Config.Kubernetes.ControlPlanes = []files.K8sNode{
-			{IPAddress: "10.50.0.2"},
-		}
-		g.Config.Kubernetes.Workers = []files.K8sNode{
-			{IPAddress: "10.50.0.2"},
-			{IPAddress: "10.50.0.3"},
-			{IPAddress: "10.50.0.4"},
-		}
-		g.Config.Codesphere.Domain = "codesphere.yourcompany.com"
-		g.Config.Codesphere.WorkspaceHostingBaseDomain = "ws.yourcompany.com"
-		g.Config.Codesphere.CustomDomains.CNameBaseDomain = "custom.yourcompany.com"
-		g.Config.Codesphere.DNSServers = []string{"1.1.1.1", "8.8.8.8"}
 		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
 			1: {
 				Name:          "Standard Developer",
@@ -179,18 +170,6 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 
 	case PROFILE_MINIMAL:
 		g.Config.Datacenter.Name = "minimal"
-		g.Config.Postgres.Primary.IP = "127.0.0.1"
-		g.Config.Postgres.Primary.Hostname = "localhost"
-		g.Config.Postgres.Replica = nil
-		g.Config.Ceph.NodesSubnet = "127.0.0.1/32"
-		g.Config.Ceph.Hosts = []files.CephHost{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
-		g.Config.Kubernetes.APIServerHost = "127.0.0.1"
-		g.Config.Kubernetes.ControlPlanes = []files.K8sNode{{IPAddress: "127.0.0.1"}}
-		g.Config.Kubernetes.Workers = []files.K8sNode{}
-		g.Config.Codesphere.Domain = "codesphere.local"
-		g.Config.Codesphere.WorkspaceHostingBaseDomain = "ws.local"
-		g.Config.Codesphere.CustomDomains.CNameBaseDomain = "custom.local"
-		g.Config.Codesphere.DNSServers = []string{"8.8.8.8"}
 		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
 			1: {
 				Name:          "Standard Developer",
