@@ -742,11 +742,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 					return
 				}
 
-				externalIP := ""
-				internalIP := readyInstance.GetNetworkInterfaces()[0].GetNetworkIP()
-				if len(readyInstance.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
-					externalIP = readyInstance.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
-				}
+				internalIP, externalIP := extractInstanceIPs(readyInstance)
 				resultCh <- vmResult{
 					vmType:     vm.Tags[0],
 					name:       vm.Name,
@@ -834,23 +830,14 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				return
 			}
 
-			// Find out the IP addresses of the created instance
-			resp, err := b.GCPClient.GetInstance(projectID, zone, vm.Name)
+			// Wait for the newly created instance to be RUNNING with IPs assigned
+			readyInstance, err := b.waitForInstanceRunning(projectID, zone, vm.Name, vm.ExternalIP)
 			if err != nil {
-				errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
+				errCh <- fmt.Errorf("instance %s did not become ready: %w", vm.Name, err)
 				return
 			}
 
-			externalIP := ""
-			internalIP := ""
-			if len(resp.GetNetworkInterfaces()) > 0 {
-				internalIP = resp.GetNetworkInterfaces()[0].GetNetworkIP()
-				if len(resp.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
-					externalIP = resp.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
-				}
-			}
-
-			// Send result through channel instead of creating nodes in goroutine
+			internalIP, externalIP := extractInstanceIPs(readyInstance)
 			resultCh <- vmResult{
 				vmType:     vm.Tags[0],
 				name:       vm.Name,
@@ -907,6 +894,17 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	})
 
 	return nil
+}
+
+// extractInstanceIPs returns the internal and external IPs from a compute instance.
+func extractInstanceIPs(inst *computepb.Instance) (internalIP, externalIP string) {
+	if len(inst.GetNetworkInterfaces()) > 0 {
+		internalIP = inst.GetNetworkInterfaces()[0].GetNetworkIP()
+		if len(inst.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
+			externalIP = inst.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
+		}
+	}
+	return
 }
 
 // buildSchedulingConfig creates the scheduling configuration based on spot/preemptible settings
@@ -1745,7 +1743,7 @@ func isAlreadyExistsError(err error) bool {
 }
 
 func isNotFoundError(err error) bool {
-	return status.Code(err) == codes.NotFound || strings.Contains(err.Error(), "not found")
+	return status.Code(err) == codes.NotFound || strings.Contains(strings.ToLower(err.Error()), "not found")
 }
 
 // readSSHKey reads an SSH key file, expanding ~ in the path
