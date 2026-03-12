@@ -42,6 +42,7 @@ oms beta bootstrap-gcp [flags]
       --openbao-user string               OpenBao username (optional) (default "admin")
       --preemptible                       Use preemptible VMs for Codesphere infrastructure (default: false)
       --project-name string               Unique GCP Project Name (required)
+      --project-ttl string                Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours) (default "2h")
       --region string                     GCP Region (default: europe-west4) (default "europe-west4")
       --registry-type string              Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry) (default "local-container")
       --registry-user string              Custom Registry username (only for GitHub registry type) (optional)
@@ -50,7 +51,7 @@ oms beta bootstrap-gcp [flags]
       --spot                              Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable (default: false)
       --ssh-private-key-path string       SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string        SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
-      --ssh-quiet                         Suppress SSH command output (default: true) (default true)
+      --ssh-quiet                         Suppress SSH command output (default: false)
       --write-config                      Write generated install config to file (default: true) (default true)
       --zone string                       GCP Zone (default: europe-west4-a) (default "europe-west4-a")
 ```

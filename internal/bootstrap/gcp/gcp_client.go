@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"slices"
 
@@ -35,7 +36,7 @@ import (
 type GCPClientManager interface {
 	GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error)
 	CreateProjectID(projectName string) string
-	CreateProject(parent, projectName, displayName string) (string, error)
+	CreateProject(parent, projectName, displayName string, ttl time.Duration) (string, error)
 	GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error)
 	EnableBilling(projectID, billingAccount string) error
 	EnableAPIs(projectID string, apis []string) error
@@ -111,22 +112,31 @@ func (c *GCPClient) CreateProjectID(projectName string) string {
 
 // CreateProject creates a new GCP project under the specified parent (folder or organization).
 // It returns the project ID of the newly created project.
-func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string, error) {
+func (c *GCPClient) CreateProject(parent, projectID, displayName string, projectTTL time.Duration) (string, error) {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
 		return "", err
 	}
 	defer util.IgnoreError(client.Close)
 
+	gcpLabelLayout := "2006-01-02_15-04-05"
+	deleteProjectAfter := time.Now().UTC().Add(projectTTL).Format(gcpLabelLayout)
+	deleteProjectAfter = fmt.Sprintf("%s_utc", deleteProjectAfter) // GCP Labels are very limited. This is the only way to add TZ info.
+
 	project := &resourcemanagerpb.Project{
 		ProjectId:   projectID,
 		DisplayName: displayName,
 		Parent:      parent,
+		Labels: map[string]string{
+			"delete_after": deleteProjectAfter,
+		},
 	}
+
 	op, err := client.CreateProject(c.ctx, &resourcemanagerpb.CreateProjectRequest{Project: project})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create project %s with config %v: %w", projectID, project, err)
 	}
+
 	resp, err := op.Wait(c.ctx)
 	if err != nil {
 		return "", err

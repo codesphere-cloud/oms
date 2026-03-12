@@ -58,6 +58,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 
 	flags := bootstrapGcpCmd.cmd.Flags()
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP Project Name (required)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectTTL, "project-ttl", "2h", "Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.BillingAccount, "billing-account", "", "GCP Billing Account ID (required)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.BaseDomain, "base-domain", "", "Base domain for Codesphere (required)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GithubAppClientID, "github-app-client-id", "", "Github App Client ID (required)")
@@ -84,7 +85,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
-	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", true, "Suppress SSH command output (default: true)")
+	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", false, "Suppress SSH command output (default: false)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
@@ -123,28 +124,18 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		}
 	}
 
-	err = bs.Bootstrap()
-	envBytes, errMarshal := json.MarshalIndent(bs.Env, "", "  ")
+	bootstrapErr := bs.Bootstrap()
 
-	if errMarshal == nil {
-		workdir := env.NewEnv().GetOmsWorkdir()
-		err = fw.MkdirAll(workdir, 0755)
-		if err != nil {
-			log.Printf("warning: failed to create workdir: %v", err)
-		}
-		infraFilePath := gcp.GetInfraFilePath()
-		err = fw.WriteFile(infraFilePath, envBytes, 0644)
-		if err != nil {
-			log.Printf("warning: failed to write gcp bootstrap env file: %v", err)
-		}
-		log.Printf("Infrastructure details written to %s", infraFilePath)
+	err = writeInfraDetails(bs.Env)
+	if err != nil {
+		log.Printf("warning: failed to write infra details: %v", err)
 	}
 
-	if err != nil {
+	if bootstrapErr != nil {
 		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
 			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
-		return fmt.Errorf("failed to bootstrap GCP: %w", err)
+		return fmt.Errorf("failed to bootstrap GCP: %w", bootstrapErr)
 	}
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
@@ -161,6 +152,32 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		packageName += "-lite"
 	}
 	log.Printf("example install command (run from jumpbox):\n%s -p %s.tar.gz", installCmd, packageName)
+
+	return nil
+}
+
+// writeInfraDetails writes details about the bootstrapped codesphere environment into a file.
+func writeInfraDetails(csEnv *gcp.CodesphereEnvironment) error {
+	envBytes, err := json.MarshalIndent(csEnv, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal codesphere env: %w", err)
+	}
+
+	workdir := env.NewEnv().GetOmsWorkdir()
+	fw := util.NewFilesystemWriter()
+
+	err = fw.MkdirAll(workdir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create workdir %w", err)
+	}
+
+	infraFilePath := gcp.GetInfraFilePath()
+	err = fw.WriteFile(infraFilePath, envBytes, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
+	}
+
+	log.Printf("Infrastructure details written to %s", infraFilePath)
 
 	return nil
 }
