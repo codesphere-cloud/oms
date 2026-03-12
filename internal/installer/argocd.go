@@ -76,25 +76,21 @@ func (a *ArgoCD) Install() error {
 		},
 	}
 
-	// 1. Find existing release
 	existing, err := a.Helm.FindRelease(cfg.ReleaseName)
 	if err != nil {
 		return err
 	}
 
 	if existing != nil {
-		// 2a. Upgrade path
 		if err := a.upgrade(ctx, cfg, existing); err != nil {
 			return err
 		}
 	} else {
-		// 2b. Fresh install path
 		if err := a.install(ctx, cfg); err != nil {
 			return err
 		}
 	}
 
-	// 3. Optional post-install resources
 	if a.FullInstall {
 		err = a.Resources.ApplyAll(ctx)
 		if err != nil {
