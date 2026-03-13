@@ -164,18 +164,22 @@ type K8sNode struct {
 }
 
 type ClusterConfig struct {
-	Certificates  ClusterCertificates `yaml:"certificates"`
-	Monitoring    *MonitoringConfig   `yaml:"monitoring,omitempty"`
-	Gateway       GatewayConfig       `yaml:"gateway"`
-	PublicGateway GatewayConfig       `yaml:"publicGateway"`
+	Certificates        ClusterCertificates        `yaml:"certificates"`
+	CertManager         *CertManagerConfig         `yaml:"certManager,omitempty"`
+	Monitoring          *MonitoringConfig          `yaml:"monitoring,omitempty"`
+	Gateway             GatewayConfig              `yaml:"gateway"`
+	PublicGateway       GatewayConfig              `yaml:"publicGateway"`
+	RookExternalCluster *RookExternalClusterConfig `yaml:"rookExternalCluster,omitempty"`
+	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
+	RgwLoadBalancer     *RgwLoadBalancerConfig     `yaml:"rgwLoadBalancer,omitempty"`
 
 	IngressCAKey string `yaml:"-"`
 }
 
 type ClusterCertificates struct {
-	CA       CAConfig               `yaml:"ca"`
-	ACME     *ACMEConfig            `yaml:"acme,omitempty"`
-	Override map[string]interface{} `yaml:"override,omitempty"`
+	CA       CAConfig      `yaml:"ca"`
+	ACME     *ACMEConfig   `yaml:"acme,omitempty"`
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type CAConfig struct {
@@ -211,6 +215,23 @@ type GatewayConfig struct {
 	ServiceType string            `yaml:"serviceType"`
 	Annotations map[string]string `yaml:"annotations,omitempty"`
 	IPAddresses []string          `yaml:"ipAddresses,omitempty"`
+	Override    ChartOverride     `yaml:"override,omitempty"`
+}
+
+type CertManagerConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type RookExternalClusterConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type PgOperatorConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type RgwLoadBalancerConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 type MetalLBConfig struct {
@@ -264,6 +285,7 @@ type CodesphereConfig struct {
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
+	Override                   ChartOverride          `yaml:"override,omitempty"`
 
 	DomainAuthPrivateKey string `yaml:"-"`
 	DomainAuthPublicKey  string `yaml:"-"`
@@ -320,6 +342,8 @@ type FlavorConfig struct {
 	Image ImageRef    `yaml:"image"`
 	Pool  map[int]int `yaml:"pool"`
 }
+
+type ChartOverride = map[string]interface{}
 
 type ImageRef struct {
 	BomRef     string `yaml:"bomRef,omitempty"`
@@ -460,16 +484,45 @@ type ManagedServiceBackendsConfig struct {
 }
 
 type MonitoringConfig struct {
-	Prometheus *PrometheusConfig `yaml:"prometheus,omitempty"`
+	Prometheus       *PrometheusConfig       `yaml:"prometheus,omitempty"`
+	BlackboxExporter *BlackboxExporterConfig `yaml:"blackboxExporter,omitempty"`
+	PushGateway      *PushGatewayConfig      `yaml:"pushGateway,omitempty"`
+	Loki             *LokiConfig             `yaml:"loki,omitempty"`
+	Grafana          *GrafanaConfig          `yaml:"grafana,omitempty"`
+	GrafanaAlloy     *GrafanaAlloyConfig     `yaml:"grafanaAlloy,omitempty"`
 }
 
 type PrometheusConfig struct {
 	RemoteWrite *RemoteWriteConfig `yaml:"remoteWrite,omitempty"`
+	Override    ChartOverride      `yaml:"override,omitempty"`
 }
 
 type RemoteWriteConfig struct {
 	Enabled     bool   `yaml:"enabled"`
 	ClusterName string `yaml:"clusterName,omitempty"`
+}
+
+type BlackboxExporterConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type PushGatewayConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type LokiConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type GrafanaConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type GrafanaAlloyConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type CephHostConfig struct {

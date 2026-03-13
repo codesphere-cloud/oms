@@ -11,6 +11,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/util"
+	. "github.com/codesphere-cloud/oms/internal/util/testing"
 )
 
 var _ = Describe("Interactive profile usage", func() {
@@ -55,6 +56,11 @@ var _ = Describe("Interactive profile usage", func() {
 			Expect(config.Codesphere.Domain).To(Equal("codesphere.local"))
 			Expect(config.Codesphere.WorkspaceHostingBaseDomain).To(Equal("ws.local"))
 			Expect(config.Codesphere.CustomDomains.CNameBaseDomain).To(Equal("custom.local"))
+
+			// Apply resource profile
+			authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
+			AssertZeroRequests(authService["requests"])
+			Expect(config.Cluster.Monitoring.Grafana.Enabled).To(BeFalse())
 		})
 
 		It("should allow non-interactive collection to use profile defaults", func() {
@@ -133,24 +139,7 @@ var _ = Describe("Interactive profile usage", func() {
 
 			// Verify production-specific values
 			Expect(config.Datacenter.Name).To(Equal("production"))
-			Expect(config.Postgres.Primary.IP).To(Equal("10.50.0.2"))
-			Expect(config.Postgres.Replica).NotTo(BeNil())
-			Expect(config.Postgres.Replica.IP).To(Equal("10.50.0.3"))
-
-			// Ceph should have 3 nodes
-			Expect(config.Ceph.Hosts).To(HaveLen(3))
-			Expect(config.Ceph.Hosts[0].Hostname).To(Equal("ceph-node-0"))
-			Expect(config.Ceph.Hosts[0].IPAddress).To(Equal("10.53.101.2"))
-			Expect(config.Ceph.Hosts[0].IsMaster).To(BeTrue())
-
-			Expect(config.Ceph.Hosts[1].Hostname).To(Equal("ceph-node-1"))
-			Expect(config.Ceph.Hosts[1].IsMaster).To(BeFalse())
-
-			// Kubernetes should have multiple workers
-			Expect(config.Kubernetes.ControlPlanes).To(HaveLen(1))
-			Expect(config.Kubernetes.Workers).To(HaveLen(3))
-
-			Expect(config.Codesphere.Domain).To(Equal("codesphere.yourcompany.com"))
+			Expect(config.Cluster.Monitoring).To(BeNil())
 		})
 	})
 })

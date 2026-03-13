@@ -382,6 +382,12 @@ License: Apache-2.0
 License URL: https://github.com/google/gnostic-models/blob/v0.7.0/LICENSE
  
 ----------
+Module: github.com/google/go-cmp/cmp
+Version: v0.7.0
+License: BSD-3-Clause
+License URL: https://github.com/google/go-cmp/blob/v0.7.0/LICENSE
+ 
+----------
 Module: github.com/google/go-github/v74/github
 Version: v74.0.0
 License: BSD-3-Clause
@@ -584,6 +590,12 @@ Module: github.com/munnerz/goautoneg
 Version: v0.0.0-20191010083416-a7dc8b61c822
 License: BSD-3-Clause
 License URL: https://github.com/munnerz/goautoneg/blob/a7dc8b61c822/LICENSE
+ 
+----------
+Module: github.com/onsi/gomega
+Version: v1.39.1
+License: MIT
+License URL: https://github.com/onsi/gomega/blob/v1.39.1/LICENSE
  
 ----------
 Module: github.com/opencontainers/go-digest
