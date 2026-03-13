@@ -92,14 +92,13 @@ type VMDef struct {
 // Example VM definitions (expand as needed)
 var vmDefs = []VMDef{
 	{"jumpbox", "e2-medium", []string{"jumpbox", "ssh"}, []int64{}, true},
-	{"postgres", "e2-standard-8", []string{"postgres"}, []int64{}, true},
-	{"ceph-1", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
-	{"ceph-2", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
-	{"ceph-3", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
-	{"ceph-4", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
-	{"k0s-1", "e2-standard-16", []string{"k0s"}, []int64{}, false},
-	{"k0s-2", "e2-standard-16", []string{"k0s"}, []int64{}, false},
-	{"k0s-3", "e2-standard-16", []string{"k0s"}, []int64{}, false},
+	{"postgres", "e2-standard-4", []string{"postgres"}, []int64{}, true},
+	{"ceph-1", "e2-standard-4", []string{"ceph"}, []int64{10, 100}, false},
+	{"ceph-2", "e2-standard-4", []string{"ceph"}, []int64{10, 100}, false},
+	{"ceph-3", "e2-standard-4", []string{"ceph"}, []int64{10, 100}, false},
+	{"k0s-1", "e2-standard-8", []string{"k0s"}, []int64{}, false},
+	{"k0s-2", "e2-standard-8", []string{"k0s"}, []int64{}, false},
+	{"k0s-3", "e2-standard-8", []string{"k0s"}, []int64{}, false},
 }
 
 var DefaultExperiments []string = []string{
@@ -1192,10 +1191,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			Hostname:  b.Env.CephNodes[2].GetName(),
 			IPAddress: b.Env.CephNodes[2].GetInternalIP(),
 		},
-		{
-			Hostname:  b.Env.CephNodes[3].GetName(),
-			IPAddress: b.Env.CephNodes[3].GetInternalIP(),
-		},
 	}
 	b.Env.InstallConfig.Ceph.OSDs = []files.CephOSD{
 		{
@@ -1204,11 +1199,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				HostPattern: "*",
 			},
 			DataDevices: files.CephDataDevices{
-				Size:  "100G:",
+				Size:  "50G:",
 				Limit: 1,
 			},
 			DBDevices: files.CephDBDevices{
-				Size:  "10G:500G",
+				Size:  "10G:50G",
 				Limit: 1,
 			},
 		},
@@ -1235,26 +1230,13 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
-	b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{
-		Prometheus: &files.PrometheusConfig{
-			RemoteWrite: &files.RemoteWriteConfig{
-				Enabled:     false,
-				ClusterName: "GCP-test",
-			},
-		},
+	b.Env.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
+	b.Env.InstallConfig.Cluster.Gateway.Annotations = map[string]string{
+		"cloud.google.com/load-balancer-ipv4": b.Env.GatewayIP,
 	}
-	b.Env.InstallConfig.Cluster.Gateway = files.GatewayConfig{
-		ServiceType: "LoadBalancer",
-		//IPAddresses: []string{b.Env.ControlPlaneNodes[0].ExternalIP},
-		Annotations: map[string]string{
-			"cloud.google.com/load-balancer-ipv4": b.Env.GatewayIP,
-		},
-	}
-	b.Env.InstallConfig.Cluster.PublicGateway = files.GatewayConfig{
-		ServiceType: "LoadBalancer",
-		Annotations: map[string]string{
-			"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
-		},
+	b.Env.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
+	b.Env.InstallConfig.Cluster.PublicGateway.Annotations = map[string]string{
+		"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
 	}
 
 	dnsProject := b.Env.DNSProjectID
@@ -1303,8 +1285,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 							BomRef: "workspace-agent-24.04",
 						},
 						Pool: map[int]int{
-							1: 1,
-							2: 1,
+							1: 0,
+							2: 0,
 							3: 0,
 						},
 					},
