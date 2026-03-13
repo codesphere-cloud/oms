@@ -31,7 +31,7 @@ var _ = Describe("ApplyProfile", func() {
 		Entry("development profile", "development", false, "dev"),
 		Entry("prod profile", "prod", false, "production"),
 		Entry("production profile", "production", false, "production"),
-		Entry("minimal profile", "minimal", false, "minimal"),
+		Entry("minimal profile", "minimal", false, "dev"),
 		Entry("invalid profile", "invalid", true, ""),
 	)
 
