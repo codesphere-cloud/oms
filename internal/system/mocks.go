@@ -58,16 +58,32 @@ type MockImageManager_BuildImage_Call struct {
 }
 
 // BuildImage is a helper method to define mock.On call
-//   - dockerfile
-//   - tag
-//   - buildContext
+//   - dockerfile string
+//   - tag string
+//   - buildContext string
 func (_e *MockImageManager_Expecter) BuildImage(dockerfile interface{}, tag interface{}, buildContext interface{}) *MockImageManager_BuildImage_Call {
 	return &MockImageManager_BuildImage_Call{Call: _e.mock.On("BuildImage", dockerfile, tag, buildContext)}
 }
 
 func (_c *MockImageManager_BuildImage_Call) Run(run func(dockerfile string, tag string, buildContext string)) *MockImageManager_BuildImage_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(string), args[2].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
@@ -105,14 +121,20 @@ type MockImageManager_LoadImage_Call struct {
 }
 
 // LoadImage is a helper method to define mock.On call
-//   - imageTarPath
+//   - imageTarPath string
 func (_e *MockImageManager_Expecter) LoadImage(imageTarPath interface{}) *MockImageManager_LoadImage_Call {
 	return &MockImageManager_LoadImage_Call{Call: _e.mock.On("LoadImage", imageTarPath)}
 }
 
 func (_c *MockImageManager_LoadImage_Call) Run(run func(imageTarPath string)) *MockImageManager_LoadImage_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
@@ -150,14 +172,20 @@ type MockImageManager_PushImage_Call struct {
 }
 
 // PushImage is a helper method to define mock.On call
-//   - tag
+//   - tag string
 func (_e *MockImageManager_Expecter) PushImage(tag interface{}) *MockImageManager_PushImage_Call {
 	return &MockImageManager_PushImage_Call{Call: _e.mock.On("PushImage", tag)}
 }
 
 func (_c *MockImageManager_PushImage_Call) Run(run func(tag string)) *MockImageManager_PushImage_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
