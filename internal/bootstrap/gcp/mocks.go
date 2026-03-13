@@ -5,13 +5,14 @@
 package gcp
 
 import (
+	"time"
+
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
 	mock "github.com/stretchr/testify/mock"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
-	"time"
 )
 
 // NewMockGCPClientManager creates a new instance of MockGCPClientManager. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
