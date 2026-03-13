@@ -368,7 +368,7 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 
 		b.Env.ExistingConfigUsed = true
 	} else {
-		err := b.icg.ApplyProfile("dev")
+		err := b.icg.ApplyProfile("minimal")
 		if err != nil {
 			return fmt.Errorf("failed to apply profile: %w", err)
 		}

@@ -170,6 +170,9 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 
 	case PROFILE_MINIMAL:
 		g.Config.Datacenter.Name = "minimal"
+		if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+			return fmt.Errorf("applying resource profile: %w", err)
+		}
 		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
 			1: {
 				Name:          "Standard Developer",

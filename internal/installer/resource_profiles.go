@@ -173,10 +173,10 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	})
 }
 
-func zeroRequests() map[string]any {
-	return map[string]any{
-		"cpu":    "0",
-		"memory": "0",
+func zeroRequests() map[string]int {
+	return map[string]int{
+		"cpu":    0,
+		"memory": 0,
 	}
 }
 
