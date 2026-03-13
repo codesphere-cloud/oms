@@ -115,6 +115,7 @@ type GCPBootstrapper struct {
 	stlog     *bootstrap.StepLogger
 	fw        util.FileIO
 	icg       installer.InstallConfigManager
+	Time      util.Time
 	GCPClient GCPClientManager
 	// Environment
 	Env *CodesphereEnvironment
@@ -188,6 +189,7 @@ func NewGCPBootstrapper(
 	fw util.FileIO,
 	sshRunner node.NodeClient,
 	portalClient portal.Portal,
+	time util.Time,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
 		ctx:          ctx,
@@ -198,6 +200,7 @@ func NewGCPBootstrapper(
 		Env:          CodesphereEnv,
 		NodeClient:   sshRunner,
 		PortalClient: portalClient,
+		Time:         time,
 	}, nil
 }
 
@@ -567,7 +570,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 					return fmt.Errorf("failed to create service account key: %w", err)
 				}
 				b.stlog.LogRetry()
-				time.Sleep(5 * time.Second)
+				b.Time.Sleep(5 * time.Second)
 				continue
 			}
 
@@ -609,7 +612,7 @@ func (b *GCPBootstrapper) ensureIAMRoleWithRetry(projectID string, serviceAccoun
 		}
 		if retries < 4 {
 			b.stlog.LogRetry()
-			time.Sleep(5 * time.Second)
+			b.Time.Sleep(5 * time.Second)
 		}
 	}
 	return fmt.Errorf("failed to assign roles %v to service account %s: %w", roles, serviceAccount, err)
@@ -1001,7 +1004,7 @@ func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
 			return fmt.Errorf("failed to enable root login on %s: %w", node.GetName(), err)
 		}
 		b.stlog.LogRetry()
-		time.Sleep(10 * time.Second)
+		b.Time.Sleep(10 * time.Second)
 	}
 
 	return nil

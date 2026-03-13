@@ -3,11 +3,9 @@ all: build-cli
 build-cli:
 	cd cli && go build -v && mv cli ../oms
 
-test: test-cli
-
-test-cli:
+test:
 	# -count=1 to disable caching test results
-	go test -count=1 -v ./cli/...
+	go test -count=1 -v ./...
 
 test-integration:
 	# Run integration tests with build tag
