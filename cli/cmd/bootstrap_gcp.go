@@ -111,7 +111,17 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	fw := util.NewFilesystemWriter()
 	portalClient := portal.NewPortalClient()
 
-	bs, err := gcp.NewGCPBootstrapper(ctx, c.Env, stlog, c.CodesphereEnv, icg, gcpClient, fw, node.NewSSHNodeClient(c.SSHQuiet), portalClient)
+	bs, err := gcp.NewGCPBootstrapper(ctx,
+		c.Env,
+		stlog,
+		c.CodesphereEnv,
+		icg,
+		gcpClient,
+		fw,
+		node.NewSSHNodeClient(c.SSHQuiet),
+		portalClient,
+		util.NewTime(),
+	)
 	if err != nil {
 		return err
 	}
