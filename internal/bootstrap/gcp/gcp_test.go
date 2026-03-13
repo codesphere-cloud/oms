@@ -54,7 +54,18 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	JustBeforeEach(func() {
 		var err error
-		bs, err = gcp.NewGCPBootstrapper(ctx, e, stlog, csEnv, icg, gc, fw, nodeClient, mockPortalClient)
+		bs, err = gcp.NewGCPBootstrapper(
+			ctx,
+			e,
+			stlog,
+			csEnv,
+			icg,
+			gc,
+			fw,
+			nodeClient,
+			mockPortalClient,
+			util.NewFakeTime(),
+		)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -75,6 +86,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			InstallConfigPath:     "fake-config-file",
 			SecretsFilePath:       "fake-secret",
 			ProjectName:           "test-project",
+			ProjectTTL:            "1h",
 			SecretsDir:            "/etc/codesphere/secrets",
 			BillingAccount:        "test-billing-account",
 			Region:                "us-central1",
@@ -1761,7 +1773,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer-lite.tar.gz").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
-							"oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer-lite.tar.gz -s load-container-images").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer-lite.tar.gz -s load-container-images").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -1775,7 +1787,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer.tar.gz").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
-							"oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer.tar.gz").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer.tar.gz").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())

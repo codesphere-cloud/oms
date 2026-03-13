@@ -5,6 +5,7 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -23,6 +24,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/dns/v1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -34,6 +36,49 @@ const (
 	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
 	RegistryTypeGitHub           RegistryType = "github"
 )
+
+// OMSManagedLabel is the label key used to identify projects created by OMS
+const OMSManagedLabel = "oms-managed"
+const DeleteAfterLabel = "delete-after"
+
+// CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
+// A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
+func CheckOMSManagedLabel(labels map[string]string) bool {
+	if labels == nil {
+		return false
+	}
+	value, exists := labels[OMSManagedLabel]
+	return exists && value == "true"
+}
+
+// GetDNSRecordNames returns the DNS record names that OMS creates for a given base domain.
+func GetDNSRecordNames(baseDomain string) []struct {
+	Name  string
+	Rtype string
+} {
+	return []struct {
+		Name  string
+		Rtype string
+	}{
+		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
+	}
+}
+
+// IsNotFoundError checks if the error is a Google API "not found" error (HTTP 404).
+func IsNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var googleErr *googleapi.Error
+	if errors.As(err, &googleErr) {
+		return googleErr.Code == 404
+	}
+	return false
+}
 
 type VMDef struct {
 	Name            string
@@ -70,6 +115,7 @@ type GCPBootstrapper struct {
 	stlog     *bootstrap.StepLogger
 	fw        util.FileIO
 	icg       installer.InstallConfigManager
+	Time      util.Time
 	GCPClient GCPClientManager
 	// Environment
 	Env *CodesphereEnvironment
@@ -144,6 +190,7 @@ func NewGCPBootstrapper(
 	fw util.FileIO,
 	sshRunner node.NodeClient,
 	portalClient portal.Portal,
+	time util.Time,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
 		ctx:          ctx,
@@ -154,12 +201,33 @@ func NewGCPBootstrapper(
 		Env:          CodesphereEnv,
 		NodeClient:   sshRunner,
 		PortalClient: portalClient,
+		Time:         time,
 	}, nil
 }
 
 func GetInfraFilePath() string {
 	workdir := env.NewEnv().GetOmsWorkdir()
 	return fmt.Sprintf("%s/gcp-infra.json", workdir)
+}
+
+// LoadInfraFile reads and parses the GCP infrastructure file from the specified path.
+// Returns the environment, whether the file exists, and any error.
+// If the file doesn't exist, returns an empty environment with exists=false and nil error.
+func LoadInfraFile(fw util.FileIO, infraFilePath string) (CodesphereEnvironment, bool, error) {
+	if !fw.Exists(infraFilePath) {
+		return CodesphereEnvironment{}, false, nil
+	}
+
+	content, err := fw.ReadFile(infraFilePath)
+	if err != nil {
+		return CodesphereEnvironment{}, true, fmt.Errorf("failed to read gcp infra file: %w", err)
+	}
+
+	var env CodesphereEnvironment
+	if err := json.Unmarshal(content, &env); err != nil {
+		return CodesphereEnvironment{}, true, fmt.Errorf("failed to unmarshal gcp infra file: %w", err)
+	}
+	return env, true, nil
 }
 
 func (b *GCPBootstrapper) Bootstrap() error {
@@ -382,7 +450,7 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 
 		b.Env.ExistingConfigUsed = true
 	} else {
-		err := b.icg.ApplyProfile("dev")
+		err := b.icg.ApplyProfile("minimal")
 		if err != nil {
 			return fmt.Errorf("failed to apply profile: %w", err)
 		}
@@ -516,7 +584,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 					return fmt.Errorf("failed to create service account key: %w", err)
 				}
 				b.stlog.LogRetry()
-				time.Sleep(5 * time.Second)
+				b.Time.Sleep(5 * time.Second)
 				continue
 			}
 
@@ -558,7 +626,7 @@ func (b *GCPBootstrapper) ensureIAMRoleWithRetry(projectID string, serviceAccoun
 		}
 		if retries < 4 {
 			b.stlog.LogRetry()
-			time.Sleep(5 * time.Second)
+			b.Time.Sleep(5 * time.Second)
 		}
 	}
 	return fmt.Errorf("failed to assign roles %v to service account %s: %w", roles, serviceAccount, err)
@@ -1080,7 +1148,7 @@ func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
 			return fmt.Errorf("failed to enable root login on %s: %w", node.GetName(), err)
 		}
 		b.stlog.LogRetry()
-		time.Sleep(10 * time.Second)
+		b.Time.Sleep(10 * time.Second)
 	}
 
 	return nil

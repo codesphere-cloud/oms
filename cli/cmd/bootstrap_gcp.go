@@ -101,6 +101,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 
 	parent.AddCommand(bootstrapGcpCmd.cmd)
 	AddBootstrapGcpPostconfigCmd(bootstrapGcpCmd.cmd, opts)
+	AddBootstrapGcpCleanupCmd(bootstrapGcpCmd.cmd, opts)
 }
 
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
@@ -111,7 +112,17 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	fw := util.NewFilesystemWriter()
 	portalClient := portal.NewPortalClient()
 
-	bs, err := gcp.NewGCPBootstrapper(ctx, c.Env, stlog, c.CodesphereEnv, icg, gcpClient, fw, node.NewSSHNodeClient(c.SSHQuiet), portalClient)
+	bs, err := gcp.NewGCPBootstrapper(ctx,
+		c.Env,
+		stlog,
+		c.CodesphereEnv,
+		icg,
+		gcpClient,
+		fw,
+		node.NewSSHNodeClient(c.SSHQuiet),
+		portalClient,
+		util.NewTime(),
+	)
 	if err != nil {
 		return err
 	}
