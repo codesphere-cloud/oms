@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 type ResourceProfile string
@@ -35,7 +36,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.CertManager == nil {
 		config.Cluster.CertManager = &files.CertManagerConfig{}
 	}
-	config.Cluster.CertManager.Override = deepMergeMaps(config.Cluster.CertManager.Override, map[string]any{
+	config.Cluster.CertManager.Override = util.DeepMergeMaps(config.Cluster.CertManager.Override, map[string]any{
 		"cert-manager": map[string]any{
 			"resources": map[string]any{
 				"requests": zeroRequests(),
@@ -65,7 +66,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.Monitoring.Prometheus == nil {
 		config.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
 	}
-	config.Cluster.Monitoring.Prometheus.Override = deepMergeMaps(config.Cluster.Monitoring.Prometheus.Override, map[string]any{
+	config.Cluster.Monitoring.Prometheus.Override = util.DeepMergeMaps(config.Cluster.Monitoring.Prometheus.Override, map[string]any{
 		"kube-prometheus-stack": map[string]any{
 			"prometheusOperator": map[string]any{
 				"resources": map[string]any{
@@ -95,7 +96,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.Monitoring.BlackboxExporter == nil {
 		config.Cluster.Monitoring.BlackboxExporter = &files.BlackboxExporterConfig{}
 	}
-	config.Cluster.Monitoring.BlackboxExporter.Override = deepMergeMaps(config.Cluster.Monitoring.BlackboxExporter.Override, map[string]any{
+	config.Cluster.Monitoring.BlackboxExporter.Override = util.DeepMergeMaps(config.Cluster.Monitoring.BlackboxExporter.Override, map[string]any{
 		"prometheus-blackbox-exporter": map[string]any{
 			"replicas": 1,
 			"resources": map[string]any{
@@ -107,7 +108,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.Monitoring.PushGateway == nil {
 		config.Cluster.Monitoring.PushGateway = &files.PushGatewayConfig{}
 	}
-	config.Cluster.Monitoring.PushGateway.Override = deepMergeMaps(config.Cluster.Monitoring.PushGateway.Override, map[string]any{
+	config.Cluster.Monitoring.PushGateway.Override = util.DeepMergeMaps(config.Cluster.Monitoring.PushGateway.Override, map[string]any{
 		"prometheus-pushgateway": map[string]any{
 			"resources": map[string]any{
 				"requests": zeroRequests(),
@@ -115,7 +116,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		},
 	})
 
-	config.Cluster.Gateway.Override = deepMergeMaps(config.Cluster.Gateway.Override, map[string]any{
+	config.Cluster.Gateway.Override = util.DeepMergeMaps(config.Cluster.Gateway.Override, map[string]any{
 		"ingress-nginx": map[string]any{
 			"controller": map[string]any{
 				"replicaCount": 1,
@@ -126,7 +127,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		},
 	})
 
-	config.Cluster.PublicGateway.Override = deepMergeMaps(config.Cluster.PublicGateway.Override, map[string]any{
+	config.Cluster.PublicGateway.Override = util.DeepMergeMaps(config.Cluster.PublicGateway.Override, map[string]any{
 		"ingress-nginx": map[string]any{
 			"controller": map[string]any{
 				"replicaCount": 1,
@@ -166,7 +167,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		}
 	}
 
-	config.Codesphere.Override = deepMergeMaps(config.Codesphere.Override, map[string]any{
+	config.Codesphere.Override = util.DeepMergeMaps(config.Codesphere.Override, map[string]any{
 		"global": map[string]any{
 			"services": serviceProfiles,
 		},
@@ -178,27 +179,4 @@ func zeroRequests() map[string]int {
 		"cpu":    0,
 		"memory": 0,
 	}
-}
-
-func deepMergeMaps(dst, src map[string]any) map[string]any {
-	if dst == nil {
-		dst = map[string]any{}
-	}
-
-	for key, srcVal := range src {
-		srcMap, srcIsMap := srcVal.(map[string]any)
-		if !srcIsMap {
-			dst[key] = srcVal
-			continue
-		}
-
-		dstMap, dstIsMap := dst[key].(map[string]any)
-		if !dstIsMap || dstMap == nil {
-			dstMap = map[string]any{}
-		}
-
-		dst[key] = deepMergeMaps(dstMap, srcMap)
-	}
-
-	return dst
 }

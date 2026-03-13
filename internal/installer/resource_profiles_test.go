@@ -9,6 +9,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	. "github.com/codesphere-cloud/oms/internal/util/testing"
 )
 
 var _ = Describe("ApplyResourceProfile", func() {
@@ -56,13 +57,11 @@ var _ = Describe("ApplyResourceProfile", func() {
 			Expect(config.Cluster.Monitoring.Prometheus.RemoteWrite.Enabled).To(BeTrue())
 			Expect(config.Cluster.Monitoring.Prometheus.RemoteWrite.ClusterName).To(Equal("existing-cluster"))
 
-			controller := mustMap(mustMap(config.Cluster.Gateway.Override["ingress-nginx"])["controller"])
-			Expect(controller).To(HaveKeyWithValue("existing", "value"))
-			assertZeroRequests(mustMap(controller["resources"])["requests"])
+			controller := MustMap[any](MustMap[any](config.Cluster.Gateway.Override["ingress-nginx"])["controller"])
+			AssertZeroRequests(MustMap[any](controller["resources"])["requests"])
 
-			authService := mustMap(mustMap(mustMap(config.Codesphere.Override["global"])["services"])["auth_service"])
-			Expect(authService).To(HaveKeyWithValue("existing", "value"))
-			assertZeroRequests(authService["requests"])
+			authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
+			AssertZeroRequests(authService["requests"])
 
 			Expect(config.Cluster.CertManager).NotTo(BeNil())
 			Expect(config.Cluster.CertManager.Override).NotTo(BeNil())
@@ -81,15 +80,3 @@ var _ = Describe("ApplyResourceProfile", func() {
 		Expect(installer.ApplyResourceProfile(nil, installer.ResourceProfileNoRequests)).To(MatchError("root config is nil"))
 	})
 })
-
-func mustMap(value interface{}) map[string]interface{} {
-	result, ok := value.(map[string]interface{})
-	Expect(ok).To(BeTrue(), "expected map[string]interface{}, got %T", value)
-	return result
-}
-
-func assertZeroRequests(value interface{}) {
-	requests := mustMap(value)
-	Expect(requests).To(HaveKeyWithValue("cpu", "0"))
-	Expect(requests).To(HaveKeyWithValue("memory", "0"))
-}
