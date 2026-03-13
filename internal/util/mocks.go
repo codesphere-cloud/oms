@@ -746,6 +746,57 @@ func (_c *MockFileIO_ReadFile_Call) RunAndReturn(run func(filename string) ([]by
 	return _c
 }
 
+// Remove provides a mock function for the type MockFileIO
+func (_mock *MockFileIO) Remove(path string) error {
+	ret := _mock.Called(path)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Remove")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(path)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockFileIO_Remove_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Remove'
+type MockFileIO_Remove_Call struct {
+	*mock.Call
+}
+
+// Remove is a helper method to define mock.On call
+//   - path string
+func (_e *MockFileIO_Expecter) Remove(path interface{}) *MockFileIO_Remove_Call {
+	return &MockFileIO_Remove_Call{Call: _e.mock.On("Remove", path)}
+}
+
+func (_c *MockFileIO_Remove_Call) Run(run func(path string)) *MockFileIO_Remove_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockFileIO_Remove_Call) Return(err error) *MockFileIO_Remove_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockFileIO_Remove_Call) RunAndReturn(run func(path string) error) *MockFileIO_Remove_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // WriteFile provides a mock function for the type MockFileIO
 func (_mock *MockFileIO) WriteFile(filename string, data []byte, perm os.FileMode) error {
 	ret := _mock.Called(filename, data, perm)

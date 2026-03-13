@@ -74,6 +74,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			InstallConfigPath:     "fake-config-file",
 			SecretsFilePath:       "fake-secret",
 			ProjectName:           "test-project",
+			ProjectTTL:            "1h",
 			SecretsDir:            "/etc/codesphere/secrets",
 			BillingAccount:        "test-billing-account",
 			Region:                "us-central1",

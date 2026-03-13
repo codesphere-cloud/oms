@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -32,18 +31,17 @@ func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, args []string) error 
 	log.Printf("running post-configuration steps...")
 
 	icg := installer.NewInstallConfigManager()
-
 	fw := util.NewFilesystemWriter()
 
-	envFileContent, err := fw.ReadFile(gcp.GetInfraFilePath())
+	infraFilePath := gcp.GetInfraFilePath()
+	codesphereEnv, exists, err := gcp.LoadInfraFile(fw, infraFilePath)
 	if err != nil {
-		return fmt.Errorf("failed to read gcp infra file: %w", err)
+		return fmt.Errorf("failed to load gcp infra file: %w", err)
 	}
-
-	err = json.Unmarshal(envFileContent, &c.CodesphereEnv)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal gcp infra file: %w", err)
+	if !exists {
+		return fmt.Errorf("gcp infra file not found at %s", infraFilePath)
 	}
+	c.CodesphereEnv = codesphereEnv
 
 	err = icg.LoadInstallConfigFromFile(c.Opts.InstallConfigPath)
 	if err != nil {
