@@ -19,6 +19,8 @@ oms beta bootstrap-gcp [flags]
 ```
       --base-domain string                Base domain for Codesphere (required)
       --billing-account string            GCP Billing Account ID (required)
+      --cleanup-sa-name string            Name of the service account responsible for automatic cleanup in GHA (default: gcp-bootstrap-cleanup-sa) (default "oms-infra-github-actions")
+      --cleanup-sa-project-id string      GCP ProjectID of the service account responsible for automatic cleanup in GHA (default: oms-infra) (default "oms-infra")
       --custom-pg-ip string               Custom PostgreSQL IP (optional)
       --datacenter-id int                 Datacenter ID (default: 1) (default 1)
       --dns-project-id string             GCP Project ID for Cloud DNS (optional)
