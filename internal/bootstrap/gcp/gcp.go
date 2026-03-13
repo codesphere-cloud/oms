@@ -177,6 +177,10 @@ type CodesphereEnvironment struct {
 	Region                string `json:"region"`
 	Zone                  string `json:"zone"`
 	DNSZoneName           string `json:"dns_zone_name"`
+
+	// Cleanup
+	CleanupSaName     string `json:"cleanup_sa_email"`
+	CleanupSaProjecID string `json:"cleanup_sa_project_id"`
 }
 
 func NewGCPBootstrapper(
@@ -600,6 +604,15 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 	}
 
 	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, "artifact-registry-writer", b.Env.ProjectID, []string{"roles/artifactregistry.writer"})
+	if err != nil {
+		return nil
+	}
+
+	err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, b.Env.CleanupSaName, b.Env.CleanupSaProjecID, []string{"roles/resourcemanager.projectDeleter"})
+	if err != nil {
+		return err
+	}
+
 	return err
 }
 

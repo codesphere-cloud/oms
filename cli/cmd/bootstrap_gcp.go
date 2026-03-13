@@ -89,10 +89,15 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
 
+	// OpenBao
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoURI, "openbao-uri", "", "URI for OpenBao (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoUser, "openbao-user", "admin", "OpenBao username (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoPassword, "openbao-password", "", "OpenBao password (optional)")
+
+	// Cleanup
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CleanupSaName, "cleanup-sa-name", "oms-infra-github-actions", "Name of the service account responsible for automatic cleanup in GHA (default: gcp-bootstrap-cleanup-sa)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CleanupSaProjecID, "cleanup-sa-project-id", "oms-infra", "GCP ProjectID of the service account responsible for automatic cleanup in GHA (default: oms-infra)")
 
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
