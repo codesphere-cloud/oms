@@ -1811,6 +1811,16 @@ func isAlreadyExistsError(err error) bool {
 }
 
 func isNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Delegate to the exported helper for Google API 404 handling
+	if IsNotFoundError(err) {
+		return true
+	}
+
+	// Preserve existing gRPC and string-based "not found" detection
 	return status.Code(err) == codes.NotFound || strings.Contains(strings.ToLower(err.Error()), "not found")
 }
 
