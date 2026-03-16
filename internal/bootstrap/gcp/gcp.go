@@ -1042,7 +1042,7 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 		}
 
 		if attempt < maxAttempts-1 {
-			time.Sleep(pollInterval)
+			b.Time.Sleep(pollInterval)
 		}
 	}
 	return nil, fmt.Errorf("timed out waiting for instance %s to be RUNNING with IPs assigned after %s",
