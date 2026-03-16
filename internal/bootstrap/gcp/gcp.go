@@ -864,7 +864,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				Tags: &computepb.Tags{
 					Items: vm.Tags,
 				},
-				Scheduling: b.buildSchedulingConfig(),
+				Scheduling: b.BuildSchedulingConfig(),
 				NetworkInterfaces: []*computepb.NetworkInterface{
 					{
 						Network:    protoString(network),
@@ -892,7 +892,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 				}
 			}
 
-			err = b.createInstanceWithFallback(projectID, zone, instance, vm.Name, logCh)
+			err = b.CreateInstanceWithFallback(projectID, zone, instance, vm.Name, logCh)
 			if err != nil {
 				errCh <- err
 				return
@@ -975,8 +975,8 @@ func extractInstanceIPs(inst *computepb.Instance) (internalIP, externalIP string
 	return
 }
 
-// buildSchedulingConfig creates the scheduling configuration based on spot/preemptible settings
-func (b *GCPBootstrapper) buildSchedulingConfig() *computepb.Scheduling {
+// BuildSchedulingConfig creates the scheduling configuration based on spot/preemptible settings
+func (b *GCPBootstrapper) BuildSchedulingConfig() *computepb.Scheduling {
 	if b.Env.Spot {
 		return &computepb.Scheduling{
 			ProvisioningModel:         protoString("SPOT"),
@@ -994,9 +994,9 @@ func (b *GCPBootstrapper) buildSchedulingConfig() *computepb.Scheduling {
 	return &computepb.Scheduling{}
 }
 
-// createInstanceWithFallback attempts to create an instance with the configured settings.
+// CreateInstanceWithFallback attempts to create an instance with the configured settings.
 // If spot VMs are enabled and creation fails due to capacity issues, it falls back to standard VMs.
-func (b *GCPBootstrapper) createInstanceWithFallback(projectID, zone string, instance *computepb.Instance, vmName string, logCh chan<- string) error {
+func (b *GCPBootstrapper) CreateInstanceWithFallback(projectID, zone string, instance *computepb.Instance, vmName string, logCh chan<- string) error {
 	err := b.GCPClient.CreateInstance(projectID, zone, instance)
 	if err == nil {
 		return nil
@@ -1006,7 +1006,7 @@ func (b *GCPBootstrapper) createInstanceWithFallback(projectID, zone string, ins
 		return nil
 	}
 
-	if b.Env.Spot && isSpotCapacityError(err) {
+	if b.Env.Spot && IsSpotCapacityError(err) {
 		logCh <- fmt.Sprintf("Spot capacity unavailable for %s, falling back to standard VM", vmName)
 		instance.Scheduling = &computepb.Scheduling{}
 		err = b.GCPClient.CreateInstance(projectID, zone, instance)
@@ -1049,8 +1049,8 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 		name, time.Duration(maxAttempts)*pollInterval)
 }
 
-// isSpotCapacityError checks if the error is related to spot VM capacity issues
-func isSpotCapacityError(err error) bool {
+// IsSpotCapacityError checks if the error is related to spot VM capacity issues
+func IsSpotCapacityError(err error) bool {
 	if err == nil {
 		return false
 	}
