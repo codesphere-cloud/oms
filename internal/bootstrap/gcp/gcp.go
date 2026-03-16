@@ -794,7 +794,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 			}
 			if existingInstance != nil {
 				instanceStatus := existingInstance.GetStatus()
-				if instanceStatus == "TERMINATED" || instanceStatus == "STOPPED" || instanceStatus == "SUSPENDED" {
+				if instanceStatus == "TERMINATED" || instanceStatus == "STOPPED" {
 					// Start the stopped instance
 					err = b.GCPClient.StartInstance(projectID, zone, vm.Name)
 					if err != nil {
