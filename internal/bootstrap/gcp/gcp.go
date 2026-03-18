@@ -82,7 +82,7 @@ func IsNotFoundError(err error) bool {
 		return true
 	}
 
-	return strings.Contains(strings.ToLower(err.Error()), "not found")
+	return false
 }
 
 type VMDef struct {

@@ -44,7 +44,7 @@ func makeStoppedInstance(internalIP, externalIP string) *computepb.Instance {
 
 // mockGetInstanceNotFoundThenRunning sets up a GetInstance mock where the first call per VM
 // returns "not found" and subsequent calls return the given running instance.
-// Returns the expected total call count (2 × numVMs).
+// It sets the expected total call count to 2 × numVMs.
 func mockGetInstanceNotFoundThenRunning(gc *gcp.MockGCPClientManager, projectID, zone string, runningResp *computepb.Instance, numVMs int) {
 	instanceCalls := make(map[string]int)
 	var mu sync.Mutex
