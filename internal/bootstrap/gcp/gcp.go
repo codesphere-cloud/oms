@@ -67,7 +67,7 @@ func GetDNSRecordNames(baseDomain string) []struct {
 	}
 }
 
-// IsNotFoundError checks if the error is a Google API "not found" error (HTTP 404).
+// IsNotFoundError checks if the error indicates a "not found" condition.
 func IsNotFoundError(err error) bool {
 	if err == nil {
 		return false
@@ -77,7 +77,12 @@ func IsNotFoundError(err error) bool {
 	if errors.As(err, &googleErr) {
 		return googleErr.Code == 404
 	}
-	return false
+
+	if status.Code(err) == codes.NotFound {
+		return true
+	}
+
+	return strings.Contains(strings.ToLower(err.Error()), "not found")
 }
 
 type VMDef struct {
@@ -763,155 +768,26 @@ type vmResult struct {
 }
 
 func (b *GCPBootstrapper) EnsureComputeInstances() error {
-	projectID := b.Env.ProjectID
-	region := b.Env.Region
-	zone := b.Env.Zone
-
-	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", projectID, projectID)
-	subnetwork := fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s-%s-subnet", projectID, region, projectID, region)
-	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-ssd", projectID, zone)
-
-	// Create VMs in parallel
-	wg := sync.WaitGroup{}
-	errCh := make(chan error, len(vmDefs))
-	resultCh := make(chan vmResult, len(vmDefs))
-	logCh := make(chan string, len(vmDefs))
 	rootDiskSize := int64(200)
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		rootDiskSize = 50
 	}
+
+	wg := sync.WaitGroup{}
+	errCh := make(chan error, len(vmDefs))
+	resultCh := make(chan vmResult, len(vmDefs))
+	logCh := make(chan string, len(vmDefs))
+
 	for _, vm := range vmDefs {
 		wg.Add(1)
 		go func(vm VMDef) {
 			defer wg.Done()
-
-			existingInstance, err := b.GCPClient.GetInstance(projectID, zone, vm.Name)
-			if err != nil {
-				if !isNotFoundError(err) {
-					errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
-					return
-				}
-			}
-			if existingInstance != nil {
-				instanceStatus := existingInstance.GetStatus()
-				if instanceStatus == "TERMINATED" || instanceStatus == "STOPPED" {
-					// Start the stopped instance
-					err = b.GCPClient.StartInstance(projectID, zone, vm.Name)
-					if err != nil {
-						errCh <- fmt.Errorf("failed to start stopped instance %s: %w", vm.Name, err)
-						return
-					}
-				}
-
-				// Wait until the instance is RUNNING and IPs are populated.
-				readyInstance, err := b.waitForInstanceRunning(projectID, zone, vm.Name, vm.ExternalIP)
-				if err != nil {
-					errCh <- fmt.Errorf("instance %s did not become ready: %w", vm.Name, err)
-					return
-				}
-
-				internalIP, externalIP := extractInstanceIPs(readyInstance)
-				resultCh <- vmResult{
-					vmType:     vm.Tags[0],
-					name:       vm.Name,
-					externalIP: externalIP,
-					internalIP: internalIP,
-				}
-				return
-			}
-
-			// Instance doesn't exist, create it
-			disks := []*computepb.AttachedDisk{
-				{
-					Boot:       protoBool(true),
-					AutoDelete: protoBool(true),
-					Type:       protoString("PERSISTENT"),
-					InitializeParams: &computepb.AttachedDiskInitializeParams{
-						DiskType:    &diskType,
-						DiskSizeGb:  protoInt64(rootDiskSize),
-						SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
-					},
-				},
-			}
-			for _, diskSize := range vm.AdditionalDisks {
-				disks = append(disks, &computepb.AttachedDisk{
-					Boot:       protoBool(false),
-					AutoDelete: protoBool(true),
-					Type:       protoString("PERSISTENT"),
-					InitializeParams: &computepb.AttachedDiskInitializeParams{
-						DiskSizeGb: protoInt64(diskSize),
-						DiskType:   &diskType,
-					},
-				})
-			}
-
-			pubKey, err := b.readSSHKey(b.Env.SSHPublicKeyPath)
-			if err != nil {
-				errCh <- fmt.Errorf("failed to read SSH public key: %w", err)
-				return
-			}
-
-			serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
-			instance := &computepb.Instance{
-				Name: protoString(vm.Name),
-				ServiceAccounts: []*computepb.ServiceAccount{
-					{
-						Email:  protoString(serviceAccount),
-						Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
-					},
-				},
-				MachineType: protoString(fmt.Sprintf("zones/%s/machineTypes/%s", zone, vm.MachineType)),
-				Tags: &computepb.Tags{
-					Items: vm.Tags,
-				},
-				Scheduling: b.BuildSchedulingConfig(),
-				NetworkInterfaces: []*computepb.NetworkInterface{
-					{
-						Network:    protoString(network),
-						Subnetwork: protoString(subnetwork),
-					},
-				},
-				Disks: disks,
-				Metadata: &computepb.Metadata{
-					Items: []*computepb.Items{
-						{
-							Key:   protoString("ssh-keys"),
-							Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")),
-						},
-					},
-				},
-			}
-
-			// Configure external IP if needed
-			if vm.ExternalIP {
-				instance.NetworkInterfaces[0].AccessConfigs = []*computepb.AccessConfig{
-					{
-						Name: protoString("External NAT"),
-						Type: protoString("ONE_TO_ONE_NAT"),
-					},
-				}
-			}
-
-			err = b.CreateInstanceWithFallback(projectID, zone, instance, vm.Name, logCh)
+			result, err := b.ensureVM(vm, rootDiskSize, logCh)
 			if err != nil {
 				errCh <- err
 				return
 			}
-
-			// Wait for the newly created instance to be RUNNING with IPs assigned
-			readyInstance, err := b.waitForInstanceRunning(projectID, zone, vm.Name, vm.ExternalIP)
-			if err != nil {
-				errCh <- fmt.Errorf("instance %s did not become ready: %w", vm.Name, err)
-				return
-			}
-
-			internalIP, externalIP := extractInstanceIPs(readyInstance)
-			resultCh <- vmResult{
-				vmType:     vm.Tags[0],
-				name:       vm.Name,
-				externalIP: externalIP,
-				internalIP: internalIP,
-			}
+			resultCh <- result
 		}(vm)
 	}
 	wg.Wait()
@@ -964,6 +840,129 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	return nil
 }
 
+// ensureVM handles the full lifecycle of a single VM: check existence, restart if stopped,
+// or create a new instance with spot fallback. Returns the VM result with assigned IPs.
+func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, logCh chan<- string) (vmResult, error) {
+	projectID := b.Env.ProjectID
+	zone := b.Env.Zone
+
+	existingInstance, err := b.GCPClient.GetInstance(projectID, zone, vm.Name)
+	if err != nil && !IsNotFoundError(err) {
+		return vmResult{}, fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
+	}
+
+	if existingInstance != nil {
+		if s := existingInstance.GetStatus(); s == "TERMINATED" || s == "STOPPED" {
+			if err := b.GCPClient.StartInstance(projectID, zone, vm.Name); err != nil {
+				return vmResult{}, fmt.Errorf("failed to start stopped instance %s: %w", vm.Name, err)
+			}
+		}
+	} else {
+		instance, err := b.buildInstanceSpec(vm, rootDiskSize)
+		if err != nil {
+			return vmResult{}, err
+		}
+		if err := b.CreateInstanceWithFallback(projectID, zone, instance, vm.Name, logCh); err != nil {
+			return vmResult{}, err
+		}
+	}
+
+	readyInstance, err := b.waitForInstanceRunning(projectID, zone, vm.Name, vm.ExternalIP)
+	if err != nil {
+		return vmResult{}, fmt.Errorf("instance %s did not become ready: %w", vm.Name, err)
+	}
+
+	internalIP, externalIP := extractInstanceIPs(readyInstance)
+	return vmResult{
+		vmType:     vm.Tags[0],
+		name:       vm.Name,
+		externalIP: externalIP,
+		internalIP: internalIP,
+	}, nil
+}
+
+// buildInstanceSpec constructs the full compute instance specification for a VM.
+func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64) (*computepb.Instance, error) {
+	projectID := b.Env.ProjectID
+	region := b.Env.Region
+	zone := b.Env.Zone
+
+	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", projectID, projectID)
+	subnetwork := fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s-%s-subnet", projectID, region, projectID, region)
+	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-ssd", projectID, zone)
+
+	disks := []*computepb.AttachedDisk{
+		{
+			Boot:       protoBool(true),
+			AutoDelete: protoBool(true),
+			Type:       protoString("PERSISTENT"),
+			InitializeParams: &computepb.AttachedDiskInitializeParams{
+				DiskType:    &diskType,
+				DiskSizeGb:  protoInt64(rootDiskSize),
+				SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
+			},
+		},
+	}
+	for _, diskSize := range vm.AdditionalDisks {
+		disks = append(disks, &computepb.AttachedDisk{
+			Boot:       protoBool(false),
+			AutoDelete: protoBool(true),
+			Type:       protoString("PERSISTENT"),
+			InitializeParams: &computepb.AttachedDiskInitializeParams{
+				DiskSizeGb: protoInt64(diskSize),
+				DiskType:   &diskType,
+			},
+		})
+	}
+
+	pubKey, err := b.readSSHKey(b.Env.SSHPublicKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read SSH public key: %w", err)
+	}
+
+	serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
+	instance := &computepb.Instance{
+		Name: protoString(vm.Name),
+		ServiceAccounts: []*computepb.ServiceAccount{
+			{
+				Email:  protoString(serviceAccount),
+				Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
+			},
+		},
+		MachineType: protoString(fmt.Sprintf("zones/%s/machineTypes/%s", zone, vm.MachineType)),
+		Tags: &computepb.Tags{
+			Items: vm.Tags,
+		},
+		Scheduling: b.BuildSchedulingConfig(),
+		NetworkInterfaces: []*computepb.NetworkInterface{
+			{
+				Network:    protoString(network),
+				Subnetwork: protoString(subnetwork),
+			},
+		},
+		Disks: disks,
+		Metadata: &computepb.Metadata{
+			Items: []*computepb.Items{
+				{
+					Key:   protoString("ssh-keys"),
+					Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")),
+				},
+			},
+		},
+	}
+
+	if vm.ExternalIP {
+		instance.NetworkInterfaces[0].AccessConfigs = []*computepb.AccessConfig{
+			{
+				Name: protoString("External NAT"),
+				Type: protoString("ONE_TO_ONE_NAT"),
+			},
+		}
+	}
+
+	return instance, nil
+}
+
 // extractInstanceIPs returns the internal and external IPs from a compute instance.
 func extractInstanceIPs(inst *computepb.Instance) (internalIP, externalIP string) {
 	if len(inst.GetNetworkInterfaces()) > 0 {
@@ -973,6 +972,22 @@ func extractInstanceIPs(inst *computepb.Instance) (internalIP, externalIP string
 		}
 	}
 	return
+}
+
+// isInstanceReady checks if an instance is RUNNING with its internal IP assigned,
+// and optionally its external IP as well.
+func isInstanceReady(inst *computepb.Instance, needsExternalIP bool) bool {
+	if inst.GetStatus() != "RUNNING" || len(inst.GetNetworkInterfaces()) == 0 {
+		return false
+	}
+	ni := inst.GetNetworkInterfaces()[0]
+	if ni.GetNetworkIP() == "" {
+		return false
+	}
+	if needsExternalIP && (len(ni.GetAccessConfigs()) == 0 || ni.GetAccessConfigs()[0].GetNatIP() == "") {
+		return false
+	}
+	return true
 }
 
 // BuildSchedulingConfig creates the scheduling configuration based on spot/preemptible settings
@@ -1033,11 +1048,7 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 			return nil, fmt.Errorf("failed to poll instance %s: %w", name, err)
 		}
 
-		if inst.GetStatus() == "RUNNING" &&
-			len(inst.GetNetworkInterfaces()) > 0 &&
-			inst.GetNetworkInterfaces()[0].GetNetworkIP() != "" &&
-			(!needsExternalIP || (len(inst.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 &&
-				inst.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP() != "")) {
+		if isInstanceReady(inst, needsExternalIP) {
 			return inst, nil
 		}
 
@@ -1808,20 +1819,6 @@ func (b *GCPBootstrapper) RunK0sConfigScript() error {
 // Helper functions
 func isAlreadyExistsError(err error) bool {
 	return status.Code(err) == codes.AlreadyExists || strings.Contains(err.Error(), "already exists")
-}
-
-func isNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	// Delegate to the exported helper for Google API 404 handling
-	if IsNotFoundError(err) {
-		return true
-	}
-
-	// Preserve existing gRPC and string-based "not found" detection
-	return status.Code(err) == codes.NotFound || strings.Contains(strings.ToLower(err.Error()), "not found")
 }
 
 // readSSHKey reads an SSH key file, expanding ~ in the path
