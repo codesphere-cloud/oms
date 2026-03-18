@@ -134,11 +134,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			// 1. EnsureInstallConfig
 			fw.EXPECT().Exists("fake-config-file").Return(false)
-			icg.EXPECT().ApplyProfile("dev").Return(nil)
+			icg.EXPECT().ApplyProfile("minimal").Return(nil)
 			// Returning a real install config to avoid nil pointer dereferences later
 			icg.EXPECT().GetInstallConfig().RunAndReturn(func() *files.RootConfig {
 				realIcm := installer.NewInstallConfigManager()
-				_ = realIcm.ApplyProfile("dev")
+				_ = realIcm.ApplyProfile("minimal")
 				return realIcm.GetInstallConfig()
 			})
 
@@ -415,7 +415,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("creates install config when missing", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(false)
-				icg.EXPECT().ApplyProfile("dev").Return(nil)
+				icg.EXPECT().ApplyProfile("minimal").Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
 				err := bs.EnsureInstallConfig()
@@ -437,7 +437,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("returns error when config file missing and applying profile fails", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(false)
-				icg.EXPECT().ApplyProfile("dev").Return(fmt.Errorf("profile error"))
+				icg.EXPECT().ApplyProfile("minimal").Return(fmt.Errorf("profile error"))
 
 				err := bs.EnsureInstallConfig()
 				Expect(err).To(HaveOccurred())
