@@ -471,6 +471,9 @@ func (b *GCPBootstrapper) EnsureProject() error {
 	}
 
 	deleteProjectAfter, err := calculateProjectExpiryLabel(b.Env.ProjectTTL)
+	if err != nil {
+		return fmt.Errorf("failed to calculate project expiry label: %w", err)
+	}
 
 	labels := map[string]string{
 		OMSManagedLabel:  "true",
@@ -515,8 +518,8 @@ func calculateProjectExpiryLabel(projectTTLStr string) (string, error) {
 
 	// prepare label for gcp project deletion in custom UTC time format.
 	// GCP Labels are very limited. This is an easy way to add date and TZ info in one label.
-	gcpLabelLayout := "2006-01-02_15-04-05"
-	deleteProjectAfter := time.Now().UTC().Add(projectTTL).Format(gcpLabelLayout)
+	gcpExpiryLabelLayout := "2006-01-02_15-04-05"
+	deleteProjectAfter := time.Now().UTC().Add(projectTTL).Format(gcpExpiryLabelLayout)
 	deleteProjectAfter = fmt.Sprintf("%s_utc", deleteProjectAfter)
 
 	return deleteProjectAfter, nil
