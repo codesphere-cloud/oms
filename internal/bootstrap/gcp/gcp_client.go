@@ -116,7 +116,6 @@ func (c *GCPClient) CreateProjectID(projectName string) string {
 
 // CreateProject creates a new GCP project under the specified parent (folder or organization).
 // It returns the project ID of the newly created project.
-// The project is labeled with 'oms-managed=true' to identify it as created by OMS.
 func (c *GCPClient) CreateProject(parent, projectID, displayName string, labels map[string]string) (string, error) {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
@@ -144,6 +143,8 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string, labels 
 	return resp.ProjectId, nil
 }
 
+// UpdateProject updates the display name and labels of an existing GCP project.
+// Returns an error if the update operation fails or if the project does not exist.
 func (c *GCPClient) UpdateProject(projectID, displayName string, labels map[string]string) error {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {

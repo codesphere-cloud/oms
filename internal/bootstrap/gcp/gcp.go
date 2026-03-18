@@ -505,6 +505,8 @@ func (b *GCPBootstrapper) EnsureProject() error {
 	return fmt.Errorf("failed to get project: %w", err)
 }
 
+// calculateProjectExpiryLabel takes a TTL string (e.g. "24h") and
+// returns a formatted UTC timestamp string that is usable as a GCP project label for automatic deletion.
 func calculateProjectExpiryLabel(projectTTLStr string) (string, error) {
 	projectTTL, err := time.ParseDuration(projectTTLStr)
 	if err != nil {
