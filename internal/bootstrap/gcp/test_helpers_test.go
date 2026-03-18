@@ -4,12 +4,12 @@
 package gcp_test
 
 import (
-	"fmt"
 	"sync"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/api/googleapi"
 )
 
 func protoString(s string) *string { return &s }
@@ -53,7 +53,7 @@ func mockGetInstanceNotFoundThenRunning(gc *gcp.MockGCPClientManager, projectID,
 		defer mu.Unlock()
 		instanceCalls[name]++
 		if instanceCalls[name] == 1 {
-			return nil, fmt.Errorf("not found")
+			return nil, &googleapi.Error{Code: 404, Message: "not found"}
 		}
 		return runningResp, nil
 	}).Times(numVMs * 2)
