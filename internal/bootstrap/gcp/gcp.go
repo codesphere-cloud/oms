@@ -1042,7 +1042,7 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 		maxAttempts  = 60
 		pollInterval = 5 * time.Second
 	)
-	for attempt := range maxAttempts {
+	for attempt := 0; attempt < maxAttempts; attempt++ {
 		inst, err := b.GCPClient.GetInstance(projectID, zone, name)
 		if err != nil {
 			return nil, fmt.Errorf("failed to poll instance %s: %w", name, err)
