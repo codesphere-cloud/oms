@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"os"
 
@@ -152,7 +151,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// 3. EnsureProject
 			gc.EXPECT().GetProjectByName(mock.Anything, "test-project").Return(nil, fmt.Errorf("project not found: test-project"))
 			gc.EXPECT().CreateProjectID("test-project").Return(projectId)
-			gc.EXPECT().CreateProject(mock.Anything, mock.Anything, "test-project", time.Hour).Return(mock.Anything, nil)
+			gc.EXPECT().CreateProject(mock.Anything, mock.Anything, "test-project", mock.Anything).Return(mock.Anything, nil)
 
 			// 4. EnsureBilling
 			gc.EXPECT().GetBillingInfo(projectId).Return(&cloudbilling.ProjectBillingInfo{BillingEnabled: false}, nil)
@@ -506,7 +505,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("creates project when missing", func() {
 				gc.EXPECT().GetProjectByName(csEnv.FolderID, csEnv.ProjectName).Return(nil, fmt.Errorf("project not found: %s", csEnv.ProjectName))
 				gc.EXPECT().CreateProjectID(csEnv.ProjectName).Return("new-proj-id")
-				gc.EXPECT().CreateProject(csEnv.FolderID, "new-proj-id", csEnv.ProjectName, time.Hour).Return("", nil)
+				gc.EXPECT().CreateProject(csEnv.FolderID, "new-proj-id", csEnv.ProjectName, mock.Anything).Return("", nil)
 
 				err := bs.EnsureProject()
 				Expect(err).NotTo(HaveOccurred())
@@ -526,7 +525,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("returns error when CreateProject fails", func() {
 				gc.EXPECT().GetProjectByName("", csEnv.ProjectName).Return(nil, fmt.Errorf("project not found: %s", csEnv.ProjectName))
 				gc.EXPECT().CreateProjectID(csEnv.ProjectName).Return("fake-id")
-				gc.EXPECT().CreateProject("", "fake-id", csEnv.ProjectName, time.Hour).Return("", fmt.Errorf("create error"))
+				gc.EXPECT().CreateProject("", "fake-id", csEnv.ProjectName, mock.Anything).Return("", fmt.Errorf("create error"))
 
 				err := bs.EnsureProject()
 				Expect(err).To(HaveOccurred())

@@ -470,21 +470,30 @@ func (b *GCPBootstrapper) EnsureProject() error {
 		parent = fmt.Sprintf("folders/%s", b.Env.FolderID)
 	}
 
+	deleteProjectAfter, err := calculateProjectExpiryLabel(b.Env.ProjectTTL)
+
+	labels := map[string]string{
+		OMSManagedLabel:  "true",
+		DeleteAfterLabel: deleteProjectAfter,
+	}
+
 	existingProject, err := b.GCPClient.GetProjectByName(b.Env.FolderID, b.Env.ProjectName)
 	if err == nil {
 		b.Env.ProjectID = existingProject.ProjectId
 		b.Env.ProjectName = existingProject.Name
+
+		err := b.GCPClient.UpdateProject(existingProject.ProjectId, existingProject.DisplayName, labels)
+		if err != nil {
+			return fmt.Errorf("failed to update project: %w", err)
+		}
+
 		return nil
 	}
+
 	if err.Error() == fmt.Sprintf("project not found: %s", b.Env.ProjectName) {
 		projectId := b.GCPClient.CreateProjectID(b.Env.ProjectName)
 
-		projectTTL, err := time.ParseDuration(b.Env.ProjectTTL)
-		if err != nil {
-			return fmt.Errorf("invalid project TTL format: %w", err)
-		}
-
-		_, err = b.GCPClient.CreateProject(parent, projectId, b.Env.ProjectName, projectTTL)
+		_, err = b.GCPClient.CreateProject(parent, projectId, b.Env.ProjectName, labels)
 		if err != nil {
 			return fmt.Errorf("failed to create project: %w", err)
 		}
@@ -494,6 +503,21 @@ func (b *GCPBootstrapper) EnsureProject() error {
 	}
 
 	return fmt.Errorf("failed to get project: %w", err)
+}
+
+func calculateProjectExpiryLabel(projectTTLStr string) (string, error) {
+	projectTTL, err := time.ParseDuration(projectTTLStr)
+	if err != nil {
+		return "", fmt.Errorf("invalid project TTL format: %w", err)
+	}
+
+	// prepare label for gcp project deletion in custom UTC time format.
+	// GCP Labels are very limited. This is an easy way to add date and TZ info in one label.
+	gcpLabelLayout := "2006-01-02_15-04-05"
+	deleteProjectAfter := time.Now().UTC().Add(projectTTL).Format(gcpLabelLayout)
+	deleteProjectAfter = fmt.Sprintf("%s_utc", deleteProjectAfter)
+
+	return deleteProjectAfter, nil
 }
 
 func (b *GCPBootstrapper) EnsureBilling() error {
