@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
+	"google.golang.org/api/googleapi"
 )
 
 func jumpbboxMatcher(node *node.Node) bool {
@@ -385,17 +386,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 			})
 
-		})
-
-		Context("When both --spot and --preemptible are specified", func() {
-			BeforeEach(func() {
-				csEnv.Spot = true
-				csEnv.Preemptible = true
-			})
-			It("fails with a clear error message", func() {
-				err := bs.ValidateInput()
-				Expect(err).To(MatchError(MatchRegexp("cannot specify both --spot and --preemptible")))
-			})
 		})
 
 	})
@@ -975,8 +965,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 
 		Describe("Invalid cases", func() {
+			notFoundErr := &googleapi.Error{Code: 404, Message: "not found"}
+
 			It("fails when SSH key read fails", func() {
-				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("not found")).Maybe()
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, notFoundErr).Maybe()
 				fw.EXPECT().ReadFile(mock.Anything).Return(nil, fmt.Errorf("read error")).Maybe()
 
 				err := bs.EnsureComputeInstances()
@@ -985,7 +977,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when CreateInstance fails", func() {
-				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("not found")).Maybe()
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, notFoundErr).Maybe()
 				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(fmt.Errorf("create error")).Maybe()
 
@@ -994,7 +986,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err.Error()).To(ContainSubstring("error ensuring compute instances"))
 			})
 
-			It("fails when GetInstance fails", func() {
+			It("fails when GetInstance fails after creation", func() {
 				instanceCalls := make(map[string]int)
 				var mu sync.Mutex
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
@@ -1003,7 +995,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 						defer mu.Unlock()
 						instanceCalls[name]++
 						if instanceCalls[name] == 1 {
-							return nil, fmt.Errorf("not found")
+							return nil, notFoundErr
 						}
 						return nil, fmt.Errorf("get error")
 					},

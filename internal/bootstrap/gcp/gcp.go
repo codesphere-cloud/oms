@@ -852,10 +852,13 @@ func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, logCh chan<- st
 	}
 
 	if existingInstance != nil {
-		if s := existingInstance.GetStatus(); s == "TERMINATED" || s == "STOPPED" {
+		switch s := existingInstance.GetStatus(); s {
+		case "TERMINATED", "STOPPED":
 			if err := b.GCPClient.StartInstance(projectID, zone, vm.Name); err != nil {
 				return vmResult{}, fmt.Errorf("failed to start stopped instance %s: %w", vm.Name, err)
 			}
+		case "SUSPENDED":
+			return vmResult{}, fmt.Errorf("instance %s is SUSPENDED; manual resume is required", vm.Name)
 		}
 	} else {
 		instance, err := b.buildInstanceSpec(vm, rootDiskSize)
@@ -1063,20 +1066,22 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 		}
 	}
 	return nil, fmt.Errorf("timed out waiting for instance %s to be RUNNING with IPs assigned after %s",
-		name, time.Duration(maxAttempts)*pollInterval)
+		name, pollInterval*time.Duration(maxAttempts))
 }
 
-// IsSpotCapacityError checks if the error is related to spot VM capacity issues
+// IsSpotCapacityError checks if the error is related to spot VM capacity issues.
 func IsSpotCapacityError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := err.Error()
-	return strings.Contains(errStr, "ZONE_RESOURCE_POOL_EXHAUSTED") ||
-		strings.Contains(errStr, "UNSUPPORTED_OPERATION") ||
+	if status.Code(err) == codes.ResourceExhausted {
+		return true
+	}
+	errStr := strings.ToLower(err.Error())
+	return strings.Contains(errStr, "zone_resource_pool_exhausted") ||
+		strings.Contains(errStr, "unsupported_operation") ||
 		strings.Contains(errStr, "stockout") ||
-		strings.Contains(errStr, "does not have enough resources") ||
-		status.Code(err) == codes.ResourceExhausted
+		strings.Contains(errStr, "does not have enough resources")
 }
 
 // EnsureGatewayIPAddresses reserves 2 static external IP addresses for the ingress
@@ -1824,6 +1829,9 @@ func (b *GCPBootstrapper) RunK0sConfigScript() error {
 
 // Helper functions
 func isAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
 	return status.Code(err) == codes.AlreadyExists || strings.Contains(err.Error(), "already exists")
 }
 

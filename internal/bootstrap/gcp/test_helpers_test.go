@@ -4,10 +4,18 @@
 package gcp_test
 
 import (
+	"context"
 	"sync"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
+	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
+	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/portal"
+	"github.com/codesphere-cloud/oms/internal/util"
+	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/googleapi"
 )
@@ -43,8 +51,8 @@ func makeStoppedInstance(internalIP, externalIP string) *computepb.Instance {
 }
 
 // mockGetInstanceNotFoundThenRunning sets up a GetInstance mock where the first call per VM
-// returns "not found" and subsequent calls return the given running instance.
-// It sets the expected total call count to 2 × numVMs.
+// returns a 404 "not found" error and subsequent calls return the given running instance.
+// The expected total call count is 2 × numVMs.
 func mockGetInstanceNotFoundThenRunning(gc *gcp.MockGCPClientManager, projectID, zone string, runningResp *computepb.Instance, numVMs int) {
 	instanceCalls := make(map[string]int)
 	var mu sync.Mutex
@@ -57,4 +65,25 @@ func mockGetInstanceNotFoundThenRunning(gc *gcp.MockGCPClientManager, projectID,
 		}
 		return runningResp, nil
 	}).Times(numVMs * 2)
+}
+
+// newTestBootstrapper creates a GCPBootstrapper with the given environment and GCP client mock.
+// All other dependencies use fresh mocks.
+func newTestBootstrapper(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPClientManager) *gcp.GCPBootstrapper {
+	bs, err := gcp.NewGCPBootstrapper(
+		context.Background(),
+		env.NewEnv(),
+		bootstrap.NewStepLogger(false),
+		csEnv,
+		installer.NewMockInstallConfigManager(GinkgoT()),
+		gc,
+		util.NewMockFileIO(GinkgoT()),
+		node.NewMockNodeClient(GinkgoT()),
+		portal.NewMockPortal(GinkgoT()),
+		util.NewFakeTime(),
+	)
+	if err != nil {
+		panic("newTestBootstrapper: " + err.Error())
+	}
+	return bs
 }
