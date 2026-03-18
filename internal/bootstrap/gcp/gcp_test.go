@@ -181,21 +181,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().CreateFirewallRule(projectId, mock.Anything).Return(nil).Times(5)
 
 			// 11. EnsureComputeInstances
-			// Track GetInstance calls per VM name
-			instanceCalls := make(map[string]int)
-			var instanceMu sync.Mutex
 			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
-			gc.EXPECT().GetInstance(projectId, "us-central1-a", mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
-				instanceMu.Lock()
-				defer instanceMu.Unlock()
-				instanceCalls[name]++
-				if instanceCalls[name] == 1 {
-					// First call, instance doesn't exist
-					return nil, fmt.Errorf("not found")
-				}
-				// Second call, return instance with IPs
-				return ipResp, nil
-			}).Times(18)
+			mockGetInstanceNotFoundThenRunning(gc, projectId, "us-central1-a", ipResp, 9)
 			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(9)
 			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(9)
 
