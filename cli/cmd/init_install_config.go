@@ -193,14 +193,14 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		c.updateConfigFromOpts(icg.GetInstallConfig())
 	}
 
-	validationErrors := icg.ValidateInstallConfig()
-	if len(validationErrors) > 0 {
+	validationWarnings := icg.ValidateInstallConfig()
+	if len(validationWarnings) > 0 {
 		if !c.Opts.Interactive {
-			return fmt.Errorf("configuration validation failed: %s", strings.Join(validationErrors, ", "))
+			return fmt.Errorf("configuration validation failed: %s", strings.Join(validationWarnings, ", "))
 		}
 		log.Println("\n" + strings.Repeat("!", 70))
-		log.Printf("Configuration has %d warning(s):\n", len(validationErrors))
-		for _, w := range validationErrors {
+		log.Printf("Configuration has %d warning(s):\n", len(validationWarnings))
+		for _, w := range validationWarnings {
 			log.Printf("  WARNING: %s\n", w)
 		}
 		log.Println(strings.Repeat("!", 70))
@@ -220,7 +220,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	c.printSuccessMessage(len(validationErrors))
+	c.printSuccessMessage(len(validationWarnings))
 
 	return nil
 }
