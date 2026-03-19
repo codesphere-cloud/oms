@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/github"
-	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -22,7 +21,7 @@ var _ = Describe("Github", func() {
 
 		Context("when org and team slug are provided", func() {
 			BeforeEach(func() {
-				mockGitHubClient = github.NewMockGitHubClient(ginkgo.GinkgoT())
+				mockGitHubClient = github.NewMockGitHubClient(GinkgoT())
 				org = "example-org"
 				teamSlug = "dev"
 			})

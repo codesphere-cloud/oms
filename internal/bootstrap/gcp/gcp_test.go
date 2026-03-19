@@ -288,7 +288,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv.GitHubTeamOrg = "codesphere-cloud"
 				csEnv.GitHubTeamSlug = "dev"
 			})
-			Context("when github PAT is set", func() {
+			Context("when GitHub PAT is set", func() {
 				BeforeEach(func() {
 					csEnv.GitHubPAT = "pat"
 				})
@@ -308,7 +308,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 			})
 
-			Context("when github PAT is not set", func() {
+			Context("when GitHub PAT is not set", func() {
 				BeforeEach(func() {
 					csEnv.GitHubPAT = ""
 				})

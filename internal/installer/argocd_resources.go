@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+//mockery:generate: true
 type ArgoCDResources interface {
 	ApplyAll(ctx context.Context) error
 }

@@ -37,6 +37,8 @@ type ChartConfig struct {
 // HelmClient is the seam that makes the Helm SDK mockable.
 // Every method receives only plain Go types so that test doubles never need to
 // import any helm.sh package.
+//
+//mockery:generate: true
 type HelmClient interface {
 	// FindRelease returns info about an existing release, or nil if none exists.
 	FindRelease(releaseName string) (*ReleaseInfo, error)

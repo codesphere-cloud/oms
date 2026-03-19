@@ -14,15 +14,6 @@ require-template-schema-exists: true
 template: testify
 template-schema: "{{.Template}}.schema.json"
 packages:
-  github.com/codesphere-cloud/oms/internal/bootstrap/gcp:
-    config:
-      all: true
-    interfaces:
   github.com/codesphere-cloud/oms/internal:
-    config:
-      all: true
-    interfaces:
+  github.com/codesphere-cloud/oms/pkg:
   github.com/codesphere-cloud/oms/cli/cmd:
-    config:
-      all: true
-    interfaces:

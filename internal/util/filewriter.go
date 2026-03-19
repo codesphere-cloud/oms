@@ -9,6 +9,7 @@ import (
 	"os"
 )
 
+//mockery:generate: true
 type FileIO interface {
 	Create(filename string) (*os.File, error)
 	Open(filename string) (*os.File, error)
