@@ -989,7 +989,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 		Describe("Valid EnsureComputeInstances", func() {
 			It("creates all instances", func() {
-			ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 9)
 
 				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
