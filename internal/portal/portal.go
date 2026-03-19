@@ -21,6 +21,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 )
 
+//mockery:generate: true
 type Portal interface {
 	ListBuilds(product Product) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
@@ -38,6 +39,7 @@ type PortalClient struct {
 	HttpClient HttpClient
 }
 
+//mockery:generate: true
 type HttpClient interface {
 	Do(*http.Request) (*http.Response, error)
 }

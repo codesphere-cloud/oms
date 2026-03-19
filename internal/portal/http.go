@@ -10,6 +10,7 @@ import (
 	"net/http"
 )
 
+//mockery:generate: true
 type Http interface {
 	Request(url string, method string, body io.Reader) (responseBody []byte, err error)
 	Get(url string) (responseBody []byte, err error)

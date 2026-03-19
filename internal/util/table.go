@@ -9,6 +9,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
+//mockery:generate: true
 type TableWriter interface {
 	AppendHeader(row table.Row, configs ...table.RowConfig)
 	AppendRow(row table.Row, configs ...table.RowConfig)

@@ -15,6 +15,7 @@ type Config struct {
 	FileIO util.FileIO
 }
 
+//mockery:generate: true
 type ConfigManager interface {
 	ParseConfigYaml(configPath string) (files.RootConfig, error)
 }

@@ -33,6 +33,8 @@ import (
 )
 
 // Interface for high-level GCP operations
+//
+//mockery:generate: true
 type GCPClientManager interface {
 	GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error)
 	CreateProjectID(projectName string) string
