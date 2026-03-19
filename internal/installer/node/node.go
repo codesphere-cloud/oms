@@ -38,6 +38,7 @@ type Node struct {
 	clientMu    sync.Mutex
 }
 
+//mockery:generate: true
 type NodeClient interface {
 	RunCommand(n *Node, username string, command string) error
 	CopyFile(n *Node, src string, dst string) error

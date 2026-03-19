@@ -17,11 +17,13 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
+	gh "github.com/google/go-github/v74/github"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -47,6 +49,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		fw               *util.MockFileIO
 		stlog            *bootstrap.StepLogger
 		mockPortalClient *portal.MockPortal
+		mockGitHubClient *github.MockGitHubClient
 
 		bs *gcp.GCPBootstrapper
 	)
@@ -64,6 +67,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient,
 			mockPortalClient,
 			util.NewFakeTime(),
+			mockGitHubClient,
 		)
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -76,12 +80,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 		gc = gcp.NewMockGCPClientManager(GinkgoT())
 		fw = util.NewMockFileIO(GinkgoT())
 		mockPortalClient = portal.NewMockPortal(GinkgoT())
+		mockGitHubClient = github.NewMockGitHubClient(GinkgoT())
 		stlog = bootstrap.NewStepLogger(false)
 
 		csEnv = &gcp.CodesphereEnvironment{
 			GitHubAppName:         "fake-app",
-			GithubAppClientID:     "fake-client-id",
-			GithubAppClientSecret: "fake-secret",
+			GitHubAppClientID:     "fake-client-id",
+			GitHubAppClientSecret: "fake-secret",
 			InstallConfigPath:     "fake-config-file",
 			SecretsFilePath:       "fake-secret",
 			ProjectName:           "test-project",
@@ -196,7 +201,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			}
 
 			gc.EXPECT().GetInstance(projectId, "us-central1-a", mock.Anything).Return(ipResp, nil).Times(9)
-			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(9)
+			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(1)
 
 			// 12. EnsureGatewayIPAddresses
 			gc.EXPECT().GetAddress(projectId, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
@@ -278,6 +283,41 @@ var _ = Describe("GCP Bootstrapper", func() {
 		var (
 			artifacts []portal.Artifact
 		)
+		Context("When GitHub team and org is set", func() {
+			BeforeEach(func() {
+				csEnv.GitHubTeamOrg = "codesphere-cloud"
+				csEnv.GitHubTeamSlug = "dev"
+			})
+			Context("when GitHub PAT is set", func() {
+				BeforeEach(func() {
+					csEnv.GitHubPAT = "pat"
+				})
+				It("passes validation", func() {
+					err := bs.ValidateInput()
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				Context("when GitHub arguments are partially set", func() {
+					BeforeEach(func() {
+						csEnv.GitHubTeamOrg = ""
+					})
+					It("fails", func() {
+						err := bs.ValidateInput()
+						Expect(err).To(MatchError(MatchRegexp("GitHub team parameters are not fully specified")))
+					})
+				})
+			})
+
+			Context("when GitHub PAT is not set", func() {
+				BeforeEach(func() {
+					csEnv.GitHubPAT = ""
+				})
+				It("fails", func() {
+					err := bs.ValidateInput()
+					Expect(err).To(MatchError(MatchRegexp("GitHub PAT is required to extract public keys of GitHub team members")))
+				})
+			})
+		})
 		Context("When a version and hash are specified", func() {
 			BeforeEach(func() {
 				mockPortalClient = portal.NewMockPortal(GinkgoT())
@@ -960,8 +1000,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 		Describe("Valid EnsureComputeInstances", func() {
 			It("creates all instances", func() {
-				// Mock ReadFile for SSH key (called 9 times in parallel)
-				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
+				// Mock ReadFile for SSH key
+				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 
 				// Mock CreateInstance (9 times)
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
@@ -986,6 +1026,70 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
 				Expect(bs.Env.Jumpbox).NotTo(BeNil())
 			})
+
+			Context("When github org is set", func() {
+				BeforeEach(func() {
+					csEnv.GitHubTeamOrg = "someorg"
+					csEnv.GitHubTeamSlug = ""
+					csEnv.GitHubPAT = "pat"
+				})
+				It("does not fetch GitHub org keys when GitHub team org is set without slug", func() {
+					fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
+					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
+					ipResp := &computepb.Instance{
+						NetworkInterfaces: []*computepb.NetworkInterface{{
+							NetworkIP:     protoString("10.0.0.x"),
+							AccessConfigs: []*computepb.AccessConfig{{NatIP: protoString("1.2.3.x")}},
+						}},
+					}
+					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(9)
+
+					err := bs.EnsureComputeInstances()
+					Expect(err).NotTo(HaveOccurred())
+				})
+				Context("When GitHub team org and slug are set", func() {
+					BeforeEach(func() {
+						csEnv.GitHubTeamSlug = "dev"
+					})
+					It("fetches GitHub team keys", func() {
+						mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug, mock.Anything).Return([]*gh.User{{Login: gh.Ptr("alice")}}, nil).Once()
+						mockGitHubClient.EXPECT().ListUserKeys(mock.Anything, "alice").Return([]*gh.Key{{Key: gh.Ptr("ssh-rsa AAALICE...")}}, nil).Once()
+
+						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
+						gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
+							sshMetadata := ""
+							for _, item := range instance.GetMetadata().GetItems() {
+								if item.GetKey() == "ssh-keys" {
+									sshMetadata = item.GetValue()
+								}
+							}
+							if !strings.Contains(sshMetadata, "AAALICE...") {
+								return fmt.Errorf("expected ssh metadata to include team user key")
+							}
+							return nil
+						}).Times(9)
+
+						ipResp := &computepb.Instance{
+							NetworkInterfaces: []*computepb.NetworkInterface{{
+								NetworkIP:     protoString("10.0.0.x"),
+								AccessConfigs: []*computepb.AccessConfig{{NatIP: protoString("1.2.3.x")}},
+							}},
+						}
+						gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(9)
+
+						err := bs.EnsureComputeInstances()
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("fails when GitHub client fails to list team members", func() {
+						mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug, mock.Anything).Return(nil, fmt.Errorf("list members error")).Once()
+
+						err := bs.EnsureComputeInstances()
+						Expect(err).To(HaveOccurred())
+						Expect(err.Error()).To(ContainSubstring("failed to get SSH keys from GitHub team"))
+					})
+				})
+			})
 		})
 
 		Describe("Invalid cases", func() {
@@ -994,7 +1098,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("error ensuring compute instances"))
+				Expect(err.Error()).To(ContainSubstring("error reading SSH key from key.pub"))
 			})
 
 			It("fails when CreateInstance fails", func() {

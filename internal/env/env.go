@@ -8,6 +8,7 @@ import (
 	"os"
 )
 
+//mockery:generate: true
 type Env interface {
 	GetOmsPortalApiKey() (string, error)
 	GetOmsPortalApi() string
