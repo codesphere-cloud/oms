@@ -155,9 +155,9 @@ License URL: https://github.com/cloudflare/circl/blob/v1.6.3/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v0.21.1
+Version: v0.22.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.21.1/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.22.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -797,9 +797,9 @@ License URL: https://github.com/open-telemetry/opentelemetry-proto-go/blob/otlp/
  
 ----------
 Module: go.yaml.in/yaml/v2
-Version: v2.4.3
+Version: v2.4.4
 License: Apache-2.0
-License URL: https://github.com/yaml/go-yaml/blob/v2.4.3/LICENSE
+License URL: https://github.com/yaml/go-yaml/blob/v2.4.4/LICENSE
  
 ----------
 Module: go.yaml.in/yaml/v3
@@ -959,9 +959,9 @@ License URL: https://github.com/kubernetes/apiserver/blob/v0.35.1/LICENSE
  
 ----------
 Module: k8s.io/cli-runtime/pkg
-Version: v0.35.2
+Version: v0.35.3
 License: Apache-2.0
-License URL: https://github.com/kubernetes/cli-runtime/blob/v0.35.2/LICENSE
+License URL: https://github.com/kubernetes/cli-runtime/blob/v0.35.3/LICENSE
  
 ----------
 Module: k8s.io/client-go
