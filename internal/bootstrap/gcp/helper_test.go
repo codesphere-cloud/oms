@@ -33,7 +33,7 @@ var _ = Describe("calculateProjectExpiryLabel", func() {
 			Expect(parsedTime).To(BeTemporally("~", expectedTime, 10*time.Second))
 		},
 
-		// Define the table rows using the temp struct
+		// Define test scenarios
 		Entry("1 Minute", validTestCase{
 			inputTTL:         "1m",
 			expectedDuration: 1 * time.Minute,
@@ -49,8 +49,9 @@ var _ = Describe("calculateProjectExpiryLabel", func() {
 	)
 
 	It("returns an error for invalid duration strings", func() {
-		_, err := calculateProjectExpiryLabel("1d") // 'd' is not a valid time unit in Go's duration parsing
+		label, err := calculateProjectExpiryLabel("1d") // 'd' is not a valid time unit in Go's duration parsing
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("invalid project TTL format"))
+		Expect(label).To(BeEmpty())
 	})
 })
