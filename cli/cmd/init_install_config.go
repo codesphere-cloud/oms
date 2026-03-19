@@ -204,8 +204,8 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 			log.Printf("  WARNING: %s\n", w)
 		}
 		log.Println(strings.Repeat("!", 70))
-		log.Println("The configuration files will still be generated.")
-		log.Println("Please review and fix the issues in the generated files before use.")
+		log.Println("The configuration files will be generated.")
+		log.Println("Please review and fix the issues in the generated files before use!")
 	}
 
 	if err := icg.GenerateSecrets(); err != nil {
@@ -234,7 +234,7 @@ func (c *InitInstallConfigCmd) printWelcomeMessage() {
 func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println("\n" + strings.Repeat("=", 70))
 	if warningCount > 0 {
-		log.Printf("Configuration files generated with %d warning(s) — review before use!\n", warningCount)
+		log.Printf("Configuration files generated with %d warning(s)! Review before use!\n", warningCount)
 	} else {
 		log.Println("Configuration files successfully generated!")
 	}
