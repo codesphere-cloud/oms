@@ -496,7 +496,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Valid EnsureProject", func() {
 			It("uses existing project", func() {
 				gc.EXPECT().GetProjectByName(csEnv.FolderID, csEnv.ProjectName).Return(&resourcemanagerpb.Project{ProjectId: "existing-id", Name: "existing-proj"}, nil)
-				gc.EXPECT().UpdateProject(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				gc.EXPECT().UpdateProject("existing-id", mock.Anything).Return(nil)
 
 				err := bs.EnsureProject()
 				Expect(err).NotTo(HaveOccurred())
@@ -532,6 +532,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create project"))
 				Expect(err.Error()).To(ContainSubstring("create error"))
+			})
+
+			It("returns an error when UpdateProject fails", func() {
+				gc.EXPECT().GetProjectByName(csEnv.FolderID, csEnv.ProjectName).Return(&resourcemanagerpb.Project{ProjectId: "existing-id", Name: "existing-proj"}, nil)
+				gc.EXPECT().UpdateProject("existing-id", mock.Anything).Return(fmt.Errorf("failed to update project"))
+
+				err := bs.EnsureProject()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to update project"))
 			})
 		})
 	})

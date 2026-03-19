@@ -1571,16 +1571,16 @@ func (_c *MockGCPClientManager_RemoveIAMRoleBinding_Call) RunAndReturn(run func(
 }
 
 // UpdateProject provides a mock function for the type MockGCPClientManager
-func (_mock *MockGCPClientManager) UpdateProject(projectID string, displayName string, labels map[string]string) error {
-	ret := _mock.Called(projectID, displayName, labels)
+func (_mock *MockGCPClientManager) UpdateProject(projectID string, labels map[string]string) error {
+	ret := _mock.Called(projectID, labels)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateProject")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, map[string]string) error); ok {
-		r0 = returnFunc(projectID, displayName, labels)
+	if returnFunc, ok := ret.Get(0).(func(string, map[string]string) error); ok {
+		r0 = returnFunc(projectID, labels)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -1594,30 +1594,24 @@ type MockGCPClientManager_UpdateProject_Call struct {
 
 // UpdateProject is a helper method to define mock.On call
 //   - projectID string
-//   - displayName string
 //   - labels map[string]string
-func (_e *MockGCPClientManager_Expecter) UpdateProject(projectID interface{}, displayName interface{}, labels interface{}) *MockGCPClientManager_UpdateProject_Call {
-	return &MockGCPClientManager_UpdateProject_Call{Call: _e.mock.On("UpdateProject", projectID, displayName, labels)}
+func (_e *MockGCPClientManager_Expecter) UpdateProject(projectID interface{}, labels interface{}) *MockGCPClientManager_UpdateProject_Call {
+	return &MockGCPClientManager_UpdateProject_Call{Call: _e.mock.On("UpdateProject", projectID, labels)}
 }
 
-func (_c *MockGCPClientManager_UpdateProject_Call) Run(run func(projectID string, displayName string, labels map[string]string)) *MockGCPClientManager_UpdateProject_Call {
+func (_c *MockGCPClientManager_UpdateProject_Call) Run(run func(projectID string, labels map[string]string)) *MockGCPClientManager_UpdateProject_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
 			arg0 = args[0].(string)
 		}
-		var arg1 string
+		var arg1 map[string]string
 		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 map[string]string
-		if args[2] != nil {
-			arg2 = args[2].(map[string]string)
+			arg1 = args[1].(map[string]string)
 		}
 		run(
 			arg0,
 			arg1,
-			arg2,
 		)
 	})
 	return _c
@@ -1628,7 +1622,7 @@ func (_c *MockGCPClientManager_UpdateProject_Call) Return(err error) *MockGCPCli
 	return _c
 }
 
-func (_c *MockGCPClientManager_UpdateProject_Call) RunAndReturn(run func(projectID string, displayName string, labels map[string]string) error) *MockGCPClientManager_UpdateProject_Call {
+func (_c *MockGCPClientManager_UpdateProject_Call) RunAndReturn(run func(projectID string, labels map[string]string) error) *MockGCPClientManager_UpdateProject_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -37,7 +37,7 @@ type GCPClientManager interface {
 	GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error)
 	CreateProjectID(projectName string) string
 	CreateProject(parent, projectName, displayName string, labels map[string]string) (string, error)
-	UpdateProject(projectID, displayName string, labels map[string]string) error
+	UpdateProject(projectID string, labels map[string]string) error
 	DeleteProject(projectID string) error
 	IsOMSManagedProject(projectID string) (bool, error)
 	GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error)
@@ -145,7 +145,7 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string, labels 
 
 // UpdateProject updates the display name and labels of an existing GCP project.
 // Returns an error if the update operation fails or if the project does not exist.
-func (c *GCPClient) UpdateProject(projectID, displayName string, labels map[string]string) error {
+func (c *GCPClient) UpdateProject(projectID string, labels map[string]string) error {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
 		return err
@@ -153,9 +153,8 @@ func (c *GCPClient) UpdateProject(projectID, displayName string, labels map[stri
 	defer util.IgnoreError(client.Close)
 
 	project := &resourcemanagerpb.Project{
-		Name:        getProjectResourceName(projectID),
-		DisplayName: displayName,
-		Labels:      labels,
+		Name:   getProjectResourceName(projectID),
+		Labels: labels,
 	}
 
 	op, err := client.UpdateProject(c.ctx, &resourcemanagerpb.UpdateProjectRequest{

@@ -485,7 +485,7 @@ func (b *GCPBootstrapper) EnsureProject() error {
 		b.Env.ProjectID = existingProject.ProjectId
 		b.Env.ProjectName = existingProject.Name
 
-		err := b.GCPClient.UpdateProject(existingProject.ProjectId, existingProject.DisplayName, labels)
+		err := b.GCPClient.UpdateProject(existingProject.ProjectId, labels)
 		if err != nil {
 			return fmt.Errorf("failed to update project: %w", err)
 		}
