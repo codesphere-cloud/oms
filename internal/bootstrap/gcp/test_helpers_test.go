@@ -11,6 +11,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
@@ -81,6 +82,7 @@ func newTestBootstrapper(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPClientManag
 		node.NewMockNodeClient(GinkgoT()),
 		portal.NewMockPortal(GinkgoT()),
 		util.NewFakeTime(),
+		github.NewMockGitHubClient(GinkgoT()),
 	)
 	if err != nil {
 		panic("newTestBootstrapper: " + err.Error())

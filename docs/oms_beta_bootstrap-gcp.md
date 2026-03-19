@@ -26,10 +26,12 @@ oms beta bootstrap-gcp [flags]
       --experiments stringArray           Experiments to enable in Codesphere installation (optional) (default [managed-services,vcluster,custom-service-image,ms-in-ls,secret-management,sub-path-mount])
       --feature-flags stringArray         Feature flags to enable in Codesphere installation (optional)
       --folder-id string                  GCP Folder ID (optional)
-      --github-app-client-id string       Github App Client ID (required)
-      --github-app-client-secret string   Github App Client Secret (required)
-      --github-app-name string            Github App Name (optional)
-      --github-pat string                 GitHub Personal Access Token to use for direct image access. Scope required: package read (optional)
+      --github-app-client-id string       GitHub App Client ID (required)
+      --github-app-client-secret string   GitHub App Client Secret (required)
+      --github-app-name string            GitHub App Name (optional)
+      --github-pat string                 GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug. Required scopes: read:packages, read:org.
+      --github-team-org string            GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.
+      --github-team-slug string           GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.
   -h, --help                              help for bootstrap-gcp
       --install-config string             Path to install config file (optional) (default "config.yaml")
       --install-hash string               Codesphere package hash to install (default: none)

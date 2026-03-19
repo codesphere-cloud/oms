@@ -114,8 +114,8 @@ var _ = Describe("Spot VM", func() {
 				InstallConfigPath:     "fake-config",
 				SecretsFilePath:       "fake-secrets",
 				GitHubAppName:         "fake-app",
-				GithubAppClientID:     "fake-id",
-				GithubAppClientSecret: "fake-secret",
+				GitHubAppClientID:     "fake-id",
+				GitHubAppClientSecret: "fake-secret",
 			}
 		})
 

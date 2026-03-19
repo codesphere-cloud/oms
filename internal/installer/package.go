@@ -18,6 +18,7 @@ import (
 const depsDir = "deps"
 const depsTar = "deps.tar.gz"
 
+//mockery:generate: true
 type PackageManager interface {
 	FileIO() util.FileIO
 	GetWorkDir() string
