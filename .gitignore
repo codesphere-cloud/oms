@@ -44,3 +44,6 @@ internal/util/testdata/
 config.yaml
 prod.vault.yaml
 configure-k0s.sh
+
+# Debugger files
+__debug*

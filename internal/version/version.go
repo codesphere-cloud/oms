@@ -13,6 +13,7 @@ var (
 	binName string = "oms"
 )
 
+//mockery:generate: true
 type Version interface {
 	Version() string
 	Commit() string

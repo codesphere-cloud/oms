@@ -17,6 +17,7 @@ func IsValidIP(ip string) bool {
 	return net.ParseIP(ip) != nil
 }
 
+//mockery:generate: true
 type InstallConfigManager interface {
 	// Profile management
 	ApplyProfile(profile string) error

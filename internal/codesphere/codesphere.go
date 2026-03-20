@@ -13,6 +13,8 @@ import (
 )
 
 // Client interface abstracts Codesphere API operations for testing
+//
+//mockery:generate: true
 type Client interface {
 	CreateWorkspace(teamID, planID int, name string, repoURL *string) (workspaceID int, err error)
 	SetEnvVar(workspaceID int, key, value string) error

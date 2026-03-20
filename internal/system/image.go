@@ -14,6 +14,7 @@ type Image struct {
 	ctx context.Context
 }
 
+//mockery:generate: true
 type ImageManager interface {
 	LoadImage(imageTarPath string) error
 	BuildImage(dockerfile string, tag string, buildContext string) error
