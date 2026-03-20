@@ -143,7 +143,7 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string, labels 
 	return resp.ProjectId, nil
 }
 
-// UpdateProject updates the display name and labels of an existing GCP project.
+// UpdateProject updates the project's labels of an existing GCP project.
 // Returns an error if the update operation fails or if the project does not exist.
 func (c *GCPClient) UpdateProject(projectID string, labels map[string]string) error {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)

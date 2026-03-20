@@ -542,11 +542,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to update project"))
 			})
-
-			It("return an error when calculateProjectExpiryLabel fails", func() {
-				// var ExportInternalCalculateLabel = calculateProjectExpiryLabel
-			})
-			// gcp.calculateProjectExpiryLabel()
 		})
 	})
 
