@@ -42,7 +42,7 @@ type InstallConfig struct {
 	Vault  *files.InstallVault
 }
 
-func NewInstallConfigManager() InstallConfigManager {
+func NewInstallConfigManager() *InstallConfig {
 	config := files.NewRootConfig()
 	return &InstallConfig{
 		fileIO: &util.FilesystemWriter{},
@@ -389,4 +389,20 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 	}
 
 	return nil
+}
+
+func (g *InstallConfig) ApplyProfile(profile string) error {
+	g.applyCommonProperties(profile)
+
+	switch profile {
+	case PROFILE_DEV, PROFILE_DEVELOPMENT:
+		return g.applyProfileDev(profile)
+
+	case PROFILE_PROD, PROFILE_PRODUCTION:
+		return g.applyProfileProd(profile)
+
+	case PROFILE_MINIMAL:
+		return g.applyProfileMinimal(profile)
+	}
+	return fmt.Errorf("unknown profile: %s, available profiles: dev, prod, minimal", profile)
 }

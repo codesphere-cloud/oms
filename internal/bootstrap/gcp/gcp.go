@@ -9,12 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
-	"sync"
-	"time"
 
-	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/github"
@@ -24,7 +20,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
-	"google.golang.org/api/dns/v1"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -235,7 +230,44 @@ func LoadInfraFile(fw util.FileIO, infraFilePath string) (CodesphereEnvironment,
 }
 
 func (b *GCPBootstrapper) Bootstrap() error {
+	err := b.Initialize()
+	if err != nil {
+		return fmt.Errorf("failed to initialize: %w", err)
+	}
+
+	err = b.EnsureGCPInfrastructure()
+	if err != nil {
+		return fmt.Errorf("failed to ensure GCP infrastructure: %w", err)
+	}
+
+	err = b.EnsureVmsConfigured()
+	if err != nil {
+		return fmt.Errorf("failed to ensure VMs are configured: %w", err)
+	}
+
+	err = b.EnsureRegistry()
+	if err != nil {
+		return fmt.Errorf("failed to ensure registry: %w", err)
+	}
+
+	err = b.UpdateConfig()
+	if err != nil {
+		return fmt.Errorf("failed to update config: %w", err)
+	}
+
+	err = b.EnsureCodesphere()
+	if err != nil {
+		return fmt.Errorf("failed to ensure Codesphere: %w", err)
+	}
+
+	return nil
+}
+
+// Initialize performs initial setup tasks such as validating input parameters,
+// ensuring the install config is loaded or created, and loading secrets if they exist.
+func (b *GCPBootstrapper) Initialize() error {
 	err := b.stlog.Step("Validate input", b.ValidateInput)
+
 	if err != nil {
 		return fmt.Errorf("invalid input: %w", err)
 	}
@@ -249,127 +281,6 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	if err != nil {
 		return fmt.Errorf("failed to ensure secrets: %w", err)
 	}
-
-	err = b.stlog.Step("Ensure project", b.EnsureProject)
-	if err != nil {
-		return fmt.Errorf("failed to ensure GCP project: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure billing", b.EnsureBilling)
-	if err != nil {
-		return fmt.Errorf("failed to ensure billing is enabled: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure APIs enabled", b.EnsureAPIsEnabled)
-	if err != nil {
-		return fmt.Errorf("failed to enable required APIs: %w", err)
-	}
-
-	if b.Env.RegistryType == RegistryTypeArtifactRegistry {
-		err = b.stlog.Step("Ensure artifact registry", b.EnsureArtifactRegistry)
-		if err != nil {
-			return fmt.Errorf("failed to ensure artifact registry: %w", err)
-		}
-	}
-
-	err = b.stlog.Step("Ensure service accounts", b.EnsureServiceAccounts)
-	if err != nil {
-		return fmt.Errorf("failed to ensure service accounts: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure IAM roles", b.EnsureIAMRoles)
-	if err != nil {
-		return fmt.Errorf("failed to ensure IAM roles: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure VPC", b.EnsureVPC)
-	if err != nil {
-		return fmt.Errorf("failed to ensure VPC: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure firewall rules", b.EnsureFirewallRules)
-	if err != nil {
-		return fmt.Errorf("failed to ensure firewall rules: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure compute instances", b.EnsureComputeInstances)
-	if err != nil {
-		return fmt.Errorf("failed to ensure compute instances: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure gateway IP addresses", b.EnsureGatewayIPAddresses)
-	if err != nil {
-		return fmt.Errorf("failed to ensure external IP addresses: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure root login enabled", b.EnsureRootLoginEnabled)
-	if err != nil {
-		return fmt.Errorf("failed to ensure root login is enabled: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure jumpbox configured", b.EnsureJumpboxConfigured)
-	if err != nil {
-		return fmt.Errorf("failed to ensure jumpbox is configured: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure hosts are configured", b.EnsureHostsConfigured)
-	if err != nil {
-		return fmt.Errorf("failed to ensure hosts are configured: %w", err)
-	}
-
-	if b.Env.RegistryType == RegistryTypeLocalContainer {
-		err = b.stlog.Step("Ensure local container registry", b.EnsureLocalContainerRegistry)
-		if err != nil {
-			return fmt.Errorf("failed to ensure local container registry: %w", err)
-		}
-	}
-
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		err = b.stlog.Step("Ensure GitHub access configured", b.EnsureGitHubAccessConfigured)
-		if err != nil {
-			return fmt.Errorf("failed to update install config: %w", err)
-		}
-	}
-
-	if b.Env.WriteConfig {
-		err = b.stlog.Step("Update install config", b.UpdateInstallConfig)
-		if err != nil {
-			return fmt.Errorf("failed to update install config: %w", err)
-		}
-
-		err = b.stlog.Step("Ensure age key", b.EnsureAgeKey)
-		if err != nil {
-			return fmt.Errorf("failed to ensure age key: %w", err)
-		}
-
-		err = b.stlog.Step("Encrypt vault", b.EncryptVault)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt vault: %w", err)
-		}
-	}
-
-	err = b.stlog.Step("Ensure DNS records", b.EnsureDNSRecords)
-	if err != nil {
-		return fmt.Errorf("failed to ensure DNS records: %w", err)
-	}
-
-	err = b.stlog.Step("Generate k0s config script", b.GenerateK0sConfigScript)
-	if err != nil {
-		return fmt.Errorf("failed to generate k0s config script: %w", err)
-	}
-
-	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
-		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
-		if err != nil {
-			return fmt.Errorf("failed to install Codesphere: %w", err)
-		}
-
-		err = b.stlog.Step("Run k0s config script", b.RunK0sConfigScript)
-		if err != nil {
-			return fmt.Errorf("failed to run k0s config script: %w", err)
-		}
-	}
-
 	return nil
 }
 
@@ -449,13 +360,14 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 		}
 
 		b.Env.ExistingConfigUsed = true
-	} else {
-		err := b.icg.ApplyProfile("minimal")
-		if err != nil {
-			return fmt.Errorf("failed to apply profile: %w", err)
-		}
+		b.Env.InstallConfig = b.icg.GetInstallConfig()
+		return nil
 	}
 
+	err := b.icg.ApplyProfile("minimal")
+	if err != nil {
+		return fmt.Errorf("failed to apply profile: %w", err)
+	}
 	b.Env.InstallConfig = b.icg.GetInstallConfig()
 
 	return nil
@@ -478,604 +390,21 @@ func (b *GCPBootstrapper) EnsureSecrets() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) EnsureProject() error {
-	parent := ""
-	if b.Env.FolderID != "" {
-		parent = fmt.Sprintf("folders/%s", b.Env.FolderID)
-	}
-
-	existingProject, err := b.GCPClient.GetProjectByName(b.Env.FolderID, b.Env.ProjectName)
-	if err == nil {
-		b.Env.ProjectID = existingProject.ProjectId
-		b.Env.ProjectName = existingProject.Name
-		return nil
-	}
-	if err.Error() == fmt.Sprintf("project not found: %s", b.Env.ProjectName) {
-		projectId := b.GCPClient.CreateProjectID(b.Env.ProjectName)
-
-		projectTTL, err := time.ParseDuration(b.Env.ProjectTTL)
+// EnsureRegistry sets up the container registry based on the specified registry type in the environment.
+func (b *GCPBootstrapper) EnsureRegistry() error {
+	if b.Env.RegistryType == RegistryTypeLocalContainer {
+		err := b.stlog.Step("Ensure local container registry", b.EnsureLocalContainerRegistry)
 		if err != nil {
-			return fmt.Errorf("invalid project TTL format: %w", err)
-		}
-
-		_, err = b.GCPClient.CreateProject(parent, projectId, b.Env.ProjectName, projectTTL)
-		if err != nil {
-			return fmt.Errorf("failed to create project: %w", err)
-		}
-
-		b.Env.ProjectID = projectId
-		return nil
-	}
-
-	return fmt.Errorf("failed to get project: %w", err)
-}
-
-func (b *GCPBootstrapper) EnsureBilling() error {
-	bi, err := b.GCPClient.GetBillingInfo(b.Env.ProjectID)
-	if err != nil {
-		return fmt.Errorf("failed to get billing info: %w", err)
-	}
-	if bi.BillingEnabled && bi.BillingAccountName == b.Env.BillingAccount {
-		return nil
-	}
-
-	err = b.GCPClient.EnableBilling(b.Env.ProjectID, b.Env.BillingAccount)
-	if err != nil {
-		return fmt.Errorf("failed to enable billing: %w", err)
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureAPIsEnabled() error {
-	apis := []string{
-		"compute.googleapis.com",
-		"serviceusage.googleapis.com",
-		"artifactregistry.googleapis.com",
-		"dns.googleapis.com",
-	}
-
-	err := b.GCPClient.EnableAPIs(b.Env.ProjectID, apis)
-	if err != nil {
-		return fmt.Errorf("failed to enable APIs: %w", err)
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
-	repoName := "codesphere-registry"
-
-	repo, err := b.GCPClient.GetArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
-	if err == nil && repo != nil {
-		b.Env.InstallConfig.Registry.Server = repo.GetRegistryUri()
-		return nil
-	}
-
-	repo, err = b.GCPClient.CreateArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
-	if err != nil || repo == nil {
-		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureServiceAccounts() error {
-	_, _, err := b.GCPClient.CreateServiceAccount(b.Env.ProjectID, "cloud-controller", "cloud-controller")
-	if err != nil {
-		return err
-	}
-
-	if b.Env.RegistryType == RegistryTypeArtifactRegistry {
-		sa, newSa, err := b.GCPClient.CreateServiceAccount(b.Env.ProjectID, "artifact-registry-writer", "artifact-registry-writer")
-		if err != nil {
-			return err
-		}
-
-		if !newSa && b.Env.InstallConfig.Registry.Password != "" {
-			return nil
-		}
-
-		for retries := range 5 {
-			privateKey, err := b.GCPClient.CreateServiceAccountKey(b.Env.ProjectID, sa)
-
-			if err != nil && status.Code(err) != codes.AlreadyExists {
-				if retries > 3 {
-					return fmt.Errorf("failed to create service account key: %w", err)
-				}
-				b.stlog.LogRetry()
-				b.Time.Sleep(5 * time.Second)
-				continue
-			}
-
-			b.Env.InstallConfig.Registry.Password = string(privateKey)
-			b.Env.InstallConfig.Registry.Username = "_json_key_base64"
-
-			break
+			return fmt.Errorf("failed to ensure local container registry: %w", err)
 		}
 	}
 
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.ensureIAMRoleWithRetry(b.Env.ProjectID, "cloud-controller", b.Env.ProjectID, []string{"roles/compute.admin"})
-	if err != nil {
-		return err
-	}
-
-	err = b.ensureDnsPermissions()
-	if err != nil {
-		return err
-	}
-
-	if b.Env.RegistryType != RegistryTypeArtifactRegistry {
-		return nil
-	}
-
-	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, "artifact-registry-writer", b.Env.ProjectID, []string{"roles/artifactregistry.writer"})
-	return err
-}
-
-func (b *GCPBootstrapper) ensureIAMRoleWithRetry(projectID string, serviceAccount string, serviceAccountProjectID string, roles []string) error {
-	var err error
-	for retries := range 5 {
-		err = b.GCPClient.AssignIAMRole(projectID, serviceAccount, serviceAccountProjectID, roles)
-		if err == nil {
-			return nil
-		}
-		if retries < 4 {
-			b.stlog.LogRetry()
-			b.Time.Sleep(5 * time.Second)
-		}
-	}
-	return fmt.Errorf("failed to assign roles %v to service account %s: %w", roles, serviceAccount, err)
-}
-
-func (b *GCPBootstrapper) ensureDnsPermissions() error {
-	dnsProject := b.Env.DNSProjectID
-	if b.Env.DNSProjectID == "" {
-		dnsProject = b.Env.ProjectID
-	}
-	err := b.ensureIAMRoleWithRetry(dnsProject, "cloud-controller", b.Env.ProjectID, []string{"roles/dns.admin"})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureVPC() error {
-	networkName := fmt.Sprintf("%s-vpc", b.Env.ProjectID)
-	subnetName := fmt.Sprintf("%s-%s-subnet", b.Env.ProjectID, b.Env.Region)
-	routerName := fmt.Sprintf("%s-router", b.Env.ProjectID)
-	natName := fmt.Sprintf("%s-nat-gateway", b.Env.ProjectID)
-
-	// Create VPC
-	err := b.GCPClient.CreateVPC(b.Env.ProjectID, b.Env.Region, networkName, subnetName, routerName, natName)
-	if err != nil {
-		return fmt.Errorf("failed to ensure VPC: %w", err)
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureFirewallRules() error {
-	networkName := fmt.Sprintf("%s-vpc", b.Env.ProjectID)
-
-	// Allow external SSH to Jumpbox
-	sshRule := &computepb.Firewall{
-		Name:      protoString("allow-ssh-ext"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{
-				IPProtocol: protoString("tcp"),
-				Ports:      []string{"22"},
-			},
-		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		TargetTags:   []string{"ssh"},
-		Description:  protoString("Allow external SSH to Jumpbox"),
-	}
-	err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, sshRule)
-	if err != nil {
-		return fmt.Errorf("failed to create jumpbox ssh firewall rule: %w", err)
-	}
-
-	// Allow all internal traffic
-	internalRule := &computepb.Firewall{
-		Name:      protoString("allow-internal"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("all")},
-		},
-		SourceRanges: []string{"10.10.0.0/20"},
-		Description:  protoString("Allow all internal traffic"),
-	}
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, internalRule)
-	if err != nil {
-		return fmt.Errorf("failed to create internal firewall rule: %w", err)
-	}
-
-	// Allow all egress
-	egressRule := &computepb.Firewall{
-		Name:      protoString("allow-all-egress"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("EGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("all")},
-		},
-		DestinationRanges: []string{"0.0.0.0/0"},
-		Description:       protoString("Allow all egress"),
-	}
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, egressRule)
-	if err != nil {
-		return fmt.Errorf("failed to create egress firewall rule: %w", err)
-	}
-
-	// Allow ingress for web (HTTP/HTTPS)
-	webRule := &computepb.Firewall{
-		Name:      protoString("allow-ingress-web"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("tcp"), Ports: []string{"80", "443"}},
-		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		Description:  protoString("Allow HTTP/HTTPS ingress"),
-	}
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, webRule)
-	if err != nil {
-		return fmt.Errorf("failed to create web firewall rule: %w", err)
-	}
-
-	// Allow ingress for PostgreSQL
-	postgresRule := &computepb.Firewall{
-		Name:      protoString("allow-ingress-postgres"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("tcp"), Ports: []string{"5432"}},
-		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		TargetTags:   []string{"postgres"},
-		Description:  protoString("Allow external access to PostgreSQL"),
-	}
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, postgresRule)
-	if err != nil {
-		return fmt.Errorf("failed to create postgres firewall rule: %w", err)
-	}
-
-	return nil
-}
-
-type vmResult struct {
-	vmType     string // jumpbox, postgres, ceph, k0s
-	name       string
-	externalIP string
-	internalIP string
-}
-
-func (b *GCPBootstrapper) EnsureComputeInstances() error {
-	projectID := b.Env.ProjectID
-	region := b.Env.Region
-	zone := b.Env.Zone
-
-	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", projectID, projectID)
-	subnetwork := fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s-%s-subnet", projectID, region, projectID, region)
-	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-ssd", projectID, zone)
-
-	rootDiskSize := int64(200)
 	if b.Env.RegistryType == RegistryTypeGitHub {
-		rootDiskSize = 50
-	}
-	sshKeys := ""
-	var err error
-	if b.Env.GitHubPAT != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubTeamSlug != "" {
-		sshKeys, err = github.GetSSHKeysFromGitHubTeam(b.GitHubClient, b.Env.GitHubTeamOrg, b.Env.GitHubTeamSlug)
+		err := b.stlog.Step("Ensure GitHub access configured", b.EnsureGitHubAccessConfigured)
 		if err != nil {
-			return fmt.Errorf("failed to get SSH keys from GitHub team: %w", err)
+			return fmt.Errorf("failed to ensure GitHub access is configured: %w", err)
 		}
 	}
-
-	pubKey, err := b.readSSHKey(b.Env.SSHPublicKeyPath)
-	if err != nil {
-		return err
-	}
-
-	sshKeys += fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")
-
-	// Create VMs in parallel
-	wg := sync.WaitGroup{}
-	errCh := make(chan error, len(vmDefs))
-	resultCh := make(chan vmResult, len(vmDefs))
-	for _, vm := range vmDefs {
-		wg.Add(1)
-		go func(vm VMDef) {
-			defer wg.Done()
-			disks := []*computepb.AttachedDisk{
-				{
-					Boot:       protoBool(true),
-					AutoDelete: protoBool(true),
-					Type:       protoString("PERSISTENT"),
-					InitializeParams: &computepb.AttachedDiskInitializeParams{
-						DiskType:    &diskType,
-						DiskSizeGb:  protoInt64(rootDiskSize),
-						SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
-					},
-				},
-			}
-			for _, diskSize := range vm.AdditionalDisks {
-				disks = append(disks, &computepb.AttachedDisk{
-					Boot:       protoBool(false),
-					AutoDelete: protoBool(true),
-					Type:       protoString("PERSISTENT"),
-					InitializeParams: &computepb.AttachedDiskInitializeParams{
-						DiskSizeGb: protoInt64(diskSize),
-						DiskType:   &diskType,
-					},
-				})
-			}
-
-			serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
-			instance := &computepb.Instance{
-				Name: protoString(vm.Name),
-				ServiceAccounts: []*computepb.ServiceAccount{
-					{
-						Email:  protoString(serviceAccount),
-						Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
-					},
-				},
-				MachineType: protoString(fmt.Sprintf("zones/%s/machineTypes/%s", zone, vm.MachineType)),
-				Tags: &computepb.Tags{
-					Items: vm.Tags,
-				},
-				Scheduling: &computepb.Scheduling{
-					Preemptible: &b.Env.Preemptible,
-				},
-				NetworkInterfaces: []*computepb.NetworkInterface{
-					{
-						Network:    protoString(network),
-						Subnetwork: protoString(subnetwork),
-					},
-				},
-				Disks: disks,
-				Metadata: &computepb.Metadata{
-					Items: []*computepb.Items{
-						{
-							Key:   protoString("ssh-keys"),
-							Value: protoString(sshKeys),
-						},
-					},
-				},
-			}
-
-			// Configure external IP if needed
-			if vm.ExternalIP {
-				instance.NetworkInterfaces[0].AccessConfigs = []*computepb.AccessConfig{
-					{
-						Name: protoString("External NAT"),
-						Type: protoString("ONE_TO_ONE_NAT"),
-					},
-				}
-			}
-
-			err = b.GCPClient.CreateInstance(projectID, zone, instance)
-			if err != nil && !isAlreadyExistsError(err) {
-				errCh <- fmt.Errorf("failed to create instance %s: %w", vm.Name, err)
-				return
-			}
-
-			// Find out the IP addresses of the created instance
-			resp, err := b.GCPClient.GetInstance(projectID, zone, vm.Name)
-			if err != nil {
-				errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
-				return
-			}
-
-			externalIP := ""
-			internalIP := ""
-			if len(resp.GetNetworkInterfaces()) > 0 {
-				internalIP = resp.GetNetworkInterfaces()[0].GetNetworkIP()
-				if len(resp.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
-					externalIP = resp.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
-				}
-			}
-
-			// Send result through channel instead of creating nodes in goroutine
-			resultCh <- vmResult{
-				vmType:     vm.Tags[0],
-				name:       vm.Name,
-				externalIP: externalIP,
-				internalIP: internalIP,
-			}
-		}(vm)
-	}
-	wg.Wait()
-
-	close(errCh)
-	close(resultCh)
-
-	var errs []error
-	for err := range errCh {
-		errs = append(errs, err)
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("error ensuring compute instances: %w", errors.Join(errs...))
-	}
-
-	// Create nodes from results (in main goroutine, not in spawned goroutines)
-	b.Env.Jumpbox = &node.Node{
-		NodeClient: b.NodeClient,
-		FileIO:     b.fw,
-	}
-	for result := range resultCh {
-		switch result.vmType {
-		case "jumpbox":
-			b.Env.Jumpbox.UpdateNode(result.name, result.externalIP, result.internalIP)
-		case "postgres":
-			b.Env.PostgreSQLNode = b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
-		case "ceph":
-			node := b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
-			b.Env.CephNodes = append(b.Env.CephNodes, node)
-		case "k0s":
-			node := b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
-			b.Env.ControlPlaneNodes = append(b.Env.ControlPlaneNodes, node)
-		}
-	}
-
-	//sort ceph nodes by name to ensure consistent ordering
-	sort.Slice(b.Env.CephNodes, func(i, j int) bool {
-		return b.Env.CephNodes[i].GetName() < b.Env.CephNodes[j].GetName()
-	})
-	//sort control plane nodes by name to ensure consistent ordering
-	sort.Slice(b.Env.ControlPlaneNodes, func(i, j int) bool {
-		return b.Env.ControlPlaneNodes[i].GetName() < b.Env.ControlPlaneNodes[j].GetName()
-	})
-
-	return nil
-}
-
-// EnsureGatewayIPAddresses reserves 2 static external IP addresses for the ingress
-// controllers of the cluster.
-func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
-	var err error
-	b.Env.GatewayIP, err = b.EnsureExternalIP("gateway")
-	if err != nil {
-		return fmt.Errorf("failed to ensure gateway IP: %w", err)
-	}
-	b.Env.PublicGatewayIP, err = b.EnsureExternalIP("public-gateway")
-	if err != nil {
-		return fmt.Errorf("failed to ensure public gateway IP: %w", err)
-	}
-
-	return nil
-}
-
-// EnsureExternalIP ensures that a static external IP address with the given name exists.
-func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
-	desiredAddress := &computepb.Address{
-		Name:        &name,
-		AddressType: protoString("EXTERNAL"),
-		Region:      &b.Env.Region,
-	}
-
-	// Figure out if address already exists and get IP
-	address, err := b.GCPClient.GetAddress(b.Env.ProjectID, b.Env.Region, name)
-	if err == nil && address != nil {
-		return address.GetAddress(), nil
-	}
-
-	createdIP, err := b.GCPClient.CreateAddress(b.Env.ProjectID, b.Env.Region, desiredAddress)
-	if err != nil && !isAlreadyExistsError(err) {
-		return "", fmt.Errorf("failed to create address %s: %w", name, err)
-	}
-
-	if createdIP != "" {
-		return createdIP, nil
-	}
-
-	address, err = b.GCPClient.GetAddress(b.Env.ProjectID, b.Env.Region, name)
-
-	if err == nil && address != nil {
-		return address.GetAddress(), nil
-	}
-
-	return "", fmt.Errorf("failed to get address %s after creation", name)
-}
-
-func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
-	allNodes := []*node.Node{
-		b.Env.Jumpbox,
-	}
-	allNodes = append(allNodes, b.Env.ControlPlaneNodes...)
-	allNodes = append(allNodes, b.Env.PostgreSQLNode)
-	allNodes = append(allNodes, b.Env.CephNodes...)
-
-	for _, node := range allNodes {
-		err := b.stlog.Substep(fmt.Sprintf("Ensuring root login enabled on %s", node.GetName()), func() error {
-			return b.ensureRootLoginEnabledInNode(node)
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
-	err := node.NodeClient.WaitReady(node, 30*time.Second)
-	if err != nil {
-		return fmt.Errorf("timed out waiting for SSH service to start on %s: %w", node.GetName(), err)
-	}
-
-	hasRootLogin := node.HasRootLoginEnabled()
-	if hasRootLogin {
-		return nil
-	}
-
-	for i := range 3 {
-		err := node.EnableRootLogin()
-		if err == nil {
-			break
-		}
-		if i == 2 {
-			return fmt.Errorf("failed to enable root login on %s: %w", node.GetName(), err)
-		}
-		b.stlog.LogRetry()
-		b.Time.Sleep(10 * time.Second)
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
-	if !b.Env.Jumpbox.HasAcceptEnvConfigured() {
-		err := b.Env.Jumpbox.ConfigureAcceptEnv()
-		if err != nil {
-			return fmt.Errorf("failed to configure AcceptEnv on jumpbox: %w", err)
-		}
-	}
-
-	hasOms := b.Env.Jumpbox.HasCommand("oms")
-	if hasOms {
-		return nil
-	}
-
-	err := b.Env.Jumpbox.InstallOms()
-	if err != nil {
-		return fmt.Errorf("failed to install OMS on jumpbox: %w", err)
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureHostsConfigured() error {
-	allNodes := append(b.Env.ControlPlaneNodes, b.Env.PostgreSQLNode)
-	allNodes = append(allNodes, b.Env.CephNodes...)
-
-	for _, node := range allNodes {
-		if !node.HasInotifyWatchesConfigured() {
-			err := node.ConfigureInotifyWatches()
-			if err != nil {
-				return fmt.Errorf("failed to configure inotify watches on %s: %w", node.GetName(), err)
-			}
-		}
-		if !node.HasMemoryMapConfigured() {
-			err := node.ConfigureMemoryMap()
-			if err != nil {
-				return fmt.Errorf("failed to configure memory map on %s: %w", node.GetName(), err)
-			}
-		}
-	}
-
 	return nil
 }
 
@@ -1145,6 +474,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 	return nil
 }
+
 func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.GitHubPAT == "" {
 		return fmt.Errorf("GitHub PAT is not set")
@@ -1154,6 +484,29 @@ func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	b.Env.InstallConfig.Registry.Password = b.Env.GitHubPAT
 	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
 	b.Env.InstallConfig.Registry.LoadContainerImages = false
+	return nil
+}
+
+// UpdateConfig applies necessary updates to the install config based on the environment and profiles, ensures secrets are encrypted,
+// and writes the updated config and secrets back to disk if the WriteConfig flag is set.
+func (b *GCPBootstrapper) UpdateConfig() error {
+	if !b.Env.WriteConfig {
+		return nil
+	}
+	err := b.stlog.Step("Update install config", b.UpdateInstallConfig)
+	if err != nil {
+		return fmt.Errorf("failed to update install config: %w", err)
+	}
+
+	err = b.stlog.Step("Ensure age key", b.EnsureAgeKey)
+	if err != nil {
+		return fmt.Errorf("failed to ensure age key: %w", err)
+	}
+
+	err = b.stlog.Step("Encrypt vault", b.EncryptVault)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt vault: %w", err)
+	}
 	return nil
 }
 
@@ -1448,48 +801,19 @@ func (b *GCPBootstrapper) EncryptVault() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) EnsureDNSRecords() error {
-	gcpProject := b.Env.DNSProjectID
-	if b.Env.DNSProjectID == "" {
-		gcpProject = b.Env.ProjectID
+// EnsureCodesphere installs Codesphere and runs the k0s config script if the install version or local installer is specified.
+func (b *GCPBootstrapper) EnsureCodesphere() error {
+	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
+		return nil
 	}
-
-	zoneName := b.Env.DNSZoneName
-	err := b.GCPClient.EnsureDNSManagedZone(gcpProject, zoneName, b.Env.BaseDomain+".", "Codesphere DNS zone")
+	err := b.stlog.Step("Install Codesphere", b.InstallCodesphere)
 	if err != nil {
-		return fmt.Errorf("failed to ensure DNS managed zone: %w", err)
+		return fmt.Errorf("failed to install Codesphere: %w", err)
 	}
 
-	records := []*dns.ResourceRecordSet{
-		{
-			Name:    fmt.Sprintf("cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-	}
-
-	err = b.GCPClient.EnsureDNSRecordSets(gcpProject, zoneName, records)
+	err = b.stlog.Step("Run k0s config script", b.RunK0sConfigScript)
 	if err != nil {
-		return fmt.Errorf("failed to ensure DNS record sets: %w", err)
+		return fmt.Errorf("failed to run k0s config script: %w", err)
 	}
 
 	return nil

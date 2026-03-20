@@ -105,21 +105,6 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		},
 	})
 
-	if config.Cluster.Monitoring.Loki == nil {
-		config.Cluster.Monitoring.Loki = &files.LokiConfig{}
-	}
-	config.Cluster.Monitoring.Loki.Override = util.DeepMergeMaps(config.Cluster.Monitoring.Loki.Override, map[string]any{
-		"loki": map[string]any{
-			"read":         minimalResourceValues(),
-			"write":        minimalResourceValues(),
-			"backend":      minimalResourceValues(),
-			"resultsCache": minimalResourceValues(),
-			"chunksCache":  minimalResourceValues(),
-			"canary":       minimalResourceValues(),
-			"gateway":      minimalResourceValues(),
-		},
-	})
-
 	if config.Cluster.Monitoring.PushGateway == nil {
 		config.Cluster.Monitoring.PushGateway = &files.PushGatewayConfig{}
 	}
@@ -193,14 +178,5 @@ func zeroRequests() map[string]int {
 	return map[string]int{
 		"cpu":    0,
 		"memory": 0,
-	}
-}
-
-func minimalResourceValues() map[string]any {
-	return map[string]any{
-		"replicas": 1,
-		"resources": map[string]any{
-			"requests": zeroRequests(),
-		},
 	}
 }
