@@ -6,6 +6,7 @@ package cmd_test
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -254,10 +255,10 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockFileIO := util.NewMockFileIO(GinkgoT())
 
 				c.Opts.Config = "valid-config.yaml"
-				c.Opts.PrivKey = "test-key.pem"
-
-				// Create config with workspace dockerfiles
 				config := files.RootConfig{
+					Registry: &files.RegistryConfig{
+						Server: "https://my-registry.com",
+					},
 					Codesphere: files.CodesphereConfig{
 						DeployConfig: files.DeployConfig{
 							Images: map[string]files.ImageConfig{
@@ -277,10 +278,33 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				}
 
 				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(config, nil)
+
+				// Setup temp dir for node executable check (because os.Chmod uses real FS)
+				tempDir, err := os.MkdirTemp("", "test-install")
+				Expect(err).To(BeNil())
+				defer os.RemoveAll(tempDir)
+				
+				// Create dummy node file
+				nodeFile := filepath.Join(tempDir, "node")
+				err = os.WriteFile(nodeFile, []byte("#!/bin/sh\nexit 0"), 0755)
+				Expect(err).To(BeNil())
+
+
+				// Create temporary file for Dockerfile to return *os.File
+				dockerfileContent := "FROM workspace-agent"
+				tmpDockerfile := filepath.Join(tempDir, "workspace.Dockerfile")
+				err = os.WriteFile(tmpDockerfile, []byte(dockerfileContent), 0644)
+				Expect(err).To(BeNil())
+				
+				realFile, err := os.Open(tmpDockerfile)
+				Expect(err).To(BeNil())
+				// Note: In a real test we'd want to close this eventually, but the mock will return it to the SUT
+				// and the SUT is responsible for closing it.
+
 				mockPackageManager.EXPECT().Extract(false).Return(nil)
-				mockPackageManager.EXPECT().GetWorkDir().Return("/test/workdir/package")
-				mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
-				mockFileIO.EXPECT().Exists("/test/workdir/package").Return(true)
+				mockPackageManager.EXPECT().GetWorkDir().Return(tempDir).Maybe()
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO).Maybe()
+				mockFileIO.EXPECT().Exists(tempDir).Return(true)
 
 				// Create complete mock directory entries with all required files
 				mockEntries := []os.DirEntry{
@@ -289,20 +313,33 @@ var _ = Describe("InstallCodesphereCmd", func() {
 					&MockDirEntry{name: "private-cloud-installer.js", isDir: false},
 					&MockDirEntry{name: "kubectl", isDir: false},
 				}
-				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
+				mockFileIO.EXPECT().ReadDir(tempDir).Return(mockEntries, nil)
 
 				mockPackageManager.EXPECT().ExtractDependency("bom.json", false).Return(nil)
+
+				// New logic mocks
+				mockPackageManager.EXPECT().GetBaseimageName("docker.io/library/ubuntu:24.04").Return("docker.io/library/ubuntu:24.04", nil)
+
 				mockPackageManager.EXPECT().ExtractDependency("codesphere/images/ubuntu.tar", false).Return(nil)
-				mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/ubuntu.tar").Return("/test/workdir/deps/codesphere/images/ubuntu.tar")
-				mockImageManager.EXPECT().LoadImage("/test/workdir/deps/codesphere/images/ubuntu.tar").Return(nil)
+				mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/ubuntu.tar").Return(filepath.Join(tempDir, "deps/codesphere/images/ubuntu.tar"))
+				mockImageManager.EXPECT().LoadImage(filepath.Join(tempDir, "deps/codesphere/images/ubuntu.tar")).Return(nil)
 
-				// Mock for reading the Dockerfile
-				mockFileIO.EXPECT().Open("workspace.Dockerfile").Return(nil, errors.New("dockerfile not found"))
+				// Mock for reading the Dockerfile - MUST return *os.File
+				mockFileIO.EXPECT().Open("workspace.Dockerfile").Return(realFile, nil)
 
-				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
-				// Should fail when trying to read the dockerfile
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("dockerfile not found"))
+				// Expect WriteFile with updated content
+				// "FROM workspace-agent" becomes "FROM docker.io/library/ubuntu:24.04"
+				mockFileIO.EXPECT().WriteFile("workspace.Dockerfile", []byte("FROM docker.io/library/ubuntu:24.04"), os.FileMode(0644)).Return(nil)
+
+				// Expect Build
+				expectedBuildTag := "https://my-registry.com/codesphere-registry/ubuntu-custom"
+				mockImageManager.EXPECT().BuildImage("workspace.Dockerfile", expectedBuildTag, ".").Return(nil)
+
+				// Expect Push
+				mockImageManager.EXPECT().PushImage(expectedBuildTag).Return(nil)
+
+				err = c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				Expect(err).To(BeNil())
 			})
 		})
 	})
