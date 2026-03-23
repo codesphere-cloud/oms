@@ -82,11 +82,11 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *GlobalOptions) {
 			
 			For example, updating the PostgreSQL primary IP will trigger regeneration
 			of the PostgreSQL server certificates that include that IP address.`),
-			Example: formatExamplesWithBinary("update install-config", []csio.Example{
+			Example: formatExamples("update install-config", []csio.Example{
 				{Cmd: "--postgres-primary-ip 10.10.0.4 --config config.yaml --vault prod.vault.yaml", Desc: "Update PostgreSQL primary IP and regenerate certificates"},
 				{Cmd: "--domain new.example.com --config config.yaml --vault prod.vault.yaml", Desc: "Update Codesphere domain"},
 				{Cmd: "--k8s-api-server 10.0.0.10 --config config.yaml --vault prod.vault.yaml", Desc: "Update Kubernetes API server host"},
-			}, "oms-cli"),
+			}),
 		},
 		Opts:       &UpdateInstallConfigOpts{GlobalOptions: opts},
 		FileWriter: util.NewFilesystemWriter(),

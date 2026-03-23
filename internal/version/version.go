@@ -10,9 +10,10 @@ var (
 	date    string = "unknown"
 	os      string = "unknown"
 	arch    string = "unknown"
-	binName string = "oms-cli"
+	binName string = "oms"
 )
 
+//mockery:generate: true
 type Version interface {
 	Version() string
 	Commit() string

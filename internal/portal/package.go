@@ -5,6 +5,7 @@ package portal
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -41,4 +42,19 @@ func (b *Build) GetBuildForDownload(filename string) (Build, error) {
 	}
 
 	return Build{}, fmt.Errorf("artifact not found: %s", filename)
+}
+
+// BuildPackageFilename generates the standard package filename for a given build
+// Format: {version}-{hash}-{filename}
+// Version slashes are replaced with dashes.
+func (b *Build) BuildPackageFilename(filename string) string {
+	return BuildPackageFilenameFromParts(b.Version, b.Hash, filename)
+}
+
+// BuildPackageFilenameFromParts generates the standard package filename from individual parts
+// Format: {version}-{hash}-{filename}
+// Version slashes are replaced with dashes.
+func BuildPackageFilenameFromParts(version, hash, filename string) string {
+	sanitizedVersion := strings.ReplaceAll(version, "/", "-")
+	return sanitizedVersion + "-" + hash + "-" + filename
 }

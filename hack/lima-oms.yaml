@@ -63,10 +63,11 @@ provision:
     # Install Docker in rootless mode
     dockerd-rootless-setuptool.sh install || true
     
-    # Clone OMS repository locally for better build performance
-    if [ ! -d ~/oms ]; then
-      git clone https://github.com/codesphere-cloud/oms.git ~/oms
-    fi
+    # Set up the OMS project
+    cd /home/user/oms
+    export PATH=$PATH:/usr/local/go/bin
+    go mod download
+    cd cli && go build -a -buildvcs=false && mv cli ../oms
     
     # Create a test install-config for k0s testing
     VM_IP=$(hostname -I | awk '{print $1}')
@@ -98,20 +99,20 @@ message: |
   Quick Start:
   ------
   limactl shell lima-oms
-  cd oms
-  make build-cli
+  cd /home/user/oms
+  ./oms --help
   ------
   
   Test k0s installation locally:
   ------
   limactl shell lima-oms
-  cd oms
+  cd /home/user/oms
   
   # Build the CLI
   make build-cli
   
   # Install k0s (uses test-install-config.yaml which is auto-generated)
-  sudo ./oms-cli install k0s --install-config test-install-config.yaml --version v1.30.0+k0s.0 --force
+  sudo ./oms install k0s --install-config test-install-config.yaml --version v1.30.0+k0s.0 --force
   
   # Check k0s installation
   sudo systemctl status k0scontroller
@@ -131,19 +132,19 @@ message: |
   Test with package instead of download:
   ------
   # First, create a package (run on your host machine with access to real install-config)
-  ./oms-cli download package --version v1.x.x
+  ./oms download package --version v1.x.x
   
   # Then in Lima:
   limactl shell lima-oms
-  cd oms
-  sudo ./oms-cli install k0s --install-config test-install-config.yaml \
+  cd /home/user/oms
+  sudo ./oms install k0s --install-config test-install-config.yaml \
     --package codesphere-vX.X.X-installer.tar.gz --force
   ------
   
   Run tests:
   ------
   limactl shell lima-oms
-  cd oms
+  cd /home/user/oms
   
   # Run all tests
   go test ./...
@@ -153,15 +154,9 @@ message: |
   go test ./internal/installer -ginkgo.v -ginkgo.focus "k0s"
   ------
   
-  Build for different platforms:
+  Install codesphere:
   ------
-  # From your Mac (cross-compile to Linux)
-  make build-cli-linux
-  
-  # Inside Lima (native Linux build)
-  limactl shell lima-oms
-  cd oms
-  make build-cli
+  ./oms install codesphere --package codesphere-v1.66.0-installer --config config.yaml --priv-key ./path-to-private-key
   ------
   
   Notes:

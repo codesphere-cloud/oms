@@ -22,6 +22,7 @@ var _ = Describe("DownloadPackages", func() {
 		c              cmd.DownloadPackageCmd
 		filename       string
 		version        string
+		hash           string
 		build          portal.Build
 		mockPortal     *portal.MockPortal
 		mockFileWriter *util.MockFileIO
@@ -30,6 +31,7 @@ var _ = Describe("DownloadPackages", func() {
 	BeforeEach(func() {
 		filename = "installer.tar.gz"
 		version = "codesphere-1.42.0"
+		hash = "abc1234567"
 		mockPortal = portal.NewMockPortal(GinkgoT())
 		mockFileWriter = util.NewMockFileIO(GinkgoT())
 	})
@@ -44,6 +46,7 @@ var _ = Describe("DownloadPackages", func() {
 		}
 		build = portal.Build{
 			Version: version,
+			Hash:    hash,
 			Artifacts: []portal.Artifact{
 				{Filename: filename},
 				{Filename: "otherFilename.tar.gz"},
@@ -169,17 +172,45 @@ var _ = Describe("DownloadPackages", func() {
 		It("Downloads the correct artifact to the correct output file", func() {
 			expectedBuildToDownload := portal.Build{
 				Version: version,
+				Hash:    hash,
 				Artifacts: []portal.Artifact{
 					{Filename: filename},
 				},
 			}
 
 			fakeFile := os.NewFile(uintptr(0), filename)
-			mockFileWriter.EXPECT().OpenAppend(version+"-"+filename).Return(fakeFile, nil)
-			mockFileWriter.EXPECT().Open(version+"-"+filename).Return(fakeFile, nil)
+			mockFileWriter.EXPECT().OpenAppend(version+"-"+hash+"-"+filename).Return(fakeFile, nil)
+			mockFileWriter.EXPECT().Open(version+"-"+hash+"-"+filename).Return(fakeFile, nil)
 			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
 			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
 			err := c.DownloadBuild(mockPortal, build, filename)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("Uses long hash in filename", func() {
+			longHash := "abc1234567890defghij"
+			buildWithLongHash := portal.Build{
+				Version: version,
+				Hash:    longHash,
+				Artifacts: []portal.Artifact{
+					{Filename: filename},
+					{Filename: "otherFilename.tar.gz"},
+				},
+			}
+			expectedBuildToDownload := portal.Build{
+				Version: version,
+				Hash:    longHash,
+				Artifacts: []portal.Artifact{
+					{Filename: filename},
+				},
+			}
+
+			fakeFile := os.NewFile(uintptr(0), filename)
+			mockFileWriter.EXPECT().OpenAppend(version+"-"+longHash+"-"+filename).Return(fakeFile, nil)
+			mockFileWriter.EXPECT().Open(version+"-"+longHash+"-"+filename).Return(fakeFile, nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
+			err := c.DownloadBuild(mockPortal, buildWithLongHash, filename)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -190,14 +221,15 @@ var _ = Describe("DownloadPackages", func() {
 			It("Downloads the correct artifact to the correct output file", func() {
 				expectedBuildToDownload := portal.Build{
 					Version: version,
+					Hash:    hash,
 					Artifacts: []portal.Artifact{
 						{Filename: filename},
 					},
 				}
 
 				fakeFile := os.NewFile(uintptr(0), filename)
-				mockFileWriter.EXPECT().OpenAppend("other-version-v1.42.0-"+filename).Return(fakeFile, nil)
-				mockFileWriter.EXPECT().Open("other-version-v1.42.0-"+filename).Return(fakeFile, nil)
+				mockFileWriter.EXPECT().OpenAppend("other-version-v1.42.0-"+hash+"-"+filename).Return(fakeFile, nil)
+				mockFileWriter.EXPECT().Open("other-version-v1.42.0-"+hash+"-"+filename).Return(fakeFile, nil)
 				mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
 				mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
 				err := c.DownloadBuild(mockPortal, build, filename)

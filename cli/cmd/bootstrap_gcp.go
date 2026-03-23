@@ -15,6 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
@@ -58,10 +59,15 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 
 	flags := bootstrapGcpCmd.cmd.Flags()
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP Project Name (required)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectTTL, "project-ttl", "2h", "Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.BillingAccount, "billing-account", "", "GCP Billing Account ID (required)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.BaseDomain, "base-domain", "", "Base domain for Codesphere (required)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GithubAppClientID, "github-app-client-id", "", "Github App Client ID (required)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GithubAppClientSecret, "github-app-client-secret", "", "Github App Client Secret (required)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppClientID, "github-app-client-id", "", "GitHub App Client ID (required)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppClientSecret, "github-app-client-secret", "", "GitHub App Client Secret (required)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug. Required scopes: read:packages, read:org.")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppName, "github-app-name", "", "GitHub App Name (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamOrg, "github-team-org", "", "GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamSlug, "github-team-slug", "", "GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SecretsDir, "secrets-dir", "/etc/codesphere/secrets", "Directory for secrets (default: /etc/codesphere/secrets)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.FolderID, "folder-id", "", "GCP Folder ID (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SSHPublicKeyPath, "ssh-public-key-path", "~/.ssh/id_rsa.pub", "SSH Public Key Path (default: ~/.ssh/id_rsa.pub)")
@@ -74,19 +80,22 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Region, "region", "europe-west4", "GCP Region (default: europe-west4)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSProjectID, "dns-project-id", "", "GCP Project ID for Cloud DNS (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSProjectServiceAccount, "dns-project-sa", "", "GCP Project Service Account for Cloud DNS (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSZoneName, "dns-zone-name", "oms-testing", "Cloud DNS Zone Name (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallLocal, "install-local", "", "Install Codesphere from local package (default: none)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (default: none)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
-
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
-	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", true, "Suppress SSH command output (default: true)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token to use for direct image access. Scope required: package read (optional)")
+	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", false, "Suppress SSH command output (default: false)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
+
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoURI, "openbao-uri", "", "URI for OpenBao (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoUser, "openbao-user", "admin", "OpenBao username (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoPassword, "openbao-password", "", "OpenBao password (optional)")
 
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
@@ -94,6 +103,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 
 	parent.AddCommand(bootstrapGcpCmd.cmd)
 	AddBootstrapGcpPostconfigCmd(bootstrapGcpCmd.cmd, opts)
+	AddBootstrapGcpCleanupCmd(bootstrapGcpCmd.cmd, opts)
 }
 
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
@@ -103,8 +113,21 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := util.NewFilesystemWriter()
 	portalClient := portal.NewPortalClient()
+	githubClient := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)
 
-	bs, err := gcp.NewGCPBootstrapper(ctx, c.Env, stlog, c.CodesphereEnv, icg, gcpClient, fw, node.NewSSHNodeClient(c.SSHQuiet), portalClient)
+	bs, err := gcp.NewGCPBootstrapper(
+		ctx,
+		c.Env,
+		stlog,
+		c.CodesphereEnv,
+		icg,
+		gcpClient,
+		fw,
+		node.NewSSHNodeClient(c.SSHQuiet),
+		portalClient,
+		util.NewTime(),
+		githubClient,
+	)
 	if err != nil {
 		return err
 	}
@@ -117,48 +140,60 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		}
 	}
 
-	err = bs.Bootstrap()
-	envBytes, err2 := json.MarshalIndent(bs.Env, "", "  ")
+	bootstrapErr := bs.Bootstrap()
 
-	envString := string(envBytes)
-	if err2 != nil {
-		envString = ""
+	err = writeInfraDetails(bs.Env)
+	if err != nil {
+		log.Printf("warning: failed to write infra details: %v", err)
 	}
 
-	if err != nil {
+	if bootstrapErr != nil {
 		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
 			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
-		return fmt.Errorf("failed to bootstrap GCP: %w, env: %s", err, envString)
-	}
-
-	workdir := env.NewEnv().GetOmsWorkdir()
-	err = fw.MkdirAll(workdir, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create workdir: %w", err)
-	}
-	infraFilePath := gcp.GetInfraFilePath()
-	err = fw.WriteFile(infraFilePath, envBytes, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
+		return fmt.Errorf("failed to bootstrap GCP: %w", bootstrapErr)
 	}
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
-	log.Println(envString)
-	log.Printf("Infrastructure details written to %s", infraFilePath)
 	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 	if bs.Env.InstallVersion != "" {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
 		return nil
 	}
 	packageName := "<package-name>-installer"
-	installCmd := "oms-cli install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt"
+	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt"
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
 		log.Printf("You set a GitHub PAT for direct image access. Make sure to use a lite package, as VM root disk sizes are reduced.")
 		installCmd += " -s load-container-images"
 		packageName += "-lite"
 	}
 	log.Printf("example install command (run from jumpbox):\n%s -p %s.tar.gz", installCmd, packageName)
+
+	return nil
+}
+
+// writeInfraDetails writes details about the bootstrapped codesphere environment into a file.
+func writeInfraDetails(csEnv *gcp.CodesphereEnvironment) error {
+	envBytes, err := json.MarshalIndent(csEnv, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal codesphere env: %w", err)
+	}
+
+	workdir := env.NewEnv().GetOmsWorkdir()
+	fw := util.NewFilesystemWriter()
+
+	err = fw.MkdirAll(workdir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create workdir %w", err)
+	}
+
+	infraFilePath := gcp.GetInfraFilePath()
+	err = fw.WriteFile(infraFilePath, envBytes, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
+	}
+
+	log.Printf("Infrastructure details written to %s", infraFilePath)
 
 	return nil
 }

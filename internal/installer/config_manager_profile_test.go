@@ -8,6 +8,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
+	. "github.com/codesphere-cloud/oms/internal/util/testing"
 )
 
 var _ = Describe("ConfigManagerProfile", func() {
@@ -56,80 +58,6 @@ var _ = Describe("ConfigManagerProfile", func() {
 
 				config := manager.GetInstallConfig()
 				Expect(config.Datacenter.Name).To(Equal("dev"))
-			})
-		})
-
-		Context("with prod profile", func() {
-			It("should configure HA multi-node setup", func() {
-				err := manager.ApplyProfile(installer.PROFILE_PROD)
-				Expect(err).ToNot(HaveOccurred())
-
-				config := manager.GetInstallConfig()
-				Expect(config.Datacenter.Name).To(Equal("production"))
-				Expect(config.Postgres.Primary.IP).To(Equal("10.50.0.2"))
-				Expect(config.Postgres.Primary.Hostname).To(Equal("pg-primary"))
-				Expect(config.Postgres.Replica).ToNot(BeNil())
-				Expect(config.Postgres.Replica.IP).To(Equal("10.50.0.3"))
-			})
-
-			It("should configure multiple Ceph nodes", func() {
-				err := manager.ApplyProfile(installer.PROFILE_PROD)
-				Expect(err).ToNot(HaveOccurred())
-
-				config := manager.GetInstallConfig()
-				Expect(config.Ceph.Hosts).To(HaveLen(3))
-				Expect(config.Ceph.Hosts[0].IsMaster).To(BeTrue())
-				Expect(config.Ceph.Hosts[1].IsMaster).To(BeFalse())
-				Expect(config.Ceph.Hosts[2].IsMaster).To(BeFalse())
-			})
-
-			It("should configure multiple Kubernetes nodes", func() {
-				err := manager.ApplyProfile(installer.PROFILE_PROD)
-				Expect(err).ToNot(HaveOccurred())
-
-				config := manager.GetInstallConfig()
-				Expect(config.Kubernetes.ControlPlanes).To(HaveLen(1))
-				Expect(config.Kubernetes.Workers).To(HaveLen(3))
-			})
-
-			It("should use production domain names", func() {
-				err := manager.ApplyProfile(installer.PROFILE_PROD)
-				Expect(err).ToNot(HaveOccurred())
-
-				config := manager.GetInstallConfig()
-				Expect(config.Codesphere.Domain).To(Equal("codesphere.yourcompany.com"))
-				Expect(config.Codesphere.WorkspaceHostingBaseDomain).To(Equal("ws.yourcompany.com"))
-			})
-		})
-
-		Context("with production profile", func() {
-			It("should apply production profile as alias for prod", func() {
-				err := manager.ApplyProfile(installer.PROFILE_PRODUCTION)
-				Expect(err).ToNot(HaveOccurred())
-
-				config := manager.GetInstallConfig()
-				Expect(config.Datacenter.Name).To(Equal("production"))
-			})
-		})
-
-		Context("with minimal profile", func() {
-			It("should configure minimal single-node setup", func() {
-				err := manager.ApplyProfile(installer.PROFILE_MINIMAL)
-				Expect(err).ToNot(HaveOccurred())
-
-				config := manager.GetInstallConfig()
-				Expect(config.Datacenter.Name).To(Equal("minimal"))
-				Expect(config.Postgres.Primary.IP).To(Equal("127.0.0.1"))
-				Expect(config.Kubernetes.Workers).To(BeEmpty())
-			})
-
-			It("should configure minimal workspace plan", func() {
-				err := manager.ApplyProfile(installer.PROFILE_MINIMAL)
-				Expect(err).ToNot(HaveOccurred())
-
-				config := manager.GetInstallConfig()
-				plan := config.Codesphere.Plans.WorkspacePlans[1]
-				Expect(plan.MaxReplicas).To(Equal(1))
 			})
 		})
 
@@ -223,6 +151,10 @@ var _ = Describe("ConfigManagerProfile", func() {
 					Expect(config.ManagedServiceBackends).ToNot(BeNil())
 					Expect(config.ManagedServiceBackends.Postgres).ToNot(BeNil())
 
+					// Managed service config
+					Expect(config.Codesphere.ManagedServices).ToNot(BeNil())
+					Expect(len(config.Codesphere.ManagedServices)).To(Equal(4))
+
 					// Secrets
 					Expect(config.Secrets.BaseDir).To(Equal("/root/secrets"))
 				})
@@ -247,32 +179,7 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(minimalManager.GetInstallConfig().Datacenter.Name).To(Equal("minimal"))
 			})
 
-			It("should have different PostgreSQL replica configurations", func() {
-				devManager := installer.NewInstallConfigManager()
-				prodManager := installer.NewInstallConfigManager()
-
-				err := devManager.ApplyProfile(installer.PROFILE_DEV)
-				Expect(err).ToNot(HaveOccurred())
-				err = prodManager.ApplyProfile(installer.PROFILE_PROD)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(prodManager.GetInstallConfig().Postgres.Replica.IP).To(Equal("10.50.0.3"))
-			})
-
-			It("should have different number of Ceph hosts", func() {
-				devManager := installer.NewInstallConfigManager()
-				prodManager := installer.NewInstallConfigManager()
-
-				err := devManager.ApplyProfile(installer.PROFILE_DEV)
-				Expect(err).ToNot(HaveOccurred())
-				err = prodManager.ApplyProfile(installer.PROFILE_PROD)
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(devManager.GetInstallConfig().Ceph.Hosts).To(HaveLen(1))
-				Expect(prodManager.GetInstallConfig().Ceph.Hosts).To(HaveLen(3))
-			})
-
-			It("should have different worker node counts", func() {
+			It("should have different resource profiles", func() {
 				devManager := installer.NewInstallConfigManager()
 				prodManager := installer.NewInstallConfigManager()
 				minimalManager := installer.NewInstallConfigManager()
@@ -284,9 +191,20 @@ var _ = Describe("ConfigManagerProfile", func() {
 				err = minimalManager.ApplyProfile(installer.PROFILE_MINIMAL)
 				Expect(err).ToNot(HaveOccurred())
 
-				Expect(devManager.GetInstallConfig().Kubernetes.Workers).To(HaveLen(1))
-				Expect(prodManager.GetInstallConfig().Kubernetes.Workers).To(HaveLen(3))
-				Expect(minimalManager.GetInstallConfig().Kubernetes.Workers).To(BeEmpty())
+				Expect(devManager.GetInstallConfig().Datacenter.Name).To(Equal("dev"))
+				Expect(prodManager.GetInstallConfig().Datacenter.Name).To(Equal("production"))
+				Expect(minimalManager.GetInstallConfig().Datacenter.Name).To(Equal("minimal"))
+
+				// DEV
+				AssertZeroRequests(getAuthServiceRequests(devManager.GetInstallConfig()))
+				Expect(devManager.GetInstallConfig().Cluster.Monitoring.Grafana.Enabled).To(BeFalse())
+				// Minimal
+				AssertZeroRequests(getAuthServiceRequests(minimalManager.GetInstallConfig()))
+				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.Loki).To(BeNil())
+				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.Grafana).To(BeNil())
+				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.GrafanaAlloy).To(BeNil())
+				// Prod
+				Expect(prodManager.GetInstallConfig().Cluster.Monitoring).To(BeNil())
 			})
 		})
 	})
@@ -301,3 +219,8 @@ var _ = Describe("ConfigManagerProfile", func() {
 		})
 	})
 })
+
+func getAuthServiceRequests(config *files.RootConfig) map[string]int {
+	authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
+	return MustMap[int](authService["requests"])
+}

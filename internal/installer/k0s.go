@@ -17,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
+//mockery:generate: true
 type K0sManager interface {
 	GetLatestVersion() (string, error)
 	Download(version string, force bool, quiet bool) (string, error)

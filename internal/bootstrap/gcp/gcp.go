@@ -5,8 +5,10 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -15,6 +17,7 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
@@ -22,6 +25,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/dns/v1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -33,6 +37,49 @@ const (
 	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
 	RegistryTypeGitHub           RegistryType = "github"
 )
+
+// OMSManagedLabel is the label key used to identify projects created by OMS
+const OMSManagedLabel = "oms-managed"
+const DeleteAfterLabel = "delete-after"
+
+// CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
+// A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
+func CheckOMSManagedLabel(labels map[string]string) bool {
+	if labels == nil {
+		return false
+	}
+	value, exists := labels[OMSManagedLabel]
+	return exists && value == "true"
+}
+
+// GetDNSRecordNames returns the DNS record names that OMS creates for a given base domain.
+func GetDNSRecordNames(baseDomain string) []struct {
+	Name  string
+	Rtype string
+} {
+	return []struct {
+		Name  string
+		Rtype string
+	}{
+		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
+	}
+}
+
+// IsNotFoundError checks if the error is a Google API "not found" error (HTTP 404).
+func IsNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var googleErr *googleapi.Error
+	if errors.As(err, &googleErr) {
+		return googleErr.Code == 404
+	}
+	return false
+}
 
 type VMDef struct {
 	Name            string
@@ -69,37 +116,49 @@ type GCPBootstrapper struct {
 	stlog     *bootstrap.StepLogger
 	fw        util.FileIO
 	icg       installer.InstallConfigManager
+	Time      util.Time
 	GCPClient GCPClientManager
 	// Environment
 	Env *CodesphereEnvironment
 	// SSH command runner
 	NodeClient   node.NodeClient
 	PortalClient portal.Portal
+	GitHubClient github.GitHubClient
 }
 
 type CodesphereEnvironment struct {
-	ProjectID                string       `json:"project_id"`
-	ProjectName              string       `json:"project_name"`
-	DNSProjectID             string       `json:"dns_project_id"`
-	DNSProjectServiceAccount string       `json:"dns_project_service_account"`
-	Jumpbox                  *node.Node   `json:"jumpbox"`
-	PostgreSQLNode           *node.Node   `json:"postgres_node"`
-	ControlPlaneNodes        []*node.Node `json:"control_plane_nodes"`
-	CephNodes                []*node.Node `json:"ceph_nodes"`
-	ContainerRegistryURL     string       `json:"-"`
-	ExistingConfigUsed       bool         `json:"-"`
-	InstallVersion           string       `json:"install_version"`
-	InstallHash              string       `json:"install_hash"`
-	InstallSkipSteps         []string     `json:"install_skip_steps"`
-	Preemptible              bool         `json:"preemptible"`
-	WriteConfig              bool         `json:"-"`
-	GatewayIP                string       `json:"gateway_ip"`
-	PublicGatewayIP          string       `json:"public_gateway_ip"`
-	RegistryType             RegistryType `json:"registry_type"`
-	GitHubPAT                string       `json:"-"`
-	RegistryUser             string       `json:"-"`
-	Experiments              []string     `json:"experiments"`
-	FeatureFlags             []string     `json:"feature_flags"`
+	ProjectID            string       `json:"project_id"`
+	ProjectTTL           string       `json:"project_ttl"`
+	ProjectName          string       `json:"project_name"`
+	DNSProjectID         string       `json:"dns_project_id"`
+	Jumpbox              *node.Node   `json:"jumpbox"`
+	PostgreSQLNode       *node.Node   `json:"postgres_node"`
+	ControlPlaneNodes    []*node.Node `json:"control_plane_nodes"`
+	CephNodes            []*node.Node `json:"ceph_nodes"`
+	ContainerRegistryURL string       `json:"-"`
+	ExistingConfigUsed   bool         `json:"-"`
+	InstallVersion       string       `json:"install_version"`
+	InstallLocal         string       `json:"install_local"`
+	InstallHash          string       `json:"install_hash"`
+	InstallSkipSteps     []string     `json:"install_skip_steps"`
+	Preemptible          bool         `json:"preemptible"`
+	WriteConfig          bool         `json:"-"`
+	GatewayIP            string       `json:"gateway_ip"`
+	PublicGatewayIP      string       `json:"public_gateway_ip"`
+	RegistryType         RegistryType `json:"registry_type"`
+	GitHubPAT            string       `json:"-"`
+	GitHubAppName        string       `json:"-"`
+	GitHubTeamOrg        string       `json:"github_team_org"`
+	GitHubTeamSlug       string       `json:"github_team_slug"`
+	RegistryUser         string       `json:"-"`
+	Experiments          []string     `json:"experiments"`
+	FeatureFlags         []string     `json:"feature_flags"`
+
+	// OpenBao
+	OpenBaoURI      string `json:"-"`
+	OpenBaoEngine   string `json:"-"`
+	OpenBaoUser     string `json:"-"`
+	OpenBaoPassword string `json:"-"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -111,8 +170,8 @@ type CodesphereEnvironment struct {
 	ProjectDisplayName    string `json:"project_display_name"`
 	BillingAccount        string `json:"billing_account"`
 	BaseDomain            string `json:"base_domain"`
-	GithubAppClientID     string `json:"-"`
-	GithubAppClientSecret string `json:"-"`
+	GitHubAppClientID     string `json:"-"`
+	GitHubAppClientSecret string `json:"-"`
 	SecretsDir            string `json:"secrets_dir"`
 	FolderID              string `json:"folder_id"`
 	SSHPublicKeyPath      string `json:"-"`
@@ -134,6 +193,8 @@ func NewGCPBootstrapper(
 	fw util.FileIO,
 	sshRunner node.NodeClient,
 	portalClient portal.Portal,
+	time util.Time,
+	gitHubClient github.GitHubClient,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
 		ctx:          ctx,
@@ -144,6 +205,8 @@ func NewGCPBootstrapper(
 		Env:          CodesphereEnv,
 		NodeClient:   sshRunner,
 		PortalClient: portalClient,
+		Time:         time,
+		GitHubClient: gitHubClient,
 	}, nil
 }
 
@@ -152,15 +215,33 @@ func GetInfraFilePath() string {
 	return fmt.Sprintf("%s/gcp-infra.json", workdir)
 }
 
-func (b *GCPBootstrapper) Bootstrap() error {
-	if b.Env.InstallVersion != "" {
-		err := b.stlog.Step("Validate package to install", b.ValidatePackageName)
-		if err != nil {
-			return fmt.Errorf("invalid package name: %w", err)
-		}
-
+// LoadInfraFile reads and parses the GCP infrastructure file from the specified path.
+// Returns the environment, whether the file exists, and any error.
+// If the file doesn't exist, returns an empty environment with exists=false and nil error.
+func LoadInfraFile(fw util.FileIO, infraFilePath string) (CodesphereEnvironment, bool, error) {
+	if !fw.Exists(infraFilePath) {
+		return CodesphereEnvironment{}, false, nil
 	}
-	err := b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
+
+	content, err := fw.ReadFile(infraFilePath)
+	if err != nil {
+		return CodesphereEnvironment{}, true, fmt.Errorf("failed to read gcp infra file: %w", err)
+	}
+
+	var env CodesphereEnvironment
+	if err := json.Unmarshal(content, &env); err != nil {
+		return CodesphereEnvironment{}, true, fmt.Errorf("failed to unmarshal gcp infra file: %w", err)
+	}
+	return env, true, nil
+}
+
+func (b *GCPBootstrapper) Bootstrap() error {
+	err := b.stlog.Step("Validate input", b.ValidateInput)
+	if err != nil {
+		return fmt.Errorf("invalid input: %w", err)
+	}
+
+	err = b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
 	if err != nil {
 		return fmt.Errorf("failed to ensure install config: %w", err)
 	}
@@ -278,7 +359,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to generate k0s config script: %w", err)
 	}
 
-	if b.Env.InstallVersion != "" {
+	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
 		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
 		if err != nil {
 			return fmt.Errorf("failed to install Codesphere: %w", err)
@@ -293,10 +374,37 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) ValidatePackageName() error {
+// ValidateInput checks that the required input parameters are set and valid
+func (b *GCPBootstrapper) ValidateInput() error {
+	err := b.validateInstallVersion()
+	if err != nil {
+		return err
+	}
+
+	return b.validateGitHubParams()
+}
+
+// validateInstallVersion checks if the specified install version exists and contains the required installer artifact
+func (b *GCPBootstrapper) validateInstallVersion() error {
+	if b.Env.InstallLocal != "" {
+		if b.Env.InstallVersion != "" || b.Env.InstallHash != "" {
+			return fmt.Errorf("cannot specify both install-local and install-version/install-hash")
+		}
+		if !b.fw.Exists(b.Env.InstallLocal) {
+			return fmt.Errorf("local installer package not found at path: %s", b.Env.InstallLocal)
+		}
+		return nil
+	}
+	if b.Env.InstallVersion == "" {
+		return nil
+	}
 	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
+	}
+
+	if b.Env.InstallHash == "" {
+		b.Env.InstallHash = build.Hash
 	}
 
 	requiredFilename := "installer.tar.gz"
@@ -315,6 +423,25 @@ func (b *GCPBootstrapper) ValidatePackageName() error {
 	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
 }
 
+// validateGitHubParams checks if the GitHub credentials are fully specified if GitHub registry is selected
+func (b *GCPBootstrapper) validateGitHubParams() error {
+	if b.Env.GitHubTeamSlug != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubPAT == "" {
+		return fmt.Errorf("GitHub PAT is required to extract public keys of GitHub team members")
+	}
+
+	ghTeamParams := []string{b.Env.GitHubTeamSlug, b.Env.GitHubTeamOrg}
+	if slices.Contains(ghTeamParams, "") && strings.Join(ghTeamParams, "") != "" {
+		return fmt.Errorf("GitHub team parameters are not fully specified (all or none of GitHubTeamSlug, GitHubTeamOrg must be set)")
+	}
+
+	ghAppParams := []string{b.Env.GitHubAppName, b.Env.GitHubAppClientID, b.Env.GitHubAppClientSecret}
+	if slices.Contains(ghAppParams, "") && strings.Join(ghAppParams, "") != "" {
+		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GitHubAppClientID, GitHubAppClientSecret must be set)")
+	}
+
+	return nil
+}
+
 func (b *GCPBootstrapper) EnsureInstallConfig() error {
 	if b.fw.Exists(b.Env.InstallConfigPath) {
 		err := b.icg.LoadInstallConfigFromFile(b.Env.InstallConfigPath)
@@ -324,7 +451,7 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 
 		b.Env.ExistingConfigUsed = true
 	} else {
-		err := b.icg.ApplyProfile("dev")
+		err := b.icg.ApplyProfile("minimal")
 		if err != nil {
 			return fmt.Errorf("failed to apply profile: %w", err)
 		}
@@ -366,7 +493,13 @@ func (b *GCPBootstrapper) EnsureProject() error {
 	}
 	if err.Error() == fmt.Sprintf("project not found: %s", b.Env.ProjectName) {
 		projectId := b.GCPClient.CreateProjectID(b.Env.ProjectName)
-		_, err = b.GCPClient.CreateProject(parent, projectId, b.Env.ProjectName)
+
+		projectTTL, err := time.ParseDuration(b.Env.ProjectTTL)
+		if err != nil {
+			return fmt.Errorf("invalid project TTL format: %w", err)
+		}
+
+		_, err = b.GCPClient.CreateProject(parent, projectId, b.Env.ProjectName, projectTTL)
 		if err != nil {
 			return fmt.Errorf("failed to create project: %w", err)
 		}
@@ -452,7 +585,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 					return fmt.Errorf("failed to create service account key: %w", err)
 				}
 				b.stlog.LogRetry()
-				time.Sleep(5 * time.Second)
+				b.Time.Sleep(5 * time.Second)
 				continue
 			}
 
@@ -467,7 +600,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 }
 
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
-	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/compute.admin"})
+	err := b.ensureIAMRoleWithRetry(b.Env.ProjectID, "cloud-controller", b.Env.ProjectID, []string{"roles/compute.admin"})
 	if err != nil {
 		return err
 	}
@@ -481,37 +614,31 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 		return nil
 	}
 
-	err = b.ensureIAMRoleWithRetry("artifact-registry-writer", []string{"roles/artifactregistry.writer"})
+	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, "artifact-registry-writer", b.Env.ProjectID, []string{"roles/artifactregistry.writer"})
 	return err
 }
 
-func (b *GCPBootstrapper) ensureIAMRoleWithRetry(serviceAccount string, roles []string) error {
+func (b *GCPBootstrapper) ensureIAMRoleWithRetry(projectID string, serviceAccount string, serviceAccountProjectID string, roles []string) error {
 	var err error
 	for retries := range 5 {
-		err = b.GCPClient.AssignIAMRole(b.Env.ProjectID, serviceAccount, roles)
+		err = b.GCPClient.AssignIAMRole(projectID, serviceAccount, serviceAccountProjectID, roles)
 		if err == nil {
 			return nil
 		}
 		if retries < 4 {
 			b.stlog.LogRetry()
-			time.Sleep(5 * time.Second)
+			b.Time.Sleep(5 * time.Second)
 		}
 	}
 	return fmt.Errorf("failed to assign roles %v to service account %s: %w", roles, serviceAccount, err)
 }
 
 func (b *GCPBootstrapper) ensureDnsPermissions() error {
-	if b.Env.DNSProjectID != "" {
-		if b.Env.DNSProjectServiceAccount == "" {
-			return errors.New("dns project service account with role roles/dns.admin must be provided when dns project id is set")
-		}
-		err := b.GCPClient.GrantImpersonation("cloud-controller", b.Env.ProjectID, b.Env.DNSProjectServiceAccount, b.Env.DNSProjectID)
-		if err != nil {
-			return fmt.Errorf("failed to grant impersonization on dns project %s to cloud-controller service account: %w", b.Env.DNSProjectID, err)
-		}
-		return nil
+	dnsProject := b.Env.DNSProjectID
+	if b.Env.DNSProjectID == "" {
+		dnsProject = b.Env.ProjectID
 	}
-	err := b.ensureIAMRoleWithRetry("cloud-controller", []string{"roles/dns.admin"})
+	err := b.ensureIAMRoleWithRetry(dnsProject, "cloud-controller", b.Env.ProjectID, []string{"roles/dns.admin"})
 	if err != nil {
 		return err
 	}
@@ -645,14 +772,30 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	subnetwork := fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s-%s-subnet", projectID, region, projectID, region)
 	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-ssd", projectID, zone)
 
-	// Create VMs in parallel
-	wg := sync.WaitGroup{}
-	errCh := make(chan error, len(vmDefs))
-	resultCh := make(chan vmResult, len(vmDefs))
 	rootDiskSize := int64(200)
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		rootDiskSize = 50
 	}
+	sshKeys := ""
+	var err error
+	if b.Env.GitHubPAT != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubTeamSlug != "" {
+		sshKeys, err = github.GetSSHKeysFromGitHubTeam(b.GitHubClient, b.Env.GitHubTeamOrg, b.Env.GitHubTeamSlug)
+		if err != nil {
+			return fmt.Errorf("failed to get SSH keys from GitHub team: %w", err)
+		}
+	}
+
+	pubKey, err := b.readSSHKey(b.Env.SSHPublicKeyPath)
+	if err != nil {
+		return err
+	}
+
+	sshKeys += fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")
+
+	// Create VMs in parallel
+	wg := sync.WaitGroup{}
+	errCh := make(chan error, len(vmDefs))
+	resultCh := make(chan vmResult, len(vmDefs))
 	for _, vm := range vmDefs {
 		wg.Add(1)
 		go func(vm VMDef) {
@@ -679,12 +822,6 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 						DiskType:   &diskType,
 					},
 				})
-			}
-
-			pubKey, err := b.readSSHKey(b.Env.SSHPublicKeyPath)
-			if err != nil {
-				errCh <- fmt.Errorf("failed to read SSH public key: %w", err)
-				return
 			}
 
 			serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
@@ -714,7 +851,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 					Items: []*computepb.Items{
 						{
 							Key:   protoString("ssh-keys"),
-							Value: protoString(fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")),
+							Value: protoString(sshKeys),
 						},
 					},
 				},
@@ -818,6 +955,7 @@ func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 	if err != nil {
 		return fmt.Errorf("failed to ensure public gateway IP: %w", err)
 	}
+
 	return nil
 }
 
@@ -849,6 +987,7 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 	if err == nil && address != nil {
 		return address.GetAddress(), nil
 	}
+
 	return "", fmt.Errorf("failed to get address %s after creation", name)
 }
 
@@ -892,7 +1031,7 @@ func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
 			return fmt.Errorf("failed to enable root login on %s: %w", node.GetName(), err)
 		}
 		b.stlog.LogRetry()
-		time.Sleep(10 * time.Second)
+		b.Time.Sleep(10 * time.Second)
 	}
 
 	return nil
@@ -906,7 +1045,7 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		}
 	}
 
-	hasOms := b.Env.Jumpbox.HasCommand("oms-cli")
+	hasOms := b.Env.Jumpbox.HasCommand("oms")
 	if hasOms {
 		return nil
 	}
@@ -1218,8 +1357,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
-	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{
-		GitHub: &files.GitProviderConfig{
+
+	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
+	if b.Env.GitHubAppName != "" && b.Env.GitHubAppClientID != "" && b.Env.GitHubAppClientSecret != "" {
+		b.Env.InstallConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://github.com",
 			API: files.APIConfig{
@@ -1229,15 +1370,17 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				Issuer:                "https://github.com",
 				AuthorizationEndpoint: "https://github.com/login/oauth/authorize",
 				TokenEndpoint:         "https://github.com/login/oauth/access_token",
+				ClientAuthMethod:      "client_secret_post",
+				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/github/callback",
+				InstallationURI:       "https://github.com/apps/" + b.Env.GitHubAppName + "/installations/new",
 
-				ClientID:     b.Env.GithubAppClientID,
-				ClientSecret: b.Env.GithubAppClientSecret,
+				ClientID:     b.Env.GitHubAppClientID,
+				ClientSecret: b.Env.GitHubAppClientSecret,
 			},
-		},
+		}
 	}
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
-	b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{}
 
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
@@ -1263,6 +1406,15 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			if err != nil {
 				return fmt.Errorf("failed to generate replica server certificate: %w", err)
 			}
+		}
+	}
+
+	if b.Env.OpenBaoURI != "" {
+		b.Env.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
+			Engine:   b.Env.OpenBaoEngine,
+			URI:      b.Env.OpenBaoURI,
+			User:     b.Env.OpenBaoUser,
+			Password: b.Env.OpenBaoPassword,
 		}
 	}
 
@@ -1362,31 +1514,70 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 }
 
 func (b *GCPBootstrapper) InstallCodesphere() error {
-	packageFile := "installer.tar.gz"
-	skipSteps := b.Env.InstallSkipSteps
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		skipSteps = append(skipSteps, "load-container-images")
-		packageFile = "installer-lite.tar.gz"
-	}
-	skipStepsArg := ""
-	if len(skipSteps) > 0 {
-		skipStepsArg = " -s " + strings.Join(skipSteps, ",")
-	}
-
-	downloadCmd := "oms-cli download package -f " + packageFile + " " + b.Env.InstallVersion
-	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
+	fullPackageFilename, err := b.ensureCodespherePackageOnJumpbox()
 	if err != nil {
-		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
+		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
-	installCmd := fmt.Sprintf("oms-cli install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s-%s%s",
-		b.Env.SecretsDir, b.Env.InstallVersion, packageFile, skipStepsArg)
-	err = b.Env.Jumpbox.RunSSHCommand("root", installCmd)
+	err = b.runInstallCommand(fullPackageFilename)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
 
 	return nil
+}
+
+func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
+	packageFilename := "installer.tar.gz"
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		packageFilename = "installer-lite.tar.gz"
+	}
+
+	if b.Env.InstallLocal != "" {
+		b.stlog.Logf("Copying local package %s to jumpbox...", b.Env.InstallLocal)
+		fullPackageFilename := fmt.Sprintf("local-%s", packageFilename)
+		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallLocal, "/root/"+fullPackageFilename)
+		if err != nil {
+			return "", fmt.Errorf("failed to copy local install package to jumpbox: %w", err)
+		}
+		return fullPackageFilename, nil
+	}
+
+	if b.Env.InstallVersion == "" {
+		return "", errors.New("either install version or a local package must be specified to install Codesphere")
+	}
+
+	fullPackageFilename := portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFilename)
+	if b.Env.InstallHash == "" {
+		return "", fmt.Errorf("install hash must be set when install version is set")
+	}
+	b.stlog.Logf("Downloading Codesphere package...")
+	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s", packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
+	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
+	if err != nil {
+		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
+	}
+
+	return fullPackageFilename, nil
+}
+
+func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
+	b.stlog.Logf("Installing Codesphere...")
+	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
+		b.Env.SecretsDir, packageFilename, b.generateSkipStepsArg())
+	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
+}
+
+func (b *GCPBootstrapper) generateSkipStepsArg() string {
+	skipSteps := b.Env.InstallSkipSteps
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		skipSteps = append(skipSteps, "load-container-images")
+	}
+	if len(skipSteps) == 0 {
+		return ""
+	}
+
+	return " -s " + strings.Join(skipSteps, ",")
 }
 
 func (b *GCPBootstrapper) GenerateK0sConfigScript() error {

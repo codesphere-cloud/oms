@@ -6,7 +6,6 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
@@ -62,11 +61,11 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 			Short: "Download a codesphere package",
 			Long: io.Long(`Download a specific version of a Codesphere package
 				To list available packages, run oms list packages.`),
-			Example: formatExamplesWithBinary("download package", []io.Example{
+			Example: formatExamples("download package", []io.Example{
 				{Cmd: "codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
-			}, "oms-cli"),
+			}),
 			PreRunE: func(cmd *cobra.Command, args []string) error {
 				// if version flag is not set, expect version as argument
 				cmd.Args = cobra.NoArgs
@@ -100,7 +99,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 		return fmt.Errorf("failed to find artifact in package: %w", err)
 	}
 
-	fullFilename := strings.ReplaceAll(build.Version, "/", "-") + "-" + filename
+	fullFilename := build.BuildPackageFilename(filename)
 	out, err := c.FileWriter.OpenAppend(fullFilename)
 	if err != nil {
 		out, err = c.FileWriter.Create(fullFilename)

@@ -166,18 +166,22 @@ type K8sNode struct {
 }
 
 type ClusterConfig struct {
-	Certificates  ClusterCertificates `yaml:"certificates"`
-	Monitoring    *MonitoringConfig   `yaml:"monitoring,omitempty"`
-	Gateway       GatewayConfig       `yaml:"gateway"`
-	PublicGateway GatewayConfig       `yaml:"publicGateway"`
+	Certificates        ClusterCertificates        `yaml:"certificates"`
+	CertManager         *CertManagerConfig         `yaml:"certManager,omitempty"`
+	Monitoring          *MonitoringConfig          `yaml:"monitoring,omitempty"`
+	Gateway             GatewayConfig              `yaml:"gateway"`
+	PublicGateway       GatewayConfig              `yaml:"publicGateway"`
+	RookExternalCluster *RookExternalClusterConfig `yaml:"rookExternalCluster,omitempty"`
+	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
+	RgwLoadBalancer     *RgwLoadBalancerConfig     `yaml:"rgwLoadBalancer,omitempty"`
 
 	IngressCAKey string `yaml:"-"`
 }
 
 type ClusterCertificates struct {
-	CA       CAConfig               `yaml:"ca"`
-	ACME     *ACMEConfig            `yaml:"acme,omitempty"`
-	Override map[string]interface{} `yaml:"override,omitempty"`
+	CA       CAConfig      `yaml:"ca"`
+	ACME     *ACMEConfig   `yaml:"acme,omitempty"`
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type CAConfig struct {
@@ -213,6 +217,23 @@ type GatewayConfig struct {
 	ServiceType string            `yaml:"serviceType"`
 	Annotations map[string]string `yaml:"annotations,omitempty"`
 	IPAddresses []string          `yaml:"ipAddresses,omitempty"`
+	Override    ChartOverride     `yaml:"override,omitempty"`
+}
+
+type CertManagerConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type RookExternalClusterConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type PgOperatorConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
+type RgwLoadBalancerConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 type MetalLBConfig struct {
@@ -265,9 +286,19 @@ type CodesphereConfig struct {
 	UnderprovisionFactors      *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
+	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
+	Override                   ChartOverride          `yaml:"override,omitempty"`
 
 	DomainAuthPrivateKey string `yaml:"-"`
 	DomainAuthPublicKey  string `yaml:"-"`
+}
+
+type OpenBaoConfig struct {
+	Engine string `yaml:"engine,omitempty"`
+	URI    string `yaml:"uri,omitempty"`
+	User   string `yaml:"user,omitempty"`
+
+	Password string `yaml:"-"`
 }
 
 type CertIssuerType string
@@ -278,7 +309,7 @@ const (
 )
 
 type CertIssuerConfig struct {
-	Type CertIssuerType `yaml:"type"`
+	Type CertIssuerType `yaml:"type,omitempty"`
 	Acme *ACMEConfig    `yaml:"acme,omitempty"`
 }
 
@@ -313,6 +344,8 @@ type FlavorConfig struct {
 	Image ImageRef    `yaml:"image"`
 	Pool  map[int]int `yaml:"pool"`
 }
+
+type ChartOverride = map[string]interface{}
 
 type ImageRef struct {
 	BomRef     string `yaml:"bomRef,omitempty"`
@@ -410,6 +443,8 @@ type OAuthConfig struct {
 	TokenEndpoint         string `yaml:"tokenEndpoint"`
 	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
 	Scope                 string `yaml:"scope,omitempty"`
+	RedirectURI           string `yaml:"redirectUri,omitempty"`
+	InstallationURI       string `yaml:"installationUri,omitempty"`
 
 	ClientID     string `yaml:"-"`
 	ClientSecret string `yaml:"-"`
@@ -417,16 +452,16 @@ type OAuthConfig struct {
 
 type ManagedServiceConfig struct {
 	Name          string                 `yaml:"name"`
-	API           ManagedServiceAPI      `yaml:"api"`
-	Author        string                 `yaml:"author"`
-	Category      string                 `yaml:"category"`
-	ConfigSchema  map[string]interface{} `yaml:"configSchema"`
-	DetailsSchema map[string]interface{} `yaml:"detailsSchema"`
-	SecretsSchema map[string]interface{} `yaml:"secretsSchema"`
-	Description   string                 `yaml:"description"`
-	DisplayName   string                 `yaml:"displayName"`
-	IconURL       string                 `yaml:"iconUrl"`
-	Plans         []ServicePlan          `yaml:"plans"`
+	API           ManagedServiceAPI      `yaml:"api,omitempty"`
+	Author        string                 `yaml:"author,omitempty"`
+	Category      string                 `yaml:"category,omitempty"`
+	ConfigSchema  map[string]interface{} `yaml:"configSchema,omitempty"`
+	DetailsSchema map[string]interface{} `yaml:"detailsSchema,omitempty"`
+	SecretsSchema map[string]interface{} `yaml:"secretsSchema,omitempty"`
+	Description   string                 `yaml:"description,omitempty"`
+	DisplayName   string                 `yaml:"displayName,omitempty"`
+	IconURL       string                 `yaml:"iconUrl,omitempty"`
+	Plans         []ServicePlan          `yaml:"plans,omitempty"`
 	Version       string                 `yaml:"version"`
 }
 
@@ -451,16 +486,45 @@ type ManagedServiceBackendsConfig struct {
 }
 
 type MonitoringConfig struct {
-	Prometheus *PrometheusConfig `yaml:"prometheus,omitempty"`
+	Prometheus       *PrometheusConfig       `yaml:"prometheus,omitempty"`
+	BlackboxExporter *BlackboxExporterConfig `yaml:"blackboxExporter,omitempty"`
+	PushGateway      *PushGatewayConfig      `yaml:"pushGateway,omitempty"`
+	Loki             *LokiConfig             `yaml:"loki,omitempty"`
+	Grafana          *GrafanaConfig          `yaml:"grafana,omitempty"`
+	GrafanaAlloy     *GrafanaAlloyConfig     `yaml:"grafanaAlloy,omitempty"`
 }
 
 type PrometheusConfig struct {
 	RemoteWrite *RemoteWriteConfig `yaml:"remoteWrite,omitempty"`
+	Override    ChartOverride      `yaml:"override,omitempty"`
 }
 
 type RemoteWriteConfig struct {
 	Enabled     bool   `yaml:"enabled"`
 	ClusterName string `yaml:"clusterName,omitempty"`
+}
+
+type BlackboxExporterConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type PushGatewayConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type LokiConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type GrafanaConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type GrafanaAlloyConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type CephHostConfig struct {
@@ -530,6 +594,7 @@ func (c *RootConfig) ExtractVault() *InstallVault {
 	c.addManagedServiceSecrets(vault)
 	c.addRegistrySecrets(vault)
 	c.addKubeConfigSecret(vault)
+	c.addOpenBaoSecrets(vault)
 
 	return vault
 }
@@ -739,6 +804,17 @@ func (c *RootConfig) addKubeConfigSecret(vault *InstallVault) {
 			File: &SecretFile{
 				Name:    "kubeConfig",
 				Content: "# YOUR KUBECONFIG CONTENT HERE\n# Replace this with your actual kubeconfig for the external cluster\n",
+			},
+		})
+	}
+}
+
+func (c *RootConfig) addOpenBaoSecrets(vault *InstallVault) {
+	if c.Codesphere.OpenBao != nil && c.Codesphere.OpenBao.Password != "" {
+		vault.Secrets = append(vault.Secrets, SecretEntry{
+			Name: "openBaoPassword",
+			Fields: &SecretFields{
+				Password: c.Codesphere.OpenBao.Password,
 			},
 		})
 	}

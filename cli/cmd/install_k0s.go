@@ -59,7 +59,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 			- Generate a k0s configuration from the install-config
 			- Generate a k0sctl configuration for cluster deployment
 			- Deploy k0s to all nodes defined in the install-config using k0sctl`),
-			Example: formatExamplesWithBinary("install k0s", []packageio.Example{
+			Example: formatExamples("install k0s", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.30.0+k0s.0)"},
 				{Cmd: "--k0sctl-version <version>", Desc: "Version of k0sctl to use (e.g., v0.17.4)"},
@@ -67,7 +67,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 				{Cmd: "--ssh-key-path <path>", Desc: "SSH private key path for remote installation"},
 				{Cmd: "--force", Desc: "Force new download and installation"},
 				{Cmd: "--no-download", Desc: "Skip downloading k0s binary (expects it to be on remote nodes)"},
-			}, "oms-cli"),
+			}),
 		},
 		Opts:       InstallK0sOpts{GlobalOptions: opts},
 		Env:        env.NewEnv(),

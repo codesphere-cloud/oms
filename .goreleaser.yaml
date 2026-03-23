@@ -18,27 +18,7 @@ builds:
       - darwin_amd64
       - windows_amd64
     main: ./cli
-    binary: oms-cli
-    ldflags:
-    - -s -w
-    - -X github.com/codesphere-cloud/oms/internal/version.version={{.Version}}
-    - -X github.com/codesphere-cloud/oms/internal/version.commit={{.Commit}}
-    - -X github.com/codesphere-cloud/oms/internal/version.date={{.Date}}
-    - -X github.com/codesphere-cloud/oms/internal/version.os={{.Os}}
-    - -X github.com/codesphere-cloud/oms/internal/version.arch={{.Arch}}
-
-  - id: service
-    env:
-      - CGO_ENABLED=0
-    targets:
-      - linux_amd64
-      - linux_arm64
-      - darwin_arm64
-      - darwin_amd64
-      - windows_amd64
-
-    main: ./service
-    binary: oms-service
+    binary: oms
     ldflags:
     - -s -w
     - -X github.com/codesphere-cloud/oms/internal/version.version={{.Version}}

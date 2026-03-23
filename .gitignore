@@ -27,8 +27,7 @@ go.work.sum
 
 # bin file
 bin/
-oms-cli
-oms-service
+oms
 dist/
 oms-workdir/
 
@@ -45,3 +44,6 @@ internal/util/testdata/
 config.yaml
 prod.vault.yaml
 configure-k0s.sh
+
+# Debugger files
+__debug*

@@ -346,4 +346,24 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 			1: workspacePlan,
 		},
 	}
+
+	g.collectOpenBaoConfig(prompter)
+}
+
+func (g *InstallConfig) collectOpenBaoConfig(prompter *Prompter) {
+	log.Println("\n=== OpenBao Configuration (Optional) ===")
+	hasOpenBao := prompter.Bool("Configure OpenBao integration", g.Config.Codesphere.OpenBao != nil && g.Config.Codesphere.OpenBao.URI != "")
+	if !hasOpenBao {
+		g.Config.Codesphere.OpenBao = nil
+		return
+	}
+
+	if g.Config.Codesphere.OpenBao == nil {
+		g.Config.Codesphere.OpenBao = &files.OpenBaoConfig{}
+	}
+
+	g.Config.Codesphere.OpenBao.URI = g.collectString(prompter, "OpenBao URI (e.g., https://openbao.example.com)", "")
+	g.Config.Codesphere.OpenBao.Engine = g.collectString(prompter, "OpenBao engine name", "cs-secrets-engine")
+	g.Config.Codesphere.OpenBao.User = g.collectString(prompter, "OpenBao username", "admin")
+	g.Config.Codesphere.OpenBao.Password = g.collectString(prompter, "OpenBao password", "")
 }

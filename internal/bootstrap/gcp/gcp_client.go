@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"slices"
 
@@ -32,10 +33,14 @@ import (
 )
 
 // Interface for high-level GCP operations
+//
+//mockery:generate: true
 type GCPClientManager interface {
 	GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error)
 	CreateProjectID(projectName string) string
-	CreateProject(parent, projectName, displayName string) (string, error)
+	CreateProject(parent, projectName, displayName string, ttl time.Duration) (string, error)
+	DeleteProject(projectID string) error
+	IsOMSManagedProject(projectID string) (bool, error)
 	GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error)
 	EnableBilling(projectID, billingAccount string) error
 	EnableAPIs(projectID string, apis []string) error
@@ -43,8 +48,8 @@ type GCPClientManager interface {
 	CreateArtifactRegistry(projectID, region, repoName string) (*artifactpb.Repository, error)
 	CreateServiceAccount(projectID, name, displayName string) (string, bool, error)
 	CreateServiceAccountKey(projectID, saEmail string) (string, error)
-	AssignIAMRole(saProjectID, saEmail string, roles []string) error
-	GrantImpersonation(impersonatingServiceAccount, impersonatingProjectID, imperonatedServiceAccount, impersonatedProjectID string) error
+	AssignIAMRole(projectID, saEmail string, saProjectID string, roles []string) error
+	RemoveIAMRoleBinding(projectID, saName string, saProjectID string, roles []string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
@@ -53,6 +58,7 @@ type GCPClientManager interface {
 	GetAddress(projectID, region, addressName string) (*computepb.Address, error)
 	EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error
 	EnsureDNSRecordSets(projectID, zoneName string, records []*dns.ResourceRecordSet) error
+	DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error
 }
 
 // Concrete implementation
@@ -111,28 +117,79 @@ func (c *GCPClient) CreateProjectID(projectName string) string {
 
 // CreateProject creates a new GCP project under the specified parent (folder or organization).
 // It returns the project ID of the newly created project.
-func (c *GCPClient) CreateProject(parent, projectID, displayName string) (string, error) {
+// The project is labeled with 'oms-managed=true' to identify it as created by OMS.
+func (c *GCPClient) CreateProject(parent, projectID, displayName string, projectTTL time.Duration) (string, error) {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
 		return "", err
 	}
 	defer util.IgnoreError(client.Close)
 
+	gcpLabelLayout := "2006-01-02_15-04-05"
+	deleteProjectAfter := time.Now().UTC().Add(projectTTL).Format(gcpLabelLayout)
+	deleteProjectAfter = fmt.Sprintf("%s_utc", deleteProjectAfter) // GCP Labels are very limited. This is the only way to add TZ info.
+
 	project := &resourcemanagerpb.Project{
 		ProjectId:   projectID,
 		DisplayName: displayName,
 		Parent:      parent,
+		Labels: map[string]string{
+			OMSManagedLabel:  "true",
+			DeleteAfterLabel: deleteProjectAfter,
+		},
 	}
+
 	op, err := client.CreateProject(c.ctx, &resourcemanagerpb.CreateProjectRequest{Project: project})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create project %s with config %v: %w", projectID, project, err)
 	}
+
 	resp, err := op.Wait(c.ctx)
 	if err != nil {
 		return "", err
 	}
 
 	return resp.ProjectId, nil
+}
+
+// DeleteProject deletes the specified GCP project.
+func (c *GCPClient) DeleteProject(projectID string) error {
+	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create resource manager client: %w", err)
+	}
+	defer util.IgnoreError(client.Close)
+
+	op, err := client.DeleteProject(c.ctx, &resourcemanagerpb.DeleteProjectRequest{
+		Name: getProjectResourceName(projectID),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initiate project deletion: %w", err)
+	}
+
+	if _, err = op.Wait(c.ctx); err != nil {
+		return fmt.Errorf("failed to wait for project deletion: %w", err)
+	}
+
+	return nil
+}
+
+// IsOMSManagedProject checks if the given project was created by OMS by verifying the 'oms-managed' label.
+func (c *GCPClient) IsOMSManagedProject(projectID string) (bool, error) {
+	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to create resource manager client: %w", err)
+	}
+	defer util.IgnoreError(client.Close)
+
+	project, err := client.GetProject(c.ctx, &resourcemanagerpb.GetProjectRequest{
+		Name: getProjectResourceName(projectID),
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	return CheckOMSManagedLabel(project.Labels), nil
 }
 
 func getProjectResourceName(projectID string) string {
@@ -194,9 +251,11 @@ func (c *GCPClient) EnableAPIs(projectID string, apis []string) error {
 			}
 			if err != nil {
 				errCh <- fmt.Errorf("failed to enable API %s: %w", api, err)
+				return
 			}
 			if _, err := op.Wait(c.ctx); err != nil {
 				errCh <- fmt.Errorf("failed to enable API %s: %w", api, err)
+				return
 			}
 
 			c.st.Logf("API %s enabled", api)
@@ -318,14 +377,13 @@ func (c *GCPClient) CreateServiceAccountKey(projectID, saEmail string) (string, 
 }
 
 // AssignIAMRole assigns the specified IAM role to a service account in a project.
-func (c *GCPClient) AssignIAMRole(projectID, saName string, roles []string) error {
-	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, projectID)
+func (c *GCPClient) AssignIAMRole(projectID, saName string, saProjectID string, roles []string) error {
+	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, saProjectID)
 	member := fmt.Sprintf("serviceAccount:%s", saEmail)
 	resource := fmt.Sprintf("projects/%s", projectID)
 	return c.addRoleBindingToProject(member, roles, resource)
 }
 
-// Types between ServiceAccount and Project IAM API differ, so we need a separate function
 func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resource string) error {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
@@ -380,71 +438,60 @@ func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resou
 	return err
 }
 
-// Types between ServiceAccount and Project IAM API differ, so we need a separate function
-func (c *GCPClient) addRoleBindingToServiceAccount(member string, roles []string, resource string) error {
-	iamService, err := iam.NewService(c.ctx)
+// RemoveIAMRoleBinding removes the specified IAM role bindings for a service account from a project.
+func (c *GCPClient) RemoveIAMRoleBinding(projectID, saName string, saProjectID string, roles []string) error {
+	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, saProjectID)
+	member := fmt.Sprintf("serviceAccount:%s", saEmail)
+	resource := fmt.Sprintf("projects/%s", projectID)
+	return c.removeRoleBindingFromProject(member, roles, resource)
+}
+
+func (c *GCPClient) removeRoleBindingFromProject(member string, roles []string, resource string) error {
+	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	if err != nil {
+		return err
+	}
+	defer util.IgnoreError(client.Close)
+
+	policy, err := client.GetIamPolicy(c.ctx, &iampb.GetIamPolicyRequest{Resource: resource})
 	if err != nil {
 		return err
 	}
 
-	// Get current policy
-	policy, err := iamService.Projects.ServiceAccounts.GetIamPolicy(resource).Context(c.ctx).Do()
-	if err != nil {
-		return fmt.Errorf("failed to get IAM policy for service account: %w", err)
-	}
-
-	// Add role bindings directly to iam.Policy
 	updated := false
 	for _, role := range roles {
-		bindingExists := false
-		for _, binding := range policy.Bindings {
-			if binding.Role == role {
-				if !slices.Contains(binding.Members, member) {
-					binding.Members = append(binding.Members, member)
-					updated = true
-				}
-				bindingExists = true
-				break
+		for i, binding := range policy.Bindings {
+			if binding.Role != role {
+				continue
 			}
+			before := len(binding.Members)
+			policy.Bindings[i].Members = slices.DeleteFunc(binding.Members, func(m string) bool {
+				return m == member
+			})
+			if len(policy.Bindings[i].Members) != before {
+				updated = true
+			}
+			break
 		}
-		if bindingExists {
-			continue
-		}
-
-		// Assign role
-		policy.Bindings = append(policy.Bindings, &iam.Binding{
-			Role:    role,
-			Members: []string{member},
-		})
-		updated = true
 	}
 
 	if !updated {
 		return nil
 	}
 
-	// Set the updated policy
-	setReq := &iam.SetIamPolicyRequest{
-		Policy: policy,
+	var validBindings []*iampb.Binding
+	for _, b := range policy.Bindings {
+		if len(b.Members) > 0 {
+			validBindings = append(validBindings, b)
+		}
 	}
-	_, err = iamService.Projects.ServiceAccounts.SetIamPolicy(resource, setReq).Context(c.ctx).Do()
-	if err != nil {
-		return fmt.Errorf("failed to set IAM policy for service account: %w", err)
-	}
+	policy.Bindings = validBindings
 
-	return nil
-}
-
-// GrantImpersonation grants the "roles/iam.serviceAccountTokenCreator" role to the impersonating service account on the impersonated service account,
-// allowing the impersonating service account to generate access tokens for the impersonated service account, which is necessary for cross-project impersonation.
-func (c *GCPClient) GrantImpersonation(impersonatingServiceAccount, impersonatingProjectID, impersonatedServiceAccount, impersonatedProjectID string) error {
-	impersonatingSAEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", impersonatingServiceAccount, impersonatingProjectID)
-	impersonatedSAEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", impersonatedServiceAccount, impersonatedProjectID)
-
-	resourceName := fmt.Sprintf("projects/%s/serviceAccounts/%s", impersonatedProjectID, impersonatedSAEmail)
-	member := fmt.Sprintf("serviceAccount:%s", impersonatingSAEmail)
-
-	return c.addRoleBindingToServiceAccount(member, []string{"roles/iam.serviceAccountTokenCreator"}, resourceName)
+	_, err = client.SetIamPolicy(c.ctx, &iampb.SetIamPolicyRequest{
+		Resource: resource,
+		Policy:   policy,
+	})
+	return err
 }
 
 // CreateVPC creates a VPC network with the specified subnet, router, and NAT gateway.
@@ -731,6 +778,35 @@ func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*d
 		return fmt.Errorf("failed to create DNS records: %w", err)
 	}
 
+	return nil
+}
+
+// DeleteDNSRecordSets deletes DNS record sets created by OMS for the given base domain.
+func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error {
+	service, err := dns.NewService(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create DNS service: %w", err)
+	}
+
+	var deletions []*dns.ResourceRecordSet
+	for _, record := range GetDNSRecordNames(baseDomain) {
+		existing, err := service.ResourceRecordSets.Get(projectID, zoneName, record.Name, record.Rtype).Context(c.ctx).Do()
+		if IsNotFoundError(err) {
+			continue
+		}
+		if err != nil {
+			return fmt.Errorf("failed to get DNS record %s: %w", record.Name, err)
+		}
+		deletions = append(deletions, existing)
+	}
+
+	if len(deletions) == 0 {
+		return nil
+	}
+
+	if _, err = service.Changes.Create(projectID, zoneName, &dns.Change{Deletions: deletions}).Context(c.ctx).Do(); err != nil {
+		return fmt.Errorf("failed to delete DNS records: %w", err)
+	}
 	return nil
 }
 
