@@ -60,6 +60,16 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 			Short: "Install a Codesphere instance",
 			Long: io.Long(`Install a Codesphere instance with the provided package, configuration file, and private key.
 			Uses the private-cloud-installer.js script included in the package to perform the installation.`),
+			Example: formatExamples("install codesphere", []io.Example{
+				{
+					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s copy-dependencies,extract-dependencies,load-container-images,ceph,postgres,kubernetes,docker",
+					Desc: "Skip most pre-installation steps. E.g. if you only need to re-apply Codesphere's helm charts",
+				},
+				{
+					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s load-container-images",
+					Desc: "Skip loading container images. Necessary when installing a lite package that doesn't include any container images",
+				},
+			}),
 		},
 		Opts: &InstallCodesphereOpts{GlobalOptions: opts},
 		Env:  env.NewEnv(),
