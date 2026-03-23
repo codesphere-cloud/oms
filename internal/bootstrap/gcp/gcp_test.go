@@ -30,7 +30,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
-	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 func jumpbboxMatcher(node *node.Node) bool {
@@ -1047,7 +1048,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					})
 
 					It("fails when GitHub client fails to list team members", func() {
-						gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, &googleapi.Error{Code: 404, Message: "not found"}).Maybe()
+						gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, grpcstatus.Errorf(codes.NotFound, "not found")).Maybe()
 						mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug, mock.Anything).Return(nil, fmt.Errorf("list members error")).Maybe()
 
 						err := bs.EnsureComputeInstances()
@@ -1059,7 +1060,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 
 		Describe("Invalid cases", func() {
-			notFoundErr := &googleapi.Error{Code: 404, Message: "not found"}
+			notFoundErr := grpcstatus.Errorf(codes.NotFound, "not found")
 
 			It("fails when SSH key read fails", func() {
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, notFoundErr).Maybe()
@@ -1105,7 +1106,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Spot VM functionality", func() {
 			It("creates spot VMs when spot flag is enabled", func() {
-				csEnv.Spot = true
+				csEnv.SpotVMs = true
 
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 9)
@@ -1124,7 +1125,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("falls back to standard VM when spot capacity is exhausted", func() {
-				csEnv.Spot = true
+				csEnv.SpotVMs = true
 
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 9)

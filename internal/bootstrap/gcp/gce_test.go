@@ -8,14 +8,102 @@ import (
 
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
+	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
-var _ = Describe("Spot VM", func() {
+var _ = Describe("GCE", func() {
+
+	Describe("IsNotFoundError", func() {
+		Context("when error is nil", func() {
+			It("should return false", func() {
+				Expect(gcp.IsNotFoundError(nil)).To(BeFalse())
+			})
+		})
+
+		Context("when error is a gRPC NotFound error", func() {
+			It("should return true", func() {
+				err := grpcstatus.Errorf(codes.NotFound, "not found")
+				Expect(gcp.IsNotFoundError(err)).To(BeTrue())
+			})
+		})
+
+		Context("when error is a Google API 404 error", func() {
+			It("should return true", func() {
+				err := &googleapi.Error{
+					Code:    404,
+					Message: "not found",
+				}
+				Expect(gcp.IsNotFoundError(err)).To(BeTrue())
+			})
+		})
+
+		Context("when error is a Google API non-404 error", func() {
+			It("should return false for 403 Forbidden", func() {
+				err := &googleapi.Error{
+					Code:    403,
+					Message: "forbidden",
+				}
+				Expect(gcp.IsNotFoundError(err)).To(BeFalse())
+			})
+
+			It("should return false for 500 Internal Server Error", func() {
+				err := &googleapi.Error{
+					Code:    500,
+					Message: "internal error",
+				}
+				Expect(gcp.IsNotFoundError(err)).To(BeFalse())
+			})
+
+			It("should return false for 401 Unauthorized", func() {
+				err := &googleapi.Error{
+					Code:    401,
+					Message: "unauthorized",
+				}
+				Expect(gcp.IsNotFoundError(err)).To(BeFalse())
+			})
+		})
+
+		Context("when error is a non-Google API error", func() {
+			It("should return false", func() {
+				err := fmt.Errorf("some other error")
+				Expect(gcp.IsNotFoundError(err)).To(BeFalse())
+			})
+		})
+
+		Context("when error wraps a Google API 404 error", func() {
+			It("should return true for wrapped 404 errors", func() {
+				innerErr := &googleapi.Error{
+					Code:    404,
+					Message: "not found",
+				}
+				wrappedErr := fmt.Errorf("failed to get record: %w", innerErr)
+				Expect(gcp.IsNotFoundError(wrappedErr)).To(BeTrue())
+			})
+
+			It("should return false for wrapped non-404 errors", func() {
+				innerErr := &googleapi.Error{
+					Code:    403,
+					Message: "forbidden",
+				}
+				wrappedErr := fmt.Errorf("failed to get record: %w", innerErr)
+				Expect(gcp.IsNotFoundError(wrappedErr)).To(BeFalse())
+			})
+		})
+
+		Context("when error wraps a gRPC NotFound error", func() {
+			It("should return true", func() {
+				innerErr := grpcstatus.Errorf(codes.NotFound, "not found")
+				wrappedErr := fmt.Errorf("failed to get instance: %w", innerErr)
+				Expect(gcp.IsNotFoundError(wrappedErr)).To(BeTrue())
+			})
+		})
+	})
 
 	Describe("IsSpotCapacityError", func() {
 		It("returns false for nil error", func() {
@@ -24,8 +112,8 @@ var _ = Describe("Spot VM", func() {
 
 		DescribeTable("detects known capacity errors",
 			func(err error) { Expect(gcp.IsSpotCapacityError(err)).To(BeTrue()) },
-			Entry("gRPC ResourceExhausted", status.Errorf(codes.ResourceExhausted, "resource exhausted")),
-			Entry("gRPC ResourceExhausted with detail", status.Errorf(codes.ResourceExhausted, "spot VM pool exhausted in us-central1-a")),
+			Entry("gRPC ResourceExhausted", grpcstatus.Errorf(codes.ResourceExhausted, "resource exhausted")),
+			Entry("gRPC ResourceExhausted with detail", grpcstatus.Errorf(codes.ResourceExhausted, "spot VM pool exhausted in us-central1-a")),
 			Entry("ZONE_RESOURCE_POOL_EXHAUSTED", fmt.Errorf("googleapi: Error 403: ZONE_RESOURCE_POOL_EXHAUSTED - the zone does not have enough resources")),
 			Entry("UNSUPPORTED_OPERATION", fmt.Errorf("UNSUPPORTED_OPERATION: spot VMs not available in this zone")),
 			Entry("stockout", fmt.Errorf("stockout in zone us-central1-a")),
@@ -34,10 +122,10 @@ var _ = Describe("Spot VM", func() {
 
 		DescribeTable("rejects non-capacity errors",
 			func(err error) { Expect(gcp.IsSpotCapacityError(err)).To(BeFalse()) },
-			Entry("NotFound", status.Errorf(codes.NotFound, "not found")),
-			Entry("PermissionDenied", status.Errorf(codes.PermissionDenied, "denied")),
-			Entry("Internal", status.Errorf(codes.Internal, "internal")),
-			Entry("Unavailable", status.Errorf(codes.Unavailable, "service unavailable")),
+			Entry("NotFound", grpcstatus.Errorf(codes.NotFound, "not found")),
+			Entry("PermissionDenied", grpcstatus.Errorf(codes.PermissionDenied, "denied")),
+			Entry("Internal", grpcstatus.Errorf(codes.Internal, "internal")),
+			Entry("Unavailable", grpcstatus.Errorf(codes.Unavailable, "service unavailable")),
 			Entry("permission denied string", fmt.Errorf("permission denied")),
 			Entry("invalid argument string", fmt.Errorf("invalid argument")),
 			Entry("quota exceeded string", fmt.Errorf("quota exceeded")),
@@ -68,7 +156,7 @@ var _ = Describe("Spot VM", func() {
 		})
 
 		It("returns spot scheduling when spot is enabled", func() {
-			csEnv.Spot = true
+			csEnv.SpotVMs = true
 			sched := bs.BuildSchedulingConfig()
 			Expect(*sched.ProvisioningModel).To(Equal("SPOT"))
 			Expect(*sched.OnHostMaintenance).To(Equal("TERMINATE"))
@@ -121,11 +209,12 @@ var _ = Describe("Spot VM", func() {
 
 		DescribeTable("succeeds for valid combinations",
 			func(spot, preemptible bool) {
-				csEnv.Spot = spot
+				csEnv.SpotVMs = spot
 				csEnv.Preemptible = preemptible
 				gc := gcp.NewMockGCPClientManager(GinkgoT())
 				bs := newTestBootstrapper(csEnv, gc)
-				Expect(bs.ValidateInput()).NotTo(HaveOccurred())
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
 			},
 			Entry("only spot", true, false),
 			Entry("only preemptible", false, true),
@@ -133,14 +222,14 @@ var _ = Describe("Spot VM", func() {
 		)
 
 		It("fails when both spot and preemptible are set", func() {
-			csEnv.Spot = true
+			csEnv.SpotVMs = true
 			csEnv.Preemptible = true
 			gc := gcp.NewMockGCPClientManager(GinkgoT())
 			bs := newTestBootstrapper(csEnv, gc)
 			err := bs.ValidateInput()
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("cannot specify both --spot and --preemptible"))
-			Expect(err.Error()).To(ContainSubstring("use --spot for the newer spot VM model"))
+			Expect(err.Error()).To(ContainSubstring("cannot specify both --spot-vms and --preemptible"))
+			Expect(err.Error()).To(ContainSubstring("use --spot-vms for the newer spot VM model"))
 		})
 	})
 
@@ -180,14 +269,14 @@ var _ = Describe("Spot VM", func() {
 		It("treats AlreadyExists as success", func() {
 			instance := &computepb.Instance{Name: protoString("test-vm")}
 			gc.EXPECT().CreateInstance("test-pid", "us-central1-a", instance).
-				Return(status.Errorf(codes.AlreadyExists, "already exists"))
+				Return(grpcstatus.Errorf(codes.AlreadyExists, "already exists"))
 
 			Expect(bs.CreateInstanceWithFallback("test-pid", "us-central1-a", instance, "test-vm", logCh)).To(Succeed())
 		})
 
 		Context("when spot is enabled", func() {
 			BeforeEach(func() {
-				csEnv.Spot = true
+				csEnv.SpotVMs = true
 			})
 
 			spotInstance := func(name string) *computepb.Instance {
@@ -206,7 +295,7 @@ var _ = Describe("Spot VM", func() {
 					Expect(bs.CreateInstanceWithFallback("test-pid", "us-central1-a", instance, "test-vm", logCh)).To(Succeed())
 					Expect(logCh).To(Receive(ContainSubstring("falling back to standard VM")))
 				},
-				Entry("gRPC ResourceExhausted", status.Errorf(codes.ResourceExhausted, "exhausted")),
+				Entry("gRPC ResourceExhausted", grpcstatus.Errorf(codes.ResourceExhausted, "exhausted")),
 				Entry("ZONE_RESOURCE_POOL_EXHAUSTED", fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED")),
 				Entry("UNSUPPORTED_OPERATION", fmt.Errorf("UNSUPPORTED_OPERATION")),
 				Entry("stockout", fmt.Errorf("stockout in zone")),
@@ -254,9 +343,9 @@ var _ = Describe("Spot VM", func() {
 			It("succeeds when fallback retry returns AlreadyExists", func() {
 				instance := spotInstance("test-vm")
 				gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).
-					Return(status.Errorf(codes.ResourceExhausted, "exhausted")).Once()
+					Return(grpcstatus.Errorf(codes.ResourceExhausted, "exhausted")).Once()
 				gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).
-					Return(status.Errorf(codes.AlreadyExists, "already exists")).Once()
+					Return(grpcstatus.Errorf(codes.AlreadyExists, "already exists")).Once()
 
 				Expect(bs.CreateInstanceWithFallback("test-pid", "us-central1-a", instance, "test-vm", logCh)).To(Succeed())
 				Expect(logCh).To(Receive(ContainSubstring("falling back to standard VM")))
@@ -281,6 +370,151 @@ var _ = Describe("Spot VM", func() {
 
 				Expect(bs.CreateInstanceWithFallback("test-pid", "us-central1-a", instance, "test-vm", logCh)).To(Succeed())
 			})
+		})
+	})
+
+	Describe("extractInstanceIPs", func() {
+		It("extracts both internal and external IPs", func() {
+			inst := makeRunningInstance("10.0.0.1", "35.1.2.3")
+			internalIP, externalIP := gcp.ExtractInstanceIPs(inst)
+			Expect(internalIP).To(Equal("10.0.0.1"))
+			Expect(externalIP).To(Equal("35.1.2.3"))
+		})
+
+		It("returns empty external IP when no access configs", func() {
+			inst := &computepb.Instance{
+				Status: protoString("RUNNING"),
+				NetworkInterfaces: []*computepb.NetworkInterface{
+					{NetworkIP: protoString("10.0.0.1")},
+				},
+			}
+			internalIP, externalIP := gcp.ExtractInstanceIPs(inst)
+			Expect(internalIP).To(Equal("10.0.0.1"))
+			Expect(externalIP).To(BeEmpty())
+		})
+
+		It("returns empty IPs when no network interfaces", func() {
+			inst := &computepb.Instance{
+				Status: protoString("RUNNING"),
+			}
+			internalIP, externalIP := gcp.ExtractInstanceIPs(inst)
+			Expect(internalIP).To(BeEmpty())
+			Expect(externalIP).To(BeEmpty())
+		})
+	})
+
+	Describe("isInstanceReady", func() {
+		It("returns true for RUNNING instance with internal IP", func() {
+			inst := makeRunningInstance("10.0.0.1", "")
+			Expect(gcp.IsInstanceReady(inst, false)).To(BeTrue())
+		})
+
+		It("returns true for RUNNING instance with both IPs when external needed", func() {
+			inst := makeRunningInstance("10.0.0.1", "35.1.2.3")
+			Expect(gcp.IsInstanceReady(inst, true)).To(BeTrue())
+		})
+
+		It("returns false for RUNNING instance without external IP when needed", func() {
+			inst := &computepb.Instance{
+				Status: protoString("RUNNING"),
+				NetworkInterfaces: []*computepb.NetworkInterface{
+					{NetworkIP: protoString("10.0.0.1")},
+				},
+			}
+			Expect(gcp.IsInstanceReady(inst, true)).To(BeFalse())
+		})
+
+		It("returns false for non-RUNNING instance", func() {
+			inst := makeStoppedInstance("10.0.0.1", "35.1.2.3")
+			Expect(gcp.IsInstanceReady(inst, false)).To(BeFalse())
+		})
+
+		It("returns false when no network interfaces", func() {
+			inst := &computepb.Instance{
+				Status: protoString("RUNNING"),
+			}
+			Expect(gcp.IsInstanceReady(inst, false)).To(BeFalse())
+		})
+
+		It("returns false when internal IP is empty", func() {
+			inst := &computepb.Instance{
+				Status: protoString("RUNNING"),
+				NetworkInterfaces: []*computepb.NetworkInterface{
+					{NetworkIP: protoString("")},
+				},
+			}
+			Expect(gcp.IsInstanceReady(inst, false)).To(BeFalse())
+		})
+	})
+
+	Describe("isAlreadyExistsError", func() {
+		It("returns false for nil error", func() {
+			Expect(gcp.IsAlreadyExistsError(nil)).To(BeFalse())
+		})
+
+		It("returns true for gRPC AlreadyExists error", func() {
+			err := grpcstatus.Errorf(codes.AlreadyExists, "already exists")
+			Expect(gcp.IsAlreadyExistsError(err)).To(BeTrue())
+		})
+
+		It("returns true for string-based already exists error", func() {
+			err := fmt.Errorf("The resource 'my-vm' already exists")
+			Expect(gcp.IsAlreadyExistsError(err)).To(BeTrue())
+		})
+
+		It("returns false for unrelated error", func() {
+			err := fmt.Errorf("permission denied")
+			Expect(gcp.IsAlreadyExistsError(err)).To(BeFalse())
+		})
+
+		It("returns false for gRPC NotFound error", func() {
+			err := grpcstatus.Errorf(codes.NotFound, "not found")
+			Expect(gcp.IsAlreadyExistsError(err)).To(BeFalse())
+		})
+	})
+
+	Describe("readSSHKey", func() {
+		var (
+			bs *gcp.GCPBootstrapper
+			fw *util.MockFileIO
+		)
+
+		BeforeEach(func() {
+			gc := gcp.NewMockGCPClientManager(GinkgoT())
+			fw = util.NewMockFileIO(GinkgoT())
+			csEnv := &gcp.CodesphereEnvironment{
+				ProjectName:  "test",
+				Region:       "us-central1",
+				Zone:         "us-central1-a",
+				BaseDomain:   "example.com",
+				DNSProjectID: "dns-project",
+				DNSZoneName:  "test-zone",
+				SecretsDir:   "/etc/codesphere/secrets",
+				DatacenterID: 1,
+				Experiments:  gcp.DefaultExperiments,
+			}
+			bs = newTestBootstrapperWithFileIO(csEnv, gc, fw)
+		})
+
+		It("reads and trims SSH key", func() {
+			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
+			key, err := bs.ReadSSHKey("~/.ssh/id_rsa.pub")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(key).To(Equal("ssh-rsa AAAA..."))
+		})
+
+		It("returns error when file read fails", func() {
+			fw.EXPECT().ReadFile(mock.Anything).Return(nil, fmt.Errorf("no such file"))
+			_, err := bs.ReadSSHKey("~/.ssh/missing.pub")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("error reading SSH key"))
+		})
+
+		It("returns error when key file is empty", func() {
+			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("   \n  "), nil)
+			_, err := bs.ReadSSHKey("~/.ssh/empty.pub")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("is empty"))
 		})
 	})
 })

@@ -569,7 +569,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 		Region:         region,
 		RouterResource: router,
 	})
-	if err != nil && !isAlreadyExistsError(err) {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return fmt.Errorf("failed to create router: %w", err)
 	}
 	if err == nil {
@@ -606,7 +606,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 			Nats: []*computepb.RouterNat{nat},
 		},
 	})
-	if err != nil && !isAlreadyExistsError(err) {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return fmt.Errorf("failed to create NAT gateway: %w", err)
 	}
 

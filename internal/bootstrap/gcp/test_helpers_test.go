@@ -18,7 +18,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/mock"
-	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func protoString(s string) *string { return &s }
@@ -62,7 +63,7 @@ func mockGetInstanceNotFoundThenRunning(gc *gcp.MockGCPClientManager, projectID,
 		defer mu.Unlock()
 		instanceCalls[name]++
 		if instanceCalls[name] == 1 {
-			return nil, &googleapi.Error{Code: 404, Message: "not found"}
+			return nil, status.Errorf(codes.NotFound, "not found")
 		}
 		return runningResp, nil
 	}).Times(numVMs * 2)
@@ -71,6 +72,12 @@ func mockGetInstanceNotFoundThenRunning(gc *gcp.MockGCPClientManager, projectID,
 // newTestBootstrapper creates a GCPBootstrapper with the given environment and GCP client mock.
 // All other dependencies use fresh mocks.
 func newTestBootstrapper(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPClientManager) *gcp.GCPBootstrapper {
+	return newTestBootstrapperWithFileIO(csEnv, gc, util.NewMockFileIO(GinkgoT()))
+}
+
+// newTestBootstrapperWithFileIO creates a GCPBootstrapper with a specific FileIO mock,
+// allowing tests to set expectations on file operations.
+func newTestBootstrapperWithFileIO(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPClientManager, fw util.FileIO) *gcp.GCPBootstrapper {
 	bs, err := gcp.NewGCPBootstrapper(
 		context.Background(),
 		env.NewEnv(),
@@ -78,7 +85,7 @@ func newTestBootstrapper(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPClientManag
 		csEnv,
 		installer.NewMockInstallConfigManager(GinkgoT()),
 		gc,
-		util.NewMockFileIO(GinkgoT()),
+		fw,
 		node.NewMockNodeClient(GinkgoT()),
 		portal.NewMockPortal(GinkgoT()),
 		util.NewFakeTime(),
