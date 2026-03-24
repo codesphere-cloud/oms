@@ -54,7 +54,7 @@ func makeStoppedInstance(internalIP, externalIP string) *computepb.Instance {
 
 // mockGetInstanceNotFoundThenRunning sets up a GetInstance mock where the first call per VM
 // returns a 404 "not found" error and subsequent calls return the given running instance.
-// The expected total call count is 2 × numVMs.
+// Uses .Times(numVMs * 2) to expect exactly 2 calls per VM (initial check + poll after create).
 func mockGetInstanceNotFoundThenRunning(gc *gcp.MockGCPClientManager, projectID, zone string, runningResp *computepb.Instance, numVMs int) {
 	instanceCalls := make(map[string]int)
 	var mu sync.Mutex
@@ -78,6 +78,12 @@ func newTestBootstrapper(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPClientManag
 // newTestBootstrapperWithFileIO creates a GCPBootstrapper with a specific FileIO mock,
 // allowing tests to set expectations on file operations.
 func newTestBootstrapperWithFileIO(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPClientManager, fw util.FileIO) *gcp.GCPBootstrapper {
+	return newTestBootstrapperAll(csEnv, gc, fw, github.NewMockGitHubClient(GinkgoT()))
+}
+
+// newTestBootstrapperAll creates a GCPBootstrapper with explicit FileIO and GitHubClient mocks,
+// allowing tests to set expectations on both file operations and GitHub API calls.
+func newTestBootstrapperAll(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPClientManager, fw util.FileIO, ghClient github.GitHubClient) *gcp.GCPBootstrapper {
 	bs, err := gcp.NewGCPBootstrapper(
 		context.Background(),
 		env.NewEnv(),
@@ -89,10 +95,10 @@ func newTestBootstrapperWithFileIO(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPC
 		node.NewMockNodeClient(GinkgoT()),
 		portal.NewMockPortal(GinkgoT()),
 		util.NewFakeTime(),
-		github.NewMockGitHubClient(GinkgoT()),
+		ghClient,
 	)
 	if err != nil {
-		panic("newTestBootstrapper: " + err.Error())
+		panic("newTestBootstrapperAll: " + err.Error())
 	}
 	return bs
 }
