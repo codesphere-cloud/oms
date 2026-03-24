@@ -78,13 +78,16 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
 		log.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")
 	}
+
 	var respBody []byte
 	if resp.StatusCode >= 300 {
 		if resp.Body != nil {
 			respBody, _ = io.ReadAll(resp.Body)
 		}
-		log.Printf("Non-2xx response received - Status: %d, Body: %s", resp.StatusCode, string(respBody))
+
+		log.Printf("Non-2xx response received from %s - Status: %d, Body: %s", req.URL, resp.StatusCode, string(respBody))
 		err = fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
+
 		return
 	}
 
@@ -102,13 +105,19 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 
 	req, err := http.NewRequest(method, url, requestBody)
 	if err != nil {
-		log.Fatalf("Error creating request: %v", err)
+		log.Fatalf("failed to create request: %v", err)
 		return
 	}
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return c.AuthorizedHttpRequest(req)
+
+	resp, err = c.AuthorizedHttpRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed during http request")
+	}
+
+	return nil, nil
 }
 
 // GetBody sends a GET request to the specified path and returns the response body and status code.
