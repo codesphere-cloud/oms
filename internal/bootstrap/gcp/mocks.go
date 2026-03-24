@@ -11,7 +11,6 @@ import (
 	mock "github.com/stretchr/testify/mock"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
-	"time"
 )
 
 // NewMockGCPClientManager creates a new instance of MockGCPClientManager. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -377,8 +376,8 @@ func (_c *MockGCPClientManager_CreateInstance_Call) RunAndReturn(run func(projec
 }
 
 // CreateProject provides a mock function for the type MockGCPClientManager
-func (_mock *MockGCPClientManager) CreateProject(parent string, projectName string, displayName string, ttl time.Duration) (string, error) {
-	ret := _mock.Called(parent, projectName, displayName, ttl)
+func (_mock *MockGCPClientManager) CreateProject(parent string, projectName string, displayName string, labels map[string]string) (string, error) {
+	ret := _mock.Called(parent, projectName, displayName, labels)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateProject")
@@ -386,16 +385,16 @@ func (_mock *MockGCPClientManager) CreateProject(parent string, projectName stri
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, string, time.Duration) (string, error)); ok {
-		return returnFunc(parent, projectName, displayName, ttl)
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, map[string]string) (string, error)); ok {
+		return returnFunc(parent, projectName, displayName, labels)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string, string, string, time.Duration) string); ok {
-		r0 = returnFunc(parent, projectName, displayName, ttl)
+	if returnFunc, ok := ret.Get(0).(func(string, string, string, map[string]string) string); ok {
+		r0 = returnFunc(parent, projectName, displayName, labels)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(string, string, string, time.Duration) error); ok {
-		r1 = returnFunc(parent, projectName, displayName, ttl)
+	if returnFunc, ok := ret.Get(1).(func(string, string, string, map[string]string) error); ok {
+		r1 = returnFunc(parent, projectName, displayName, labels)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -411,12 +410,12 @@ type MockGCPClientManager_CreateProject_Call struct {
 //   - parent string
 //   - projectName string
 //   - displayName string
-//   - ttl time.Duration
-func (_e *MockGCPClientManager_Expecter) CreateProject(parent interface{}, projectName interface{}, displayName interface{}, ttl interface{}) *MockGCPClientManager_CreateProject_Call {
-	return &MockGCPClientManager_CreateProject_Call{Call: _e.mock.On("CreateProject", parent, projectName, displayName, ttl)}
+//   - labels map[string]string
+func (_e *MockGCPClientManager_Expecter) CreateProject(parent interface{}, projectName interface{}, displayName interface{}, labels interface{}) *MockGCPClientManager_CreateProject_Call {
+	return &MockGCPClientManager_CreateProject_Call{Call: _e.mock.On("CreateProject", parent, projectName, displayName, labels)}
 }
 
-func (_c *MockGCPClientManager_CreateProject_Call) Run(run func(parent string, projectName string, displayName string, ttl time.Duration)) *MockGCPClientManager_CreateProject_Call {
+func (_c *MockGCPClientManager_CreateProject_Call) Run(run func(parent string, projectName string, displayName string, labels map[string]string)) *MockGCPClientManager_CreateProject_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -430,9 +429,9 @@ func (_c *MockGCPClientManager_CreateProject_Call) Run(run func(parent string, p
 		if args[2] != nil {
 			arg2 = args[2].(string)
 		}
-		var arg3 time.Duration
+		var arg3 map[string]string
 		if args[3] != nil {
-			arg3 = args[3].(time.Duration)
+			arg3 = args[3].(map[string]string)
 		}
 		run(
 			arg0,
@@ -449,7 +448,7 @@ func (_c *MockGCPClientManager_CreateProject_Call) Return(s string, err error) *
 	return _c
 }
 
-func (_c *MockGCPClientManager_CreateProject_Call) RunAndReturn(run func(parent string, projectName string, displayName string, ttl time.Duration) (string, error)) *MockGCPClientManager_CreateProject_Call {
+func (_c *MockGCPClientManager_CreateProject_Call) RunAndReturn(run func(parent string, projectName string, displayName string, labels map[string]string) (string, error)) *MockGCPClientManager_CreateProject_Call {
 	_c.Call.Return(run)
 	return _c
 }

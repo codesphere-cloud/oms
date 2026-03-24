@@ -454,21 +454,33 @@ func (b *GCPBootstrapper) EnsureProject() error {
 		parent = fmt.Sprintf("folders/%s", b.Env.FolderID)
 	}
 
+	deleteProjectAfter, err := calculateProjectExpiryLabel(b.Env.ProjectTTL)
+	if err != nil {
+		return fmt.Errorf("failed to calculate project expiry label: %w", err)
+	}
+
+	labels := map[string]string{
+		OMSManagedLabel:  "true",
+		DeleteAfterLabel: deleteProjectAfter,
+	}
+
 	existingProject, err := b.GCPClient.GetProjectByName(b.Env.FolderID, b.Env.ProjectName)
 	if err == nil {
 		b.Env.ProjectID = existingProject.ProjectId
 		b.Env.ProjectName = existingProject.Name
+
+		err := b.GCPClient.UpdateProject(existingProject.ProjectId, labels)
+		if err != nil {
+			return fmt.Errorf("failed to update project: %w", err)
+		}
+
 		return nil
 	}
+
 	if err.Error() == fmt.Sprintf("project not found: %s", b.Env.ProjectName) {
 		projectId := b.GCPClient.CreateProjectID(b.Env.ProjectName)
 
-		projectTTL, err := time.ParseDuration(b.Env.ProjectTTL)
-		if err != nil {
-			return fmt.Errorf("invalid project TTL format: %w", err)
-		}
-
-		_, err = b.GCPClient.CreateProject(parent, projectId, b.Env.ProjectName, projectTTL)
+		_, err = b.GCPClient.CreateProject(parent, projectId, b.Env.ProjectName, labels)
 		if err != nil {
 			return fmt.Errorf("failed to create project: %w", err)
 		}
