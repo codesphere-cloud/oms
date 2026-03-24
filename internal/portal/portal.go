@@ -85,7 +85,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 			respBody, _ = io.ReadAll(resp.Body)
 		}
 
-		log.Printf("Non-2xx response received from %s - Status: %d, Body: %s", req.URL, resp.StatusCode, string(respBody))
+		log.Printf("Non-2xx response received from %s - Status: %d, Body: %s", c.Env.GetOmsPortalApi(), resp.StatusCode, string(respBody))
 		err = fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
 
 		return
