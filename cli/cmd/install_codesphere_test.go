@@ -282,7 +282,9 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				// Setup temp dir for node executable check (because os.Chmod uses real FS)
 				tempDir, err := os.MkdirTemp("", "test-install")
 				Expect(err).To(BeNil())
-				defer os.RemoveAll(tempDir)
+				defer func() {
+					_ = os.RemoveAll(tempDir)
+				}()
 
 				// Create dummy node file
 				nodeFile := filepath.Join(tempDir, "node")
