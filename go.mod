@@ -12,6 +12,7 @@ require (
 	github.com/codesphere-cloud/cs-go v0.22.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/google/go-github/v74 v74.0.0
+	github.com/google/go-github/v84 v84.0.0
 	github.com/jedib0t/go-pretty/v6 v6.7.8
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.28.1
@@ -25,6 +26,7 @@ require (
 	golang.org/x/term v0.41.0
 	google.golang.org/api v0.272.0
 	google.golang.org/grpc v1.79.3
+	google.golang.org/protobuf v1.36.11
 	helm.sh/helm/v4 v4.1.3
 	k8s.io/api v0.35.3
 	k8s.io/apimachinery v0.35.3
@@ -535,7 +537,6 @@ require (
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/gnostic-models v0.7.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/go-github/v84 v84.0.0 // indirect
 	github.com/google/go-licenses/v2 v2.0.1 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
 	github.com/google/licenseclassifier/v2 v2.0.0 // indirect
@@ -579,7 +580,6 @@ require (
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	golang.org/x/tools v0.43.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
