@@ -117,7 +117,7 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 		return nil, fmt.Errorf("failed during authorized HTTP request: %w", err)
 	}
 
-	return nil, nil
+	return resp, nil
 }
 
 // GetBody sends a GET request to the specified path and returns the response body and status code.
