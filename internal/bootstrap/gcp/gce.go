@@ -47,14 +47,13 @@ type VMDef struct {
 // Example VM definitions (expand as needed)
 var vmDefs = []VMDef{
 	{"jumpbox", "e2-medium", []string{"jumpbox", "ssh"}, []int64{}, true},
-	{"postgres", "e2-standard-8", []string{"postgres"}, []int64{}, true},
-	{"ceph-1", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
-	{"ceph-2", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
-	{"ceph-3", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
-	{"ceph-4", "e2-standard-8", []string{"ceph"}, []int64{20, 200}, false},
-	{"k0s-1", "e2-standard-16", []string{"k0s"}, []int64{}, false},
-	{"k0s-2", "e2-standard-16", []string{"k0s"}, []int64{}, false},
-	{"k0s-3", "e2-standard-16", []string{"k0s"}, []int64{}, false},
+	{"postgres", "e2-standard-2", []string{"postgres"}, []int64{}, true},
+	{"ceph-1", "e2-standard-4", []string{"ceph"}, []int64{10, 100}, false},
+	{"ceph-2", "e2-standard-4", []string{"ceph"}, []int64{10, 100}, false},
+	{"ceph-3", "e2-standard-4", []string{"ceph"}, []int64{10, 100}, false},
+	{"k0s-1", "e2-standard-8", []string{"k0s"}, []int64{}, false},
+	{"k0s-2", "e2-standard-8", []string{"k0s"}, []int64{}, false},
+	{"k0s-3", "e2-standard-8", []string{"k0s"}, []int64{}, false},
 }
 
 // validateVMProvisioningOptions checks that spot and preemptible options are not both set

@@ -142,19 +142,19 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 	switch profile {
 	case PROFILE_DEV, PROFILE_DEVELOPMENT:
 		g.Config.Datacenter.Name = "dev"
-		if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
-			return fmt.Errorf("applying resource profile: %w", err)
-		}
 		g.Config.Cluster.Monitoring = &files.MonitoringConfig{
 			Prometheus: &files.PrometheusConfig{
 				RemoteWrite: &files.RemoteWriteConfig{
 					Enabled:     false,
-					ClusterName: "local-test",
+					ClusterName: "dev",
 				},
 			},
 			Loki:         &files.LokiConfig{Enabled: false},
 			Grafana:      &files.GrafanaConfig{Enabled: false},
 			GrafanaAlloy: &files.GrafanaAlloyConfig{Enabled: false},
+		}
+		if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+			return fmt.Errorf("applying resource profile: %w", err)
 		}
 
 	case PROFILE_PROD, PROFILE_PRODUCTION:
@@ -167,11 +167,30 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 				OnDemand:      true,
 			},
 		}
+		g.Config.Cluster.Monitoring = &files.MonitoringConfig{
+			Prometheus: &files.PrometheusConfig{
+				RemoteWrite: &files.RemoteWriteConfig{
+					Enabled:     false,
+					ClusterName: "production",
+				},
+			},
+			Loki:         &files.LokiConfig{Enabled: true},
+			Grafana:      &files.GrafanaConfig{Enabled: true},
+			GrafanaAlloy: &files.GrafanaAlloyConfig{Enabled: true},
+		}
 
 	case PROFILE_MINIMAL:
-		g.Config.Datacenter.Name = "minimal"
-		if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
-			return fmt.Errorf("applying resource profile: %w", err)
+		g.Config.Datacenter.Name = "dev"
+		g.Config.Cluster.Monitoring = &files.MonitoringConfig{
+			Prometheus: &files.PrometheusConfig{
+				RemoteWrite: &files.RemoteWriteConfig{
+					Enabled:     false,
+					ClusterName: "dev",
+				},
+			},
+			Loki:         &files.LokiConfig{Enabled: true},
+			Grafana:      &files.GrafanaConfig{Enabled: true},
+			GrafanaAlloy: &files.GrafanaAlloyConfig{Enabled: true},
 		}
 		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
 			1: {
@@ -180,6 +199,9 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 				MaxReplicas:   1,
 				OnDemand:      true,
 			},
+		}
+		if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+			return fmt.Errorf("applying resource profile: %w", err)
 		}
 
 	default:

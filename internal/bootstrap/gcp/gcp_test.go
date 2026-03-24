@@ -114,7 +114,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Jumpbox:           fakeNode("jumpbox", nodeClient),
 			PostgreSQLNode:    fakeNode("postgres", nodeClient),
 			ControlPlaneNodes: []*node.Node{fakeNode("k0s-1", nodeClient), fakeNode("k0s-2", nodeClient), fakeNode("k0s-3", nodeClient)},
-			CephNodes:         []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient), fakeNode("ceph-3", nodeClient), fakeNode("ceph-4", nodeClient)},
+			CephNodes:         []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient), fakeNode("ceph-3", nodeClient)},
 		}
 	})
 	Describe("NewGCPBootstrapper", func() {
@@ -189,9 +189,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			// EnsureComputeInstances
 			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
-			mockGetInstanceNotFoundThenRunning(gc, projectId, "us-central1-a", ipResp, 9)
-			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(9)
-			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(9)
+			mockGetInstanceNotFoundThenRunning(gc, projectId, "us-central1-a", ipResp, 8)
+			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(8)
+			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(8)
 
 			// EnsureGatewayIPAddresses
 			gc.EXPECT().GetAddress(projectId, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
@@ -239,10 +239,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Expect(bs.Env.ProjectID).To(HavePrefix("test-project-"))
 
 			// Verify nodes are properly set in the environment
-			Expect(bs.Env.Jumpbox).NotTo(BeNil(), "Jumpbox should be created")
-			Expect(bs.Env.PostgreSQLNode).NotTo(BeNil(), "PostgreSQL node should be created")
-			Expect(bs.Env.CephNodes).To(HaveLen(4), "Should have 4 Ceph nodes")
-			Expect(bs.Env.ControlPlaneNodes).To(HaveLen(3), "Should have 3 K0s control plane nodes")
+			Expect(bs.Env.Jumpbox).NotTo(BeNil())
+			Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
+			Expect(bs.Env.CephNodes).To(HaveLen(3))
+			Expect(bs.Env.ControlPlaneNodes).To(HaveLen(3))
 
 			// Verify mock returns expected values
 			Expect(bs.Env.Jumpbox.GetName()).To(Equal("jumpbox"))
@@ -991,15 +991,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Valid EnsureComputeInstances", func() {
 			It("creates all instances", func() {
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
-				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 9)
+				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
-				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
-				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(bs.Env.ControlPlaneNodes)).To(Equal(3))
-				Expect(len(bs.Env.CephNodes)).To(Equal(4))
+				Expect(len(bs.Env.CephNodes)).To(Equal(3))
 				Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
 				Expect(bs.Env.Jumpbox).NotTo(BeNil())
 			})
@@ -1012,9 +1012,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 				It("does not fetch GitHub org keys when GitHub team org is set without slug", func() {
 					ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
-					mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 9)
-					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
-					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
+					mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
+					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 
 					err := bs.EnsureComputeInstances()
 					Expect(err).NotTo(HaveOccurred())
@@ -1028,8 +1028,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 						mockGitHubClient.EXPECT().ListUserKeys(mock.Anything, "alice").Return([]*gh.Key{{Key: gh.Ptr("ssh-rsa AAALICE...")}}, nil).Maybe()
 
 						ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
-						mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 9)
-						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
+						mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
+						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
 						gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
 							sshMetadata := ""
 							for _, item := range instance.GetMetadata().GetItems() {
@@ -1041,7 +1041,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 								return fmt.Errorf("expected ssh metadata to include team user key")
 							}
 							return nil
-						}).Times(9)
+						}).Times(8)
 
 						err := bs.EnsureComputeInstances()
 						Expect(err).NotTo(HaveOccurred())
@@ -1109,16 +1109,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv.SpotVMs = true
 
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
-				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 9)
+				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
-				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
 
 				// Verify CreateInstance is called with SPOT provisioning model
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.MatchedBy(func(instance *computepb.Instance) bool {
 					return instance.Scheduling != nil &&
 						instance.Scheduling.ProvisioningModel != nil &&
 						*instance.Scheduling.ProvisioningModel == "SPOT"
-				})).Return(nil).Times(9)
+				})).Return(nil).Times(8)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
@@ -1128,9 +1128,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv.SpotVMs = true
 
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
-				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 9)
+				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
-				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(9)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
 
 				createCalls := make(map[string]int)
 				var mu sync.Mutex
@@ -1143,7 +1143,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 						return fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED")
 					}
 					return nil
-				}).Times(18)
+				}).Times(16)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
@@ -1164,9 +1164,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 					}
 					// After StartInstance, VM is running
 					return runningResp, nil
-				}).Times(18)
+				}).Times(16)
 
-				gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
+				gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
@@ -1174,8 +1174,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("uses existing running VMs without starting them", func() {
 				runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
-				// 9 VMs × 2 GetInstance calls each (initial check + waitForInstanceRunning poll)
-				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(runningResp, nil).Times(18)
+				// 8 VMs × 2 GetInstance calls each (initial check + waitForInstanceRunning poll)
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(runningResp, nil).Times(16)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
@@ -1196,7 +1196,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					}
 					// Second call via waitForInstanceRunning: now running
 					return runningResp, nil
-				}).Times(18)
+				}).Times(16)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
