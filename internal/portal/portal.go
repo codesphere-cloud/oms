@@ -66,6 +66,14 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 		return
 	}
 
+	isHealthy, healthErr := c.GetHealth()
+	if healthErr != nil || !isHealthy {
+		err = fmt.Errorf("OMS Portal health check failed: %w", healthErr)
+		log.Println(err.Error())
+		log.Println("Please check if the OMS Portal URL is correct and instance is healthy and reachable at:", c.Env.GetOmsPortalApi())
+		return
+	}
+
 	req.Header.Set("X-API-Key", apiKey)
 
 	resp, err = c.HttpClient.Do(req)
@@ -85,7 +93,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 			respBody, _ = io.ReadAll(resp.Body)
 		}
 
-		log.Printf("Non-2xx response received from %s - Status: %d, Body: %s", req.URL, resp.StatusCode, string(respBody))
+		log.Printf("Non-2xx response received from %s - Status: %d, Body: %s", c.Env.GetOmsPortalApi(), resp.StatusCode, string(respBody))
 		err = fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
 
 		return
@@ -408,4 +416,33 @@ func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 	}
 
 	return result.KeyID, nil
+}
+
+func (c *PortalClient) GetHealth() (bool, error) {
+	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "/health")
+	if err != nil {
+		return false, fmt.Errorf("failed to get generate health URL: %w", err)
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Fatalf("failed to create request: %v", err)
+		return false, fmt.Errorf("failed to create health check request: %w", err)
+	}
+
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("failed to send health request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("health check returned non-OK status: %d", resp.StatusCode)
+	}
+
+	serviceNameHeader := resp.Header.Get("X-Service-Name")
+	if strings.ToLower(serviceNameHeader) != "oms-portal" {
+		return false, fmt.Errorf("unexpected service name in health check response: %s", serviceNameHeader)
+	}
+
+	return true, nil
 }
