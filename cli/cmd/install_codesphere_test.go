@@ -283,23 +283,20 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				tempDir, err := os.MkdirTemp("", "test-install")
 				Expect(err).To(BeNil())
 				defer os.RemoveAll(tempDir)
-				
+
 				// Create dummy node file
 				nodeFile := filepath.Join(tempDir, "node")
 				err = os.WriteFile(nodeFile, []byte("#!/bin/sh\nexit 0"), 0755)
 				Expect(err).To(BeNil())
-
 
 				// Create temporary file for Dockerfile to return *os.File
 				dockerfileContent := "FROM workspace-agent"
 				tmpDockerfile := filepath.Join(tempDir, "workspace.Dockerfile")
 				err = os.WriteFile(tmpDockerfile, []byte(dockerfileContent), 0644)
 				Expect(err).To(BeNil())
-				
+
 				realFile, err := os.Open(tmpDockerfile)
 				Expect(err).To(BeNil())
-				// Note: In a real test we'd want to close this eventually, but the mock will return it to the SUT
-				// and the SUT is responsible for closing it.
 
 				mockPackageManager.EXPECT().Extract(false).Return(nil)
 				mockPackageManager.EXPECT().GetWorkDir().Return(tempDir).Maybe()
@@ -324,7 +321,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/ubuntu.tar").Return(filepath.Join(tempDir, "deps/codesphere/images/ubuntu.tar"))
 				mockImageManager.EXPECT().LoadImage(filepath.Join(tempDir, "deps/codesphere/images/ubuntu.tar")).Return(nil)
 
-				// Mock for reading the Dockerfile - MUST return *os.File
+				// Mock for reading the Dockerfile - MUST return *os.File for next steps
 				mockFileIO.EXPECT().Open("workspace.Dockerfile").Return(realFile, nil)
 
 				// Expect WriteFile with updated content
