@@ -23,6 +23,7 @@ type FileIO interface {
 	ReadFile(filename string) ([]byte, error)
 	CreateAndWrite(filePath string, data []byte, fileType string) error
 	Remove(path string) error
+	Chmod(name string, mode os.FileMode) error
 }
 
 type FilesystemWriter struct{}
@@ -97,6 +98,10 @@ func (fs *FilesystemWriter) ReadFile(filename string) ([]byte, error) {
 
 func (fs *FilesystemWriter) Remove(path string) error {
 	return os.Remove(path)
+}
+
+func (fs *FilesystemWriter) Chmod(name string, mode os.FileMode) error {
+	return os.Chmod(name, mode)
 }
 
 type ClosableFile interface {

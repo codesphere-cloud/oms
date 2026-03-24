@@ -5,9 +5,10 @@
 package util
 
 import (
+	"os"
+
 	"github.com/jedib0t/go-pretty/v6/table"
 	mock "github.com/stretchr/testify/mock"
-	"os"
 )
 
 // NewMockFileIO creates a new instance of MockFileIO. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -35,6 +36,63 @@ type MockFileIO_Expecter struct {
 
 func (_m *MockFileIO) EXPECT() *MockFileIO_Expecter {
 	return &MockFileIO_Expecter{mock: &_m.Mock}
+}
+
+// Chmod provides a mock function for the type MockFileIO
+func (_mock *MockFileIO) Chmod(name string, mode os.FileMode) error {
+	ret := _mock.Called(name, mode)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Chmod")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, os.FileMode) error); ok {
+		r0 = returnFunc(name, mode)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockFileIO_Chmod_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Chmod'
+type MockFileIO_Chmod_Call struct {
+	*mock.Call
+}
+
+// Chmod is a helper method to define mock.On call
+//   - name string
+//   - mode os.FileMode
+func (_e *MockFileIO_Expecter) Chmod(name interface{}, mode interface{}) *MockFileIO_Chmod_Call {
+	return &MockFileIO_Chmod_Call{Call: _e.mock.On("Chmod", name, mode)}
+}
+
+func (_c *MockFileIO_Chmod_Call) Run(run func(name string, mode os.FileMode)) *MockFileIO_Chmod_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 os.FileMode
+		if args[1] != nil {
+			arg1 = args[1].(os.FileMode)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockFileIO_Chmod_Call) Return(err error) *MockFileIO_Chmod_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockFileIO_Chmod_Call) RunAndReturn(run func(name string, mode os.FileMode) error) *MockFileIO_Chmod_Call {
+	_c.Call.Return(run)
+	return _c
 }
 
 // Create provides a mock function for the type MockFileIO

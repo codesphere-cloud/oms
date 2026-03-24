@@ -138,6 +138,7 @@ var _ = Describe("K0s", func() {
 
 			It("should handle version parameter correctly", func() {
 				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
+				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 
 				// Create the workdir first
@@ -151,6 +152,7 @@ var _ = Describe("K0s", func() {
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
 
 				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).ToNot(HaveOccurred())
@@ -163,6 +165,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
 				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
+				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 			})
 
 			It("should fail when k0s binary exists and force is false", func() {
@@ -188,6 +191,7 @@ var _ = Describe("K0s", func() {
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
 
 				path, err := k0s.Download("v1.29.1+k0s.0", true, false)
 				Expect(err).ToNot(HaveOccurred())
@@ -200,6 +204,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
 				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
+				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 			})
 
@@ -231,7 +236,7 @@ var _ = Describe("K0s", func() {
 			})
 
 			It("should succeed with default options", func() {
-				// Create a real file in temp directory for os.Chmod to work
+				// Create a real file in temp directory for mock Create to return
 				err := os.MkdirAll(workDir, 0755)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -241,15 +246,11 @@ var _ = Describe("K0s", func() {
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
 
 				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
-
-				// Verify file was made executable
-				info, err := os.Stat(k0sPath)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(info.Mode() & 0755).To(Equal(os.FileMode(0755)))
 			})
 		})
 
@@ -263,6 +264,8 @@ var _ = Describe("K0s", func() {
 			It("should construct correct download URL for amd64", func() {
 				k0sImpl.Goarch = "amd64"
 
+				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
+
 				// Create the workdir first
 				err := os.MkdirAll(workDir, 0755)
 				Expect(err).ToNot(HaveOccurred())
@@ -274,6 +277,7 @@ var _ = Describe("K0s", func() {
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
 
 				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
 				Expect(err).ToNot(HaveOccurred())

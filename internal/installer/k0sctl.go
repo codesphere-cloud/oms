@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -79,7 +78,7 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 
 	// Ensure workdir exists
 	workdir := k.Env.GetOmsWorkdir()
-	if err := os.MkdirAll(workdir, 0755); err != nil {
+	if err := k.FileWriter.MkdirAll(workdir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create workdir: %w", err)
 	}
 
@@ -112,7 +111,7 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 	}
 
 	// Make binary executable
-	if err := os.Chmod(k0sctlPath, 0755); err != nil {
+	if err := k.FileWriter.Chmod(k0sctlPath, 0755); err != nil {
 		return "", fmt.Errorf("failed to make k0sctl executable: %w", err)
 	}
 

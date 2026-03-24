@@ -6,8 +6,6 @@ package installer
 import (
 	"fmt"
 	"log"
-	"net"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -65,7 +63,7 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	workdir := k.Env.GetOmsWorkdir()
 
 	// Ensure workdir exists
-	if err := os.MkdirAll(workdir, 0755); err != nil {
+	if err := k.FileWriter.MkdirAll(workdir, 0755); err != nil {
 		return "", fmt.Errorf("failed to create workdir: %w", err)
 	}
 
@@ -90,7 +88,7 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	}
 
 	// Make the binary executable
-	err = os.Chmod(k0sPath, 0755)
+	err = k.FileWriter.Chmod(k0sPath, 0755)
 	if err != nil {
 		return "", fmt.Errorf("failed to make k0s binary executable: %w", err)
 	}
@@ -98,39 +96,4 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	log.Printf("k0s binary downloaded and made executable at '%s'", k0sPath)
 
 	return k0sPath, nil
-}
-
-// GetNodeIPAddress finds the IP address of the current node and returns matching control plane IP
-func GetNodeIPAddress(controlPlanes []string) (string, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", fmt.Errorf("failed to get network interfaces: %w", err)
-	}
-
-	cpSet := make(map[string]bool, len(controlPlanes))
-	for _, ip := range controlPlanes {
-		cpSet[ip] = true
-	}
-
-	var fallbackIP string
-	for _, addr := range addrs {
-		ipnet, ok := addr.(*net.IPNet)
-		if !ok || ipnet.IP.IsLoopback() || ipnet.IP.To4() == nil {
-			continue
-		}
-
-		ip := ipnet.IP.String()
-		if cpSet[ip] {
-			return ip, nil
-		}
-		if fallbackIP == "" {
-			fallbackIP = ip
-		}
-	}
-
-	if fallbackIP != "" {
-		return fallbackIP, nil
-	}
-
-	return "", fmt.Errorf("no suitable IP address found")
 }
