@@ -9,9 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
@@ -25,7 +23,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/dns/v1"
-	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -68,39 +65,6 @@ func GetDNSRecordNames(baseDomain string) []struct {
 	}
 }
 
-// IsNotFoundError checks if the error is a Google API "not found" error (HTTP 404).
-func IsNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	var googleErr *googleapi.Error
-	if errors.As(err, &googleErr) {
-		return googleErr.Code == 404
-	}
-	return false
-}
-
-type VMDef struct {
-	Name            string
-	MachineType     string
-	Tags            []string
-	AdditionalDisks []int64
-	ExternalIP      bool
-}
-
-// Example VM definitions (expand as needed)
-var vmDefs = []VMDef{
-	{"jumpbox", "e2-medium", []string{"jumpbox", "ssh"}, []int64{}, true},
-	{"postgres", "e2-standard-2", []string{"postgres"}, []int64{}, true},
-	{"ceph-1", "e2-standard-4", []string{"ceph"}, []int64{10, 100}, false},
-	{"ceph-2", "e2-standard-4", []string{"ceph"}, []int64{10, 100}, false},
-	{"ceph-3", "e2-standard-4", []string{"ceph"}, []int64{10, 100}, false},
-	{"k0s-1", "e2-standard-8", []string{"k0s"}, []int64{}, false},
-	{"k0s-2", "e2-standard-8", []string{"k0s"}, []int64{}, false},
-	{"k0s-3", "e2-standard-8", []string{"k0s"}, []int64{}, false},
-}
-
 var DefaultExperiments []string = []string{
 	"managed-services",
 	"vcluster",
@@ -141,6 +105,7 @@ type CodesphereEnvironment struct {
 	InstallHash          string       `json:"install_hash"`
 	InstallSkipSteps     []string     `json:"install_skip_steps"`
 	Preemptible          bool         `json:"preemptible"`
+	SpotVMs              bool         `json:"spot_vms"`
 	WriteConfig          bool         `json:"-"`
 	GatewayIP            string       `json:"gateway_ip"`
 	PublicGatewayIP      string       `json:"public_gateway_ip"`
@@ -376,6 +341,11 @@ func (b *GCPBootstrapper) Bootstrap() error {
 // ValidateInput checks that the required input parameters are set and valid
 func (b *GCPBootstrapper) ValidateInput() error {
 	err := b.validateInstallVersion()
+	if err != nil {
+		return err
+	}
+
+	err = b.validateVMProvisioningOptions()
 	if err != nil {
 		return err
 	}
@@ -767,193 +737,6 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 	return nil
 }
 
-type vmResult struct {
-	vmType     string // jumpbox, postgres, ceph, k0s
-	name       string
-	externalIP string
-	internalIP string
-}
-
-func (b *GCPBootstrapper) EnsureComputeInstances() error {
-	projectID := b.Env.ProjectID
-	region := b.Env.Region
-	zone := b.Env.Zone
-
-	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", projectID, projectID)
-	subnetwork := fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s-%s-subnet", projectID, region, projectID, region)
-	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-ssd", projectID, zone)
-
-	rootDiskSize := int64(200)
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		rootDiskSize = 50
-	}
-	sshKeys := ""
-	var err error
-	if b.Env.GitHubPAT != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubTeamSlug != "" {
-		sshKeys, err = github.GetSSHKeysFromGitHubTeam(b.GitHubClient, b.Env.GitHubTeamOrg, b.Env.GitHubTeamSlug)
-		if err != nil {
-			return fmt.Errorf("failed to get SSH keys from GitHub team: %w", err)
-		}
-	}
-
-	pubKey, err := b.readSSHKey(b.Env.SSHPublicKeyPath)
-	if err != nil {
-		return err
-	}
-
-	sshKeys += fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")
-
-	// Create VMs in parallel
-	wg := sync.WaitGroup{}
-	errCh := make(chan error, len(vmDefs))
-	resultCh := make(chan vmResult, len(vmDefs))
-	for _, vm := range vmDefs {
-		wg.Add(1)
-		go func(vm VMDef) {
-			defer wg.Done()
-			disks := []*computepb.AttachedDisk{
-				{
-					Boot:       protoBool(true),
-					AutoDelete: protoBool(true),
-					Type:       protoString("PERSISTENT"),
-					InitializeParams: &computepb.AttachedDiskInitializeParams{
-						DiskType:    &diskType,
-						DiskSizeGb:  protoInt64(rootDiskSize),
-						SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
-					},
-				},
-			}
-			for _, diskSize := range vm.AdditionalDisks {
-				disks = append(disks, &computepb.AttachedDisk{
-					Boot:       protoBool(false),
-					AutoDelete: protoBool(true),
-					Type:       protoString("PERSISTENT"),
-					InitializeParams: &computepb.AttachedDiskInitializeParams{
-						DiskSizeGb: protoInt64(diskSize),
-						DiskType:   &diskType,
-					},
-				})
-			}
-
-			serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
-			instance := &computepb.Instance{
-				Name: protoString(vm.Name),
-				ServiceAccounts: []*computepb.ServiceAccount{
-					{
-						Email:  protoString(serviceAccount),
-						Scopes: []string{"https://www.googleapis.com/auth/cloud-platform"},
-					},
-				},
-				MachineType: protoString(fmt.Sprintf("zones/%s/machineTypes/%s", zone, vm.MachineType)),
-				Tags: &computepb.Tags{
-					Items: vm.Tags,
-				},
-				Scheduling: &computepb.Scheduling{
-					Preemptible: &b.Env.Preemptible,
-				},
-				NetworkInterfaces: []*computepb.NetworkInterface{
-					{
-						Network:    protoString(network),
-						Subnetwork: protoString(subnetwork),
-					},
-				},
-				Disks: disks,
-				Metadata: &computepb.Metadata{
-					Items: []*computepb.Items{
-						{
-							Key:   protoString("ssh-keys"),
-							Value: protoString(sshKeys),
-						},
-					},
-				},
-			}
-
-			// Configure external IP if needed
-			if vm.ExternalIP {
-				instance.NetworkInterfaces[0].AccessConfigs = []*computepb.AccessConfig{
-					{
-						Name: protoString("External NAT"),
-						Type: protoString("ONE_TO_ONE_NAT"),
-					},
-				}
-			}
-
-			err = b.GCPClient.CreateInstance(projectID, zone, instance)
-			if err != nil && !isAlreadyExistsError(err) {
-				errCh <- fmt.Errorf("failed to create instance %s: %w", vm.Name, err)
-				return
-			}
-
-			// Find out the IP addresses of the created instance
-			resp, err := b.GCPClient.GetInstance(projectID, zone, vm.Name)
-			if err != nil {
-				errCh <- fmt.Errorf("failed to get instance %s: %w", vm.Name, err)
-				return
-			}
-
-			externalIP := ""
-			internalIP := ""
-			if len(resp.GetNetworkInterfaces()) > 0 {
-				internalIP = resp.GetNetworkInterfaces()[0].GetNetworkIP()
-				if len(resp.GetNetworkInterfaces()[0].GetAccessConfigs()) > 0 {
-					externalIP = resp.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
-				}
-			}
-
-			// Send result through channel instead of creating nodes in goroutine
-			resultCh <- vmResult{
-				vmType:     vm.Tags[0],
-				name:       vm.Name,
-				externalIP: externalIP,
-				internalIP: internalIP,
-			}
-		}(vm)
-	}
-	wg.Wait()
-
-	close(errCh)
-	close(resultCh)
-
-	var errs []error
-	for err := range errCh {
-		errs = append(errs, err)
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("error ensuring compute instances: %w", errors.Join(errs...))
-	}
-
-	// Create nodes from results (in main goroutine, not in spawned goroutines)
-	b.Env.Jumpbox = &node.Node{
-		NodeClient: b.NodeClient,
-		FileIO:     b.fw,
-	}
-	for result := range resultCh {
-		switch result.vmType {
-		case "jumpbox":
-			b.Env.Jumpbox.UpdateNode(result.name, result.externalIP, result.internalIP)
-		case "postgres":
-			b.Env.PostgreSQLNode = b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
-		case "ceph":
-			node := b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
-			b.Env.CephNodes = append(b.Env.CephNodes, node)
-		case "k0s":
-			node := b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
-			b.Env.ControlPlaneNodes = append(b.Env.ControlPlaneNodes, node)
-		}
-	}
-
-	//sort ceph nodes by name to ensure consistent ordering
-	sort.Slice(b.Env.CephNodes, func(i, j int) bool {
-		return b.Env.CephNodes[i].GetName() < b.Env.CephNodes[j].GetName()
-	})
-	//sort control plane nodes by name to ensure consistent ordering
-	sort.Slice(b.Env.ControlPlaneNodes, func(i, j int) bool {
-		return b.Env.ControlPlaneNodes[i].GetName() < b.Env.ControlPlaneNodes[j].GetName()
-	})
-
-	return nil
-}
-
 // EnsureGatewayIPAddresses reserves 2 static external IP addresses for the ingress
 // controllers of the cluster.
 func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
@@ -985,7 +768,7 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 	}
 
 	createdIP, err := b.GCPClient.CreateAddress(b.Env.ProjectID, b.Env.Region, desiredAddress)
-	if err != nil && !isAlreadyExistsError(err) {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return "", fmt.Errorf("failed to create address %s: %w", name, err)
 	}
 
@@ -1680,23 +1463,4 @@ func (b *GCPBootstrapper) RunK0sConfigScript() error {
 	}
 
 	return nil
-}
-
-// Helper functions
-func isAlreadyExistsError(err error) bool {
-	return status.Code(err) == codes.AlreadyExists || strings.Contains(err.Error(), "already exists")
-}
-
-// readSSHKey reads an SSH key file, expanding ~ in the path
-func (b *GCPBootstrapper) readSSHKey(path string) (string, error) {
-	realPath := util.ExpandPath(path)
-	data, err := b.fw.ReadFile(realPath)
-	if err != nil {
-		return "", fmt.Errorf("error reading SSH key from %s: %w", realPath, err)
-	}
-	key := strings.TrimSpace(string(data))
-	if key == "" {
-		return "", fmt.Errorf("SSH key at %s is empty", realPath)
-	}
-	return key, nil
 }

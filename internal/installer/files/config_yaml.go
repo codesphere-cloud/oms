@@ -567,18 +567,6 @@ func (c *RootConfig) ExtractBomRefs() []string {
 	return bomRefs
 }
 
-func (c *RootConfig) ExtractWorkspaceDockerfiles() map[string]string {
-	dockerfiles := make(map[string]string)
-	for _, imageConfig := range c.Codesphere.DeployConfig.Images {
-		for _, flavor := range imageConfig.Flavors {
-			if flavor.Image.Dockerfile != "" {
-				dockerfiles[flavor.Image.Dockerfile] = flavor.Image.BomRef
-			}
-		}
-	}
-	return dockerfiles
-}
-
 func (c *RootConfig) ExtractVault() *InstallVault {
 	vault := &InstallVault{
 		Secrets: []SecretEntry{},

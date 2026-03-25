@@ -249,24 +249,5 @@ codesphere:
 			err = rootConfig.Unmarshal(data)
 			Expect(err).NotTo(HaveOccurred())
 		})
-
-		It("should return empty map when no images are configured", func() {
-			emptyConfig := &files.RootConfig{}
-			dockerfiles := emptyConfig.ExtractWorkspaceDockerfiles()
-
-			Expect(dockerfiles).To(BeEmpty())
-		})
-
-		It("should extract all Dockerfile paths mapped to their BOM references", func() {
-			dockerfiles := rootConfig.ExtractWorkspaceDockerfiles()
-
-			Expect(dockerfiles).NotTo(BeEmpty())
-			Expect(dockerfiles).To(HaveKeyWithValue("dockerfile-24.04", "workspace-agent-24.04"))
-			Expect(dockerfiles).To(HaveKeyWithValue("dockerfile-24.04-minimal", "workspace-agent-24.04-minimal"))
-			Expect(dockerfiles).To(HaveKeyWithValue("dockerfile-20.04", "workspace-agent-20.04"))
-
-			// Should have 3 dockerfile mappings (ide-service has no dockerfile)
-			Expect(len(dockerfiles)).To(Equal(3))
-		})
 	})
 })

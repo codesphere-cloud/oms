@@ -80,7 +80,7 @@ func (c *ExtendBaseimageCmd) ExtendBaseimage(pm installer.PackageManager, im sys
 		return fmt.Errorf("failed to extract package: %w", err)
 	}
 
-	imageName, err := pm.GetBaseimageName(c.Opts.Baseimage)
+	imageName, err := pm.GetFullImageTag(c.Opts.Baseimage)
 	if err != nil {
 		return fmt.Errorf("failed to get image name: %w", err)
 	}
