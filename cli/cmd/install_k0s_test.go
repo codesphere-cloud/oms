@@ -117,6 +117,15 @@ var _ = Describe("InstallK0sCmd", func() {
 			}
 		}
 
+		writeTestConfig := func(config *files.RootConfig) string {
+			configPath := filepath.Join(tempDir, "install-config.yaml")
+			configData, err := yaml.Marshal(config)
+			Expect(err).NotTo(HaveOccurred())
+			err = os.WriteFile(configPath, configData, 0644)
+			Expect(err).NotTo(HaveOccurred())
+			return configPath
+		}
+
 		It("fails when install-config file does not exist", func() {
 			c.Opts.InstallConfig = "/nonexistent/install-config.yaml"
 
@@ -126,29 +135,15 @@ var _ = Describe("InstallK0sCmd", func() {
 		})
 
 		It("fails when install-config specifies external Kubernetes", func() {
-			config := createTestConfig(false)
-			configPath := filepath.Join(tempDir, "install-config.yaml")
-			configData, err := yaml.Marshal(config)
-			Expect(err).NotTo(HaveOccurred())
-			err = os.WriteFile(configPath, configData, 0644)
-			Expect(err).NotTo(HaveOccurred())
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(false))
 
-			c.Opts.InstallConfig = configPath
-
-			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("external Kubernetes"))
 		})
 
 		It("successfully installs k0s with valid config using k0sctl", func() {
-			config := createTestConfig(true)
-			configPath := filepath.Join(tempDir, "install-config.yaml")
-			configData, err := yaml.Marshal(config)
-			Expect(err).NotTo(HaveOccurred())
-			err = os.WriteFile(configPath, configData, 0644)
-			Expect(err).NotTo(HaveOccurred())
-
-			c.Opts.InstallConfig = configPath
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = "test-package.tar.gz"
 			c.Opts.Version = "v1.30.0+k0s.0"
 			c.Opts.Force = true
@@ -160,19 +155,12 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", true).Return(nil)
 
-			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("downloads k0s when package is not specified", func() {
-			config := createTestConfig(true)
-			configPath := filepath.Join(tempDir, "install-config.yaml")
-			configData, err := yaml.Marshal(config)
-			Expect(err).NotTo(HaveOccurred())
-			err = os.WriteFile(configPath, configData, 0644)
-			Expect(err).NotTo(HaveOccurred())
-
-			c.Opts.InstallConfig = configPath
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = ""
 			c.Opts.Version = "v1.29.0+k0s.0"
 
@@ -182,38 +170,24 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
-			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("fails when k0s download fails", func() {
-			config := createTestConfig(true)
-			configPath := filepath.Join(tempDir, "install-config.yaml")
-			configData, err := yaml.Marshal(config)
-			Expect(err).NotTo(HaveOccurred())
-			err = os.WriteFile(configPath, configData, 0644)
-			Expect(err).NotTo(HaveOccurred())
-
-			c.Opts.InstallConfig = configPath
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = ""
 
 			mockK0s.EXPECT().GetLatestVersion().Return("v1.30.0+k0s.0", nil)
 			mockK0s.EXPECT().Download("v1.30.0+k0s.0", false, false).Return("", os.ErrNotExist)
 
-			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to download k0s"))
 		})
 
 		It("fails when k0sctl download fails", func() {
-			config := createTestConfig(true)
-			configPath := filepath.Join(tempDir, "install-config.yaml")
-			configData, err := yaml.Marshal(config)
-			Expect(err).NotTo(HaveOccurred())
-			err = os.WriteFile(configPath, configData, 0644)
-			Expect(err).NotTo(HaveOccurred())
-
-			c.Opts.InstallConfig = configPath
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = "test-package.tar.gz"
 			c.Opts.Version = "v1.30.0+k0s.0"
 
@@ -221,20 +195,13 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0sctl.EXPECT().Download("", false, false).Return("", os.ErrPermission)
 
-			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to download k0sctl"))
 		})
 
 		It("fails when k0sctl apply fails", func() {
-			config := createTestConfig(true)
-			configPath := filepath.Join(tempDir, "install-config.yaml")
-			configData, err := yaml.Marshal(config)
-			Expect(err).NotTo(HaveOccurred())
-			err = os.WriteFile(configPath, configData, 0644)
-			Expect(err).NotTo(HaveOccurred())
-
-			c.Opts.InstallConfig = configPath
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = "test-package.tar.gz"
 			c.Opts.Version = "v1.30.0+k0s.0"
 
@@ -245,7 +212,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(os.ErrPermission)
 
-			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to apply k0sctl config"))
 		})

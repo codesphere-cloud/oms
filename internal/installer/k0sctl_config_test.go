@@ -16,23 +16,10 @@ var _ = Describe("K0sctlConfig", func() {
 	Describe("GenerateK0sctlConfig", func() {
 		Context("with valid install-config", func() {
 			It("should generate k0sctl config with control plane nodes", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						APIServerHost:       "k8s.example.com",
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-							{IPAddress: "10.0.1.11"},
-							{IPAddress: "10.0.1.12"},
-						},
-						PodCIDR:     "10.244.0.0/16",
-						ServiceCIDR: "10.96.0.0/12",
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10", "10.0.1.11", "10.0.1.12")
+				installConfig.Kubernetes.APIServerHost = "k8s.example.com"
+				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
+				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "/path/to/k0s")
 				Expect(err).ToNot(HaveOccurred())
@@ -51,18 +38,7 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should assign controller+worker role to control plane nodes", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).ToNot(HaveOccurred())
@@ -73,21 +49,10 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should assign worker role to dedicated worker nodes", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-						Workers: []files.K8sNode{
-							{IPAddress: "10.0.2.10"},
-							{IPAddress: "10.0.2.11"},
-						},
-					},
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+				installConfig.Kubernetes.Workers = []files.K8sNode{
+					{IPAddress: "10.0.2.10"},
+					{IPAddress: "10.0.2.11"},
 				}
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
@@ -105,21 +70,10 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should skip duplicate IPs between control planes and workers", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-						Workers: []files.K8sNode{
-							{IPAddress: "10.0.1.10"}, // Duplicate
-							{IPAddress: "10.0.2.10"}, // Unique
-						},
-					},
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+				installConfig.Kubernetes.Workers = []files.K8sNode{
+					{IPAddress: "10.0.1.10"}, // Duplicate
+					{IPAddress: "10.0.2.10"}, // Unique
 				}
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
@@ -134,18 +88,7 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should enable UploadBinary when k0sBinaryPath is provided", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "/path/to/k0s")
 				Expect(err).ToNot(HaveOccurred())
@@ -155,18 +98,7 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should not enable UploadBinary when k0sBinaryPath is empty", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).ToNot(HaveOccurred())
@@ -176,18 +108,7 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should set SSH key path correctly", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/home/user/.ssh/id_rsa", "")
 				Expect(err).ToNot(HaveOccurred())
@@ -196,18 +117,7 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should set SSH user to root", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).ToNot(HaveOccurred())
@@ -216,18 +126,7 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should set KUBELET_EXTRA_ARGS environment variable", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).ToNot(HaveOccurred())
@@ -236,20 +135,9 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should generate valid YAML", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-						PodCIDR:     "10.244.0.0/16",
-						ServiceCIDR: "10.96.0.0/12",
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
+				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).ToNot(HaveOccurred())
@@ -275,15 +163,7 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should return error for non-managed Kubernetes", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: false,
-					},
-				}
+				installConfig := newTestConfig("test-dc", false)
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).To(HaveOccurred())
@@ -294,16 +174,8 @@ var _ = Describe("K0sctlConfig", func() {
 
 		Context("edge cases", func() {
 			It("should handle empty control plane list", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes:       []files.K8sNode{},
-					},
-				}
+				installConfig := newTestConfig("test-dc", true)
+				installConfig.Kubernetes.ControlPlanes = []files.K8sNode{}
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).ToNot(HaveOccurred())
@@ -311,16 +183,7 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should handle nil control plane list", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes:       nil,
-					},
-				}
+				installConfig := newTestConfig("test-dc", true)
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).ToNot(HaveOccurred())
@@ -328,18 +191,10 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should handle only worker nodes (no control planes)", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes:       []files.K8sNode{},
-						Workers: []files.K8sNode{
-							{IPAddress: "10.0.2.10"},
-						},
-					},
+				installConfig := newTestConfig("test-dc", true)
+				installConfig.Kubernetes.ControlPlanes = []files.K8sNode{}
+				installConfig.Kubernetes.Workers = []files.K8sNode{
+					{IPAddress: "10.0.2.10"},
 				}
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
@@ -350,18 +205,7 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should handle empty SSH key path", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "", "")
 				Expect(err).ToNot(HaveOccurred())
@@ -370,20 +214,9 @@ var _ = Describe("K0sctlConfig", func() {
 			})
 
 			It("should set PrivateAddress for all host types", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-						Workers: []files.K8sNode{
-							{IPAddress: "10.0.2.10"},
-						},
-					},
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+				installConfig.Kubernetes.Workers = []files.K8sNode{
+					{IPAddress: "10.0.2.10"},
 				}
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")

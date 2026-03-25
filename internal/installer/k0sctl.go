@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -77,50 +76,28 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 		}
 	}
 
-	// Ensure workdir exists
-	workdir := k.Env.GetOmsWorkdir()
-	if err := k.FileWriter.MkdirAll(workdir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create workdir: %w", err)
-	}
-
-	k0sctlPath := filepath.Join(workdir, "k0sctl")
-	if k.FileWriter.Exists(k0sctlPath) && !force {
-		return "", fmt.Errorf("k0sctl binary already exists at %s. Use --force to overwrite", k0sctlPath)
-	}
-
-	// Construct download URL
-	// Format: https://github.com/k0sproject/k0sctl/releases/download/v0.17.4/k0sctl-linux-amd64
-	binaryName := fmt.Sprintf("k0sctl-%s-%s", k.Goos, k.Goarch)
 	// Ensure version has v prefix for GitHub URL
 	if !strings.HasPrefix(version, "v") {
 		version = "v" + version
 	}
+
+	binaryName := fmt.Sprintf("k0sctl-%s-%s", k.Goos, k.Goarch)
 	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0sctl/releases/download/%s/%s", version, binaryName)
 
 	if !quiet {
 		log.Printf("Downloading k0sctl %s from %s", version, downloadURL)
 	}
 
-	dstFile, err := k.FileWriter.Create(k0sctlPath)
+	path, err := downloadBinary(k.FileWriter, k.Http, k.Env.GetOmsWorkdir(), "k0sctl", downloadURL, force, quiet)
 	if err != nil {
-		return "", fmt.Errorf("failed to create destination file: %w", err)
-	}
-	defer util.IgnoreError(dstFile.Close)
-
-	if err := k.Http.Download(downloadURL, dstFile, quiet); err != nil {
-		return "", fmt.Errorf("failed to download k0sctl: %w", err)
-	}
-
-	// Make binary executable
-	if err := k.FileWriter.Chmod(k0sctlPath, 0755); err != nil {
-		return "", fmt.Errorf("failed to make k0sctl executable: %w", err)
+		return "", err
 	}
 
 	if !quiet {
-		log.Printf("k0sctl downloaded successfully to %s", k0sctlPath)
+		log.Printf("k0sctl downloaded successfully to %s", path)
 	}
 
-	return k0sctlPath, nil
+	return path, nil
 }
 
 func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {

@@ -16,23 +16,10 @@ var _ = Describe("K0sConfig", func() {
 	Describe("GenerateK0sConfig", func() {
 		Context("with valid install-config", func() {
 			It("should generate k0s config with control plane settings", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						APIServerHost:       "k8s.example.com",
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-							{IPAddress: "10.0.1.11"},
-							{IPAddress: "10.0.1.12"},
-						},
-						PodCIDR:     "10.244.0.0/16",
-						ServiceCIDR: "10.96.0.0/12",
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10", "10.0.1.11", "10.0.1.12")
+				installConfig.Kubernetes.APIServerHost = "k8s.example.com"
+				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
+				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).ToNot(HaveOccurred())
@@ -65,18 +52,7 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should handle minimal configuration", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "minimal",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "192.168.1.100"},
-						},
-					},
-				}
+				installConfig := newTestConfig("minimal", true, "192.168.1.100")
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).ToNot(HaveOccurred())
@@ -85,20 +61,9 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should generate valid YAML", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-						PodCIDR:     "10.244.0.0/16",
-						ServiceCIDR: "10.96.0.0/12",
-					},
-				}
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
+				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).ToNot(HaveOccurred())
@@ -126,17 +91,9 @@ var _ = Describe("K0sConfig", func() {
 
 		Context("with non-managed Kubernetes", func() {
 			It("should not configure k0s for external kubernetes", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "external",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: false,
-						PodCIDR:             "10.244.0.0/16",
-						ServiceCIDR:         "10.96.0.0/12",
-					},
-				}
+				installConfig := newTestConfig("external", false)
+				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
+				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).ToNot(HaveOccurred())
@@ -148,18 +105,7 @@ var _ = Describe("K0sConfig", func() {
 
 		Context("edge cases and validation", func() {
 			It("should handle empty datacenter name", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.0.1"},
-						},
-					},
-				}
+				installConfig := newTestConfig("", true, "10.0.0.1")
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())
@@ -167,16 +113,8 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should handle empty control plane list", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes:       []files.K8sNode{},
-					},
-				}
+				installConfig := newTestConfig("test", true)
+				installConfig.Kubernetes.ControlPlanes = []files.K8sNode{}
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())
@@ -186,16 +124,7 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should handle nil control plane addresses", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes:       nil,
-					},
-				}
+				installConfig := newTestConfig("test", true)
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())
@@ -203,19 +132,7 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should handle missing APIServerHost", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.0.1"},
-						},
-						APIServerHost: "",
-					},
-				}
+				installConfig := newTestConfig("test", true, "10.0.0.1")
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())
@@ -224,20 +141,7 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should handle missing network CIDRs", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.0.1"},
-						},
-						PodCIDR:     "",
-						ServiceCIDR: "",
-					},
-				}
+				installConfig := newTestConfig("test", true, "10.0.0.1")
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())
@@ -246,18 +150,7 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should use default network provider", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.0.1"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test", true, "10.0.0.1")
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())
@@ -265,19 +158,8 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should generate correct SANs with single control plane", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.0.1"},
-						},
-						APIServerHost: "api.example.com",
-					},
-				}
+				installConfig := newTestConfig("test", true, "10.0.0.1")
+				installConfig.Kubernetes.APIServerHost = "api.example.com"
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())
@@ -286,18 +168,7 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should handle special characters in datacenter name", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc_01.prod",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.0.1"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test-dc_01.prod", true, "10.0.0.1")
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())
@@ -305,18 +176,7 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should set correct API port", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.0.1"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test", true, "10.0.0.1")
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())
@@ -324,19 +184,7 @@ var _ = Describe("K0sConfig", func() {
 			})
 
 			It("should configure etcd with first control plane IP", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.0.1"},
-							{IPAddress: "10.0.0.2"},
-						},
-					},
-				}
+				installConfig := newTestConfig("test", true, "10.0.0.1", "10.0.0.2")
 
 				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
 				Expect(err).NotTo(HaveOccurred())

@@ -6,7 +6,6 @@ package installer
 import (
 	"fmt"
 	"log"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -59,41 +58,15 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 		return "", fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
 	}
 
-	// Check if k0s binary already exists and create destination file
-	workdir := k.Env.GetOmsWorkdir()
-
-	// Ensure workdir exists
-	if err := k.FileWriter.MkdirAll(workdir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create workdir: %w", err)
-	}
-
-	k0sPath := filepath.Join(workdir, "k0s")
-	if k.FileWriter.Exists(k0sPath) && !force {
-		return "", fmt.Errorf("k0s binary already exists at %s. Use --force to overwrite", k0sPath)
-	}
-
-	file, err := k.FileWriter.Create(k0sPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to create k0s binary file: %w", err)
-	}
-	defer util.CloseFileIgnoreError(file)
-
-	// Download using the portal Http wrapper with WriteCounter
 	log.Printf("Downloading k0s version %s", version)
 
 	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0s/releases/download/%s/k0s-%s-%s", version, version, k.Goarch)
-	err = k.Http.Download(downloadURL, file, quiet)
+	path, err := downloadBinary(k.FileWriter, k.Http, k.Env.GetOmsWorkdir(), "k0s", downloadURL, force, quiet)
 	if err != nil {
-		return "", fmt.Errorf("failed to download k0s binary: %w", err)
+		return "", err
 	}
 
-	// Make the binary executable
-	err = k.FileWriter.Chmod(k0sPath, 0755)
-	if err != nil {
-		return "", fmt.Errorf("failed to make k0s binary executable: %w", err)
-	}
+	log.Printf("k0s binary downloaded and made executable at '%s'", path)
 
-	log.Printf("k0s binary downloaded and made executable at '%s'", k0sPath)
-
-	return k0sPath, nil
+	return path, nil
 }
