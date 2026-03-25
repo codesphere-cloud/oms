@@ -60,8 +60,12 @@ var _ = Describe("ApplyResourceProfile", func() {
 			controller := MustMap[any](MustMap[any](config.Cluster.Gateway.Override["ingress-nginx"])["controller"])
 			AssertZeroRequests(MustMap[any](controller["resources"])["requests"])
 
-			authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
-			AssertZeroRequests(authService["requests"])
+			deployService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["deployment_service"])
+			AssertZeroRequests(deployService["requests"])
+			Expect(deployService["replicas"]).To(Equal(2))
+			underprovisionFactors := MustMap[string](MustMap[any](config.Codesphere.Override["global"])["underprovisionFactors"])
+			Expect(underprovisionFactors["cpu"]).To(Equal("0.01"))
+			Expect(underprovisionFactors["memory"]).To(Equal("0.01"))
 
 			Expect(config.Cluster.CertManager).NotTo(BeNil())
 			Expect(config.Cluster.CertManager.Override).NotTo(BeNil())

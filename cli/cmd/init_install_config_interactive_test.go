@@ -139,7 +139,7 @@ var _ = Describe("Interactive profile usage", func() {
 
 			// Verify production-specific values
 			Expect(config.Datacenter.Name).To(Equal("production"))
-			Expect(config.Cluster.Monitoring).To(BeNil())
+			Expect(config.Cluster.Monitoring.Loki.Enabled).To(BeTrue())
 		})
 	})
 })

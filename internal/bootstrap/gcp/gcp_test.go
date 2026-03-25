@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"os"
 
@@ -113,7 +112,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Jumpbox:           fakeNode("jumpbox", nodeClient),
 			PostgreSQLNode:    fakeNode("postgres", nodeClient),
 			ControlPlaneNodes: []*node.Node{fakeNode("k0s-1", nodeClient), fakeNode("k0s-2", nodeClient), fakeNode("k0s-3", nodeClient)},
-			CephNodes:         []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient), fakeNode("ceph-3", nodeClient), fakeNode("ceph-4", nodeClient)},
+			CephNodes:         []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient), fakeNode("ceph-3", nodeClient)},
 		}
 	})
 	Describe("NewGCPBootstrapper", func() {
@@ -157,7 +156,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// 3. EnsureProject
 			gc.EXPECT().GetProjectByName(mock.Anything, "test-project").Return(nil, fmt.Errorf("project not found: test-project"))
 			gc.EXPECT().CreateProjectID("test-project").Return(projectId)
-			gc.EXPECT().CreateProject(mock.Anything, mock.Anything, "test-project", time.Hour).Return(mock.Anything, nil)
+			gc.EXPECT().CreateProject(mock.Anything, mock.Anything, "test-project", mock.Anything).Return(mock.Anything, nil)
 
 			// 4. EnsureBilling
 			gc.EXPECT().GetBillingInfo(projectId).Return(&cloudbilling.ProjectBillingInfo{BillingEnabled: false}, nil)
@@ -187,7 +186,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().CreateFirewallRule(projectId, mock.Anything).Return(nil).Times(5)
 
 			// 11. EnsureComputeInstances
-			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(9)
+			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(8)
 			// GetInstance calls to retrieve IPs
 			ipResp := &computepb.Instance{
 				NetworkInterfaces: []*computepb.NetworkInterface{
@@ -200,7 +199,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				},
 			}
 
-			gc.EXPECT().GetInstance(projectId, "us-central1-a", mock.Anything).Return(ipResp, nil).Times(9)
+			gc.EXPECT().GetInstance(projectId, "us-central1-a", mock.Anything).Return(ipResp, nil).Times(8)
 			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(1)
 
 			// 12. EnsureGatewayIPAddresses
@@ -249,10 +248,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Expect(bs.Env.ProjectID).To(HavePrefix("test-project-"))
 
 			// Verify nodes are properly set in the environment
-			Expect(bs.Env.Jumpbox).NotTo(BeNil(), "Jumpbox should be created")
-			Expect(bs.Env.PostgreSQLNode).NotTo(BeNil(), "PostgreSQL node should be created")
-			Expect(bs.Env.CephNodes).To(HaveLen(4), "Should have 4 Ceph nodes")
-			Expect(bs.Env.ControlPlaneNodes).To(HaveLen(3), "Should have 3 K0s control plane nodes")
+			Expect(bs.Env.Jumpbox).NotTo(BeNil())
+			Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
+			Expect(bs.Env.CephNodes).To(HaveLen(3))
+			Expect(bs.Env.ControlPlaneNodes).To(HaveLen(3))
 
 			// Verify mock returns expected values
 			Expect(bs.Env.Jumpbox.GetName()).To(Equal("jumpbox"))
@@ -537,6 +536,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Valid EnsureProject", func() {
 			It("uses existing project", func() {
 				gc.EXPECT().GetProjectByName(csEnv.FolderID, csEnv.ProjectName).Return(&resourcemanagerpb.Project{ProjectId: "existing-id", Name: "existing-proj"}, nil)
+				gc.EXPECT().UpdateProject("existing-id", mock.Anything).Return(nil)
 
 				err := bs.EnsureProject()
 				Expect(err).NotTo(HaveOccurred())
@@ -546,7 +546,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("creates project when missing", func() {
 				gc.EXPECT().GetProjectByName(csEnv.FolderID, csEnv.ProjectName).Return(nil, fmt.Errorf("project not found: %s", csEnv.ProjectName))
 				gc.EXPECT().CreateProjectID(csEnv.ProjectName).Return("new-proj-id")
-				gc.EXPECT().CreateProject(csEnv.FolderID, "new-proj-id", csEnv.ProjectName, time.Hour).Return("", nil)
+				gc.EXPECT().CreateProject(csEnv.FolderID, "new-proj-id", csEnv.ProjectName, mock.Anything).Return("", nil)
 
 				err := bs.EnsureProject()
 				Expect(err).NotTo(HaveOccurred())
@@ -566,12 +566,21 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("returns error when CreateProject fails", func() {
 				gc.EXPECT().GetProjectByName("", csEnv.ProjectName).Return(nil, fmt.Errorf("project not found: %s", csEnv.ProjectName))
 				gc.EXPECT().CreateProjectID(csEnv.ProjectName).Return("fake-id")
-				gc.EXPECT().CreateProject("", "fake-id", csEnv.ProjectName, time.Hour).Return("", fmt.Errorf("create error"))
+				gc.EXPECT().CreateProject("", "fake-id", csEnv.ProjectName, mock.Anything).Return("", fmt.Errorf("create error"))
 
 				err := bs.EnsureProject()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create project"))
 				Expect(err.Error()).To(ContainSubstring("create error"))
+			})
+
+			It("returns an error when UpdateProject fails", func() {
+				gc.EXPECT().GetProjectByName(csEnv.FolderID, csEnv.ProjectName).Return(&resourcemanagerpb.Project{ProjectId: "existing-id", Name: "existing-proj"}, nil)
+				gc.EXPECT().UpdateProject("existing-id", mock.Anything).Return(fmt.Errorf("failed to update project"))
+
+				err := bs.EnsureProject()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to update project"))
 			})
 		})
 	})
@@ -1003,10 +1012,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 				// Mock ReadFile for SSH key
 				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 
-				// Mock CreateInstance (9 times)
-				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
+				// Mock CreateInstance (8 times)
+				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 
-				// Mock GetInstance (9 times)
+				// Mock GetInstance (8 times)
 				ipResp := &computepb.Instance{
 					NetworkInterfaces: []*computepb.NetworkInterface{
 						{
@@ -1017,12 +1026,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 						},
 					},
 				}
-				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(9)
+				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(8)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(bs.Env.ControlPlaneNodes)).To(Equal(3))
-				Expect(len(bs.Env.CephNodes)).To(Equal(4))
+				Expect(len(bs.Env.CephNodes)).To(Equal(3))
 				Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
 				Expect(bs.Env.Jumpbox).NotTo(BeNil())
 			})
@@ -1035,14 +1044,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 				It("does not fetch GitHub org keys when GitHub team org is set without slug", func() {
 					fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
-					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(9)
+					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 					ipResp := &computepb.Instance{
 						NetworkInterfaces: []*computepb.NetworkInterface{{
 							NetworkIP:     protoString("10.0.0.x"),
 							AccessConfigs: []*computepb.AccessConfig{{NatIP: protoString("1.2.3.x")}},
 						}},
 					}
-					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(9)
+					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(8)
 
 					err := bs.EnsureComputeInstances()
 					Expect(err).NotTo(HaveOccurred())
@@ -1067,7 +1076,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 								return fmt.Errorf("expected ssh metadata to include team user key")
 							}
 							return nil
-						}).Times(9)
+						}).Times(8)
 
 						ipResp := &computepb.Instance{
 							NetworkInterfaces: []*computepb.NetworkInterface{{
@@ -1075,7 +1084,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 								AccessConfigs: []*computepb.AccessConfig{{NatIP: protoString("1.2.3.x")}},
 							}},
 						}
-						gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(9)
+						gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(8)
 
 						err := bs.EnsureComputeInstances()
 						Expect(err).NotTo(HaveOccurred())
