@@ -1445,66 +1445,6 @@ func (_c *MockPackageManager_FileIO_Call) RunAndReturn(run func() util.FileIO) *
 	return _c
 }
 
-// GetBaseimageName provides a mock function for the type MockPackageManager
-func (_mock *MockPackageManager) GetBaseimageName(baseimage string) (string, error) {
-	ret := _mock.Called(baseimage)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetBaseimageName")
-	}
-
-	var r0 string
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) (string, error)); ok {
-		return returnFunc(baseimage)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string) string); ok {
-		r0 = returnFunc(baseimage)
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(baseimage)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockPackageManager_GetBaseimageName_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetBaseimageName'
-type MockPackageManager_GetBaseimageName_Call struct {
-	*mock.Call
-}
-
-// GetBaseimageName is a helper method to define mock.On call
-//   - baseimage string
-func (_e *MockPackageManager_Expecter) GetBaseimageName(baseimage interface{}) *MockPackageManager_GetBaseimageName_Call {
-	return &MockPackageManager_GetBaseimageName_Call{Call: _e.mock.On("GetBaseimageName", baseimage)}
-}
-
-func (_c *MockPackageManager_GetBaseimageName_Call) Run(run func(baseimage string)) *MockPackageManager_GetBaseimageName_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		run(
-			arg0,
-		)
-	})
-	return _c
-}
-
-func (_c *MockPackageManager_GetBaseimageName_Call) Return(s string, err error) *MockPackageManager_GetBaseimageName_Call {
-	_c.Call.Return(s, err)
-	return _c
-}
-
-func (_c *MockPackageManager_GetBaseimageName_Call) RunAndReturn(run func(baseimage string) (string, error)) *MockPackageManager_GetBaseimageName_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // GetBaseimagePath provides a mock function for the type MockPackageManager
 func (_mock *MockPackageManager) GetBaseimagePath(baseimage string, force bool) (string, error) {
 	ret := _mock.Called(baseimage, force)
@@ -1671,6 +1611,66 @@ func (_c *MockPackageManager_GetDependencyPath_Call) Return(s string) *MockPacka
 }
 
 func (_c *MockPackageManager_GetDependencyPath_Call) RunAndReturn(run func(filename string) string) *MockPackageManager_GetDependencyPath_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetFullImageTag provides a mock function for the type MockPackageManager
+func (_mock *MockPackageManager) GetFullImageTag(baseimage string) (string, error) {
+	ret := _mock.Called(baseimage)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetFullImageTag")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (string, error)); ok {
+		return returnFunc(baseimage)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) string); ok {
+		r0 = returnFunc(baseimage)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(baseimage)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPackageManager_GetFullImageTag_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetFullImageTag'
+type MockPackageManager_GetFullImageTag_Call struct {
+	*mock.Call
+}
+
+// GetFullImageTag is a helper method to define mock.On call
+//   - baseimage string
+func (_e *MockPackageManager_Expecter) GetFullImageTag(baseimage interface{}) *MockPackageManager_GetFullImageTag_Call {
+	return &MockPackageManager_GetFullImageTag_Call{Call: _e.mock.On("GetFullImageTag", baseimage)}
+}
+
+func (_c *MockPackageManager_GetFullImageTag_Call) Run(run func(baseimage string)) *MockPackageManager_GetFullImageTag_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockPackageManager_GetFullImageTag_Call) Return(s string, err error) *MockPackageManager_GetFullImageTag_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockPackageManager_GetFullImageTag_Call) RunAndReturn(run func(baseimage string) (string, error)) *MockPackageManager_GetFullImageTag_Call {
 	_c.Call.Return(run)
 	return _c
 }

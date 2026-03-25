@@ -315,10 +315,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockFileIO.EXPECT().ReadDir(tempDir).Return(mockEntries, nil)
 
 				mockPackageManager.EXPECT().ExtractDependency("bom.json", false).Return(nil)
-
-				// New logic mocks
-				mockPackageManager.EXPECT().GetBaseimageName("docker.io/library/ubuntu:24.04").Return("docker.io/library/ubuntu:24.04", nil)
-
+				mockPackageManager.EXPECT().GetFullImageTag("docker.io/library/ubuntu:24.04").Return("docker.io/library/ubuntu:24.04", nil)
 				mockPackageManager.EXPECT().ExtractDependency("codesphere/images/ubuntu.tar", false).Return(nil)
 				mockPackageManager.EXPECT().GetDependencyPath("codesphere/images/ubuntu.tar").Return(filepath.Join(tempDir, "deps/codesphere/images/ubuntu.tar"))
 				mockImageManager.EXPECT().LoadImage(filepath.Join(tempDir, "deps/codesphere/images/ubuntu.tar")).Return(nil)
@@ -326,8 +323,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				// Mock for reading the Dockerfile - MUST return *os.File for next steps
 				mockFileIO.EXPECT().Open("workspace.Dockerfile").Return(realFile, nil)
 
-				// Expect WriteFile with updated content
-				// "FROM workspace-agent" becomes "FROM docker.io/library/ubuntu:24.04"
+				// Expect updated content in the dockerfile
 				mockFileIO.EXPECT().WriteFile("workspace.Dockerfile", []byte("FROM docker.io/library/ubuntu:24.04"), os.FileMode(0644)).Return(nil)
 
 				// Expect Build

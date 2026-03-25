@@ -341,8 +341,8 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 	})
 })
 
-// Tests for GetBaseimageName
-var _ = Describe("Package GetBaseimageName", func() {
+// Tests for GetFullImageTag
+var _ = Describe("Package GetFullImageTag", func() {
 	var (
 		pkg     *installer.Package
 		tempDir string
@@ -354,10 +354,10 @@ var _ = Describe("Package GetBaseimageName", func() {
 		pkg = installer.NewPackage(omsWorkdir, "test-package.tar.gz").(*installer.Package)
 	})
 
-	Describe("GetBaseimageName", func() {
+	Describe("GetFullImageTag", func() {
 		Context("when baseimage parameter is empty", func() {
 			It("returns an error", func() {
-				_, err := pkg.GetBaseimageName("")
+				_, err := pkg.GetFullImageTag("")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("baseimage not specified"))
 			})
@@ -365,7 +365,7 @@ var _ = Describe("Package GetBaseimageName", func() {
 
 		Context("when bom.json file does not exist", func() {
 			It("returns an error", func() {
-				_, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				_, err := pkg.GetFullImageTag("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
 			})
@@ -382,7 +382,7 @@ var _ = Describe("Package GetBaseimageName", func() {
 				err = os.WriteFile(bomPath, []byte("invalid json"), 0644)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = pkg.GetBaseimageName("workspace-agent-24.04")
+				_, err = pkg.GetFullImageTag("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
 			})
@@ -406,7 +406,7 @@ var _ = Describe("Package GetBaseimageName", func() {
 				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = pkg.GetBaseimageName("workspace-agent-24.04")
+				_, err = pkg.GetFullImageTag("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get codesphere container images from bom.json"))
 			})
@@ -432,7 +432,7 @@ var _ = Describe("Package GetBaseimageName", func() {
 				err = os.WriteFile(bomPath, []byte(bomContent), 0644)
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = pkg.GetBaseimageName("workspace-agent-24.04")
+				_, err = pkg.GetFullImageTag("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("baseimage workspace-agent-24.04 not found in bom.json"))
 			})
@@ -461,13 +461,13 @@ var _ = Describe("Package GetBaseimageName", func() {
 			})
 
 			It("returns the correct image name", func() {
-				imageName, err := pkg.GetBaseimageName("workspace-agent-24.04")
+				imageName, err := pkg.GetFullImageTag("workspace-agent-24.04")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(imageName).To(Equal("ghcr.io/codesphere-cloud/workspace-agent-24.04:codesphere-v1.66.0"))
 			})
 
 			It("returns the correct image name for different baseimage", func() {
-				imageName, err := pkg.GetBaseimageName("workspace-agent-20.04")
+				imageName, err := pkg.GetFullImageTag("workspace-agent-20.04")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(imageName).To(Equal("ghcr.io/codesphere-cloud/workspace-agent-20.04:codesphere-v1.65.0"))
 			})
