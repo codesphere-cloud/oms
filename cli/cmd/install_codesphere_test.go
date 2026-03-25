@@ -241,6 +241,8 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				}
 				mockFileIO.EXPECT().ReadDir("/test/workdir/package").Return(mockEntries, nil)
 
+				mockPackageManager.EXPECT().ExtractDependency("bom.json", false).Return(nil)
+
 				err := c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
 				Expect(err).To(HaveOccurred())
 				// Should fail when trying to make fake node executable
@@ -327,7 +329,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockFileIO.EXPECT().WriteFile("workspace.Dockerfile", []byte("FROM docker.io/library/ubuntu:24.04"), os.FileMode(0644)).Return(nil)
 
 				// Expect Build
-				expectedBuildTag := "https://my-registry.com/codesphere-registry/ubuntu-custom"
+				expectedBuildTag := "https://my-registry.com/codesphere-registry/ubuntu-24.04-default"
 				mockImageManager.EXPECT().BuildImage("workspace.Dockerfile", expectedBuildTag, ".").Return(nil)
 
 				// Expect Push
