@@ -21,9 +21,13 @@ vendor/
 go.work
 go.work.sum
 
+# Go modules
+vendor
+
 # local env
 .envrc
 .env
+.installer
 
 # bin file
 bin/

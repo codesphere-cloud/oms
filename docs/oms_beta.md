@@ -17,6 +17,7 @@ Be aware that that usage and behavior may change as the features are developed.
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)
 * [oms beta bootstrap-gcp](oms_beta_bootstrap-gcp.md)	 - Bootstrap GCP infrastructure for Codesphere
+* [oms beta bootstrap-local](oms_beta_bootstrap-local.md)	 - Bootstrap a local Codesphere environment
 * [oms beta extend](oms_beta_extend.md)	 - Extend Codesphere ressources such as base images.
 * [oms beta install](oms_beta_install.md)	 - Install beta components
 

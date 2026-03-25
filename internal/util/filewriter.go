@@ -38,12 +38,12 @@ func (fs *FilesystemWriter) Create(filename string) (*os.File, error) {
 func (fs *FilesystemWriter) CreateAndWrite(filePath string, data []byte, fileType string) error {
 	file, err := fs.Create(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to create %s file: %w", fileType, err)
+		return fmt.Errorf("failed to create %s file at %q: %w", fileType, filePath, err)
 	}
 	defer CloseFileIgnoreError(file)
 
 	if _, err = file.Write(data); err != nil {
-		return fmt.Errorf("failed to write %s file: %w", fileType, err)
+		return fmt.Errorf("failed to write %s file at %q: %w", fileType, filePath, err)
 	}
 
 	log.Printf("\n%s file created: %s", fileType, filePath)
