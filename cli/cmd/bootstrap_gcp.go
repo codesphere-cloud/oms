@@ -108,10 +108,6 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 }
 
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
-	if c.CodesphereEnv.Preemptible && c.CodesphereEnv.SpotVMs {
-		return fmt.Errorf("--preemptible and --spot-vms are mutually exclusive, please specify only one")
-	}
-
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false)
 	icg := installer.NewInstallConfigManager()
