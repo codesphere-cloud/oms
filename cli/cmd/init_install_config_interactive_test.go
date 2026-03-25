@@ -142,4 +142,63 @@ var _ = Describe("Interactive profile usage", func() {
 			Expect(config.Cluster.Monitoring.Loki.Enabled).To(BeTrue())
 		})
 	})
+
+	Context("when interactive mode has validation warnings", func() {
+		It("should generate config files despite validation errors", func() {
+			mockIcg := installer.NewMockInstallConfigManager(GinkgoT())
+
+			mockIcg.EXPECT().ApplyProfile("dev").Return(nil)
+			mockIcg.EXPECT().CollectInteractively().Return(nil)
+			mockIcg.EXPECT().ValidateInstallConfig().Return([]string{"OpenBao URI must be a valid URL"})
+			mockIcg.EXPECT().GenerateSecrets().Return(nil)
+			mockIcg.EXPECT().WriteInstallConfig("config.yaml", false).Return(nil)
+			mockIcg.EXPECT().WriteVault("vault.yaml", false).Return(nil)
+
+			c := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					GlobalOptions: &GlobalOptions{},
+					ConfigFile:    "config.yaml",
+					VaultFile:     "vault.yaml",
+					Profile:       "dev",
+					Interactive:   true,
+				},
+				FileWriter: util.NewFilesystemWriter(),
+			}
+
+			err := c.InitInstallConfig(mockIcg)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should still fail in non-interactive mode with validation errors", func() {
+			configFile, err := os.CreateTemp("", "config-*.yaml")
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = os.Remove(configFile.Name()) }()
+			err = configFile.Close()
+			Expect(err).NotTo(HaveOccurred())
+
+			vaultFile, err := os.CreateTemp("", "vault-*.yaml")
+			Expect(err).NotTo(HaveOccurred())
+			defer func() { _ = os.Remove(vaultFile.Name()) }()
+			err = vaultFile.Close()
+			Expect(err).NotTo(HaveOccurred())
+
+			c := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					GlobalOptions:        &GlobalOptions{},
+					ConfigFile:           configFile.Name(),
+					VaultFile:            vaultFile.Name(),
+					Profile:              "dev",
+					Interactive:          false,
+					CodesphereOpenBaoUri: "not-a-valid-url",
+				},
+				FileWriter: util.NewFilesystemWriter(),
+			}
+
+			icg := installer.NewInstallConfigManager()
+
+			err = c.InitInstallConfig(icg)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("configuration validation failed"))
+		})
+	})
 })
