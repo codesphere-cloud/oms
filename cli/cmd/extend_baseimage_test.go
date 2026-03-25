@@ -67,7 +67,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
-			mockPackageManager.EXPECT().GetBaseimageName("").Return("", errors.New("failed to get image name: extraction failed"))
+			mockPackageManager.EXPECT().GetFullImageTag("").Return("", errors.New("failed to get image name: extraction failed"))
 
 			err := c.ExtendBaseimage(mockPackageManager, mockImageManager)
 			Expect(err).To(HaveOccurred())
@@ -79,7 +79,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
-			mockPackageManager.EXPECT().GetBaseimageName("").Return("", errors.New("failed to extract OCI image index: index extraction failed"))
+			mockPackageManager.EXPECT().GetFullImageTag("").Return("", errors.New("failed to extract OCI image index: index extraction failed"))
 
 			err := c.ExtendBaseimage(mockPackageManager, mockImageManager)
 			Expect(err).To(HaveOccurred())
@@ -91,7 +91,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
-			mockPackageManager.EXPECT().GetBaseimageName("").Return("", errors.New("failed to read image tags: no image names found"))
+			mockPackageManager.EXPECT().GetFullImageTag("").Return("", errors.New("failed to read image tags: no image names found"))
 
 			err := c.ExtendBaseimage(mockPackageManager, mockImageManager)
 			Expect(err).To(HaveOccurred())
@@ -110,7 +110,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			defer func() { _ = tempFile.Close() }()
 
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
-			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04-base", nil)
+			mockPackageManager.EXPECT().GetFullImageTag("").Return("ubuntu:24.04-base", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
 			mockFileIO.EXPECT().Create("Dockerfile").Return(tempFile, nil)
@@ -127,7 +127,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 
 			c.Opts.Force = true
 			mockPackageManager.EXPECT().Extract(true).Return(nil)
-			mockPackageManager.EXPECT().GetBaseimageName("").Return("", errors.New("failed to extract package to workdir: extraction failed"))
+			mockPackageManager.EXPECT().GetFullImageTag("").Return("", errors.New("failed to extract package to workdir: extraction failed"))
 
 			err := c.ExtendBaseimage(mockPackageManager, mockImageManager)
 			Expect(err).To(HaveOccurred())
@@ -146,7 +146,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			defer func() { _ = tempFile.Close() }()
 
 			mockPackageManager.EXPECT().Extract(false).Return(nil)
-			mockPackageManager.EXPECT().GetBaseimageName("").Return("ubuntu:24.04-base", nil)
+			mockPackageManager.EXPECT().GetFullImageTag("").Return("ubuntu:24.04-base", nil)
 			mockPackageManager.EXPECT().GetBaseimagePath("", false).Return("/test/workdir/deps/codesphere/images/workspace-agent-24.04.tar", nil)
 			mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
 			mockFileIO.EXPECT().Create("Dockerfile").Return(tempFile, nil)
