@@ -16,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
+//mockery:generate: true
 type K0sctlManager interface {
 	GetLatestVersion() (string, error)
 	Download(version string, force bool, quiet bool) (string, error)
@@ -31,7 +32,7 @@ type K0sctl struct {
 	Goarch     string
 }
 
-func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) K0sctlManager {
+func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) *K0sctl {
 	return &K0sctl{
 		Env:        env,
 		Http:       hw,

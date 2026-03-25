@@ -55,8 +55,8 @@ type K0sctlBastion struct {
 }
 
 type K0sctlK0s struct {
-	Version string                 `yaml:"version"`
-	Config  map[string]interface{} `yaml:"config,omitempty"`
+	Version string     `yaml:"version"`
+	Config  *K0sConfig `yaml:"config,omitempty"`
 }
 
 type K0sctlHooks struct {
@@ -69,22 +69,12 @@ type K0sctlApplyHooks struct {
 }
 
 func createK0sctlHost(node files.K8sNode, role string, installFlags []string, sshKeyPath string, k0sBinaryPath string) K0sctlHost {
-	sshPort := node.SSHPort
-	if sshPort == 0 {
-		sshPort = 22
-	}
-
-	sshAddress := node.SSHAddress
-	if sshAddress == "" {
-		sshAddress = node.IPAddress
-	}
-
 	host := K0sctlHost{
 		Role: role,
 		SSH: K0sctlSSH{
-			Address: sshAddress,
+			Address: node.IPAddress,
 			User:    "root",
-			Port:    sshPort,
+			Port:    22,
 			KeyPath: sshKeyPath,
 		},
 		InstallFlags:   installFlags,
@@ -118,17 +108,6 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 		return nil, fmt.Errorf("failed to generate k0s config: %w", err)
 	}
 
-	// Convert K0sConfig struct to map for k0sctl
-	k0sConfigYAML, err := k0sConfig.Marshal()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal k0s config: %w", err)
-	}
-
-	var k0sConfigMap map[string]interface{}
-	if err := yaml.Unmarshal(k0sConfigYAML, &k0sConfigMap); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal k0s config to map: %w", err)
-	}
-
 	k0sctlConfig := &K0sctlConfig{
 		APIVersion: "k0sctl.k0sproject.io/v1beta1",
 		Kind:       "Cluster",
@@ -139,7 +118,7 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 			Hosts: []K0sctlHost{},
 			K0s: K0sctlK0s{
 				Version: k0sVersion,
-				Config:  k0sConfigMap,
+				Config:  k0sConfig,
 			},
 		},
 	}

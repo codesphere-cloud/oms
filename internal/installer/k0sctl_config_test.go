@@ -104,93 +104,6 @@ var _ = Describe("K0sctlConfig", func() {
 				Expect(k0sctlConfig.Spec.Hosts[2].Role).To(Equal("worker"))
 			})
 
-			It("should use SSHAddress when specified", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{
-								IPAddress:  "10.0.1.10",
-								SSHAddress: "ssh.example.com",
-							},
-						},
-					},
-				}
-
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(k0sctlConfig.Spec.Hosts[0].SSH.Address).To(Equal("ssh.example.com"))
-				Expect(k0sctlConfig.Spec.Hosts[0].PrivateAddress).To(Equal("10.0.1.10"))
-			})
-
-			It("should default SSHAddress to IPAddress when not specified", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-					},
-				}
-
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(k0sctlConfig.Spec.Hosts[0].SSH.Address).To(Equal("10.0.1.10"))
-			})
-
-			It("should use SSHPort when specified", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{
-								IPAddress: "10.0.1.10",
-								SSHPort:   2222,
-							},
-						},
-					},
-				}
-
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(k0sctlConfig.Spec.Hosts[0].SSH.Port).To(Equal(2222))
-			})
-
-			It("should default SSHPort to 22 when not specified", func() {
-				installConfig := &files.RootConfig{
-					Datacenter: files.DatacenterConfig{
-						ID:   1,
-						Name: "test-dc",
-					},
-					Kubernetes: files.KubernetesConfig{
-						ManagedByCodesphere: true,
-						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10"},
-						},
-					},
-				}
-
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(k0sctlConfig.Spec.Hosts[0].SSH.Port).To(Equal(22))
-			})
-
 			It("should skip duplicate IPs between control planes and workers", func() {
 				installConfig := &files.RootConfig{
 					Datacenter: files.DatacenterConfig{
@@ -465,10 +378,10 @@ var _ = Describe("K0sctlConfig", func() {
 					Kubernetes: files.KubernetesConfig{
 						ManagedByCodesphere: true,
 						ControlPlanes: []files.K8sNode{
-							{IPAddress: "10.0.1.10", SSHAddress: "public1.example.com"},
+							{IPAddress: "10.0.1.10"},
 						},
 						Workers: []files.K8sNode{
-							{IPAddress: "10.0.2.10", SSHAddress: "public2.example.com"},
+							{IPAddress: "10.0.2.10"},
 						},
 					},
 				}

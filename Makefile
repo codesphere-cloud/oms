@@ -6,9 +6,6 @@ build-cli:
 build-cli-linux:
 	GOOS=linux GOARCH=amd64 go build -C cli -o ../oms
 
-build-service:
-	cd service && go build -v && mv service ../oms-service
-
 test:
 	# -count=1 to disable caching test results
 	go test -count=1 -v ./...
