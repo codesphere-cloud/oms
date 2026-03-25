@@ -64,7 +64,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 	if err != nil {
 		return nil, fmt.Errorf("failed to get API Key: %w", err)
 	}
-	_ = apiKey
+
 	req.Header.Set("X-API-Key", apiKey)
 
 	resp, err = c.HttpClient.Do(req)
@@ -80,6 +80,8 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 	return resp, nil
 }
 
+// isOKResponseStatus checks the status code in the response
+// if status is not a 2xx response it returns an error and logs some info for the user output depending on the required steps
 func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 	if resp.StatusCode == http.StatusUnauthorized {
 		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
@@ -91,7 +93,6 @@ func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 	if resp.StatusCode >= 300 {
 		log.Printf("Non-2xx response received from OMS-Portal (%s) - Status: %d", c.Env.GetOmsPortalApi(), resp.StatusCode)
 
-		// check if oms-portal is healthy
 		healthErr := c.GetHealth()
 		if healthErr != nil {
 			healthErr = fmt.Errorf("OMS-Portal healthcheck failed: %w", healthErr)
@@ -430,6 +431,8 @@ func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 	return result.KeyID, nil
 }
 
+// GetHealth checks the response of the OMS-Portal health endpoint
+// returns an error if portal is unhealthy
 func (c *PortalClient) GetHealth() error {
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "health")
 	if err != nil {

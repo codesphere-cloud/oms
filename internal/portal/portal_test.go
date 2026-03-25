@@ -78,15 +78,13 @@ var _ = Describe("PortalClient", func() {
 			BeforeEach(func() {
 				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 					func(req *http.Request) (*http.Response, error) {
-						getUrl = *req.URL
 						return &http.Response{
 							StatusCode: http.StatusOK,
-							Body:       io.NopCloser(bytes.NewReader([]byte("test"))),
 						}, nil
 					})
 			})
 
-			It("returns response and no error", func() {
+			It("returns a response and no error", func() {
 				testRequest, err := http.NewRequest("GET", "fake", nil)
 				Expect(err).ToNot(HaveOccurred())
 
@@ -100,7 +98,6 @@ var _ = Describe("PortalClient", func() {
 			BeforeEach(func() {
 				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 					func(req *http.Request) (*http.Response, error) {
-						getUrl = *req.URL
 						return &http.Response{
 							StatusCode: http.StatusUnauthorized,
 						}, nil
@@ -127,8 +124,6 @@ var _ = Describe("PortalClient", func() {
 				It("returns no response and an error showing portal is healthy", func() {
 					mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 						func(req *http.Request) (*http.Response, error) {
-							getUrl = *req.URL
-
 							if strings.Contains(req.URL.Path, "health") {
 								headers := http.Header{}
 								headers.Add("X-Service-Name", "oms-portal")
@@ -157,8 +152,6 @@ var _ = Describe("PortalClient", func() {
 				It("returns no response and an error showing portal is unhealthy", func() {
 					mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 						func(req *http.Request) (*http.Response, error) {
-							getUrl = *req.URL
-
 							return &http.Response{
 								StatusCode: http.StatusNotFound,
 							}, nil
