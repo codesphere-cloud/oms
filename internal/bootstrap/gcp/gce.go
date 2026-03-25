@@ -52,6 +52,7 @@ type vmResult struct {
 	internalIP string
 }
 
+// EnsureComputeInstances ensures that all required compute instances are present and running.
 func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	rootDiskSize := int64(200)
 	if b.Env.RegistryType == RegistryTypeGitHub {
