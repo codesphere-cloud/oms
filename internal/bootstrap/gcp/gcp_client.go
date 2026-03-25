@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strings"
 	"sync"
-	"time"
 
 	"slices"
 
@@ -30,6 +29,7 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // Interface for high-level GCP operations
@@ -38,7 +38,8 @@ import (
 type GCPClientManager interface {
 	GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error)
 	CreateProjectID(projectName string) string
-	CreateProject(parent, projectName, displayName string, ttl time.Duration) (string, error)
+	CreateProject(parent, projectName, displayName string, labels map[string]string) (string, error)
+	UpdateProject(projectID string, labels map[string]string) error
 	DeleteProject(projectID string) error
 	IsOMSManagedProject(projectID string) (bool, error)
 	GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error)
@@ -54,6 +55,7 @@ type GCPClientManager interface {
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
 	GetInstance(projectID, zone, instanceName string) (*computepb.Instance, error)
+	StartInstance(projectID, zone, instanceName string) error
 	CreateAddress(projectID, region string, address *computepb.Address) (string, error)
 	GetAddress(projectID, region, addressName string) (*computepb.Address, error)
 	EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error
@@ -117,26 +119,18 @@ func (c *GCPClient) CreateProjectID(projectName string) string {
 
 // CreateProject creates a new GCP project under the specified parent (folder or organization).
 // It returns the project ID of the newly created project.
-// The project is labeled with 'oms-managed=true' to identify it as created by OMS.
-func (c *GCPClient) CreateProject(parent, projectID, displayName string, projectTTL time.Duration) (string, error) {
+func (c *GCPClient) CreateProject(parent, projectID, displayName string, labels map[string]string) (string, error) {
 	client, err := resourcemanager.NewProjectsClient(c.ctx)
 	if err != nil {
 		return "", err
 	}
 	defer util.IgnoreError(client.Close)
 
-	gcpLabelLayout := "2006-01-02_15-04-05"
-	deleteProjectAfter := time.Now().UTC().Add(projectTTL).Format(gcpLabelLayout)
-	deleteProjectAfter = fmt.Sprintf("%s_utc", deleteProjectAfter) // GCP Labels are very limited. This is the only way to add TZ info.
-
 	project := &resourcemanagerpb.Project{
 		ProjectId:   projectID,
 		DisplayName: displayName,
 		Parent:      parent,
-		Labels: map[string]string{
-			OMSManagedLabel:  "true",
-			DeleteAfterLabel: deleteProjectAfter,
-		},
+		Labels:      labels,
 	}
 
 	op, err := client.CreateProject(c.ctx, &resourcemanagerpb.CreateProjectRequest{Project: project})
@@ -150,6 +144,37 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string, project
 	}
 
 	return resp.ProjectId, nil
+}
+
+// UpdateProject updates the project's labels of an existing GCP project.
+// Returns an error if the update operation fails or if the project does not exist.
+func (c *GCPClient) UpdateProject(projectID string, labels map[string]string) error {
+	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	if err != nil {
+		return err
+	}
+	defer util.IgnoreError(client.Close)
+
+	project := &resourcemanagerpb.Project{
+		Name:   getProjectResourceName(projectID),
+		Labels: labels,
+	}
+
+	op, err := client.UpdateProject(c.ctx, &resourcemanagerpb.UpdateProjectRequest{
+		Project: project,
+		UpdateMask: &fieldmaskpb.FieldMask{
+			Paths: []string{"labels"},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update project %s with config %v: %w", projectID, project, err)
+	}
+
+	if _, err = op.Wait(c.ctx); err != nil {
+		return fmt.Errorf("failed to wait for project update: %w", err)
+	}
+
+	return nil
 }
 
 // DeleteProject deletes the specified GCP project.
@@ -568,7 +593,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 		Region:         region,
 		RouterResource: router,
 	})
-	if err != nil && !isAlreadyExistsError(err) {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return fmt.Errorf("failed to create router: %w", err)
 	}
 	if err == nil {
@@ -605,7 +630,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 			Nats: []*computepb.RouterNat{nat},
 		},
 	})
-	if err != nil && !isAlreadyExistsError(err) {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return fmt.Errorf("failed to create NAT gateway: %w", err)
 	}
 
@@ -666,6 +691,26 @@ func (c *GCPClient) GetInstance(projectID, zone, instanceName string) (*computep
 		Zone:     zone,
 		Instance: instanceName,
 	})
+}
+
+// StartInstance starts a stopped Compute Engine instance in the specified project and zone.
+func (c *GCPClient) StartInstance(projectID, zone, instanceName string) error {
+	client, err := compute.NewInstancesRESTClient(c.ctx)
+	if err != nil {
+		return err
+	}
+	defer util.IgnoreError(client.Close)
+
+	op, err := client.Start(c.ctx, &computepb.StartInstanceRequest{
+		Project:  projectID,
+		Zone:     zone,
+		Instance: instanceName,
+	})
+	if err != nil {
+		return err
+	}
+
+	return op.Wait(c.ctx)
 }
 
 // CreateAddress creates a new static IP address in the specified project and region.
