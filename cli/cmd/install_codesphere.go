@@ -125,8 +125,8 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 	}
 
 	// If workspace image is extended extract bom.json and load workspace image
-	for _, imageConfig := range config.Codesphere.DeployConfig.Images {
-		for _, flavor := range imageConfig.Flavors {
+	for imageKey, imageConfig := range config.Codesphere.DeployConfig.Images {
+		for flavorKey, flavor := range imageConfig.Flavors {
 			if flavor.Image.Dockerfile != "" && config.Registry != nil && config.Registry.Server != "" {
 				bomRef := flavor.Image.BomRef
 				dockerfile := flavor.Image.Dockerfile
@@ -184,7 +184,7 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 
 				// Determine image tag for build and push
 				registryUrl := strings.TrimRight(config.Registry.Server, "/")
-				buildTag := fmt.Sprintf("%s/codesphere-registry/%s-%s", registryUrl, config.Codesphere.DeployConfig.Images)
+				buildTag := fmt.Sprintf("%s/codesphere-registry/%s-%s", registryUrl, imageKey, flavorKey)
 
 				err = im.BuildImage(dockerfileName, buildTag, dockerfileDir)
 				if err != nil {
