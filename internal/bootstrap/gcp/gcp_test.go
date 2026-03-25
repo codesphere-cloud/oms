@@ -22,15 +22,12 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
-	gh "github.com/google/go-github/v74/github"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
 )
-
-func protoString(s string) *string { return &s }
 
 func jumpbboxMatcher(node *node.Node) bool {
 	return node.GetName() == "jumpbox"
@@ -137,7 +134,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			bs.Env.RegistryType = gcp.RegistryTypeArtifactRegistry
 			bs.Env.WriteConfig = true
 
-			// 1. EnsureInstallConfig
+			// EnsureInstallConfig
 			fw.EXPECT().Exists("fake-config-file").Return(false)
 			icg.EXPECT().ApplyProfile("minimal").Return(nil)
 			// Returning a real install config to avoid nil pointer dereferences later
@@ -149,60 +146,49 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			projectId := "test-project-12345"
 
-			// 2. EnsureSecrets
+			// EnsureSecrets
 			fw.EXPECT().Exists("fake-secret").Return(false)
 			icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
-			// 3. EnsureProject
+			// EnsureProject
 			gc.EXPECT().GetProjectByName(mock.Anything, "test-project").Return(nil, fmt.Errorf("project not found: test-project"))
 			gc.EXPECT().CreateProjectID("test-project").Return(projectId)
 			gc.EXPECT().CreateProject(mock.Anything, mock.Anything, "test-project", mock.Anything).Return(mock.Anything, nil)
 
-			// 4. EnsureBilling
+			// EnsureBilling
 			gc.EXPECT().GetBillingInfo(projectId).Return(&cloudbilling.ProjectBillingInfo{BillingEnabled: false}, nil)
 			gc.EXPECT().EnableBilling(projectId, "test-billing-account").Return(nil)
 
-			// 5. EnsureAPIsEnabled
+			// EnsureAPIsEnabled
 			gc.EXPECT().EnableAPIs(projectId, mock.Anything).Return(nil)
 
-			// 6. EnsureArtifactRegistry
+			// EnsureArtifactRegistry
 			gc.EXPECT().GetArtifactRegistry(projectId, "us-central1", "codesphere-registry").Return(nil, fmt.Errorf("not found"))
 			gc.EXPECT().CreateArtifactRegistry(projectId, "us-central1", "codesphere-registry").Return(&artifactregistrypb.Repository{Name: "codesphere-registry"}, nil)
 
-			// 7. EnsureServiceAccounts
+			// EnsureServiceAccounts
 			gc.EXPECT().CreateServiceAccount(projectId, "cloud-controller", "cloud-controller").Return("cloud-controller@p.iam.gserviceaccount.com", false, nil)
 			gc.EXPECT().CreateServiceAccount(projectId, "artifact-registry-writer", "artifact-registry-writer").Return("writer@p.iam.gserviceaccount.com", true, nil)
 			gc.EXPECT().CreateServiceAccountKey(projectId, "writer@p.iam.gserviceaccount.com").Return("fake-key", nil)
 
-			// 8. EnsureIAMRoles
+			// EnsureIAMRoles
 			gc.EXPECT().AssignIAMRole(projectId, "artifact-registry-writer", projectId, []string{"roles/artifactregistry.writer"}).Return(nil)
 			gc.EXPECT().AssignIAMRole(projectId, "cloud-controller", projectId, []string{"roles/compute.admin"}).Return(nil)
 			gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", projectId, []string{"roles/dns.admin"}).Return(nil)
 
-			// 9. EnsureVPC
+			// EnsureVPC
 			gc.EXPECT().CreateVPC(projectId, "us-central1", projectId+"-vpc", projectId+"-us-central1-subnet", projectId+"-router", projectId+"-nat-gateway").Return(nil)
 
-			// 10. EnsureFirewallRules (5 times)
+			// EnsureFirewallRules (5 times)
 			gc.EXPECT().CreateFirewallRule(projectId, mock.Anything).Return(nil).Times(5)
 
-			// 11. EnsureComputeInstances
+			// EnsureComputeInstances
+			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
+			mockGetInstanceNotFoundThenRunning(gc, projectId, "us-central1-a", ipResp, 8)
+			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(8)
 			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(8)
-			// GetInstance calls to retrieve IPs
-			ipResp := &computepb.Instance{
-				NetworkInterfaces: []*computepb.NetworkInterface{
-					{
-						NetworkIP: protoString("10.0.0.1"),
-						AccessConfigs: []*computepb.AccessConfig{
-							{NatIP: protoString("1.2.3.4")},
-						},
-					},
-				},
-			}
 
-			gc.EXPECT().GetInstance(projectId, "us-central1-a", mock.Anything).Return(ipResp, nil).Times(8)
-			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(1)
-
-			// 12. EnsureGatewayIPAddresses
+			// EnsureGatewayIPAddresses
 			gc.EXPECT().GetAddress(projectId, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
 			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "gateway" })).Return("1.1.1.1", nil)
 			gc.EXPECT().GetAddress(projectId, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
@@ -210,7 +196,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "public-gateway" })).Return("2.2.2.2", nil)
 			gc.EXPECT().GetAddress(projectId, "us-central1", "public-gateway").Return(&computepb.Address{Address: protoString("2.2.2.2")}, nil)
 
-			// 16. UpdateInstallConfig
+			// UpdateInstallConfig
 			icg.EXPECT().GenerateSecrets().Return(nil)
 			icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 			nodeClient.EXPECT().CopyFile(mock.Anything, "fake-config-file", "/etc/codesphere/config.yaml").Return(nil)
@@ -221,23 +207,23 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().WaitReady(mock.Anything, mock.Anything).Return(nil).Return(nil)
 			nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
-			// 17. EnsureAgeKey
+			// EnsureAgeKey
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(nil)
 			nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
 
-			// 18. EncryptVault
+			// EncryptVault
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "cp /etc/codesphere/secrets/prod.vault.yaml{,.bak}").Return(nil)
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", mock.MatchedBy(func(cmd string) bool {
 				return strings.Contains(cmd, "sops --encrypt")
 			})).Return(nil)
 
-			// 19. EnsureDNSRecords
+			// EnsureDNSRecords
 			gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, "test-zone", "example.com.", mock.Anything).Return(nil)
 			gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, "test-zone", mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
 				return len(records) == 4
 			})).Return(nil)
 
-			// 20. GenerateK0sConfigScript
+			// GenerateK0sConfigScript
 			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
 			nodeClient.EXPECT().CopyFile(mock.Anything, "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
 			nodeClient.EXPECT().RunCommand(mock.Anything, "root", "chmod +x /root/configure-k0s.sh").Return(nil)
@@ -998,135 +984,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureFirewallRules()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create jumpbox ssh firewall rule"))
-			})
-		})
-	})
-
-	Describe("EnsureComputeInstances", func() {
-		BeforeEach(func() {
-			csEnv.ControlPlaneNodes = []*node.Node{}
-			csEnv.CephNodes = []*node.Node{}
-		})
-		Describe("Valid EnsureComputeInstances", func() {
-			It("creates all instances", func() {
-				// Mock ReadFile for SSH key
-				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
-
-				// Mock CreateInstance (8 times)
-				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
-
-				// Mock GetInstance (8 times)
-				ipResp := &computepb.Instance{
-					NetworkInterfaces: []*computepb.NetworkInterface{
-						{
-							NetworkIP: protoString("10.0.0.x"),
-							AccessConfigs: []*computepb.AccessConfig{
-								{NatIP: protoString("1.2.3.x")},
-							},
-						},
-					},
-				}
-				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(8)
-
-				err := bs.EnsureComputeInstances()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(len(bs.Env.ControlPlaneNodes)).To(Equal(3))
-				Expect(len(bs.Env.CephNodes)).To(Equal(3))
-				Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
-				Expect(bs.Env.Jumpbox).NotTo(BeNil())
-			})
-
-			Context("When github org is set", func() {
-				BeforeEach(func() {
-					csEnv.GitHubTeamOrg = "someorg"
-					csEnv.GitHubTeamSlug = ""
-					csEnv.GitHubPAT = "pat"
-				})
-				It("does not fetch GitHub org keys when GitHub team org is set without slug", func() {
-					fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
-					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
-					ipResp := &computepb.Instance{
-						NetworkInterfaces: []*computepb.NetworkInterface{{
-							NetworkIP:     protoString("10.0.0.x"),
-							AccessConfigs: []*computepb.AccessConfig{{NatIP: protoString("1.2.3.x")}},
-						}},
-					}
-					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(8)
-
-					err := bs.EnsureComputeInstances()
-					Expect(err).NotTo(HaveOccurred())
-				})
-				Context("When GitHub team org and slug are set", func() {
-					BeforeEach(func() {
-						csEnv.GitHubTeamSlug = "dev"
-					})
-					It("fetches GitHub team keys", func() {
-						mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug, mock.Anything).Return([]*gh.User{{Login: gh.Ptr("alice")}}, nil).Once()
-						mockGitHubClient.EXPECT().ListUserKeys(mock.Anything, "alice").Return([]*gh.Key{{Key: gh.Ptr("ssh-rsa AAALICE...")}}, nil).Once()
-
-						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
-						gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
-							sshMetadata := ""
-							for _, item := range instance.GetMetadata().GetItems() {
-								if item.GetKey() == "ssh-keys" {
-									sshMetadata = item.GetValue()
-								}
-							}
-							if !strings.Contains(sshMetadata, "AAALICE...") {
-								return fmt.Errorf("expected ssh metadata to include team user key")
-							}
-							return nil
-						}).Times(8)
-
-						ipResp := &computepb.Instance{
-							NetworkInterfaces: []*computepb.NetworkInterface{{
-								NetworkIP:     protoString("10.0.0.x"),
-								AccessConfigs: []*computepb.AccessConfig{{NatIP: protoString("1.2.3.x")}},
-							}},
-						}
-						gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(ipResp, nil).Times(8)
-
-						err := bs.EnsureComputeInstances()
-						Expect(err).NotTo(HaveOccurred())
-					})
-
-					It("fails when GitHub client fails to list team members", func() {
-						mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug, mock.Anything).Return(nil, fmt.Errorf("list members error")).Once()
-
-						err := bs.EnsureComputeInstances()
-						Expect(err).To(HaveOccurred())
-						Expect(err.Error()).To(ContainSubstring("failed to get SSH keys from GitHub team"))
-					})
-				})
-			})
-		})
-
-		Describe("Invalid cases", func() {
-			It("fails when SSH key read fails", func() {
-				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return(nil, fmt.Errorf("read error")).Maybe()
-
-				err := bs.EnsureComputeInstances()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("error reading SSH key from key.pub"))
-			})
-
-			It("fails when CreateInstance fails", func() {
-				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
-				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(fmt.Errorf("create error")).Maybe()
-
-				err := bs.EnsureComputeInstances()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("error ensuring compute instances"))
-			})
-
-			It("fails when GetInstance fails", func() {
-				fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Maybe()
-				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Maybe()
-				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("get error")).Maybe()
-
-				err := bs.EnsureComputeInstances()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("error ensuring compute instances"))
 			})
 		})
 	})

@@ -55,6 +55,7 @@ type GCPClientManager interface {
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
 	GetInstance(projectID, zone, instanceName string) (*computepb.Instance, error)
+	StartInstance(projectID, zone, instanceName string) error
 	CreateAddress(projectID, region string, address *computepb.Address) (string, error)
 	GetAddress(projectID, region, addressName string) (*computepb.Address, error)
 	EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error
@@ -592,7 +593,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 		Region:         region,
 		RouterResource: router,
 	})
-	if err != nil && !isAlreadyExistsError(err) {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return fmt.Errorf("failed to create router: %w", err)
 	}
 	if err == nil {
@@ -629,7 +630,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 			Nats: []*computepb.RouterNat{nat},
 		},
 	})
-	if err != nil && !isAlreadyExistsError(err) {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return fmt.Errorf("failed to create NAT gateway: %w", err)
 	}
 
@@ -690,6 +691,26 @@ func (c *GCPClient) GetInstance(projectID, zone, instanceName string) (*computep
 		Zone:     zone,
 		Instance: instanceName,
 	})
+}
+
+// StartInstance starts a stopped Compute Engine instance in the specified project and zone.
+func (c *GCPClient) StartInstance(projectID, zone, instanceName string) error {
+	client, err := compute.NewInstancesRESTClient(c.ctx)
+	if err != nil {
+		return err
+	}
+	defer util.IgnoreError(client.Close)
+
+	op, err := client.Start(c.ctx, &computepb.StartInstanceRequest{
+		Project:  projectID,
+		Zone:     zone,
+		Instance: instanceName,
+	})
+	if err != nil {
+		return err
+	}
+
+	return op.Wait(c.ctx)
 }
 
 // CreateAddress creates a new static IP address in the specified project and region.
