@@ -80,7 +80,7 @@ var _ = Describe("IAM & Admin", func() {
 				inputValue:    "feat/my-branch-name",
 				expectedLabel: "feat_my_branch_name",
 			}),
-			Entry("long label", testCase{
+			Entry("long label is cut after 64 chars", testCase{
 				inputValue:    "this/is.averylongvaluewhichexceedsthemaximumlengthofagcpprojectlabel",
 				expectedLabel: "this_is_averylongvaluewhichexceedsthemaximumlengthofagcpprojectl",
 			}),
