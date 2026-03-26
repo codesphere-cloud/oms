@@ -35,9 +35,13 @@ const (
 	RegistryTypeGitHub           RegistryType = "github"
 )
 
-// OMSManagedLabel is the label key used to identify projects created by OMS
-const OMSManagedLabel = "oms-managed"
-const DeleteAfterLabel = "delete-after"
+// OMS Project Label Keys
+const (
+	OMSManagedLabel  = "oms-managed"
+	DeleteAfterLabel = "delete-after"
+	InstallVersion   = "install-version"
+	InstallHash      = "install-hash"
+)
 
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
 // A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
@@ -462,6 +466,8 @@ func (b *GCPBootstrapper) EnsureProject() error {
 	labels := map[string]string{
 		OMSManagedLabel:  "true",
 		DeleteAfterLabel: deleteProjectAfter,
+		InstallVersion:   b.Env.InstallVersion,
+		InstallHash:      b.Env.InstallHash,
 	}
 
 	existingProject, err := b.GCPClient.GetProjectByName(b.Env.FolderID, b.Env.ProjectName)
