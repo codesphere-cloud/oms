@@ -20,6 +20,7 @@ const (
 	InstallHash      = "install-hash"
 )
 
+// EnsureProject creates or updates an existing GCP project with labels
 func (b *GCPBootstrapper) EnsureProject() error {
 	parent := ""
 	if b.Env.FolderID != "" {
@@ -60,6 +61,7 @@ func (b *GCPBootstrapper) EnsureProject() error {
 		}
 
 		b.Env.ProjectID = projectId
+
 		return nil
 	}
 
@@ -99,6 +101,8 @@ func calculateProjectExpiryLabel(projectTTLStr string) (string, error) {
 	return deleteProjectAfter, nil
 }
 
+// EnsureBilling connects the GCP project with an existing billing account.
+// Doesn't change anything if billing account is already connected.
 func (b *GCPBootstrapper) EnsureBilling() error {
 	bi, err := b.GCPClient.GetBillingInfo(b.Env.ProjectID)
 	if err != nil {
@@ -116,6 +120,8 @@ func (b *GCPBootstrapper) EnsureBilling() error {
 	return nil
 }
 
+// EnsureAPIsEnabled enables all required GCP APIs.
+// Doesn't change anything if API's already enabled in the project.
 func (b *GCPBootstrapper) EnsureAPIsEnabled() error {
 	apis := []string{
 		"compute.googleapis.com",
@@ -132,6 +138,7 @@ func (b *GCPBootstrapper) EnsureAPIsEnabled() error {
 	return nil
 }
 
+// EnsureServiceAccounts creates the required service account and keys.
 func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 	_, _, err := b.GCPClient.CreateServiceAccount(b.Env.ProjectID, "cloud-controller", "cloud-controller")
 	if err != nil {
@@ -170,6 +177,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 	return nil
 }
 
+// EnsureIAMRoles assigns all required IAM roles to the previously created SA's
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
 	err := b.ensureIAMRoleWithRetry(b.Env.ProjectID, "cloud-controller", b.Env.ProjectID, []string{"roles/compute.admin"})
 	if err != nil {
@@ -186,9 +194,15 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 	}
 
 	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, "artifact-registry-writer", b.Env.ProjectID, []string{"roles/artifactregistry.writer"})
+	if err != nil {
+		return nil
+	}
+
 	return err
 }
 
+// ensureIAMRoleWithRetry assigns a list of roles to an existing service account.
+// Will try to assign the role up to 5 times before failing to cover expected Google API delays.
 func (b *GCPBootstrapper) ensureIAMRoleWithRetry(projectID string, serviceAccount string, serviceAccountProjectID string, roles []string) error {
 	var err error
 	for retries := range 5 {
@@ -196,10 +210,12 @@ func (b *GCPBootstrapper) ensureIAMRoleWithRetry(projectID string, serviceAccoun
 		if err == nil {
 			return nil
 		}
+
 		if retries < 4 {
 			b.stlog.LogRetry()
 			b.Time.Sleep(5 * time.Second)
 		}
 	}
+
 	return fmt.Errorf("failed to assign roles %v to service account %s: %w", roles, serviceAccount, err)
 }
