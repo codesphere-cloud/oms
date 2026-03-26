@@ -34,6 +34,12 @@ var _ = Describe("ConfigYaml", func() {
   server: registry.example.com
 
 codesphere:
+  migration:
+    postgres:
+      host: 10.0.0.25
+      port: 30432
+      database: masterdata
+      altName: masterdata-rw.codesphere.svc.cluster.local
   deployConfig:
     images:
       workspace-agent-24.04:
@@ -95,6 +101,12 @@ codesphere:
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(rootConfig.Registry.Server).To(Equal("registry.example.com"))
+			Expect(rootConfig.Codesphere.Migration).NotTo(BeNil())
+			Expect(rootConfig.Codesphere.Migration.Postgres).NotTo(BeNil())
+			Expect(rootConfig.Codesphere.Migration.Postgres.Host).To(Equal("10.0.0.25"))
+			Expect(rootConfig.Codesphere.Migration.Postgres.Port).To(Equal(30432))
+			Expect(rootConfig.Codesphere.Migration.Postgres.Database).To(Equal("masterdata"))
+			Expect(rootConfig.Codesphere.Migration.Postgres.AltName).To(Equal("masterdata-rw.codesphere.svc.cluster.local"))
 			Expect(rootConfig.Codesphere.DeployConfig.Images).To(HaveKey("workspace-agent-24.04"))
 			Expect(rootConfig.Codesphere.DeployConfig.Images).To(HaveKey("workspace-agent-20.04"))
 			Expect(rootConfig.Codesphere.DeployConfig.Images).To(HaveKey("ide-service"))
