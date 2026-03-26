@@ -338,6 +338,71 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				err = c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
 				Expect(err).To(BeNil())
 			})
+
+			It("fails when image tag in bom.json is missing version", func() {
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockFileIO := util.NewMockFileIO(GinkgoT())
+
+				c.Opts.Config = "valid-config.yaml"
+				config := files.RootConfig{
+					Registry: &files.RegistryConfig{
+						Server: "https://my-registry.com",
+					},
+					Codesphere: files.CodesphereConfig{
+						DeployConfig: files.DeployConfig{
+							Images: map[string]files.ImageConfig{
+								"ubuntu-24.04": {
+									Flavors: map[string]files.FlavorConfig{
+										"default": {
+											Image: files.ImageRef{
+												BomRef:     "docker.io/library/ubuntu",
+												Dockerfile: "workspace.Dockerfile",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(config, nil)
+
+				// Setup temp dir for node executable check (because os.Chmod uses real FS)
+				tempDir, err := os.MkdirTemp("", "test-install")
+				Expect(err).To(BeNil())
+				defer func() {
+					_ = os.RemoveAll(tempDir)
+				}()
+
+				// Create dummy node file
+				nodeFile := filepath.Join(tempDir, "node")
+				err = os.WriteFile(nodeFile, []byte("#!/bin/sh\nexit 0"), 0755)
+				Expect(err).To(BeNil())
+
+				mockPackageManager.EXPECT().Extract(false).Return(nil)
+				mockPackageManager.EXPECT().GetWorkDir().Return(tempDir).Maybe()
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO).Maybe()
+				mockFileIO.EXPECT().Exists(tempDir).Return(true)
+
+				// Create complete mock directory entries with all required files
+				mockEntries := []os.DirEntry{
+					&MockDirEntry{name: "deps.tar.gz", isDir: false},
+					&MockDirEntry{name: "node", isDir: false},
+					&MockDirEntry{name: "private-cloud-installer.js", isDir: false},
+					&MockDirEntry{name: "kubectl", isDir: false},
+				}
+				mockFileIO.EXPECT().ReadDir(tempDir).Return(mockEntries, nil)
+
+				mockPackageManager.EXPECT().ExtractDependency("bom.json", false).Return(nil)
+				mockPackageManager.EXPECT().GetFullImageTag("docker.io/library/ubuntu").Return("docker.io/library/ubuntu", nil)
+
+				err = c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("invalid image tag format"))
+			})
 		})
 	})
 
