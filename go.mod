@@ -37,7 +37,7 @@ require (
 	golang.org/x/mod v0.34.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.41.0
-	google.golang.org/api v0.272.0
+	google.golang.org/api v0.273.0
 	google.golang.org/grpc v1.79.3
 	helm.sh/helm/v4 v4.1.3
 	k8s.io/api v0.35.3
