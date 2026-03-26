@@ -81,7 +81,7 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 }
 
 // isOKResponseStatus checks the status code in the response
-// if status is not a 2xx response it returns an error and logs some info for the user output depending on the required steps
+// if status is not a 2xx response it returns an error and logs some info for the user depending on the required steps
 func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 	if resp.StatusCode == http.StatusUnauthorized {
 		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
