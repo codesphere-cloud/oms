@@ -5,10 +5,19 @@ package gcp
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+)
+
+// OMS Project Label Keys
+const (
+	OMSManagedLabel  = "oms-managed"
+	DeleteAfterLabel = "delete-after"
+	InstallVersion   = "install-version"
+	InstallHash      = "install-hash"
 )
 
 func (b *GCPBootstrapper) EnsureProject() error {
@@ -24,9 +33,9 @@ func (b *GCPBootstrapper) EnsureProject() error {
 
 	labels := map[string]string{
 		OMSManagedLabel:  "true",
-		DeleteAfterLabel: deleteProjectAfter,
-		InstallVersion:   b.Env.InstallVersion,
-		InstallHash:      b.Env.InstallHash,
+		DeleteAfterLabel: createProjectLabel(deleteProjectAfter),
+		InstallVersion:   createProjectLabel(b.Env.InstallVersion),
+		InstallHash:      createProjectLabel(b.Env.InstallHash),
 	}
 
 	existingProject, err := b.GCPClient.GetProjectByName(b.Env.FolderID, b.Env.ProjectName)
@@ -55,6 +64,22 @@ func (b *GCPBootstrapper) EnsureProject() error {
 	}
 
 	return fmt.Errorf("failed to get project: %w", err)
+}
+
+// createProjectLabel replaces common project characters to create a valid GCP project label
+func createProjectLabel(value string) string {
+	invalidChars := []string{"-", "/", "."}
+
+	label := value
+	for _, char := range invalidChars {
+		label = strings.ReplaceAll(label, char, "_")
+	}
+
+	if len(label) > 64 {
+		label = label[:64]
+	}
+
+	return label
 }
 
 // calculateProjectExpiryLabel takes a TTL string (e.g. "24h") and

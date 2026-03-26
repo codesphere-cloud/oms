@@ -56,4 +56,34 @@ var _ = Describe("IAM & Admin", func() {
 			Expect(label).To(BeEmpty())
 		})
 	})
+
+	Describe("createProjectLabel", func() {
+		type testCase struct {
+			inputValue    string
+			expectedLabel string
+		}
+
+		DescribeTable("", func(tc testCase) {
+			actualLabel := createProjectLabel(tc.inputValue)
+			Expect(actualLabel).To(Equal(tc.expectedLabel))
+		},
+
+			Entry("master", testCase{
+				inputValue:    "master",
+				expectedLabel: "master",
+			}),
+			Entry("codesphere-v1.23.4", testCase{
+				inputValue:    "codesphere-v1.23.4",
+				expectedLabel: "codesphere_v1_23_4",
+			}),
+			Entry("feat/my-branch-name", testCase{
+				inputValue:    "feat/my-branch-name",
+				expectedLabel: "feat_my_branch_name",
+			}),
+			Entry("long label", testCase{
+				inputValue:    "this/is.averylongvaluewhichexceedsthemaximumlengthofagcpprojectlabel",
+				expectedLabel: "this_is_averylongvaluewhichexceedsthemaximumlengthofagcpprojectl",
+			}),
+		)
+	})
 })

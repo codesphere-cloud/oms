@@ -33,14 +33,6 @@ const (
 	RegistryTypeGitHub           RegistryType = "github"
 )
 
-// OMS Project Label Keys
-const (
-	OMSManagedLabel  = "oms-managed"
-	DeleteAfterLabel = "delete-after"
-	InstallVersion   = "install-version"
-	InstallHash      = "install-hash"
-)
-
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
 // A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
 func CheckOMSManagedLabel(labels map[string]string) bool {
