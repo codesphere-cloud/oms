@@ -4,7 +4,7 @@ go 1.26.1
 
 replace (
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
-	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v0.20.4-rc1
+	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v5.2.0+incompatible
 
 	// TODO: remove this replace once https://github.com/libopenstorage/secrets/pull/83 is merged
 	github.com/libopenstorage/secrets => github.com/rook/secrets v0.0.0-20240315053144-3195f6906937
