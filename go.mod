@@ -39,6 +39,7 @@ require (
 	golang.org/x/term v0.41.0
 	google.golang.org/api v0.273.0
 	google.golang.org/grpc v1.79.3
+	google.golang.org/protobuf v1.36.11
 	helm.sh/helm/v4 v4.1.3
 	k8s.io/api v0.35.3
 	k8s.io/apimachinery v0.35.3
@@ -47,10 +48,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.23.3
 )
 
-require (
-	github.com/rook/rook/pkg/apis v0.0.0-20260323183436-c72dddf8faa9
-	google.golang.org/protobuf v1.36.11
-)
+require github.com/rook/rook/pkg/apis v0.0.0-20260323183436-c72dddf8faa9
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
