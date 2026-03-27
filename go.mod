@@ -48,7 +48,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.23.3
 )
 
-require github.com/rook/rook/pkg/apis v0.0.0-20260323183436-c72dddf8faa9
+require github.com/rook/rook/pkg/apis v0.0.0-20260326184538-170077bdfe86
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
