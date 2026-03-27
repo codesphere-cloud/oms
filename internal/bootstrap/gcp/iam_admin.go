@@ -5,6 +5,7 @@ package gcp
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -107,7 +108,14 @@ func createLabel(value string) (string, error) {
 		label = strings.ReplaceAll(label, char, "_")
 	}
 
-	return strings.ToLower(label), nil
+	label = strings.ToLower(label)
+
+	labelRegexFormat := `^[a-z][a-z0-9_-]{0,63}$`
+	if !regexp.MustCompile(labelRegexFormat).MatchString(label) {
+		return "", fmt.Errorf("label '%s' does not match regex '%s'", label, labelRegexFormat)
+	}
+
+	return label, nil
 }
 
 // calculateProjectExpiryLabel takes a TTL string (e.g. "24h") and
@@ -207,12 +215,12 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
 	err := b.ensureIAMRoleWithRetry(b.Env.ProjectID, "cloud-controller", b.Env.ProjectID, []string{"roles/compute.admin"})
 	if err != nil {
-		return fmt.Errorf("failed to ensure cloud-controller role bindings")
+		return fmt.Errorf("failed to ensure cloud-controller role bindings: %w", err)
 	}
 
 	err = b.ensureDnsPermissions()
 	if err != nil {
-		return fmt.Errorf("failed to ensure DNS permissions")
+		return fmt.Errorf("failed to ensure DNS permissions: %w", err)
 	}
 
 	if b.Env.RegistryType != RegistryTypeArtifactRegistry {
@@ -221,7 +229,7 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 
 	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, "artifact-registry-writer", b.Env.ProjectID, []string{"roles/artifactregistry.writer"})
 	if err != nil {
-		return fmt.Errorf("failed to ensure artifact-registry-writer role bindings")
+		return fmt.Errorf("failed to ensure artifact-registry-writer role bindings: %w", err)
 	}
 
 	return nil
