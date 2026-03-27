@@ -35,9 +35,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata
  
 ----------
 Module: cloud.google.com/go/iam/apiv1/iampb
-Version: v1.5.3
+Version: v1.6.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.5.3/iam/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.6.0/iam/LICENSE
  
 ----------
 Module: cloud.google.com/go/longrunning
