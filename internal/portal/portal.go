@@ -62,36 +62,57 @@ const (
 func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Response, err error) {
 	apiKey, err := c.Env.GetOmsPortalApiKey()
 	if err != nil {
-		err = fmt.Errorf("failed to get API Key: %w", err)
-		return
+		return nil, fmt.Errorf("failed to get API Key: %w", err)
 	}
 
 	req.Header.Set("X-API-Key", apiKey)
 
 	resp, err = c.HttpClient.Do(req)
 	if err != nil {
-		err = fmt.Errorf("failed to send request: %w", err)
-		return
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
+	err = c.isOKResponseStatus(resp)
+	if err != nil {
+		return nil, fmt.Errorf("unexpected response: %w", err)
+	}
+
+	return resp, nil
+}
+
+// isOKResponseStatus checks the status code in the response
+// if status is not a 2xx response it returns an error and logs some info for the user depending on the required steps
+func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 	if resp.StatusCode == http.StatusUnauthorized {
 		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
 		log.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")
+
+		return errors.New("unauthorized: invalid API key")
 	}
 
-	var respBody []byte
 	if resp.StatusCode >= 300 {
-		if resp.Body != nil {
-			respBody, _ = io.ReadAll(resp.Body)
+		log.Printf("Non-2xx response received from OMS-Portal (%s) - Status: %d", c.Env.GetOmsPortalApi(), resp.StatusCode)
+
+		healthErr := c.GetHealth()
+		if healthErr != nil {
+			healthErr = fmt.Errorf("OMS-Portal healthcheck failed: %w", healthErr)
+			log.Println(healthErr.Error())
+			log.Println("Please check if the OMS-Portal URL is correct and instance is healthy and reachable at:", c.Env.GetOmsPortalApi())
+
+			return healthErr
 		}
 
-		log.Printf("Non-2xx response received from %s - Status: %d, Body: %s", c.Env.GetOmsPortalApi(), resp.StatusCode, string(respBody))
-		err = fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
+		healthyPortalLog := fmt.Sprintf("OMS-Portal is healthy and reachable, but returned an error response - Status: %d", resp.StatusCode)
+		if resp.Body != nil {
+			respBody, _ := io.ReadAll(resp.Body)
+			healthyPortalLog = fmt.Sprintf("%s, Body: %s", healthyPortalLog, string(respBody))
+		}
+		log.Println(healthyPortalLog)
 
-		return
+		return fmt.Errorf("%s", healthyPortalLog)
 	}
 
-	return
+	return nil
 }
 
 // HttpRequest sends an unauthorized HTTP request to the portal API with the specified method, path, and body.
@@ -408,4 +429,34 @@ func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 	}
 
 	return result.KeyID, nil
+}
+
+// GetHealth checks the response of the OMS-Portal health endpoint
+// returns an error if portal is unhealthy
+func (c *PortalClient) GetHealth() error {
+	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "health")
+	if err != nil {
+		return fmt.Errorf("failed to get generate health URL: %w", err)
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create healthcheck request: %w", err)
+	}
+
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send health request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthcheck returned non-OK status: %d", resp.StatusCode)
+	}
+
+	serviceNameHeader := resp.Header.Get("X-Service-Name")
+	if strings.ToLower(serviceNameHeader) != "oms-portal" {
+		return fmt.Errorf("unexpected service name in healthcheck response: %s", serviceNameHeader)
+	}
+
+	return nil
 }
