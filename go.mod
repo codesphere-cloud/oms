@@ -3,7 +3,7 @@ module github.com/codesphere-cloud/oms
 go 1.26.1
 
 replace (
-	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
+	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.7.1
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v5.2.0+incompatible
 
 	// TODO: remove this replace once https://github.com/libopenstorage/secrets/pull/83 is merged
