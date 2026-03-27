@@ -58,32 +58,43 @@ var _ = Describe("IAM & Admin", func() {
 	})
 
 	Describe("createProjectLabel", func() {
-		type testCase struct {
+		type validTestCase struct {
 			inputValue    string
 			expectedLabel string
 		}
 
-		DescribeTable("", func(tc testCase) {
-			actualLabel := createProjectLabel(tc.inputValue)
+		DescribeTable("", func(tc validTestCase) {
+			actualLabel, err := createLabel(tc.inputValue)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(actualLabel).To(Equal(tc.expectedLabel))
 		},
 
-			Entry("master", testCase{
+			Entry("master", validTestCase{
 				inputValue:    "master",
 				expectedLabel: "master",
 			}),
-			Entry("codesphere-v1.23.4", testCase{
+			Entry("codesphere-v1.23.4", validTestCase{
 				inputValue:    "codesphere-v1.23.4",
-				expectedLabel: "codesphere_v1_23_4",
+				expectedLabel: "codesphere-v1_23_4",
 			}),
-			Entry("feat/my-branch-name", testCase{
+			Entry("feat/my-branch-name", validTestCase{
 				inputValue:    "feat/my-branch-name",
-				expectedLabel: "feat_my_branch_name",
+				expectedLabel: "feat_my-branch-name",
 			}),
-			Entry("long label is cut after 64 chars", testCase{
+			Entry("long label is cut after 64 chars", validTestCase{
 				inputValue:    "this/is.averylongvaluewhichexceedsthemaximumlengthofagcpprojectlabel",
 				expectedLabel: "this_is_averylongvaluewhichexceedsthemaximumlengthofagcpprojectl",
 			}),
+			Entry("uppercase is transfored to lowercase", validTestCase{
+				inputValue:    "Master",
+				expectedLabel: "master",
+			}),
 		)
+
+		It("returns an error for empty input", func() {
+			label, err := createLabel("")
+			Expect(err).To(HaveOccurred())
+			Expect(label).To(BeEmpty())
+		})
 	})
 })

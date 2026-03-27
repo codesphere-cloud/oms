@@ -14,10 +14,10 @@ import (
 
 // OMS Project Label Keys
 const (
-	OMSManagedLabel  = "oms-managed"
-	DeleteAfterLabel = "delete-after"
-	InstallVersion   = "install-version"
-	InstallHash      = "install-hash"
+	OMSManagedLabel     = "oms-managed"
+	DeleteAfterLabel    = "delete-after"
+	InstallVersionLabel = "install-version"
+	InstallHashLabel    = "install-hash"
 )
 
 // EnsureProject creates or updates an existing GCP project with labels
@@ -27,16 +27,9 @@ func (b *GCPBootstrapper) EnsureProject() error {
 		parent = fmt.Sprintf("folders/%s", b.Env.FolderID)
 	}
 
-	deleteProjectAfter, err := calculateProjectExpiryLabel(b.Env.ProjectTTL)
+	labels, err := b.generateProjectLabels()
 	if err != nil {
-		return fmt.Errorf("failed to calculate project expiry label: %w", err)
-	}
-
-	labels := map[string]string{
-		OMSManagedLabel:  "true",
-		DeleteAfterLabel: createProjectLabel(deleteProjectAfter),
-		InstallVersion:   createProjectLabel(b.Env.InstallVersion),
-		InstallHash:      createProjectLabel(b.Env.InstallHash),
+		return fmt.Errorf("failed to generate project labels: %w", err)
 	}
 
 	existingProject, err := b.GCPClient.GetProjectByName(b.Env.FolderID, b.Env.ProjectName)
@@ -68,20 +61,53 @@ func (b *GCPBootstrapper) EnsureProject() error {
 	return fmt.Errorf("failed to get project: %w", err)
 }
 
-// createProjectLabel replaces common project characters to create a valid GCP project label
-func createProjectLabel(value string) string {
-	invalidChars := []string{"-", "/", "."}
+// generateProjectLabels creates a map of GCP project labels
+// returns an error if "delete-after" label can not be generated
+func (b *GCPBootstrapper) generateProjectLabels() (map[string]string, error) {
+	labels := make(map[string]string)
+	labels[OMSManagedLabel] = "true"
 
-	label := value
-	for _, char := range invalidChars {
-		label = strings.ReplaceAll(label, char, "_")
+	installVersionLabel, err := createLabel(b.Env.InstallVersion)
+	if err == nil {
+		labels[InstallVersionLabel] = installVersionLabel
 	}
 
+	installHashLabel, err := createLabel(b.Env.InstallHash)
+	if err == nil {
+		labels[InstallHashLabel] = installHashLabel
+	}
+
+	deleteProjectAfter, err := calculateProjectExpiryLabel(b.Env.ProjectTTL)
+	if err != nil {
+		return labels, fmt.Errorf("failed to calculate project expiry label: %w", err)
+	}
+
+	deleteProjectAfterLabel, err := createLabel(deleteProjectAfter)
+	if err == nil {
+		labels[DeleteAfterLabel] = deleteProjectAfterLabel
+	}
+
+	return labels, nil
+}
+
+// createLabel replaces invalid label characters to create a valid GCP label
+// returns an error if value is empty
+func createLabel(value string) (string, error) {
+	if len(value) < 1 {
+		return "", fmt.Errorf("value is empty")
+	}
+
+	label := value
 	if len(label) > 64 {
 		label = label[:64]
 	}
 
-	return label
+	invalidChars := []string{"/", "."}
+	for _, char := range invalidChars {
+		label = strings.ReplaceAll(label, char, "_")
+	}
+
+	return strings.ToLower(label), nil
 }
 
 // calculateProjectExpiryLabel takes a TTL string (e.g. "24h") and
@@ -181,12 +207,12 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 func (b *GCPBootstrapper) EnsureIAMRoles() error {
 	err := b.ensureIAMRoleWithRetry(b.Env.ProjectID, "cloud-controller", b.Env.ProjectID, []string{"roles/compute.admin"})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to ensure cloud-controller role bindings")
 	}
 
 	err = b.ensureDnsPermissions()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to ensure DNS permissions")
 	}
 
 	if b.Env.RegistryType != RegistryTypeArtifactRegistry {
@@ -195,10 +221,10 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 
 	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, "artifact-registry-writer", b.Env.ProjectID, []string{"roles/artifactregistry.writer"})
 	if err != nil {
-		return nil
+		return fmt.Errorf("failed to ensure artifact-registry-writer role bindings")
 	}
 
-	return err
+	return nil
 }
 
 // ensureIAMRoleWithRetry assigns a list of roles to an existing service account.
