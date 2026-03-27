@@ -138,10 +138,11 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 
 				// Extract root image name from full tag (e.g. repo/image:tag -> image)
 				parts := strings.Split(fullImageTag, ":")
-				if len(parts) == 0 {
+				if len(parts) < 2 {
 					return fmt.Errorf("invalid image tag format: %s", fullImageTag)
 				}
 				imageNameAndPath := parts[0]
+				version := parts[1]
 				rootImageName := path.Base(imageNameAndPath)
 
 				// Extract and load root image
@@ -184,7 +185,7 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 
 				// Determine image tag for build and push
 				registryUrl := strings.TrimRight(config.Registry.Server, "/")
-				buildTag := fmt.Sprintf("%s/codesphere-registry/%s-%s", registryUrl, imageKey, flavorKey)
+				buildTag := fmt.Sprintf("%s/codesphere-registry/%s-%s:%s", registryUrl, imageKey, flavorKey, version)
 
 				err = im.BuildImage(dockerfileName, buildTag, dockerfileDir)
 				if err != nil {
