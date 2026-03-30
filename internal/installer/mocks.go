@@ -933,16 +933,16 @@ func (_c *MockHelmClient_InstallChart_Call) RunAndReturn(run func(ctx context.Co
 }
 
 // UpgradeChart provides a mock function for the type MockHelmClient
-func (_mock *MockHelmClient) UpgradeChart(ctx context.Context, cfg ChartConfig) error {
-	ret := _mock.Called(ctx, cfg)
+func (_mock *MockHelmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error {
+	ret := _mock.Called(ctx, cfg, opts)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpgradeChart")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, ChartConfig) error); ok {
-		r0 = returnFunc(ctx, cfg)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ChartConfig, UpgradeChartOptions) error); ok {
+		r0 = returnFunc(ctx, cfg, opts)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -957,11 +957,12 @@ type MockHelmClient_UpgradeChart_Call struct {
 // UpgradeChart is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cfg ChartConfig
-func (_e *MockHelmClient_Expecter) UpgradeChart(ctx interface{}, cfg interface{}) *MockHelmClient_UpgradeChart_Call {
-	return &MockHelmClient_UpgradeChart_Call{Call: _e.mock.On("UpgradeChart", ctx, cfg)}
+//   - opts UpgradeChartOptions
+func (_e *MockHelmClient_Expecter) UpgradeChart(ctx interface{}, cfg interface{}, opts interface{}) *MockHelmClient_UpgradeChart_Call {
+	return &MockHelmClient_UpgradeChart_Call{Call: _e.mock.On("UpgradeChart", ctx, cfg, opts)}
 }
 
-func (_c *MockHelmClient_UpgradeChart_Call) Run(run func(ctx context.Context, cfg ChartConfig)) *MockHelmClient_UpgradeChart_Call {
+func (_c *MockHelmClient_UpgradeChart_Call) Run(run func(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions)) *MockHelmClient_UpgradeChart_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -971,9 +972,14 @@ func (_c *MockHelmClient_UpgradeChart_Call) Run(run func(ctx context.Context, cf
 		if args[1] != nil {
 			arg1 = args[1].(ChartConfig)
 		}
+		var arg2 UpgradeChartOptions
+		if args[2] != nil {
+			arg2 = args[2].(UpgradeChartOptions)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -984,7 +990,7 @@ func (_c *MockHelmClient_UpgradeChart_Call) Return(err error) *MockHelmClient_Up
 	return _c
 }
 
-func (_c *MockHelmClient_UpgradeChart_Call) RunAndReturn(run func(ctx context.Context, cfg ChartConfig) error) *MockHelmClient_UpgradeChart_Call {
+func (_c *MockHelmClient_UpgradeChart_Call) RunAndReturn(run func(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error) *MockHelmClient_UpgradeChart_Call {
 	_c.Call.Return(run)
 	return _c
 }

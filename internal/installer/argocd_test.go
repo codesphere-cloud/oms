@@ -81,7 +81,7 @@ var _ = Describe("ArgoCD.Install", func() {
 
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.Version == "7.0.0"
-			})).Return(nil)
+			}), installer.UpgradeChartOptions{InstallIfNotExist: false}).Return(nil)
 
 			err := a.Install()
 			Expect(err).ToNot(HaveOccurred())
@@ -90,7 +90,7 @@ var _ = Describe("ArgoCD.Install", func() {
 		It("upgrades to the same version (no-op upgrade)", func() {
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.Version == "6.0.0"
-			})).Return(nil)
+			}), installer.UpgradeChartOptions{InstallIfNotExist: false}).Return(nil)
 
 			a = &installer.ArgoCD{Version: "6.0.0", Helm: helmMock}
 
@@ -101,7 +101,7 @@ var _ = Describe("ArgoCD.Install", func() {
 		It("upgrades to latest when Version is empty", func() {
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.Version == ""
-			})).Return(nil)
+			}), installer.UpgradeChartOptions{InstallIfNotExist: false}).Return(nil)
 
 			a = &installer.ArgoCD{Version: "", Helm: helmMock}
 
@@ -118,7 +118,7 @@ var _ = Describe("ArgoCD.Install", func() {
 		})
 
 		It("returns an error when UpgradeChart fails", func() {
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything).
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.Anything).
 				Return(errors.New("timeout waiting for condition"))
 
 			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}

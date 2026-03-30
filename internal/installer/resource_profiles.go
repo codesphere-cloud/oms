@@ -190,6 +190,9 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	config.Codesphere.Override = util.DeepMergeMaps(config.Codesphere.Override, map[string]any{
 		"global": map[string]any{
 			"services": serviceProfiles,
+			"frontendGateway": map[string]any{
+				"requests": zeroRequests(),
+			},
 			"underprovisionFactors": map[string]string{
 				"cpu":    "0.01",
 				"memory": "0.01",

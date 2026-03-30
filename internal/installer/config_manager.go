@@ -42,6 +42,11 @@ type InstallConfig struct {
 	Vault  *files.InstallVault
 }
 
+// SetFileIO overrides the file I/O implementation (useful for testing).
+func (g *InstallConfig) SetFileIO(fio util.FileIO) {
+	g.fileIO = fio
+}
+
 func NewInstallConfigManager() InstallConfigManager {
 	config := files.NewRootConfig()
 	return &InstallConfig{
@@ -237,7 +242,7 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 		return fmt.Errorf("no configuration provided - config is nil")
 	}
 
-	vault := g.Config.ExtractVault()
+	vault := g.Config.AddSecretsToVault(g.GetVault())
 	vaultYAML, err := vault.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
@@ -389,4 +394,19 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 	}
 
 	return nil
+}
+
+func (g *InstallConfig) ApplyProfile(profile string) error {
+	g.applyCommonProperties()
+
+	switch profile {
+	case PROFILE_DEV, PROFILE_DEVELOPMENT:
+		return g.applyProfileDev()
+	case PROFILE_PROD, PROFILE_PRODUCTION:
+		return g.applyProfileProd()
+
+	case PROFILE_MINIMAL:
+		return g.applyProfileMinimal()
+	}
+	return fmt.Errorf("unknown profile: %s, available profiles: dev, prod, minimal", profile)
 }
