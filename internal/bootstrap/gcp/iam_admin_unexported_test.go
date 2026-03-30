@@ -85,7 +85,7 @@ var _ = Describe("IAM & Admin - Unexported", func() {
 				inputValue:    "this/is.averylongvaluewhichexceedsthemaximumlengthofagcpprojectlabel",
 				expectedLabel: "this_is_averylongvaluewhichexceedsthemaximumlengthofagcpprojectl",
 			}),
-			Entry("uppercase is transfored to lowercase", validTestCase{
+			Entry("uppercase to lowercase", validTestCase{
 				inputValue:    "Master",
 				expectedLabel: "master",
 			}),
