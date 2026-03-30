@@ -15,6 +15,5 @@ template: testify
 template-schema: "{{.Template}}.schema.json"
 packages:
   github.com/codesphere-cloud/oms/internal:
-  github.com/codesphere-cloud/oms/internal/installer:
   github.com/codesphere-cloud/oms/pkg:
   github.com/codesphere-cloud/oms/cli/cmd:
