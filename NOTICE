@@ -59,9 +59,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.
  
 ----------
 Module: code.gitea.io/sdk/gitea
-Version: v0.23.2
+Version: v0.24.1
 License: MIT
-License URL: https://gitea.com/gitea/go-sdk/src/tag/gitea/v0.23.2/gitea/LICENSE
+License URL: https://gitea.com/gitea/go-sdk/src/tag/gitea/v0.24.1/gitea/LICENSE
  
 ----------
 Module: dario.cat/mergo
@@ -893,9 +893,9 @@ License URL: https://github.com/prometheus/procfs/blob/v0.19.2/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260323183436-c72dddf8faa9
+Version: v0.0.0-20260326184538-170077bdfe86
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/c72dddf8faa9/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/170077bdfe86/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
