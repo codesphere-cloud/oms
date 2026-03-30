@@ -14,6 +14,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -148,7 +149,15 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (availablePackag
 		return
 	}
 	if sort != "" {
-		requestUrl = requestUrl + "?sort=" + url.QueryEscape(sort)
+		u, parseErr := url.Parse(requestUrl)
+		if parseErr != nil {
+			err = fmt.Errorf("failed to parse URL: %w", parseErr)
+			return
+		}
+		q := u.Query()
+		q.Set("sort", sort)
+		u.RawQuery = q.Encode()
+		requestUrl = u.String()
 	}
 
 	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
@@ -159,6 +168,9 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (availablePackag
 
 	resp, err := c.AuthorizedHttpRequest(req)
 	if err != nil {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
+		}
 		err = fmt.Errorf("failed to list packages: %w", err)
 		return
 	}
@@ -190,8 +202,14 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 		return Build{}, errors.New("no builds returned")
 	}
 
+	// Ensure builds are sorted by date locally as a safety net,
+	// so "latest" resolution is stable regardless of server sort behavior.
+	slices.SortFunc(packages.Builds, func(l, r Build) int {
+		return l.Date.Compare(r.Date)
+	})
+
 	if version == "" || version == "latest" {
-		// Builds are always ordered by date, newest build is latest version
+		// Builds are ordered by date, newest build is latest version
 		return packages.Builds[len(packages.Builds)-1], nil
 	}
 
