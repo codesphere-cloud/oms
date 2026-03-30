@@ -13,7 +13,8 @@ oms list packages [flags]
 ### Options
 
 ```
-  -h, --help   help for packages
+  -h, --help          help for packages
+  -s, --sort string   Sort order: 'semver' (by semantic version) or 'date' (by build date). If omitted, the server chooses based on API key role
 ```
 
 ### SEE ALSO
