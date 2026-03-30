@@ -6,8 +6,6 @@ package installer
 import (
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -20,7 +18,6 @@ import (
 type K0sManager interface {
 	GetLatestVersion() (string, error)
 	Download(version string, force bool, quiet bool) (string, error)
-	Install(configPath string, k0sPath string, force bool) error
 }
 
 type K0s struct {
@@ -61,71 +58,15 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 		return "", fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
 	}
 
-	// Check if k0s binary already exists and create destination file
-	workdir := k.Env.GetOmsWorkdir()
-	k0sPath := filepath.Join(workdir, "k0s")
-	if k.FileWriter.Exists(k0sPath) && !force {
-		return "", fmt.Errorf("k0s binary already exists at %s. Use --force to overwrite", k0sPath)
-	}
-
-	file, err := k.FileWriter.Create(k0sPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to create k0s binary file: %w", err)
-	}
-	defer util.CloseFileIgnoreError(file)
-
-	// Download using the portal Http wrapper with WriteCounter
 	log.Printf("Downloading k0s version %s", version)
 
 	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0s/releases/download/%s/k0s-%s-%s", version, version, k.Goarch)
-	err = k.Http.Download(downloadURL, file, quiet)
+	path, err := downloadBinary(k.FileWriter, k.Http, k.Env.GetOmsWorkdir(), "k0s", downloadURL, force, quiet)
 	if err != nil {
-		return "", fmt.Errorf("failed to download k0s binary: %w", err)
+		return "", err
 	}
 
-	// Make the binary executable
-	err = os.Chmod(k0sPath, 0755)
-	if err != nil {
-		return "", fmt.Errorf("failed to make k0s binary executable: %w", err)
-	}
+	log.Printf("k0s binary downloaded and made executable at '%s'", path)
 
-	log.Printf("k0s binary downloaded and made executable at '%s'", k0sPath)
-
-	return k0sPath, nil
-}
-
-func (k *K0s) Install(configPath string, k0sPath string, force bool) error {
-	if k.Goos != "linux" || k.Goarch != "amd64" {
-		return fmt.Errorf("k0s installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
-	}
-
-	if !k.FileWriter.Exists(k0sPath) {
-		return fmt.Errorf("k0s binary does not exist in '%s', please download first", k0sPath)
-	}
-
-	args := []string{k0sPath, "install", "controller"}
-	if configPath != "" {
-		args = append(args, "--config", configPath)
-	} else {
-		args = append(args, "--single")
-	}
-
-	if force {
-		args = append(args, "--force")
-	}
-
-	err := util.RunCommand("sudo", args, "")
-	if err != nil {
-		return fmt.Errorf("failed to install k0s: %w", err)
-	}
-
-	if configPath != "" {
-		log.Println("k0s installed successfully with provided configuration.")
-	} else {
-		log.Println("k0s installed successfully in single-node mode.")
-	}
-	log.Printf("You can start it using 'sudo %v start'", k0sPath)
-	log.Printf("You can check the status using 'sudo %v status'", k0sPath)
-
-	return nil
+	return path, nil
 }

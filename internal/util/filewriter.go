@@ -23,6 +23,7 @@ type FileIO interface {
 	ReadFile(filename string) ([]byte, error)
 	CreateAndWrite(filePath string, data []byte, fileType string) error
 	Remove(path string) error
+	Chmod(name string, mode os.FileMode) error
 }
 
 type FilesystemWriter struct{}
@@ -38,12 +39,12 @@ func (fs *FilesystemWriter) Create(filename string) (*os.File, error) {
 func (fs *FilesystemWriter) CreateAndWrite(filePath string, data []byte, fileType string) error {
 	file, err := fs.Create(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to create %s file: %w", fileType, err)
+		return fmt.Errorf("failed to create %s file at %q: %w", fileType, filePath, err)
 	}
 	defer CloseFileIgnoreError(file)
 
 	if _, err = file.Write(data); err != nil {
-		return fmt.Errorf("failed to write %s file: %w", fileType, err)
+		return fmt.Errorf("failed to write %s file at %q: %w", fileType, filePath, err)
 	}
 
 	log.Printf("\n%s file created: %s", fileType, filePath)
@@ -97,6 +98,10 @@ func (fs *FilesystemWriter) ReadFile(filename string) ([]byte, error) {
 
 func (fs *FilesystemWriter) Remove(path string) error {
 	return os.Remove(path)
+}
+
+func (fs *FilesystemWriter) Chmod(name string, mode os.FileMode) error {
+	return os.Chmod(name, mode)
 }
 
 type ClosableFile interface {

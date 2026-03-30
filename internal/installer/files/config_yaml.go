@@ -19,6 +19,17 @@ func (v *InstallVault) Marshal() ([]byte, error) {
 	return yaml.Marshal(v)
 }
 
+// SetSecret adds or updates a secret entry in the vault.
+func (v *InstallVault) SetSecret(entry SecretEntry) {
+	for i, s := range v.Secrets {
+		if s.Name == entry.Name {
+			v.Secrets[i] = entry
+			return
+		}
+	}
+	v.Secrets = append(v.Secrets, entry)
+}
+
 func (v *InstallVault) Unmarshal(data []byte) error {
 	return yaml.Unmarshal(data, v)
 }
@@ -35,6 +46,7 @@ type SecretFile struct {
 }
 
 type SecretFields struct {
+	Username string `yaml:"username,omitempty"`
 	Password string `yaml:"password"`
 }
 
@@ -79,6 +91,9 @@ type PostgresConfig struct {
 	Primary       *PostgresPrimaryConfig `yaml:"primary,omitempty"`
 	Replica       *PostgresReplicaConfig `yaml:"replica,omitempty"`
 	ServerAddress string                 `yaml:"serverAddress,omitempty"`
+	AltName       string                 `yaml:"altName,omitempty"`
+	Port          int                    `yaml:"port,omitempty"`
+	Database      string                 `yaml:"database,omitempty"`
 
 	// Stored separately in vault
 	CaCertPrivateKey  string            `yaml:"-"`
@@ -285,10 +300,22 @@ type CodesphereConfig struct {
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
+	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
 
 	DomainAuthPrivateKey string `yaml:"-"`
 	DomainAuthPublicKey  string `yaml:"-"`
+}
+
+type MigrationConfig struct {
+	Postgres *MigrationPostgresConfig `yaml:"postgres,omitempty"`
+}
+
+type MigrationPostgresConfig struct {
+	Host     string `yaml:"host,omitempty"`
+	Port     int    `yaml:"port,omitempty"`
+	Database string `yaml:"database,omitempty"`
+	AltName  string `yaml:"altName,omitempty"`
 }
 
 type OpenBaoConfig struct {
@@ -567,23 +594,16 @@ func (c *RootConfig) ExtractBomRefs() []string {
 	return bomRefs
 }
 
-func (c *RootConfig) ExtractWorkspaceDockerfiles() map[string]string {
-	dockerfiles := make(map[string]string)
-	for _, imageConfig := range c.Codesphere.DeployConfig.Images {
-		for _, flavor := range imageConfig.Flavors {
-			if flavor.Image.Dockerfile != "" {
-				dockerfiles[flavor.Image.Dockerfile] = flavor.Image.BomRef
-			}
-		}
-	}
-	return dockerfiles
-}
-
 func (c *RootConfig) ExtractVault() *InstallVault {
 	vault := &InstallVault{
 		Secrets: []SecretEntry{},
 	}
 
+	c.AddSecretsToVault(vault)
+	return vault
+}
+
+func (c *RootConfig) AddSecretsToVault(vault *InstallVault) *InstallVault {
 	c.addCodesphereSecrets(vault)
 	c.addIngressCASecret(vault)
 	c.addACMESecrets(vault)

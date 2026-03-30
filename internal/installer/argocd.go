@@ -145,7 +145,7 @@ func (a *ArgoCD) upgrade(ctx context.Context, cfg ChartConfig, existing *Release
 		log.Printf("Upgrading ArgoCD from %s to latest\n", existing.InstalledVersion)
 	}
 
-	if err := a.Helm.UpgradeChart(ctx, cfg); err != nil {
+	if err := a.Helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{}); err != nil {
 		return err
 	}
 
