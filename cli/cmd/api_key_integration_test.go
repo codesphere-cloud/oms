@@ -88,7 +88,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			client := portal.NewPortalClient()
 			client.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
 
-			builds, err := client.ListBuilds(portal.CodesphereProduct)
+			builds, err := client.ListBuilds(portal.CodesphereProduct, "")
 			Expect(err).To(BeNil(), "Listing builds with created key should succeed")
 			Expect(builds.Builds).NotTo(BeEmpty(), "Created key should be able to see builds")
 		})
@@ -139,7 +139,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			// switch to the new key
 			p.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
 
-			builds, err := p.ListBuilds(portal.CodesphereProduct)
+			builds, err := p.ListBuilds(portal.CodesphereProduct, "")
 			Expect(err).To(BeNil(), "Listing builds with new key should succeed")
 			Expect(builds.Builds).NotTo(BeEmpty(), "Should have at least one build available")
 
@@ -206,7 +206,7 @@ var _ = Describe("API Key Integration Tests", func() {
 			if keyFound {
 				revokedClient := portal.NewPortalClient()
 				revokedClient.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
-				_, useErr := revokedClient.ListBuilds(portal.CodesphereProduct)
+				_, useErr := revokedClient.ListBuilds(portal.CodesphereProduct, "")
 				Expect(useErr).NotTo(BeNil(), "Using a revoked API key should fail")
 			} else {
 				Expect(keyFound).To(BeFalse(), "Revoked API key should not be in the list")

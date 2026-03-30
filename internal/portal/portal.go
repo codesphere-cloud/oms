@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -23,7 +22,7 @@ import (
 
 //mockery:generate: true
 type Portal interface {
-	ListBuilds(product Product) (availablePackages Builds, err error)
+	ListBuilds(product Product, sort string) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
 	DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error
 	VerifyBuildArtifactDownload(file io.Reader, download Build) error
@@ -131,10 +130,34 @@ func (c *PortalClient) GetBody(path string) (body []byte, status int, err error)
 }
 
 // ListBuilds retrieves the list of available builds for the specified product.
-func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, err error) {
-	res, _, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
+// The sort parameter controls server-side ordering: "semver" (by semantic version),
+// "date" (by build date), or "" (server picks default based on API key role).
+func (c *PortalClient) ListBuilds(product Product, sort string) (availablePackages Builds, err error) {
+	requestUrl, err := url.JoinPath(c.Env.GetOmsPortalApi(), fmt.Sprintf("/packages/%s", product))
+	if err != nil {
+		err = fmt.Errorf("failed to generate URL: %w", err)
+		return
+	}
+	if sort != "" {
+		requestUrl = requestUrl + "?sort=" + url.QueryEscape(sort)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
+	if err != nil {
+		err = fmt.Errorf("failed to create request: %w", err)
+		return
+	}
+
+	resp, err := c.AuthorizedHttpRequest(req)
 	if err != nil {
 		err = fmt.Errorf("failed to list packages: %w", err)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	res, err := io.ReadAll(resp.Body)
+	if err != nil {
+		err = fmt.Errorf("failed to read response body: %w", err)
 		return
 	}
 
@@ -144,23 +167,12 @@ func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, er
 		return
 	}
 
-	compareBuilds := func(l, r Build) int {
-		if l.Date.Before(r.Date) {
-			return -1
-		}
-		if l.Date.Equal(r.Date) && l.Internal == r.Internal {
-			return 0
-		}
-		return 1
-	}
-	slices.SortFunc(availablePackages.Builds, compareBuilds)
-
 	return
 }
 
 // GetBuild retrieves a specific build for the given product, version, and hash.
 func (c *PortalClient) GetBuild(product Product, version string, hash string) (Build, error) {
-	packages, err := c.ListBuilds(product)
+	packages, err := c.ListBuilds(product, "date")
 	if err != nil {
 		return Build{}, fmt.Errorf("failed to list %s packages: %w", product, err)
 	}

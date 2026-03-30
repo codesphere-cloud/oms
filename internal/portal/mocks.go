@@ -527,8 +527,8 @@ func (_c *MockPortal_ListAPIKeys_Call) RunAndReturn(run func() ([]ApiKey, error)
 }
 
 // ListBuilds provides a mock function for the type MockPortal
-func (_mock *MockPortal) ListBuilds(product Product) (Builds, error) {
-	ret := _mock.Called(product)
+func (_mock *MockPortal) ListBuilds(product Product, sort string) (Builds, error) {
+	ret := _mock.Called(product, sort)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListBuilds")
@@ -536,16 +536,16 @@ func (_mock *MockPortal) ListBuilds(product Product) (Builds, error) {
 
 	var r0 Builds
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(Product) (Builds, error)); ok {
-		return returnFunc(product)
+	if returnFunc, ok := ret.Get(0).(func(Product, string) (Builds, error)); ok {
+		return returnFunc(product, sort)
 	}
-	if returnFunc, ok := ret.Get(0).(func(Product) Builds); ok {
-		r0 = returnFunc(product)
+	if returnFunc, ok := ret.Get(0).(func(Product, string) Builds); ok {
+		r0 = returnFunc(product, sort)
 	} else {
 		r0 = ret.Get(0).(Builds)
 	}
-	if returnFunc, ok := ret.Get(1).(func(Product) error); ok {
-		r1 = returnFunc(product)
+	if returnFunc, ok := ret.Get(1).(func(Product, string) error); ok {
+		r1 = returnFunc(product, sort)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -559,18 +559,24 @@ type MockPortal_ListBuilds_Call struct {
 
 // ListBuilds is a helper method to define mock.On call
 //   - product Product
-func (_e *MockPortal_Expecter) ListBuilds(product interface{}) *MockPortal_ListBuilds_Call {
-	return &MockPortal_ListBuilds_Call{Call: _e.mock.On("ListBuilds", product)}
+//   - sort string
+func (_e *MockPortal_Expecter) ListBuilds(product interface{}, sort interface{}) *MockPortal_ListBuilds_Call {
+	return &MockPortal_ListBuilds_Call{Call: _e.mock.On("ListBuilds", product, sort)}
 }
 
-func (_c *MockPortal_ListBuilds_Call) Run(run func(product Product)) *MockPortal_ListBuilds_Call {
+func (_c *MockPortal_ListBuilds_Call) Run(run func(product Product, sort string)) *MockPortal_ListBuilds_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 Product
 		if args[0] != nil {
 			arg0 = args[0].(Product)
 		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
 		run(
 			arg0,
+			arg1,
 		)
 	})
 	return _c
@@ -581,7 +587,7 @@ func (_c *MockPortal_ListBuilds_Call) Return(availablePackages Builds, err error
 	return _c
 }
 
-func (_c *MockPortal_ListBuilds_Call) RunAndReturn(run func(product Product) (Builds, error)) *MockPortal_ListBuilds_Call {
+func (_c *MockPortal_ListBuilds_Call) RunAndReturn(run func(product Product, sort string) (Builds, error)) *MockPortal_ListBuilds_Call {
 	_c.Call.Return(run)
 	return _c
 }
