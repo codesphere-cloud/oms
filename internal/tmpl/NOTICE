@@ -34,7 +34,7 @@ License: Apache-2.0
 License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata/v0.9.0/compute/metadata/LICENSE
  
 ----------
-Module: cloud.google.com/go/iam/apiv1/iampb
+Module: cloud.google.com/go/iam
 Version: v1.6.0
 License: Apache-2.0
 License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.6.0/iam/LICENSE
@@ -50,6 +50,12 @@ Module: cloud.google.com/go/resourcemanager
 Version: v1.10.7
 License: Apache-2.0
 License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.10.7/resourcemanager/LICENSE
+ 
+----------
+Module: cloud.google.com/go/secretmanager
+Version: v1.16.0
+License: Apache-2.0
+License URL: https://github.com/googleapis/google-cloud-go/blob/secretmanager/v1.16.0/secretmanager/LICENSE
  
 ----------
 Module: cloud.google.com/go/serviceusage
