@@ -112,7 +112,7 @@ func createLabel(value string) (string, error) {
 
 	label = strings.ToLower(label)
 
-	labelRegexFormat := `^[a-z0-9_-]{0,64}$`
+	labelRegexFormat := `^[a-z0-9_-]{1,63}$`
 	if !regexp.MustCompile(labelRegexFormat).MatchString(label) {
 		return "", fmt.Errorf("label '%s' does not match regex '%s'", label, labelRegexFormat)
 	}
