@@ -1633,6 +1633,69 @@ func (_c *MockGCPClientManager_StartInstance_Call) RunAndReturn(run func(project
 	return _c
 }
 
+// StoreSecret provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) StoreSecret(projectID string, key string, value []byte) error {
+	ret := _mock.Called(projectID, key, value)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StoreSecret")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, []byte) error); ok {
+		r0 = returnFunc(projectID, key, value)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGCPClientManager_StoreSecret_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StoreSecret'
+type MockGCPClientManager_StoreSecret_Call struct {
+	*mock.Call
+}
+
+// StoreSecret is a helper method to define mock.On call
+//   - projectID string
+//   - key string
+//   - value []byte
+func (_e *MockGCPClientManager_Expecter) StoreSecret(projectID interface{}, key interface{}, value interface{}) *MockGCPClientManager_StoreSecret_Call {
+	return &MockGCPClientManager_StoreSecret_Call{Call: _e.mock.On("StoreSecret", projectID, key, value)}
+}
+
+func (_c *MockGCPClientManager_StoreSecret_Call) Run(run func(projectID string, key string, value []byte)) *MockGCPClientManager_StoreSecret_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []byte
+		if args[2] != nil {
+			arg2 = args[2].([]byte)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_StoreSecret_Call) Return(err error) *MockGCPClientManager_StoreSecret_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_StoreSecret_Call) RunAndReturn(run func(projectID string, key string, value []byte) error) *MockGCPClientManager_StoreSecret_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpdateProject provides a mock function for the type MockGCPClientManager
 func (_mock *MockGCPClientManager) UpdateProject(projectID string, labels map[string]string) error {
 	ret := _mock.Called(projectID, labels)

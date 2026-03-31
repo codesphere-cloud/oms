@@ -530,6 +530,7 @@ require (
 )
 
 require (
+	cloud.google.com/go/secretmanager v1.16.0
 	filippo.io/edwards25519 v1.2.0 // indirect
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
