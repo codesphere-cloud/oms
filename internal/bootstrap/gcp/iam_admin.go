@@ -101,8 +101,8 @@ func createLabel(value string) (string, error) {
 	}
 
 	label := value
-	if len(label) > 64 {
-		label = label[:64]
+	if len(label) > 63 {
+		label = label[:63]
 	}
 
 	invalidChars := []string{"/", "."}
