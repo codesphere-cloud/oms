@@ -83,11 +83,15 @@ var _ = Describe("IAM & Admin - Unexported", func() {
 			}),
 			Entry("long label is cut after 64 chars", validTestCase{
 				inputValue:    "this/is.averylongvaluewhichexceedsthemaximumlengthofagcpprojectlabel",
-				expectedLabel: "this_is_averylongvaluewhichexceedsthemaximumlengthofagcpprojectl",
+				expectedLabel: "this_is_averylongvaluewhichexceedsthemaximumlengthofagcpproject",
 			}),
 			Entry("uppercase to lowercase", validTestCase{
 				inputValue:    "Master",
 				expectedLabel: "master",
+			}),
+			Entry("timestamp format is accepted", validTestCase{
+				inputValue:    "2026-03-31_11-36-55_utc",
+				expectedLabel: "2026-03-31_11-36-55_utc",
 			}),
 		)
 
