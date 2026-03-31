@@ -329,7 +329,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				mockFileIO.EXPECT().WriteFile("workspace.Dockerfile", []byte("FROM docker.io/library/ubuntu:24.04"), os.FileMode(0644)).Return(nil)
 
 				// Expect Build
-				expectedBuildTag := "https://my-registry.com/codesphere-registry/ubuntu-24.04-default:24.04"
+				expectedBuildTag := "https://my-registry.com/ubuntu-24.04-default:24.04"
 				mockImageManager.EXPECT().BuildImage("workspace.Dockerfile", expectedBuildTag, ".").Return(nil)
 
 				// Expect Push
