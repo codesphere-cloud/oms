@@ -83,7 +83,7 @@ var _ = Describe("IAM & Admin - Unexported", func() {
 			}),
 			Entry("long label is cut after 64 chars", validTestCase{
 				inputValue:    "this/is.averylongvaluewhichexceedsthemaximumlengthofagcpprojectlabel",
-				expectedLabel: "this_is_averylongvaluewhichexceedsthemaximumlengthofagcpprojectl",
+				expectedLabel: "this_is_averylongvaluewhichexceedsthemaximumlengthofagcpproject",
 			}),
 			Entry("uppercase to lowercase", validTestCase{
 				inputValue:    "Master",
