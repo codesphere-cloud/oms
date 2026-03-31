@@ -84,9 +84,11 @@ func (b *GCPBootstrapper) generateProjectLabels() (map[string]string, error) {
 	}
 
 	deleteProjectAfterLabel, err := createLabel(deleteProjectAfter)
-	if err == nil {
-		labels[DeleteAfterLabel] = deleteProjectAfterLabel
+	if err != nil {
+		return nil, fmt.Errorf("failed to create '%s' label: %w", DeleteAfterLabel, err)
 	}
+
+	labels[DeleteAfterLabel] = deleteProjectAfterLabel
 
 	return labels, nil
 }
@@ -110,7 +112,7 @@ func createLabel(value string) (string, error) {
 
 	label = strings.ToLower(label)
 
-	labelRegexFormat := `^[a-z][a-z0-9_-]{0,63}$`
+	labelRegexFormat := `^[a-z0-9_-]{0,64}$`
 	if !regexp.MustCompile(labelRegexFormat).MatchString(label) {
 		return "", fmt.Errorf("label '%s' does not match regex '%s'", label, labelRegexFormat)
 	}

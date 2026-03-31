@@ -89,6 +89,10 @@ var _ = Describe("IAM & Admin - Unexported", func() {
 				inputValue:    "Master",
 				expectedLabel: "master",
 			}),
+			Entry("timestamp format is accepted", validTestCase{
+				inputValue:    "2026-03-31_11-36-55_utc",
+				expectedLabel: "2026-03-31_11-36-55_utc",
+			}),
 		)
 
 		It("returns an error for empty input", func() {
