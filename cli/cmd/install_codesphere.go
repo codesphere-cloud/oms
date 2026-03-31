@@ -185,7 +185,7 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 
 				// Determine image tag for build and push
 				registryUrl := strings.TrimRight(config.Registry.Server, "/")
-				buildTag := fmt.Sprintf("%s/codesphere-registry/%s-%s:%s", registryUrl, imageKey, flavorKey, version)
+				buildTag := fmt.Sprintf("%s/%s-%s:%s", registryUrl, imageKey, flavorKey, version)
 
 				err = im.BuildImage(dockerfileName, buildTag, dockerfileDir)
 				if err != nil {
