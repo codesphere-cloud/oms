@@ -388,12 +388,12 @@ func (b *GCPBootstrapper) GetNodeByName(name string) (*node.Node, error) {
 		return nil, fmt.Errorf("failed to get instance %s: %w", name, err)
 	}
 
-	internalIP, externalIP := ExtractInstanceIPs(existingInstance)
-
 	existingNode := &node.Node{
 		NodeClient: b.NodeClient,
 		FileIO:     b.fw,
 	}
+
+	internalIP, externalIP := ExtractInstanceIPs(existingInstance)
 	existingNode.UpdateNode(name, externalIP, internalIP)
 
 	return existingNode, nil
