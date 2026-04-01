@@ -18,8 +18,6 @@ import (
 	"cloud.google.com/go/iam/apiv1/iampb"
 	resourcemanager "cloud.google.com/go/resourcemanager/apiv3"
 	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
-	secretmanager "cloud.google.com/go/secretmanager/apiv1"
-	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	serviceusage "cloud.google.com/go/serviceusage/apiv1"
 	"cloud.google.com/go/serviceusage/apiv1/serviceusagepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
@@ -63,8 +61,6 @@ type GCPClientManager interface {
 	EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error
 	EnsureDNSRecordSets(projectID, zoneName string, records []*dns.ResourceRecordSet) error
 	DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error
-
-	StoreSecret(projectID, key string, value []byte) error
 }
 
 // Concrete implementation
@@ -856,46 +852,6 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 	if _, err = service.Changes.Create(projectID, zoneName, &dns.Change{Deletions: deletions}).Context(c.ctx).Do(); err != nil {
 		return fmt.Errorf("failed to delete DNS records: %w", err)
 	}
-	return nil
-}
-
-func (c *GCPClient) StoreSecret(projectID, key string, payload []byte) error {
-	client, err := secretmanager.NewClient(c.ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create secretmanager client: %w", err)
-	}
-	defer client.Close()
-
-	secretParent := fmt.Sprintf("projects/%s", projectID)
-	secretReq := &secretmanagerpb.CreateSecretRequest{
-		Parent:   secretParent,
-		SecretId: key,
-		Secret: &secretmanagerpb.Secret{
-			Replication: &secretmanagerpb.Replication{
-				Replication: &secretmanagerpb.Replication_Automatic_{
-					Automatic: &secretmanagerpb.Replication_Automatic{},
-				},
-			},
-		},
-	}
-
-	_, err = client.CreateSecret(c.ctx, secretReq)
-	if err != nil && !IsAlreadyExistsError(err) {
-		return fmt.Errorf("failed to create secret: %w", err)
-	}
-
-	secretVersionReq := &secretmanagerpb.AddSecretVersionRequest{
-		Parent: fmt.Sprintf("%s/secrets/%s", secretParent, key),
-		Payload: &secretmanagerpb.SecretPayload{
-			Data: payload,
-		},
-	}
-
-	_, err = client.AddSecretVersion(c.ctx, secretVersionReq)
-	if err != nil {
-		return fmt.Errorf("failed to add secret version: %w", err)
-	}
-
 	return nil
 }
 

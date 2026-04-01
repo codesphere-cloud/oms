@@ -229,26 +229,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}
 
-	err = b.UploadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to upload config: %w", err)
-	}
-
-	return nil
-}
-
-// UploadConfig stores the install config and the vault in the GCP Secret Manager of the bootstrapped project
-func (b *GCPBootstrapper) UploadConfig() error {
-	configPayload, err := b.icg.GetInstallConfig().Marshal()
-	if err != nil {
-		return fmt.Errorf("failed to marshal install config: %w", err)
-	}
-
-	err = b.GCPClient.StoreSecret(b.Env.ProjectID, "config", configPayload)
-	if err != nil {
-		return fmt.Errorf("failed to store install config in GCP Secret Manager: %w", err)
-	}
-
 	return nil
 }
 

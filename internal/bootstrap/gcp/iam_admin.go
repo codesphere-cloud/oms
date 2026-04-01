@@ -164,7 +164,6 @@ func (b *GCPBootstrapper) EnsureAPIsEnabled() error {
 		"serviceusage.googleapis.com",
 		"artifactregistry.googleapis.com",
 		"dns.googleapis.com",
-		"secretmanager.googleapis.com",
 	}
 
 	err := b.GCPClient.EnableAPIs(b.Env.ProjectID, apis)
