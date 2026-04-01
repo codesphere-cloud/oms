@@ -48,7 +48,6 @@ var _ = Describe("API Key Integration Tests", func() {
 		testOwner = fmt.Sprintf("integration-test-%d@test.com", time.Now().Unix())
 		testOrg = "IntegrationTestOrg"
 		testRole = "Ext"
-		expiresAt = time.Now().Add(24 * time.Hour)
 		extendedExpiry = time.Now().Add(48 * time.Hour)
 	})
 
