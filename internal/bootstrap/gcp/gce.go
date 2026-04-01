@@ -380,6 +380,8 @@ func (b *GCPBootstrapper) ReadSSHKey(path string) (string, error) {
 	return key, nil
 }
 
+// GetNodeByName returns the node by the given name
+// Returns an error if gce instance is not found
 func (b *GCPBootstrapper) GetNodeByName(name string) (*node.Node, error) {
 	existingInstance, err := b.GCPClient.GetInstance(b.Env.ProjectID, b.Env.Zone, name)
 	if err != nil {
