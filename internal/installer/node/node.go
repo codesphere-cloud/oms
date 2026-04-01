@@ -310,7 +310,7 @@ func (c *SSHNodeClient) CopyFile(n *Node, src string, dst string) error {
 	return n.copyFile(jumpBoxIP, nodeIP, "root", src, dst)
 }
 
-// DownloadFile copies a file from the remote node to the local system via SFTP
+// DownloadFile downloads a file from the remote node to the local system via SFTP
 func (c *SSHNodeClient) DownloadFile(n *Node, src, dst string) error {
 	jumpBoxIP := ""
 	nodeIP := n.ExternalIP
@@ -506,7 +506,7 @@ func (n *Node) copyFile(jumpboxIp string, ip string, username string, src string
 	return nil
 }
 
-// downloadFile copies a file from the remote node to the local system via SFTP
+// downloadFile downloads a file from the remote node to the local system via SFTP
 func (n *Node) downloadFile(jumpboxIp, ip, username, src, dst string) error {
 	client, err := n.getSFTPClient(jumpboxIp, ip, username)
 	if err != nil {

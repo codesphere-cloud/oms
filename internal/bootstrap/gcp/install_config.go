@@ -15,7 +15,7 @@ const (
 	remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
 )
 
-// EnsureInstallConfig recovers the config either from the jumpbox or from a local file if desired.
+// EnsureInstallConfig uses the local config or recovers it from an existing jumpbox if desired.
 // Else it applies the minimal profile to a new config.
 func (b *GCPBootstrapper) EnsureInstallConfig() error {
 	if b.fw.Exists(b.Env.InstallConfigPath) || b.Env.RecoverConfig {
