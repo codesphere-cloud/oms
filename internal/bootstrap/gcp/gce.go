@@ -379,3 +379,20 @@ func (b *GCPBootstrapper) ReadSSHKey(path string) (string, error) {
 	}
 	return key, nil
 }
+
+func (b *GCPBootstrapper) GetNodeByName(name string) (*node.Node, error) {
+	existingInstance, err := b.GCPClient.GetInstance(b.Env.ProjectID, b.Env.Zone, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get instance %s: %w", name, err)
+	}
+
+	internalIP, externalIP := ExtractInstanceIPs(existingInstance)
+
+	existingNode := &node.Node{
+		NodeClient: b.NodeClient,
+		FileIO:     b.fw,
+	}
+	existingNode.UpdateNode(name, externalIP, internalIP)
+
+	return existingNode, nil
+}

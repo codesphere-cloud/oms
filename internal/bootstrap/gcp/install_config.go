@@ -11,8 +11,22 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
+const (
+	remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
+)
+
+// EnsureInstallConfig recovers the config either from the jumpbox or from a local file if desired.
+// Else it applies the minimal profile to a new config.
 func (b *GCPBootstrapper) EnsureInstallConfig() error {
-	if b.fw.Exists(b.Env.InstallConfigPath) {
+	if b.fw.Exists(b.Env.InstallConfigPath) || b.Env.RecoverConfig {
+		// recovery will overwrite local config
+		if b.Env.RecoverConfig {
+			err := b.recoverConfig()
+			if err != nil {
+				return fmt.Errorf("failed to recover config: %w", err)
+			}
+		}
+
 		err := b.icg.LoadInstallConfigFromFile(b.Env.InstallConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config file: %w", err)
@@ -27,6 +41,27 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 	}
 
 	b.Env.InstallConfig = b.icg.GetInstallConfig()
+
+	return nil
+}
+
+func (b *GCPBootstrapper) recoverConfig() error {
+	// check if gcp project exists for recovery
+	existingProject, err := b.GCPClient.GetProjectByName(b.Env.FolderID, b.Env.ProjectName)
+	if err != nil {
+		return fmt.Errorf("failed to find gcp project for config recovery: %w", err)
+	}
+	b.Env.ProjectID = existingProject.ProjectId
+
+	jumpbox, err := b.GetNodeByName("jumpbox")
+	if err != nil {
+		return fmt.Errorf("failed to find jumpbox node for config recovery: %w", err)
+	}
+
+	err = jumpbox.NodeClient.DownloadFile(jumpbox, remoteInstallConfigPath, b.Env.InstallConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to recover install config from jumpbox: %w", err)
+	}
 
 	return nil
 }
@@ -219,7 +254,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, "/etc/codesphere/config.yaml")
+	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}

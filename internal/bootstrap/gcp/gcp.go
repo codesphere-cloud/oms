@@ -101,6 +101,7 @@ type CodesphereEnvironment struct {
 	Preemptible          bool         `json:"preemptible"`
 	SpotVMs              bool         `json:"spot_vms"`
 	WriteConfig          bool         `json:"-"`
+	RecoverConfig        bool         `json:"-"`
 	GatewayIP            string       `json:"gateway_ip"`
 	PublicGatewayIP      string       `json:"public_gateway_ip"`
 	RegistryType         RegistryType `json:"registry_type"`
