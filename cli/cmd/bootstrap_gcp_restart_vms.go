@@ -35,7 +35,12 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, args []string) error 
 	projectID := c.Opts.ProjectID
 	zone := c.Opts.Zone
 
-	if projectID == "" || zone == "" {
+	// If only one of --project-id/--zone is provided, require both
+	if (projectID == "") != (zone == "") {
+		return fmt.Errorf("--project-id and --zone must be provided together")
+	}
+
+	if projectID == "" && zone == "" {
 		infraFilePath := gcp.GetInfraFilePath()
 		infraEnv, exists, err := gcp.LoadInfraFile(fw, infraFilePath)
 		if err != nil {
@@ -44,19 +49,15 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, args []string) error 
 		if !exists {
 			return fmt.Errorf("infra file not found at %s; use --project-id and --zone flags", infraFilePath)
 		}
-		if projectID == "" {
-			projectID = infraEnv.ProjectID
-		}
-		if zone == "" {
-			zone = infraEnv.Zone
-		}
+		projectID = infraEnv.ProjectID
+		zone = infraEnv.Zone
 	}
 
 	if projectID == "" {
-		return fmt.Errorf("project ID is required; set --project-id or ensure the infra file exists")
+		return fmt.Errorf("project ID is required; set --project-id and --zone or ensure the infra file exists")
 	}
 	if zone == "" {
-		return fmt.Errorf("zone is required; set --zone or ensure the infra file exists")
+		return fmt.Errorf("zone is required; set --project-id and --zone or ensure the infra file exists")
 	}
 
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))

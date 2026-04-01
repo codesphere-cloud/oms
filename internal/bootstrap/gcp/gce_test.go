@@ -860,6 +860,15 @@ var _ = Describe("GCE", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to get instance"))
 		})
 
+		It("returns actionable error when instance is not found", func() {
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(nil, grpcstatus.Errorf(codes.NotFound, "not found"))
+
+			err := bs.RestartVM("jumpbox")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not exist"))
+			Expect(err.Error()).To(ContainSubstring("bootstrap first"))
+		})
+
 		It("returns error when StartInstance fails", func() {
 			stoppedInst := makeStoppedInstance("10.0.0.1", "1.2.3.4")
 			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(stoppedInst, nil)

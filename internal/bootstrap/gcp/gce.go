@@ -397,6 +397,9 @@ func (b *GCPBootstrapper) RestartVM(name string) error {
 
 	inst, err := b.GCPClient.GetInstance(projectID, zone, name)
 	if err != nil {
+		if IsNotFoundError(err) {
+			return fmt.Errorf("instance %s does not exist in project %s / zone %s; did you run bootstrap first?", name, projectID, zone)
+		}
 		return fmt.Errorf("failed to get instance %s: %w", name, err)
 	}
 

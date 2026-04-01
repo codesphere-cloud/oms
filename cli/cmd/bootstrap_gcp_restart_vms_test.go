@@ -83,15 +83,25 @@ var _ = Describe("BootstrapGcpRestartVMsCmd", func() {
 
 				restartCmd, _, err := parentCmd.Find([]string{"restart-vms"})
 				Expect(err).NotTo(HaveOccurred())
+				Expect(restartCmd).NotTo(BeNil())
 
 				err = restartCmd.Flags().Set("project-id", "flag-project")
 				Expect(err).NotTo(HaveOccurred())
+				projectIDVal, err := restartCmd.Flags().GetString("project-id")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(projectIDVal).To(Equal("flag-project"))
 
 				err = restartCmd.Flags().Set("zone", "flag-zone")
 				Expect(err).NotTo(HaveOccurred())
+				zoneVal, err := restartCmd.Flags().GetString("zone")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(zoneVal).To(Equal("flag-zone"))
 
 				err = restartCmd.Flags().Set("name", "jumpbox")
 				Expect(err).NotTo(HaveOccurred())
+				nameVal, err := restartCmd.Flags().GetString("name")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(nameVal).To(Equal("jumpbox"))
 			})
 		})
 	})
