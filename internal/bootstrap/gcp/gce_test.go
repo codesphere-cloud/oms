@@ -901,7 +901,7 @@ var _ = Describe("GCE", func() {
 
 		It("succeeds when all VMs are already running", func() {
 			runningInst := makeRunningInstance("10.0.0.1", "1.2.3.4")
-			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(runningInst, nil).Maybe()
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(runningInst, nil).Times(8)
 
 			err := bs.RestartVMs()
 			Expect(err).NotTo(HaveOccurred())
@@ -911,27 +911,22 @@ var _ = Describe("GCE", func() {
 			stoppedInst := makeStoppedInstance("10.0.0.1", "1.2.3.4")
 			runningInst := makeRunningInstance("10.0.0.1", "1.2.3.4")
 
-			callCounts := &sync.Map{}
+			callCounts := map[string]int{}
 			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(_, _, name string) (*computepb.Instance, error) {
-				count := 0
-				if v, ok := callCounts.Load(name); ok {
-					count = v.(int)
-				}
-				count++
-				callCounts.Store(name, count)
-				if count == 1 {
+				callCounts[name]++
+				if callCounts[name] == 1 {
 					return stoppedInst, nil
 				}
 				return runningInst, nil
-			}).Maybe()
-			gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Maybe()
+			}).Times(16)
+			gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 
 			err := bs.RestartVMs()
 			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("returns aggregated errors when some VMs fail", func() {
-			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("api error")).Maybe()
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("api error")).Times(8)
 
 			err := bs.RestartVMs()
 			Expect(err).To(HaveOccurred())
