@@ -142,6 +142,12 @@ License: MIT
 License URL: https://github.com/asaskevich/govalidator/blob/a9d515a09cc2/LICENSE
  
 ----------
+Module: github.com/avast/retry-go/v5
+Version: v5.0.0
+License: MIT
+License URL: https://github.com/avast/retry-go/blob/v5.0.0/LICENSE
+ 
+----------
 Module: github.com/beorn7/perks/quantile
 Version: v1.0.1
 License: MIT
@@ -185,21 +191,21 @@ License URL: https://github.com/cloudflare/circl/blob/v1.6.3/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/barman-cloud/pkg/api
-Version: v0.4.1-0.20260108104508-ced266c145f5
+Version: v0.5.0
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/barman-cloud/blob/ced266c145f5/LICENSE
+License URL: https://github.com/cloudnative-pg/barman-cloud/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/cloudnative-pg
-Version: v1.28.1
+Version: v1.29.0
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.28.1/LICENSE
+License URL: https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.29.0/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/cnpg-i/pkg/identity
-Version: v0.3.1
+Version: v0.5.0
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/cnpg-i/blob/v0.3.1/LICENSE
+License URL: https://github.com/cloudnative-pg/cnpg-i/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/machinery/pkg
