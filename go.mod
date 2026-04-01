@@ -20,7 +20,7 @@ require (
 	cloud.google.com/go/serviceusage v1.9.7
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.4.0
-	github.com/cloudnative-pg/cloudnative-pg v1.28.1
+	github.com/cloudnative-pg/cloudnative-pg v1.29.0
 	github.com/codesphere-cloud/cs-go v0.22.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/getsops/sops/v3 v3.12.2
@@ -534,11 +534,12 @@ require (
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
+	github.com/avast/retry-go/v5 v5.0.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/chai2010/gettext-go v1.0.3 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/cloudnative-pg/barman-cloud v0.4.1-0.20260108104508-ced266c145f5 // indirect
-	github.com/cloudnative-pg/cnpg-i v0.3.1 // indirect
+	github.com/cloudnative-pg/barman-cloud v0.5.0 // indirect
+	github.com/cloudnative-pg/cnpg-i v0.5.0 // indirect
 	github.com/cloudnative-pg/machinery v0.3.3 // indirect
 	github.com/containernetworking/cni v1.2.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
