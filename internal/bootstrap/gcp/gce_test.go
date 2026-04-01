@@ -786,4 +786,156 @@ var _ = Describe("GCE", func() {
 			})
 		})
 	})
+
+	Describe("RestartVM", func() {
+		var (
+			gc    *gcp.MockGCPClientManager
+			csEnv *gcp.CodesphereEnvironment
+			bs    *gcp.GCPBootstrapper
+		)
+
+		BeforeEach(func() {
+			gc = gcp.NewMockGCPClientManager(GinkgoT())
+			csEnv = &gcp.CodesphereEnvironment{
+				ProjectID: "test-project",
+				Zone:      "us-central1-a",
+			}
+			bs = newTestBootstrapper(csEnv, gc)
+		})
+
+		It("returns error for unknown VM name", func() {
+			err := bs.RestartVM("nonexistent")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unknown VM name"))
+			Expect(err.Error()).To(ContainSubstring("jumpbox"))
+		})
+
+		It("is a no-op when instance is already running", func() {
+			runningInst := makeRunningInstance("10.0.0.1", "1.2.3.4")
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(runningInst, nil)
+
+			err := bs.RestartVM("jumpbox")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("starts a TERMINATED instance and waits for it to be running", func() {
+			stoppedInst := makeStoppedInstance("10.0.0.1", "1.2.3.4")
+			runningInst := makeRunningInstance("10.0.0.1", "1.2.3.4")
+
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(stoppedInst, nil).Once()
+			gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(nil)
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(runningInst, nil).Once()
+
+			err := bs.RestartVM("jumpbox")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("starts a STOPPED instance", func() {
+			stoppedInst := makeInstance("STOPPED", "10.0.0.1", "1.2.3.4")
+			runningInst := makeRunningInstance("10.0.0.1", "1.2.3.4")
+
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "postgres").Return(stoppedInst, nil).Once()
+			gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, "postgres").Return(nil)
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "postgres").Return(runningInst, nil).Once()
+
+			err := bs.RestartVM("postgres")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("returns error for SUSPENDED instance", func() {
+			suspendedInst := makeInstance("SUSPENDED", "10.0.0.1", "")
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(suspendedInst, nil)
+
+			err := bs.RestartVM("jumpbox")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("SUSPENDED"))
+			Expect(err.Error()).To(ContainSubstring("manual resume"))
+		})
+
+		It("returns error when GetInstance fails", func() {
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(nil, fmt.Errorf("permission denied"))
+
+			err := bs.RestartVM("jumpbox")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to get instance"))
+		})
+
+		It("returns error when StartInstance fails", func() {
+			stoppedInst := makeStoppedInstance("10.0.0.1", "1.2.3.4")
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(stoppedInst, nil)
+			gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(fmt.Errorf("quota exceeded"))
+
+			err := bs.RestartVM("jumpbox")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to start instance"))
+		})
+
+		It("handles VM without external IP (ceph node)", func() {
+			stoppedInst := makeStoppedInstance("10.0.0.5", "")
+			runningInst := makeRunningInstance("10.0.0.5", "")
+
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "ceph-1").Return(stoppedInst, nil).Once()
+			gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, "ceph-1").Return(nil)
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "ceph-1").Return(runningInst, nil).Once()
+
+			err := bs.RestartVM("ceph-1")
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("RestartVMs", func() {
+		var (
+			gc    *gcp.MockGCPClientManager
+			csEnv *gcp.CodesphereEnvironment
+			bs    *gcp.GCPBootstrapper
+		)
+
+		BeforeEach(func() {
+			gc = gcp.NewMockGCPClientManager(GinkgoT())
+			csEnv = &gcp.CodesphereEnvironment{
+				ProjectID: "test-project",
+				Zone:      "us-central1-a",
+			}
+			bs = newTestBootstrapper(csEnv, gc)
+		})
+
+		It("succeeds when all VMs are already running", func() {
+			runningInst := makeRunningInstance("10.0.0.1", "1.2.3.4")
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(runningInst, nil).Maybe()
+
+			err := bs.RestartVMs()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("starts stopped VMs and succeeds", func() {
+			stoppedInst := makeStoppedInstance("10.0.0.1", "1.2.3.4")
+			runningInst := makeRunningInstance("10.0.0.1", "1.2.3.4")
+
+			callCounts := &sync.Map{}
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(_, _, name string) (*computepb.Instance, error) {
+				count := 0
+				if v, ok := callCounts.Load(name); ok {
+					count = v.(int)
+				}
+				count++
+				callCounts.Store(name, count)
+				if count == 1 {
+					return stoppedInst, nil
+				}
+				return runningInst, nil
+			}).Maybe()
+			gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Maybe()
+
+			err := bs.RestartVMs()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("returns aggregated errors when some VMs fail", func() {
+			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("api error")).Maybe()
+
+			err := bs.RestartVMs()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("errors restarting VMs"))
+		})
+	})
 })
