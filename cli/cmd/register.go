@@ -6,6 +6,8 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -29,7 +31,7 @@ type RegisterOpts struct {
 	Owner        string
 	Organization string
 	Role         string
-	ExpiresAt    string
+	ValidFor     string
 }
 
 func (c *RegisterCmd) RunE(_ *cobra.Command, args []string) error {
@@ -58,7 +60,7 @@ func AddRegisterCmd(list *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().StringVarP(&c.Opts.Owner, "owner", "o", "", "Owner of the new API key")
 	c.cmd.Flags().StringVarP(&c.Opts.Organization, "organization", "g", "", "Organization of the new API key")
 	c.cmd.Flags().StringVarP(&c.Opts.Role, "role", "r", "Ext", "Role of the new API key. Available roles: Admin, Dev, Ext")
-	c.cmd.Flags().StringVarP(&c.Opts.ExpiresAt, "expires", "e", "", "Expiration date of the new API key. Default is 1 year from now. Format: RFC3339 (e.g., 2024-12-31T23:59:59Z)")
+	c.cmd.Flags().StringVar(&c.Opts.ValidFor, "valid-for", "", "Validity duration of the new API key in days (e.g., 10d)")
 
 	c.cmd.RunE = c.RunE
 
@@ -72,11 +74,17 @@ func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
 
 	var err error
 	var expiresAt time.Time
-	if c.Opts.ExpiresAt != "" {
-		expiresAt, err = time.Parse(time.RFC3339, c.Opts.ExpiresAt)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse expiration date: %w", err)
+	if c.Opts.ValidFor != "" {
+		if !strings.HasSuffix(c.Opts.ValidFor, "d") {
+			return nil, fmt.Errorf("failed to parse valid-for duration: expected format '<days>d', got %q", c.Opts.ValidFor)
 		}
+
+		days, parseErr := strconv.Atoi(strings.TrimSuffix(c.Opts.ValidFor, "d"))
+		if parseErr != nil || days <= 0 {
+			return nil, fmt.Errorf("failed to parse valid-for duration: expected format '<days>d' with days > 0, got %q", c.Opts.ValidFor)
+		}
+
+		expiresAt = time.Now().AddDate(0, 0, days)
 	}
 
 	newKey, err := p.RegisterAPIKey(c.Opts.Owner, c.Opts.Organization, c.Opts.Role, expiresAt)

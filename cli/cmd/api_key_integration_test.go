@@ -60,7 +60,7 @@ var _ = Describe("API Key Integration Tests", func() {
 					Owner:        fmt.Sprintf("standalone-test-%d@test.com", time.Now().Unix()),
 					Organization: "StandaloneTestOrg",
 					Role:         "Ext",
-					ExpiresAt:    time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+					ValidFor:     "1d",
 				},
 			}
 
@@ -102,7 +102,7 @@ var _ = Describe("API Key Integration Tests", func() {
 					Owner:        testOwner,
 					Organization: testOrg,
 					Role:         testRole,
-					ExpiresAt:    expiresAt.Format(time.RFC3339),
+					ValidFor:     "1d",
 				},
 			}
 
