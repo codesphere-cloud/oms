@@ -45,8 +45,10 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 	return nil
 }
 
+// recoverConfig downloads the config and secrets from the jumpbox if it exists.
+// Since recovery is done when the project or VMs are not ensured, we need to search for the jumpbox IP first.
+// Returns an error if project or jumpbox does not exist or downloading fails.
 func (b *GCPBootstrapper) recoverConfig() error {
-	// check if gcp project exists for recovery
 	existingProject, err := b.GCPClient.GetProjectByName(b.Env.FolderID, b.Env.ProjectName)
 	if err != nil {
 		return fmt.Errorf("failed to find gcp project for config recovery: %w", err)
@@ -61,6 +63,11 @@ func (b *GCPBootstrapper) recoverConfig() error {
 	err = jumpbox.NodeClient.DownloadFile(jumpbox, remoteInstallConfigPath, b.Env.InstallConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to recover install config from jumpbox: %w", err)
+	}
+
+	err = jumpbox.NodeClient.DownloadFile(jumpbox, b.Env.SecretsDir+"/prod.vault.yaml", b.Env.SecretsFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to recover secrets file from jumpbox: %w", err)
 	}
 
 	return nil

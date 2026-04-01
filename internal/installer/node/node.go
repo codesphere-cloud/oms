@@ -295,13 +295,11 @@ func (c *SSHNodeClient) HasFile(n *Node, filePath string) bool {
 
 // CopyFile copies a file from the local system to the remote node via SFTP
 func (c *SSHNodeClient) CopyFile(n *Node, src string, dst string) error {
-	if n.Jumpbox == nil {
-		err := n.ensureDirectoryExists("root", filepath.Dir(dst))
-		if err != nil {
-			return fmt.Errorf("failed to ensure directory exists: %w", err)
-		}
-
-		return n.copyFile("", n.ExternalIP, "root", src, dst)
+	jumpBoxIP := ""
+	nodeIP := n.ExternalIP
+	if n.Jumpbox != nil {
+		jumpBoxIP = n.Jumpbox.ExternalIP
+		nodeIP = n.InternalIP
 	}
 
 	err := n.ensureDirectoryExists("root", filepath.Dir(dst))
@@ -309,7 +307,7 @@ func (c *SSHNodeClient) CopyFile(n *Node, src string, dst string) error {
 		return fmt.Errorf("failed to ensure directory exists: %w", err)
 	}
 
-	return n.copyFile(n.Jumpbox.ExternalIP, n.InternalIP, "root", src, dst)
+	return n.copyFile(jumpBoxIP, nodeIP, "root", src, dst)
 }
 
 // DownloadFile copies a file from the remote node to the local system via SFTP
@@ -530,7 +528,7 @@ func (n *Node) downloadFile(jumpboxIp, ip, username, src, dst string) error {
 
 	_, err = dstFile.ReadFrom(srcFile)
 	if err != nil {
-		return fmt.Errorf("failed to copy data from %s to %s: %v", src, dst, err)
+		return fmt.Errorf("failed to download data from %s to %s: %v", src, dst, err)
 	}
 
 	return nil
