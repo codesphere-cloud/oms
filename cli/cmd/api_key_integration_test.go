@@ -28,7 +28,6 @@ var _ = Describe("API Key Integration Tests", func() {
 		testRole         string
 		registeredKey    *portal.ApiKey
 		originalAdminKey string
-		expiresAt        time.Time
 		extendedExpiry   time.Time
 	)
 
