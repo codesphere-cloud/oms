@@ -1165,7 +1165,7 @@ License URL: https://cs.opensource.google/go/x/time/+/v0.15.0:LICENSE
 Module: gomodules.xyz/jsonpatch/v2
 Version: v2.5.0
 License: Apache-2.0
-License URL: Unknown
+License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
