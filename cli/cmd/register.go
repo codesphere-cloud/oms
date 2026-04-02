@@ -6,12 +6,11 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/portal"
+	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -72,19 +71,14 @@ func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
 		return nil, fmt.Errorf("invalid role: %s. Available roles are: Admin, Dev, Ext", c.Opts.Role)
 	}
 
-	var err error
 	var expiresAt time.Time
 	if c.Opts.ValidFor != "" {
-		if !strings.HasSuffix(c.Opts.ValidFor, "d") {
-			return nil, fmt.Errorf("failed to parse valid-for duration: expected format '<days>d', got %q", c.Opts.ValidFor)
+		validForDuration, err := util.GetDurationFromString(c.Opts.ValidFor)
+		if err != nil {
+			return nil, err
 		}
 
-		days, parseErr := strconv.Atoi(strings.TrimSuffix(c.Opts.ValidFor, "d"))
-		if parseErr != nil || days <= 0 {
-			return nil, fmt.Errorf("failed to parse valid-for duration: expected format '<days>d' with days > 0, got %q", c.Opts.ValidFor)
-		}
-
-		expiresAt = time.Now().AddDate(0, 0, days)
+		expiresAt = time.Now().Add(validForDuration)
 	}
 
 	newKey, err := p.RegisterAPIKey(c.Opts.Owner, c.Opts.Organization, c.Opts.Role, expiresAt)

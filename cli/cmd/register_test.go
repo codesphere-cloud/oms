@@ -50,7 +50,7 @@ var _ = Describe("RegisterCmd", func() {
 				organization,
 				role,
 				mock.MatchedBy(func(expiresAt time.Time) bool {
-					expected := start.AddDate(0, 0, 10)
+					expected := start.Add(10 * 24 * time.Hour)
 					// Allow a small delta to avoid flakiness from runtime overhead.
 					return expiresAt.After(expected.Add(-2*time.Second)) && expiresAt.Before(expected.Add(2*time.Second))
 				}),
