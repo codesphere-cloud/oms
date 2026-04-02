@@ -120,24 +120,23 @@ func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 }
 
 // HttpRequest sends an unauthorized HTTP request to the portal API with the specified method, path, and body.
-func (c *PortalClient) HttpRequest(method string, path string, body []byte) (resp *http.Response, err error) {
+func (c *PortalClient) HttpRequest(method string, path string, body []byte) (*http.Response, error) {
 	requestBody := bytes.NewBuffer(body)
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), path)
 	if err != nil {
-		err = fmt.Errorf("failed to get generate URL: %w", err)
-		return
+		return nil, fmt.Errorf("failed to get generate URL: %w", err)
 	}
 
 	req, err := http.NewRequest(method, url, requestBody)
 	if err != nil {
 		log.Fatalf("failed to create request: %v", err)
-		return
+		return nil, err
 	}
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err = c.AuthorizedHttpRequest(req)
+	resp, err := c.AuthorizedHttpRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed during authorized HTTP request: %w", err)
 	}
@@ -146,37 +145,32 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 }
 
 // GetBody sends a GET request to the specified path and returns the response body and status code.
-func (c *PortalClient) GetBody(path string) (body []byte, status int, err error) {
+func (c *PortalClient) GetBody(path string) ([]byte, int, error) {
 	resp, err := c.HttpRequest(http.MethodGet, path, []byte{})
 	if err != nil || resp == nil {
-		err = fmt.Errorf("GET failed: %w", err)
-		return
+		return nil, 0, fmt.Errorf("GET failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	status = resp.StatusCode
 
-	body, err = io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		err = fmt.Errorf("failed to read response body: %w", err)
-		return
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return
+	return body, resp.StatusCode, nil
 }
 
 // ListBuilds retrieves the list of available builds for the specified product.
 // The sort parameter controls server-side ordering: "semver" (by semantic version)
 // or "date" (by build date).
-func (c *PortalClient) ListBuilds(product Product, sort string) (availablePackages Builds, err error) {
+func (c *PortalClient) ListBuilds(product Product, sort string) (Builds, error) {
 	requestUrl, err := url.JoinPath(c.Env.GetOmsPortalApi(), fmt.Sprintf("/packages/%s", product))
 	if err != nil {
-		err = fmt.Errorf("failed to generate URL: %w", err)
-		return
+		return Builds{}, fmt.Errorf("failed to generate URL: %w", err)
 	}
 	u, parseErr := url.Parse(requestUrl)
 	if parseErr != nil {
-		err = fmt.Errorf("failed to parse URL: %w", parseErr)
-		return
+		return Builds{}, fmt.Errorf("failed to parse URL: %w", parseErr)
 	}
 	q := u.Query()
 	q.Set("sort", sort)
@@ -185,8 +179,7 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (availablePackag
 
 	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
-		err = fmt.Errorf("failed to create request: %w", err)
-		return
+		return Builds{}, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	resp, err := c.AuthorizedHttpRequest(req)
@@ -194,24 +187,21 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (availablePackag
 		if resp != nil && resp.Body != nil {
 			_ = resp.Body.Close()
 		}
-		err = fmt.Errorf("failed to list packages: %w", err)
-		return
+		return Builds{}, fmt.Errorf("failed to list packages: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	res, err := io.ReadAll(resp.Body)
 	if err != nil {
-		err = fmt.Errorf("failed to read response body: %w", err)
-		return
+		return Builds{}, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	err = json.Unmarshal(res, &availablePackages)
-	if err != nil {
-		err = fmt.Errorf("failed to parse list packages response: %w", err)
-		return
+	var availablePackages Builds
+	if err := json.Unmarshal(res, &availablePackages); err != nil {
+		return Builds{}, fmt.Errorf("failed to parse list packages response: %w", err)
 	}
 
-	return
+	return availablePackages, nil
 }
 
 // GetBuild retrieves a specific build for the given product, version, and hash.
