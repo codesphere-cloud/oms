@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -23,7 +22,7 @@ import (
 
 //mockery:generate: true
 type Portal interface {
-	ListBuilds(product Product) (availablePackages Builds, err error)
+	ListBuilds(product Product, sort string) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
 	DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error
 	VerifyBuildArtifactDownload(file io.Reader, download Build) error
@@ -56,6 +55,11 @@ type Product string
 const (
 	CodesphereProduct Product = "codesphere"
 	OmsProduct        Product = "oms"
+)
+
+const (
+	SortSemver = "semver"
+	SortDate   = "date"
 )
 
 // AuthorizedHttpRequest sends a HTTP request with the necessary authorization headers.
@@ -116,24 +120,23 @@ func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 }
 
 // HttpRequest sends an unauthorized HTTP request to the portal API with the specified method, path, and body.
-func (c *PortalClient) HttpRequest(method string, path string, body []byte) (resp *http.Response, err error) {
+func (c *PortalClient) HttpRequest(method string, path string, body []byte) (*http.Response, error) {
 	requestBody := bytes.NewBuffer(body)
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), path)
 	if err != nil {
-		err = fmt.Errorf("failed to get generate URL: %w", err)
-		return
+		return nil, fmt.Errorf("failed to get generate URL: %w", err)
 	}
 
 	req, err := http.NewRequest(method, url, requestBody)
 	if err != nil {
 		log.Fatalf("failed to create request: %v", err)
-		return
+		return nil, err
 	}
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	resp, err = c.AuthorizedHttpRequest(req)
+	resp, err := c.AuthorizedHttpRequest(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed during authorized HTTP request: %w", err)
 	}
@@ -142,55 +145,68 @@ func (c *PortalClient) HttpRequest(method string, path string, body []byte) (res
 }
 
 // GetBody sends a GET request to the specified path and returns the response body and status code.
-func (c *PortalClient) GetBody(path string) (body []byte, status int, err error) {
+func (c *PortalClient) GetBody(path string) ([]byte, int, error) {
 	resp, err := c.HttpRequest(http.MethodGet, path, []byte{})
 	if err != nil || resp == nil {
-		err = fmt.Errorf("GET failed: %w", err)
-		return
+		return nil, 0, fmt.Errorf("GET failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	status = resp.StatusCode
 
-	body, err = io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		err = fmt.Errorf("failed to read response body: %w", err)
-		return
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return
+	return body, resp.StatusCode, nil
 }
 
 // ListBuilds retrieves the list of available builds for the specified product.
-func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, err error) {
-	res, _, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
+// The sort parameter controls server-side ordering: "semver" (by semantic version)
+// or "date" (by build date).
+func (c *PortalClient) ListBuilds(product Product, sort string) (Builds, error) {
+	requestUrl, err := url.JoinPath(c.Env.GetOmsPortalApi(), fmt.Sprintf("/packages/%s", product))
 	if err != nil {
-		err = fmt.Errorf("failed to list packages: %w", err)
-		return
+		return Builds{}, fmt.Errorf("failed to generate URL: %w", err)
 	}
+	u, parseErr := url.Parse(requestUrl)
+	if parseErr != nil {
+		return Builds{}, fmt.Errorf("failed to parse URL: %w", parseErr)
+	}
+	q := u.Query()
+	q.Set("sort", sort)
+	u.RawQuery = q.Encode()
+	requestUrl = u.String()
 
-	err = json.Unmarshal(res, &availablePackages)
+	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
-		err = fmt.Errorf("failed to parse list packages response: %w", err)
-		return
+		return Builds{}, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	compareBuilds := func(l, r Build) int {
-		if l.Date.Before(r.Date) {
-			return -1
+	resp, err := c.AuthorizedHttpRequest(req)
+	if err != nil {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
 		}
-		if l.Date.Equal(r.Date) && l.Internal == r.Internal {
-			return 0
-		}
-		return 1
+		return Builds{}, fmt.Errorf("failed to list packages: %w", err)
 	}
-	slices.SortFunc(availablePackages.Builds, compareBuilds)
+	defer func() { _ = resp.Body.Close() }()
 
-	return
+	res, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return Builds{}, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var availablePackages Builds
+	if err := json.Unmarshal(res, &availablePackages); err != nil {
+		return Builds{}, fmt.Errorf("failed to parse list packages response: %w", err)
+	}
+
+	return availablePackages, nil
 }
 
 // GetBuild retrieves a specific build for the given product, version, and hash.
 func (c *PortalClient) GetBuild(product Product, version string, hash string) (Build, error) {
-	packages, err := c.ListBuilds(product)
+	packages, err := c.ListBuilds(product, SortDate)
 	if err != nil {
 		return Build{}, fmt.Errorf("failed to list %s packages: %w", product, err)
 	}
@@ -200,7 +216,7 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 	}
 
 	if version == "" || version == "latest" {
-		// Builds are always ordered by date, newest build is latest version
+		// Builds are ordered by date, newest build is latest version
 		return packages.Builds[len(packages.Builds)-1], nil
 	}
 

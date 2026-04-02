@@ -254,18 +254,18 @@ var _ = Describe("PortalClient", func() {
 				mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
 			})
 
-			It("returns the builds ordered by date", func() {
-				firstBuild, _ := time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
-
-				packages, err := client.ListBuilds(portal.CodesphereProduct)
+			It("returns the builds", func() {
+				packages, err := client.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages.Builds).To(HaveLen(2))
-				Expect(packages.Builds[0].Hash).To(Equal("firstBuild"))
-				Expect(packages.Builds[0].Date).To(Equal(firstBuild))
-				Expect(packages.Builds[1].Hash).To(Equal("lastBuild"))
-				Expect(packages.Builds[1].Date).To(Equal(lastBuild))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere?sort=semver"))
+			})
+
+			It("appends sort query parameter when provided", func() {
+				packages, err := client.ListBuilds(portal.CodesphereProduct, portal.SortDate)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(packages.Builds).To(HaveLen(2))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere?sort=date"))
 			})
 		})
 	})

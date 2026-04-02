@@ -8,7 +8,7 @@ import (
 
 	"github.com/jedib0t/go-pretty/v6/table"
 	. "github.com/onsi/ginkgo/v2"
-	//. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
@@ -104,5 +104,31 @@ var _ = Describe("ListPackages", func() {
 					},
 				})
 		})
+	})
+})
+
+var _ = Describe("ListPackages Sort Validation", func() {
+	It("rejects invalid sort values", func() {
+		c := cmd.ListBuildsCmd{
+			Opts: cmd.ListBuildsOpts{
+				Sort: "invalid",
+			},
+		}
+		err := c.RunE(nil, []string{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("invalid sort parameter"))
+		Expect(err.Error()).To(ContainSubstring("invalid"))
+	})
+
+	It("rejects another invalid sort value", func() {
+		c := cmd.ListBuildsCmd{
+			Opts: cmd.ListBuildsOpts{
+				Sort: "name",
+			},
+		}
+		err := c.RunE(nil, []string{})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("invalid sort parameter"))
+		Expect(err.Error()).To(ContainSubstring("name"))
 	})
 })
