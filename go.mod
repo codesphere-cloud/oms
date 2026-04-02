@@ -20,7 +20,7 @@ require (
 	cloud.google.com/go/serviceusage v1.9.7
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.4.0
-	github.com/cloudnative-pg/cloudnative-pg v1.28.1
+	github.com/cloudnative-pg/cloudnative-pg v1.29.0
 	github.com/codesphere-cloud/cs-go v0.22.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/getsops/sops/v3 v3.12.2
@@ -37,8 +37,8 @@ require (
 	golang.org/x/mod v0.34.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.41.0
-	google.golang.org/api v0.273.0
-	google.golang.org/grpc v1.79.3
+	google.golang.org/api v0.273.1
+	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.1.3
@@ -102,7 +102,7 @@ require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 // indirect
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Djarvur/go-err113 v0.1.1 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.31.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.55.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
@@ -300,7 +300,7 @@ require (
 	github.com/gordonklaus/ineffassign v0.2.0 // indirect
 	github.com/goreleaser/chglog v0.7.4 // indirect
 	github.com/goreleaser/fileglob v1.4.0 // indirect
-	github.com/goreleaser/goreleaser/v2 v2.15.1 // indirect
+	github.com/goreleaser/goreleaser/v2 v2.15.2 // indirect
 	github.com/goreleaser/nfpm/v2 v2.45.2 // indirect
 	github.com/goreleaser/quill v0.0.0-20251224035235-ab943733386f // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
@@ -534,11 +534,12 @@ require (
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/MakeNowJust/heredoc v1.0.0 // indirect
 	github.com/Masterminds/squirrel v1.5.4 // indirect
+	github.com/avast/retry-go/v5 v5.0.0 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/chai2010/gettext-go v1.0.3 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/cloudnative-pg/barman-cloud v0.4.1-0.20260108104508-ced266c145f5 // indirect
-	github.com/cloudnative-pg/cnpg-i v0.3.1 // indirect
+	github.com/cloudnative-pg/barman-cloud v0.5.0 // indirect
+	github.com/cloudnative-pg/cnpg-i v0.5.0 // indirect
 	github.com/cloudnative-pg/machinery v0.3.3 // indirect
 	github.com/containernetworking/cni v1.2.3 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
