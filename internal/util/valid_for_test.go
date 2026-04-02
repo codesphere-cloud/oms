@@ -33,5 +33,9 @@ var _ = Describe("GetDurationFromString", func() {
 		_, err = util.GetDurationFromString("abc")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("expected format '<days>d'"))
+
+		_, err = util.GetDurationFromString("a1d")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("expected format '<days>d'"))
 	})
 })
