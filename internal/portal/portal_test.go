@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -66,6 +67,106 @@ var _ = Describe("PortalClient", func() {
 	AfterEach(func() {
 		mockEnv.AssertExpectations(GinkgoT())
 		mockHttpClient.AssertExpectations(GinkgoT())
+	})
+
+	Describe("AuthorizedHttpRequest", func() {
+		JustBeforeEach(func() {
+			mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
+		})
+
+		Context("HTTP Request has Status: OK", func() {
+			BeforeEach(func() {
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: http.StatusOK,
+						}, nil
+					})
+			})
+
+			It("returns a response and no error", func() {
+				testRequest, err := http.NewRequest("GET", "fake", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				resp, err := client.AuthorizedHttpRequest(testRequest)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(resp.StatusCode).To(Equal(http.StatusOK))
+			})
+		})
+
+		Context("HTTP Request has Status: Unauthorized", func() {
+			BeforeEach(func() {
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: http.StatusUnauthorized,
+						}, nil
+					})
+			})
+
+			It("returns no response and an unauthorized error", func() {
+				testRequest, err := http.NewRequest("GET", "fake", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				resp, err := client.AuthorizedHttpRequest(testRequest)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unauthorized: invalid API key"))
+				Expect(resp).To(BeNil())
+			})
+		})
+
+		Context("HTTP Request has Non-OK Status", func() {
+			BeforeEach(func() {
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+			})
+
+			Context("OMS-Portal Health Check is OK", func() {
+				It("returns no response and an error showing portal is healthy", func() {
+					mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+						func(req *http.Request) (*http.Response, error) {
+							if strings.Contains(req.URL.Path, "health") {
+								headers := http.Header{}
+								headers.Add("X-Service-Name", "oms-portal")
+								return &http.Response{
+									StatusCode: http.StatusOK,
+									Header:     headers,
+								}, nil
+							}
+
+							return &http.Response{
+								StatusCode: http.StatusNotFound,
+							}, nil
+						})
+
+					testRequest, err := http.NewRequest("GET", "fake", nil)
+					Expect(err).ToNot(HaveOccurred())
+
+					resp, err := client.AuthorizedHttpRequest(testRequest)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("OMS-Portal is healthy and reachable, but returned an error response"))
+					Expect(resp).To(BeNil())
+				})
+			})
+
+			Context("OMS-Portal Health Check is not OK", func() {
+				It("returns no response and an error showing portal is unhealthy", func() {
+					mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+						func(req *http.Request) (*http.Response, error) {
+							return &http.Response{
+								StatusCode: http.StatusNotFound,
+							}, nil
+						})
+
+					testRequest, err := http.NewRequest("GET", "fake", nil)
+					Expect(err).ToNot(HaveOccurred())
+
+					resp, err := client.AuthorizedHttpRequest(testRequest)
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("OMS-Portal healthcheck failed"))
+					Expect(resp).To(BeNil())
+				})
+			})
+		})
 	})
 
 	Describe("GetBody", func() {
@@ -153,18 +254,18 @@ var _ = Describe("PortalClient", func() {
 				mockEnv.EXPECT().GetOmsPortalApiKey().Return(apiKey, apiKeyErr)
 			})
 
-			It("returns the builds ordered by date", func() {
-				firstBuild, _ := time.Parse("2006-01-02", "2025-04-02")
-				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
-
-				packages, err := client.ListBuilds(portal.CodesphereProduct)
+			It("returns the builds", func() {
+				packages, err := client.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages.Builds).To(HaveLen(2))
-				Expect(packages.Builds[0].Hash).To(Equal("firstBuild"))
-				Expect(packages.Builds[0].Date).To(Equal(firstBuild))
-				Expect(packages.Builds[1].Hash).To(Equal("lastBuild"))
-				Expect(packages.Builds[1].Date).To(Equal(lastBuild))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere?sort=semver"))
+			})
+
+			It("appends sort query parameter when provided", func() {
+				packages, err := client.ListBuilds(portal.CodesphereProduct, portal.SortDate)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(packages.Builds).To(HaveLen(2))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere?sort=date"))
 			})
 		})
 	})
@@ -528,6 +629,62 @@ var _ = Describe("PortalClient", func() {
 				Expect(keys).To(HaveLen(2))
 				Expect(keys[0].KeyID).To(Equal("key-1"))
 				Expect(keys[1].KeyID).To(Equal("key-2"))
+			})
+		})
+	})
+
+	Describe("GetHealth", func() {
+		Context("portal reports healthy status", func() {
+			BeforeEach(func() {
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+
+				headers := http.Header{}
+				headers.Add("X-Service-Name", "oms-portal")
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusOK,
+					Header:     headers,
+				}, nil)
+			})
+
+			It("returns healthy status", func() {
+				err := client.GetHealth()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("portal reports unhealthy status", func() {
+			BeforeEach(func() {
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+
+				headers := http.Header{}
+				headers.Add("X-Service-Name", "oms-portal")
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusNotFound,
+					Header:     headers,
+				}, nil)
+			})
+
+			It("returns unhealthy status", func() {
+				err := client.GetHealth()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("healthcheck returned non-OK status"))
+			})
+		})
+
+		// When proxy answers or URL is wrong, but the status is OK
+		Context("portal does not respond itself", func() {
+			BeforeEach(func() {
+				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
+
+				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+					StatusCode: http.StatusOK,
+				}, nil)
+			})
+
+			It("returns a healthy status without headers", func() {
+				err := client.GetHealth()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("unexpected service name in healthcheck response"))
 			})
 		})
 	})
