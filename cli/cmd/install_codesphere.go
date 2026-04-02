@@ -32,11 +32,13 @@ type InstallCodesphereCmd struct {
 
 type InstallCodesphereOpts struct {
 	*GlobalOptions
-	Package   string
-	Force     bool
-	Config    string
-	PrivKey   string
-	SkipSteps []string
+	Package          string
+	Force            bool
+	Config           string
+	PrivKey          string
+	SkipSteps        []string
+	CodesphereOnly   bool
+	DirectConnection bool
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
@@ -79,6 +81,8 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Config, "config", "c", "", "Path to the Codesphere Private Cloud configuration file (yaml)")
 	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Path to the private key to encrypt/decrypt secrets")
 	codesphere.cmd.Flags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, kubernetes")
+	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
+	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
 
 	util.MarkFlagRequired(codesphere.cmd, "package")
 	util.MarkFlagRequired(codesphere.cmd, "config")
@@ -218,6 +222,14 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 		for _, step := range c.Opts.SkipSteps {
 			cmdArgs = append(cmdArgs, "--skipStep", step)
 		}
+	}
+
+	if c.Opts.CodesphereOnly {
+		cmdArgs = append(cmdArgs, "--codesphereOnly")
+	}
+
+	if c.Opts.DirectConnection {
+		cmdArgs = append(cmdArgs, "--directConnection")
 	}
 
 	cmd := exec.Command(nodePath, cmdArgs...)
