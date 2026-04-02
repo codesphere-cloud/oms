@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -56,6 +55,11 @@ type Product string
 const (
 	CodesphereProduct Product = "codesphere"
 	OmsProduct        Product = "oms"
+)
+
+const (
+	SortSemver = "semver"
+	SortDate   = "date"
 )
 
 // AuthorizedHttpRequest sends a HTTP request with the necessary authorization headers.
@@ -161,25 +165,23 @@ func (c *PortalClient) GetBody(path string) (body []byte, status int, err error)
 }
 
 // ListBuilds retrieves the list of available builds for the specified product.
-// The sort parameter controls server-side ordering: "semver" (by semantic version),
-// "date" (by build date), or "" (server picks default based on API key role).
+// The sort parameter controls server-side ordering: "semver" (by semantic version)
+// or "date" (by build date).
 func (c *PortalClient) ListBuilds(product Product, sort string) (availablePackages Builds, err error) {
 	requestUrl, err := url.JoinPath(c.Env.GetOmsPortalApi(), fmt.Sprintf("/packages/%s", product))
 	if err != nil {
 		err = fmt.Errorf("failed to generate URL: %w", err)
 		return
 	}
-	if sort != "" {
-		u, parseErr := url.Parse(requestUrl)
-		if parseErr != nil {
-			err = fmt.Errorf("failed to parse URL: %w", parseErr)
-			return
-		}
-		q := u.Query()
-		q.Set("sort", sort)
-		u.RawQuery = q.Encode()
-		requestUrl = u.String()
+	u, parseErr := url.Parse(requestUrl)
+	if parseErr != nil {
+		err = fmt.Errorf("failed to parse URL: %w", parseErr)
+		return
 	}
+	q := u.Query()
+	q.Set("sort", sort)
+	u.RawQuery = q.Encode()
+	requestUrl = u.String()
 
 	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
@@ -214,7 +216,7 @@ func (c *PortalClient) ListBuilds(product Product, sort string) (availablePackag
 
 // GetBuild retrieves a specific build for the given product, version, and hash.
 func (c *PortalClient) GetBuild(product Product, version string, hash string) (Build, error) {
-	packages, err := c.ListBuilds(product, "date")
+	packages, err := c.ListBuilds(product, SortDate)
 	if err != nil {
 		return Build{}, fmt.Errorf("failed to list %s packages: %w", product, err)
 	}
@@ -222,12 +224,6 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 	if len(packages.Builds) == 0 {
 		return Build{}, errors.New("no builds returned")
 	}
-
-	// Ensure builds are sorted by date locally as a safety net,
-	// so "latest" resolution is stable regardless of server sort behavior.
-	slices.SortFunc(packages.Builds, func(l, r Build) int {
-		return l.Date.Compare(r.Date)
-	})
 
 	if version == "" || version == "latest" {
 		// Builds are ordered by date, newest build is latest version

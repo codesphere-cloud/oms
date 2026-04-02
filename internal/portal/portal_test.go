@@ -255,17 +255,17 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			It("returns the builds", func() {
-				packages, err := client.ListBuilds(portal.CodesphereProduct, "")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(packages.Builds).To(HaveLen(2))
-				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere"))
-			})
-
-			It("appends sort query parameter when provided", func() {
-				packages, err := client.ListBuilds(portal.CodesphereProduct, "semver")
+				packages, err := client.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(packages.Builds).To(HaveLen(2))
 				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere?sort=semver"))
+			})
+
+			It("appends sort query parameter when provided", func() {
+				packages, err := client.ListBuilds(portal.CodesphereProduct, portal.SortDate)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(packages.Builds).To(HaveLen(2))
+				Expect(getUrl.String()).To(Equal("fake-portal.com/packages/codesphere?sort=date"))
 			})
 		})
 	})

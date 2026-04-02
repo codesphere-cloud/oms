@@ -27,8 +27,8 @@ type ListBuildsOpts struct {
 }
 
 func (c *ListBuildsCmd) RunE(_ *cobra.Command, args []string) error {
-	if c.Opts.Sort != "" && c.Opts.Sort != "semver" && c.Opts.Sort != "date" {
-		return fmt.Errorf("invalid sort parameter: %s (must be 'semver' or 'date')", c.Opts.Sort)
+	if c.Opts.Sort != portal.SortSemver && c.Opts.Sort != portal.SortDate {
+		return fmt.Errorf("invalid sort parameter: %s (must be '%s' or '%s')", c.Opts.Sort, portal.SortSemver, portal.SortDate)
 	}
 
 	p := portal.NewPortalClient()
@@ -55,7 +55,7 @@ func AddListPackagesCmd(list *cobra.Command, opts *GlobalOptions) {
 	builds.cmd.RunE = builds.RunE
 	builds.cmd.Flags().BoolVarP(&builds.Opts.Internal, "list-internal", "i", false, "List internal packages")
 	_ = builds.cmd.Flags().MarkHidden("list-internal")
-	builds.cmd.Flags().StringVarP(&builds.Opts.Sort, "sort", "s", "", "Sort order: 'semver' (by semantic version) or 'date' (by build date). If omitted, the server chooses based on API key role")
+	builds.cmd.Flags().StringVarP(&builds.Opts.Sort, "sort", "s", portal.SortSemver, "Sort order: 'semver' (by semantic version) or 'date' (by build date)")
 
 	list.AddCommand(builds.cmd)
 }
