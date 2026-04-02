@@ -18,15 +18,15 @@ const (
 // EnsureInstallConfig uses the local config or recovers it from an existing jumpbox if desired.
 // Else it applies the minimal profile to a new config.
 func (b *GCPBootstrapper) EnsureInstallConfig() error {
-	if b.fw.Exists(b.Env.InstallConfigPath) || b.Env.RecoverConfig {
-		// recovery will overwrite local config
-		if b.Env.RecoverConfig {
-			err := b.recoverConfig()
-			if err != nil {
-				return fmt.Errorf("failed to recover config: %w", err)
-			}
+	// recovery will overwrite local config or create a new file
+	if b.Env.RecoverConfig {
+		err := b.recoverConfig()
+		if err != nil {
+			return fmt.Errorf("failed to recover config: %w", err)
 		}
+	}
 
+	if b.fw.Exists(b.Env.InstallConfigPath) {
 		err := b.icg.LoadInstallConfigFromFile(b.Env.InstallConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config file: %w", err)

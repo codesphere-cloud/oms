@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	"cloud.google.com/go/resourcemanager/apiv3/resourcemanagerpb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -20,6 +21,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 var _ = Describe("Installconfig & Secrets", func() {
@@ -74,6 +77,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			GitHubAppClientSecret: "fake-secret",
 			InstallConfigPath:     "fake-config-file",
 			SecretsFilePath:       "fake-secret",
+			RecoverConfig:         false,
 			ProjectName:           "test-project",
 			ProjectTTL:            "1h",
 			SecretsDir:            "/etc/codesphere/secrets",
@@ -124,6 +128,27 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bs.Env.InstallConfig).NotTo(BeNil())
 			})
+
+			Describe("Config Recovery from Jumpbox", func() {
+				JustBeforeEach(func() {
+					csEnv.RecoverConfig = true
+					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(&resourcemanagerpb.Project{ProjectId: csEnv.ProjectID, Name: "existing-proj"}, nil)
+
+					runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(runningResp, nil)
+
+					nodeClient.EXPECT().DownloadFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+				})
+
+				FIt("overwrites an existing config", func() {
+					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
+					icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
+
+					err := bs.EnsureInstallConfig()
+					Expect(err).ToNot(HaveOccurred())
+				})
+			})
 		})
 
 		Describe("Invalid cases", func() {
@@ -146,6 +171,59 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err.Error()).To(ContainSubstring("failed to apply profile"))
 				Expect(err.Error()).To(ContainSubstring("profile error"))
 			})
+
+			Describe("returns an error when config recovery fails", func() {
+				JustBeforeEach(func() {
+					csEnv.RecoverConfig = true
+				})
+
+				FIt("return an error when project for recovery is not found", func() {
+					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(nil, fmt.Errorf("project not found"))
+
+					err := bs.EnsureInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to find gcp project for config recovery"))
+					Expect(err.Error()).To(ContainSubstring("project not found"))
+				})
+
+				FIt("return an error when jumpbox for recovery is not found", func() {
+					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(&resourcemanagerpb.Project{ProjectId: csEnv.ProjectID, Name: "existing-proj"}, nil)
+					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(nil, grpcstatus.Errorf(codes.NotFound, "not found"))
+
+					err := bs.EnsureInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to find jumpbox node for config recovery"))
+					Expect(err.Error()).To(ContainSubstring("not found"))
+				})
+
+				FIt("return an error when config download fails from jumpbox for recovery", func() {
+					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(&resourcemanagerpb.Project{ProjectId: csEnv.ProjectID, Name: "existing-proj"}, nil)
+
+					runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(runningResp, nil)
+
+					nodeClient.EXPECT().DownloadFile(mock.Anything, mock.Anything, csEnv.InstallConfigPath).Return(fmt.Errorf("failed"))
+
+					err := bs.EnsureInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to recover install config from jumpbox"))
+				})
+
+				FIt("return an error when secrets download fails from jumpbox for recovery", func() {
+					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(&resourcemanagerpb.Project{ProjectId: csEnv.ProjectID, Name: "existing-proj"}, nil)
+
+					runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(runningResp, nil)
+
+					nodeClient.EXPECT().DownloadFile(mock.Anything, mock.Anything, csEnv.InstallConfigPath).Return(nil)
+					nodeClient.EXPECT().DownloadFile(mock.Anything, mock.Anything, csEnv.SecretsFilePath).Return(fmt.Errorf("failed"))
+
+					err := bs.EnsureInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to recover secrets file from jumpbox"))
+				})
+			})
+
 		})
 	})
 
