@@ -28,8 +28,7 @@ var _ = Describe("API Key Integration Tests", func() {
 		testRole         string
 		registeredKey    *portal.ApiKey
 		originalAdminKey string
-		expiresAt        time.Time
-		extendedExpiry   time.Time
+		extendDays       int
 	)
 
 	BeforeEach(func() {
@@ -49,8 +48,7 @@ var _ = Describe("API Key Integration Tests", func() {
 		testOwner = fmt.Sprintf("integration-test-%d@test.com", time.Now().Unix())
 		testOrg = "IntegrationTestOrg"
 		testRole = "Ext"
-		expiresAt = time.Now().Add(24 * time.Hour)
-		extendedExpiry = time.Now().Add(48 * time.Hour)
+		extendDays = 2
 	})
 
 	Describe("Standalone created-key behavior", func() {
@@ -60,7 +58,7 @@ var _ = Describe("API Key Integration Tests", func() {
 					Owner:        fmt.Sprintf("standalone-test-%d@test.com", time.Now().Unix()),
 					Organization: "StandaloneTestOrg",
 					Role:         "Ext",
-					ExpiresAt:    time.Now().Add(1 * time.Hour).Format(time.RFC3339),
+					ValidFor:     "1d",
 				},
 			}
 
@@ -102,7 +100,7 @@ var _ = Describe("API Key Integration Tests", func() {
 					Owner:        testOwner,
 					Organization: testOrg,
 					Role:         testRole,
-					ExpiresAt:    expiresAt.Format(time.RFC3339),
+					ValidFor:     "1d",
 				},
 			}
 
@@ -147,15 +145,17 @@ var _ = Describe("API Key Integration Tests", func() {
 			portalClient.(*portal.PortalClient).Env = NewTestEnv(originalAdminKey, os.Getenv("OMS_PORTAL_API"), "")
 
 			By("Extending the API Key to a future date")
+			beforeUpdate := time.Now()
 			updateCmd := cmd.UpdateAPIKeyCmd{
 				Opts: cmd.UpdateAPIKeyOpts{
-					APIKeyID:     registeredKey.KeyID,
-					ExpiresAtStr: extendedExpiry.Format(time.RFC3339),
+					APIKeyID: registeredKey.KeyID,
+					ValidFor: fmt.Sprintf("%dd", extendDays),
 				},
 			}
 
 			err = updateCmd.UpdateAPIKey(portalClient)
 			Expect(err).To(BeNil(), "API key update should succeed")
+			afterUpdate := time.Now()
 
 			By("Verifying the API key was updated")
 			keys, err = portalClient.ListAPIKeys()
@@ -170,7 +170,10 @@ var _ = Describe("API Key Integration Tests", func() {
 				}
 			}
 			Expect(updatedKey).NotTo(BeNil(), "Should find the updated API key")
-			Expect(updatedKey.ExpiresAt).To(BeTemporally("~", extendedExpiry, 5*time.Second))
+			minExpected := beforeUpdate.AddDate(0, 0, extendDays)
+			maxExpected := afterUpdate.AddDate(0, 0, extendDays)
+			Expect(updatedKey.ExpiresAt.After(minExpected) || updatedKey.ExpiresAt.Equal(minExpected)).To(BeTrue())
+			Expect(updatedKey.ExpiresAt.Before(maxExpected) || updatedKey.ExpiresAt.Equal(maxExpected)).To(BeTrue())
 
 			By("Revoking the API Key")
 			revokeCmd := cmd.RevokeAPIKeyCmd{
@@ -215,17 +218,17 @@ var _ = Describe("API Key Integration Tests", func() {
 	})
 
 	Describe("API Key Update With Wrong Input", func() {
-		It("should handle update with invalid date format", func() {
+		It("should handle update with invalid valid-for format", func() {
 			updateCmd := cmd.UpdateAPIKeyCmd{
 				Opts: cmd.UpdateAPIKeyOpts{
-					APIKeyID:     "test-key-id",
-					ExpiresAtStr: "invalid-date",
+					APIKeyID: "test-key-id",
+					ValidFor: "invalid-date",
 				},
 			}
 
 			err := updateCmd.UpdateAPIKey(portalClient)
-			Expect(err).NotTo(BeNil(), "Should fail with invalid date format")
-			Expect(err.Error()).To(ContainSubstring("invalid date format"))
+			Expect(err).NotTo(BeNil(), "Should fail with invalid valid-for duration")
+			Expect(err.Error()).To(ContainSubstring("failed to parse valid-for duration"))
 		})
 	})
 

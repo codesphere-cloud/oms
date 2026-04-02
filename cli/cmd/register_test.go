@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
 	"github.com/codesphere-cloud/oms/internal/portal"
@@ -19,7 +20,7 @@ var _ = Describe("RegisterCmd", func() {
 	var (
 		mockPortal   *portal.MockPortal
 		c            cmd.RegisterCmd
-		expiresAt    string
+		validFor     string
 		owner        string
 		organization string
 		role         string
@@ -27,7 +28,7 @@ var _ = Describe("RegisterCmd", func() {
 
 	BeforeEach(func() {
 		mockPortal = portal.NewMockPortal(GinkgoT())
-		expiresAt = "2025-05-01T15:04:05Z"
+		validFor = "10d"
 		owner = "test-owner"
 		organization = "test-org"
 		role = cmd.API_KEY_ROLE_ADMIN
@@ -36,47 +37,50 @@ var _ = Describe("RegisterCmd", func() {
 				Owner:        owner,
 				Organization: organization,
 				Role:         role,
-				ExpiresAt:    expiresAt,
+				ValidFor:     validFor,
 			},
 		}
 	})
 
-	Context("when expiration date is valid", func() {
+	Context("when valid-for duration is valid", func() {
 		It("registers the API key successfully", func() {
-			parsedTime, err := time.Parse(time.RFC3339, expiresAt)
-			Expect(err).To(BeNil())
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, parsedTime).Return(&portal.ApiKey{}, nil)
+			start := time.Now()
+			mockPortal.EXPECT().RegisterAPIKey(
+				owner,
+				organization,
+				role,
+				mock.MatchedBy(func(expiresAt time.Time) bool {
+					expected := start.Add(10 * 24 * time.Hour)
+					// Allow a small delta to avoid flakiness from runtime overhead.
+					return expiresAt.After(expected.Add(-2*time.Second)) && expiresAt.Before(expected.Add(2*time.Second))
+				}),
+			).Return(&portal.ApiKey{}, nil)
 			ak, err := c.Register(mockPortal)
 			Expect(err).To(BeNil())
 			Expect(ak).NotTo(BeNil())
 		})
 
 		It("returns error if Register fails", func() {
-			parsedTime, err := time.Parse(time.RFC3339, expiresAt)
-			Expect(err).To(BeNil())
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, parsedTime).Return((*portal.ApiKey)(nil), fmt.Errorf("some error"))
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, mock.Anything).Return((*portal.ApiKey)(nil), fmt.Errorf("some error"))
 			ak, err := c.Register(mockPortal)
 			Expect(ak).To(BeNil())
 			Expect(err).To(MatchError(ContainSubstring("failed to register API key")))
 		})
 	})
 
-	Context("when expiration date is invalid", func() {
-		It("returns error for invalid expiration date", func() {
-			c.Opts.ExpiresAt = "invalid-date"
+	Context("when valid-for duration is invalid", func() {
+		It("returns error for invalid valid-for duration", func() {
+			c.Opts.ValidFor = "invalid-date"
 			ak, err := c.Register(mockPortal)
 			Expect(ak).To(BeNil())
-			Expect(err).To(MatchError(ContainSubstring("failed to parse expiration date")))
+			Expect(err).To(MatchError(ContainSubstring("failed to parse valid-for duration")))
 		})
 	})
 
 	Context("when role is valid", func() {
 		It("accepts Admin role", func() {
 			c.Opts.Role = cmd.API_KEY_ROLE_ADMIN
-			parsedTime, err := time.Parse(time.RFC3339, expiresAt)
-			Expect(err).To(BeNil())
-
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, cmd.API_KEY_ROLE_ADMIN, parsedTime).Return(&portal.ApiKey{}, nil)
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, cmd.API_KEY_ROLE_ADMIN, mock.Anything).Return(&portal.ApiKey{}, nil)
 
 			ak, err := c.Register(mockPortal)
 			Expect(err).To(BeNil())
@@ -85,10 +89,7 @@ var _ = Describe("RegisterCmd", func() {
 
 		It("accepts Dev role", func() {
 			c.Opts.Role = cmd.API_KEY_ROLE_DEV
-			parsedTime, err := time.Parse(time.RFC3339, expiresAt)
-			Expect(err).To(BeNil())
-
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, cmd.API_KEY_ROLE_DEV, parsedTime).Return(&portal.ApiKey{}, nil)
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, cmd.API_KEY_ROLE_DEV, mock.Anything).Return(&portal.ApiKey{}, nil)
 
 			ak, err := c.Register(mockPortal)
 			Expect(err).To(BeNil())
@@ -97,10 +98,18 @@ var _ = Describe("RegisterCmd", func() {
 
 		It("accepts Ext role", func() {
 			c.Opts.Role = cmd.API_KEY_ROLE_EXT
-			parsedTime, err := time.Parse(time.RFC3339, expiresAt)
-			Expect(err).To(BeNil())
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, cmd.API_KEY_ROLE_EXT, mock.Anything).Return(&portal.ApiKey{}, nil)
 
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, cmd.API_KEY_ROLE_EXT, parsedTime).Return(&portal.ApiKey{}, nil)
+			ak, err := c.Register(mockPortal)
+			Expect(err).To(BeNil())
+			Expect(ak).NotTo(BeNil())
+		})
+	})
+
+	Context("when valid-for duration is not provided", func() {
+		It("passes zero expiration time to portal client", func() {
+			c.Opts.ValidFor = ""
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, time.Time{}).Return(&portal.ApiKey{}, nil)
 
 			ak, err := c.Register(mockPortal)
 			Expect(err).To(BeNil())
