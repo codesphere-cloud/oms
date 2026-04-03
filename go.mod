@@ -15,7 +15,7 @@ replace (
 require (
 	cloud.google.com/go/artifactregistry v1.21.0
 	cloud.google.com/go/compute v1.57.0
-	cloud.google.com/go/iam v1.6.0
+	cloud.google.com/go/iam v1.7.0
 	cloud.google.com/go/resourcemanager v1.10.7
 	cloud.google.com/go/serviceusage v1.10.0
 	filippo.io/age v1.3.1
