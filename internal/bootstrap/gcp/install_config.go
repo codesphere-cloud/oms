@@ -76,8 +76,11 @@ func (b *GCPBootstrapper) recoverConfig() error {
 
 // recoverVault unencrypts the secrets file on the jumpbox and download the file to the local destination
 func (b *GCPBootstrapper) recoverVault() error {
-	vaultCopyPath := "/tmp/prod.vault.yaml"
-	defer func() { b.Env.Jumpbox.RunSSHCommand("root", "rm -f "+vaultCopyPath) }()
+	const vaultCopyPath string = "/tmp/prod.vault.yaml"
+	defer func() {
+		err := b.Env.Jumpbox.RunSSHCommand("root", "rm -f "+vaultCopyPath)
+		b.stlog.Logf("failed to remove unencrypted, vault file for recovery: %s", err.Error())
+	}()
 
 	err := b.DecryptVault(vaultCopyPath)
 	if err != nil {
