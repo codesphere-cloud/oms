@@ -19,8 +19,8 @@ type UpdateAPIKeyCmd struct {
 
 type UpdateAPIKeyOpts struct {
 	*GlobalOptions
-	APIKeyID     string
-	ExpiresAtStr string
+	APIKeyID string
+	ValidFor string
 }
 
 func AddApiKeyUpdateCmd(parentCmd *cobra.Command) {
@@ -31,7 +31,7 @@ func AddApiKeyUpdateCmd(parentCmd *cobra.Command) {
 	apiKeyCmd := &cobra.Command{
 		Use:   "api-key",
 		Short: "Update an API key's expiration date",
-		Long:  `Updates the expiration date for a given API key using the --id and --valid-to flags.`,
+		Long:  `Updates the expiration date for a given API key using the --id and --valid-for flags.`,
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			p := portal.NewPortalClient()
@@ -40,20 +40,21 @@ func AddApiKeyUpdateCmd(parentCmd *cobra.Command) {
 	}
 
 	apiKeyCmd.Flags().StringVarP(&cmdState.Opts.APIKeyID, "id", "i", "", "The ID of the API key to update")
-	apiKeyCmd.Flags().StringVar(&cmdState.Opts.ExpiresAtStr, "valid-to", "", "The new expiration date in RFC3339 format (e.g., \"2025-12-31T23:59:59Z\")")
+	apiKeyCmd.Flags().StringVar(&cmdState.Opts.ValidFor, "valid-for", "", "Validity duration in days to extend the API key (e.g., 10d)")
 
 	util.MarkFlagRequired(apiKeyCmd, "id")
-	util.MarkFlagRequired(apiKeyCmd, "valid-to")
+	util.MarkFlagRequired(apiKeyCmd, "valid-for")
 
 	parentCmd.AddCommand(apiKeyCmd)
 }
 
 func (c *UpdateAPIKeyCmd) UpdateAPIKey(p portal.Portal) error {
-	expiresAt, err := time.Parse(time.RFC3339, c.Opts.ExpiresAtStr)
-
+	validForDuration, err := util.GetDurationFromString(c.Opts.ValidFor)
 	if err != nil {
-		return fmt.Errorf("invalid date format for <valid-to>: %w", err)
+		return err
 	}
+
+	expiresAt := time.Now().Add(validForDuration)
 
 	if err := p.UpdateAPIKey(c.Opts.APIKeyID, expiresAt); err != nil {
 		return fmt.Errorf("failed to update API key: %w", err)

@@ -4,7 +4,7 @@ Update an API key's expiration date
 
 ### Synopsis
 
-Updates the expiration date for a given API key using the --id and --valid-to flags.
+Updates the expiration date for a given API key using the --id and --valid-for flags.
 
 ```
 oms update api-key [flags]
@@ -13,9 +13,9 @@ oms update api-key [flags]
 ### Options
 
 ```
-  -h, --help              help for api-key
-  -i, --id string         The ID of the API key to update
-      --valid-to string   The new expiration date in RFC3339 format (e.g., "2025-12-31T23:59:59Z")
+  -h, --help               help for api-key
+  -i, --id string          The ID of the API key to update
+      --valid-for string   Validity duration in days to extend the API key (e.g., 10d)
 ```
 
 ### SEE ALSO
