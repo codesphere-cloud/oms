@@ -138,9 +138,10 @@ var _ = Describe("Installconfig & Secrets", func() {
 					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(runningResp, nil)
 
 					nodeClient.EXPECT().DownloadFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 				})
 
-				FIt("overwrites an existing config", func() {
+				It("overwrites an existing config", func() {
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 					icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
@@ -177,7 +178,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					csEnv.RecoverConfig = true
 				})
 
-				FIt("return an error when project for recovery is not found", func() {
+				It("return an error when project for recovery is not found", func() {
 					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(nil, fmt.Errorf("project not found"))
 
 					err := bs.EnsureInstallConfig()
@@ -186,7 +187,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(err.Error()).To(ContainSubstring("project not found"))
 				})
 
-				FIt("return an error when jumpbox for recovery is not found", func() {
+				It("return an error when jumpbox for recovery is not found", func() {
 					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(&resourcemanagerpb.Project{ProjectId: csEnv.ProjectID, Name: "existing-proj"}, nil)
 					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(nil, grpcstatus.Errorf(codes.NotFound, "not found"))
 
@@ -196,7 +197,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(err.Error()).To(ContainSubstring("not found"))
 				})
 
-				FIt("return an error when config download fails from jumpbox for recovery", func() {
+				It("return an error when config download fails from the jumpbox for recovery", func() {
 					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(&resourcemanagerpb.Project{ProjectId: csEnv.ProjectID, Name: "existing-proj"}, nil)
 
 					runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
@@ -206,21 +207,36 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					err := bs.EnsureInstallConfig()
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to recover install config from jumpbox"))
+					Expect(err.Error()).To(ContainSubstring("failed to download install config from jumpbox"))
 				})
 
-				FIt("return an error when secrets download fails from jumpbox for recovery", func() {
+				It("return an error when decrypting the secrets on the jumpbox for recovery", func() {
 					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(&resourcemanagerpb.Project{ProjectId: csEnv.ProjectID, Name: "existing-proj"}, nil)
 
 					runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(runningResp, nil)
 
 					nodeClient.EXPECT().DownloadFile(mock.Anything, mock.Anything, csEnv.InstallConfigPath).Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("failed"))
+
+					err := bs.EnsureInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to create decrypted vault for recovery"))
+				})
+
+				It("return an error when secrets download fails from the jumpbox for recovery", func() {
+					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(&resourcemanagerpb.Project{ProjectId: csEnv.ProjectID, Name: "existing-proj"}, nil)
+
+					runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(runningResp, nil)
+
+					nodeClient.EXPECT().DownloadFile(mock.Anything, mock.Anything, csEnv.InstallConfigPath).Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 					nodeClient.EXPECT().DownloadFile(mock.Anything, mock.Anything, csEnv.SecretsFilePath).Return(fmt.Errorf("failed"))
 
 					err := bs.EnsureInstallConfig()
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to recover secrets file from jumpbox"))
+					Expect(err.Error()).To(ContainSubstring("failed to download secrets file from jumpbox"))
 				})
 			})
 

@@ -68,7 +68,7 @@ func (b *GCPBootstrapper) recoverConfig() error {
 
 	err = b.recoverVault()
 	if err != nil {
-		return fmt.Errorf("failed to recover vault")
+		return fmt.Errorf("failed to recover vault: %w", err)
 	}
 
 	return nil
@@ -81,7 +81,7 @@ func (b *GCPBootstrapper) recoverVault() error {
 
 	err := b.DecryptVault(vaultCopyPath)
 	if err != nil {
-		return fmt.Errorf("failed to create tmp vault copy")
+		return fmt.Errorf("failed to create decrypted vault for recovery")
 	}
 
 	err = b.Env.Jumpbox.NodeClient.DownloadFile(b.Env.Jumpbox, vaultCopyPath, b.Env.SecretsFilePath)
