@@ -547,7 +547,7 @@ var _ = Describe("GCE", func() {
 				DatacenterID:     1,
 				SSHPublicKeyPath: "key.pub",
 				Experiments:      gcp.DefaultExperiments,
-				FeatureFlags:     []string{},
+				FeatureFlags:     map[string]bool{},
 			}
 			bs = newTestBootstrapperAll(csEnv, gc, fw, mockGitHubClient)
 		})

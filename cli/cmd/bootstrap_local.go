@@ -34,9 +34,10 @@ import (
 )
 
 type BootstrapLocalCmd struct {
-	cmd           *cobra.Command
-	CodesphereEnv *local.CodesphereEnvironment
-	Yes           bool
+	cmd             *cobra.Command
+	CodesphereEnv   *local.CodesphereEnvironment
+	Yes             bool
+	FeatureFlagList []string
 }
 
 func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, args []string) error {
@@ -74,7 +75,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	// Codesphere Environment
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.BaseDomain, "base-domain", "cs.local", "Base domain for Codesphere")
 	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.Experiments, "experiments", []string{}, "Experiments to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.FeatureFlags, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapLocalCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.Profile, "profile", installer.PROFILE_DEV, "Profile to apply to the install config like resources (supported: dev, minimal, prod)")
 	// Config
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallDir, "install-dir", ".installer", "Directory for config, secrets, and bundle files")
@@ -112,6 +113,10 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 	if err := c.ValidatePrerequisites(ctx); err != nil {
 		return err
+	}
+
+	for _, flag := range c.FeatureFlagList {
+		c.CodesphereEnv.FeatureFlags[flag] = true
 	}
 
 	stlog := bootstrap.NewStepLogger(false)

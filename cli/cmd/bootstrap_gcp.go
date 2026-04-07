@@ -29,6 +29,7 @@ type BootstrapGcpCmd struct {
 	CodesphereEnv     *gcp.CodesphereEnvironment
 	InputRegistryType string
 	SSHQuiet          bool
+	FeatureFlagList   []string
 }
 
 func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
@@ -85,9 +86,9 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
-	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry)")
+	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapGcpCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
 
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallConfigPath, "install-config", "config.yaml", "Path to install config file (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "prod.vault.yaml", "Path to secrets files (optional)")
@@ -141,6 +142,10 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		if c.CodesphereEnv.RegistryUser == "" {
 			return fmt.Errorf("registry-user must be set when using GitHub registry type")
 		}
+	}
+
+	for _, flag := range c.FeatureFlagList {
+		c.CodesphereEnv.FeatureFlags[flag] = true
 	}
 
 	bootstrapErr := bs.Bootstrap()

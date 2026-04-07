@@ -67,10 +67,10 @@ type LocalBootstrapper struct {
 }
 
 type CodesphereEnvironment struct {
-	BaseDomain   string   `json:"base_domain"`
-	Experiments  []string `json:"experiments"`
-	FeatureFlags []string `json:"feature_flags"`
-	Profile      string   `json:"profile"`
+	BaseDomain   string          `json:"base_domain"`
+	Experiments  []string        `json:"experiments"`
+	FeatureFlags map[string]bool `json:"feature_flags"`
+	Profile      string          `json:"profile"`
 	// Installer
 	InstallVersion string `json:"install_version"`
 	InstallHash    string `json:"install_hash"`
