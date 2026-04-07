@@ -190,7 +190,11 @@ var _ = Describe("API Key Integration Tests", func() {
 			keyFound := true
 			for attempt := 0; attempt < 5; attempt++ {
 				keys, err = portalClient.ListAPIKeys()
-				Expect(err).To(BeNil(), "Listing API keys should succeed")
+				if err != nil {
+					GinkgoWriter.Printf("[WARN] ListAPIKeys attempt %d failed: %v\n", attempt+1, err)
+					time.Sleep(1 * time.Second)
+					continue
+				}
 
 				keyFound = false
 				for i := range keys {
@@ -205,6 +209,7 @@ var _ = Describe("API Key Integration Tests", func() {
 				}
 				time.Sleep(1 * time.Second)
 			}
+			Expect(err).To(BeNil(), "Listing API keys should succeed after retries")
 
 			if keyFound {
 				revokedClient := portal.NewPortalClient()

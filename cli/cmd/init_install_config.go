@@ -193,9 +193,12 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		c.updateConfigFromOpts(icg.GetInstallConfig())
 	}
 
-	errors := icg.ValidateInstallConfig()
-	if len(errors) > 0 {
-		return fmt.Errorf("configuration validation failed: %s", strings.Join(errors, ", "))
+	validationWarnings := icg.ValidateInstallConfig()
+	if len(validationWarnings) > 0 {
+		if !c.Opts.Interactive {
+			return fmt.Errorf("configuration validation failed: %s", strings.Join(validationWarnings, ", "))
+		}
+		c.printWarningsMessage(validationWarnings)
 	}
 
 	if err := icg.GenerateSecrets(); err != nil {
@@ -210,7 +213,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	c.printSuccessMessage()
+	c.printSuccessMessage(len(validationWarnings))
 
 	return nil
 }
@@ -221,9 +224,24 @@ func (c *InitInstallConfigCmd) printWelcomeMessage() {
 	log.Println()
 }
 
-func (c *InitInstallConfigCmd) printSuccessMessage() {
+func (c *InitInstallConfigCmd) printWarningsMessage(warnings []string) {
+	log.Println("\n" + strings.Repeat("!", 70))
+	log.Printf("Configuration has %d warning(s):\n", len(warnings))
+	for _, w := range warnings {
+		log.Printf("  WARNING: %s\n", w)
+	}
+	log.Println(strings.Repeat("!", 70))
+	log.Println("The configuration files will be generated.")
+	log.Println("Please review and fix the issues in the generated files before use!")
+}
+
+func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println("\n" + strings.Repeat("=", 70))
-	log.Println("Configuration files successfully generated!")
+	if warningCount > 0 {
+		log.Printf("Configuration files generated with %d warning(s)! Review before use!\n", warningCount)
+	} else {
+		log.Println("Configuration files successfully generated!")
+	}
 	log.Println(strings.Repeat("=", 70))
 
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
