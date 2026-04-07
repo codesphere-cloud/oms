@@ -59,15 +59,34 @@ func (b *GCPBootstrapper) recoverConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to find jumpbox node for config recovery: %w", err)
 	}
+	b.Env.Jumpbox = jumpbox
 
-	err = jumpbox.NodeClient.DownloadFile(jumpbox, remoteInstallConfigPath, b.Env.InstallConfigPath)
+	err = b.Env.Jumpbox.NodeClient.DownloadFile(jumpbox, remoteInstallConfigPath, b.Env.InstallConfigPath)
 	if err != nil {
-		return fmt.Errorf("failed to recover install config from jumpbox: %w", err)
+		return fmt.Errorf("failed to download install config from jumpbox: %w", err)
 	}
 
-	err = jumpbox.NodeClient.DownloadFile(jumpbox, b.Env.SecretsDir+"/prod.vault.yaml", b.Env.SecretsFilePath)
+	err = b.recoverVault()
 	if err != nil {
-		return fmt.Errorf("failed to recover secrets file from jumpbox: %w", err)
+		return fmt.Errorf("failed to recover vault")
+	}
+
+	return nil
+}
+func (b *GCPBootstrapper) recoverVault() error {
+	vaultCopyPath := "/tmp/prod.vault.yaml"
+	defer func(vaultCopyPath string) {
+		b.Env.Jumpbox.RunSSHCommand("root", "rm -f "+vaultCopyPath)
+	}(vaultCopyPath)
+
+	err := b.DecryptVault(vaultCopyPath)
+	if err != nil {
+		return fmt.Errorf("failed to create tmp vault copy")
+	}
+
+	err = b.Env.Jumpbox.NodeClient.DownloadFile(b.Env.Jumpbox, vaultCopyPath, b.Env.SecretsFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to download secrets file from jumpbox: %w", err)
 	}
 
 	return nil
@@ -314,6 +333,21 @@ func (b *GCPBootstrapper) EncryptVault() error {
 	err = b.Env.Jumpbox.RunSSHCommand("root", "sops --encrypt --in-place --age $(age-keygen -y "+b.Env.SecretsDir+"/age_key.txt) "+b.Env.SecretsDir+"/prod.vault.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to encrypt vault on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// DecryptVault decrypts the vault on the jumpbox to the dst path
+func (b *GCPBootstrapper) DecryptVault(dst string) error {
+	err := b.Env.Jumpbox.RunSSHCommand("root", "cp "+b.Env.SecretsDir+"/prod.vault.yaml "+dst)
+	if err != nil {
+		return fmt.Errorf("failed to create tmp vault on jumpbox: %w", err)
+	}
+
+	err = b.Env.Jumpbox.RunSSHCommand("root", "SOPS_AGE_KEY_FILE="+b.Env.SecretsDir+"/age_key.txt sops --decrypt --in-place "+dst)
+	if err != nil {
+		return fmt.Errorf("failed to decrypt vault on jumpbox: %w", err)
 	}
 
 	return nil
