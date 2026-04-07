@@ -149,7 +149,7 @@ var _ = Describe("Interactive profile usage", func() {
 
 			mockIcg.EXPECT().ApplyProfile("dev").Return(nil)
 			mockIcg.EXPECT().CollectInteractively().Return(nil)
-			mockIcg.EXPECT().ValidateInstallConfig().Return([]string{"OpenBao URI must be a valid URL"})
+			mockIcg.EXPECT().ValidateInstallConfig().Return([]string{"configuration validation failed"})
 			mockIcg.EXPECT().GenerateSecrets().Return(nil)
 			mockIcg.EXPECT().WriteInstallConfig("config.yaml", false).Return(nil)
 			mockIcg.EXPECT().WriteVault("vault.yaml", false).Return(nil)

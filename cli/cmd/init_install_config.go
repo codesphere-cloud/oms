@@ -198,14 +198,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		if !c.Opts.Interactive {
 			return fmt.Errorf("configuration validation failed: %s", strings.Join(validationWarnings, ", "))
 		}
-		log.Println("\n" + strings.Repeat("!", 70))
-		log.Printf("Configuration has %d warning(s):\n", len(validationWarnings))
-		for _, w := range validationWarnings {
-			log.Printf("  WARNING: %s\n", w)
-		}
-		log.Println(strings.Repeat("!", 70))
-		log.Println("The configuration files will be generated.")
-		log.Println("Please review and fix the issues in the generated files before use!")
+		c.printWarningsMessage(validationWarnings)
 	}
 
 	if err := icg.GenerateSecrets(); err != nil {
@@ -229,6 +222,17 @@ func (c *InitInstallConfigCmd) printWelcomeMessage() {
 	log.Println("Welcome to OMS!")
 	log.Println("This wizard will help you create config.yaml and prod.vault.yaml for Codesphere installation.")
 	log.Println()
+}
+
+func (c *InitInstallConfigCmd) printWarningsMessage(warnings []string) {
+	log.Println("\n" + strings.Repeat("!", 70))
+	log.Printf("Configuration has %d warning(s):\n", len(warnings))
+	for _, w := range warnings {
+		log.Printf("  WARNING: %s\n", w)
+	}
+	log.Println(strings.Repeat("!", 70))
+	log.Println("The configuration files will be generated.")
+	log.Println("Please review and fix the issues in the generated files before use!")
 }
 
 func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
