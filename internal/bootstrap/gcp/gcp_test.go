@@ -97,7 +97,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			SSHPublicKeyPath:      "key.pub",
 			ProjectID:             "pid",
 			Experiments:           gcp.DefaultExperiments,
-			FeatureFlags:          []string{},
+			FeatureFlags:          map[string]bool{},
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{
@@ -934,7 +934,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				Expect(bs.Env.InstallConfig.Datacenter.ID).To(Equal(1))
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
-				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal([]string{}))
+				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(map[string]bool{}))
 				Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(gcp.DefaultExperiments))
 
 				expectedInstallURI := "https://github.com/apps/" + bs.Env.GitHubAppName + "/installations/new"
@@ -969,12 +969,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal([]string{"fake-exp1", "fake-exp2"}))
+					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(csEnv.Experiments))
 				})
 			})
 			Context("When feature flags are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
-					csEnv.FeatureFlags = []string{"fake-flag1", "fake-flag2"}
+					csEnv.FeatureFlags = map[string]bool{"fake-flag1": true, "fake-flag2": true}
 				})
 				It("uses those feature flags", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
@@ -986,7 +986,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal([]string{"fake-flag1", "fake-flag2"}))
+					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(csEnv.FeatureFlags))
 				})
 			})
 			Context("When GitHub App name is not set ", func() {
