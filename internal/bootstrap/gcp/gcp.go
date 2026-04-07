@@ -84,33 +84,33 @@ type GCPBootstrapper struct {
 }
 
 type CodesphereEnvironment struct {
-	ProjectID            string       `json:"project_id"`
-	ProjectTTL           string       `json:"project_ttl"`
-	ProjectName          string       `json:"project_name"`
-	DNSProjectID         string       `json:"dns_project_id"`
-	Jumpbox              *node.Node   `json:"jumpbox"`
-	PostgreSQLNode       *node.Node   `json:"postgres_node"`
-	ControlPlaneNodes    []*node.Node `json:"control_plane_nodes"`
-	CephNodes            []*node.Node `json:"ceph_nodes"`
-	ContainerRegistryURL string       `json:"-"`
-	ExistingConfigUsed   bool         `json:"-"`
-	InstallVersion       string       `json:"install_version"`
-	InstallLocal         string       `json:"install_local"`
-	InstallHash          string       `json:"install_hash"`
-	InstallSkipSteps     []string     `json:"install_skip_steps"`
-	Preemptible          bool         `json:"preemptible"`
-	SpotVMs              bool         `json:"spot_vms"`
-	WriteConfig          bool         `json:"-"`
-	GatewayIP            string       `json:"gateway_ip"`
-	PublicGatewayIP      string       `json:"public_gateway_ip"`
-	RegistryType         RegistryType `json:"registry_type"`
-	GitHubPAT            string       `json:"-"`
-	GitHubAppName        string       `json:"-"`
-	GitHubTeamOrg        string       `json:"github_team_org"`
-	GitHubTeamSlug       string       `json:"github_team_slug"`
-	RegistryUser         string       `json:"-"`
-	Experiments          []string     `json:"experiments"`
-	FeatureFlags         []string     `json:"feature_flags"`
+	ProjectID            string          `json:"project_id"`
+	ProjectTTL           string          `json:"project_ttl"`
+	ProjectName          string          `json:"project_name"`
+	DNSProjectID         string          `json:"dns_project_id"`
+	Jumpbox              *node.Node      `json:"jumpbox"`
+	PostgreSQLNode       *node.Node      `json:"postgres_node"`
+	ControlPlaneNodes    []*node.Node    `json:"control_plane_nodes"`
+	CephNodes            []*node.Node    `json:"ceph_nodes"`
+	ContainerRegistryURL string          `json:"-"`
+	ExistingConfigUsed   bool            `json:"-"`
+	InstallVersion       string          `json:"install_version"`
+	InstallLocal         string          `json:"install_local"`
+	InstallHash          string          `json:"install_hash"`
+	InstallSkipSteps     []string        `json:"install_skip_steps"`
+	Preemptible          bool            `json:"preemptible"`
+	SpotVMs              bool            `json:"spot_vms"`
+	WriteConfig          bool            `json:"-"`
+	GatewayIP            string          `json:"gateway_ip"`
+	PublicGatewayIP      string          `json:"public_gateway_ip"`
+	RegistryType         RegistryType    `json:"registry_type"`
+	GitHubPAT            string          `json:"-"`
+	GitHubAppName        string          `json:"-"`
+	GitHubTeamOrg        string          `json:"github_team_org"`
+	GitHubTeamSlug       string          `json:"github_team_slug"`
+	RegistryUser         string          `json:"-"`
+	Experiments          []string        `json:"experiments"`
+	FeatureFlags         map[string]bool `json:"feature_flags"`
 
 	// OpenBao
 	OpenBaoURI      string `json:"-"`
