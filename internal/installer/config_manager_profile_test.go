@@ -162,7 +162,7 @@ var _ = Describe("ConfigManagerProfile", func() {
 		})
 
 		Context("profile-specific differences", func() {
-			It("should have different datacenter names", func() {
+			It("should have the expected datacenter names", func() {
 				devManager := installer.NewInstallConfigManager()
 				prodManager := installer.NewInstallConfigManager()
 				minimalManager := installer.NewInstallConfigManager()
@@ -175,8 +175,8 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(devManager.GetInstallConfig().Datacenter.Name).To(Equal("dev"))
+				Expect(minimalManager.GetInstallConfig().Datacenter.Name).To(Equal("dev"))
 				Expect(prodManager.GetInstallConfig().Datacenter.Name).To(Equal("production"))
-				Expect(minimalManager.GetInstallConfig().Datacenter.Name).To(Equal("minimal"))
 			})
 
 			It("should have different resource profiles", func() {
@@ -192,19 +192,23 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(devManager.GetInstallConfig().Datacenter.Name).To(Equal("dev"))
+				Expect(minimalManager.GetInstallConfig().Datacenter.Name).To(Equal("dev"))
 				Expect(prodManager.GetInstallConfig().Datacenter.Name).To(Equal("production"))
-				Expect(minimalManager.GetInstallConfig().Datacenter.Name).To(Equal("minimal"))
 
 				// DEV
 				AssertZeroRequests(getAuthServiceRequests(devManager.GetInstallConfig()))
 				Expect(devManager.GetInstallConfig().Cluster.Monitoring.Grafana.Enabled).To(BeFalse())
 				// Minimal
 				AssertZeroRequests(getAuthServiceRequests(minimalManager.GetInstallConfig()))
-				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.Loki).To(BeNil())
-				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.Grafana).To(BeNil())
-				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.GrafanaAlloy).To(BeNil())
+				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.Loki.Enabled).To(BeTrue())
+				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.Grafana.Enabled).To(BeTrue())
+				Expect(minimalManager.GetInstallConfig().Cluster.Monitoring.GrafanaAlloy.Enabled).To(BeTrue())
 				// Prod
-				Expect(prodManager.GetInstallConfig().Cluster.Monitoring).To(BeNil())
+				Expect(prodManager.GetInstallConfig().Cluster.Monitoring.Loki.Enabled).To(BeTrue())
+				Expect(prodManager.GetInstallConfig().Cluster.Monitoring.Grafana.Enabled).To(BeTrue())
+				Expect(prodManager.GetInstallConfig().Cluster.Monitoring.GrafanaAlloy.Enabled).To(BeTrue())
+				Expect(prodManager.GetInstallConfig().Codesphere.Override).To(BeNil())
+
 			})
 		})
 	})

@@ -11,10 +11,23 @@ Uses the private-cloud-installer.js script included in the package to perform th
 oms install codesphere [flags]
 ```
 
+### Examples
+
+```
+# Skip most pre-installation steps. E.g. if you only need to re-apply Codesphere's helm charts
+$ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s copy-dependencies,extract-dependencies,load-container-images,ceph,postgres,kubernetes,docker
+
+# Skip loading container images. Necessary when installing a lite package that doesn't include any container images
+$ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s load-container-images
+
+```
+
 ### Options
 
 ```
+      --codesphere-only      Install only Codesphere without dependencies
   -c, --config string        Path to the Codesphere Private Cloud configuration file (yaml)
+      --direct-connection    Use direct connection for installation, requires having access to the cluster nodes from your machine
   -f, --force                Enforce package extraction
   -h, --help                 help for codesphere
   -p, --package string       Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from

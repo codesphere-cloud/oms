@@ -14,7 +14,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -23,7 +22,7 @@ import (
 
 //mockery:generate: true
 type Portal interface {
-	ListBuilds(product Product) (availablePackages Builds, err error)
+	ListBuilds(product Product, sort string) (availablePackages Builds, err error)
 	GetBuild(product Product, version string, hash string) (Build, error)
 	DownloadBuildArtifact(product Product, build Build, file io.Writer, startByte int, quiet bool) error
 	VerifyBuildArtifactDownload(file io.Reader, download Build) error
@@ -58,109 +57,156 @@ const (
 	OmsProduct        Product = "oms"
 )
 
+const (
+	SortSemver = "semver"
+	SortDate   = "date"
+)
+
 // AuthorizedHttpRequest sends a HTTP request with the necessary authorization headers.
 func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Response, err error) {
 	apiKey, err := c.Env.GetOmsPortalApiKey()
 	if err != nil {
-		err = fmt.Errorf("failed to get API Key: %w", err)
-		return
+		return nil, fmt.Errorf("failed to get API Key: %w", err)
 	}
 
 	req.Header.Set("X-API-Key", apiKey)
 
 	resp, err = c.HttpClient.Do(req)
 	if err != nil {
-		err = fmt.Errorf("failed to send request: %w", err)
-		return
+		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
+	err = c.isOKResponseStatus(resp)
+	if err != nil {
+		return nil, fmt.Errorf("unexpected response: %w", err)
+	}
+
+	return resp, nil
+}
+
+// isOKResponseStatus checks the status code in the response
+// if status is not a 2xx response it returns an error and logs some info for the user depending on the required steps
+func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 	if resp.StatusCode == http.StatusUnauthorized {
 		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
 		log.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")
-	}
-	var respBody []byte
-	if resp.StatusCode >= 300 {
-		if resp.Body != nil {
-			respBody, _ = io.ReadAll(resp.Body)
-		}
-		log.Printf("Non-2xx response received - Status: %d, Body: %s", resp.StatusCode, string(respBody))
-		err = fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
-		return
+
+		return errors.New("unauthorized: invalid API key")
 	}
 
-	return
+	if resp.StatusCode >= 300 {
+		log.Printf("Non-2xx response received from OMS-Portal (%s) - Status: %d", c.Env.GetOmsPortalApi(), resp.StatusCode)
+
+		healthErr := c.GetHealth()
+		if healthErr != nil {
+			healthErr = fmt.Errorf("OMS-Portal healthcheck failed: %w", healthErr)
+			log.Println(healthErr.Error())
+			log.Println("Please check if the OMS-Portal URL is correct and instance is healthy and reachable at:", c.Env.GetOmsPortalApi())
+
+			return healthErr
+		}
+
+		healthyPortalLog := fmt.Sprintf("OMS-Portal is healthy and reachable, but returned an error response - Status: %d", resp.StatusCode)
+		if resp.Body != nil {
+			respBody, _ := io.ReadAll(resp.Body)
+			healthyPortalLog = fmt.Sprintf("%s, Body: %s", healthyPortalLog, string(respBody))
+		}
+		log.Println(healthyPortalLog)
+
+		return fmt.Errorf("%s", healthyPortalLog)
+	}
+
+	return nil
 }
 
 // HttpRequest sends an unauthorized HTTP request to the portal API with the specified method, path, and body.
-func (c *PortalClient) HttpRequest(method string, path string, body []byte) (resp *http.Response, err error) {
+func (c *PortalClient) HttpRequest(method string, path string, body []byte) (*http.Response, error) {
 	requestBody := bytes.NewBuffer(body)
 	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), path)
 	if err != nil {
-		err = fmt.Errorf("failed to get generate URL: %w", err)
-		return
+		return nil, fmt.Errorf("failed to get generate URL: %w", err)
 	}
 
 	req, err := http.NewRequest(method, url, requestBody)
 	if err != nil {
-		log.Fatalf("Error creating request: %v", err)
-		return
+		log.Fatalf("failed to create request: %v", err)
+		return nil, err
 	}
 	if len(body) > 0 {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	return c.AuthorizedHttpRequest(req)
+
+	resp, err := c.AuthorizedHttpRequest(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed during authorized HTTP request: %w", err)
+	}
+
+	return resp, nil
 }
 
 // GetBody sends a GET request to the specified path and returns the response body and status code.
-func (c *PortalClient) GetBody(path string) (body []byte, status int, err error) {
+func (c *PortalClient) GetBody(path string) ([]byte, int, error) {
 	resp, err := c.HttpRequest(http.MethodGet, path, []byte{})
 	if err != nil || resp == nil {
-		err = fmt.Errorf("GET failed: %w", err)
-		return
+		return nil, 0, fmt.Errorf("GET failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	status = resp.StatusCode
 
-	body, err = io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		err = fmt.Errorf("failed to read response body: %w", err)
-		return
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	return
+	return body, resp.StatusCode, nil
 }
 
 // ListBuilds retrieves the list of available builds for the specified product.
-func (c *PortalClient) ListBuilds(product Product) (availablePackages Builds, err error) {
-	res, _, err := c.GetBody(fmt.Sprintf("/packages/%s", product))
+// The sort parameter controls server-side ordering: "semver" (by semantic version)
+// or "date" (by build date).
+func (c *PortalClient) ListBuilds(product Product, sort string) (Builds, error) {
+	requestUrl, err := url.JoinPath(c.Env.GetOmsPortalApi(), fmt.Sprintf("/packages/%s", product))
 	if err != nil {
-		err = fmt.Errorf("failed to list packages: %w", err)
-		return
+		return Builds{}, fmt.Errorf("failed to generate URL: %w", err)
 	}
+	u, parseErr := url.Parse(requestUrl)
+	if parseErr != nil {
+		return Builds{}, fmt.Errorf("failed to parse URL: %w", parseErr)
+	}
+	q := u.Query()
+	q.Set("sort", sort)
+	u.RawQuery = q.Encode()
+	requestUrl = u.String()
 
-	err = json.Unmarshal(res, &availablePackages)
+	req, err := http.NewRequest(http.MethodGet, requestUrl, nil)
 	if err != nil {
-		err = fmt.Errorf("failed to parse list packages response: %w", err)
-		return
+		return Builds{}, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	compareBuilds := func(l, r Build) int {
-		if l.Date.Before(r.Date) {
-			return -1
+	resp, err := c.AuthorizedHttpRequest(req)
+	if err != nil {
+		if resp != nil && resp.Body != nil {
+			_ = resp.Body.Close()
 		}
-		if l.Date.Equal(r.Date) && l.Internal == r.Internal {
-			return 0
-		}
-		return 1
+		return Builds{}, fmt.Errorf("failed to list packages: %w", err)
 	}
-	slices.SortFunc(availablePackages.Builds, compareBuilds)
+	defer func() { _ = resp.Body.Close() }()
 
-	return
+	res, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return Builds{}, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var availablePackages Builds
+	if err := json.Unmarshal(res, &availablePackages); err != nil {
+		return Builds{}, fmt.Errorf("failed to parse list packages response: %w", err)
+	}
+
+	return availablePackages, nil
 }
 
 // GetBuild retrieves a specific build for the given product, version, and hash.
 func (c *PortalClient) GetBuild(product Product, version string, hash string) (Build, error) {
-	packages, err := c.ListBuilds(product)
+	packages, err := c.ListBuilds(product, SortDate)
 	if err != nil {
 		return Build{}, fmt.Errorf("failed to list %s packages: %w", product, err)
 	}
@@ -170,7 +216,7 @@ func (c *PortalClient) GetBuild(product Product, version string, hash string) (B
 	}
 
 	if version == "" || version == "latest" {
-		// Builds are always ordered by date, newest build is latest version
+		// Builds are ordered by date, newest build is latest version
 		return packages.Builds[len(packages.Builds)-1], nil
 	}
 
@@ -399,4 +445,34 @@ func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
 	}
 
 	return result.KeyID, nil
+}
+
+// GetHealth checks the response of the OMS-Portal health endpoint
+// returns an error if portal is unhealthy
+func (c *PortalClient) GetHealth() error {
+	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "health")
+	if err != nil {
+		return fmt.Errorf("failed to get generate health URL: %w", err)
+	}
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create healthcheck request: %w", err)
+	}
+
+	resp, err := c.HttpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send health request: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("healthcheck returned non-OK status: %d", resp.StatusCode)
+	}
+
+	serviceNameHeader := resp.Header.Get("X-Service-Name")
+	if strings.ToLower(serviceNameHeader) != "oms-portal" {
+		return fmt.Errorf("unexpected service name in healthcheck response: %s", serviceNameHeader)
+	}
+
+	return nil
 }

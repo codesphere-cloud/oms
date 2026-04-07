@@ -105,6 +105,21 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		},
 	})
 
+	if config.Cluster.Monitoring.Loki == nil {
+		config.Cluster.Monitoring.Loki = &files.LokiConfig{}
+	}
+	config.Cluster.Monitoring.Loki.Override = util.DeepMergeMaps(config.Cluster.Monitoring.Loki.Override, map[string]any{
+		"loki": map[string]any{
+			"read":         minimalResourceValues(),
+			"write":        minimalResourceValues(),
+			"backend":      minimalResourceValues(),
+			"resultsCache": minimalResourceValues(),
+			"chunksCache":  minimalResourceValues(),
+			"canary":       minimalResourceValues(),
+			"gateway":      minimalResourceValues(),
+		},
+	})
+
 	if config.Cluster.Monitoring.PushGateway == nil {
 		config.Cluster.Monitoring.PushGateway = &files.PushGatewayConfig{}
 	}
@@ -144,10 +159,6 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		},
 	})
 
-	if config.Codesphere.Override == nil {
-		config.Codesphere.Override = map[string]any{}
-	}
-
 	serviceProfiles := map[string]any{}
 	for _, serviceName := range []string{
 		"auth_service",
@@ -166,10 +177,26 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 			"requests": zeroRequests(),
 		}
 	}
+	serviceProfiles["deployment_service"].(map[string]any)["replicas"] = 2
+	serviceProfiles["public_api_service"].(map[string]any)["replicas"] = 2
+	serviceProfiles["team_service"].(map[string]any)["replicas"] = 2
+	serviceProfiles["workspace_service"].(map[string]any)["replicas"] = 2
+	serviceProfiles["auth_service"].(map[string]any)["replicas"] = 2
+
+	if config.Codesphere.Override == nil {
+		config.Codesphere.Override = map[string]any{}
+	}
 
 	config.Codesphere.Override = util.DeepMergeMaps(config.Codesphere.Override, map[string]any{
 		"global": map[string]any{
 			"services": serviceProfiles,
+			"frontendGateway": map[string]any{
+				"requests": zeroRequests(),
+			},
+			"underprovisionFactors": map[string]string{
+				"cpu":    "0.01",
+				"memory": "0.01",
+			},
 		},
 	})
 }
@@ -178,5 +205,14 @@ func zeroRequests() map[string]int {
 	return map[string]int{
 		"cpu":    0,
 		"memory": 0,
+	}
+}
+
+func minimalResourceValues() map[string]any {
+	return map[string]any{
+		"replicas": 1,
+		"resources": map[string]any{
+			"requests": zeroRequests(),
+		},
 	}
 }

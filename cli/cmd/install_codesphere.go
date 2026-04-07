@@ -32,11 +32,13 @@ type InstallCodesphereCmd struct {
 
 type InstallCodesphereOpts struct {
 	*GlobalOptions
-	Package   string
-	Force     bool
-	Config    string
-	PrivKey   string
-	SkipSteps []string
+	Package          string
+	Force            bool
+	Config           string
+	PrivKey          string
+	SkipSteps        []string
+	CodesphereOnly   bool
+	DirectConnection bool
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
@@ -60,6 +62,16 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 			Short: "Install a Codesphere instance",
 			Long: io.Long(`Install a Codesphere instance with the provided package, configuration file, and private key.
 			Uses the private-cloud-installer.js script included in the package to perform the installation.`),
+			Example: formatExamples("install codesphere", []io.Example{
+				{
+					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s copy-dependencies,extract-dependencies,load-container-images,ceph,postgres,kubernetes,docker",
+					Desc: "Skip most pre-installation steps. E.g. if you only need to re-apply Codesphere's helm charts",
+				},
+				{
+					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s load-container-images",
+					Desc: "Skip loading container images. Necessary when installing a lite package that doesn't include any container images",
+				},
+			}),
 		},
 		Opts: &InstallCodesphereOpts{GlobalOptions: opts},
 		Env:  env.NewEnv(),
@@ -69,6 +81,8 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Config, "config", "c", "", "Path to the Codesphere Private Cloud configuration file (yaml)")
 	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Path to the private key to encrypt/decrypt secrets")
 	codesphere.cmd.Flags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, kubernetes")
+	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
+	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
 
 	util.MarkFlagRequired(codesphere.cmd, "package")
 	util.MarkFlagRequired(codesphere.cmd, "config")
@@ -109,61 +123,90 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 		return fmt.Errorf("node executable not found in package")
 	}
 
+	err = pm.ExtractDependency("bom.json", c.Opts.Force)
+	if err != nil {
+		return fmt.Errorf("failed to extract package to workdir: %w", err)
+	}
+
 	// If workspace image is extended extract bom.json and load workspace image
-	dockerfiles := config.ExtractWorkspaceDockerfiles()
-	if len(dockerfiles) > 0 {
-		err = pm.ExtractDependency("bom.json", c.Opts.Force)
-		if err != nil {
-			return fmt.Errorf("failed to extract package to workdir: %w", err)
-		}
+	for imageKey, imageConfig := range config.Codesphere.DeployConfig.Images {
+		for flavorKey, flavor := range imageConfig.Flavors {
+			if flavor.Image.Dockerfile != "" && config.Registry != nil && config.Registry.Server != "" {
+				bomRef := flavor.Image.BomRef
+				dockerfile := flavor.Image.Dockerfile
 
-		for dockerfile, bomRef := range dockerfiles {
-			rootImageName := c.ExtractRootImageName(bomRef)
-			imagePath := filepath.Join("codesphere", "images", fmt.Sprintf("%s.tar", rootImageName))
-			err = pm.ExtractDependency(imagePath, c.Opts.Force)
-			if err != nil {
-				return fmt.Errorf("failed to extract root image %s: %w", imagePath, err)
-			}
+				fullImageTag, err := pm.GetFullImageTag(bomRef)
+				if err != nil {
+					return fmt.Errorf("failed to get full image tag for %s: %w", bomRef, err)
+				}
 
-			extractedImagePath := pm.GetDependencyPath(imagePath)
-			err = im.LoadImage(extractedImagePath)
-			if err != nil {
-				return fmt.Errorf("failed to load workspace image from Dockerfile %s: %w", dockerfile, err)
-			}
-			log.Printf("Loaded root image '%s'", extractedImagePath)
+				// Extract root image name from full tag (e.g. repo/image:tag -> image)
+				parts := strings.Split(fullImageTag, ":")
+				if len(parts) < 2 {
+					return fmt.Errorf("invalid image tag format: %s", fullImageTag)
+				}
+				imageNameAndPath := parts[0]
+				version := parts[1]
+				rootImageName := path.Base(imageNameAndPath)
 
-			// TODO: This is duplicated from update_dockerfile.go, refactor into shared function
-			dockerfileFile, err := pm.FileIO().Open(dockerfile)
-			if err != nil {
-				return fmt.Errorf("failed to open dockerfile %s: %w", dockerfile, err)
-			}
-			defer util.CloseFileIgnoreError(dockerfileFile)
+				// Extract and load root image
+				imagePath := filepath.Join("codesphere", "images", fmt.Sprintf("%s.tar", rootImageName))
+				err = pm.ExtractDependency(imagePath, c.Opts.Force)
+				if err != nil {
+					return fmt.Errorf("failed to extract root image %s: %w", imagePath, err)
+				}
 
-			dockerfileManager := util.NewDockerfileManager()
-			updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, rootImageName)
-			if err != nil {
-				return fmt.Errorf("failed to update FROM statement: %w", err)
-			}
+				extractedImagePath := pm.GetDependencyPath(imagePath)
+				err = im.LoadImage(extractedImagePath)
+				if err != nil {
+					return fmt.Errorf("failed to load workspace image from Dockerfile %s: %w", dockerfile, err)
+				}
+				log.Printf("Loaded root image '%s'", extractedImagePath)
 
-			err = pm.FileIO().WriteFile(dockerfile, []byte(updatedContent), 0644)
-			if err != nil {
-				return fmt.Errorf("failed to write updated dockerfile: %w", err)
-			}
+				// TODO: This is duplicated from update_dockerfile.go, refactor into shared function
+				dockerfileFile, err := pm.FileIO().Open(dockerfile)
+				if err != nil {
+					return fmt.Errorf("failed to open dockerfile %s: %w", dockerfile, err)
+				}
+				defer util.CloseFileIgnoreError(dockerfileFile)
 
-			log.Printf("Successfully updated FROM statement in %s to use %s", dockerfile, rootImageName)
-			// TODO: End duplicated code
+				dockerfileManager := util.NewDockerfileManager()
+				updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, fullImageTag)
+				if err != nil {
+					return fmt.Errorf("failed to update FROM statement: %w", err)
+				}
 
-			dockerfileName := filepath.Base(dockerfile)
-			dockerfileDir := filepath.Dir(dockerfile)
-			err = im.BuildImage(dockerfileName, rootImageName, dockerfileDir)
-			if err != nil {
-				return fmt.Errorf("failed to build workspace image from Dockerfile %s: %w", dockerfile, err)
+				err = pm.FileIO().WriteFile(dockerfile, []byte(updatedContent), 0644)
+				if err != nil {
+					return fmt.Errorf("failed to write updated dockerfile: %w", err)
+				}
+
+				log.Printf("Successfully updated FROM statement in %s to use %s", dockerfile, fullImageTag)
+				// TODO: End duplicated code
+
+				dockerfileName := filepath.Base(dockerfile)
+				dockerfileDir := filepath.Dir(dockerfile)
+
+				// Determine image tag for build and push
+				registryUrl := strings.TrimRight(config.Registry.Server, "/")
+				buildTag := fmt.Sprintf("%s/%s-%s:%s", registryUrl, imageKey, flavorKey, version)
+
+				err = im.BuildImage(dockerfileName, buildTag, dockerfileDir)
+				if err != nil {
+					return fmt.Errorf("failed to build workspace image from Dockerfile %s: %w", dockerfile, err)
+				}
+
+				log.Printf("Pushing image to %s", buildTag)
+				err = im.PushImage(buildTag)
+				if err != nil {
+					return fmt.Errorf("failed to push image %s: %w", buildTag, err)
+				}
 			}
 		}
 	}
 
 	// Install codesphere with node
-	nodePath := filepath.Join(".", pm.GetWorkDir(), "node")
+	nodePath := filepath.Join(pm.GetWorkDir(), "node")
 	err = os.Chmod(nodePath, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to make node executable: %w", err)
@@ -171,14 +214,22 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 
 	log.Printf("Using Node.js executable: %s", nodePath)
 	log.Println("Starting private cloud installer script...")
-	installerPath := filepath.Join(".", pm.GetWorkDir(), "private-cloud-installer.js")
-	archivePath := filepath.Join(".", pm.GetWorkDir(), "deps.tar.gz")
+	installerPath := filepath.Join(pm.GetWorkDir(), "private-cloud-installer.js")
+	archivePath := filepath.Join(pm.GetWorkDir(), "deps.tar.gz")
 
 	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", c.Opts.Config, "--privKey", c.Opts.PrivKey}
 	if len(c.Opts.SkipSteps) > 0 {
 		for _, step := range c.Opts.SkipSteps {
 			cmdArgs = append(cmdArgs, "--skipStep", step)
 		}
+	}
+
+	if c.Opts.CodesphereOnly {
+		cmdArgs = append(cmdArgs, "--codesphereOnly")
+	}
+
+	if c.Opts.DirectConnection {
+		cmdArgs = append(cmdArgs, "--directConnection")
 	}
 
 	cmd := exec.Command(nodePath, cmdArgs...)
@@ -215,14 +266,4 @@ func (c *InstallCodesphereCmd) ListPackageContents(pm installer.PackageManager) 
 	}
 
 	return foundFiles, nil
-}
-
-// ExtractRootImageName extracts the root image name from a bomRef string.
-func (c *InstallCodesphereCmd) ExtractRootImageName(bomRef string) string {
-	parts := strings.Split(bomRef, ":")
-	if len(parts) < 2 {
-		return bomRef
-	}
-
-	return path.Base(parts[0])
 }

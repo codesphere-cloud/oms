@@ -17,88 +17,138 @@ const (
 	PROFILE_MINIMAL     = "minimal"
 )
 
-func (g *InstallConfig) ApplyProfile(profile string) error {
+func (g *InstallConfig) applyCommonProperties() {
 	if g.Config == nil {
 		g.Config = &files.RootConfig{}
 	}
 
-	g.Config.Ceph.NodesSubnet = "127.0.0.1/32"
-	g.Config.Ceph.Hosts = []files.CephHost{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
-	g.Config.Ceph.OSDs = []files.CephOSD{
-		{
-			SpecID: "default",
-			Placement: files.CephPlacement{
-				HostPattern: "*",
+	if g.Config.Ceph.NodesSubnet == "" {
+		g.Config.Ceph.NodesSubnet = "127.0.0.1/32"
+	}
+	if g.Config.Ceph.Hosts == nil {
+		g.Config.Ceph.Hosts = []files.CephHost{{Hostname: "localhost", IPAddress: "127.0.0.1", IsMaster: true}}
+	}
+	if g.Config.Ceph.OSDs == nil {
+		g.Config.Ceph.OSDs = []files.CephOSD{
+			{
+				SpecID: "default",
+				Placement: files.CephPlacement{
+					HostPattern: "*",
+				},
+				DataDevices: files.CephDataDevices{
+					Size:  "240G:300G",
+					Limit: 1,
+				},
+				DBDevices: files.CephDBDevices{
+					Size:  "120G:150G",
+					Limit: 1,
+				},
 			},
-			DataDevices: files.CephDataDevices{
-				Size:  "240G:300G",
-				Limit: 1,
-			},
-			DBDevices: files.CephDBDevices{
-				Size:  "120G:150G",
-				Limit: 1,
-			},
-		},
+		}
 	}
 
-	g.Config.Datacenter.ID = 1
-	g.Config.Datacenter.City = "Karlsruhe"
-	g.Config.Datacenter.CountryCode = "DE"
+	if g.Config.Datacenter.ID == 0 {
+		g.Config.Datacenter.ID = 1
+	}
+	if g.Config.Datacenter.City == "" {
+		g.Config.Datacenter.City = "Karlsruhe"
+	}
+	if g.Config.Datacenter.CountryCode == "" {
+		g.Config.Datacenter.CountryCode = "DE"
+	}
 
-	g.Config.Postgres.Mode = "install"
-	g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{
-		IP:       "127.0.0.1",
-		Hostname: "localhost",
+	if g.Config.Postgres.Mode == "" {
+		g.Config.Postgres.Mode = "install"
+	}
+	if g.Config.Postgres.Primary == nil {
+		g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{
+			IP:       "127.0.0.1",
+			Hostname: "localhost",
+		}
 	}
 
 	g.Config.Kubernetes.ManagedByCodesphere = true
 	g.Config.Kubernetes.NeedsKubeConfig = false
-	g.Config.Kubernetes.APIServerHost = "127.0.0.1"
-	g.Config.Kubernetes.ControlPlanes = []files.K8sNode{{IPAddress: "127.0.0.1"}}
-	g.Config.Kubernetes.Workers = []files.K8sNode{{IPAddress: "127.0.0.1"}}
-
-	g.Config.Cluster.Certificates = files.ClusterCertificates{
-		CA: files.CAConfig{
-			Algorithm:   "RSA",
-			KeySizeBits: 2048,
-		},
+	if g.Config.Kubernetes.APIServerHost == "" {
+		g.Config.Kubernetes.APIServerHost = "127.0.0.1"
 	}
-	g.Config.Cluster.Gateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
-	g.Config.Cluster.PublicGateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
-	g.Config.MetalLB = &files.MetalLBConfig{
-		Enabled: false,
-		Pools:   []files.MetalLBPoolDef{},
+	if g.Config.Kubernetes.ControlPlanes == nil {
+		g.Config.Kubernetes.ControlPlanes = []files.K8sNode{{IPAddress: "127.0.0.1"}}
 	}
-	g.Config.Registry = &files.RegistryConfig{}
+	if g.Config.Kubernetes.Workers == nil {
+		g.Config.Kubernetes.Workers = []files.K8sNode{{IPAddress: "127.0.0.1"}}
+	}
 
-	g.Config.Codesphere.Domain = "codesphere.local"
-	g.Config.Codesphere.WorkspaceHostingBaseDomain = "ws.local"
-	g.Config.Codesphere.CustomDomains.CNameBaseDomain = "custom.local"
-	g.Config.Codesphere.DNSServers = []string{"8.8.8.8", "1.1.1.1"}
-	g.Config.Codesphere.Experiments = []string{}
-	g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
-		Agent: &files.ImageRef{
+	if g.Config.Cluster.Certificates.CA.Algorithm == "" {
+		g.Config.Cluster.Certificates = files.ClusterCertificates{
+			CA: files.CAConfig{
+				Algorithm:   "RSA",
+				KeySizeBits: 2048,
+			},
+		}
+	}
+	if g.Config.Cluster.Gateway.ServiceType == "" {
+		g.Config.Cluster.Gateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
+	}
+	if g.Config.Cluster.PublicGateway.ServiceType == "" {
+		g.Config.Cluster.PublicGateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
+	}
+	if g.Config.MetalLB == nil {
+		g.Config.MetalLB = &files.MetalLBConfig{
+			Enabled: false,
+			Pools:   []files.MetalLBPoolDef{},
+		}
+	}
+	if g.Config.Registry == nil {
+		g.Config.Registry = &files.RegistryConfig{}
+	}
+
+	if g.Config.Codesphere.Domain == "" {
+		g.Config.Codesphere.Domain = "codesphere.local"
+	}
+	if g.Config.Codesphere.WorkspaceHostingBaseDomain == "" {
+		g.Config.Codesphere.WorkspaceHostingBaseDomain = "ws.local"
+	}
+	if g.Config.Codesphere.CustomDomains.CNameBaseDomain == "" {
+		g.Config.Codesphere.CustomDomains.CNameBaseDomain = "custom.local"
+	}
+	if g.Config.Codesphere.DNSServers == nil {
+		g.Config.Codesphere.DNSServers = []string{"8.8.8.8", "1.1.1.1"}
+	}
+	if g.Config.Codesphere.Experiments == nil {
+		g.Config.Codesphere.Experiments = []string{}
+	}
+	if g.Config.Codesphere.WorkspaceImages == nil {
+		g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
+			Agent: &files.ImageRef{
+				BomRef: "workspace-agent-24.04",
+			},
+		}
+	} else if g.Config.Codesphere.WorkspaceImages.Agent == nil {
+		g.Config.Codesphere.WorkspaceImages.Agent = &files.ImageRef{
 			BomRef: "workspace-agent-24.04",
-		},
+		}
 	}
-	g.Config.Codesphere.DeployConfig = files.DeployConfig{
-		Images: map[string]files.ImageConfig{
-			"ubuntu-24.04": {
-				Name:           "Ubuntu 24.04",
-				SupportedUntil: "2028-05-31",
-				Flavors: map[string]files.FlavorConfig{
-					"default": {
-						Image: files.ImageRef{
-							BomRef: "workspace-agent-24.04",
+	if g.Config.Codesphere.DeployConfig.Images == nil {
+		g.Config.Codesphere.DeployConfig = files.DeployConfig{
+			Images: map[string]files.ImageConfig{
+				"ubuntu-24.04": {
+					Name:           "Ubuntu 24.04",
+					SupportedUntil: "2028-05-31",
+					Flavors: map[string]files.FlavorConfig{
+						"default": {
+							Image: files.ImageRef{
+								BomRef: "workspace-agent-24.04",
+							},
+							Pool: map[int]int{1: 1},
 						},
-						Pool: map[int]int{1: 1},
 					},
 				},
 			},
-		},
+		}
 	}
-	g.Config.Codesphere.Plans = files.PlansConfig{
-		HostingPlans: map[int]files.HostingPlan{
+	if g.Config.Codesphere.Plans.HostingPlans == nil {
+		g.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{
 			1: {
 				CPUTenth:      10,
 				GPUParts:      0,
@@ -106,73 +156,98 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 				StorageMb:     20480,
 				TempStorageMb: 1024,
 			},
-		},
-		WorkspacePlans: map[int]files.WorkspacePlan{
+		}
+	}
+	if g.Config.Codesphere.Plans.WorkspacePlans == nil {
+		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
 			1: {
 				Name:          "Standard",
 				HostingPlanID: 1,
 				MaxReplicas:   3,
 				OnDemand:      true,
 			},
-		},
+		}
 	}
-	g.Config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{
-		Postgres: make(map[string]interface{}),
+	if g.Config.ManagedServiceBackends == nil {
+		g.Config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{
+			Postgres: make(map[string]interface{}),
+		}
+	} else if g.Config.ManagedServiceBackends.Postgres == nil {
+		g.Config.ManagedServiceBackends.Postgres = make(map[string]interface{})
 	}
-	g.Config.Codesphere.ManagedServices = []files.ManagedServiceConfig{
-		{
-			Name:    "postgres",
-			Version: "v1",
-		},
-		{
-			Name:    "babelfish",
-			Version: "v1",
-		},
-		{
-			Name:    "s3",
-			Version: "v1",
-		},
-		{
-			Name:    "virtual-k8s",
-			Version: "v1",
-		},
+	if g.Config.Codesphere.ManagedServices == nil {
+		g.Config.Codesphere.ManagedServices = []files.ManagedServiceConfig{
+			{Name: "postgres", Version: "v1"},
+			{Name: "babelfish", Version: "v1"},
+			{Name: "s3", Version: "v1"},
+			{Name: "virtual-k8s", Version: "v1"},
+		}
 	}
-	g.Config.Secrets.BaseDir = "/root/secrets"
+	if g.Config.Secrets.BaseDir == "" {
+		g.Config.Secrets.BaseDir = "/root/secrets"
+	}
+}
 
-	switch profile {
-	case PROFILE_DEV, PROFILE_DEVELOPMENT:
+func (g *InstallConfig) applyProfileDev() error {
+	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "dev"
-		if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
-			return fmt.Errorf("applying resource profile: %w", err)
+	}
+	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+		return fmt.Errorf("applying resource profile: %w", err)
+	}
+	if g.Config.Cluster.Monitoring == nil {
+		g.Config.Cluster.Monitoring = &files.MonitoringConfig{}
+	}
+	if g.Config.Cluster.Monitoring.Prometheus == nil {
+		g.Config.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
+	}
+	if g.Config.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
+		g.Config.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{
+			Enabled:     false,
+			ClusterName: "dev",
 		}
-		g.Config.Cluster.Monitoring = &files.MonitoringConfig{
-			Prometheus: &files.PrometheusConfig{
-				RemoteWrite: &files.RemoteWriteConfig{
-					Enabled:     false,
-					ClusterName: "local-test",
-				},
-			},
-			Loki:         &files.LokiConfig{Enabled: false},
-			Grafana:      &files.GrafanaConfig{Enabled: false},
-			GrafanaAlloy: &files.GrafanaAlloyConfig{Enabled: false},
-		}
+	}
+	if g.Config.Cluster.Monitoring.Loki == nil {
+		g.Config.Cluster.Monitoring.Loki = &files.LokiConfig{Enabled: false}
+	}
+	if g.Config.Cluster.Monitoring.Grafana == nil {
+		g.Config.Cluster.Monitoring.Grafana = &files.GrafanaConfig{Enabled: false}
+	}
+	if g.Config.Cluster.Monitoring.GrafanaAlloy == nil {
+		g.Config.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{Enabled: false}
+	}
+	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+		return fmt.Errorf("applying resource profile: %w", err)
+	}
+	return nil
+}
 
-	case PROFILE_PROD, PROFILE_PRODUCTION:
-		g.Config.Datacenter.Name = "production"
-		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
-			1: {
-				Name:          "Standard Developer",
-				HostingPlanID: 1,
-				MaxReplicas:   3,
-				OnDemand:      true,
-			},
+func (g *InstallConfig) applyProfileMinimal() error {
+	if g.Config.Datacenter.Name == "" {
+		g.Config.Datacenter.Name = "dev"
+	}
+	if g.Config.Cluster.Monitoring == nil {
+		g.Config.Cluster.Monitoring = &files.MonitoringConfig{}
+	}
+	if g.Config.Cluster.Monitoring.Prometheus == nil {
+		g.Config.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
+	}
+	if g.Config.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
+		g.Config.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{
+			Enabled:     false,
+			ClusterName: "dev",
 		}
-
-	case PROFILE_MINIMAL:
-		g.Config.Datacenter.Name = "minimal"
-		if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
-			return fmt.Errorf("applying resource profile: %w", err)
-		}
+	}
+	if g.Config.Cluster.Monitoring.Loki == nil {
+		g.Config.Cluster.Monitoring.Loki = &files.LokiConfig{Enabled: true}
+	}
+	if g.Config.Cluster.Monitoring.Grafana == nil {
+		g.Config.Cluster.Monitoring.Grafana = &files.GrafanaConfig{Enabled: true}
+	}
+	if g.Config.Cluster.Monitoring.GrafanaAlloy == nil {
+		g.Config.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{Enabled: true}
+	}
+	if g.Config.Codesphere.Plans.WorkspacePlans == nil {
 		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
 			1: {
 				Name:          "Standard Developer",
@@ -181,10 +256,37 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 				OnDemand:      true,
 			},
 		}
-
-	default:
-		return fmt.Errorf("unknown profile: %s, available profiles: dev, prod, minimal", profile)
 	}
+	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+		return fmt.Errorf("applying resource profile: %w", err)
+	}
+	return nil
+}
 
+func (g *InstallConfig) applyProfileProd() error {
+	if g.Config.Datacenter.Name == "" {
+		g.Config.Datacenter.Name = "production"
+	}
+	if g.Config.Codesphere.Plans.WorkspacePlans == nil {
+		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
+			1: {
+				Name:          "Standard Developer",
+				HostingPlanID: 1,
+				MaxReplicas:   3,
+				OnDemand:      true,
+			},
+		}
+	}
+	g.Config.Cluster.Monitoring = &files.MonitoringConfig{
+		Prometheus: &files.PrometheusConfig{
+			RemoteWrite: &files.RemoteWriteConfig{
+				Enabled:     false,
+				ClusterName: "production",
+			},
+		},
+		Loki:         &files.LokiConfig{Enabled: true},
+		Grafana:      &files.GrafanaConfig{Enabled: true},
+		GrafanaAlloy: &files.GrafanaAlloyConfig{Enabled: true},
+	}
 	return nil
 }

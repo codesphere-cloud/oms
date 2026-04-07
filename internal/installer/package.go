@@ -26,7 +26,7 @@ type PackageManager interface {
 	Extract(force bool) error
 	ExtractDependency(file string, force bool) error
 	ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error)
-	GetBaseimageName(baseimage string) (string, error)
+	GetFullImageTag(baseimage string) (string, error)
 	GetBaseimagePath(baseimage string, force bool) (string, error)
 	GetCodesphereVersion() (string, error)
 }
@@ -147,7 +147,7 @@ func (p *Package) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, e
 	return ociImageIndex, nil
 }
 
-func (p *Package) GetBaseimageName(baseimage string) (string, error) {
+func (p *Package) GetFullImageTag(baseimage string) (string, error) {
 	if baseimage == "" {
 		return "", fmt.Errorf("baseimage not specified")
 	}

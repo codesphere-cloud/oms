@@ -5,6 +5,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/release"
+	"helm.sh/helm/v4/pkg/storage/driver"
 )
 
 // ReleaseInfo holds the details of an existing Helm release that the rest of
@@ -34,6 +36,10 @@ type ChartConfig struct {
 	CreateNamespace bool
 }
 
+type UpgradeChartOptions struct {
+	InstallIfNotExist bool // if true, perform an install if the release does not already exist
+}
+
 // HelmClient is the seam that makes the Helm SDK mockable.
 // Every method receives only plain Go types so that test doubles never need to
 // import any helm.sh package.
@@ -47,7 +53,7 @@ type HelmClient interface {
 	InstallChart(ctx context.Context, cfg ChartConfig) error
 
 	// UpgradeChart upgrades an existing Helm release and returns an error on failure.
-	UpgradeChart(ctx context.Context, cfg ChartConfig) error
+	UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error
 }
 
 // ---------------------------------------------------------------------------
@@ -55,28 +61,46 @@ type HelmClient interface {
 // ---------------------------------------------------------------------------
 
 type helmClient struct {
-	settings     *cli.EnvSettings
-	actionConfig *action.Configuration
+	settings         *cli.EnvSettings
+	defaultNamespace string
+	driver           string
 }
 
 func NewHelmClient(namespace string) (HelmClient, error) {
-	settings := cli.New()
-	actionConfig := new(action.Configuration)
-	if err := actionConfig.Init(
-		settings.RESTClientGetter(),
-		namespace,
-		os.Getenv("HELM_DRIVER"),
-	); err != nil {
-		return nil, fmt.Errorf("helm action config init failed: %w", err)
-	}
 	return &helmClient{
-		settings:     settings,
-		actionConfig: actionConfig,
+		settings:         cli.New(),
+		defaultNamespace: namespace,
+		driver:           os.Getenv("HELM_DRIVER"),
 	}, nil
 }
 
+func (h *helmClient) newActionConfig(namespace string) (*action.Configuration, error) {
+	if namespace == "" {
+		namespace = h.defaultNamespace
+	}
+	if namespace == "" {
+		return nil, fmt.Errorf("helm namespace is required")
+	}
+
+	actionConfig := new(action.Configuration)
+	if err := actionConfig.Init(
+		h.settings.RESTClientGetter(),
+		namespace,
+		h.driver,
+	); err != nil {
+		return nil, fmt.Errorf("helm action config init failed: %w", err)
+	}
+
+	return actionConfig, nil
+}
+
 func (h *helmClient) FindRelease(releaseName string) (*ReleaseInfo, error) {
-	listClient := action.NewList(h.actionConfig)
+	actionConfig, err := h.newActionConfig("")
+	if err != nil {
+		return nil, err
+	}
+
+	listClient := action.NewList(actionConfig)
 	listClient.Filter = "^" + releaseName + "$"
 	listClient.Deployed = true
 	listClient.SetStateMask()
@@ -112,7 +136,12 @@ func (h *helmClient) FindRelease(releaseName string) (*ReleaseInfo, error) {
 }
 
 func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
-	installClient := action.NewInstall(h.actionConfig)
+	actionConfig, err := h.newActionConfig(cfg.Namespace)
+	if err != nil {
+		return err
+	}
+
+	installClient := action.NewInstall(actionConfig)
 	installClient.ReleaseName = cfg.ReleaseName
 	installClient.Namespace = cfg.Namespace
 	installClient.CreateNamespace = cfg.CreateNamespace
@@ -140,12 +169,26 @@ func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
 	return nil
 }
 
-func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig) error {
-	upgradeClient := action.NewUpgrade(h.actionConfig)
+func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error {
+	actionConfig, err := h.newActionConfig(cfg.Namespace)
+	if err != nil {
+		return err
+	}
+
+	if opts.InstallIfNotExist {
+		// If a release does not exist, install it.
+		if _, err := h.FindRelease(cfg.ReleaseName); errors.Is(err, driver.ErrReleaseNotFound) {
+			return h.InstallChart(ctx, cfg)
+		}
+	}
+
+	upgradeClient := action.NewUpgrade(actionConfig)
 	upgradeClient.Namespace = cfg.Namespace
 	upgradeClient.WaitStrategy = "watcher"
 	upgradeClient.Version = cfg.Version
 	upgradeClient.RepoURL = cfg.RepoURL
+	upgradeClient.Timeout = 5 * time.Minute
+	upgradeClient.Install = opts.InstallIfNotExist
 
 	chartPath, err := upgradeClient.LocateChart(cfg.ChartName, h.settings)
 	if err != nil {
