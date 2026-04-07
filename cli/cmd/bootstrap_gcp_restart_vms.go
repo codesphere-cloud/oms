@@ -27,37 +27,42 @@ type BootstrapGcpRestartVMsOpts struct {
 	Name      string
 }
 
-func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, args []string) error {
+// resolveProjectAndZone returns the project ID and zone from flags or the infra file.
+// If both flags are set they are used directly; if neither is set, the infra file is read.
+// Providing only one of --project-id / --zone is an error.
+func (c *BootstrapGcpRestartVMsCmd) resolveProjectAndZone(fw util.FileIO) (string, string, error) {
+	projectID := c.Opts.ProjectID
+	zone := c.Opts.Zone
+
+	if (projectID == "") != (zone == "") {
+		return "", "", fmt.Errorf("--project-id and --zone must be provided together")
+	}
+	if projectID != "" {
+		return projectID, zone, nil
+	}
+
+	infraFilePath := gcp.GetInfraFilePath()
+	infraEnv, exists, err := gcp.LoadInfraFile(fw, infraFilePath)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to load infra file: %w", err)
+	}
+	if !exists {
+		return "", "", fmt.Errorf("infra file not found at %s; use --project-id and --zone flags", infraFilePath)
+	}
+	if infraEnv.ProjectID == "" || infraEnv.Zone == "" {
+		return "", "", fmt.Errorf("infra file is missing project ID or zone; use --project-id and --zone flags")
+	}
+	return infraEnv.ProjectID, infraEnv.Zone, nil
+}
+
+func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false)
 	fw := util.NewFilesystemWriter()
 
-	projectID := c.Opts.ProjectID
-	zone := c.Opts.Zone
-
-	// If only one of --project-id/--zone is provided, require both
-	if (projectID == "") != (zone == "") {
-		return fmt.Errorf("--project-id and --zone must be provided together")
-	}
-
-	if projectID == "" && zone == "" {
-		infraFilePath := gcp.GetInfraFilePath()
-		infraEnv, exists, err := gcp.LoadInfraFile(fw, infraFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to load infra file: %w", err)
-		}
-		if !exists {
-			return fmt.Errorf("infra file not found at %s; use --project-id and --zone flags", infraFilePath)
-		}
-		projectID = infraEnv.ProjectID
-		zone = infraEnv.Zone
-	}
-
-	if projectID == "" {
-		return fmt.Errorf("project ID is required; set --project-id and --zone or ensure the infra file exists")
-	}
-	if zone == "" {
-		return fmt.Errorf("zone is required; set --project-id and --zone or ensure the infra file exists")
+	projectID, zone, err := c.resolveProjectAndZone(fw)
+	if err != nil {
+		return err
 	}
 
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
@@ -69,16 +74,7 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, args []string) error 
 
 	bs, err := gcp.NewGCPBootstrapper(
 		ctx,
-		nil,
-		stlog,
-		csEnv,
-		nil,
-		gcpClient,
-		fw,
-		nil,
-		nil,
-		util.NewTime(),
-		nil,
+		nil, stlog, csEnv, nil, gcpClient, fw, nil, nil, util.NewTime(), nil,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create bootstrapper: %w", err)
