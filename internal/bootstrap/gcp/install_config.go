@@ -84,7 +84,7 @@ func (b *GCPBootstrapper) recoverVault() error {
 		}
 	}()
 
-	err := b.DecryptVault(vaultCopyPath)
+	err := b.decryptVault(vaultCopyPath)
 	if err != nil {
 		return fmt.Errorf("failed to create decrypted vault for recovery: %w", err)
 	}
@@ -343,9 +343,9 @@ func (b *GCPBootstrapper) EncryptVault() error {
 	return nil
 }
 
-// DecryptVault creates an unencrypted copy of the vault in dst on the jumpbox
+// decryptVault creates an unencrypted copy of the vault in dst on the jumpbox
 // Make sure to delete the unencrypted file when not needed anymore.
-func (b *GCPBootstrapper) DecryptVault(dst string) error {
+func (b *GCPBootstrapper) decryptVault(dst string) error {
 	err := b.Env.Jumpbox.RunSSHCommand("root", "cp "+b.Env.SecretsDir+"/prod.vault.yaml "+dst)
 	if err != nil {
 		return fmt.Errorf("failed to create tmp vault on jumpbox: %w", err)
