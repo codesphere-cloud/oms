@@ -106,8 +106,7 @@ func AddBootstrapGcpRestartVMsCmd(bootstrapGcp *cobra.Command, opts *GlobalOptio
 				for example after spot VM preemption.
 				By default, restarts all VMs defined in the infrastructure.
 				Use --name to restart a single VM.
-				Project ID and zone are read from the local infra file if available,
-				or can be specified via flags.`),
+				Project ID and zone are read from the local infra file if available`),
 			Example: formatExamples("beta bootstrap-gcp restart-vms", []csio.Example{
 				{Desc: "Restart all VMs using project info from the local infra file"},
 				{Cmd: "--name jumpbox", Desc: "Restart only the jumpbox VM"},

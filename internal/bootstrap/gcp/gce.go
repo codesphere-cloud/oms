@@ -6,6 +6,7 @@ package gcp
 import (
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -366,14 +367,14 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 		name, pollInterval*time.Duration(maxAttempts))
 }
 
-// findVMDef looks up a VM definition by name. Returns the VMDef and true if found.
-func findVMDef(name string) (VMDef, bool) {
+// findVMDef looks up a VM definition by name. Returns nil if not found.
+func findVMDef(name string) *VMDef {
 	for _, vm := range vmDefs {
 		if vm.Name == name {
-			return vm, true
+			return &vm
 		}
 	}
-	return VMDef{}, false
+	return nil
 }
 
 // validVMNames returns the list of known VM names from vmDefs.
@@ -387,8 +388,8 @@ func validVMNames() []string {
 
 // RestartVM restarts a single stopped or terminated VM by a name that is defined in vmDefs.
 func (b *GCPBootstrapper) RestartVM(name string) error {
-	vm, found := findVMDef(name)
-	if !found {
+	vm := findVMDef(name)
+	if vm == nil {
 		return fmt.Errorf("unknown VM name %q; valid names are: %s", name, strings.Join(validVMNames(), ", "))
 	}
 
@@ -405,10 +406,10 @@ func (b *GCPBootstrapper) RestartVM(name string) error {
 
 	switch s := inst.GetStatus(); s {
 	case "RUNNING":
-		b.stlog.Logf("Instance %s is already running", name)
+		log.Printf("Instance %s is already running", name)
 		return nil
 	case "TERMINATED", "STOPPED":
-		b.stlog.Logf("Starting stopped instance %s...", name)
+		log.Printf("Starting stopped instance %s...", name)
 		if err := b.GCPClient.StartInstance(projectID, zone, name); err != nil {
 			return fmt.Errorf("failed to start instance %s: %w", name, err)
 		}
@@ -424,7 +425,7 @@ func (b *GCPBootstrapper) RestartVM(name string) error {
 	}
 
 	internalIP, externalIP := ExtractInstanceIPs(readyInstance)
-	b.stlog.Logf("Instance %s is now running (internal=%s, external=%s)", name, internalIP, externalIP)
+	log.Printf("Instance %s is now running (internal=%s, external=%s)", name, internalIP, externalIP)
 	return nil
 }
 
