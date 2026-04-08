@@ -238,8 +238,25 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to download secrets file from jumpbox"))
 				})
-			})
 
+				It("returns error when recovery is successful, but config file fails to load", func() {
+					gc.EXPECT().GetProjectByName(mock.Anything, mock.Anything).Return(&resourcemanagerpb.Project{ProjectId: csEnv.ProjectID, Name: "existing-proj"}, nil)
+
+					runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+					gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, "jumpbox").Return(runningResp, nil)
+
+					nodeClient.EXPECT().DownloadFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
+
+					err := bs.EnsureInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to load config file"))
+					Expect(err.Error()).To(ContainSubstring("bad format"))
+				})
+			})
 		})
 	})
 
@@ -376,7 +393,6 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub).To(BeNil())
 				})
-
 			})
 
 			Context("When OpenBao config is set", func() {
@@ -479,7 +495,6 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when age-keygen command fails", func() {
-
 				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(fmt.Errorf("ouch"))
 
@@ -532,5 +547,4 @@ var _ = Describe("Installconfig & Secrets", func() {
 			})
 		})
 	})
-
 })
