@@ -430,7 +430,6 @@ func (b *GCPBootstrapper) RestartVM(name string) error {
 }
 
 // RestartVMs restarts all stopped or terminated VMs defined in vmDefs.
-// VMs are restarted sequentially because StepLogger is not thread-safe.
 func (b *GCPBootstrapper) RestartVMs() error {
 	var errs []error
 	for _, vm := range vmDefs {
