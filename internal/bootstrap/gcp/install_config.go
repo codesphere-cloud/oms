@@ -80,13 +80,18 @@ func (b *GCPBootstrapper) recoverVault() error {
 	defer func() {
 		err := b.Env.Jumpbox.RunSSHCommand("root", "rm -f "+vaultCopyPath)
 		if err != nil {
-			b.stlog.Logf("failed to remove unencrypted, vault file for recovery: %s", err.Error())
+			b.stlog.Logf("failed to remove unencrypted vault file for recovery: %s", err.Error())
 		}
 	}()
 
 	err := b.decryptVault(vaultCopyPath)
 	if err != nil {
 		return fmt.Errorf("failed to create decrypted vault for recovery: %w", err)
+	}
+
+	err = b.Env.Jumpbox.NodeClient.RunCommand(b.Env.Jumpbox, "root", "chmod 600 "+vaultCopyPath)
+	if err != nil {
+		return fmt.Errorf("failed to make vault file readable only for root on jumpbox: %w", err)
 	}
 
 	err = b.Env.Jumpbox.NodeClient.DownloadFile(b.Env.Jumpbox, vaultCopyPath, b.Env.SecretsFilePath)
