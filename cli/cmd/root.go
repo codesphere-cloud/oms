@@ -26,6 +26,7 @@ func GetRootCmd() *cobra.Command {
 
 			This command can be used to run common tasks related to managing codesphere installations,
 			like downloading new versions.`),
+		Args: cobra.NoArgs,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			apiKey := os.Getenv("OMS_PORTAL_API_KEY")
 
