@@ -462,15 +462,15 @@ var _ = Describe("Installconfig & Secrets", func() {
 	Describe("EnsureAgeKey", func() {
 		Describe("Valid EnsureAgeKey", func() {
 			It("generates key if missing", func() {
-				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(nil)
+				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(nil)
 
 				err := bs.EnsureAgeKey()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("skips if key exists", func() {
-				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(true)
+				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(true)
 
 				err := bs.EnsureAgeKey()
 				Expect(err).NotTo(HaveOccurred())
@@ -480,8 +480,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("Invalid cases", func() {
 			It("fails when age-keygen command fails", func() {
 
-				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(fmt.Errorf("ouch"))
+				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(fmt.Errorf("ouch"))
 
 				err := bs.EnsureAgeKey()
 				Expect(err).To(HaveOccurred())
