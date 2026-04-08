@@ -319,11 +319,6 @@ func (c *SSHNodeClient) DownloadFile(n *Node, src, dst string) error {
 		nodeIP = n.InternalIP
 	}
 
-	err := n.ensureDirectoryExists("root", filepath.Dir(dst))
-	if err != nil {
-		return fmt.Errorf("failed to ensure directory exists: %w", err)
-	}
-
 	return n.downloadFile(jumpBoxIP, nodeIP, "root", src, dst)
 }
 
