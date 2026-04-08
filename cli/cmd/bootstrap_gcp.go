@@ -106,6 +106,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	parent.AddCommand(bootstrapGcpCmd.cmd)
 	AddBootstrapGcpPostconfigCmd(bootstrapGcpCmd.cmd, opts)
 	AddBootstrapGcpCleanupCmd(bootstrapGcpCmd.cmd, opts)
+	AddBootstrapGcpRestartVMsCmd(bootstrapGcpCmd.cmd, opts)
 }
 
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
