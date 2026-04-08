@@ -42,6 +42,7 @@ type Node struct {
 type NodeClient interface {
 	RunCommand(n *Node, username string, command string) error
 	CopyFile(n *Node, src string, dst string) error
+	DownloadFile(n *Node, src string, dst string) error
 	WaitReady(n *Node, timeout time.Duration) error
 	HasFile(n *Node, filePath string) bool
 }
@@ -294,18 +295,31 @@ func (c *SSHNodeClient) HasFile(n *Node, filePath string) bool {
 
 // CopyFile copies a file from the local system to the remote node via SFTP
 func (c *SSHNodeClient) CopyFile(n *Node, src string, dst string) error {
-	if n.Jumpbox == nil {
-		err := n.ensureDirectoryExists("root", filepath.Dir(dst))
-		if err != nil {
-			return fmt.Errorf("failed to ensure directory exists: %w", err)
-		}
-		return n.copyFile("", n.ExternalIP, "root", src, dst)
+	jumpBoxIP := ""
+	nodeIP := n.ExternalIP
+	if n.Jumpbox != nil {
+		jumpBoxIP = n.Jumpbox.ExternalIP
+		nodeIP = n.InternalIP
 	}
+
 	err := n.ensureDirectoryExists("root", filepath.Dir(dst))
 	if err != nil {
 		return fmt.Errorf("failed to ensure directory exists: %w", err)
 	}
-	return n.copyFile(n.Jumpbox.ExternalIP, n.InternalIP, "root", src, dst)
+
+	return n.copyFile(jumpBoxIP, nodeIP, "root", src, dst)
+}
+
+// DownloadFile downloads a file from the remote node to the local system via SFTP
+func (c *SSHNodeClient) DownloadFile(n *Node, src, dst string) error {
+	jumpBoxIP := ""
+	nodeIP := n.ExternalIP
+	if n.Jumpbox != nil {
+		jumpBoxIP = n.Jumpbox.ExternalIP
+		nodeIP = n.InternalIP
+	}
+
+	return n.downloadFile(jumpBoxIP, nodeIP, "root", src, dst)
 }
 
 // Helper functions
@@ -482,6 +496,34 @@ func (n *Node) copyFile(jumpboxIp string, ip string, username string, src string
 	_, err = dstFile.ReadFrom(srcFile)
 	if err != nil {
 		return fmt.Errorf("failed to copy data from %s to %s: %v", src, dst, err)
+	}
+
+	return nil
+}
+
+// downloadFile downloads a file from the remote node to the local system via SFTP
+func (n *Node) downloadFile(jumpboxIp, ip, username, src, dst string) error {
+	client, err := n.getSFTPClient(jumpboxIp, ip, username)
+	if err != nil {
+		return fmt.Errorf("failed to get SSH client: %v", err)
+	}
+	defer util.IgnoreError(client.Close)
+
+	srcFile, err := client.Open(src)
+	if err != nil {
+		return fmt.Errorf("failed to open source file %s: %v", src, err)
+	}
+	defer util.IgnoreError(srcFile.Close)
+
+	dstFile, err := n.FileIO.Create(dst)
+	if err != nil {
+		return fmt.Errorf("failed to create destination file %s: %v", dst, err)
+	}
+	defer util.IgnoreError(dstFile.Close)
+
+	_, err = dstFile.ReadFrom(srcFile)
+	if err != nil {
+		return fmt.Errorf("failed to download data from %s to %s: %v", src, dst, err)
 	}
 
 	return nil

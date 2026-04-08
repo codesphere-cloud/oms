@@ -6,9 +6,8 @@ package gcp_test
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"os"
+	"strings"
 
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	"cloud.google.com/go/compute/apiv1/computepb"
@@ -28,7 +27,7 @@ import (
 	"google.golang.org/api/dns/v1"
 )
 
-func jumpbboxMatcher(node *node.Node) bool {
+func jumpboxMatcher(node *node.Node) bool {
 	return node.GetName() == "jumpbox"
 }
 
@@ -207,12 +206,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 			// EnsureAgeKey
-			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(nil)
-			nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(nil)
+			nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
 
 			// EncryptVault
-			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "cp /etc/codesphere/secrets/prod.vault.yaml{,.bak}").Return(nil)
-			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", mock.MatchedBy(func(cmd string) bool {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "cp /etc/codesphere/secrets/prod.vault.yaml{,.bak}").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(cmd string) bool {
 				return strings.Contains(cmd, "sops --encrypt")
 			})).Return(nil)
 
@@ -264,9 +263,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("ValidateInput", func() {
-		var (
-			artifacts []portal.Artifact
-		)
+		var artifacts []portal.Artifact
 		Context("When GitHub team and org is set", func() {
 			BeforeEach(func() {
 				csEnv.GitHubTeamOrg = "codesphere-cloud"
@@ -420,9 +417,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					})
 				})
 			})
-
 		})
-
 	})
 
 	Describe("EnsureInstallConfig", func() {
@@ -588,7 +583,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				icg = installer.NewMockInstallConfigManager(GinkgoT())
 				gc = gcp.NewMockGCPClientManager(GinkgoT())
 				fw = util.NewMockFileIO(GinkgoT())
-
 			})
 
 			It("fails when the 8th install command fails", func() {
@@ -1005,7 +999,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub).To(BeNil())
 				})
-
 			})
 
 			Context("When OpenBao config is set", func() {
@@ -1091,15 +1084,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureAgeKey", func() {
 		Describe("Valid EnsureAgeKey", func() {
 			It("generates key if missing", func() {
-				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(nil)
+				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(nil)
 
 				err := bs.EnsureAgeKey()
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("skips if key exists", func() {
-				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(true)
+				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(true)
 
 				err := bs.EnsureAgeKey()
 				Expect(err).NotTo(HaveOccurred())
@@ -1108,9 +1101,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("fails when age-keygen command fails", func() {
-
-				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpbboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(fmt.Errorf("ouch"))
+				nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(fmt.Errorf("ouch"))
 
 				err := bs.EnsureAgeKey()
 				Expect(err).To(HaveOccurred())
@@ -1207,14 +1199,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 					csEnv.GitHubPAT = "fake-pat"
 					csEnv.RegistryUser = "fake-user"
 					csEnv.RegistryType = "github"
-
 				})
 				It("downloads and installs lite package", func() {
 					// Expect download package
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer-lite.tar.gz -s load-container-images").Return(nil)
 
 					err := bs.InstallCodesphere()
@@ -1229,10 +1220,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 				It("downloads and installs codesphere", func() {
 					// Expect download package
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer.tar.gz -H def9876543210 v1.2.3").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H def9876543210 v1.2.3").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1240,8 +1231,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("downloads and installs codesphere with hash", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1259,7 +1250,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					})
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer-lite.tar.gz").Return(nil)
-						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
+						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer-lite.tar.gz -s load-container-images").Return(nil)
 
 						err := bs.InstallCodesphere()
@@ -1273,7 +1264,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					})
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer.tar.gz").Return(nil)
-						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root",
+						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer.tar.gz").Return(nil)
 
 						err := bs.InstallCodesphere()
@@ -1309,7 +1300,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when download package fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(fmt.Errorf("download error"))
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(fmt.Errorf("download error"))
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
@@ -1317,8 +1308,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when install codesphere fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpbboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
@@ -1369,7 +1360,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 		})
 	})
-
 })
 
 func fakeNode(name string, commandRunner node.NodeClient) *node.Node {
