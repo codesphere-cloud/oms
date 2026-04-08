@@ -89,11 +89,6 @@ func (b *GCPBootstrapper) recoverVault() error {
 		return fmt.Errorf("failed to create decrypted vault for recovery: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.RunCommand(b.Env.Jumpbox, "root", "chmod 600 "+vaultCopyPath)
-	if err != nil {
-		return fmt.Errorf("failed to make vault file readable only for root on jumpbox: %w", err)
-	}
-
 	err = b.Env.Jumpbox.NodeClient.DownloadFile(b.Env.Jumpbox, vaultCopyPath, b.Env.SecretsFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to download secrets file from jumpbox: %w", err)
@@ -354,6 +349,11 @@ func (b *GCPBootstrapper) decryptVault(dst string) error {
 	err := b.Env.Jumpbox.RunSSHCommand("root", "cp "+b.Env.SecretsDir+"/prod.vault.yaml "+dst)
 	if err != nil {
 		return fmt.Errorf("failed to create tmp vault on jumpbox: %w", err)
+	}
+
+	err = b.Env.Jumpbox.NodeClient.RunCommand(b.Env.Jumpbox, "root", "chmod 600 "+dst)
+	if err != nil {
+		return fmt.Errorf("failed to make vault file readable only for root on jumpbox: %w", err)
 	}
 
 	err = b.Env.Jumpbox.RunSSHCommand("root", "SOPS_AGE_KEY_FILE="+b.Env.SecretsDir+"/age_key.txt sops --decrypt --in-place "+dst)
