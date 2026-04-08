@@ -47,9 +47,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v0.8
  
 ----------
 Module: cloud.google.com/go/resourcemanager
-Version: v1.10.7
+Version: v1.11.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.10.7/resourcemanager/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.11.0/resourcemanager/LICENSE
  
 ----------
 Module: cloud.google.com/go/serviceusage
@@ -353,15 +353,15 @@ License URL: https://github.com/go-gorp/gorp/blob/v3.1.0/LICENSE
  
 ----------
 Module: github.com/go-jose/go-jose/v4
-Version: v4.1.3
+Version: v4.1.4
 License: Apache-2.0
-License URL: https://github.com/go-jose/go-jose/blob/v4.1.3/LICENSE
+License URL: https://github.com/go-jose/go-jose/blob/v4.1.4/LICENSE
  
 ----------
 Module: github.com/go-jose/go-jose/v4/json
-Version: v4.1.3
+Version: v4.1.4
 License: BSD-3-Clause
-License URL: https://github.com/go-jose/go-jose/blob/v4.1.3/json/LICENSE
+License URL: https://github.com/go-jose/go-jose/blob/v4.1.4/json/LICENSE
  
 ----------
 Module: github.com/go-logr/logr
@@ -1169,15 +1169,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.273.1
+Version: v0.274.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.273.1/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.274.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.273.1
+Version: v0.274.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.273.1/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.274.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
