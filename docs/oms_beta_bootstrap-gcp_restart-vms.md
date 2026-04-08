@@ -8,8 +8,7 @@ Restarts GCP compute instances that were stopped or terminated,
 for example after spot VM preemption.
 By default, restarts all VMs defined in the infrastructure.
 Use --name to restart a single VM.
-Project ID and zone are read from the local infra file if available,
-or can be specified via flags.
+Project ID and zone are read from the local infra file if available
 
 ```
 oms beta bootstrap-gcp restart-vms [flags]
