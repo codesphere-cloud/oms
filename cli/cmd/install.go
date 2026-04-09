@@ -21,7 +21,7 @@ func AddInstallCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Long:  io.Long(`Install Codesphere and other components like Ceph and PostgreSQL.`),
 		},
 	}
-	rootCmd.AddCommand(install.cmd)
+	AddCmd(rootCmd, install.cmd)
 
 	AddInstallCodesphereCmd(install.cmd, opts)
 	AddInstallK0sCmd(install.cmd, opts)

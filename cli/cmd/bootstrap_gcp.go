@@ -102,7 +102,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
 
-	parent.AddCommand(bootstrapGcpCmd.cmd)
+	AddCmd(parent, bootstrapGcpCmd.cmd)
 	AddBootstrapGcpPostconfigCmd(bootstrapGcpCmd.cmd, opts)
 	AddBootstrapGcpCleanupCmd(bootstrapGcpCmd.cmd, opts)
 }

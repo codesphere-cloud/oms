@@ -19,6 +19,6 @@ func AddBetaInstallCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Short: "Install beta components",
 		},
 	}
-	rootCmd.AddCommand(install.cmd)
+	AddCmd(rootCmd, install.cmd)
 	AddArgoCDCmd(install.cmd, opts)
 }

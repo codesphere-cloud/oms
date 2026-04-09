@@ -63,7 +63,7 @@ func AddRegisterCmd(list *cobra.Command, opts *GlobalOptions) {
 
 	c.cmd.RunE = c.RunE
 
-	list.AddCommand(c.cmd)
+	AddCmd(list, c.cmd)
 }
 
 func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {

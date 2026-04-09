@@ -22,7 +22,7 @@ func AddDownloadCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 				e.g. available Codesphere packages`),
 		},
 	}
-	rootCmd.AddCommand(download.cmd)
+	AddCmd(rootCmd, download.cmd)
 
 	AddDownloadPackageCmd(download.cmd, opts)
 	AddDownloadK0sCmd(download.cmd, opts)

@@ -58,7 +58,7 @@ func AddBuildImagesCmd(build *cobra.Command, opts *GlobalOptions) {
 
 	util.MarkFlagRequired(buildImages.cmd, "config")
 
-	build.AddCommand(buildImages.cmd)
+	AddCmd(build, buildImages.cmd)
 
 	buildImages.cmd.RunE = buildImages.RunE
 }

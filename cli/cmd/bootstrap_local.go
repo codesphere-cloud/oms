@@ -84,7 +84,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 
 	util.MarkFlagRequired(bootstrapLocalCmd.cmd, "registry-user")
 
-	parent.AddCommand(bootstrapLocalCmd.cmd)
+	AddCmd(parent, bootstrapLocalCmd.cmd)
 }
 
 func (c *BootstrapLocalCmd) BootstrapLocal() error {

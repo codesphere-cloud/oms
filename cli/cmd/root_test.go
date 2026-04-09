@@ -4,8 +4,6 @@
 package cmd_test
 
 import (
-	"fmt"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
@@ -32,20 +30,16 @@ var _ = Describe("RootCmd", func() {
 		rootCmd.SilenceErrors = true
 		rootCmd.SilenceUsage = true
 
-		updateAPIKeyCmd := findCommand(rootCmd, "update", "api-key")
-		Expect(updateAPIKeyCmd).NotTo(BeNil())
+		licensesCmd := findCommand(rootCmd, "licenses")
+		Expect(licensesCmd).NotTo(BeNil())
 
-		// Avoid running real command logic; argument validation happens before RunE.
-		updateAPIKeyCmd.RunE = func(_ *cobra.Command, _ []string) error { return nil }
-
-		rootCmd.SetArgs([]string{"update", "api-key", "--id", "abc123", "--valid-for", "1d", "extra"})
+		rootCmd.SetArgs([]string{"licenses", "extra"})
 		err := rootCmd.Execute()
-
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("accepts 0 arg(s), received 1"))
+		Expect(err.Error()).To(ContainSubstring("unknown command \"extra\""))
 	})
 
-	It("allows positional version for download package despite root cobra.NoArgs", func() {
+	It("allows positional args for commands explicitly defining them", func() {
 		rootCmd := cmd.GetRootCmd()
 		rootCmd.SilenceErrors = true
 		rootCmd.SilenceUsage = true
@@ -54,12 +48,10 @@ var _ = Describe("RootCmd", func() {
 		Expect(downloadPackageCmd).NotTo(BeNil())
 
 		executed := false
+		capturedArgs := []string{}
 		downloadPackageCmd.RunE = func(_ *cobra.Command, args []string) error {
 			executed = true
-			if len(args) != 1 {
-				return fmt.Errorf("expected one positional arg, got %d", len(args))
-			}
-
+			capturedArgs = args
 			return nil
 		}
 
@@ -68,5 +60,6 @@ var _ = Describe("RootCmd", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(executed).To(BeTrue())
+		Expect(capturedArgs).To(Equal([]string{"codesphere-v1.55.0"}))
 	})
 })

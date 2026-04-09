@@ -66,7 +66,7 @@ func AddOmsUpdateCmd(parentCmd *cobra.Command) {
 			return cmdState.SelfUpdate()
 		},
 	}
-	parentCmd.AddCommand(omsCmd)
+	AddCmd(parentCmd, omsCmd)
 }
 
 func (c *UpdateOmsCmd) SelfUpdate() error {

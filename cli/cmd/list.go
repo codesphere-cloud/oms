@@ -21,7 +21,7 @@ func AddListCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 				eg. available Codesphere packages`),
 		},
 	}
-	rootCmd.AddCommand(list.cmd)
+	AddCmd(rootCmd, list.cmd)
 	AddListPackagesCmd(list.cmd, opts)
 	AddListAPIKeysCmd(list.cmd, opts)
 }

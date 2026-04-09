@@ -20,6 +20,6 @@ func AddInitCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Long:  io.Long(`Initialize configuration files for Codesphere installation and other components.`),
 		},
 	}
-	rootCmd.AddCommand(init.cmd)
+	AddCmd(rootCmd, init.cmd)
 	AddInitInstallConfigCmd(init.cmd, opts)
 }

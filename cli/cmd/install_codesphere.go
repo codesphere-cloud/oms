@@ -88,7 +88,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(codesphere.cmd, "config")
 	util.MarkFlagRequired(codesphere.cmd, "priv-key")
 
-	install.AddCommand(codesphere.cmd)
+	AddCmd(install, codesphere.cmd)
 
 	codesphere.cmd.RunE = codesphere.RunE
 }

@@ -21,5 +21,5 @@ func AddUpgradeCodesphereCmd(upgrade *cobra.Command) {
 			Long:  io.Long(`Coming soon: Upgrade Codesphere to the latest or a specific version`),
 		},
 	}
-	upgrade.AddCommand(codesphere.cmd)
+	AddCmd(upgrade, codesphere.cmd)
 }
