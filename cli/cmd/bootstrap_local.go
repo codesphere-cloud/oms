@@ -77,6 +77,8 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.Experiments, "experiments", []string{}, "Experiments to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapLocalCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.Profile, "profile", installer.PROFILE_DEV, "Profile to apply to the install config like resources (supported: dev, minimal, prod)")
+	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.K0s, "k0s", false, "Use k0s-specific configuration (required to deploy to k0s clusters)")
+
 	// Config
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallDir, "install-dir", ".installer", "Directory for config, secrets, and bundle files")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallConfigPath, "install-config", "", "Path to install config file (default: <install-dir>/config.yaml)")
@@ -155,25 +157,27 @@ func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
 }
 
 func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
-	fmt.Println(csio.Long(`############################################################
-# Local Bootstrap Warning                                  #
-############################################################
-#
-# Codesphere local bootstrap is for testing only.
-#
-# Currently supported:
-# - One Kubernetes cluster with Linux x86_64 nodes only
-# - Kubernetes Cluster on Linux with a VM and an extra disk for Rook/Ceph
-#
-# Not supported:
-# - Minikube on macOS
-#
-# Never run Rook directly on your host system; local disks may be consumed.
-#
-# Recommended command:
-#   minikube start --disk-size=40g --extra-disks=1 --driver kvm2
-############################################################
-`))
+	fmt.Println(csio.Long(`
+		############################################################
+		# Local Bootstrap Warning                                  #
+		############################################################
+		#
+		# Codesphere local bootstrap is for testing only.
+		#
+		# Currently supported:
+		# - One Kubernetes cluster with Linux x86_64 nodes only
+		# - Kubernetes Cluster on Linux with a VM and an extra disk for Rook/Ceph
+		#   (use --k0s flag for k0s specific configuration)
+		#
+		# Not supported:
+		# - Minikube on macOS
+		#
+		# Never run Rook directly on your host system; local disks may be consumed.
+		#
+		# Recommended command:
+		#   minikube start --disk-size=40g --extra-disks=1 --driver kvm2
+		############################################################
+	`))
 
 	if c.Yes {
 		return nil

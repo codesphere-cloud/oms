@@ -814,8 +814,8 @@ func (_m *MockHelmClient) EXPECT() *MockHelmClient_Expecter {
 }
 
 // FindRelease provides a mock function for the type MockHelmClient
-func (_mock *MockHelmClient) FindRelease(releaseName string) (*ReleaseInfo, error) {
-	ret := _mock.Called(releaseName)
+func (_mock *MockHelmClient) FindRelease(namespace string, releaseName string) (*ReleaseInfo, error) {
+	ret := _mock.Called(namespace, releaseName)
 
 	if len(ret) == 0 {
 		panic("no return value specified for FindRelease")
@@ -823,18 +823,18 @@ func (_mock *MockHelmClient) FindRelease(releaseName string) (*ReleaseInfo, erro
 
 	var r0 *ReleaseInfo
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) (*ReleaseInfo, error)); ok {
-		return returnFunc(releaseName)
+	if returnFunc, ok := ret.Get(0).(func(string, string) (*ReleaseInfo, error)); ok {
+		return returnFunc(namespace, releaseName)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string) *ReleaseInfo); ok {
-		r0 = returnFunc(releaseName)
+	if returnFunc, ok := ret.Get(0).(func(string, string) *ReleaseInfo); ok {
+		r0 = returnFunc(namespace, releaseName)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*ReleaseInfo)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(releaseName)
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(namespace, releaseName)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -847,19 +847,25 @@ type MockHelmClient_FindRelease_Call struct {
 }
 
 // FindRelease is a helper method to define mock.On call
+//   - namespace string
 //   - releaseName string
-func (_e *MockHelmClient_Expecter) FindRelease(releaseName interface{}) *MockHelmClient_FindRelease_Call {
-	return &MockHelmClient_FindRelease_Call{Call: _e.mock.On("FindRelease", releaseName)}
+func (_e *MockHelmClient_Expecter) FindRelease(namespace interface{}, releaseName interface{}) *MockHelmClient_FindRelease_Call {
+	return &MockHelmClient_FindRelease_Call{Call: _e.mock.On("FindRelease", namespace, releaseName)}
 }
 
-func (_c *MockHelmClient_FindRelease_Call) Run(run func(releaseName string)) *MockHelmClient_FindRelease_Call {
+func (_c *MockHelmClient_FindRelease_Call) Run(run func(namespace string, releaseName string)) *MockHelmClient_FindRelease_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
 			arg0 = args[0].(string)
 		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
 		run(
 			arg0,
+			arg1,
 		)
 	})
 	return _c
@@ -870,7 +876,7 @@ func (_c *MockHelmClient_FindRelease_Call) Return(releaseInfo *ReleaseInfo, err 
 	return _c
 }
 
-func (_c *MockHelmClient_FindRelease_Call) RunAndReturn(run func(releaseName string) (*ReleaseInfo, error)) *MockHelmClient_FindRelease_Call {
+func (_c *MockHelmClient_FindRelease_Call) RunAndReturn(run func(namespace string, releaseName string) (*ReleaseInfo, error)) *MockHelmClient_FindRelease_Call {
 	_c.Call.Return(run)
 	return _c
 }
