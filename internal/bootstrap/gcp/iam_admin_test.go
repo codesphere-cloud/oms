@@ -89,7 +89,7 @@ var _ = Describe("IAM & Admin", func() {
 			SSHPublicKeyPath:      "key.pub",
 			ProjectID:             "pid",
 			Experiments:           gcp.DefaultExperiments,
-			FeatureFlags:          []string{},
+			FeatureFlags:          map[string]bool{},
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{

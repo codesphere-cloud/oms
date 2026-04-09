@@ -45,6 +45,7 @@ oms beta bootstrap-gcp [flags]
       --preemptible                       Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)
       --project-name string               Unique GCP Project Name (required)
       --project-ttl string                Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours) (default "2h")
+      --recover-config                    Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                     GCP Region (default: europe-west4) (default "europe-west4")
       --registry-type string              Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry) (default "local-container")
       --registry-user string              Custom Registry username (only for GitHub registry type) (optional)
@@ -63,4 +64,5 @@ oms beta bootstrap-gcp [flags]
 * [oms beta](oms_beta.md)	 - Commands for early testing
 * [oms beta bootstrap-gcp cleanup](oms_beta_bootstrap-gcp_cleanup.md)	 - Clean up GCP infrastructure created by bootstrap-gcp
 * [oms beta bootstrap-gcp postconfig](oms_beta_bootstrap-gcp_postconfig.md)	 - Run post-configuration steps for GCP bootstrapping
+* [oms beta bootstrap-gcp restart-vms](oms_beta_bootstrap-gcp_restart-vms.md)	 - Restart stopped or terminated GCP VMs
 

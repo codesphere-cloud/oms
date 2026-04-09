@@ -33,7 +33,7 @@ func (g *InstallConfig) GenerateSecrets() error {
 
 	if g.Config.Postgres.Primary != nil {
 		if err := g.generatePostgresSecrets(g.Config); err != nil {
-			return err
+			return fmt.Errorf("failed to generate postgres secrets: %w", err)
 		}
 	}
 

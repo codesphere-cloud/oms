@@ -6,6 +6,7 @@ package gcp
 import (
 	"errors"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"sync"
@@ -366,6 +367,82 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 		name, pollInterval*time.Duration(maxAttempts))
 }
 
+// findVMDef looks up a VM definition by name. Returns nil if not found.
+func findVMDef(name string) *VMDef {
+	for _, vm := range vmDefs {
+		if vm.Name == name {
+			return &vm
+		}
+	}
+	return nil
+}
+
+// validVMNames returns the list of known VM names from vmDefs.
+func validVMNames() []string {
+	names := make([]string, len(vmDefs))
+	for i, vm := range vmDefs {
+		names[i] = vm.Name
+	}
+	return names
+}
+
+// RestartVM restarts a single stopped or terminated VM by a name that is defined in vmDefs.
+func (b *GCPBootstrapper) RestartVM(name string) error {
+	vm := findVMDef(name)
+	if vm == nil {
+		return fmt.Errorf("unknown VM name %q; valid names are: %s", name, strings.Join(validVMNames(), ", "))
+	}
+
+	projectID := b.Env.ProjectID
+	zone := b.Env.Zone
+
+	inst, err := b.GCPClient.GetInstance(projectID, zone, name)
+	if err != nil {
+		if IsNotFoundError(err) {
+			return fmt.Errorf("instance %s does not exist in project %s / zone %s; did you run bootstrap first?", name, projectID, zone)
+		}
+		return fmt.Errorf("failed to get instance %s: %w", name, err)
+	}
+
+	switch s := inst.GetStatus(); s {
+	case "RUNNING":
+		log.Printf("Instance %s is already running", name)
+		return nil
+	case "TERMINATED", "STOPPED":
+		log.Printf("Starting stopped instance %s...", name)
+		if err := b.GCPClient.StartInstance(projectID, zone, name); err != nil {
+			return fmt.Errorf("failed to start instance %s: %w", name, err)
+		}
+	case "SUSPENDED":
+		return fmt.Errorf("instance %s is SUSPENDED; manual resume is required", name)
+	default:
+		return fmt.Errorf("instance %s is in unexpected state %q", name, s)
+	}
+
+	readyInstance, err := b.waitForInstanceRunning(projectID, zone, name, vm.ExternalIP)
+	if err != nil {
+		return fmt.Errorf("instance %s did not become ready: %w", name, err)
+	}
+
+	internalIP, externalIP := ExtractInstanceIPs(readyInstance)
+	log.Printf("Instance %s is now running (internal=%s, external=%s)", name, internalIP, externalIP)
+	return nil
+}
+
+// RestartVMs restarts all stopped or terminated VMs defined in vmDefs.
+func (b *GCPBootstrapper) RestartVMs() error {
+	var errs []error
+	for _, vm := range vmDefs {
+		if err := b.RestartVM(vm.Name); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("errors restarting VMs: %w", errors.Join(errs...))
+	}
+	return nil
+}
+
 // ReadSSHKey reads an SSH key file, expanding ~ in the path
 func (b *GCPBootstrapper) ReadSSHKey(path string) (string, error) {
 	realPath := util.ExpandPath(path)
@@ -378,4 +455,23 @@ func (b *GCPBootstrapper) ReadSSHKey(path string) (string, error) {
 		return "", fmt.Errorf("SSH key at %s is empty", realPath)
 	}
 	return key, nil
+}
+
+// GetNodeByName returns the node by the given name
+// Returns an error if gce instance is not found
+func (b *GCPBootstrapper) GetNodeByName(name string) (*node.Node, error) {
+	existingInstance, err := b.GCPClient.GetInstance(b.Env.ProjectID, b.Env.Zone, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get instance %s: %w", name, err)
+	}
+
+	existingNode := &node.Node{
+		NodeClient: b.NodeClient,
+		FileIO:     b.fw,
+	}
+
+	internalIP, externalIP := ExtractInstanceIPs(existingInstance)
+	existingNode.UpdateNode(name, externalIP, internalIP)
+
+	return existingNode, nil
 }

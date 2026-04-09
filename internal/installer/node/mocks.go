@@ -99,6 +99,69 @@ func (_c *MockNodeClient_CopyFile_Call) RunAndReturn(run func(n *Node, src strin
 	return _c
 }
 
+// DownloadFile provides a mock function for the type MockNodeClient
+func (_mock *MockNodeClient) DownloadFile(n *Node, src string, dst string) error {
+	ret := _mock.Called(n, src, dst)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DownloadFile")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(*Node, string, string) error); ok {
+		r0 = returnFunc(n, src, dst)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockNodeClient_DownloadFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DownloadFile'
+type MockNodeClient_DownloadFile_Call struct {
+	*mock.Call
+}
+
+// DownloadFile is a helper method to define mock.On call
+//   - n *Node
+//   - src string
+//   - dst string
+func (_e *MockNodeClient_Expecter) DownloadFile(n interface{}, src interface{}, dst interface{}) *MockNodeClient_DownloadFile_Call {
+	return &MockNodeClient_DownloadFile_Call{Call: _e.mock.On("DownloadFile", n, src, dst)}
+}
+
+func (_c *MockNodeClient_DownloadFile_Call) Run(run func(n *Node, src string, dst string)) *MockNodeClient_DownloadFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *Node
+		if args[0] != nil {
+			arg0 = args[0].(*Node)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockNodeClient_DownloadFile_Call) Return(err error) *MockNodeClient_DownloadFile_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockNodeClient_DownloadFile_Call) RunAndReturn(run func(n *Node, src string, dst string) error) *MockNodeClient_DownloadFile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // HasFile provides a mock function for the type MockNodeClient
 func (_mock *MockNodeClient) HasFile(n *Node, filePath string) bool {
 	ret := _mock.Called(n, filePath)
