@@ -270,6 +270,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				return fmt.Errorf("primary PostgreSQL cert/key validation failed: %w", err)
 			}
 		}
+		// Replica certificates only regenerate if the key is missing from the vault.
 		if b.Env.InstallConfig.Postgres.Replica != nil && (b.Env.InstallConfig.Postgres.ReplicaPrivateKey == "") {
 			var err error
 			b.Env.InstallConfig.Postgres.ReplicaPrivateKey, b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(

@@ -132,13 +132,13 @@ var _ = Describe("ValidateCertKeyPair", func() {
 
 		err = ValidateCertKeyPair(certPEM, keyPEM)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("do not match"))
+		Expect(err.Error()).To(ContainSubstring("private key does not match public key"))
 	})
 
 	It("fails for invalid cert PEM", func() {
 		err := ValidateCertKeyPair("not-a-cert", "not-a-key")
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to decode certificate PEM"))
+		Expect(err.Error()).To(ContainSubstring("failed to find any PEM data in certificate input"))
 	})
 
 	It("fails for invalid key PEM", func() {
@@ -150,6 +150,6 @@ var _ = Describe("ValidateCertKeyPair", func() {
 
 		err = ValidateCertKeyPair(certPEM, "not-a-key")
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to decode private key PEM"))
+		Expect(err.Error()).To(ContainSubstring("failed to find any PEM data in key input"))
 	})
 })

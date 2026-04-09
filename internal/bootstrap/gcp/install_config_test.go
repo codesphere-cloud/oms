@@ -473,6 +473,131 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err.Error()).To(ContainSubstring("failed to copy secrets file to jumpbox"))
 			})
 		})
+
+		Describe("ExistingConfigUsed", func() {
+			BeforeEach(func() {
+				csEnv.ExistingConfigUsed = true
+			})
+
+			Context("with unchanged IP and existing key", func() {
+				BeforeEach(func() {
+					caKey, caCert, err := installer.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
+					Expect(err).NotTo(HaveOccurred())
+
+					key, cert, err := installer.GenerateServerCertificate(caKey, caCert, "postgres", []string{"10.0.0.1"})
+					Expect(err).NotTo(HaveOccurred())
+
+					csEnv.InstallConfig.Postgres.CaCertPrivateKey = caKey
+					csEnv.InstallConfig.Postgres.CACertPem = caCert
+					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.1"
+					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
+					csEnv.InstallConfig.Postgres.Primary.PrivateKey = key
+					csEnv.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem = cert
+				})
+
+				It("preserves existing cert/key without regeneration", func() {
+					origKey := csEnv.InstallConfig.Postgres.Primary.PrivateKey
+					origCert := csEnv.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem
+
+					// GenerateSecrets should NOT be called
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).To(Equal(origKey))
+					Expect(bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem).To(Equal(origCert))
+				})
+			})
+
+			Context("with changed IP", func() {
+				BeforeEach(func() {
+					caKey, caCert, err := installer.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
+					Expect(err).NotTo(HaveOccurred())
+
+					key, cert, err := installer.GenerateServerCertificate(caKey, caCert, "postgres", []string{"10.0.0.99"})
+					Expect(err).NotTo(HaveOccurred())
+
+					csEnv.InstallConfig.Postgres.CaCertPrivateKey = caKey
+					csEnv.InstallConfig.Postgres.CACertPem = caCert
+					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.99"
+					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
+					csEnv.InstallConfig.Postgres.Primary.PrivateKey = key
+					csEnv.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem = cert
+				})
+
+				It("regenerates cert/key for the new IP", func() {
+					origKey := csEnv.InstallConfig.Postgres.Primary.PrivateKey
+
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					// IP should be updated to the node's IP
+					Expect(bs.Env.InstallConfig.Postgres.Primary.IP).To(Equal("10.0.0.1"))
+					// Key should be regenerated
+					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).NotTo(Equal(origKey))
+					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).NotTo(BeEmpty())
+					// New cert/key should match
+					err = installer.ValidateCertKeyPair(
+						bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem,
+						bs.Env.InstallConfig.Postgres.Primary.PrivateKey,
+					)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("with empty PrivateKey (not loaded from vault)", func() {
+				BeforeEach(func() {
+					caKey, caCert, err := installer.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
+					Expect(err).NotTo(HaveOccurred())
+
+					csEnv.InstallConfig.Postgres.CaCertPrivateKey = caKey
+					csEnv.InstallConfig.Postgres.CACertPem = caCert
+					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.1"
+					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
+					csEnv.InstallConfig.Postgres.Primary.PrivateKey = ""
+				})
+
+				It("generates new cert/key pair", func() {
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).NotTo(BeEmpty())
+					Expect(bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem).NotTo(BeEmpty())
+					err = installer.ValidateCertKeyPair(
+						bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem,
+						bs.Env.InstallConfig.Postgres.Primary.PrivateKey,
+					)
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("with missing CA cert (cert generation fails)", func() {
+				BeforeEach(func() {
+					csEnv.InstallConfig.Postgres.CaCertPrivateKey = ""
+					csEnv.InstallConfig.Postgres.CACertPem = ""
+					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.1"
+					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
+					csEnv.InstallConfig.Postgres.Primary.PrivateKey = ""
+				})
+
+				It("returns an error", func() {
+					err := bs.UpdateInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to generate primary server certificate"))
+				})
+			})
+		})
 	})
 
 	Describe("EnsureAgeKey", func() {
