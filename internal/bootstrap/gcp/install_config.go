@@ -113,6 +113,9 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			Hostname: b.Env.PostgreSQLNode.GetName(),
 		}
 	}
+
+	previousPrimaryIP := b.Env.InstallConfig.Postgres.Primary.IP
+	previousPrimaryHostname := b.Env.InstallConfig.Postgres.Primary.Hostname
 	b.Env.InstallConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
 
 	b.Env.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
@@ -247,16 +250,28 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			return fmt.Errorf("failed to generate secrets: %w", err)
 		}
 	} else {
-		var err error
-		b.Env.InstallConfig.Postgres.Primary.PrivateKey, b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
-			b.Env.InstallConfig.Postgres.CaCertPrivateKey,
-			b.Env.InstallConfig.Postgres.CACertPem,
-			b.Env.InstallConfig.Postgres.Primary.Hostname,
-			[]string{b.Env.InstallConfig.Postgres.Primary.IP})
-		if err != nil {
-			return fmt.Errorf("failed to generate primary server certificate: %w", err)
+		// Only regenerate postgres certificates if the IP or hostname changed,
+		// or if the private key was not loaded from the vault.
+		primaryNeedsRegen := b.Env.InstallConfig.Postgres.Primary.PrivateKey == "" ||
+			previousPrimaryIP != b.Env.InstallConfig.Postgres.Primary.IP ||
+			previousPrimaryHostname != b.Env.InstallConfig.Postgres.Primary.Hostname
+
+		if primaryNeedsRegen {
+			var err error
+			b.Env.InstallConfig.Postgres.Primary.PrivateKey, b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
+				b.Env.InstallConfig.Postgres.CaCertPrivateKey,
+				b.Env.InstallConfig.Postgres.CACertPem,
+				b.Env.InstallConfig.Postgres.Primary.Hostname,
+				[]string{b.Env.InstallConfig.Postgres.Primary.IP})
+			if err != nil {
+				return fmt.Errorf("failed to generate primary server certificate: %w", err)
+			}
+			if err := installer.ValidateCertKeyPair(b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem, b.Env.InstallConfig.Postgres.Primary.PrivateKey); err != nil {
+				return fmt.Errorf("primary PostgreSQL cert/key validation failed: %w", err)
+			}
 		}
-		if b.Env.InstallConfig.Postgres.Replica != nil {
+		if b.Env.InstallConfig.Postgres.Replica != nil && (b.Env.InstallConfig.Postgres.ReplicaPrivateKey == "") {
+			var err error
 			b.Env.InstallConfig.Postgres.ReplicaPrivateKey, b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
 				b.Env.InstallConfig.Postgres.CaCertPrivateKey,
 				b.Env.InstallConfig.Postgres.CACertPem,
@@ -264,6 +279,9 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				[]string{b.Env.InstallConfig.Postgres.Replica.IP})
 			if err != nil {
 				return fmt.Errorf("failed to generate replica server certificate: %w", err)
+			}
+			if err := installer.ValidateCertKeyPair(b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem, b.Env.InstallConfig.Postgres.ReplicaPrivateKey); err != nil {
+				return fmt.Errorf("replica PostgreSQL cert/key validation failed: %w", err)
 			}
 		}
 	}

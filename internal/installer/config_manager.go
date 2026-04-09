@@ -242,7 +242,7 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 		return fmt.Errorf("no configuration provided - config is nil")
 	}
 
-	vault := g.Config.AddSecretsToVault(g.GetVault())
+	vault := g.Config.ExtractVault()
 	vaultYAML, err := vault.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal vault.yaml: %w", err)

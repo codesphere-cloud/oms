@@ -219,3 +219,35 @@ func encodePEMCert(certDER []byte) string {
 		Bytes: certDER,
 	}))
 }
+
+// ValidateCertKeyPair verifies that a PEM-encoded certificate's public key matches a PEM-encoded private key.
+func ValidateCertKeyPair(certPEM, keyPEM string) error {
+	certBlock, _ := pem.Decode([]byte(certPEM))
+	if certBlock == nil {
+		return fmt.Errorf("failed to decode certificate PEM")
+	}
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse certificate: %w", err)
+	}
+
+	keyBlock, _ := pem.Decode([]byte(keyPEM))
+	if keyBlock == nil {
+		return fmt.Errorf("failed to decode private key PEM")
+	}
+	privKey, err := x509.ParsePKCS1PrivateKey(keyBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse private key: %w", err)
+	}
+
+	pubKey, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("certificate does not contain an RSA public key")
+	}
+
+	if pubKey.N.Cmp(privKey.N) != 0 || pubKey.E != privKey.E {
+		return fmt.Errorf("certificate and private key do not match")
+	}
+
+	return nil
+}

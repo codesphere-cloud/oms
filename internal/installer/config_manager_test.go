@@ -85,6 +85,26 @@ func (m *MockFileIO) ReadDir(dirname string) ([]os.DirEntry, error) {
 	return nil, nil
 }
 
+func (m *MockFileIO) ReadFile(filename string) ([]byte, error) {
+	if data, ok := m.files[filename]; ok {
+		return data, nil
+	}
+	return nil, os.ErrNotExist
+}
+
+func (m *MockFileIO) Remove(path string) error {
+	delete(m.files, path)
+	return nil
+}
+
+func (m *MockFileIO) Chmod(name string, mode os.FileMode) error {
+	return nil
+}
+
+func (m *MockFileIO) GetFileContent(path string) []byte {
+	return m.files[path]
+}
+
 type MockFile struct {
 	*bytes.Buffer
 	closed bool
@@ -501,6 +521,143 @@ var _ = Describe("ConfigManager", func() {
 
 				errors := configManager.ValidateVault()
 				Expect(errors).To(BeEmpty())
+			})
+		})
+
+		Context("vault deduplication on re-write", func() {
+			It("should not produce duplicate vault entries when WriteVault is called after loading existing vault", func() {
+				err := configManager.ApplyProfile("prod")
+				Expect(err).ToNot(HaveOccurred())
+
+				err = configManager.GenerateSecrets()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Simulate first write: extract vault from config
+				vault1 := configManager.Config.ExtractVault()
+				firstEntryCount := len(vault1.Secrets)
+				Expect(firstEntryCount).To(BeNumerically(">", 0))
+
+				// Simulate loading that vault back
+				configManager.Vault = vault1
+
+				// Write vault again
+				vault2 := configManager.Config.ExtractVault()
+				Expect(len(vault2.Secrets)).To(Equal(firstEntryCount), "vault should have same number of entries after re-write, no duplicates")
+
+				// Verify no duplicate secret names
+				nameCount := make(map[string]int)
+				for _, secret := range vault2.Secrets {
+					nameCount[secret.Name]++
+				}
+				for name, count := range nameCount {
+					Expect(count).To(Equal(1), "secret %s appears %d times, expected 1", name, count)
+				}
+			})
+		})
+
+		Context("full bootstrap re-run simulation", func() {
+			It("should preserve matching cert/key pairs across write → load → merge → re-write cycle", func() {
+				mockIO := NewMockFileIO()
+				configManager.SetFileIO(mockIO)
+
+				// --- First run: generate everything from scratch ---
+				err := configManager.ApplyProfile("prod")
+				Expect(err).ToNot(HaveOccurred())
+
+				err = configManager.GenerateSecrets()
+				Expect(err).ToNot(HaveOccurred())
+
+				// Verify cert/key pair matches after initial generation
+				err = installer.ValidateCertKeyPair(
+					configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem,
+					configManager.Config.Postgres.Primary.PrivateKey,
+				)
+				Expect(err).ToNot(HaveOccurred(), "cert/key should match after initial generation")
+
+				// Save the original cert and key for later comparison
+				origCert := configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem
+				origKey := configManager.Config.Postgres.Primary.PrivateKey
+				Expect(origCert).ToNot(BeEmpty())
+				Expect(origKey).ToNot(BeEmpty())
+
+				// Write config and vault
+				err = configManager.WriteInstallConfig("/tmp/config.yaml", false)
+				Expect(err).ToNot(HaveOccurred())
+				err = configManager.WriteVault("/tmp/vault.yaml", false)
+				Expect(err).ToNot(HaveOccurred())
+
+				// --- Second run: simulate loading existing files ---
+				configManager2 := &installer.InstallConfig{}
+				configManager2.SetFileIO(mockIO)
+
+				// Reload config from written YAML
+				configBytes := mockIO.GetFileContent("/tmp/config.yaml")
+				Expect(configBytes).ToNot(BeNil())
+				config2 := files.NewRootConfig()
+				err = config2.Unmarshal(configBytes)
+				Expect(err).ToNot(HaveOccurred())
+				configManager2.Config = &config2
+
+				Expect(configManager2.Config.Postgres.Primary.PrivateKey).To(BeEmpty(),
+					"private key should NOT be in config.yaml (it has yaml:\"-\" tag)")
+				Expect(configManager2.Config.Postgres.Primary.SSLConfig.ServerCertPem).To(Equal(origCert),
+					"cert should be in config.yaml")
+
+				// Reload vault from written YAML
+				vaultBytes := mockIO.GetFileContent("/tmp/vault.yaml")
+				Expect(vaultBytes).ToNot(BeNil())
+				vault2 := &files.InstallVault{}
+				err = vault2.Unmarshal(vaultBytes)
+				Expect(err).ToNot(HaveOccurred())
+				configManager2.Vault = vault2
+
+				// Merge vault into config
+				err = configManager2.MergeVaultIntoConfig()
+				Expect(err).ToNot(HaveOccurred())
+
+				// After merge, the private key should be restored from vault
+				Expect(configManager2.Config.Postgres.Primary.PrivateKey).To(Equal(origKey),
+					"private key should be restored from vault after merge")
+
+				// Cert/key should still match
+				err = installer.ValidateCertKeyPair(
+					configManager2.Config.Postgres.Primary.SSLConfig.ServerCertPem,
+					configManager2.Config.Postgres.Primary.PrivateKey,
+				)
+				Expect(err).ToNot(HaveOccurred(), "cert/key should match after load + merge")
+
+				// Write vault again
+				err = configManager2.WriteVault("/tmp/vault2.yaml", false)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Verify no duplicates in re-written vault
+				vault3 := &files.InstallVault{}
+				vaultBytes2 := mockIO.GetFileContent("/tmp/vault2.yaml")
+				err = vault3.Unmarshal(vaultBytes2)
+				Expect(err).ToNot(HaveOccurred())
+
+				nameCount := make(map[string]int)
+				for _, secret := range vault3.Secrets {
+					nameCount[secret.Name]++
+				}
+				for name, count := range nameCount {
+					Expect(count).To(Equal(1), "secret '%s' has %d entries (expected 1) — duplication bug!", name, count)
+				}
+
+				// Verify the key in re-written vault still matches the cert
+				var rewrittenKey string
+				for _, secret := range vault3.Secrets {
+					if secret.Name == "postgresPrimaryServerKeyPem" && secret.File != nil {
+						rewrittenKey = secret.File.Content
+					}
+				}
+				Expect(rewrittenKey).To(Equal(origKey),
+					"re-written vault should contain the same key")
+				err = installer.ValidateCertKeyPair(
+					configManager2.Config.Postgres.Primary.SSLConfig.ServerCertPem,
+					rewrittenKey,
+				)
+				Expect(err).ToNot(HaveOccurred(), "cert/key should match in re-written vault")
 			})
 		})
 
