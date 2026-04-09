@@ -526,32 +526,35 @@ var _ = Describe("ConfigManager", func() {
 
 		Context("vault deduplication on re-write", func() {
 			It("should not produce duplicate vault entries when WriteVault is called after loading existing vault", func() {
+				mockIO := NewMockFileIO()
+				configManager.SetFileIO(mockIO)
+
 				err := configManager.ApplyProfile("prod")
 				Expect(err).ToNot(HaveOccurred())
 
 				err = configManager.GenerateSecrets()
 				Expect(err).ToNot(HaveOccurred())
 
-				// Simulate first write: extract vault from config
-				vault1 := configManager.Config.ExtractVault()
-				firstEntryCount := len(vault1.Secrets)
-				Expect(firstEntryCount).To(BeNumerically(">", 0))
+				// First write via WriteVault
+				err = configManager.WriteVault("/tmp/vault.yaml", false)
+				Expect(err).ToNot(HaveOccurred())
 
-				// Simulate loading that vault back
-				configManager.Vault = vault1
+				firstVaultBytes := mockIO.GetFileContent("/tmp/vault.yaml")
+				Expect(firstVaultBytes).ToNot(BeEmpty())
 
-				// Write vault again
-				vault2 := configManager.Config.ExtractVault()
-				Expect(len(vault2.Secrets)).To(Equal(firstEntryCount), "vault should have same number of entries after re-write, no duplicates")
+				// Load the written vault back
+				vault := &files.InstallVault{}
+				err = vault.Unmarshal(firstVaultBytes)
+				Expect(err).ToNot(HaveOccurred())
+				configManager.Vault = vault
 
-				// Verify no duplicate secret names
-				nameCount := make(map[string]int)
-				for _, secret := range vault2.Secrets {
-					nameCount[secret.Name]++
-				}
-				for name, count := range nameCount {
-					Expect(count).To(Equal(1), "secret %s appears %d times, expected 1", name, count)
-				}
+				// Re-write vault (simulating a second run)
+				err = configManager.WriteVault("/tmp/vault.yaml", false)
+				Expect(err).ToNot(HaveOccurred())
+
+				secondVaultBytes := mockIO.GetFileContent("/tmp/vault.yaml")
+				Expect(secondVaultBytes).To(Equal(firstVaultBytes),
+					"serialized vault should be identical after load and re-write")
 			})
 		})
 
