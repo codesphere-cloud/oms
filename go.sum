@@ -178,8 +178,8 @@ cloud.google.com/go/artifactregistry v1.14.3/go.mod h1:A2/E9GXnsyXl7GUvQ/2CjHA+m
 cloud.google.com/go/artifactregistry v1.14.4/go.mod h1:SJJcZTMv6ce0LDMUnihCN7WSrI+kBSFV0KIKo8S8aYU=
 cloud.google.com/go/artifactregistry v1.14.6/go.mod h1:np9LSFotNWHcjnOgh8UVK0RFPCTUGbO0ve3384xyHfE=
 cloud.google.com/go/artifactregistry v1.14.7/go.mod h1:0AUKhzWQzfmeTvT4SjfI4zjot72EMfrkvL9g9aRjnnM=
-cloud.google.com/go/artifactregistry v1.21.0 h1:JroY3+JSqXTFVm6/jyV2RcaeiEL1sWPbD4QlUuS2/vI=
-cloud.google.com/go/artifactregistry v1.21.0/go.mod h1:IhMxwuMpzlVJjpTodjz1eZXMxvMxXS9/vgG5hbnYUz0=
+cloud.google.com/go/artifactregistry v1.22.0 h1:yL1iX0kxord8xVi1C+wvWA8zy07x8XyPIv34/uOnYq8=
+cloud.google.com/go/artifactregistry v1.22.0/go.mod h1:aMmdtqKVmbuxCCb/NGDJYZHsK6AtqlcyvD05ACzs1n8=
 cloud.google.com/go/asset v1.5.0/go.mod h1:5mfs8UvcM5wHhqtSv8J1CtxxaQq3AdBxxQi2jGW/K4o=
 cloud.google.com/go/asset v1.7.0/go.mod h1:YbENsRK4+xTiL+Ofoj5Ckf+O17kJtgp3Y3nn4uzZz5s=
 cloud.google.com/go/asset v1.8.0/go.mod h1:mUNGKhiqIdbr8X7KNayoYvyc4HbbFO9URsjbytpUaW0=
@@ -806,8 +806,8 @@ cloud.google.com/go/longrunning v0.5.2/go.mod h1:nqo6DQbNV2pXhGDbDMoN2bWz68MjZUz
 cloud.google.com/go/longrunning v0.5.3/go.mod h1:y/0ga59EYu58J6SHmmQOvekvND2qODbu8ywBBW7EK7Y=
 cloud.google.com/go/longrunning v0.5.4/go.mod h1:zqNVncI0BOP8ST6XQD1+VcvuShMmq7+xFSzOL++V0dI=
 cloud.google.com/go/longrunning v0.5.5/go.mod h1:WV2LAxD8/rg5Z1cNW6FJ/ZpX4E4VnDnoTk0yawPBB7s=
-cloud.google.com/go/longrunning v0.8.0 h1:LiKK77J3bx5gDLi4SMViHixjD2ohlkwBi+mKA7EhfW8=
-cloud.google.com/go/longrunning v0.8.0/go.mod h1:UmErU2Onzi+fKDg2gR7dusz11Pe26aknR4kHmJJqIfk=
+cloud.google.com/go/longrunning v0.9.0 h1:0EzbDEGsAvOZNbqXopgniY0w0a1phvu5IdUFq8grmqY=
+cloud.google.com/go/longrunning v0.9.0/go.mod h1:pkTz846W7bF4o2SzdWJ40Hu0Re+UoNT6Q5t+igIcb8E=
 cloud.google.com/go/managedidentities v1.3.0/go.mod h1:UzlW3cBOiPrzucO5qWkNkh0w33KFtBJU281hacNvsdE=
 cloud.google.com/go/managedidentities v1.4.0/go.mod h1:NWSBYbEMgqmbZsLIyKvxrYbtqOsxY1ZrGM+9RgDqInM=
 cloud.google.com/go/managedidentities v1.5.0/go.mod h1:+dWcZ0JlUmpuxpIDfyP5pP5y0bLdRwOS4Lp7gMni/LA=
