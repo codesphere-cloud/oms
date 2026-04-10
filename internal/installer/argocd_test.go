@@ -28,11 +28,10 @@ var _ = Describe("ArgoCD.Install", func() {
 
 	Context("when no existing release is found", func() {
 		BeforeEach(func() {
-			helmMock.On("FindRelease", "argocd").Return(nil, nil)
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 		})
 
 		It("performs a fresh install with a specific version", func() {
-			helmMock.EXPECT().FindRelease("argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.Version == "7.0.0" &&
 					cfg.ReleaseName == "argocd" &&
@@ -45,7 +44,7 @@ var _ = Describe("ArgoCD.Install", func() {
 		})
 
 		It("performs a fresh install with latest version when Version is empty", func() {
-			helmMock.EXPECT().FindRelease("argocd").Return(nil, nil)
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.Version == ""
 			})).Return(nil)
@@ -67,11 +66,8 @@ var _ = Describe("ArgoCD.Install", func() {
 	})
 
 	Context("when an existing release is found", func() {
-		existingRelease := &installer.ReleaseInfo{Name: "argocd", InstalledVersion: "6.0.0"}
-
 		BeforeEach(func() {
-			helmMock.On("FindRelease", "argocd").Return(existingRelease, nil)
-			helmMock.EXPECT().FindRelease("argocd").Return(&installer.ReleaseInfo{
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(&installer.ReleaseInfo{
 				Name:             "argocd",
 				InstalledVersion: "6.0.0",
 			}, nil)
@@ -131,7 +127,7 @@ var _ = Describe("ArgoCD.Install", func() {
 
 	Context("when FindRelease returns an error", func() {
 		It("propagates the error without installing or upgrading", func() {
-			helmMock.EXPECT().FindRelease("argocd").
+			helmMock.EXPECT().FindRelease("argocd", "argocd").
 				Return(nil, errors.New("cluster unreachable"))
 
 			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
@@ -144,7 +140,7 @@ var _ = Describe("ArgoCD.Install", func() {
 
 	Context("chart configuration", func() {
 		It("always uses the correct chart name and repo URL", func() {
-			helmMock.EXPECT().FindRelease("argocd").Return(nil, nil)
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.ChartName == "argo-cd" &&
 					cfg.RepoURL == "https://argoproj.github.io/argo-helm"
@@ -157,7 +153,7 @@ var _ = Describe("ArgoCD.Install", func() {
 		})
 
 		It("disables dex in the values", func() {
-			helmMock.EXPECT().FindRelease("argocd").Return(nil, nil)
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				dex, ok := cfg.Values["dex"].(map[string]interface{})
 				return ok && dex["enabled"] == false
@@ -172,7 +168,7 @@ var _ = Describe("ArgoCD.Install", func() {
 
 	Context("full installation", func() {
 		BeforeEach(func() {
-			helmMock.EXPECT().FindRelease("argocd").Return(nil, nil)
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything).Return(nil)
 		})
 		It("installs extra ArgoCD resources when FullInstall option in true", func() {
