@@ -63,15 +63,50 @@ var _ = Describe("ApplyResourceProfile", func() {
 			deployService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["deployment_service"])
 			AssertZeroRequests(deployService["requests"])
 			Expect(deployService["replicas"]).To(Equal(2))
+			authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
+			Expect(authService["replicas"]).To(Equal(2))
+			publicAPIService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["public_api_service"])
+			Expect(publicAPIService["replicas"]).To(Equal(2))
+			workspaceService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["workspace_service"])
+			Expect(workspaceService["replicas"]).To(Equal(2))
 			underprovisionFactors := MustMap[string](MustMap[any](config.Codesphere.Override["global"])["underprovisionFactors"])
 			Expect(underprovisionFactors["cpu"]).To(Equal("0.01"))
 			Expect(underprovisionFactors["memory"]).To(Equal("0.01"))
 
 			Expect(config.Cluster.CertManager).NotTo(BeNil())
+			Expect(config.Cluster.TrustManager).NotTo(BeNil())
 			Expect(config.Cluster.CertManager.Override).NotTo(BeNil())
+			Expect(config.Cluster.TrustManager.Override).NotTo(BeNil())
 			Expect(config.Cluster.Monitoring.BlackboxExporter).NotTo(BeNil())
 			Expect(config.Cluster.Monitoring.PushGateway).NotTo(BeNil())
 			Expect(config.Cluster.PublicGateway.Override).NotTo(BeNil())
+			Expect(config.Cluster.PgOperator).NotTo(BeNil())
+			Expect(config.Cluster.BarmanCloudPlugin).NotTo(BeNil())
+			Expect(config.Cluster.RgwLoadBalancer).NotTo(BeNil())
+			Expect(config.Cluster.RgwLoadBalancer.Override).NotTo(BeNil())
+			Expect(config.ManagedServiceBackends).NotTo(BeNil())
+			Expect(config.ManagedServiceBackends.Postgres).NotTo(BeNil())
+			Expect(config.ManagedServiceBackends.S3).NotTo(BeNil())
+
+			trustManager := MustMap[any](config.Cluster.TrustManager.Override["trust-manager"])
+			AssertZeroRequests(MustMap[any](trustManager["resources"])["requests"])
+
+			pgOperator := MustMap[any](config.Cluster.PgOperator.Override["cloudnative-pg"])
+			AssertZeroRequests(MustMap[any](pgOperator["resources"])["requests"])
+			Expect(MustMap[any](pgOperator["config"])["clusterWide"]).To(Equal(false))
+
+			barmanCloud := MustMap[any](config.Cluster.BarmanCloudPlugin.Override["plugin-barman-cloud"])
+			AssertZeroRequests(MustMap[any](barmanCloud["resources"])["requests"])
+
+			Expect(config.Cluster.RgwLoadBalancer.Override["replicas"]).To(Equal(1))
+
+			managedPostgres := config.ManagedServiceBackends.Postgres.Override
+			Expect(managedPostgres["replicas"]).To(Equal(1))
+			AssertZeroRequests(MustMap[any](managedPostgres["resources"])["requests"])
+
+			managedS3 := config.ManagedServiceBackends.S3.Override
+			Expect(managedS3["replicas"]).To(Equal(1))
+			AssertZeroRequests(MustMap[any](managedS3["resources"])["requests"])
 		})
 	})
 

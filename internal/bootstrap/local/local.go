@@ -151,13 +151,13 @@ func (b *LocalBootstrapper) Bootstrap() error {
 			return err
 		}
 
-		err = b.stlog.Substep("Create Ceph users", b.DeployCephUsers)
+		err = b.stlog.Substep("Bootstrap RGW gateway", b.DeployRGWGateway)
 		if err != nil {
 			return err
 		}
 
-		err = b.stlog.Substep("Read Ceph credentials", func() error {
-			creds, err := b.ReadCephCredentials()
+		err = b.stlog.Substep("Ensure Ceph users", func() error {
+			creds, err := b.EnsureCephUsers()
 			if err != nil {
 				return err
 			}
@@ -540,10 +540,19 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	b.Env.InstallConfig.Cluster.PgOperator = &files.PgOperatorConfig{
 		Enabled: false,
 	}
-	b.Env.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
+	b.Env.InstallConfig.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
 		Enabled: false,
 	}
-	b.Env.InstallConfig.Ceph = files.CephConfig{}
+	b.Env.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
+		Enabled: true,
+	}
+	cephMonHosts, err := b.ReadCephMonHosts()
+	if err != nil {
+		return fmt.Errorf("failed to read Ceph monitor hosts: %w", err)
+	}
+	b.Env.InstallConfig.Ceph = files.CephConfig{
+		Hosts: cephMonHosts,
+	}
 	if b.cephCredentials != nil {
 		b.addCephSecretsToVault(b.Env.Vault)
 	}
@@ -627,6 +636,7 @@ func (b *LocalBootstrapper) EnsureGitHubAccessConfigured() error {
 // These mirror the secrets that the JS installer stores via SecretManagerSops:
 //   - cephFsId (password = FSID)
 //   - cephfsAdmin, cephfsAdminCodesphere (password = auth key)
+//   - rgwAdminAccessKey, rgwAdminSecretKey (password = S3 access/secret keys)
 //   - csiRbdNode, csiRbdProvisioner, csiCephfsNode, csiCephfsProvisioner, csiOperator (password = auth key)
 func (b *LocalBootstrapper) addCephSecretsToVault(vault *files.InstallVault) {
 	creds := b.cephCredentials
@@ -634,6 +644,8 @@ func (b *LocalBootstrapper) addCephSecretsToVault(vault *files.InstallVault) {
 	vault.SetSecret(files.SecretEntry{Name: "cephFsId", Fields: &files.SecretFields{Password: creds.FSID}})
 	vault.SetSecret(files.SecretEntry{Name: "cephfsAdmin", Fields: &files.SecretFields{Username: creds.CephfsAdmin.Entity, Password: creds.CephfsAdmin.Key}})
 	vault.SetSecret(files.SecretEntry{Name: "cephfsAdminCodesphere", Fields: &files.SecretFields{Username: creds.CephfsAdminCodesphere.Entity, Password: creds.CephfsAdminCodesphere.Key}})
+	vault.SetSecret(files.SecretEntry{Name: "rgwAdminAccessKey", Fields: &files.SecretFields{Password: creds.RGWAdmin.AccessKey}})
+	vault.SetSecret(files.SecretEntry{Name: "rgwAdminSecretKey", Fields: &files.SecretFields{Password: creds.RGWAdmin.SecretKey}})
 	vault.SetSecret(files.SecretEntry{Name: "csiRbdNode", Fields: &files.SecretFields{Username: creds.CSIRBDNode.Entity, Password: creds.CSIRBDNode.Key}})
 	vault.SetSecret(files.SecretEntry{Name: "csiRbdProvisioner", Fields: &files.SecretFields{Username: creds.CSIRBDProvisioner.Entity, Password: creds.CSIRBDProvisioner.Key}})
 	vault.SetSecret(files.SecretEntry{Name: "csiCephfsNode", Fields: &files.SecretFields{Username: creds.CSICephFSNode.Entity, Password: creds.CSICephFSNode.Key}})
