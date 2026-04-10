@@ -192,9 +192,6 @@ func (g *InstallConfig) applyProfileDev() error {
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "dev"
 	}
-	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
-		return fmt.Errorf("applying resource profile: %w", err)
-	}
 	if g.Config.Cluster.Monitoring == nil {
 		g.Config.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
