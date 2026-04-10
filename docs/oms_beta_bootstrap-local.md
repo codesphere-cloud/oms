@@ -25,6 +25,7 @@ oms beta bootstrap-local [flags]
       --install-hash string         Codesphere package hash (required when install-version is set)
       --install-local string        Path to a local installer package (tar.gz or unpacked directory)
       --install-version string      Codesphere version to install (downloaded from the OMS portal)
+      --k0s                         Use k0s-specific configuration (required to deploy to k0s clusters)
       --profile string              Profile to apply to the install config like resources (supported: dev, minimal, prod) (default "dev")
       --registry-user string        Custom Registry username (optional)
       --secrets-file string         Path to secrets file (default: <install-dir>/prod.vault.yaml)
