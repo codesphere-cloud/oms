@@ -26,9 +26,11 @@ oms beta bootstrap-local [flags]
       --install-local string        Path to a local installer package (tar.gz or unpacked directory)
       --install-version string      Codesphere version to install (downloaded from the OMS portal)
       --k0s                         Use k0s-specific configuration (required to deploy to k0s clusters)
+      --pod-cidr string             Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
       --profile string              Profile to apply to the install config like resources (supported: dev, minimal, prod) (default "dev")
       --registry-user string        Custom Registry username (optional)
       --secrets-file string         Path to secrets file (default: <install-dir>/prod.vault.yaml)
+      --service-cidr string         Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
   -y, --yes                         Auto-approve the local bootstrapping warning prompt
 ```
 

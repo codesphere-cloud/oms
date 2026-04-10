@@ -5,9 +5,9 @@ This project includes code licensed under the following terms:
  
 ----------
 Module: cloud.google.com/go/artifactregistry
-Version: v1.21.0
+Version: v1.22.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.21.0/artifactregistry/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.22.0/artifactregistry/LICENSE
  
 ----------
 Module: cloud.google.com/go/auth
@@ -35,21 +35,21 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata
  
 ----------
 Module: cloud.google.com/go/iam/apiv1/iampb
-Version: v1.7.0
+Version: v1.8.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.7.0/iam/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.8.0/iam/LICENSE
  
 ----------
 Module: cloud.google.com/go/longrunning
-Version: v0.8.0
+Version: v0.9.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v0.8.0/longrunning/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v0.9.0/longrunning/LICENSE
  
 ----------
 Module: cloud.google.com/go/resourcemanager
-Version: v1.11.0
+Version: v1.12.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.11.0/resourcemanager/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.12.0/resourcemanager/LICENSE
  
 ----------
 Module: cloud.google.com/go/serviceusage
@@ -1109,15 +1109,15 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.4/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.49.0
+Version: v0.50.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.49.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.50.0:LICENSE
  
 ----------
 Module: golang.org/x/mod/semver
-Version: v0.34.0
+Version: v0.35.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/mod/+/v0.34.0:LICENSE
+License URL: https://cs.opensource.google/go/x/mod/+/v0.35.0:LICENSE
  
 ----------
 Module: golang.org/x/net
@@ -1139,21 +1139,21 @@ License URL: https://cs.opensource.google/go/x/sync/+/v0.20.0:LICENSE
  
 ----------
 Module: golang.org/x/sys
-Version: v0.42.0
+Version: v0.43.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sys/+/v0.42.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sys/+/v0.43.0:LICENSE
  
 ----------
 Module: golang.org/x/term
-Version: v0.41.0
+Version: v0.42.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/term/+/v0.41.0:LICENSE
+License URL: https://cs.opensource.google/go/x/term/+/v0.42.0:LICENSE
  
 ----------
 Module: golang.org/x/text
-Version: v0.35.0
+Version: v0.36.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/text/+/v0.35.0:LICENSE
+License URL: https://cs.opensource.google/go/x/text/+/v0.36.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
