@@ -79,6 +79,9 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.Profile, "profile", installer.PROFILE_DEV, "Profile to apply to the install config like resources (supported: dev, minimal, prod)")
 	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.K0s, "k0s", false, "Use k0s-specific configuration (required to deploy to k0s clusters)")
 
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ServiceCIDR, "service-cidr", "", "Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.PodCIDR, "pod-cidr", "", "Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.")
+
 	// Config
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallDir, "install-dir", ".installer", "Directory for config, secrets, and bundle files")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallConfigPath, "install-config", "", "Path to install config file (default: <install-dir>/config.yaml)")

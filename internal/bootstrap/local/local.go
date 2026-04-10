@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -86,6 +87,8 @@ type CodesphereEnvironment struct {
 	InstallConfig      *files.RootConfig   `json:"-"`
 	Vault              *files.InstallVault `json:"-"`
 	K0s                bool                `json:"-"`
+	PodCIDR            string              `json:"pod_cidr"`
+	ServiceCIDR        string              `json:"service_cidr"`
 }
 
 func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, helm installer.HelmClient, env *CodesphereEnvironment) *LocalBootstrapper {
@@ -328,28 +331,67 @@ func (b *LocalBootstrapper) SyncCephMonEndpoints() error {
 	return nil
 }
 
-// ReadClusterCIDRs reads the pod and service CIDRs from the running Kubernetes cluster.
-// Pod CIDR is read from the first node's spec.podCIDR.
+// ReadClusterCIDRs reads the pod and service CIDRs.
+// If specified, uses CIDRs from the input parameters.
+// Else, pod CIDR is read from the first node's spec.podCIDR.
 // Service CIDR is read from the kube-apiserver pod's --service-cluster-ip-range flag.
+// If that fails, it tries to extract it from a local kube-apiserver process
 func (b *LocalBootstrapper) ReadClusterCIDRs() (podCIDR string, serviceCIDR string, err error) {
-	// Read pod CIDR from the first node.
-	nodeList := &corev1.NodeList{}
-	if err = b.kubeClient.List(b.ctx, nodeList); err != nil {
-		return "", "", fmt.Errorf("failed to list nodes: %w", err)
-	}
-	if len(nodeList.Items) == 0 {
-		return "", "", fmt.Errorf("no nodes found in cluster")
-	}
-	podCIDR = nodeList.Items[0].Spec.PodCIDR
+	podCIDR = b.Env.PodCIDR
 	if podCIDR == "" {
-		return "", "", fmt.Errorf("node %q does not have a podCIDR set", nodeList.Items[0].Name)
+		podCIDR, err = b.readPodCIDR()
+		if err != nil {
+			return "", "", fmt.Errorf("failed to detect pod CIDR: %w", err)
+		}
 	}
 
-	// Read service CIDR from the kube-apiserver pod's --service-cluster-ip-range flag.
+	serviceCIDR = b.Env.ServiceCIDR
+	if serviceCIDR == "" {
+		serviceCIDR, err = b.readServiceCIDRFromK8s()
+		if serviceCIDR != "" {
+			return podCIDR, serviceCIDR, nil
+		}
+
+		log.Printf("can't read service CIDR from cluster, trying proc filesystem next: %s", err)
+
+		serviceCIDR, err = b.readServiceCIDRFromProc()
+
+		if err != nil {
+			err = fmt.Errorf("failed to determine service CIDR: %w", err)
+		}
+	}
+	return
+}
+
+// readPodCIDR reads the pod CIDR from the first node.
+func (b *LocalBootstrapper) readPodCIDR() (string, error) {
+	nodeList := &corev1.NodeList{}
+	if err := b.kubeClient.List(b.ctx, nodeList); err != nil {
+		return "", fmt.Errorf("failed to list nodes: %w", err)
+	}
+	if len(nodeList.Items) == 0 {
+		return "", fmt.Errorf("no nodes found in cluster")
+	}
+	podCIDR := nodeList.Items[0].Spec.PodCIDR
+	if podCIDR == "" {
+		return "", fmt.Errorf("node %q does not have a podCIDR set", nodeList.Items[0].Name)
+	}
+	return podCIDR, nil
+}
+
+// readServiceCIDRFromK8s reads service CIDR from the kube-apiserver pod's --service-cluster-ip-range flag.
+func (b *LocalBootstrapper) readServiceCIDRFromK8s() (serviceCIDR string, err error) {
+	nodeList := &corev1.NodeList{}
+	if err := b.kubeClient.List(b.ctx, nodeList); err != nil {
+		return "", fmt.Errorf("failed to list nodes: %w", err)
+	}
+	if len(nodeList.Items) == 0 {
+		return "", fmt.Errorf("no nodes found in cluster")
+	}
 	apiServerPod := &corev1.Pod{}
 	key := client.ObjectKey{Name: "kube-apiserver-" + nodeList.Items[0].Name, Namespace: "kube-system"}
 	if err = b.kubeClient.Get(b.ctx, key, apiServerPod); err != nil {
-		return "", "", fmt.Errorf("failed to get kube-apiserver pod: %w", err)
+		return "", fmt.Errorf("failed to get kube-apiserver pod: %w", err)
 	}
 
 	for _, container := range apiServerPod.Spec.Containers {
@@ -365,10 +407,37 @@ func (b *LocalBootstrapper) ReadClusterCIDRs() (podCIDR string, serviceCIDR stri
 	}
 
 	if serviceCIDR == "" {
-		return "", "", fmt.Errorf("could not determine service CIDR from kube-apiserver pod")
+		return "", fmt.Errorf("could not determine service CIDR from kube-apiserver pod")
 	}
 
-	return podCIDR, serviceCIDR, nil
+	return serviceCIDR, nil
+}
+
+// readServiceCIDRFromProc reads the service CIDR from the api server process on the local machine
+// this is necessary for single node k0s installations
+func (b *LocalBootstrapper) readServiceCIDRFromProc() (serviceCIDR string, err error) {
+	// Look for the kube-apiserver process arguments
+	matches, _ := filepath.Glob("/proc/*/cmdline")
+	for _, path := range matches {
+		var content []byte
+		content, err = os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("failed to read cmdline from proc FS: %w", err)
+		}
+		cmdline := string(content)
+
+		if strings.Contains(cmdline, "kube-apiserver") {
+			// Arguments in /proc/PID/cmdline are null-terminated
+			args := strings.Split(cmdline, "\x00")
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "--service-cluster-ip-range=") {
+					serviceCIDR = strings.Split(arg, "=")[1]
+					return
+				}
+			}
+		}
+	}
+	return "", errors.New("can't find service CIDR")
 }
 
 func (b *LocalBootstrapper) EnsureInstallConfig() error {
@@ -485,7 +554,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 
 	podCIDR, serviceCIDR, err := b.ReadClusterCIDRs()
 	if err != nil {
-		return fmt.Errorf("failed to read cluster CIDRs: %w", err)
+		return fmt.Errorf("failed to read cluster CIDRs: %w. Use --service-cidr and --pod-cidr to specify them", err)
 	}
 	b.Env.InstallConfig.Kubernetes.PodCIDR = podCIDR
 	b.Env.InstallConfig.Kubernetes.ServiceCIDR = serviceCIDR
