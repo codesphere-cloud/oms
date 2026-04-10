@@ -49,7 +49,7 @@ type csiResourceEntry struct {
 // but preserves the default memory limits for each container.
 //
 // Config is based on https://github.com/rook/rook/blob/master/deploy/charts/rook-ceph/values.yaml#L233
-func buildRookHelmValues() (map[string]interface{}, error) {
+func (b *LocalBootstrapper) buildRookHelmValues() (map[string]interface{}, error) {
 	limitOnly := func(memory string) map[string]interface{} {
 		return map[string]interface{}{
 			"limits":   map[string]string{"memory": memory},
@@ -107,6 +107,11 @@ func buildRookHelmValues() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("failed to marshal csiCephFSPluginResource: %w", err)
 	}
 
+	kubeletDir := "/var/lib/kubelet"
+	if b.Env.K0s {
+		kubeletDir = "/var/lib/k0s/kubelet"
+	}
+
 	values := map[string]interface{}{
 		"priorityClassName": "system-cluster-critical",
 		"resources": map[string]interface{}{
@@ -116,6 +121,7 @@ func buildRookHelmValues() (map[string]interface{}, error) {
 			},
 		},
 		"csi": map[string]interface{}{
+			"kubeletDirPath":               kubeletDir,
 			"csiRBDProvisionerResource":    rbdProvisioner,
 			"csiRBDPluginResource":         rbdPlugin,
 			"csiCephFSProvisionerResource": cephfsProvisioner,
@@ -127,7 +133,7 @@ func buildRookHelmValues() (map[string]interface{}, error) {
 }
 
 func (b *LocalBootstrapper) InstallRookHelmChart() error {
-	helmValues, err := buildRookHelmValues()
+	helmValues, err := b.buildRookHelmValues()
 	if err != nil {
 		return fmt.Errorf("failed to build Helm values: %w", err)
 	}

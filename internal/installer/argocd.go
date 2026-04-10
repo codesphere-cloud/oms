@@ -76,7 +76,7 @@ func (a *ArgoCD) Install() error {
 		},
 	}
 
-	existing, err := a.Helm.FindRelease(cfg.ReleaseName)
+	existing, err := a.Helm.FindRelease(cfg.Namespace, cfg.ReleaseName)
 	if err != nil {
 		return err
 	}

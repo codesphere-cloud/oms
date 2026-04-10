@@ -85,6 +85,7 @@ type CodesphereEnvironment struct {
 	SecretsFilePath    string              `json:"-"`
 	InstallConfig      *files.RootConfig   `json:"-"`
 	Vault              *files.InstallVault `json:"-"`
+	K0s                bool                `json:"-"`
 }
 
 func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, helm installer.HelmClient, env *CodesphereEnvironment) *LocalBootstrapper {

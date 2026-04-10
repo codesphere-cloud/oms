@@ -47,7 +47,7 @@ type UpgradeChartOptions struct {
 //mockery:generate: true
 type HelmClient interface {
 	// FindRelease returns info about an existing release, or nil if none exists.
-	FindRelease(releaseName string) (*ReleaseInfo, error)
+	FindRelease(namespace, releaseName string) (*ReleaseInfo, error)
 
 	// InstallChart performs a fresh Helm install and returns an error on failure.
 	InstallChart(ctx context.Context, cfg ChartConfig) error
@@ -94,8 +94,8 @@ func (h *helmClient) newActionConfig(namespace string) (*action.Configuration, e
 	return actionConfig, nil
 }
 
-func (h *helmClient) FindRelease(releaseName string) (*ReleaseInfo, error) {
-	actionConfig, err := h.newActionConfig("")
+func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, error) {
+	actionConfig, err := h.newActionConfig(namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +177,11 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 
 	if opts.InstallIfNotExist {
 		// If a release does not exist, install it.
-		if _, err := h.FindRelease(cfg.ReleaseName); errors.Is(err, driver.ErrReleaseNotFound) {
+		rel, err := h.FindRelease(cfg.Namespace, cfg.ReleaseName)
+		if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+			return err
+		}
+		if rel == nil {
 			return h.InstallChart(ctx, cfg)
 		}
 	}
@@ -188,7 +192,6 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 	upgradeClient.Version = cfg.Version
 	upgradeClient.RepoURL = cfg.RepoURL
 	upgradeClient.Timeout = 5 * time.Minute
-	upgradeClient.Install = opts.InstallIfNotExist
 
 	chartPath, err := upgradeClient.LocateChart(cfg.ChartName, h.settings)
 	if err != nil {
