@@ -59,6 +59,10 @@ func (g *InstallConfig) generatePostgresSecrets(config *files.RootConfig) error 
 		return fmt.Errorf("failed to generate primary PostgreSQL certificate: %w", err)
 	}
 
+	if err := ValidateCertKeyPair(config.Postgres.Primary.SSLConfig.ServerCertPem, config.Postgres.Primary.PrivateKey); err != nil {
+		return fmt.Errorf("primary PostgreSQL cert/key validation failed: %w", err)
+	}
+
 	config.Postgres.AdminPassword = GeneratePassword(32)
 	config.Postgres.ReplicaPassword = GeneratePassword(32)
 
@@ -71,6 +75,10 @@ func (g *InstallConfig) generatePostgresSecrets(config *files.RootConfig) error 
 		)
 		if err != nil {
 			return fmt.Errorf("failed to generate replica PostgreSQL certificate: %w", err)
+		}
+
+		if err := ValidateCertKeyPair(config.Postgres.Replica.SSLConfig.ServerCertPem, config.Postgres.ReplicaPrivateKey); err != nil {
+			return fmt.Errorf("replica PostgreSQL cert/key validation failed: %w", err)
 		}
 	}
 

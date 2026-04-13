@@ -8,6 +8,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
@@ -218,4 +219,10 @@ func encodePEMCert(certDER []byte) string {
 		Type:  "CERTIFICATE",
 		Bytes: certDER,
 	}))
+}
+
+// ValidateCertKeyPair verifies that a PEM-encoded certificate's public key matches a PEM-encoded private key.
+func ValidateCertKeyPair(certPEM, keyPEM string) error {
+	_, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	return err
 }

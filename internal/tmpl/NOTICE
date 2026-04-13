@@ -53,9 +53,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/
  
 ----------
 Module: cloud.google.com/go/serviceusage
-Version: v1.10.0
+Version: v1.11.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.10.0/serviceusage/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.11.0/serviceusage/LICENSE
  
 ----------
 Module: code.gitea.io/sdk/gitea
