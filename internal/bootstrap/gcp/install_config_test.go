@@ -499,7 +499,6 @@ var _ = Describe("Installconfig & Secrets", func() {
 					origKey := csEnv.InstallConfig.Postgres.Primary.PrivateKey
 					origCert := csEnv.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem
 
-					icg.EXPECT().GenerateSecrets().Return(nil).Times(0)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
@@ -507,6 +506,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
+					icg.AssertNotCalled(GinkgoT(), "GenerateSecrets")
 					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).To(Equal(origKey))
 					Expect(bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem).To(Equal(origCert))
 				})
