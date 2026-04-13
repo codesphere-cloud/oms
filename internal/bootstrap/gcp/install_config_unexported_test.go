@@ -12,7 +12,7 @@ import (
 
 var _ = Describe("Installconfig & Secrets - Unexported", func() {
 	Describe("buildCephHostsConfig", func() {
-		FIt("builds a valid Ceph hosts config with a single node as master", func() {
+		It("builds a valid Ceph hosts config with a single node as master", func() {
 			nodes := []*node.Node{
 				{
 					Name:       "ceph-node-1",
@@ -30,7 +30,7 @@ var _ = Describe("Installconfig & Secrets - Unexported", func() {
 			Expect(actual).To(Equal(expected))
 		})
 
-		FIt("builds a valid Ceph hosts config with three nodes", func() {
+		It("builds a valid Ceph hosts config with three nodes", func() {
 			nodes := []*node.Node{
 				{
 					Name:       "ceph-node-1",
@@ -66,7 +66,7 @@ var _ = Describe("Installconfig & Secrets - Unexported", func() {
 			Expect(actual).To(Equal(expected))
 		})
 
-		FIt("builds an empty Ceph hosts config with no nodes", func() {
+		It("builds an empty Ceph hosts config with no nodes", func() {
 			nodes := []*node.Node{}
 			expected := []files.CephHost{}
 			actual := buildCephHostsConfig(nodes)
@@ -75,7 +75,7 @@ var _ = Describe("Installconfig & Secrets - Unexported", func() {
 	})
 
 	Describe("buildKubernetesConfig", func() {
-		FIt("builds a valid Kubernetes config with a single node as worker and control plane", func() {
+		It("builds a valid Kubernetes config with a single node as worker and control plane", func() {
 			nodes := []*node.Node{
 				{
 					Name:       "node-1",
@@ -100,7 +100,7 @@ var _ = Describe("Installconfig & Secrets - Unexported", func() {
 			Expect(actual).To(Equal(expected))
 		})
 
-		FIt("builds a valid Kubernetes config with three nodes", func() {
+		It("builds a valid Kubernetes config with three nodes", func() {
 			nodes := []*node.Node{
 				{
 					Name:       "node-1",
@@ -139,7 +139,7 @@ var _ = Describe("Installconfig & Secrets - Unexported", func() {
 			Expect(actual).To(Equal(expected))
 		})
 
-		FIt("builds an empty Kubernetes config with no nodes", func() {
+		It("builds an empty Kubernetes config with no nodes", func() {
 			nodes := []*node.Node{}
 			expected := files.KubernetesConfig{
 				APIServerHost: "",
