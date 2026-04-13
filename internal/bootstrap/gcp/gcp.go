@@ -215,6 +215,11 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure GCP project: %w", err)
 	}
 
+	err = b.stlog.Step("Update install config", b.UpdateInstallConfig)
+	if err != nil {
+		return fmt.Errorf("failed to update install config: %w", err)
+	}
+
 	err = b.stlog.Step("Ensure billing", b.EnsureBilling)
 	if err != nil {
 		return fmt.Errorf("failed to ensure billing is enabled: %w", err)
@@ -749,6 +754,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 	return nil
 }
+
 func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.GitHubPAT == "" {
 		return fmt.Errorf("GitHub PAT is not set")
