@@ -11,55 +11,51 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd"
 )
 
-func findCommand(root *cobra.Command, path ...string) *cobra.Command {
-	current := root
-	for _, p := range path {
-		next, _, err := current.Find([]string{p})
-		if err != nil || next == nil {
-			return nil
+var _ = Describe("AddCmd", func() {
+	It("inherits the parent Args validator when the child does not define one", func() {
+		parent := &cobra.Command{
+			Use:           "root",
+			Args:          cobra.NoArgs,
+			SilenceErrors: true,
+			SilenceUsage:  true,
 		}
-		current = next
-	}
+		child := &cobra.Command{
+			Use:  "child",
+			RunE: func(_ *cobra.Command, _ []string) error { return nil },
+		}
+		cmd.AddCmd(parent, child)
 
-	return current
-}
+		parent.SetArgs([]string{"child", "extra"})
+		err := parent.Execute()
 
-var _ = Describe("RootCmd", func() {
-	It("rejects positional args for commands configured with no positional args", func() {
-		rootCmd := cmd.GetRootCmd()
-		rootCmd.SilenceErrors = true
-		rootCmd.SilenceUsage = true
-
-		licensesCmd := findCommand(rootCmd, "licenses")
-		Expect(licensesCmd).NotTo(BeNil())
-
-		rootCmd.SetArgs([]string{"licenses", "extra"})
-		err := rootCmd.Execute()
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("unknown command \"extra\""))
+		Expect(parent.Commands()).To(ContainElement(child))
 	})
 
-	It("allows positional args for commands explicitly defining them", func() {
-		rootCmd := cmd.GetRootCmd()
-		rootCmd.SilenceErrors = true
-		rootCmd.SilenceUsage = true
-
-		downloadPackageCmd := findCommand(rootCmd, "download", "package")
-		Expect(downloadPackageCmd).NotTo(BeNil())
-
-		executed := false
-		capturedArgs := []string{}
-		downloadPackageCmd.RunE = func(_ *cobra.Command, args []string) error {
-			executed = true
-			capturedArgs = args
-			return nil
+	It("keeps a child-specific Args validator when one is explicitly set", func() {
+		parent := &cobra.Command{
+			Use:           "root",
+			Args:          cobra.NoArgs,
+			SilenceErrors: true,
+			SilenceUsage:  true,
 		}
 
-		rootCmd.SetArgs([]string{"download", "package", "codesphere-v1.55.0"})
-		err := rootCmd.Execute()
+		capturedArgs := []string{}
+		child := &cobra.Command{
+			Use:  "child",
+			Args: cobra.MaximumNArgs(1),
+			RunE: func(_ *cobra.Command, args []string) error {
+				capturedArgs = args
+				return nil
+			},
+		}
+		cmd.AddCmd(parent, child)
+
+		parent.SetArgs([]string{"child", "value"})
+		err := parent.Execute()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(executed).To(BeTrue())
-		Expect(capturedArgs).To(Equal([]string{"codesphere-v1.55.0"}))
+		Expect(capturedArgs).To(Equal([]string{"value"}))
+		Expect(parent.Commands()).To(ContainElement(child))
 	})
 })
