@@ -61,6 +61,7 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 			Short: "Download a codesphere package",
 			Long: io.Long(`Download a specific version of a Codesphere package
 				To list available packages, run oms list packages.`),
+			Args: cobra.ArbitraryArgs,
 			Example: formatExamples("download package", []io.Example{
 				{Cmd: "codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
@@ -88,7 +89,7 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Hash, "hash", "H", "", "Hash of the version to download if multiple builds exist for the same version")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer.tar.gz", "Specify artifact to download")
 	pkg.cmd.Flags().BoolVarP(&pkg.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
-	download.AddCommand(pkg.cmd)
+	AddCmd(download, pkg.cmd)
 
 	pkg.cmd.RunE = pkg.RunE
 }

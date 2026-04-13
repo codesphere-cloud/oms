@@ -26,5 +26,5 @@ func AddUpdateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	AddUpdateDockerfileCmd(updateCmd.cmd, opts)
 	AddUpdateInstallConfigCmd(updateCmd.cmd, opts)
 
-	rootCmd.AddCommand(updateCmd.cmd)
+	AddCmd(rootCmd, updateCmd.cmd)
 }

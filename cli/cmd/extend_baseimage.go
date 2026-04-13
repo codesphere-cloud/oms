@@ -69,7 +69,7 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
 	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04", "Base image file name inside the package to extend (default: 'workspace-agent-24.04')")
 	baseimage.cmd.Flags().BoolVarP(&baseimage.Opts.Force, "force", "f", false, "Enforce package extraction")
 
-	extend.AddCommand(baseimage.cmd)
+	AddCmd(extend, baseimage.cmd)
 
 	baseimage.cmd.RunE = baseimage.RunE
 }

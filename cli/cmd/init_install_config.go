@@ -168,7 +168,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(c.cmd, "vault")
 
 	c.cmd.RunE = c.RunE
-	init.AddCommand(c.cmd)
+	AddCmd(init, c.cmd)
 }
 
 func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {

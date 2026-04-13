@@ -62,7 +62,7 @@ func AddBuildImageCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(imageCmd.cmd, "package")
 	util.MarkFlagRequired(imageCmd.cmd, "registry")
 
-	parentCmd.AddCommand(imageCmd.cmd)
+	AddCmd(parentCmd, imageCmd.cmd)
 
 	imageCmd.cmd.RunE = imageCmd.RunE
 }

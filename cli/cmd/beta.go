@@ -21,7 +21,7 @@ func AddBetaCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 				Be aware that that usage and behavior may change as the features are developed.`),
 		},
 	}
-	rootCmd.AddCommand(beta.cmd)
+	AddCmd(rootCmd, beta.cmd)
 
 	AddExtendCmd(beta.cmd, opts)
 	AddBootstrapGcpCmd(beta.cmd, opts)

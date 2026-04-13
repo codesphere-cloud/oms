@@ -70,6 +70,6 @@ func AddBootstrapGcpPostconfigCmd(bootstrapGcp *cobra.Command, opts *GlobalOptio
 	flags.StringVar(&postconfig.Opts.InstallConfigPath, "install-config-path", "config.yaml", "Path to the installation configuration file")
 	flags.StringVar(&postconfig.Opts.PrivateKeyPath, "private-key-path", "", "Path to the GCP service account private key file (optional)")
 
-	bootstrapGcp.AddCommand(postconfig.cmd)
+	AddCmd(bootstrapGcp, postconfig.cmd)
 	postconfig.cmd.RunE = postconfig.RunE
 }

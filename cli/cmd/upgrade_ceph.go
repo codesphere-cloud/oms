@@ -21,5 +21,5 @@ func AddUpgradeCephCmd(upgrade *cobra.Command) {
 			Long:  io.Long(`Coming soon: Install a Ceph cluster`),
 		},
 	}
-	upgrade.AddCommand(ceph.cmd)
+	AddCmd(upgrade, ceph.cmd)
 }

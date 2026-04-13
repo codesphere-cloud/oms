@@ -75,7 +75,7 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 	util.MarkFlagRequired(dockerfileCmd.cmd, "dockerfile")
 	util.MarkFlagRequired(dockerfileCmd.cmd, "package")
 
-	parentCmd.AddCommand(dockerfileCmd.cmd)
+	AddCmd(parentCmd, dockerfileCmd.cmd)
 
 	dockerfileCmd.cmd.RunE = dockerfileCmd.RunE
 }
