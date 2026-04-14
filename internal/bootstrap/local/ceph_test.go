@@ -11,20 +11,6 @@ import (
 )
 
 var _ = Describe("Ceph", func() {
-	Describe("parseMonitorEndpointHost", func() {
-		DescribeTable("parses monitor endpoint hosts",
-			func(input, expected string) {
-				host, err := parseMonitorEndpointHost(input)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(host).To(Equal(expected))
-			},
-			Entry("plain IP:port", "a=10.0.0.10:6789", "10.0.0.10:6789"),
-			Entry("msgr2 format", "a=[v2:10.0.0.10:3300/0,v1:10.0.0.10:6789/0]", "10.0.0.10:3300"),
-			Entry("service DNS with port", "a=rook-ceph-mon-a.rook-ceph.svc:6789", "rook-ceph-mon-a.rook-ceph.svc:6789"),
-			Entry("service DNS without port", "a=rook-ceph-mon-a.rook-ceph.svc", "rook-ceph-mon-a.rook-ceph.svc"),
-		)
-	})
-
 	Describe("cephHostsFromObjectStore", func() {
 		It("parses hosts from a valid object store", func() {
 			store := &rookcephv1.CephObjectStore{}

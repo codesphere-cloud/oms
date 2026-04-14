@@ -8,12 +8,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -311,60 +311,20 @@ func parseObjectStoreEndpointHost(endpoint string) (string, error) {
 	return parsed.Hostname(), nil
 }
 
-func parseMonitorEndpointHost(endpoint string) (string, error) {
-	endpoint = strings.TrimSpace(endpoint)
-	if endpoint == "" {
-		return "", fmt.Errorf("empty endpoint")
+func (b *LocalBootstrapper) DeployRGWGateway() error {
+	if err := b.deployRGWRealm(); err != nil {
+		return err
 	}
-
-	if separator := strings.Index(endpoint, "="); separator >= 0 {
-		endpoint = strings.TrimSpace(endpoint[separator+1:])
+	if err := b.deployRGWZoneGroup(); err != nil {
+		return err
 	}
-
-	if strings.HasPrefix(endpoint, "[") && strings.HasSuffix(endpoint, "]") {
-		for _, candidate := range strings.Split(endpoint[1:len(endpoint)-1], ",") {
-			host, err := parseMonitorEndpointHost(candidate)
-			if err == nil {
-				return host, nil
-			}
-		}
-		return "", fmt.Errorf("no valid monitor host found in %q", endpoint)
+	if err := b.deployRGWZone(); err != nil {
+		return err
 	}
-
-	endpoint = strings.TrimPrefix(endpoint, "v1:")
-	endpoint = strings.TrimPrefix(endpoint, "v2:")
-	if slash := strings.Index(endpoint, "/"); slash >= 0 {
-		endpoint = endpoint[:slash]
-	}
-
-	if host, port, err := net.SplitHostPort(endpoint); err == nil {
-		host = strings.Trim(host, "[]")
-		if host == "" {
-			return "", fmt.Errorf("endpoint %q does not contain a valid host", endpoint)
-		}
-		if port == "" {
-			return host, nil
-		}
-		return net.JoinHostPort(host, port), nil
-	}
-
-	trimmed := strings.Trim(endpoint, "[]")
-	if trimmed == "" {
-		return "", fmt.Errorf("endpoint %q does not contain a valid host", endpoint)
-	}
-
-	if ip := net.ParseIP(trimmed); ip != nil {
-		return ip.String(), nil
-	}
-
-	if strings.Contains(trimmed, ":") {
-		return "", fmt.Errorf("endpoint %q contains an unparseable host:port", endpoint)
-	}
-
-	return trimmed, nil
+	return b.deployRGWObjectStore()
 }
 
-func (b *LocalBootstrapper) DeployRGWGateway() error {
+func (b *LocalBootstrapper) deployRGWRealm() error {
 	realm := &rookcephv1.CephObjectRealm{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rgwRealmName,
@@ -381,7 +341,10 @@ func (b *LocalBootstrapper) DeployRGWGateway() error {
 	if err != nil {
 		return fmt.Errorf("failed to create or update CephObjectRealm %q: %w", rgwRealmName, err)
 	}
+	return nil
+}
 
+func (b *LocalBootstrapper) deployRGWZoneGroup() error {
 	zoneGroup := &rookcephv1.CephObjectZoneGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rgwZoneGroupName,
@@ -389,7 +352,7 @@ func (b *LocalBootstrapper) DeployRGWGateway() error {
 		},
 	}
 
-	_, err = controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, zoneGroup, func() error {
+	_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, zoneGroup, func() error {
 		zoneGroup.Spec = rookcephv1.ObjectZoneGroupSpec{
 			Realm: rgwRealmName,
 		}
@@ -398,7 +361,10 @@ func (b *LocalBootstrapper) DeployRGWGateway() error {
 	if err != nil {
 		return fmt.Errorf("failed to create or update CephObjectZoneGroup %q: %w", rgwZoneGroupName, err)
 	}
+	return nil
+}
 
+func (b *LocalBootstrapper) deployRGWZone() error {
 	zone := &rookcephv1.CephObjectZone{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rgwZoneName,
@@ -406,7 +372,7 @@ func (b *LocalBootstrapper) DeployRGWGateway() error {
 		},
 	}
 
-	_, err = controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, zone, func() error {
+	_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, zone, func() error {
 		zone.Spec = rookcephv1.ObjectZoneSpec{
 			ZoneGroup: rgwZoneGroupName,
 			MetadataPool: rookcephv1.PoolSpec{
@@ -430,7 +396,10 @@ func (b *LocalBootstrapper) DeployRGWGateway() error {
 	if err != nil {
 		return fmt.Errorf("failed to create or update CephObjectZone %q: %w", rgwZoneName, err)
 	}
+	return nil
+}
 
+func (b *LocalBootstrapper) deployRGWObjectStore() error {
 	store := &rookcephv1.CephObjectStore{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      rgwObjectStoreName,
@@ -438,7 +407,7 @@ func (b *LocalBootstrapper) DeployRGWGateway() error {
 		},
 	}
 
-	_, err = controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, store, func() error {
+	_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, store, func() error {
 		store.Spec = rookcephv1.ObjectStoreSpec{
 			MetadataPool: rookcephv1.PoolSpec{
 				Replicated: rookcephv1.ReplicatedSpec{
@@ -494,7 +463,7 @@ func (b *LocalBootstrapper) EnsureRGWAdminUser() (*RGWUserCredentials, error) {
 		"--rgw-zone", rgwZoneName,
 		"--format", "json",
 	}
-	createArgs, err := b.withCephMonitorArgs(createArgs)
+	createArgs, err := b.appendCephMonitorArgs(createArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +490,7 @@ func (b *LocalBootstrapper) EnsureRGWAdminUser() (*RGWUserCredentials, error) {
 		"--rgw-zone", rgwZoneName,
 		"--format", "json",
 	}
-	infoArgs, err = b.withCephMonitorArgs(infoArgs)
+	infoArgs, err = b.appendCephMonitorArgs(infoArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -537,7 +506,7 @@ func (b *LocalBootstrapper) EnsureRGWAdminUser() (*RGWUserCredentials, error) {
 	return creds, nil
 }
 
-func (b *LocalBootstrapper) withCephMonitorArgs(args []string) ([]string, error) {
+func (b *LocalBootstrapper) appendCephMonitorArgs(args []string) ([]string, error) {
 	monHosts, err := b.readCephMonitorHosts()
 	if err != nil {
 		return nil, err
@@ -568,8 +537,8 @@ func (b *LocalBootstrapper) readCephMonitorHosts() (string, error) {
 
 	var monHosts []string
 	seen := map[string]struct{}{}
-	for _, entry := range splitMonitorEndpointEntries(rawEndpoints) {
-		monHost, err := parseMonitorEndpointHost(entry)
+	for _, entry := range util.SplitMonitorEndpointEntries(rawEndpoints) {
+		monHost, err := util.ParseMonitorEndpointHost(entry)
 		if err != nil {
 			b.stlog.Logf("Skipping invalid Ceph monitor endpoint entry %q: %v", entry, err)
 			continue
@@ -608,11 +577,15 @@ func (b *LocalBootstrapper) readCephAdminAuth() (string, string, error) {
 	return username, cephSecret, nil
 }
 
-func (b *LocalBootstrapper) waitForRGWPod() (*corev1.Pod, error) {
-	ctx, cancel := context.WithTimeout(b.ctx, cephObjectUserReadyTimeout)
+// retryWithBackoff polls fn until it succeeds or the timeout expires.
+// fn should return a *retryableWaitError to signal that polling should continue,
+// a nil error on success, or any other error to abort immediately.
+// On timeout the timeoutMsg is used as the error message.
+func (b *LocalBootstrapper) retryWithBackoff(timeout time.Duration, timeoutMsg string, fn func(ctx context.Context) error) error {
+	ctx, cancel := context.WithTimeout(b.ctx, timeout)
 	defer cancel()
 
-	steps := int(cephObjectUserReadyTimeout / cephReadyPollInterval)
+	steps := int(timeout / cephReadyPollInterval)
 	if steps < 1 {
 		steps = 1
 	}
@@ -624,32 +597,45 @@ func (b *LocalBootstrapper) waitForRGWPod() (*corev1.Pod, error) {
 		Steps:    steps,
 	}
 
-	var pod *corev1.Pod
-
 	err := retry.OnError(backoff, isRetryableWaitError, func() error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-
-		currentPod, err := b.getRGWPod()
-		if err != nil {
-			if isRetryableWaitError(err) {
-				return err
-			}
-			return &retryableWaitError{err: err}
-		}
-		pod = currentPod
-		return nil
+		return fn(ctx)
 	})
 	if err == nil {
-		return pod, nil
+		return nil
 	}
 
 	if isRetryableWaitError(err) {
-		return nil, fmt.Errorf("timed out waiting for an RGW pod for object store %q", rgwObjectStoreName)
+		return fmt.Errorf("%s", timeoutMsg)
 	}
 
-	return nil, fmt.Errorf("failed waiting for an RGW pod for object store %q: %w", rgwObjectStoreName, err)
+	return err
+}
+
+func (b *LocalBootstrapper) waitForRGWPod() (*corev1.Pod, error) {
+	var pod *corev1.Pod
+
+	err := b.retryWithBackoff(cephObjectUserReadyTimeout,
+		fmt.Sprintf("timed out waiting for an RGW pod for object store %q", rgwObjectStoreName),
+		func(_ context.Context) error {
+			currentPod, err := b.getRGWPod()
+			if err != nil {
+				if isRetryableWaitError(err) {
+					return err
+				}
+				return &retryableWaitError{err: err}
+			}
+			pod = currentPod
+			return nil
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return pod, nil
 }
 
 func (b *LocalBootstrapper) getRGWPod() (*corev1.Pod, error) {
@@ -780,87 +766,31 @@ func getSecretDataValue(secret *corev1.Secret, keys ...string) (string, error) {
 	return "", fmt.Errorf("secret %q does not contain any of the expected keys %q", secret.Name, strings.Join(keys, ", "))
 }
 
-func splitMonitorEndpointEntries(rawEndpoints string) []string {
-	entries := []string{}
-	var current strings.Builder
-	bracketDepth := 0
-
-	for _, r := range rawEndpoints {
-		switch r {
-		case '[':
-			bracketDepth++
-		case ']':
-			if bracketDepth > 0 {
-				bracketDepth--
-			}
-		case ',':
-			if bracketDepth == 0 {
-				entries = append(entries, current.String())
-				current.Reset()
-				continue
-			}
-		}
-
-		current.WriteRune(r)
-	}
-
-	if current.Len() > 0 {
-		entries = append(entries, current.String())
-	}
-
-	return entries
-}
-
 func (b *LocalBootstrapper) waitForCephObjectStoreReady(name string) error {
-	ctx, cancel := context.WithTimeout(b.ctx, cephObjectStoreReadyTimeout)
-	defer cancel()
-
 	storeKey := client.ObjectKey{Name: name, Namespace: rookNamespace}
-	steps := int(cephObjectStoreReadyTimeout / cephReadyPollInterval)
-	if steps < 1 {
-		steps = 1
-	}
-
-	backoff := wait.Backoff{
-		Duration: cephReadyPollInterval,
-		Factor:   1.0,
-		Jitter:   0.1,
-		Steps:    steps,
-	}
-
 	lastPhase := ""
 
-	err := retry.OnError(backoff, isRetryableWaitError, func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		store := &rookcephv1.CephObjectStore{}
-		if err := b.kubeClient.Get(ctx, storeKey, store); err != nil {
-			if apierrors.IsNotFound(err) {
-				return &retryableWaitError{err: fmt.Errorf("CephObjectStore %q not found yet", name)}
+	return b.retryWithBackoff(cephObjectStoreReadyTimeout,
+		fmt.Sprintf("timed out waiting for CephObjectStore %q to become ready (phase=%q)", name, lastPhase),
+		func(ctx context.Context) error {
+			store := &rookcephv1.CephObjectStore{}
+			if err := b.kubeClient.Get(ctx, storeKey, store); err != nil {
+				if apierrors.IsNotFound(err) {
+					return &retryableWaitError{err: fmt.Errorf("CephObjectStore %q not found yet", name)}
+				}
+				return err
 			}
-			return err
-		}
 
-		if store.Status != nil {
-			lastPhase = string(store.Status.Phase)
-			if store.Status.Phase == rookcephv1.ConditionReady {
-				return nil
+			if store.Status != nil {
+				lastPhase = string(store.Status.Phase)
+				if store.Status.Phase == rookcephv1.ConditionReady {
+					return nil
+				}
 			}
-		}
 
-		return &retryableWaitError{err: fmt.Errorf("CephObjectStore %q is not ready yet (phase=%q)", name, lastPhase)}
-	})
-	if err == nil {
-		return nil
-	}
-
-	if isRetryableWaitError(err) {
-		return fmt.Errorf("timed out waiting for CephObjectStore %q to become ready (phase=%q)", name, lastPhase)
-	}
-
-	return fmt.Errorf("failed waiting for CephObjectStore %q: %w", name, err)
+			return &retryableWaitError{err: fmt.Errorf("CephObjectStore %q is not ready yet (phase=%q)", name, lastPhase)}
+		},
+	)
 }
 
 // readCephFSID reads the Ceph FSID from the CephCluster status.
@@ -925,114 +855,62 @@ func (b *LocalBootstrapper) readCSISecret(secretName, idKey, keyKey string) (*Ce
 
 // waitForCephFilesystemReady polls until the CephFilesystem reaches the Ready phase.
 func (b *LocalBootstrapper) waitForCephFilesystemReady() error {
-	ctx, cancel := context.WithTimeout(b.ctx, cephFilesystemReadyTimeout)
-	defer cancel()
-
 	fsKey := client.ObjectKey{Name: cephFilesystemName, Namespace: rookNamespace}
-
-	steps := int(cephFilesystemReadyTimeout / cephReadyPollInterval)
-	if steps < 1 {
-		steps = 1
-	}
-
-	backoff := wait.Backoff{
-		Duration: cephReadyPollInterval,
-		Factor:   1.0,
-		Jitter:   0.1,
-		Steps:    steps,
-	}
-
 	lastPhase := ""
 
-	err := retry.OnError(backoff, isRetryableWaitError, func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		fs := &rookcephv1.CephFilesystem{}
-		if err := b.kubeClient.Get(ctx, fsKey, fs); err != nil {
-			if apierrors.IsNotFound(err) {
-				return &retryableWaitError{err: fmt.Errorf("CephFilesystem %q not found yet", cephFilesystemName)}
+	return b.retryWithBackoff(cephFilesystemReadyTimeout,
+		fmt.Sprintf("timed out waiting for CephFilesystem %q to become ready (phase=%q)", cephFilesystemName, lastPhase),
+		func(ctx context.Context) error {
+			fs := &rookcephv1.CephFilesystem{}
+			if err := b.kubeClient.Get(ctx, fsKey, fs); err != nil {
+				if apierrors.IsNotFound(err) {
+					return &retryableWaitError{err: fmt.Errorf("CephFilesystem %q not found yet", cephFilesystemName)}
+				}
+				return err
 			}
-			return err
-		}
 
-		if fs.Status != nil {
-			lastPhase = string(fs.Status.Phase)
-			if fs.Status.Phase == rookcephv1.ConditionReady {
-				return nil
+			if fs.Status != nil {
+				lastPhase = string(fs.Status.Phase)
+				if fs.Status.Phase == rookcephv1.ConditionReady {
+					return nil
+				}
 			}
-		}
 
-		return &retryableWaitError{err: fmt.Errorf(
-			"CephFilesystem %q is not ready yet (phase=%q)",
-			cephFilesystemName, lastPhase,
-		)}
-	})
-	if err == nil {
-		return nil
-	}
-
-	if isRetryableWaitError(err) {
-		return fmt.Errorf("timed out waiting for CephFilesystem %q to become ready (phase=%q)", cephFilesystemName, lastPhase)
-	}
-
-	return fmt.Errorf("failed waiting for CephFilesystem %q: %w", cephFilesystemName, err)
+			return &retryableWaitError{err: fmt.Errorf(
+				"CephFilesystem %q is not ready yet (phase=%q)",
+				cephFilesystemName, lastPhase,
+			)}
+		},
+	)
 }
 
 // waitForCephClientReady polls until the CephClient reaches the Ready phase.
 func (b *LocalBootstrapper) waitForCephClientReady(name string) error {
-	ctx, cancel := context.WithTimeout(b.ctx, cephClientReadyTimeout)
-	defer cancel()
-
 	ccKey := client.ObjectKey{Name: name, Namespace: rookNamespace}
-
-	steps := int(cephClientReadyTimeout / cephReadyPollInterval)
-	if steps < 1 {
-		steps = 1
-	}
-
-	backoff := wait.Backoff{
-		Duration: cephReadyPollInterval,
-		Factor:   1.0,
-		Jitter:   0.1,
-		Steps:    steps,
-	}
-
 	lastPhase := ""
 
-	err := retry.OnError(backoff, isRetryableWaitError, func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		cc := &rookcephv1.CephClient{}
-		if err := b.kubeClient.Get(ctx, ccKey, cc); err != nil {
-			if apierrors.IsNotFound(err) {
-				return &retryableWaitError{err: fmt.Errorf("CephClient %q not found yet", name)}
+	return b.retryWithBackoff(cephClientReadyTimeout,
+		fmt.Sprintf("timed out waiting for CephClient %q to become ready (phase=%q)", name, lastPhase),
+		func(ctx context.Context) error {
+			cc := &rookcephv1.CephClient{}
+			if err := b.kubeClient.Get(ctx, ccKey, cc); err != nil {
+				if apierrors.IsNotFound(err) {
+					return &retryableWaitError{err: fmt.Errorf("CephClient %q not found yet", name)}
+				}
+				return err
 			}
-			return err
-		}
 
-		if cc.Status != nil {
-			lastPhase = string(cc.Status.Phase)
-			if cc.Status.Phase == rookcephv1.ConditionReady {
-				return nil
+			if cc.Status != nil {
+				lastPhase = string(cc.Status.Phase)
+				if cc.Status.Phase == rookcephv1.ConditionReady {
+					return nil
+				}
 			}
-		}
 
-		return &retryableWaitError{err: fmt.Errorf(
-			"CephClient %q is not ready yet (phase=%q)",
-			name, lastPhase,
-		)}
-	})
-	if err == nil {
-		return nil
-	}
-
-	if isRetryableWaitError(err) {
-		return fmt.Errorf("timed out waiting for CephClient %q to become ready (phase=%q)", name, lastPhase)
-	}
-
-	return fmt.Errorf("failed waiting for CephClient %q: %w", name, err)
+			return &retryableWaitError{err: fmt.Errorf(
+				"CephClient %q is not ready yet (phase=%q)",
+				name, lastPhase,
+			)}
+		},
+	)
 }
