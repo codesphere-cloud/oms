@@ -66,7 +66,7 @@ func AddDownloadK0sCmd(download *cobra.Command, opts *GlobalOptions) {
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force download even if k0s binary exists")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
 
-	download.AddCommand(k0s.cmd)
+	AddCmd(download, k0s.cmd)
 
 	k0s.cmd.RunE = k0s.RunE
 }

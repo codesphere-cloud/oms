@@ -110,7 +110,7 @@ func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *GlobalOptions) {
 
 	c.cmd.RunE = c.RunE
 
-	parent.AddCommand(c.cmd)
+	AddCmd(parent, c.cmd)
 }
 
 func (c *SmoketestCodesphereCmd) RunSmoketest() (err error) {

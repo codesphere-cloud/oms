@@ -116,5 +116,5 @@ func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions)
 	flags.StringVar(&cleanup.Opts.DNSProjectID, "dns-project-id", "", "GCP Project ID for DNS zone (optional, will use infra file if not provided)")
 
 	cleanup.cmd.RunE = cleanup.RunE
-	bootstrapGcp.AddCommand(cleanup.cmd)
+	AddCmd(bootstrapGcp, cleanup.cmd)
 }

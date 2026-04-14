@@ -33,6 +33,6 @@ func AddVersionCmd(rootCmd *cobra.Command) {
 			Long:  `Print current version of OMS.`,
 		},
 	}
-	rootCmd.AddCommand(version.cmd)
+	AddCmd(rootCmd, version.cmd)
 	version.cmd.RunE = version.RunE
 }

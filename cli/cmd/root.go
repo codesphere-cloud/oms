@@ -16,6 +16,15 @@ type GlobalOptions struct {
 	OmsPortalApiKey string
 }
 
+// AddCmd adds a command, inheriting the parent's Args validator if not explicitly set.
+// Individual commands that need different argument rules can override this by setting their own Args validator.
+func AddCmd(parent *cobra.Command, cmd *cobra.Command) {
+	if cmd.Args == nil {
+		cmd.Args = parent.Args
+	}
+	parent.AddCommand(cmd)
+}
+
 // GetRootCmd adds all child commands to the root command and sets flags appropriately.
 func GetRootCmd() *cobra.Command {
 	opts := &GlobalOptions{}
@@ -26,6 +35,7 @@ func GetRootCmd() *cobra.Command {
 
 			This command can be used to run common tasks related to managing codesphere installations,
 			like downloading new versions.`),
+		Args: cobra.NoArgs,
 		PersistentPreRun: func(cmd *cobra.Command, args []string) {
 			apiKey := os.Getenv("OMS_PORTAL_API_KEY")
 

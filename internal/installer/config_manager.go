@@ -242,7 +242,21 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 		return fmt.Errorf("no configuration provided - config is nil")
 	}
 
-	vault := g.Config.AddSecretsToVault(g.GetVault())
+	vault := g.Config.ExtractVault()
+
+	// Preserve vault-only secrets that were added directly via SetSecret and aren't on the config struct.
+	if g.Vault != nil {
+		configSecretNames := make(map[string]bool)
+		for _, s := range vault.Secrets {
+			configSecretNames[s.Name] = true
+		}
+		for _, s := range g.Vault.Secrets {
+			if !configSecretNames[s.Name] {
+				vault.Secrets = append(vault.Secrets, s)
+			}
+		}
+	}
+
 	vaultYAML, err := vault.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal vault.yaml: %w", err)

@@ -107,3 +107,49 @@ var _ = Describe("GeneratePassword", func() {
 		Expect(password1).NotTo(Equal(password2))
 	})
 })
+
+var _ = Describe("ValidateCertKeyPair", func() {
+	It("succeeds for a matching cert and key pair", func() {
+		caKeyPEM, caCertPEM, err := GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
+		Expect(err).NotTo(HaveOccurred())
+
+		keyPEM, certPEM, err := GenerateServerCertificate(caKeyPEM, caCertPEM, "test-server", []string{"10.0.0.1"})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = ValidateCertKeyPair(certPEM, keyPEM)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("fails for a mismatched cert and key pair", func() {
+		caKeyPEM, caCertPEM, err := GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
+		Expect(err).NotTo(HaveOccurred())
+
+		_, certPEM, err := GenerateServerCertificate(caKeyPEM, caCertPEM, "server-1", []string{"10.0.0.1"})
+		Expect(err).NotTo(HaveOccurred())
+
+		keyPEM, _, err := GenerateServerCertificate(caKeyPEM, caCertPEM, "server-2", []string{"10.0.0.2"})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = ValidateCertKeyPair(certPEM, keyPEM)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("private key does not match public key"))
+	})
+
+	It("fails for invalid cert PEM", func() {
+		err := ValidateCertKeyPair("not-a-cert", "not-a-key")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to find any PEM data"))
+	})
+
+	It("fails for invalid key PEM", func() {
+		caKeyPEM, caCertPEM, err := GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
+		Expect(err).NotTo(HaveOccurred())
+
+		_, certPEM, err := GenerateServerCertificate(caKeyPEM, caCertPEM, "test-server", []string{"10.0.0.1"})
+		Expect(err).NotTo(HaveOccurred())
+
+		err = ValidateCertKeyPair(certPEM, "not-a-key")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to find any PEM data"))
+	})
+})

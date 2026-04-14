@@ -51,5 +51,5 @@ func AddRevokeAPIKeyCmd(list *cobra.Command, opts *GlobalOptions) {
 
 	c.cmd.RunE = c.RunE
 
-	list.AddCommand(c.cmd)
+	AddCmd(list, c.cmd)
 }

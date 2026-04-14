@@ -83,7 +83,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 
 	_ = k0s.cmd.MarkFlagRequired("install-config")
 
-	install.AddCommand(k0s.cmd)
+	AddCmd(install, k0s.cmd)
 
 	k0s.cmd.RunE = k0s.RunE
 }

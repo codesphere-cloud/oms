@@ -24,5 +24,5 @@ func AddBuildCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	AddBuildImagesCmd(build.cmd, opts)
 	AddBuildImageCmd(build.cmd, opts)
 
-	rootCmd.AddCommand(build.cmd)
+	AddCmd(rootCmd, build.cmd)
 }

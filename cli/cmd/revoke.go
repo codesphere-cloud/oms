@@ -21,6 +21,6 @@ func AddRevokeCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 				eg. api keys.`),
 		},
 	}
-	rootCmd.AddCommand(revoke.cmd)
+	AddCmd(rootCmd, revoke.cmd)
 	AddRevokeAPIKeyCmd(revoke.cmd, opts)
 }

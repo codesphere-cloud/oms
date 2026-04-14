@@ -21,7 +21,7 @@ func AddExtendCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Long:  io.Long(`Extend Codesphere ressources such as base images to customize them for your needs.`),
 		},
 	}
-	rootCmd.AddCommand(extend.cmd)
+	AddCmd(rootCmd, extend.cmd)
 
 	AddExtendBaseimageCmd(extend.cmd, opts)
 }
