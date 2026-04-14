@@ -178,8 +178,8 @@ cloud.google.com/go/artifactregistry v1.14.3/go.mod h1:A2/E9GXnsyXl7GUvQ/2CjHA+m
 cloud.google.com/go/artifactregistry v1.14.4/go.mod h1:SJJcZTMv6ce0LDMUnihCN7WSrI+kBSFV0KIKo8S8aYU=
 cloud.google.com/go/artifactregistry v1.14.6/go.mod h1:np9LSFotNWHcjnOgh8UVK0RFPCTUGbO0ve3384xyHfE=
 cloud.google.com/go/artifactregistry v1.14.7/go.mod h1:0AUKhzWQzfmeTvT4SjfI4zjot72EMfrkvL9g9aRjnnM=
-cloud.google.com/go/artifactregistry v1.22.0 h1:yL1iX0kxord8xVi1C+wvWA8zy07x8XyPIv34/uOnYq8=
-cloud.google.com/go/artifactregistry v1.22.0/go.mod h1:aMmdtqKVmbuxCCb/NGDJYZHsK6AtqlcyvD05ACzs1n8=
+cloud.google.com/go/artifactregistry v1.23.0 h1:Isjhp2tw/7sQf3d0I7modlkIPHTC9TVZbHcWHd1JizY=
+cloud.google.com/go/artifactregistry v1.23.0/go.mod h1:aMmdtqKVmbuxCCb/NGDJYZHsK6AtqlcyvD05ACzs1n8=
 cloud.google.com/go/asset v1.5.0/go.mod h1:5mfs8UvcM5wHhqtSv8J1CtxxaQq3AdBxxQi2jGW/K4o=
 cloud.google.com/go/asset v1.7.0/go.mod h1:YbENsRK4+xTiL+Ofoj5Ckf+O17kJtgp3Y3nn4uzZz5s=
 cloud.google.com/go/asset v1.8.0/go.mod h1:mUNGKhiqIdbr8X7KNayoYvyc4HbbFO9URsjbytpUaW0=
