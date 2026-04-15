@@ -5,9 +5,9 @@ This project includes code licensed under the following terms:
  
 ----------
 Module: cloud.google.com/go/artifactregistry
-Version: v1.22.0
+Version: v1.23.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.22.0/artifactregistry/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.23.0/artifactregistry/LICENSE
  
 ----------
 Module: cloud.google.com/go/auth
@@ -23,9 +23,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.59.0
+Version: v1.60.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.59.0/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.60.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
@@ -35,9 +35,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata
  
 ----------
 Module: cloud.google.com/go/iam/apiv1/iampb
-Version: v1.8.0
+Version: v1.9.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.8.0/iam/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.9.0/iam/LICENSE
  
 ----------
 Module: cloud.google.com/go/longrunning
@@ -47,15 +47,15 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v0.9
  
 ----------
 Module: cloud.google.com/go/resourcemanager
-Version: v1.12.0
+Version: v1.13.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.12.0/resourcemanager/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.13.0/resourcemanager/LICENSE
  
 ----------
 Module: cloud.google.com/go/serviceusage
-Version: v1.11.0
+Version: v1.12.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.11.0/serviceusage/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.12.0/serviceusage/LICENSE
  
 ----------
 Module: code.gitea.io/sdk/gitea
@@ -893,9 +893,9 @@ License URL: https://github.com/prometheus/common/blob/v0.67.5/LICENSE
  
 ----------
 Module: github.com/prometheus/procfs
-Version: v0.19.2
+Version: v0.20.1
 License: Apache-2.0
-License URL: https://github.com/prometheus/procfs/blob/v0.19.2/LICENSE
+License URL: https://github.com/prometheus/procfs/blob/v0.20.1/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
@@ -1121,9 +1121,9 @@ License URL: https://cs.opensource.google/go/x/mod/+/v0.35.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.52.0
+Version: v0.53.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.52.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.53.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
@@ -1169,15 +1169,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.275.0
+Version: v0.276.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.275.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.276.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.275.0
+Version: v0.276.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.275.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.276.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis

@@ -17,7 +17,7 @@ oms beta bootstrap-local [flags]
 
 ```
       --base-domain string          Base domain for Codesphere (default "cs.local")
-      --experiments stringArray     Experiments to enable in Codesphere installation (optional)
+      --experiments stringArray     Experiments to enable in Codesphere installation (optional) (default [managed-services,headless-services,vcluster,custom-service-image,ms-in-ls,secret-management,sub-path-mount])
       --feature-flags stringArray   Feature flags to enable in Codesphere installation (optional)
   -h, --help                        help for bootstrap-local
       --install-config string       Path to install config file (default: <install-dir>/config.yaml)
