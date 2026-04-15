@@ -26,7 +26,7 @@ import (
 
 // installerComponentSteps lists the install-components.js steps executed
 // locally (in order) instead of running the full private-cloud-installer.
-var installerComponentSteps = []string{"setUpCluster", "codesphere"}
+var installerComponentSteps = []string{"setUpCluster", "codesphere", "msBackends"}
 
 // installerArtifactFilename is the artifact to download from the OMS portal.
 const installerArtifactFilename = "installer-lite.tar.gz"
