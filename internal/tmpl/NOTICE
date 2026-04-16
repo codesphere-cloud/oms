@@ -707,9 +707,9 @@ License URL: https://github.com/lann/ps/blob/62de8c46ede0/LICENSE
  
 ----------
 Module: github.com/lib/pq
-Version: v1.12.0
+Version: v1.12.3
 License: MIT
-License URL: https://github.com/lib/pq/blob/v1.12.0/LICENSE
+License URL: https://github.com/lib/pq/blob/v1.12.3/LICENSE
  
 ----------
 Module: github.com/libopenstorage/secrets
@@ -773,9 +773,15 @@ License URL: https://github.com/mitchellh/reflectwalk/blob/v1.0.2/LICENSE
  
 ----------
 Module: github.com/moby/spdystream
-Version: v0.5.0
+Version: v0.5.1
 License: Apache-2.0
-License URL: https://github.com/moby/spdystream/blob/v0.5.0/LICENSE
+License URL: https://github.com/moby/spdystream/blob/v0.5.1/LICENSE
+ 
+----------
+Module: github.com/moby/spdystream/spdy
+Version: v0.5.1
+License: BSD-3-Clause
+License URL: https://github.com/moby/spdystream/blob/v0.5.1/spdy/LICENSE
  
 ----------
 Module: github.com/moby/term
@@ -1241,57 +1247,57 @@ License URL: https://github.com/helm/helm/blob/v4.1.4/LICENSE
  
 ----------
 Module: k8s.io/api
-Version: v0.35.3
+Version: v0.35.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/api/blob/v0.35.3/LICENSE
+License URL: https://github.com/kubernetes/api/blob/v0.35.4/LICENSE
  
 ----------
 Module: k8s.io/apiextensions-apiserver/pkg/apis/apiextensions
-Version: v0.35.3
+Version: v0.35.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/apiextensions-apiserver/blob/v0.35.3/LICENSE
+License URL: https://github.com/kubernetes/apiextensions-apiserver/blob/v0.35.4/LICENSE
  
 ----------
 Module: k8s.io/apimachinery/pkg
-Version: v0.35.3
+Version: v0.35.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/apimachinery/blob/v0.35.3/LICENSE
+License URL: https://github.com/kubernetes/apimachinery/blob/v0.35.4/LICENSE
  
 ----------
 Module: k8s.io/apimachinery/third_party/forked/golang
-Version: v0.35.3
+Version: v0.35.4
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/apimachinery/blob/v0.35.3/third_party/forked/golang/LICENSE
+License URL: https://github.com/kubernetes/apimachinery/blob/v0.35.4/third_party/forked/golang/LICENSE
  
 ----------
 Module: k8s.io/apiserver/pkg/endpoints/deprecation
-Version: v0.35.3
+Version: v0.35.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/apiserver/blob/v0.35.3/LICENSE
+License URL: https://github.com/kubernetes/apiserver/blob/v0.35.4/LICENSE
  
 ----------
 Module: k8s.io/cli-runtime/pkg
-Version: v0.35.3
+Version: v0.35.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/cli-runtime/blob/v0.35.3/LICENSE
+License URL: https://github.com/kubernetes/cli-runtime/blob/v0.35.4/LICENSE
  
 ----------
 Module: k8s.io/client-go
-Version: v0.35.3
+Version: v0.35.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/client-go/blob/v0.35.3/LICENSE
+License URL: https://github.com/kubernetes/client-go/blob/v0.35.4/LICENSE
  
 ----------
 Module: k8s.io/client-go/third_party/forked/golang/template
-Version: v0.35.3
+Version: v0.35.4
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/client-go/blob/v0.35.3/third_party/forked/golang/LICENSE
+License URL: https://github.com/kubernetes/client-go/blob/v0.35.4/third_party/forked/golang/LICENSE
  
 ----------
 Module: k8s.io/component-base/version
-Version: v0.35.3
+Version: v0.35.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/component-base/blob/v0.35.3/LICENSE
+License URL: https://github.com/kubernetes/component-base/blob/v0.35.4/LICENSE
  
 ----------
 Module: k8s.io/klog/v2
@@ -1319,9 +1325,9 @@ License URL: https://github.com/kubernetes/kube-openapi/blob/5883c5ee87b9/pkg/va
  
 ----------
 Module: k8s.io/kubectl/pkg
-Version: v0.35.3
+Version: v0.35.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/kubectl/blob/v0.35.3/LICENSE
+License URL: https://github.com/kubernetes/kubectl/blob/v0.35.4/LICENSE
  
 ----------
 Module: k8s.io/utils
