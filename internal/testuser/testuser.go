@@ -19,10 +19,16 @@ import (
 )
 
 const (
-	testEmail    = "test@codesphere.com"
-	testPassword = "Test1234!"
-	testTeamName = "Tests"
+	TestEmail    = "test@codesphere.com"
+	TestPassword = "Test1234!"
+	TestTeamName = "Tests"
 	tokenPrefix  = "CS_"
+
+	// Default connection parameters.
+	DefaultPort    = 5432
+	DefaultUser    = "postgres"
+	DefaultDBName  = "codesphere"
+	DefaultSSLMode = "disable"
 )
 
 // CreateTestUserOpts contains the options for creating a test user.
@@ -46,16 +52,16 @@ type TestUserResult struct {
 // with a hashed password and API token via SQL. Returns the plaintext credentials.
 func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 	if opts.Port == 0 {
-		opts.Port = 5432
+		opts.Port = DefaultPort
 	}
 	if opts.User == "" {
-		opts.User = "postgres"
+		opts.User = DefaultUser
 	}
 	if opts.DBName == "" {
-		opts.DBName = "codesphere"
+		opts.DBName = DefaultDBName
 	}
 	if opts.SSLMode == "" {
-		opts.SSLMode = "disable"
+		opts.SSLMode = DefaultSSLMode
 	}
 
 	plaintextToken, err := generateAPIToken()
@@ -63,7 +69,7 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 		return nil, fmt.Errorf("failed to generate API token: %w", err)
 	}
 
-	hashedPassword := HashPassword(testPassword)
+	hashedPassword := HashPassword(TestPassword)
 	hashedToken := HashAPIToken(plaintextToken)
 
 	connStr := fmt.Sprintf(
@@ -86,15 +92,35 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 
 	log.Printf("Connected to PostgreSQL at %s:%d", opts.Host, opts.Port)
 
+	result, err := createTestUserInDB(db, hashedPassword, hashedToken)
+	if err != nil {
+		return nil, err
+	}
+
+	result.PlaintextPassword = TestPassword
+	result.PlaintextAPIToken = plaintextToken
+
+	return result, nil
+}
+
+// createTestUserInDB executes the database inserts inside a transaction.
+// Separated from CreateTestUser to enable unit testing with sqlmock.
+func createTestUserInDB(db *sql.DB, hashedPassword, hashedToken string) (*TestUserResult, error) {
+	// Check if test user already exists
+	var exists bool
+	err := db.QueryRow(`SELECT EXISTS(SELECT 1 FROM authservice.credentials WHERE email = $1)`, TestEmail).Scan(&exists)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for existing test user: %w", err)
+	}
+	if exists {
+		return nil, fmt.Errorf("test user %s already exists", TestEmail)
+	}
+
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		}
-	}()
+	defer func() { _ = tx.Rollback() }()
 
 	// Create the user credentials
 	var userID int
@@ -103,7 +129,7 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 			(user_id, email, password_hash, authentication_method, signed_up, banned)
 		VALUES(nextval('authservice.credentials_user_id_seq'::regclass), $1, $2, 'password'::text, false, false)
 		RETURNING user_id`,
-		testEmail, hashedPassword,
+		TestEmail, hashedPassword,
 	).Scan(&userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert credentials: %w", err)
@@ -114,7 +140,7 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 		INSERT INTO authservice.email_confirmations
 			(id, email, pending, created_at)
 		VALUES(uuid_generate_v4(), $1, false, CURRENT_TIMESTAMP)`,
-		testEmail,
+		TestEmail,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert email confirmation: %w", err)
@@ -127,7 +153,7 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 			(id, "name", description, first_team, default_data_center_id, deleted, deletion_pending, created_at)
 		VALUES(nextval('"teamService".teams_id_seq'::regclass), $1, '', true, 1, false, false, CURRENT_TIMESTAMP)
 		RETURNING id`,
-		testTeamName,
+		TestTeamName,
 	).Scan(&teamID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert team: %w", err)
@@ -159,13 +185,25 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Printf("Test user created: email=%s, userID=%d, teamID=%d", testEmail, userID, teamID)
+	log.Printf("Test user created: email=%s, userID=%d, teamID=%d", TestEmail, userID, teamID)
 
 	return &TestUserResult{
-		Email:             testEmail,
-		PlaintextPassword: testPassword,
-		PlaintextAPIToken: plaintextToken,
+		Email: TestEmail,
 	}, nil
+}
+
+// LogAndPersistResult writes the test user result to a JSON file and logs the credentials.
+func LogAndPersistResult(result *TestUserResult, workdir string) {
+	filePath, err := WriteResultToFile(result, workdir)
+	if err != nil {
+		log.Printf("warning: failed to write test user result to file: %v", err)
+	} else {
+		log.Printf("Test user credentials written to %s", filePath)
+	}
+
+	log.Printf("Email:     %s", result.Email)
+	log.Printf("Password:  %s", result.PlaintextPassword)
+	log.Printf("API Token: %s", result.PlaintextAPIToken)
 }
 
 // WriteResultToFile writes the test user result to a JSON file in the given directory.

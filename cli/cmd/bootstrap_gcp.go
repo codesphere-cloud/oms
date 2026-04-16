@@ -237,28 +237,17 @@ func (c *BootstrapGcpCmd) createTestUser(bs *gcp.GCPBootstrapper) error {
 
 	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
 		Host:     pgHost,
-		Port:     5432,
-		User:     "postgres",
+		Port:     testuser.DefaultPort,
+		User:     testuser.DefaultUser,
 		Password: pgPassword,
-		DBName:   "codesphere",
+		DBName:   testuser.DefaultDBName,
 		SSLMode:  "require",
 	})
 	if err != nil {
 		return err
 	}
 
-	workdir := c.Env.GetOmsWorkdir()
-	filePath, err := testuser.WriteResultToFile(result, workdir)
-	if err != nil {
-		log.Printf("warning: failed to write test user result to file: %v", err)
-	} else {
-		log.Printf("Test user credentials written to %s", filePath)
-	}
-
-	log.Printf("Test user created successfully:")
-	log.Printf("  Email:     %s", result.Email)
-	log.Printf("  Password:  %s", result.PlaintextPassword)
-	log.Printf("  API Token: %s", result.PlaintextAPIToken)
+	testuser.LogAndPersistResult(result, c.Env.GetOmsWorkdir())
 
 	return nil
 }

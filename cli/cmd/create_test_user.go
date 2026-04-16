@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/spf13/cobra"
 
@@ -17,47 +16,27 @@ import (
 
 type CreateTestUserCmd struct {
 	cmd  *cobra.Command
-	Opts *CreateTestUserOpts
+	Opts CreateTestUserOpts
+	Env  env.Env
 }
 
 type CreateTestUserOpts struct {
-	PostgresHost     string
-	PostgresPort     int
-	PostgresUser     string
-	PostgresPassword string
-	PostgresDB       string
-	SSLMode          string
+	*GlobalOptions
+	testuser.CreateTestUserOpts
 }
 
 func (c *CreateTestUserCmd) RunE(_ *cobra.Command, args []string) error {
-	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
-		Host:     c.Opts.PostgresHost,
-		Port:     c.Opts.PostgresPort,
-		User:     c.Opts.PostgresUser,
-		Password: c.Opts.PostgresPassword,
-		DBName:   c.Opts.PostgresDB,
-		SSLMode:  c.Opts.SSLMode,
-	})
+	result, err := testuser.CreateTestUser(c.Opts.CreateTestUserOpts)
 	if err != nil {
 		return fmt.Errorf("failed to create test user: %w", err)
 	}
 
-	workdir := env.NewEnv().GetOmsWorkdir()
-	filePath, err := testuser.WriteResultToFile(result, workdir)
-	if err != nil {
-		log.Printf("warning: failed to write test user result to file: %v", err)
-	} else {
-		log.Printf("Test user credentials written to %s", filePath)
-	}
-
-	log.Printf("Email:     %s", result.Email)
-	log.Printf("Password:  %s", result.PlaintextPassword)
-	log.Printf("API Token: %s", result.PlaintextAPIToken)
+	testuser.LogAndPersistResult(result, c.Env.GetOmsWorkdir())
 
 	return nil
 }
 
-func AddCreateTestUserCmd(parent *cobra.Command) {
+func AddCreateTestUserCmd(parent *cobra.Command, opts *GlobalOptions) {
 	c := CreateTestUserCmd{
 		cmd: &cobra.Command{
 			Use:   "test-user",
@@ -70,17 +49,18 @@ func AddCreateTestUserCmd(parent *cobra.Command) {
 
 				Credentials are printed to stdout and saved to the OMS workdir as test-user.json.`),
 		},
-		Opts: &CreateTestUserOpts{},
+		Opts: CreateTestUserOpts{GlobalOptions: opts},
+		Env:  env.NewEnv(),
 	}
 	c.cmd.RunE = c.RunE
 
 	flags := c.cmd.Flags()
-	flags.StringVar(&c.Opts.PostgresHost, "postgres-host", "", "PostgreSQL host address (required)")
-	flags.IntVar(&c.Opts.PostgresPort, "postgres-port", 5432, "PostgreSQL port (default: 5432)")
-	flags.StringVar(&c.Opts.PostgresUser, "postgres-user", "postgres", "PostgreSQL username (default: postgres)")
-	flags.StringVar(&c.Opts.PostgresPassword, "postgres-password", "", "PostgreSQL password (required)")
-	flags.StringVar(&c.Opts.PostgresDB, "postgres-db", "codesphere", "PostgreSQL database name (default: codesphere)")
-	flags.StringVar(&c.Opts.SSLMode, "ssl-mode", "disable", "PostgreSQL SSL mode (default: disable)")
+	flags.StringVar(&c.Opts.Host, "postgres-host", "", "PostgreSQL host address (required)")
+	flags.IntVar(&c.Opts.Port, "postgres-port", testuser.DefaultPort, "PostgreSQL port")
+	flags.StringVar(&c.Opts.User, "postgres-user", testuser.DefaultUser, "PostgreSQL username")
+	flags.StringVar(&c.Opts.Password, "postgres-password", "", "PostgreSQL password (required)")
+	flags.StringVar(&c.Opts.DBName, "postgres-db", testuser.DefaultDBName, "PostgreSQL database name")
+	flags.StringVar(&c.Opts.SSLMode, "ssl-mode", testuser.DefaultSSLMode, "PostgreSQL SSL mode")
 
 	util.MarkFlagRequired(c.cmd, "postgres-host")
 	util.MarkFlagRequired(c.cmd, "postgres-password")

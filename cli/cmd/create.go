@@ -23,5 +23,5 @@ func AddCreateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	}
 	AddCmd(rootCmd, create.cmd)
 
-	AddCreateTestUserCmd(create.cmd)
+	AddCreateTestUserCmd(create.cmd, opts)
 }
