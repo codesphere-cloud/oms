@@ -75,7 +75,7 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	db.SetConnMaxLifetime(30 * time.Second)
 	db.SetMaxOpenConns(1)

@@ -6,7 +6,6 @@ package testuser
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"hash"
 )
 
 // Salts used by Codesphere's auth-service for password hashing.
@@ -29,8 +28,7 @@ func HashAPIToken(apiToken string) string {
 }
 
 func hashSecret(secret, salt string) string {
-	var hasher hash.Hash
-	hasher = sha256.New()
+	hasher := sha256.New()
 	hasher.Write([]byte(secret + salt))
 	return hex.EncodeToString(hasher.Sum(nil))
 }
