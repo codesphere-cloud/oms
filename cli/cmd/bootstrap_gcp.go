@@ -19,6 +19,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
+	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -30,6 +31,7 @@ type BootstrapGcpCmd struct {
 	InputRegistryType string
 	SSHQuiet          bool
 	FeatureFlagList   []string
+	CreateTestUser    bool
 }
 
 func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
@@ -95,6 +97,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.RecoverConfig, "recover-config", false, "Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)")
 	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", false, "Suppress SSH command output (default: false)")
+	flags.BoolVar(&bootstrapGcpCmd.CreateTestUser, "create-test-user", false, "Create a test user with API token on the bootstrapped instance for smoke testing (default: false)")
 
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoURI, "openbao-uri", "", "URI for OpenBao (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")
@@ -165,6 +168,13 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
 	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
+
+	if c.CreateTestUser {
+		if err := c.createTestUser(bs); err != nil {
+			log.Printf("warning: failed to create test user: %v", err)
+		}
+	}
+
 	if bs.Env.InstallVersion != "" {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
 		return nil
@@ -203,6 +213,52 @@ func writeInfraDetails(csEnv *gcp.CodesphereEnvironment) error {
 	}
 
 	log.Printf("Infrastructure details written to %s", infraFilePath)
+
+	return nil
+}
+
+func (c *BootstrapGcpCmd) createTestUser(bs *gcp.GCPBootstrapper) error {
+	if bs.Env.PostgreSQLNode == nil {
+		return fmt.Errorf("postgres node not found in bootstrap environment")
+	}
+
+	pgHost := bs.Env.PostgreSQLNode.GetExternalIP()
+	if pgHost == "" {
+		return fmt.Errorf("postgres node has no external IP")
+	}
+
+	pgPassword := ""
+	if bs.Env.InstallConfig != nil {
+		pgPassword = bs.Env.InstallConfig.Postgres.AdminPassword
+	}
+	if pgPassword == "" {
+		return fmt.Errorf("postgres admin password not found in install config or vault")
+	}
+
+	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
+		Host:     pgHost,
+		Port:     5432,
+		User:     "postgres",
+		Password: pgPassword,
+		DBName:   "codesphere",
+		SSLMode:  "require",
+	})
+	if err != nil {
+		return err
+	}
+
+	workdir := c.Env.GetOmsWorkdir()
+	filePath, err := testuser.WriteResultToFile(result, workdir)
+	if err != nil {
+		log.Printf("warning: failed to write test user result to file: %v", err)
+	} else {
+		log.Printf("Test user credentials written to %s", filePath)
+	}
+
+	log.Printf("Test user created successfully:")
+	log.Printf("  Email:     %s", result.Email)
+	log.Printf("  Password:  %s", result.PlaintextPassword)
+	log.Printf("  API Token: %s", result.PlaintextAPIToken)
 
 	return nil
 }
