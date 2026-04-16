@@ -308,7 +308,6 @@ var _ = Describe("Installconfig & Secrets", func() {
 	Describe("UpdateInstallConfig", func() {
 		BeforeEach(func() {
 			csEnv.GitHubAppName = "fake-app-name"
-			// csEnv.PostgreSQLNode = fakeNode("postgres", nodeClient)
 		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {

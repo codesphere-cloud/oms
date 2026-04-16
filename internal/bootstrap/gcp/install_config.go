@@ -102,7 +102,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	return b.updateInstallConfig(true, true)
 }
 
-func (b *GCPBootstrapper) UpdateInstallConfigCheckpoint() error {
+func (b *GCPBootstrapper) CreateInstallConfigCheckpoint() error {
 	return b.updateInstallConfig(false, false)
 }
 

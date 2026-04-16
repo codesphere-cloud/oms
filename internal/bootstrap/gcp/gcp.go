@@ -215,9 +215,9 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure GCP project: %w", err)
 	}
 
-	err = b.stlog.Step("Snapshot install config", b.UpdateInstallConfigCheckpoint)
+	err = b.stlog.Step("Save install config checkpoint locally", b.CreateInstallConfigCheckpoint)
 	if err != nil {
-		return fmt.Errorf("failed to update install config: %w", err)
+		return fmt.Errorf("failed to create install config checkpoint: %w", err)
 	}
 
 	err = b.stlog.Step("Ensure billing", b.EnsureBilling)
