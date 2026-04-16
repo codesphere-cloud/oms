@@ -103,12 +103,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	return b.updateInstallConfig(true, true)
 }
 
-// CreateInstallConfigCheckpoint updates the install config and writes the new config locally.
-// The resulting local config be used for cleanups or manual interaction on failed bootstraps.
-func (b *GCPBootstrapper) CreateInstallConfigCheckpoint() error {
-	return b.updateInstallConfig(false, false)
-}
-
 // updateInstallConfig update the install config, generates new secrets and writes the new config locally and to the jumpbox.
 // Generating secrets and writing to jumpbox can be skipped if not needed (e.g. when creating a checkpoint and VM's are not present).
 // Returns an error if any step fails.
