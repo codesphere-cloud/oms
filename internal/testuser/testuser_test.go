@@ -111,7 +111,7 @@ var _ = Describe("createTestUserInDB", func() {
 	It("creates a test user successfully", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
-		defer sqlDB.Close()
+		defer func() { _ = sqlDB.Close() }()
 
 		// Expect: check if user exists
 		m.ExpectQuery(`SELECT EXISTS`).
@@ -158,7 +158,7 @@ var _ = Describe("createTestUserInDB", func() {
 	It("returns an error when the test user already exists", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
-		defer sqlDB.Close()
+		defer func() { _ = sqlDB.Close() }()
 
 		m.ExpectQuery(`SELECT EXISTS`).
 			WithArgs(TestEmail).
@@ -173,7 +173,7 @@ var _ = Describe("createTestUserInDB", func() {
 	It("rolls back the transaction on credential insert failure", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
-		defer sqlDB.Close()
+		defer func() { _ = sqlDB.Close() }()
 
 		m.ExpectQuery(`SELECT EXISTS`).
 			WithArgs(TestEmail).
@@ -194,7 +194,7 @@ var _ = Describe("createTestUserInDB", func() {
 	It("rolls back the transaction on team insert failure", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
-		defer sqlDB.Close()
+		defer func() { _ = sqlDB.Close() }()
 
 		m.ExpectQuery(`SELECT EXISTS`).
 			WithArgs(TestEmail).
