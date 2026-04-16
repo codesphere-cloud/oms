@@ -99,6 +99,14 @@ func (b *GCPBootstrapper) recoverVault() error {
 }
 
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
+	return b.updateInstallConfig(true, true)
+}
+
+func (b *GCPBootstrapper) UpdateInstallConfigCheckpoint() error {
+	return b.updateInstallConfig(false, false)
+}
+
+func (b *GCPBootstrapper) updateInstallConfig(generateSecrets, copyToJumpbox bool) error {
 	previousPrimaryIP := b.Env.InstallConfig.Postgres.Primary.IP
 	previousPrimaryHostname := b.Env.InstallConfig.Postgres.Primary.Hostname
 
@@ -106,17 +114,18 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to build install config: %w", err)
 	}
+	b.Env.InstallConfig = &installConfig
 
-	b.Env.InstallConfig = installConfig
-
-	if !b.Env.ExistingConfigUsed {
-		err := b.icg.GenerateSecrets()
-		if err != nil {
-			return fmt.Errorf("failed to generate secrets: %w", err)
-		}
-	} else {
-		if err := b.regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname); err != nil {
-			return err
+	if generateSecrets {
+		if !b.Env.ExistingConfigUsed {
+			err := b.icg.GenerateSecrets()
+			if err != nil {
+				return fmt.Errorf("failed to generate secrets: %w", err)
+			}
+		} else {
+			if err := b.regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname); err != nil {
+				return fmt.Errorf("failed to regenerate postgres certs: %w", err)
+			}
 		}
 	}
 
@@ -128,45 +137,50 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
-	}
+	if copyToJumpbox {
+		err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
+		}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
-	if err != nil {
-		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
+		err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
+		if err != nil {
+			return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (b *GCPBootstrapper) buildInstallConfig() (*files.RootConfig, error) {
-	b.Env.InstallConfig.Datacenter.ID = b.Env.DatacenterID
-	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
-	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
-	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
+func (b *GCPBootstrapper) buildInstallConfig() (files.RootConfig, error) {
+	// Copy existing config
+	installConfig := *b.Env.InstallConfig
+
+	installConfig.Datacenter.ID = b.Env.DatacenterID
+	installConfig.Datacenter.City = "Karlsruhe"
+	installConfig.Datacenter.CountryCode = "DE"
+	installConfig.Secrets.BaseDir = b.Env.SecretsDir
 	if b.Env.RegistryType != RegistryTypeGitHub {
-		b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
-		b.Env.InstallConfig.Registry.LoadContainerImages = true
+		installConfig.Registry.ReplaceImagesInBom = true
+		installConfig.Registry.LoadContainerImages = true
 	}
 
-	if b.Env.InstallConfig.Postgres.Primary == nil {
-		b.Env.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
+	if installConfig.Postgres.Primary == nil {
+		installConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
 			Hostname: b.Env.PostgreSQLNode.GetName(),
 		}
 	}
 
 	if b.Env.PostgreSQLNode != nil {
-		b.Env.InstallConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
-		b.Env.InstallConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
+		installConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
+		installConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
 	}
 
 	// Ceph
-	b.Env.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
-	b.Env.InstallConfig.Ceph.NodesSubnet = "10.10.0.0/20"
-	b.Env.InstallConfig.Ceph.Hosts = buildCephHostsConfig(b.Env.CephNodes)
-	b.Env.InstallConfig.Ceph.OSDs = []files.CephOSD{
+	installConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
+	installConfig.Ceph.NodesSubnet = "10.10.0.0/20"
+	installConfig.Ceph.Hosts = buildCephHostsConfig(b.Env.CephNodes)
+	installConfig.Ceph.OSDs = []files.CephOSD{
 		{
 			SpecID: "default",
 			Placement: files.CephPlacement{
@@ -184,14 +198,14 @@ func (b *GCPBootstrapper) buildInstallConfig() (*files.RootConfig, error) {
 	}
 
 	// K8s
-	b.Env.InstallConfig.Kubernetes = buildKubernetesConfig(b.Env.ControlPlaneNodes)
+	installConfig.Kubernetes = buildKubernetesConfig(b.Env.ControlPlaneNodes)
 
-	b.Env.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
-	b.Env.InstallConfig.Cluster.Gateway.Annotations = map[string]string{
+	installConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
+	installConfig.Cluster.Gateway.Annotations = map[string]string{
 		"cloud.google.com/load-balancer-ipv4": b.Env.GatewayIP,
 	}
-	b.Env.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
-	b.Env.InstallConfig.Cluster.PublicGateway.Annotations = map[string]string{
+	installConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
+	installConfig.Cluster.PublicGateway.Annotations = map[string]string{
 		"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
 	}
 
@@ -199,7 +213,7 @@ func (b *GCPBootstrapper) buildInstallConfig() (*files.RootConfig, error) {
 	if b.Env.DNSProjectID == "" {
 		dnsProject = b.Env.ProjectID
 	}
-	b.Env.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
+	installConfig.Cluster.Certificates.Override = map[string]interface{}{
 		"issuers": map[string]interface{}{
 			"letsEncryptHttp": map[string]interface{}{
 				"enabled": true,
@@ -215,7 +229,7 @@ func (b *GCPBootstrapper) buildInstallConfig() (*files.RootConfig, error) {
 			},
 		},
 	}
-	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+	installConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
 		Type: "acme",
 		Acme: &files.ACMEConfig{
 			Email:  "oms-testing@" + b.Env.BaseDomain,
@@ -223,22 +237,22 @@ func (b *GCPBootstrapper) buildInstallConfig() (*files.RootConfig, error) {
 		},
 	}
 
-	b.Env.InstallConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
-	b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
+	installConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
+	installConfig.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
 	if len(b.Env.ControlPlaneNodes) > 1 {
-		b.Env.InstallConfig.Codesphere.PublicIP = b.Env.ControlPlaneNodes[1].GetExternalIP()
+		installConfig.Codesphere.PublicIP = b.Env.ControlPlaneNodes[1].GetExternalIP()
 	}
 
-	b.Env.InstallConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
+	installConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
 		CNameBaseDomain: "ws." + b.Env.BaseDomain,
 	}
-	b.Env.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
-	b.Env.InstallConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()
-	b.Env.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
+	installConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
+	installConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()
+	installConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
 
-	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
+	installConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
 	if b.Env.GitHubAppName != "" && b.Env.GitHubAppClientID != "" && b.Env.GitHubAppClientSecret != "" {
-		b.Env.InstallConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
+		installConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://github.com",
 			API: files.APIConfig{
@@ -257,11 +271,11 @@ func (b *GCPBootstrapper) buildInstallConfig() (*files.RootConfig, error) {
 			},
 		}
 	}
-	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
-	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
+	installConfig.Codesphere.Experiments = b.Env.Experiments
+	installConfig.Codesphere.Features = b.Env.FeatureFlags
 
 	if b.Env.OpenBaoURI != "" {
-		b.Env.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
+		installConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
 			Engine:   b.Env.OpenBaoEngine,
 			URI:      b.Env.OpenBaoURI,
 			User:     b.Env.OpenBaoUser,
@@ -269,7 +283,7 @@ func (b *GCPBootstrapper) buildInstallConfig() (*files.RootConfig, error) {
 		}
 	}
 
-	return &files.RootConfig{}, nil
+	return installConfig, nil
 }
 
 func buildCephHostsConfig(nodes []*node.Node) []files.CephHost {
@@ -314,6 +328,10 @@ func buildKubernetesConfig(controlPlaneNodes []*node.Node) files.KubernetesConfi
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname
 // changed or no private key was loaded from the vault.
 func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname string) error {
+	if b.Env.InstallConfig.Postgres.Primary == nil {
+		return fmt.Errorf("primary postgres config is not set")
+	}
+
 	// Only regenerate postgres certificates if the IP or hostname changed,
 	// or if the private key was not loaded from the vault.
 	primaryNeedsRegen := b.Env.InstallConfig.Postgres.Primary.PrivateKey == "" ||

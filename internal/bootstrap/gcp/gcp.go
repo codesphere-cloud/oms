@@ -215,7 +215,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure GCP project: %w", err)
 	}
 
-	err = b.stlog.Step("Update install config", b.UpdateInstallConfig)
+	err = b.stlog.Step("Snapshot install config", b.UpdateInstallConfigCheckpoint)
 	if err != nil {
 		return fmt.Errorf("failed to update install config: %w", err)
 	}
