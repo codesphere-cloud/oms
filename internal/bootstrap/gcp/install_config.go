@@ -98,7 +98,7 @@ func (b *GCPBootstrapper) recoverVault() error {
 	return nil
 }
 
-// updateInstallConfig update the install config, generates new secrets and writes the new config locally and to the jumpbox.
+// UpdateInstallConfig update the install config, generates new secrets and writes the new config locally and to the jumpbox.
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	return b.updateInstallConfig(true, true)
 }
@@ -158,6 +158,8 @@ func (b *GCPBootstrapper) updateInstallConfig(generateSecrets, copyToJumpbox boo
 	return nil
 }
 
+// buildInstallConfig builds a new install config based on the current environment.
+// Returns the new config or an error if building the config fails.
 func (b *GCPBootstrapper) buildInstallConfig() (files.RootConfig, error) {
 	// Copy existing config
 	installConfig := *b.Env.InstallConfig
@@ -292,6 +294,8 @@ func (b *GCPBootstrapper) buildInstallConfig() (files.RootConfig, error) {
 	return installConfig, nil
 }
 
+// buildCephHostsConfig builds the Ceph hosts config based on the provided nodes.
+// It marks the first node as master.
 func buildCephHostsConfig(nodes []*node.Node) []files.CephHost {
 	hosts := make([]files.CephHost, len(nodes))
 	for i, node := range nodes {
@@ -301,9 +305,12 @@ func buildCephHostsConfig(nodes []*node.Node) []files.CephHost {
 			IsMaster:  i == 0,
 		}
 	}
+
 	return hosts
 }
 
+// buildKubernetesConfig builds the Kubernetes config based on the provided control plane nodes.
+// The first node is control plane and worker at the same time.
 func buildKubernetesConfig(controlPlaneNodes []*node.Node) files.KubernetesConfig {
 	if len(controlPlaneNodes) == 0 {
 		return files.KubernetesConfig{
