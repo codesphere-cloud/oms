@@ -57,7 +57,7 @@ func AddListPackagesCmd(list *cobra.Command, opts *GlobalOptions) {
 	_ = builds.cmd.Flags().MarkHidden("list-internal")
 	builds.cmd.Flags().StringVarP(&builds.Opts.Sort, "sort", "s", portal.SortSemver, "Sort order: 'semver' (by semantic version) or 'date' (by build date)")
 
-	list.AddCommand(builds.cmd)
+	AddCmd(list, builds.cmd)
 }
 
 func (c *ListBuildsCmd) PrintPackagesTable(packages portal.Builds) {

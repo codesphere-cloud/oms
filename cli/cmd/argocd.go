@@ -70,5 +70,5 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	argocd.cmd.Flags().BoolVar(&argocd.Opts.FullInstall, "deploy-dc-config", false, "Install Codesphere-managed resources (AppProjects, Repo Creds, ...) after installing the chart")
 	argocd.cmd.RunE = argocd.RunE
 
-	parentCmd.AddCommand(argocd.cmd)
+	AddCmd(parentCmd, argocd.cmd)
 }

@@ -19,6 +19,7 @@ import (
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -74,7 +75,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 
 	// Codesphere Environment
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.BaseDomain, "base-domain", "cs.local", "Base domain for Codesphere")
-	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.Experiments, "experiments", []string{}, "Experiments to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapLocalCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.Profile, "profile", installer.PROFILE_DEV, "Profile to apply to the install config like resources (supported: dev, minimal, prod)")
 	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.K0s, "k0s", false, "Use k0s-specific configuration (required to deploy to k0s clusters)")
@@ -90,7 +91,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 
 	util.MarkFlagRequired(bootstrapLocalCmd.cmd, "registry-user")
 
-	parent.AddCommand(bootstrapLocalCmd.cmd)
+	AddCmd(parent, bootstrapLocalCmd.cmd)
 }
 
 func (c *BootstrapLocalCmd) BootstrapLocal() error {

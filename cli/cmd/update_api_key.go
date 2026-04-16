@@ -45,7 +45,7 @@ func AddApiKeyUpdateCmd(parentCmd *cobra.Command) {
 	util.MarkFlagRequired(apiKeyCmd, "id")
 	util.MarkFlagRequired(apiKeyCmd, "valid-for")
 
-	parentCmd.AddCommand(apiKeyCmd)
+	AddCmd(parentCmd, apiKeyCmd)
 }
 
 func (c *UpdateAPIKeyCmd) UpdateAPIKey(p portal.Portal) error {

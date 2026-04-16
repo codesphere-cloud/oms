@@ -181,11 +181,13 @@ type K8sNode struct {
 type ClusterConfig struct {
 	Certificates        ClusterCertificates        `yaml:"certificates"`
 	CertManager         *CertManagerConfig         `yaml:"certManager,omitempty"`
+	TrustManager        *TrustManagerConfig        `yaml:"trustManager,omitempty"`
 	Monitoring          *MonitoringConfig          `yaml:"monitoring,omitempty"`
 	Gateway             GatewayConfig              `yaml:"gateway"`
 	PublicGateway       GatewayConfig              `yaml:"publicGateway"`
 	RookExternalCluster *RookExternalClusterConfig `yaml:"rookExternalCluster,omitempty"`
 	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
+	BarmanCloudPlugin   *BarmanCloudPluginConfig   `yaml:"BarmanCloudPluginConfig,omitempty"`
 	RgwLoadBalancer     *RgwLoadBalancerConfig     `yaml:"rgwLoadBalancer,omitempty"`
 
 	IngressCAKey string `yaml:"-"`
@@ -237,16 +239,27 @@ type CertManagerConfig struct {
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
+type TrustManagerConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
 type RookExternalClusterConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
 type PgOperatorConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled  bool          `yaml:"enabled"`
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type BarmanCloudPluginConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type RgwLoadBalancerConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled  bool          `yaml:"enabled"`
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type MetalLBConfig struct {
@@ -507,7 +520,8 @@ type PlanParam struct {
 }
 
 type ManagedServiceBackendsConfig struct {
-	Postgres map[string]interface{} `yaml:"postgres,omitempty"`
+	Postgres *PgManagedServiceConfig `yaml:"postgres,omitempty"`
+	S3       *S3ManagedServiceConfig `yaml:"s3,omitempty"`
 }
 
 type MonitoringConfig struct {
@@ -561,6 +575,14 @@ type CephHostConfig struct {
 type MetalLBPool struct {
 	Name        string
 	IPAddresses []string
+}
+
+type PgManagedServiceConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type S3ManagedServiceConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 // Marshal serializes the RootConfig to YAML

@@ -43,7 +43,10 @@ func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
 		CreateNamespace: true,
 		Values: map[string]interface{}{
 			"config": map[string]interface{}{
-				"clusterWide": false,
+				"clusterWide": true,
+				"data": map[string]interface{}{
+					"INHERITED_LABELS": "teamId",
+				},
 			},
 			"resources": map[string]interface{}{
 				"requests": map[string]interface{}{

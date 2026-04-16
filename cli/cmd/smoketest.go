@@ -21,7 +21,7 @@ func AddSmoketestCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Long:  io.Long(`Run automated smoke tests for Codesphere installations to verify functionality.`),
 		},
 	}
-	rootCmd.AddCommand(smoketest.cmd)
+	AddCmd(rootCmd, smoketest.cmd)
 
 	AddSmoketestCodesphereCmd(smoketest.cmd, opts)
 }

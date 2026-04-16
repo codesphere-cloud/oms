@@ -170,10 +170,10 @@ func (g *InstallConfig) applyCommonProperties() {
 	}
 	if g.Config.ManagedServiceBackends == nil {
 		g.Config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{
-			Postgres: make(map[string]interface{}),
+			Postgres: &files.PgManagedServiceConfig{},
 		}
 	} else if g.Config.ManagedServiceBackends.Postgres == nil {
-		g.Config.ManagedServiceBackends.Postgres = make(map[string]interface{})
+		g.Config.ManagedServiceBackends.Postgres = &files.PgManagedServiceConfig{}
 	}
 	if g.Config.Codesphere.ManagedServices == nil {
 		g.Config.Codesphere.ManagedServices = []files.ManagedServiceConfig{
@@ -191,9 +191,6 @@ func (g *InstallConfig) applyCommonProperties() {
 func (g *InstallConfig) applyProfileDev() error {
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "dev"
-	}
-	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
-		return fmt.Errorf("applying resource profile: %w", err)
 	}
 	if g.Config.Cluster.Monitoring == nil {
 		g.Config.Cluster.Monitoring = &files.MonitoringConfig{}

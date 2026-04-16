@@ -21,5 +21,5 @@ func AddUpgradeCmd(rootCmd *cobra.Command) {
 		},
 	}
 
-	rootCmd.AddCommand(upgrade.cmd)
+	AddCmd(rootCmd, upgrade.cmd)
 }

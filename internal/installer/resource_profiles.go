@@ -60,6 +60,17 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		},
 	})
 
+	if config.Cluster.TrustManager == nil {
+		config.Cluster.TrustManager = &files.TrustManagerConfig{}
+	}
+	config.Cluster.TrustManager.Override = util.DeepMergeMaps(config.Cluster.TrustManager.Override, map[string]any{
+		"trust-manager": map[string]any{
+			"resources": map[string]any{
+				"requests": zeroRequests(),
+			},
+		},
+	})
+
 	if config.Cluster.Monitoring == nil {
 		config.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
@@ -156,6 +167,61 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 			"resources": map[string]any{
 				"requests": zeroRequests(),
 			},
+		},
+	})
+
+	if config.Cluster.PgOperator == nil {
+		config.Cluster.PgOperator = &files.PgOperatorConfig{}
+	}
+	config.Cluster.PgOperator.Override = util.DeepMergeMaps(config.Cluster.PgOperator.Override, map[string]any{
+		"cloudnative-pg": map[string]any{
+			"config": map[string]any{
+				"clusterWide": false,
+			},
+			"resources": map[string]any{
+				"requests": zeroRequests(),
+			},
+		},
+	})
+
+	if config.Cluster.BarmanCloudPlugin == nil {
+		config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{}
+	}
+	config.Cluster.BarmanCloudPlugin.Override = util.DeepMergeMaps(config.Cluster.BarmanCloudPlugin.Override, map[string]any{
+		"plugin-barman-cloud": map[string]any{
+			"resources": map[string]any{
+				"requests": zeroRequests(),
+			},
+		},
+	})
+
+	if config.Cluster.RgwLoadBalancer == nil {
+		config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{}
+	}
+	config.Cluster.RgwLoadBalancer.Override = util.DeepMergeMaps(config.Cluster.RgwLoadBalancer.Override, map[string]any{
+		"replicas": 1,
+	})
+
+	if config.ManagedServiceBackends == nil {
+		config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{}
+	}
+	if config.ManagedServiceBackends.Postgres == nil {
+		config.ManagedServiceBackends.Postgres = &files.PgManagedServiceConfig{}
+	}
+	config.ManagedServiceBackends.Postgres.Override = util.DeepMergeMaps(config.ManagedServiceBackends.Postgres.Override, map[string]any{
+		"replicas": 1,
+		"resources": map[string]any{
+			"requests": zeroRequests(),
+		},
+	})
+
+	if config.ManagedServiceBackends.S3 == nil {
+		config.ManagedServiceBackends.S3 = &files.S3ManagedServiceConfig{}
+	}
+	config.ManagedServiceBackends.S3.Override = util.DeepMergeMaps(config.ManagedServiceBackends.S3.Override, map[string]any{
+		"replicas": 1,
+		"resources": map[string]any{
+			"requests": zeroRequests(),
 		},
 	})
 
