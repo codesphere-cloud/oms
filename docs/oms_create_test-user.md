@@ -20,12 +20,12 @@ oms create test-user [flags]
 
 ```
   -h, --help                       help for test-user
-      --postgres-db string         PostgreSQL database name (default: codesphere) (default "codesphere")
+      --postgres-db string         PostgreSQL database name (default "codesphere")
       --postgres-host string       PostgreSQL host address (required)
       --postgres-password string   PostgreSQL password (required)
-      --postgres-port int          PostgreSQL port (default: 5432) (default 5432)
-      --postgres-user string       PostgreSQL username (default: postgres) (default "postgres")
-      --ssl-mode string            PostgreSQL SSL mode (default: disable) (default "disable")
+      --postgres-port int          PostgreSQL port (default 5432)
+      --postgres-user string       PostgreSQL username (default "postgres")
+      --ssl-mode string            PostgreSQL SSL mode (default "disable")
 ```
 
 ### SEE ALSO
