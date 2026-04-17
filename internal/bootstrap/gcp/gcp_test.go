@@ -153,6 +153,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().CreateProjectID("test-project").Return(projectId)
 			gc.EXPECT().CreateProject(mock.Anything, mock.Anything, "test-project", mock.Anything).Return(mock.Anything, nil)
 
+			// WriteInfraFile
+			fw.EXPECT().MkdirAll(mock.Anything, os.FileMode(0755)).Return(nil)
+			fw.EXPECT().WriteFile(mock.Anything, mock.Anything, os.FileMode(0644)).Return(nil)
+
 			// EnsureBilling
 			gc.EXPECT().GetBillingInfo(projectId).Return(&cloudbilling.ProjectBillingInfo{BillingEnabled: false}, nil)
 			gc.EXPECT().EnableBilling(projectId, "test-billing-account").Return(nil)

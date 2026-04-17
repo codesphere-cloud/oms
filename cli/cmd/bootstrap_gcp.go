@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -149,26 +148,28 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		c.CodesphereEnv.FeatureFlags[flag] = true
 	}
 
-	bootstrapErr := bs.Bootstrap()
+	err = bs.Bootstrap()
 
-	err = writeInfraDetails(bs.Env)
-	if err != nil {
-		log.Printf("warning: failed to write infra details: %v", err)
+	writeInfraErr := bs.WriteInfraFile()
+	if writeInfraErr != nil {
+		return fmt.Errorf("failed to write infra details: %w", writeInfraErr)
 	}
 
-	if bootstrapErr != nil {
+	if err != nil {
 		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
 			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
-		return fmt.Errorf("failed to bootstrap GCP: %w", bootstrapErr)
+		return fmt.Errorf("failed to bootstrap GCP: %w", err)
 	}
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
 	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 	if bs.Env.InstallVersion != "" {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
+
 		return nil
 	}
+
 	packageName := "<package-name>-installer"
 	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt"
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
@@ -177,32 +178,6 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		packageName += "-lite"
 	}
 	log.Printf("example install command (run from jumpbox):\n%s -p %s.tar.gz", installCmd, packageName)
-
-	return nil
-}
-
-// writeInfraDetails writes details about the bootstrapped codesphere environment into a file.
-func writeInfraDetails(csEnv *gcp.CodesphereEnvironment) error {
-	envBytes, err := json.MarshalIndent(csEnv, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal codesphere env: %w", err)
-	}
-
-	workdir := env.NewEnv().GetOmsWorkdir()
-	fw := util.NewFilesystemWriter()
-
-	err = fw.MkdirAll(workdir, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create workdir %w", err)
-	}
-
-	infraFilePath := gcp.GetInfraFilePath()
-	err = fw.WriteFile(infraFilePath, envBytes, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
-	}
-
-	log.Printf("Infrastructure details written to %s", infraFilePath)
 
 	return nil
 }
