@@ -147,11 +147,26 @@ func createTestUserInDB(db *sql.DB, hashedPassword, hashedToken string) (*TestUs
 	}
 
 	// Create email confirmation (mark as confirmed)
+	emailConfirmationIDBytes := make([]byte, 16)
+	if _, err = rand.Read(emailConfirmationIDBytes); err != nil {
+		return nil, fmt.Errorf("failed to generate email confirmation id: %w", err)
+	}
+	emailConfirmationIDBytes[6] = (emailConfirmationIDBytes[6] & 0x0f) | 0x40
+	emailConfirmationIDBytes[8] = (emailConfirmationIDBytes[8] & 0x3f) | 0x80
+	emailConfirmationID := fmt.Sprintf(
+		"%x-%x-%x-%x-%x",
+		emailConfirmationIDBytes[0:4],
+		emailConfirmationIDBytes[4:6],
+		emailConfirmationIDBytes[6:8],
+		emailConfirmationIDBytes[8:10],
+		emailConfirmationIDBytes[10:16],
+	)
+
 	_, err = tx.Exec(`
 		INSERT INTO authservice.email_confirmations
 			(id, email, pending, created_at)
-		VALUES(uuid_generate_v4(), $1, false, CURRENT_TIMESTAMP)`,
-		TestEmail,
+		VALUES($1, $2, false, CURRENT_TIMESTAMP)`,
+		emailConfirmationID, TestEmail,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert email confirmation: %w", err)

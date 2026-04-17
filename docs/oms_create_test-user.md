@@ -10,7 +10,7 @@ PostgreSQL database. The user can be used for automated smoke tests.
 The command connects to the specified PostgreSQL instance and creates the necessary
 database records (credentials, email confirmation, team, team membership, API token).
 
-Credentials are printed to stdout and saved to the OMS workdir as test-user.json.
+Credentials are displayed and saved to the OMS workdir as test-user.json.
 
 ```
 oms create test-user [flags]

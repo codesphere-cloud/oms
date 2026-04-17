@@ -167,7 +167,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
-	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
+	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY -o SendEnv=OMS_PORTAL_API root@%s", bs.Env.Jumpbox.GetExternalIP())
 
 	if c.CreateTestUser {
 		if err := c.createTestUser(bs); err != nil {
