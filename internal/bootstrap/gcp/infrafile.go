@@ -13,6 +13,7 @@ import (
 
 func GetInfraFilePath() string {
 	workdir := env.NewEnv().GetOmsWorkdir()
+
 	return fmt.Sprintf("%s/gcp-infra.json", workdir)
 }
 
@@ -33,6 +34,7 @@ func LoadInfraFile(fw util.FileIO, infraFilePath string) (CodesphereEnvironment,
 	if err := json.Unmarshal(content, &env); err != nil {
 		return CodesphereEnvironment{}, true, fmt.Errorf("failed to unmarshal gcp infra file: %w", err)
 	}
+
 	return env, true, nil
 }
 
@@ -44,15 +46,13 @@ func (b *GCPBootstrapper) WriteInfraFile() error {
 	}
 
 	workdir := env.NewEnv().GetOmsWorkdir()
-	fw := util.NewFilesystemWriter()
-
-	err = fw.MkdirAll(workdir, 0755)
+	err = b.fw.MkdirAll(workdir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create workdir %w", err)
 	}
 
 	infraFilePath := GetInfraFilePath()
-	err = fw.WriteFile(infraFilePath, envBytes, 0644)
+	err = b.fw.WriteFile(infraFilePath, envBytes, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
 	}
