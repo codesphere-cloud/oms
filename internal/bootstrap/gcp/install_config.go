@@ -158,16 +158,18 @@ func (b *GCPBootstrapper) buildInstallConfig() (files.RootConfig, error) {
 		installConfig.Registry.LoadContainerImages = true
 	}
 
+	if b.Env.PostgreSQLNode == nil {
+		return files.RootConfig{}, fmt.Errorf("postgresql node is not set in environment, cannot build install config")
+	}
+
 	if installConfig.Postgres.Primary == nil {
 		installConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
 			Hostname: b.Env.PostgreSQLNode.GetName(),
 		}
 	}
 
-	if b.Env.PostgreSQLNode != nil {
-		installConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
-		installConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
-	}
+	installConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
+	installConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
 
 	// Ceph
 	installConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
