@@ -77,7 +77,8 @@ var _ = Describe("Infrafile", func() {
 
 	Describe("GetInfraFilePath", func() {
 		AfterEach(func() {
-			os.Unsetenv("OMS_WORKDIR")
+			err := os.Unsetenv("OMS_WORKDIR")
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("returns the default path for the infra file when env var is not set", func() {
@@ -87,7 +88,8 @@ var _ = Describe("Infrafile", func() {
 		})
 
 		It("returns the correct path for the infra file based on the OMS_WORKDIR env var", func() {
-			os.Setenv("OMS_WORKDIR", "/test/workdir")
+			err := os.Setenv("OMS_WORKDIR", "/test/workdir")
+			Expect(err).ToNot(HaveOccurred())
 
 			actualPath := gcp.GetInfraFilePath()
 

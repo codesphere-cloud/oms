@@ -149,7 +149,11 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	err = bs.Bootstrap()
-	writeGcpInfraFile(bs)
+
+	writeInfraErr := bs.WriteInfraFile()
+	if writeInfraErr != nil {
+		log.Printf("warning: failed to write infra details: %v", writeInfraErr)
+	}
 
 	if err != nil {
 		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
@@ -164,6 +168,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
 		return nil
 	}
+
 	packageName := "<package-name>-installer"
 	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt"
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
@@ -174,13 +179,4 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	log.Printf("example install command (run from jumpbox):\n%s -p %s.tar.gz", installCmd, packageName)
 
 	return nil
-}
-
-func writeGcpInfraFile(bs *gcp.GCPBootstrapper) {
-	err := bs.WriteInfraFile()
-	if err != nil {
-		log.Printf("warning: failed to write infra details: %v", err)
-	} else {
-		log.Printf("infrastructure details written to file: %s", gcp.GetInfraFilePath())
-	}
 }
