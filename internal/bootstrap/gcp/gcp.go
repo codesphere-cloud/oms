@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -849,8 +848,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 		return "", fmt.Errorf("install hash must be set when install version is set")
 	}
 	b.stlog.Logf("Downloading Codesphere package...")
-	downloadCmd := fmt.Sprintf("OMS_PORTAL_API_KEY=%s OMS_PORTAL_API=%s oms download package -f %s -H %s %s",
-		os.Getenv("OMS_PORTAL_API_KEY"), os.Getenv("OMS_PORTAL_API"),
+	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
 		packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {

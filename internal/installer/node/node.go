@@ -89,6 +89,7 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 	defer util.IgnoreError(session.Close)
 
 	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
+	_ = session.Setenv("OMS_PORTAL_API", os.Getenv("OMS_PORTAL_API"))
 	_ = agent.RequestAgentForwarding(session) // Best effort, ignore errors
 
 	if !r.Quiet {
@@ -209,7 +210,7 @@ func (n *Node) InstallOms() error {
 
 // HasAcceptEnvConfigured checks if AcceptEnv is configured
 func (n *Node) HasAcceptEnvConfigured() bool {
-	checkCommand := "sudo grep -E '^AcceptEnv OMS_PORTAL_API_KEY' /etc/ssh/sshd_config >/dev/null 2>&1"
+	checkCommand := "sudo grep -E '^AcceptEnv OMS_PORTAL_API_KEY OMS_PORTAL_API' /etc/ssh/sshd_config >/dev/null 2>&1"
 	err := n.RunSSHCommand("ubuntu", checkCommand)
 	if err != nil {
 		// If the command returns a NON-zero exit status, it means AcceptEnv is not configured
@@ -218,10 +219,10 @@ func (n *Node) HasAcceptEnvConfigured() bool {
 	return true
 }
 
-// ConfigureAcceptEnv configures AcceptEnv for OMS_PORTAL_API_KEY
+// ConfigureAcceptEnv configures AcceptEnv for OMS_PORTAL_API_KEY and OMS_PORTAL_API
 func (n *Node) ConfigureAcceptEnv() error {
 	cmds := []string{
-		"sudo sed -i 's/^#\\?AcceptEnv.*/AcceptEnv OMS_PORTAL_API_KEY/' /etc/ssh/sshd_config",
+		"sudo sed -i 's/^#\\?AcceptEnv.*/AcceptEnv OMS_PORTAL_API_KEY OMS_PORTAL_API/' /etc/ssh/sshd_config",
 		"sudo systemctl restart sshd",
 	}
 	for _, cmd := range cmds {

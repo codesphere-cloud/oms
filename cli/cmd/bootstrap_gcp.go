@@ -232,7 +232,7 @@ func (c *BootstrapGcpCmd) createTestUser(bs *gcp.GCPBootstrapper) error {
 		pgPassword = bs.Env.InstallConfig.Postgres.AdminPassword
 	}
 	if pgPassword == "" {
-		return fmt.Errorf("postgres admin password not found in install config or vault")
+		return fmt.Errorf("postgres admin password not found in install config")
 	}
 
 	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{

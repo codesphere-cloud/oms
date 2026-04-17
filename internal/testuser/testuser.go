@@ -63,6 +63,12 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 	if opts.SSLMode == "" {
 		opts.SSLMode = DefaultSSLMode
 	}
+	if opts.Host == "" {
+		return nil, fmt.Errorf("host is required")
+	}
+	if opts.Password == "" {
+		return nil, fmt.Errorf("password is required")
+	}
 
 	plaintextToken, err := generateAPIToken()
 	if err != nil {
@@ -120,7 +126,12 @@ func createTestUserInDB(db *sql.DB, hashedPassword, hashedToken string) (*TestUs
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
 	// Create the user credentials
 	var userID int
@@ -184,6 +195,7 @@ func createTestUserInDB(db *sql.DB, hashedPassword, hashedToken string) (*TestUs
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
+	committed = true
 
 	log.Printf("Test user created: email=%s, userID=%d, teamID=%d", TestEmail, userID, teamID)
 
@@ -213,7 +225,7 @@ func WriteResultToFile(result *TestUserResult, dir string) (string, error) {
 		return "", fmt.Errorf("failed to marshal test user result: %w", err)
 	}
 
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return "", fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
