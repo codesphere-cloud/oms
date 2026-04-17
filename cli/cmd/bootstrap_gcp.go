@@ -152,7 +152,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	writeInfraErr := bs.WriteInfraFile()
 	if writeInfraErr != nil {
-		log.Printf("warning: failed to write infra details: %v", writeInfraErr)
+		return fmt.Errorf("failed to write infra details: %w", writeInfraErr)
 	}
 
 	if err != nil {
@@ -166,6 +166,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 	if bs.Env.InstallVersion != "" {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
+
 		return nil
 	}
 
