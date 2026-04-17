@@ -31,3 +31,15 @@ jobs:
         run: hack/tag-release.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Slack Notification on Failure
+        if: ${{ failure() }}
+        run: |
+          curl -X POST \
+            -H 'Content-type: application/json' \
+            --data '{
+              "channel": "#team-oms-sdk",
+              "icon_emoji": ":siren:",
+              "text": "🚨 Release Job Failure 🚨\nRepository: ${{ github.repository }}\nBranch/Ref: `${{ github.ref }}`\nRun url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }' \
+            ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
