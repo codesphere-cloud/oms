@@ -49,7 +49,11 @@ require (
 	sigs.k8s.io/controller-runtime v0.23.3
 )
 
-require github.com/rook/rook/pkg/apis v0.0.0-20260326184538-170077bdfe86
+require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/lib/pq v1.12.3
+	github.com/rook/rook/pkg/apis v0.0.0-20260326184538-170077bdfe86
+)
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
@@ -583,7 +587,6 @@ require (
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.4.0 // indirect
 	github.com/lann/builder v0.0.0-20180802200727-47ae307949d0 // indirect
 	github.com/lann/ps v0.0.0-20150810152359-62de8c46ede0 // indirect
-	github.com/lib/pq v1.12.0 // indirect
 	github.com/libopenstorage/secrets v0.0.0-20240416031220-a17cf7f72c6c // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
