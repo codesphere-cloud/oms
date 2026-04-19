@@ -49,7 +49,7 @@ require (
 	sigs.k8s.io/controller-runtime v0.23.3
 )
 
-require github.com/rook/rook/pkg/apis v0.0.0-20260326184538-170077bdfe86
+require github.com/rook/rook/pkg/apis v0.0.0-20260417181530-5bd05dcbd0db
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
@@ -571,7 +571,7 @@ require (
 	github.com/hashicorp/go-secure-stdlib/strutil v0.1.2 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.1-vault-7 // indirect
-	github.com/hashicorp/vault/api v1.22.0 // indirect
+	github.com/hashicorp/vault/api v1.23.0 // indirect
 	github.com/hashicorp/vault/api/auth/approle v0.8.0 // indirect
 	github.com/hashicorp/vault/api/auth/kubernetes v0.8.0 // indirect
 	github.com/ianlancetaylor/demangle v0.0.0-20251118225945-96ee0021ea0f // indirect
