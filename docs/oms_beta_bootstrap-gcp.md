@@ -19,6 +19,7 @@ oms beta bootstrap-gcp [flags]
 ```
       --base-domain string                Base domain for Codesphere (required)
       --billing-account string            GCP Billing Account ID (required)
+      --create-test-user                  Create a test user with API token on the bootstrapped instance for smoke testing (default: false)
       --custom-pg-ip string               Custom PostgreSQL IP (optional)
       --datacenter-id int                 Datacenter ID (default: 1) (default 1)
       --dns-project-id string             GCP Project ID for Cloud DNS (optional)

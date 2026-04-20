@@ -707,9 +707,9 @@ License URL: https://github.com/lann/ps/blob/62de8c46ede0/LICENSE
  
 ----------
 Module: github.com/lib/pq
-Version: v1.12.0
+Version: v1.12.3
 License: MIT
-License URL: https://github.com/lib/pq/blob/v1.12.0/LICENSE
+License URL: https://github.com/lib/pq/blob/v1.12.3/LICENSE
  
 ----------
 Module: github.com/libopenstorage/secrets
