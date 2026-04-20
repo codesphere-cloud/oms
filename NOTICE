@@ -215,9 +215,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.3.3/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v0.22.0
+Version: v0.23.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.22.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v0.23.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -623,9 +623,9 @@ License URL: https://github.com/hashicorp/hcl/blob/v1.0.1-vault-7/LICENSE
  
 ----------
 Module: github.com/hashicorp/vault/api
-Version: v1.22.0
+Version: v1.23.0
 License: MPL-2.0
-License URL: https://github.com/hashicorp/vault/blob/api/v1.22.0/api/LICENSE
+License URL: https://github.com/hashicorp/vault/blob/api/v1.23.0/api/LICENSE
  
 ----------
 Module: github.com/hashicorp/vault/api/auth/approle
@@ -905,9 +905,9 @@ License URL: https://github.com/prometheus/procfs/blob/v0.20.1/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260326184538-170077bdfe86
+Version: v0.0.0-20260417181530-5bd05dcbd0db
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/170077bdfe86/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/5bd05dcbd0db/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
