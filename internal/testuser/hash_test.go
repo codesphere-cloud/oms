@@ -12,13 +12,15 @@ import (
 
 var _ = Describe("HashPassword", func() {
 	BeforeEach(func() {
-		os.Setenv("SALT_1", "testsalt1")
-		os.Setenv("SALT_2", "testsalt2")
+		GinkgoHelper()
+		Expect(os.Setenv("SALT_1", "testsalt1")).To(Succeed())
+		Expect(os.Setenv("SALT_2", "testsalt2")).To(Succeed())
 	})
 
 	AfterEach(func() {
-		os.Unsetenv("SALT_1")
-		os.Unsetenv("SALT_2")
+		GinkgoHelper()
+		Expect(os.Unsetenv("SALT_1")).To(Succeed())
+		Expect(os.Unsetenv("SALT_2")).To(Succeed())
 	})
 
 	It("produces a deterministic result", func() {
@@ -45,14 +47,14 @@ var _ = Describe("HashPassword", func() {
 	})
 
 	It("returns an error when SALT_1 is not set", func() {
-		os.Unsetenv("SALT_1")
+		Expect(os.Unsetenv("SALT_1")).To(Succeed())
 		_, err := HashPassword("Test1234!")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("SALT_1"))
 	})
 
 	It("returns an error when SALT_2 is not set", func() {
-		os.Unsetenv("SALT_2")
+		Expect(os.Unsetenv("SALT_2")).To(Succeed())
 		_, err := HashPassword("Test1234!")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("SALT_2"))
@@ -85,10 +87,10 @@ var _ = Describe("HashAPIToken", func() {
 	})
 
 	It("differs from HashPassword for the same input", func() {
-		os.Setenv("SALT_1", "testsalt1")
-		os.Setenv("SALT_2", "testsalt2")
-		defer os.Unsetenv("SALT_1")
-		defer os.Unsetenv("SALT_2")
+		Expect(os.Setenv("SALT_1", "testsalt1")).To(Succeed())
+		Expect(os.Setenv("SALT_2", "testsalt2")).To(Succeed())
+		defer func() { Expect(os.Unsetenv("SALT_1")).To(Succeed()) }()
+		defer func() { Expect(os.Unsetenv("SALT_2")).To(Succeed()) }()
 
 		password, err := HashPassword("testtoken")
 		Expect(err).NotTo(HaveOccurred())

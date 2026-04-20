@@ -4,7 +4,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -189,32 +188,6 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		packageName += "-lite"
 	}
 	log.Printf("example install command (run from jumpbox):\n%s -p %s.tar.gz", installCmd, packageName)
-
-	return nil
-}
-
-// writeInfraDetails writes details about the bootstrapped codesphere environment into a file.
-func writeInfraDetails(csEnv *gcp.CodesphereEnvironment) error {
-	envBytes, err := json.MarshalIndent(csEnv, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal codesphere env: %w", err)
-	}
-
-	workdir := env.NewEnv().GetOmsWorkdir()
-	fw := util.NewFilesystemWriter()
-
-	err = fw.MkdirAll(workdir, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to create workdir %w", err)
-	}
-
-	infraFilePath := gcp.GetInfraFilePath()
-	err = fw.WriteFile(infraFilePath, envBytes, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)
-	}
-
-	log.Printf("Infrastructure details written to %s", infraFilePath)
 
 	return nil
 }
