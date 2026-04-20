@@ -30,6 +30,18 @@ jobs:
       - name: Release Dry-run
         run: make release-local
 
+      - name: Slack Notification on Failure
+        if: ${{ failure() && github.ref == 'refs/heads/main' }}
+        run: |
+          curl -X POST \
+            -H 'Content-type: application/json' \
+            --data '{
+              "channel": "#team-oms-sdk",
+              "icon_emoji": ":siren:",
+              "text": "🚨 Build Job Failure 🚨\nRepository: ${{ github.repository }}\nBranch/Ref: `${{ github.ref }}`\nRun url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }' \
+            ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -42,3 +54,15 @@ jobs:
 
       - name: Test
         run: make test
+
+      - name: Slack Notification on Failure
+        if: ${{ failure() && github.ref == 'refs/heads/main' }}
+        run: |
+          curl -X POST \
+            -H 'Content-type: application/json' \
+            --data '{
+              "channel": "#team-oms-sdk",
+              "icon_emoji": ":siren:",
+              "text": "🚨 Build Job Failure 🚨\nRepository: ${{ github.repository }}\nBranch/Ref: `${{ github.ref }}`\nRun url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }' \
+            ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
