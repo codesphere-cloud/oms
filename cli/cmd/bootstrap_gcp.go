@@ -152,18 +152,18 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		c.CodesphereEnv.FeatureFlags[flag] = true
 	}
 
-	bootstrapErr := bs.Bootstrap()
+	err = bs.Bootstrap()
 
-	err = writeInfraDetails(bs.Env)
-	if err != nil {
-		log.Printf("warning: failed to write infra details: %v", err)
+	writeInfraErr := bs.WriteInfraFile()
+	if writeInfraErr != nil {
+		return fmt.Errorf("failed to write infra details: %w", writeInfraErr)
 	}
 
-	if bootstrapErr != nil {
+	if err != nil {
 		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
 			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
-		return fmt.Errorf("failed to bootstrap GCP: %w", bootstrapErr)
+		return fmt.Errorf("failed to bootstrap GCP: %w", err)
 	}
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
@@ -177,8 +177,10 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	if bs.Env.InstallVersion != "" {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
+
 		return nil
 	}
+
 	packageName := "<package-name>-installer"
 	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt"
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {

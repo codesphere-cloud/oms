@@ -21,7 +21,7 @@ require (
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/cloudnative-pg/cloudnative-pg v1.29.0
-	github.com/codesphere-cloud/cs-go v0.22.0
+	github.com/codesphere-cloud/cs-go v0.23.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/getsops/sops/v3 v3.12.2
 	github.com/google/go-github/v74 v74.0.0
@@ -52,7 +52,7 @@ require (
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/lib/pq v1.12.3
-	github.com/rook/rook/pkg/apis v0.0.0-20260326184538-170077bdfe86
+	github.com/rook/rook/pkg/apis v0.0.0-20260417181530-5bd05dcbd0db
 )
 
 require (
@@ -240,7 +240,7 @@ require (
 	github.com/go-fed/httpsig v1.1.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.8.0 // indirect
-	github.com/go-git/go-git/v5 v5.17.1 // indirect
+	github.com/go-git/go-git/v5 v5.18.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/analysis v0.24.3 // indirect
@@ -575,7 +575,7 @@ require (
 	github.com/hashicorp/go-secure-stdlib/strutil v0.1.2 // indirect
 	github.com/hashicorp/go-sockaddr v1.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.1-vault-7 // indirect
-	github.com/hashicorp/vault/api v1.22.0 // indirect
+	github.com/hashicorp/vault/api v1.23.0 // indirect
 	github.com/hashicorp/vault/api/auth/approle v0.8.0 // indirect
 	github.com/hashicorp/vault/api/auth/kubernetes v0.8.0 // indirect
 	github.com/ianlancetaylor/demangle v0.0.0-20251118225945-96ee0021ea0f // indirect
