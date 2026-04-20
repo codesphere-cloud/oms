@@ -24,7 +24,7 @@ require (
 	github.com/codesphere-cloud/cs-go v0.23.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/getsops/sops/v3 v3.12.2
-	github.com/google/go-github/v74 v74.0.0
+	github.com/google/go-github/v85 v85.0.0
 	github.com/jedib0t/go-pretty/v6 v6.7.9
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.28.1
@@ -49,7 +49,10 @@ require (
 	sigs.k8s.io/controller-runtime v0.23.3
 )
 
-require github.com/rook/rook/pkg/apis v0.0.0-20260417181530-5bd05dcbd0db
+require (
+	github.com/google/go-github/v74 v74.0.0
+	github.com/rook/rook/pkg/apis v0.0.0-20260417181530-5bd05dcbd0db
+)
 
 require (
 	4d63.com/gocheckcompilerdirectives v1.3.0 // indirect
