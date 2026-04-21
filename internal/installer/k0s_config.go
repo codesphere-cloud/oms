@@ -113,7 +113,7 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 		}
 
 		k0sConfig.Spec.Images = &K0sImages{
-			DefaultPullPolicy: "Never",
+			DefaultPullPolicy: "IfNotPresent",
 		}
 
 		k0sConfig.Spec.Telemetry = &K0sTelemetry{

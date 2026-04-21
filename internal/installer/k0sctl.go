@@ -100,6 +100,32 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 	return path, nil
 }
 
+func (k *K0sctl) WriteKubeconfig(k0sctlPath, configPath, kubeconfigPath string) error {
+	if !k.FileWriter.Exists(k0sctlPath) {
+		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
+	}
+
+	if !k.FileWriter.Exists(configPath) {
+		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
+	}
+
+	args := []string{"kubeconfig", "--config", configPath}
+
+	log.Printf("Running k0sctl kubeconfig with config: %s", configPath)
+
+	output, err := util.RunCommandGetOutput(k0sctlPath, args, "")
+	if err != nil {
+		return fmt.Errorf("k0sctl kubeconfig failed: %w", err)
+	}
+
+	err = k.FileWriter.WriteFile(kubeconfigPath, []byte(output), 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write kubeconfig file: %w", err)
+	}
+	log.Println("k0sctl kubeconfig completed successfully")
+	return nil
+}
+
 func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)

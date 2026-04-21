@@ -29,7 +29,7 @@ type K0sctlSpec struct {
 
 type K0sctlHost struct {
 	Role             string            `yaml:"role"`
-	SSH              K0sctlSSH         `yaml:"ssh"`
+	SSH              K0sctlSSH         `yaml:"ssh,omitempty"`
 	InstallFlags     []string          `yaml:"installFlags,omitempty"`
 	PrivateInterface string            `yaml:"privateInterface,omitempty"`
 	PrivateAddress   string            `yaml:"privateAddress,omitempty"`
@@ -90,6 +90,44 @@ func createK0sctlHost(node files.K8sNode, role string, installFlags []string, ss
 	}
 
 	return host
+}
+
+// GenerateK0sctlConfigSingle generates a k0sctl configuration from a Codesphere install-config for a single-node k0s cluster
+func GenerateK0sctlConfigSingle(installConfig *files.RootConfig, k0sVersion string, k0sBinaryPath string) (*K0sctlConfig, error) {
+	if installConfig == nil {
+		return nil, fmt.Errorf("installConfig cannot be nil")
+	}
+
+	if !installConfig.Kubernetes.ManagedByCodesphere {
+		return nil, fmt.Errorf("k0sctl is only supported for Codesphere-managed Kubernetes")
+	}
+
+	// Generate k0s config that will be embedded in k0sctl config
+	k0sConfig, err := GenerateK0sConfig(installConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate k0s config: %w", err)
+	}
+
+	k0sctlConfig := &K0sctlConfig{
+		APIVersion: "k0sctl.k0sproject.io/v1beta1",
+		Kind:       "Cluster",
+		Metadata: K0sctlMeta{
+			Name: fmt.Sprintf("codesphere-%s", installConfig.Datacenter.Name),
+		},
+		Spec: K0sctlSpec{
+			Hosts: []K0sctlHost{
+				{
+					Role:           "single",
+					PrivateAddress: "127.0.0.1",
+				},
+			},
+			K0s: K0sctlK0s{
+				Version: k0sVersion,
+				Config:  k0sConfig,
+			},
+		},
+	}
+	return k0sctlConfig, nil
 }
 
 // GenerateK0sctlConfig generates a k0sctl configuration from a Codesphere install-config

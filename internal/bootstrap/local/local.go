@@ -11,18 +11,27 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
+	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -89,18 +98,19 @@ type CodesphereEnvironment struct {
 	K0s                bool                `json:"-"`
 	PodCIDR            string              `json:"pod_cidr"`
 	ServiceCIDR        string              `json:"service_cidr"`
+
+	// k0sctl configuration fields
+	SSHPublicKey string `json:"ssh_public_key"`
 }
 
-func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, helm installer.HelmClient, env *CodesphereEnvironment) *LocalBootstrapper {
+func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, fw util.FileIO, icg installer.InstallConfigManager, helm installer.HelmClient, env *CodesphereEnvironment) *LocalBootstrapper {
 	return &LocalBootstrapper{
-		ctx:        ctx,
-		stlog:      stlog,
-		kubeClient: kubeClient,
-		restConfig: restConfig,
-		fw:         fw,
-		icg:        icg,
-		helm:       helm,
-		Env:        env,
+		ctx:   ctx,
+		stlog: stlog,
+		fw:    fw,
+		icg:   icg,
+		helm:  helm,
+		Env:   env,
 	}
 }
 
@@ -118,6 +128,11 @@ func (b *LocalBootstrapper) Bootstrap() error {
 	err = b.stlog.Step("Resolve age encryption key", b.ResolveAgeKey)
 	if err != nil {
 		return fmt.Errorf("failed to resolve age encryption key: %w", err)
+	}
+
+	err = b.stlog.Step("Ensure k0s", b.EnsureK0s)
+	if err != nil {
+		return fmt.Errorf("failed to ensure k0s: %w", err)
 	}
 
 	err = b.stlog.Step("Ensure namespaces", b.EnsureNamespaces)
@@ -216,26 +231,34 @@ func (b *LocalBootstrapper) Bootstrap() error {
 
 func (b *LocalBootstrapper) EnsureNamespaces() error {
 	for _, ns := range []string{codesphereSystemNamespace, codesphereNamespace, workspacesNamespace} {
-		namespace := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{Name: ns},
-		}
-
-		// Mark the workspaces namespace as owned by the cluster-config Helm
-		// release so that the chart can manage it during install/upgrade.
-		if ns == workspacesNamespace {
-			namespace.Labels = map[string]string{
-				"app.kubernetes.io/managed-by":   "Helm",
-				"meta.helm.sh/release-name":      "cluster-config",
-				"meta.helm.sh/release-namespace": codesphereNamespace,
+		for retries := 0; retries < 5; retries++ {
+			namespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{Name: ns},
 			}
-			namespace.Annotations = map[string]string{
-				"meta.helm.sh/release-name":      "cluster-config",
-				"meta.helm.sh/release-namespace": codesphereNamespace,
-			}
-		}
 
-		if err := b.kubeClient.Create(b.ctx, namespace); err != nil && !apierrors.IsAlreadyExists(err) {
-			return fmt.Errorf("failed to create namespace %q: %w", ns, err)
+			// Mark the workspaces namespace as owned by the cluster-config Helm
+			// release so that the chart can manage it during install/upgrade.
+			if ns == workspacesNamespace {
+				namespace.Labels = map[string]string{
+					"app.kubernetes.io/managed-by":   "Helm",
+					"meta.helm.sh/release-name":      "cluster-config",
+					"meta.helm.sh/release-namespace": codesphereNamespace,
+				}
+				namespace.Annotations = map[string]string{
+					"meta.helm.sh/release-name":      "cluster-config",
+					"meta.helm.sh/release-namespace": codesphereNamespace,
+				}
+			}
+
+			err := b.kubeClient.Create(b.ctx, namespace)
+			if err != nil && !apierrors.IsAlreadyExists(err) {
+				return fmt.Errorf("failed to create namespace %q: %w", ns, err)
+			}
+
+			if err == nil || apierrors.IsAlreadyExists(err) {
+				break
+			}
+			time.Sleep(5 * time.Second)
 		}
 	}
 
@@ -489,6 +512,62 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 	return nil
 }
 
+func (b *LocalBootstrapper) EnsureK0s() error {
+
+	fw := util.NewFilesystemWriter()
+	hw := portal.NewHttpWrapper()
+	env := env.NewEnv()
+	k0s := installer.NewK0s(hw, env, fw)
+	k0sVersion, err := k0s.GetLatestVersion()
+	if err != nil {
+		return fmt.Errorf("failed to get latest k0s version: %w", err)
+	}
+	k0sPath, err := k0s.Download(k0sVersion, true, false)
+	if err != nil {
+		return fmt.Errorf("failed to download k0s: %w", err)
+	}
+
+	k0sctl := installer.NewK0sctl(hw, env, fw)
+	k0sctlpath, err := k0sctl.Download("", true, false)
+	if err != nil {
+		return fmt.Errorf("failed to download k0sctl: %w", err)
+	}
+
+	k0sctlConfig, err := installer.GenerateK0sctlConfigSingle(b.Env.InstallConfig, k0sVersion, k0sPath)
+	if err != nil {
+		return fmt.Errorf("failed to generate k0sctl config: %w", err)
+	}
+
+	k0sctlConfigData, err := k0sctlConfig.Marshal()
+	if err != nil {
+		return fmt.Errorf("failed to marshal k0sctl config: %w", err)
+	}
+
+	k0sctlConfigPath := filepath.Join(env.GetOmsWorkdir(), "k0sctl-config.yaml")
+	err = fw.WriteFile(k0sctlConfigPath, k0sctlConfigData, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write k0sctl config: %w", err)
+	}
+
+	err = k0sctl.Apply(k0sctlConfigPath, k0sctlpath, false)
+	if err != nil {
+		return fmt.Errorf("failed to apply k0sctl config: %w", err)
+	}
+
+	kubeconfigPath := filepath.Join(env.GetOmsWorkdir(), "kubeconfig.yaml")
+	err = k0sctl.WriteKubeconfig(k0sctlpath, k0sctlConfigPath, kubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to write kubeconfig: %w", err)
+	}
+
+	b.kubeClient, b.restConfig, err = b.GetKubeClient(context.Background(), kubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize Kubernetes client: %w", err)
+	}
+
+	return nil
+}
+
 func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	b.Env.InstallConfig.Secrets.BaseDir = filepath.Join(b.Env.InstallDir, "secrets")
 	if err := os.MkdirAll(b.Env.InstallConfig.Secrets.BaseDir, 0700); err != nil {
@@ -700,4 +779,34 @@ func (b *LocalBootstrapper) getKubeConfig() (string, error) {
 	}
 
 	return string(data), nil
+}
+
+func (b *LocalBootstrapper) GetKubeClient(ctx context.Context, kubeconfigPath string) (ctrlclient.Client, *rest.Config, error) {
+	err := os.Setenv("KUBECONFIG", kubeconfigPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to set KUBECONFIG environment variable: %w", err)
+	}
+	kubeConfig, err := ctrlconfig.GetConfig()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load Kubernetes config: %w", err)
+	}
+
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return nil, nil, fmt.Errorf("failed to add Kubernetes core scheme: %w", err)
+	}
+
+	if err := cnpgv1.AddToScheme(scheme); err != nil {
+		return nil, nil, fmt.Errorf("failed to add CloudNativePG scheme: %w", err)
+	}
+
+	if err := rookcephv1.AddToScheme(scheme); err != nil {
+		return nil, nil, fmt.Errorf("failed to add Rook Ceph scheme: %w", err)
+	}
+
+	kubeClient, err := ctrlclient.New(kubeConfig, ctrlclient.Options{Scheme: scheme})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize Kubernetes client: %w", err)
+	}
+	return kubeClient, kubeConfig, nil
 }

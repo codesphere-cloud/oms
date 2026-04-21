@@ -128,17 +128,13 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	stlog := bootstrap.NewStepLogger(false)
 	icg := installer.NewInstallConfigManager()
 	fw := util.NewFilesystemWriter()
-	kubeClient, restConfig, err := c.GetKubeClient(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to initialize Kubernetes client: %w", err)
-	}
 
 	helmClient, err := installer.NewHelmClient("codesphere")
 	if err != nil {
 		return fmt.Errorf("failed to initialize Helm client: %w", err)
 	}
 
-	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, helmClient, c.CodesphereEnv)
+	bs := local.NewLocalBootstrapper(ctx, stlog, fw, icg, helmClient, c.CodesphereEnv)
 	return bs.Bootstrap()
 }
 
@@ -228,9 +224,9 @@ func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Clien
 }
 
 func (c *BootstrapLocalCmd) ValidatePrerequisites(ctx context.Context) error {
-	if err := c.ValidateKubernetesCluster(ctx); err != nil {
-		return err
-	}
+	//if err := c.ValidateKubernetesCluster(ctx); err != nil {
+	//	return err
+	//}
 
 	if err := c.ValidateHelmVersion(ctx); err != nil {
 		return err
