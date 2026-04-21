@@ -24,7 +24,6 @@ require (
 	github.com/codesphere-cloud/cs-go v0.23.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/getsops/sops/v3 v3.12.2
-	github.com/google/go-github/v85 v85.0.0
 	github.com/jedib0t/go-pretty/v6 v6.7.9
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.28.1
@@ -53,7 +52,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/lib/pq v1.12.3
 	github.com/google/go-github/v74 v74.0.0
-	github.com/rook/rook/pkg/apis v0.0.0-20260417181530-5bd05dcbd0db
+	github.com/rook/rook/pkg/apis v0.0.0-20260421122039-59ce48ae88e5
 )
 
 require (
