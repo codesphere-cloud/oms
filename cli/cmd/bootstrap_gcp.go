@@ -202,10 +202,10 @@ func (c *BootstrapGcpCmd) createTestUser(bs *gcp.GCPBootstrapper) error {
 		return fmt.Errorf("postgres node has no external IP")
 	}
 
-	pgPassword := ""
-	if bs.Env.InstallConfig != nil {
-		pgPassword = bs.Env.InstallConfig.Postgres.AdminPassword
+	if bs.Env.InstallConfig == nil {
+		return fmt.Errorf("install config not found in bootstrap environment")
 	}
+	pgPassword := bs.Env.InstallConfig.Postgres.AdminPassword
 	if pgPassword == "" {
 		return fmt.Errorf("postgres admin password not found in install config")
 	}
