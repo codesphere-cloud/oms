@@ -155,7 +155,7 @@ var _ = Describe("createInDB", func() {
 
 		// Expect: insert email confirmation
 		m.ExpectExec(`INSERT INTO authservice.email_confirmations`).
-			WithArgs(sqlmock.AnyArg(), TestEmail).
+			WithArgs(TestEmail).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		// Expect: insert team
@@ -232,7 +232,7 @@ var _ = Describe("createInDB", func() {
 			WithArgs(TestEmail, hashedPassword).
 			WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(42))
 		m.ExpectExec(`INSERT INTO authservice.email_confirmations`).
-			WithArgs(sqlmock.AnyArg(), TestEmail).
+			WithArgs(TestEmail).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		m.ExpectQuery(`INSERT INTO "teamService".teams`).
 			WithArgs(TestTeamName).

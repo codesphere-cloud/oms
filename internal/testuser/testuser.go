@@ -73,24 +73,15 @@ func New(opts CreateTestUserOpts) (*TestUserCreator, error) {
 	if opts.Password == "" {
 		return nil, fmt.Errorf("password is required")
 	}
-	return &TestUserCreator{opts: opts}, nil
-}
 
-// newWithDB creates a TestUserCreator with an already-opened DB.
-func newWithDB(opts CreateTestUserOpts, db *sql.DB) *TestUserCreator {
-	return &TestUserCreator{opts: opts, db: db}
-}
-
-// Connect opens the database connection and verifies it with a ping.
-func (c *TestUserCreator) Connect() error {
 	connStr := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s connect_timeout=10",
-		c.opts.Host, c.opts.Port, c.opts.User, c.opts.Password, c.opts.DBName, c.opts.SSLMode,
+		opts.Host, opts.Port, opts.User, opts.Password, opts.DBName, opts.SSLMode,
 	)
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		return fmt.Errorf("failed to open database connection: %w", err)
+		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}
 
 	db.SetConnMaxLifetime(30 * time.Second)
@@ -98,12 +89,16 @@ func (c *TestUserCreator) Connect() error {
 
 	if err := db.Ping(); err != nil {
 		_ = db.Close()
-		return fmt.Errorf("failed to connect to database at %s:%d: %w", c.opts.Host, c.opts.Port, err)
+		return nil, fmt.Errorf("failed to connect to database at %s:%d: %w", opts.Host, opts.Port, err)
 	}
 
-	log.Printf("Connected to PostgreSQL at %s:%d", c.opts.Host, c.opts.Port)
-	c.db = db
-	return nil
+	log.Printf("Connected to PostgreSQL at %s:%d", opts.Host, opts.Port)
+	return &TestUserCreator{opts: opts, db: db}, nil
+}
+
+// newWithDB creates a TestUserCreator with an already-opened DB.
+func newWithDB(opts CreateTestUserOpts, db *sql.DB) *TestUserCreator {
+	return &TestUserCreator{opts: opts, db: db}
 }
 
 // close closes the underlying database connection.
@@ -143,13 +138,10 @@ func (c *TestUserCreator) Create() (*TestUserResult, error) {
 	return result, nil
 }
 
-// CreateTestUser is a convenience facade: New -> Connect -> Create -> close.
+// CreateTestUser is a convenience facade: New -> Create -> close.
 func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 	creator, err := New(opts)
 	if err != nil {
-		return nil, err
-	}
-	if err := creator.Connect(); err != nil {
 		return nil, err
 	}
 	defer func() { _ = creator.close() }()
@@ -158,10 +150,9 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 
 // createInDB executes the database inserts inside a transaction.
 func (c *TestUserCreator) createInDB(hashedPassword, hashedToken string) (*TestUserResult, error) {
-	var exists bool
-	err := c.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM authservice.credentials WHERE email = $1)`, TestEmail).Scan(&exists)
+	exists, err := c.userExists()
 	if err != nil {
-		return nil, fmt.Errorf("failed to check for existing test user: %w", err)
+		return nil, err
 	}
 	if exists {
 		return nil, fmt.Errorf("test user %s already exists", TestEmail)
@@ -171,12 +162,7 @@ func (c *TestUserCreator) createInDB(hashedPassword, hashedToken string) (*TestU
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
-		}
-	}()
+	defer func() { _ = tx.Rollback() }()
 
 	userID, err := c.insertCredentials(tx, hashedPassword)
 	if err != nil {
@@ -203,11 +189,19 @@ func (c *TestUserCreator) createInDB(hashedPassword, hashedToken string) (*TestU
 	if err = tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
-	committed = true
 
 	log.Printf("Test user created: email=%s, userID=%d, teamID=%d", TestEmail, userID, teamID)
 
 	return &TestUserResult{Email: TestEmail}, nil
+}
+
+func (c *TestUserCreator) userExists() (bool, error) {
+	var exists bool
+	err := c.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM authservice.credentials WHERE email = $1)`, TestEmail).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to check for existing test user: %w", err)
+	}
+	return exists, nil
 }
 
 func (c *TestUserCreator) insertCredentials(tx *sql.Tx, hashedPassword string) (int, error) {
@@ -226,26 +220,11 @@ func (c *TestUserCreator) insertCredentials(tx *sql.Tx, hashedPassword string) (
 }
 
 func (c *TestUserCreator) insertEmailConfirmation(tx *sql.Tx) error {
-	emailConfirmationIDBytes := make([]byte, 16)
-	if _, err := rand.Read(emailConfirmationIDBytes); err != nil {
-		return fmt.Errorf("failed to generate email confirmation id: %w", err)
-	}
-	emailConfirmationIDBytes[6] = (emailConfirmationIDBytes[6] & 0x0f) | 0x40
-	emailConfirmationIDBytes[8] = (emailConfirmationIDBytes[8] & 0x3f) | 0x80
-	emailConfirmationID := fmt.Sprintf(
-		"%x-%x-%x-%x-%x",
-		emailConfirmationIDBytes[0:4],
-		emailConfirmationIDBytes[4:6],
-		emailConfirmationIDBytes[6:8],
-		emailConfirmationIDBytes[8:10],
-		emailConfirmationIDBytes[10:16],
-	)
-
 	_, err := tx.Exec(`
 		INSERT INTO authservice.email_confirmations
 			(id, email, pending, created_at)
-		VALUES($1, $2, false, CURRENT_TIMESTAMP)`,
-		emailConfirmationID, TestEmail,
+		VALUES(uuid_generate_v4(), $1, false, CURRENT_TIMESTAMP)`,
+		TestEmail,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert email confirmation: %w", err)

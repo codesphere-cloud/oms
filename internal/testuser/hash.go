@@ -11,15 +11,15 @@ import (
 )
 
 // HashPassword hashes a password using Codesphere's double-SHA256 scheme with salts.
-// The salts are read from environment variables SALT_1 and SALT_2.
+// The salts are read from environment variables OMS_CS_SALT_1 and OMS_CS_SALT_2.
 func HashPassword(password string) (string, error) {
-	salt1 := os.Getenv("SALT_1")
+	salt1 := os.Getenv("OMS_CS_SALT_1")
 	if salt1 == "" {
-		return "", fmt.Errorf("SALT_1 environment variable is not set")
+		return "", fmt.Errorf("OMS_CS_SALT_1 environment variable is not set")
 	}
-	salt2 := os.Getenv("SALT_2")
+	salt2 := os.Getenv("OMS_CS_SALT_2")
 	if salt2 == "" {
-		return "", fmt.Errorf("SALT_2 environment variable is not set")
+		return "", fmt.Errorf("OMS_CS_SALT_2 environment variable is not set")
 	}
 
 	hashed := hashSecret(password, salt1)
