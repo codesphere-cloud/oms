@@ -50,7 +50,7 @@ require (
 
 require (
 	github.com/google/go-github/v74 v74.0.0
-	github.com/rook/rook/pkg/apis v0.0.0-20260421122039-59ce48ae88e5
+	github.com/rook/rook/pkg/apis v0.0.0-20260422153639-c250b47c4fe1
 )
 
 require (
