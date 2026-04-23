@@ -9,6 +9,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/node"
 )
 
 const (
@@ -97,46 +98,84 @@ func (b *GCPBootstrapper) recoverVault() error {
 	return nil
 }
 
+// updateInstallConfig update the install config, generates new secrets and writes the new config locally and to the jumpbox.
+// Generating secrets and writing to jumpbox can be skipped if not needed (e.g. when creating a checkpoint and VM's are not present).
+// Returns an error if any step fails.
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
-	// Update install config with necessary values
-	b.Env.InstallConfig.Datacenter.ID = b.Env.DatacenterID
-	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
-	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
-	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
-	if b.Env.RegistryType != RegistryTypeGitHub {
-		b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
-		b.Env.InstallConfig.Registry.LoadContainerImages = true
+	previousPrimaryIP := b.Env.InstallConfig.Postgres.Primary.IP
+	previousPrimaryHostname := b.Env.InstallConfig.Postgres.Primary.Hostname
+
+	installConfig, err := b.buildInstallConfig()
+	if err != nil {
+		return fmt.Errorf("failed to build install config: %w", err)
+	}
+	b.Env.InstallConfig = &installConfig
+
+	if !b.Env.ExistingConfigUsed {
+		err := b.icg.GenerateSecrets()
+		if err != nil {
+			return fmt.Errorf("failed to generate secrets: %w", err)
+		}
+	} else {
+		if err := b.regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname); err != nil {
+			return fmt.Errorf("failed to regenerate postgres certs: %w", err)
+		}
 	}
 
-	if b.Env.InstallConfig.Postgres.Primary == nil {
-		b.Env.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
+	if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
+		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
+		return fmt.Errorf("failed to write vault file: %w", err)
+	}
+
+	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
+	if err != nil {
+		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
+	}
+
+	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
+	if err != nil {
+		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// buildInstallConfig builds a new install config based on the current environment.
+// Returns the new config or an error if building the config fails.
+func (b *GCPBootstrapper) buildInstallConfig() (files.RootConfig, error) {
+	// Copy existing config
+	installConfig := *b.Env.InstallConfig
+
+	installConfig.Datacenter.ID = b.Env.DatacenterID
+	installConfig.Datacenter.City = "Karlsruhe"
+	installConfig.Datacenter.CountryCode = "DE"
+	installConfig.Secrets.BaseDir = b.Env.SecretsDir
+	if b.Env.RegistryType != RegistryTypeGitHub {
+		installConfig.Registry.ReplaceImagesInBom = true
+		installConfig.Registry.LoadContainerImages = true
+	}
+
+	if b.Env.PostgreSQLNode == nil {
+		return files.RootConfig{}, fmt.Errorf("postgresql node is not set in environment, cannot build install config")
+	}
+
+	if installConfig.Postgres.Primary == nil {
+		installConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
 			Hostname: b.Env.PostgreSQLNode.GetName(),
 		}
 	}
 
-	previousPrimaryIP := b.Env.InstallConfig.Postgres.Primary.IP
-	previousPrimaryHostname := b.Env.InstallConfig.Postgres.Primary.Hostname
-	b.Env.InstallConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
-	b.Env.InstallConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
+	installConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
+	installConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
 
-	b.Env.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
-	b.Env.InstallConfig.Ceph.NodesSubnet = "10.10.0.0/20"
-	b.Env.InstallConfig.Ceph.Hosts = []files.CephHost{
-		{
-			Hostname:  b.Env.CephNodes[0].GetName(),
-			IsMaster:  true,
-			IPAddress: b.Env.CephNodes[0].GetInternalIP(),
-		},
-		{
-			Hostname:  b.Env.CephNodes[1].GetName(),
-			IPAddress: b.Env.CephNodes[1].GetInternalIP(),
-		},
-		{
-			Hostname:  b.Env.CephNodes[2].GetName(),
-			IPAddress: b.Env.CephNodes[2].GetInternalIP(),
-		},
-	}
-	b.Env.InstallConfig.Ceph.OSDs = []files.CephOSD{
+	// Ceph
+	installConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
+	installConfig.Ceph.NodesSubnet = "10.10.0.0/20"
+	installConfig.Ceph.Hosts = buildCephHostsConfig(b.Env.CephNodes)
+	installConfig.Ceph.OSDs = []files.CephOSD{
 		{
 			SpecID: "default",
 			Placement: files.CephPlacement{
@@ -153,33 +192,15 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		},
 	}
 
-	b.Env.InstallConfig.Kubernetes = files.KubernetesConfig{
-		ManagedByCodesphere: true,
-		APIServerHost:       b.Env.ControlPlaneNodes[0].GetInternalIP(),
-		ControlPlanes: []files.K8sNode{
-			{
-				IPAddress: b.Env.ControlPlaneNodes[0].GetInternalIP(),
-			},
-		},
-		Workers: []files.K8sNode{
-			{
-				IPAddress: b.Env.ControlPlaneNodes[0].GetInternalIP(),
-			},
+	// K8s
+	installConfig.Kubernetes = buildKubernetesConfig(b.Env.ControlPlaneNodes)
 
-			{
-				IPAddress: b.Env.ControlPlaneNodes[1].GetInternalIP(),
-			},
-			{
-				IPAddress: b.Env.ControlPlaneNodes[2].GetInternalIP(),
-			},
-		},
-	}
-	b.Env.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
-	b.Env.InstallConfig.Cluster.Gateway.Annotations = map[string]string{
+	installConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
+	installConfig.Cluster.Gateway.Annotations = map[string]string{
 		"cloud.google.com/load-balancer-ipv4": b.Env.GatewayIP,
 	}
-	b.Env.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
-	b.Env.InstallConfig.Cluster.PublicGateway.Annotations = map[string]string{
+	installConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
+	installConfig.Cluster.PublicGateway.Annotations = map[string]string{
 		"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
 	}
 
@@ -187,7 +208,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	if b.Env.DNSProjectID == "" {
 		dnsProject = b.Env.ProjectID
 	}
-	b.Env.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
+	installConfig.Cluster.Certificates.Override = map[string]interface{}{
 		"issuers": map[string]interface{}{
 			"letsEncryptHttp": map[string]interface{}{
 				"enabled": true,
@@ -203,7 +224,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
-	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+	installConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
 		Type: "acme",
 		Acme: &files.ACMEConfig{
 			Email:  "oms-testing@" + b.Env.BaseDomain,
@@ -211,19 +232,22 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		},
 	}
 
-	b.Env.InstallConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
-	b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
-	b.Env.InstallConfig.Codesphere.PublicIP = b.Env.ControlPlaneNodes[1].GetExternalIP()
-	b.Env.InstallConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
+	installConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
+	installConfig.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
+	if len(b.Env.ControlPlaneNodes) > 1 {
+		installConfig.Codesphere.PublicIP = b.Env.ControlPlaneNodes[1].GetExternalIP()
+	}
+
+	installConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
 		CNameBaseDomain: "ws." + b.Env.BaseDomain,
 	}
-	b.Env.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
-	b.Env.InstallConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()
-	b.Env.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
+	installConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
+	installConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()
+	installConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
 
-	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
+	installConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
 	if b.Env.GitHubAppName != "" && b.Env.GitHubAppClientID != "" && b.Env.GitHubAppClientSecret != "" {
-		b.Env.InstallConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
+		installConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://github.com",
 			API: files.APIConfig{
@@ -242,22 +266,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		}
 	}
-	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
-	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
-
-	if !b.Env.ExistingConfigUsed {
-		err := b.icg.GenerateSecrets()
-		if err != nil {
-			return fmt.Errorf("failed to generate secrets: %w", err)
-		}
-	} else {
-		if err := b.regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname); err != nil {
-			return err
-		}
-	}
+	installConfig.Codesphere.Experiments = b.Env.Experiments
+	installConfig.Codesphere.Features = b.Env.FeatureFlags
 
 	if b.Env.OpenBaoURI != "" {
-		b.Env.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
+		installConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
 			Engine:   b.Env.OpenBaoEngine,
 			URI:      b.Env.OpenBaoURI,
 			User:     b.Env.OpenBaoUser,
@@ -265,30 +278,60 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
-	if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
-		return fmt.Errorf("failed to write config file: %w", err)
+	return installConfig, nil
+}
+
+// buildCephHostsConfig builds the Ceph hosts config based on the provided nodes.
+// It marks the first node as master.
+func buildCephHostsConfig(nodes []*node.Node) []files.CephHost {
+	hosts := make([]files.CephHost, len(nodes))
+	for i, node := range nodes {
+		hosts[i] = files.CephHost{
+			Hostname:  node.GetName(),
+			IPAddress: node.GetInternalIP(),
+			IsMaster:  i == 0,
+		}
 	}
 
-	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
-		return fmt.Errorf("failed to write vault file: %w", err)
+	return hosts
+}
+
+// buildKubernetesConfig builds the Kubernetes config based on the provided control plane nodes.
+// The first node is control plane and worker at the same time.
+func buildKubernetesConfig(controlPlaneNodes []*node.Node) files.KubernetesConfig {
+	if len(controlPlaneNodes) == 0 {
+		return files.KubernetesConfig{
+			ControlPlanes: []files.K8sNode{},
+			Workers:       []files.K8sNode{},
+		}
 	}
 
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
+	k8sConfig := files.KubernetesConfig{
+		ManagedByCodesphere: true,
+		APIServerHost:       controlPlaneNodes[0].GetInternalIP(),
+		ControlPlanes: []files.K8sNode{
+			{
+				IPAddress: controlPlaneNodes[0].GetInternalIP(),
+			},
+		},
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
-	if err != nil {
-		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
+	for _, workerNode := range controlPlaneNodes {
+		k8sConfig.Workers = append(k8sConfig.Workers, files.K8sNode{
+			IPAddress: workerNode.GetInternalIP(),
+		})
 	}
 
-	return nil
+	return k8sConfig
 }
 
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname
 // changed or no private key was loaded from the vault.
 func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname string) error {
+	if b.Env.InstallConfig.Postgres.Primary == nil {
+		return fmt.Errorf("primary postgres config is not set")
+	}
+
 	// Only regenerate postgres certificates if the IP or hostname changed,
 	// or if the private key was not loaded from the vault.
 	primaryNeedsRegen := b.Env.InstallConfig.Postgres.Primary.PrivateKey == "" ||
