@@ -102,33 +102,6 @@ var _ = Describe("WriteResultToFile", func() {
 	})
 })
 
-var _ = Describe("generatePassword", func() {
-	It("returns no error", func() {
-		_, err := generatePassword()
-		Expect(err).NotTo(HaveOccurred())
-	})
-
-	It("has the correct length (32 hex chars from 16 bytes)", func() {
-		password, err := generatePassword()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(password).To(HaveLen(32))
-	})
-
-	It("produces unique passwords on successive calls", func() {
-		pw1, err := generatePassword()
-		Expect(err).NotTo(HaveOccurred())
-		pw2, err := generatePassword()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(pw1).NotTo(Equal(pw2))
-	})
-
-	It("contains only hex characters", func() {
-		password, err := generatePassword()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(password).To(MatchRegexp("^[0-9a-f]{32}$"))
-	})
-})
-
 var _ = Describe("createInDB", func() {
 	const (
 		hashedPassword = "fakehashedpassword"
@@ -176,7 +149,7 @@ var _ = Describe("createInDB", func() {
 		// Expect: commit
 		m.ExpectCommit()
 
-		result, err := newWithDB(CreateTestUserOpts{Host: "test", Password: "test"}, sqlDB).createInDB(hashedPassword, hashedToken)
+		result, err := (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test"}, db: sqlDB}).createInDB(hashedPassword, hashedToken)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Email).To(Equal(TestEmail))
 		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
@@ -191,7 +164,7 @@ var _ = Describe("createInDB", func() {
 			WithArgs(TestEmail).
 			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
 
-		_, err = newWithDB(CreateTestUserOpts{Host: "test", Password: "test"}, sqlDB).createInDB(hashedPassword, hashedToken)
+		_, err = (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test"}, db: sqlDB}).createInDB(hashedPassword, hashedToken)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("already exists"))
 		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
@@ -212,7 +185,7 @@ var _ = Describe("createInDB", func() {
 			WillReturnError(fmt.Errorf("unique_violation"))
 		m.ExpectRollback()
 
-		_, err = newWithDB(CreateTestUserOpts{Host: "test", Password: "test"}, sqlDB).createInDB(hashedPassword, hashedToken)
+		_, err = (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test"}, db: sqlDB}).createInDB(hashedPassword, hashedToken)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to insert credentials"))
 		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
@@ -239,7 +212,7 @@ var _ = Describe("createInDB", func() {
 			WillReturnError(fmt.Errorf("db error"))
 		m.ExpectRollback()
 
-		_, err = newWithDB(CreateTestUserOpts{Host: "test", Password: "test"}, sqlDB).createInDB(hashedPassword, hashedToken)
+		_, err = (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test"}, db: sqlDB}).createInDB(hashedPassword, hashedToken)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to insert team"))
 		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())

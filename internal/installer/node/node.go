@@ -94,11 +94,10 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 	_ = agent.RequestAgentForwarding(session) // Best effort, ignore errors
 
 	var stderrBuf bytes.Buffer
+	session.Stderr = &stderrBuf
 	if !r.Quiet {
 		session.Stdout = os.Stdout
 		session.Stderr = os.Stderr
-	} else {
-		session.Stderr = &stderrBuf
 	}
 	// Start the command
 	if err := session.Start(command); err != nil {

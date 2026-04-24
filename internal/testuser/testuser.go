@@ -96,11 +96,6 @@ func New(opts CreateTestUserOpts) (*TestUserCreator, error) {
 	return &TestUserCreator{opts: opts, db: db}, nil
 }
 
-// newWithDB creates a TestUserCreator with an already-opened DB.
-func newWithDB(opts CreateTestUserOpts, db *sql.DB) *TestUserCreator {
-	return &TestUserCreator{opts: opts, db: db}
-}
-
 // close closes the underlying database connection.
 func (c *TestUserCreator) close() error {
 	if c.db != nil {
@@ -111,9 +106,13 @@ func (c *TestUserCreator) close() error {
 
 // Create generates credentials and inserts the test user into the database.
 func (c *TestUserCreator) Create() (*TestUserResult, error) {
-	plaintextPassword, err := generatePassword()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate password: %w", err)
+	plaintextPassword := os.Getenv("OMS_CS_TEST_USER_PASSWORD")
+	if plaintextPassword == "" {
+		return nil, fmt.Errorf("OMS_CS_TEST_USER_PASSWORD environment variable is not set")
+	}
+	hashedPassword := os.Getenv("OMS_CS_TEST_USER_PASSWORD_HASHED")
+	if hashedPassword == "" {
+		return nil, fmt.Errorf("OMS_CS_TEST_USER_PASSWORD_HASHED environment variable is not set")
 	}
 
 	plaintextToken, err := generateAPIToken()
@@ -121,10 +120,6 @@ func (c *TestUserCreator) Create() (*TestUserResult, error) {
 		return nil, fmt.Errorf("failed to generate API token: %w", err)
 	}
 
-	hashedPassword, err := HashPassword(plaintextPassword)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
-	}
 	hashedToken := HashAPIToken(plaintextToken)
 
 	result, err := c.createInDB(hashedPassword, hashedToken)
@@ -312,12 +307,4 @@ func generateAPIToken() (string, error) {
 		return "", err
 	}
 	return tokenPrefix + hex.EncodeToString(b), nil
-}
-
-func generatePassword() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
-	}
-	return hex.EncodeToString(b), nil
 }
