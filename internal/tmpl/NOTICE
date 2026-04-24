@@ -653,9 +653,9 @@ License URL: https://github.com/ianlancetaylor/demangle/blob/96ee0021ea0f/LICENS
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.7.9
+Version: v6.7.10
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.9/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.10/LICENSE
  
 ----------
 Module: github.com/jmoiron/sqlx
@@ -905,9 +905,9 @@ License URL: https://github.com/prometheus/procfs/blob/v0.20.1/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260421122039-59ce48ae88e5
+Version: v0.0.0-20260424083917-b87c434ff9a9
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/59ce48ae88e5/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/b87c434ff9a9/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1211,9 +1211,9 @@ License URL: https://github.com/grpc/grpc-go/blob/v1.80.0/LICENSE
  
 ----------
 Module: google.golang.org/protobuf
-Version: v1.36.11
+Version: v1.36.12-0.20260120151049-f2248ac996af
 License: BSD-3-Clause
-License URL: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.11/LICENSE
+License URL: https://github.com/protocolbuffers/protobuf-go/blob/f2248ac996af/LICENSE
  
 ----------
 Module: gopkg.in/evanphx/json-patch.v4
