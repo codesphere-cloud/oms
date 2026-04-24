@@ -515,7 +515,7 @@ type ServicePlan struct {
 }
 
 type PlanParam struct {
-	PricedAs string                 `yaml:"pricedAs"`
+	PricedAs string                 `yaml:"pricedAs,omitempty"`
 	Schema   map[string]interface{} `yaml:"schema"`
 }
 
