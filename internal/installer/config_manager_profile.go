@@ -177,11 +177,82 @@ func (g *InstallConfig) applyCommonProperties() {
 	}
 	if g.Config.Codesphere.ManagedServices == nil {
 		g.Config.Codesphere.ManagedServices = []files.ManagedServiceConfig{
-			{Name: "postgres", Version: "v1", Backend: files.ManagedServiceBackend{
-				API: files.ManagedServiceAPI{
-					Endpoint: "http://localhost:8080",
+			{
+				Name:    "postgres",
+				Version: "v1",
+				Author:  "Codesphere",
+				Backend: files.ManagedServiceBackend{
+					API: files.ManagedServiceAPI{
+						Endpoint: "http://ms-backend-postgres.postgres-operator:3000/api/v1/postgres",
+					},
 				},
-			}},
+				Category:    "Database",
+				Description: "Open-source database system tailored for efficient data management and scalability. Newest version of the Provider using the Cloud-Native Operator",
+				DisplayName: "PostgreSQL",
+				IconURL:     "/ide/assets/managed-services/postgresql.svg",
+				Scope:       "global",
+				Capabilities: &files.ManagedServiceCapabilities{
+					Pause:               true,
+					Backups:             true,
+					PointInTimeRecovery: true,
+				},
+				// ConfigSchema: ,
+				Backups: &files.ManagedServiceBackups{
+					ConfigSchema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"endpointUrl": map[string]string{
+								"type":        "string",
+								"format":      "uri",
+								"description": "S3-compatible endpoint URL...",
+							},
+							"destinationPath": map[string]string{
+								"type":        "string",
+								"format":      "uri",
+								"description": "S3 bucket URI...",
+							},
+							"accessKeyId": map[string]string{
+								"type":        "string",
+								"description": "S3 access key...",
+							},
+						},
+						"required":             []string{"endpointUrl", "destinationPath", "accessKeyId"},
+						"additionalProperties": false,
+					},
+					SecretsSchema: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"secretKey": map[string]string{
+								"type":        "string",
+								"description": "S3 secret key for authentication",
+							},
+						},
+						"required":             []string{"secretKey"},
+						"additionalProperties": false,
+					},
+				},
+				// DetailsSchema
+				// secretsSchema
+				Plans: []files.ServicePlan{
+					{
+						ID:          0,
+						Name:        "Small",
+						Description: "0.5 vCPU / 500 MB Memory",
+						Parameters: map[string]files.PlanParam{
+							"storage": {
+								PricedAs: "storage-mb",
+								Schema: map[string]interface{}{
+									"type":                "integer",
+									"default":             10240,
+									"readOnly":            false,
+									"minimum":             512,
+									"x-update-constraint": "increase-only",
+								},
+							},
+						},
+					},
+				},
+			},
 			{Name: "babelfish", Version: "v1", Backend: files.ManagedServiceBackend{
 				API: files.ManagedServiceAPI{
 					Endpoint: "http://localhost:8080",

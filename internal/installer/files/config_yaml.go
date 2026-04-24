@@ -499,6 +499,7 @@ type ManagedServiceConfig struct {
 	Description   string                      `yaml:"description"`
 	DisplayName   string                      `yaml:"displayName"`
 	IconURL       string                      `yaml:"iconUrl"`
+	Scope         string                      `yaml:"scope"`
 	Plans         []ServicePlan               `yaml:"plans"`
 	Version       string                      `yaml:"version"`
 	Backups       *ManagedServiceBackups      `yaml:"backups,omitempty"`
@@ -509,9 +510,16 @@ type ManagedServiceBackend struct {
 	API ManagedServiceAPI `yaml:"api"`
 }
 
-type ManagedServiceBackups struct{}
+type ManagedServiceBackups struct {
+	ConfigSchema  map[string]any `yaml:"configSchema, omitempty"`
+	SecretsSchema map[string]any `yaml:"secretSchema, omitempty"`
+}
 
-type ManagedServiceCapabilities struct{}
+type ManagedServiceCapabilities struct {
+	Pause               bool `yaml:"pause"`
+	Backups             bool `yaml:"backups"`
+	PointInTimeRecovery bool `yaml:"pointInTimeRecovery"`
+}
 
 type ManagedServiceAPI struct {
 	Endpoint string `yaml:"endpoint"`
