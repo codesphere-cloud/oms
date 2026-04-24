@@ -489,19 +489,29 @@ type OAuthConfig struct {
 }
 
 type ManagedServiceConfig struct {
-	Name          string                 `yaml:"name"`
-	API           ManagedServiceAPI      `yaml:"api,omitempty"`
-	Author        string                 `yaml:"author,omitempty"`
-	Category      string                 `yaml:"category,omitempty"`
-	ConfigSchema  map[string]interface{} `yaml:"configSchema,omitempty"`
-	DetailsSchema map[string]interface{} `yaml:"detailsSchema,omitempty"`
-	SecretsSchema map[string]interface{} `yaml:"secretsSchema,omitempty"`
-	Description   string                 `yaml:"description,omitempty"`
-	DisplayName   string                 `yaml:"displayName,omitempty"`
-	IconURL       string                 `yaml:"iconUrl,omitempty"`
-	Plans         []ServicePlan          `yaml:"plans,omitempty"`
-	Version       string                 `yaml:"version"`
+	Name          string                      `yaml:"name"`
+	Backend       ManagedServiceBackend       `yaml:"backend"`
+	Author        string                      `yaml:"author"`
+	Category      string                      `yaml:"category"`
+	ConfigSchema  map[string]interface{}      `yaml:"configSchema"`
+	DetailsSchema map[string]interface{}      `yaml:"detailsSchema"`
+	SecretsSchema map[string]interface{}      `yaml:"secretsSchema"`
+	Description   string                      `yaml:"description"`
+	DisplayName   string                      `yaml:"displayName"`
+	IconURL       string                      `yaml:"iconUrl"`
+	Plans         []ServicePlan               `yaml:"plans"`
+	Version       string                      `yaml:"version"`
+	Backups       *ManagedServiceBackups      `yaml:"backups,omitempty"`
+	Capabilities  *ManagedServiceCapabilities `yaml:"capabilities,omitempty"`
 }
+
+type ManagedServiceBackend struct {
+	API ManagedServiceAPI `yaml:"api"`
+}
+
+type ManagedServiceBackups struct{}
+
+type ManagedServiceCapabilities struct{}
 
 type ManagedServiceAPI struct {
 	Endpoint string `yaml:"endpoint"`

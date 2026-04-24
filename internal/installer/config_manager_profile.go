@@ -177,10 +177,26 @@ func (g *InstallConfig) applyCommonProperties() {
 	}
 	if g.Config.Codesphere.ManagedServices == nil {
 		g.Config.Codesphere.ManagedServices = []files.ManagedServiceConfig{
-			{Name: "postgres", Version: "v1"},
-			{Name: "babelfish", Version: "v1"},
-			{Name: "s3", Version: "v1"},
-			{Name: "virtual-k8s", Version: "v1"},
+			{Name: "postgres", Version: "v1", Backend: files.ManagedServiceBackend{
+				API: files.ManagedServiceAPI{
+					Endpoint: "http://localhost:8080",
+				},
+			}},
+			{Name: "babelfish", Version: "v1", Backend: files.ManagedServiceBackend{
+				API: files.ManagedServiceAPI{
+					Endpoint: "http://localhost:8080",
+				},
+			}},
+			{Name: "s3", Version: "v1", Backend: files.ManagedServiceBackend{
+				API: files.ManagedServiceAPI{
+					Endpoint: "http://localhost:8080",
+				},
+			}},
+			{Name: "virtual-k8s", Version: "v1", Backend: files.ManagedServiceBackend{
+				API: files.ManagedServiceAPI{
+					Endpoint: "http://localhost:8080",
+				},
+			}},
 		}
 	}
 	if g.Config.Secrets.BaseDir == "" {
