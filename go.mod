@@ -9,7 +9,7 @@ replace (
 	// TODO: remove this replace once https://github.com/libopenstorage/secrets/pull/83 is merged
 	github.com/libopenstorage/secrets => github.com/rook/secrets v0.0.0-20240315053144-3195f6906937
 	github.com/portworx/sched-ops => github.com/portworx/sched-ops v0.20.4-openstorage-rc3
-	k8s.io/kubernetes => k8s.io/kubernetes v1.35.4
+	k8s.io/kubernetes => k8s.io/kubernetes v1.36.0
 )
 
 require (
@@ -24,7 +24,7 @@ require (
 	github.com/codesphere-cloud/cs-go v0.23.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/getsops/sops/v3 v3.12.2
-	github.com/jedib0t/go-pretty/v6 v6.7.9
+	github.com/jedib0t/go-pretty/v6 v6.7.10
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
@@ -38,7 +38,7 @@ require (
 	golang.org/x/term v0.42.0
 	google.golang.org/api v0.276.0
 	google.golang.org/grpc v1.80.0
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.1.4
 	k8s.io/api v0.35.4
@@ -52,7 +52,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/lib/pq v1.12.3
 	github.com/google/go-github/v74 v74.0.0
-	github.com/rook/rook/pkg/apis v0.0.0-20260421122039-59ce48ae88e5
+	github.com/rook/rook/pkg/apis v0.0.0-20260424083917-b87c434ff9a9
 )
 
 require (
@@ -668,12 +668,12 @@ replace (
 	k8s.io/component-helpers => k8s.io/component-helpers v0.35.4
 	k8s.io/controller-manager => k8s.io/controller-manager v0.35.4
 	k8s.io/cri-api => k8s.io/cri-api v0.35.4
-	k8s.io/cri-client => k8s.io/cri-client v0.35.4
+	k8s.io/cri-client => k8s.io/cri-client v0.36.0
 	k8s.io/csi-translation-lib => k8s.io/csi-translation-lib v0.35.4
-	k8s.io/dynamic-resource-allocation => k8s.io/dynamic-resource-allocation v0.35.4
-	k8s.io/endpointslice => k8s.io/endpointslice v0.35.4
-	k8s.io/externaljwt => k8s.io/externaljwt v0.35.4
-	k8s.io/kms => k8s.io/kms v0.35.4
+	k8s.io/dynamic-resource-allocation => k8s.io/dynamic-resource-allocation v0.36.0
+	k8s.io/endpointslice => k8s.io/endpointslice v0.36.0
+	k8s.io/externaljwt => k8s.io/externaljwt v0.36.0
+	k8s.io/kms => k8s.io/kms v0.36.0
 	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.35.4
 	k8s.io/kube-controller-manager => k8s.io/kube-controller-manager v0.35.4
 	k8s.io/kube-proxy => k8s.io/kube-proxy v0.35.4
