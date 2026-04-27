@@ -511,8 +511,8 @@ type ManagedServiceBackend struct {
 }
 
 type ManagedServiceBackups struct {
-	ConfigSchema  map[string]any `yaml:"configSchema, omitempty"`
-	SecretsSchema map[string]any `yaml:"secretSchema, omitempty"`
+	ConfigSchema  map[string]any `yaml:"configSchema"`
+	SecretsSchema map[string]any `yaml:"secretSchema"`
 }
 
 type ManagedServiceCapabilities struct {
