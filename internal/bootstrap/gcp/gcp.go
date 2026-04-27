@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"slices"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
+	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/dns/v1"
@@ -140,6 +142,10 @@ type CodesphereEnvironment struct {
 	Region                string `json:"region"`
 	Zone                  string `json:"zone"`
 	DNSZoneName           string `json:"dns_zone_name"`
+
+	// Test user creation
+	CreateTestUser bool   `json:"-"`
+	OmsWorkdir     string `json:"-"`
 }
 
 func NewGCPBootstrapper(
@@ -310,10 +316,49 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		}
 	}
 
+	if b.Env.CreateTestUser {
+		if err := b.createTestUser(); err != nil {
+			log.Printf("warning: failed to create test user: %v", err)
+		}
+	}
+
 	return nil
 }
 
-// ValidateInput checks that the required input parameters are set and valid
+// createTestUser creates a test user in the PostgreSQL instance using the testuser package and logs the credentials.
+func (b *GCPBootstrapper) createTestUser() error {
+	if b.Env.PostgreSQLNode == nil {
+		return fmt.Errorf("postgres node not found in bootstrap environment")
+	}
+
+	pgHost := b.Env.PostgreSQLNode.GetExternalIP()
+	if pgHost == "" {
+		return fmt.Errorf("postgres node has no external IP")
+	}
+
+	if b.Env.InstallConfig == nil {
+		return fmt.Errorf("install config not found in bootstrap environment")
+	}
+	pgPassword := b.Env.InstallConfig.Postgres.AdminPassword
+	if pgPassword == "" {
+		return fmt.Errorf("postgres admin password not found in install config")
+	}
+
+	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
+		Host:     pgHost,
+		Port:     testuser.DefaultPort,
+		User:     testuser.DefaultUser,
+		Password: pgPassword,
+		DBName:   testuser.DefaultDBName,
+		SSLMode:  "require",
+	})
+	if err != nil {
+		return err
+	}
+
+	testuser.LogAndPersistResult(result, b.Env.OmsWorkdir)
+	return nil
+}
 func (b *GCPBootstrapper) ValidateInput() error {
 	err := b.validateInstallVersion()
 	if err != nil {
@@ -828,7 +873,8 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 		return "", fmt.Errorf("install hash must be set when install version is set")
 	}
 	b.stlog.Logf("Downloading Codesphere package...")
-	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s", packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
+	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
+		packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)

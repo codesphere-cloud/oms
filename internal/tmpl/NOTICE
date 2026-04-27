@@ -707,9 +707,9 @@ License URL: https://github.com/lann/ps/blob/62de8c46ede0/LICENSE
  
 ----------
 Module: github.com/lib/pq
-Version: v1.12.0
+Version: v1.12.3
 License: MIT
-License URL: https://github.com/lib/pq/blob/v1.12.0/LICENSE
+License URL: https://github.com/lib/pq/blob/v1.12.3/LICENSE
  
 ----------
 Module: github.com/libopenstorage/secrets
@@ -905,9 +905,9 @@ License URL: https://github.com/prometheus/procfs/blob/v0.20.1/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260422153639-c250b47c4fe1
+Version: v0.0.0-20260424083917-b87c434ff9a9
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/c250b47c4fe1/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/b87c434ff9a9/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1211,9 +1211,9 @@ License URL: https://github.com/grpc/grpc-go/blob/v1.80.0/LICENSE
  
 ----------
 Module: google.golang.org/protobuf
-Version: v1.36.11
+Version: v1.36.12-0.20260120151049-f2248ac996af
 License: BSD-3-Clause
-License URL: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.11/LICENSE
+License URL: https://github.com/protocolbuffers/protobuf-go/blob/f2248ac996af/LICENSE
  
 ----------
 Module: gopkg.in/evanphx/json-patch.v4
