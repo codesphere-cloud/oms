@@ -653,9 +653,9 @@ License URL: https://github.com/ianlancetaylor/demangle/blob/96ee0021ea0f/LICENS
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.7.9
+Version: v6.7.10
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.9/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.10/LICENSE
  
 ----------
 Module: github.com/jmoiron/sqlx
@@ -743,9 +743,9 @@ License URL: https://github.com/mattn/go-isatty/blob/v0.0.20/LICENSE
  
 ----------
 Module: github.com/mattn/go-runewidth
-Version: v0.0.21
+Version: v0.0.23
 License: MIT
-License URL: https://github.com/mattn/go-runewidth/blob/v0.0.21/LICENSE
+License URL: https://github.com/mattn/go-runewidth/blob/v0.0.23/LICENSE
  
 ----------
 Module: github.com/mitchellh/copystructure
@@ -905,9 +905,9 @@ License URL: https://github.com/prometheus/procfs/blob/v0.20.1/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260417181530-5bd05dcbd0db
+Version: v0.0.0-20260422153639-c250b47c4fe1
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/5bd05dcbd0db/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/c250b47c4fe1/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
