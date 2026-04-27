@@ -10,11 +10,11 @@ import (
 
 // HashAPIToken hashes an API token using a single SHA256 with no additional salt.
 func HashAPIToken(apiToken string) string {
-	return hashSecret(apiToken, "")
+	return hashSecret(apiToken)
 }
 
-func hashSecret(secret, salt string) string {
+func hashSecret(secret string) string {
 	hasher := sha256.New()
-	_, _ = hasher.Write([]byte(secret + salt))
+	_, _ = hasher.Write([]byte(secret))
 	return hex.EncodeToString(hasher.Sum(nil))
 }
