@@ -85,7 +85,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
-	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry)")
+	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: local-container)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
 
@@ -94,6 +94,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.RecoverConfig, "recover-config", false, "Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)")
 	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", false, "Suppress SSH command output (default: false)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.CreateTestUser, "create-test-user", false, "Create a test user with API token on the bootstrapped instance for smoke testing (default: false)")
 
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoURI, "openbao-uri", "", "URI for OpenBao (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")
@@ -137,6 +138,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	c.CodesphereEnv.RegistryType = gcp.RegistryType(c.InputRegistryType)
+	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
 	if c.CodesphereEnv.GitHubPAT != "" {
 		c.CodesphereEnv.RegistryType = gcp.RegistryTypeGitHub
 		if c.CodesphereEnv.RegistryUser == "" {
@@ -163,7 +165,8 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	log.Println("\n🎉🎉🎉 GCP infrastructure bootstrapped successfully!")
-	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
+	log.Printf("Access the jumpbox using:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY -o SendEnv=OMS_PORTAL_API root@%s", bs.Env.Jumpbox.GetExternalIP())
+
 	if bs.Env.InstallVersion != "" {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
 

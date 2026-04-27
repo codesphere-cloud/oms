@@ -19,6 +19,7 @@ oms beta bootstrap-gcp [flags]
 ```
       --base-domain string                Base domain for Codesphere (required)
       --billing-account string            GCP Billing Account ID (required)
+      --create-test-user                  Create a test user with API token on the bootstrapped instance for smoke testing (default: false)
       --custom-pg-ip string               Custom PostgreSQL IP (optional)
       --datacenter-id int                 Datacenter ID (default: 1) (default 1)
       --dns-project-id string             GCP Project ID for Cloud DNS (optional)
@@ -47,7 +48,7 @@ oms beta bootstrap-gcp [flags]
       --project-ttl string                Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours) (default "2h")
       --recover-config                    Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                     GCP Region (default: europe-west4) (default "europe-west4")
-      --registry-type string              Container registry type to use (options: local-container, artifact-registry) (default: artifact-registry) (default "local-container")
+      --registry-type string              Container registry type to use (options: local-container, artifact-registry) (default: local-container) (default "local-container")
       --registry-user string              Custom Registry username (only for GitHub registry type) (optional)
       --secrets-dir string                Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")
       --secrets-file string               Path to secrets files (optional) (default "prod.vault.yaml")
