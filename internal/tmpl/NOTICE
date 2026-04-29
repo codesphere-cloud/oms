@@ -821,9 +821,9 @@ License URL: https://github.com/mxk/go-flowrate/blob/cca7078d478f/LICENSE
  
 ----------
 Module: github.com/onsi/gomega
-Version: v1.39.1
+Version: v1.40.0
 License: MIT
-License URL: https://github.com/onsi/gomega/blob/v1.39.1/LICENSE
+License URL: https://github.com/onsi/gomega/blob/v1.40.0/LICENSE
  
 ----------
 Module: github.com/opencontainers/go-digest
