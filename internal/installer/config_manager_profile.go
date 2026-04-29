@@ -254,6 +254,22 @@ func (g *InstallConfig) applyProfileMinimal() error {
 			},
 		}
 	}
+	if g.Config.Cluster.BarmanCloudPlugin == nil {
+		g.Config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
+			Enabled: true,
+		}
+	}
+	if g.Config.Cluster.PgOperator == nil {
+		g.Config.Cluster.PgOperator = &files.PgOperatorConfig{
+			Enabled: true,
+		}
+	}
+	if g.Config.Cluster.RgwLoadBalancer == nil {
+		g.Config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
+			Enabled: true,
+		}
+	}
+
 	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
 	}
