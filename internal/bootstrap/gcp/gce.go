@@ -55,11 +55,6 @@ type vmResult struct {
 
 // EnsureComputeInstances ensures that all required compute instances are present and running.
 func (b *GCPBootstrapper) EnsureComputeInstances() error {
-	rootDiskSize := int64(200)
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		rootDiskSize = 50
-	}
-
 	wg := sync.WaitGroup{}
 	errCh := make(chan error, len(vmDefs))
 	resultCh := make(chan vmResult, len(vmDefs))
@@ -69,7 +64,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		wg.Add(1)
 		go func(vm VMDef) {
 			defer wg.Done()
-			result, err := b.ensureVM(vm, rootDiskSize, logCh)
+			result, err := b.ensureVM(vm, b.Env.RootDiskSize, logCh)
 			if err != nil {
 				errCh <- err
 				return

@@ -548,17 +548,47 @@ var _ = Describe("GCE", func() {
 				SSHPublicKeyPath: "key.pub",
 				Experiments:      gcp.DefaultExperiments,
 				FeatureFlags:     map[string]bool{},
+				RootDiskSize:     50,
 			}
 			bs = newTestBootstrapperAll(csEnv, gc, fw, mockGitHubClient)
 		})
 
 		Describe("Valid EnsureComputeInstances", func() {
-			It("creates all instances", func() {
-				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
-				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
+			Context("When custom root disk size is specified", func() {
+				BeforeEach(func() {
+					csEnv.RootDiskSize = 200
+					ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+					mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
+				})
 
+				It("Sets the root disk size", func() {
+					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+					allRootDiskSizesCorrect := true
+					mu := sync.Mutex{}
+					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
+						// Testing the disk size like this instead of a matcher
+						// to avoid the test to panic in case of a mismatch in the parallel go funcs
+						func(projectID, zone string, instance *computepb.Instance) error {
+							if instance.GetDisks()[0].GetInitializeParams().GetDiskSizeGb() != 200 {
+								mu.Lock()
+								allRootDiskSizesCorrect = false
+								mu.Unlock()
+							}
+							return nil
+						},
+					).Times(8)
+
+					err := bs.EnsureComputeInstances()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(allRootDiskSizesCorrect).To(BeTrue())
+				})
+			})
+
+			It("creates all instances", func() {
 				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
+				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
@@ -590,9 +620,9 @@ var _ = Describe("GCE", func() {
 					It("fetches GitHub team keys", func() {
 						mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug, mock.Anything).Return([]*gh.User{{Login: gh.Ptr("alice")}}, nil).Maybe()
 						mockGitHubClient.EXPECT().ListUserKeys(mock.Anything, "alice").Return([]*gh.Key{{Key: gh.Ptr("ssh-rsa AAALICE...")}}, nil).Maybe()
-
 						ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 						mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
+
 						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
 						gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
 							sshMetadata := ""
