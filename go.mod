@@ -27,7 +27,7 @@ require (
 	github.com/jedib0t/go-pretty/v6 v6.7.10
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.28.2
-	github.com/onsi/gomega v1.39.1
+	github.com/onsi/gomega v1.40.0
 	github.com/pkg/sftp v1.13.10
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
@@ -50,8 +50,8 @@ require (
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/lib/pq v1.12.3
 	github.com/google/go-github/v74 v74.0.0
+	github.com/lib/pq v1.12.3
 	github.com/rook/rook/pkg/apis v0.0.0-20260424083917-b87c434ff9a9
 )
 
