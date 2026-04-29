@@ -97,6 +97,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			ProjectID:             "pid",
 			Experiments:           gcp.DefaultExperiments,
 			FeatureFlags:          map[string]bool{},
+			RootDiskSize:          50,
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{
