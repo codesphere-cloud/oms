@@ -146,6 +146,7 @@ type CodesphereEnvironment struct {
 	// Test user creation
 	CreateTestUser bool   `json:"-"`
 	OmsWorkdir     string `json:"-"`
+	RootDiskSize   int64  `json:"root_disk_size"`
 }
 
 func NewGCPBootstrapper(
