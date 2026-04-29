@@ -49,8 +49,9 @@ type TestUserResult struct {
 
 // TestUserCreator manages the lifecycle of test user creation.
 type TestUserCreator struct {
-	opts CreateTestUserOpts
-	db   *sql.DB
+	opts  CreateTestUserOpts
+	db    *sql.DB
+	email string
 }
 
 // New creates a new TestUserCreator with the given options.
@@ -93,7 +94,15 @@ func New(opts CreateTestUserOpts) (*TestUserCreator, error) {
 	}
 
 	log.Printf("Connected to PostgreSQL at %s:%d", opts.Host, opts.Port)
-	return &TestUserCreator{opts: opts, db: db}, nil
+
+	suffix, err := generateEmailSuffix()
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to generate email suffix: %w", err)
+	}
+	email := fmt.Sprintf("test+%s@codesphere.com", suffix)
+
+	return &TestUserCreator{opts: opts, db: db, email: email}, nil
 }
 
 // close closes the underlying database connection.
@@ -150,7 +159,7 @@ func (c *TestUserCreator) createInDB(hashedPassword, hashedToken string) (*TestU
 		return nil, err
 	}
 	if exists {
-		return nil, fmt.Errorf("test user %s already exists", TestEmail)
+		return nil, fmt.Errorf("test user %s already exists", c.email)
 	}
 
 	tx, err := c.db.Begin()
@@ -185,14 +194,14 @@ func (c *TestUserCreator) createInDB(hashedPassword, hashedToken string) (*TestU
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Printf("Test user created: email=%s, userID=%d, teamID=%d", TestEmail, userID, teamID)
+	log.Printf("Test user created: email=%s, userID=%d, teamID=%d", c.email, userID, teamID)
 
-	return &TestUserResult{Email: TestEmail}, nil
+	return &TestUserResult{Email: c.email}, nil
 }
 
 func (c *TestUserCreator) userExists() (bool, error) {
 	var exists bool
-	err := c.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM authservice.credentials WHERE email = $1)`, TestEmail).Scan(&exists)
+	err := c.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM authservice.credentials WHERE email = $1)`, c.email).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("failed to check for existing test user: %w", err)
 	}
@@ -206,7 +215,7 @@ func (c *TestUserCreator) insertCredentials(tx *sql.Tx, hashedPassword string) (
 			(user_id, email, password_hash, authentication_method, signed_up, banned)
 		VALUES(nextval('authservice.credentials_user_id_seq'::regclass), $1, $2, 'password'::text, false, false)
 		RETURNING user_id`,
-		TestEmail, hashedPassword,
+		c.email, hashedPassword,
 	).Scan(&userID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert credentials: %w", err)
@@ -219,7 +228,7 @@ func (c *TestUserCreator) insertEmailConfirmation(tx *sql.Tx) error {
 		INSERT INTO authservice.email_confirmations
 			(id, email, pending, created_at)
 		VALUES(uuid_generate_v4(), $1, false, CURRENT_TIMESTAMP)`,
-		TestEmail,
+		c.email,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert email confirmation: %w", err)
@@ -307,4 +316,12 @@ func generateAPIToken() (string, error) {
 		return "", err
 	}
 	return tokenPrefix + hex.EncodeToString(b), nil
+}
+
+func generateEmailSuffix() (string, error) {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
