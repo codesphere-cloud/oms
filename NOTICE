@@ -527,15 +527,15 @@ License URL: https://github.com/google/uuid/blob/v1.6.0/LICENSE
  
 ----------
 Module: github.com/googleapis/enterprise-certificate-proxy/client
-Version: v0.3.14
+Version: v0.3.15
 License: Apache-2.0
-License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.14/LICENSE
+License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.15/LICENSE
  
 ----------
 Module: github.com/googleapis/gax-go/v2
-Version: v2.21.0
+Version: v2.22.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/gax-go/blob/v2.21.0/v2/LICENSE
+License URL: https://github.com/googleapis/gax-go/blob/v2.22.0/v2/LICENSE
  
 ----------
 Module: github.com/gorilla/websocket
@@ -1175,15 +1175,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.276.0
+Version: v0.277.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.276.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.277.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.276.0
+Version: v0.277.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.276.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.277.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1199,9 +1199,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/9d38bb4040a9/googlea
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20260401024825-9d38bb4040a9
+Version: v0.0.0-20260427160629-7cedc36a6bc4
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/9d38bb4040a9/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/7cedc36a6bc4/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc
