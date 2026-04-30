@@ -47,7 +47,11 @@ func AddCreateTestUserCmd(parent *cobra.Command, opts *GlobalOptions) {
 				The command connects to the specified PostgreSQL instance and creates the necessary
 				database records (credentials, email confirmation, team, team membership, API token).
 
-				Credentials are displayed and saved to the OMS workdir as test-user.json.`),
+				Credentials are displayed and saved to the OMS workdir as test-user.json.
+
+				Required environment variables:
+				  OMS_CS_TEST_USER_PASSWORD         Plaintext password for the test user.
+				  OMS_CS_TEST_USER_PASSWORD_HASHED  SHA-256 hex hash of the plaintext password.`),
 		},
 		Opts: CreateTestUserOpts{GlobalOptions: opts},
 		Env:  env.NewEnv(),

@@ -12,6 +12,10 @@ database records (credentials, email confirmation, team, team membership, API to
 
 Credentials are displayed and saved to the OMS workdir as test-user.json.
 
+Required environment variables:
+  OMS_CS_TEST_USER_PASSWORD         Plaintext password for the test user.
+  OMS_CS_TEST_USER_PASSWORD_HASHED  SHA-256 hex hash of the plaintext password.
+
 ```
 oms create test-user [flags]
 ```
