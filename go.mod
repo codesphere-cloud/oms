@@ -21,7 +21,7 @@ require (
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.29.0
-	github.com/codesphere-cloud/cs-go v0.23.0
+	github.com/codesphere-cloud/cs-go v1.0.0
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/getsops/sops/v3 v3.12.2
 	github.com/jedib0t/go-pretty/v6 v6.7.10
@@ -41,8 +41,8 @@ require (
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.1.4
-	k8s.io/api v0.35.4
-	k8s.io/apimachinery v0.35.4
+	k8s.io/api v0.36.0
+	k8s.io/apimachinery v0.36.0
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/utils v0.0.0-20260319190234-28399d86e0b5
 	sigs.k8s.io/controller-runtime v0.23.3
@@ -631,7 +631,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	k8s.io/apiextensions-apiserver v0.35.3 // indirect
 	k8s.io/apiserver v0.35.4 // indirect
-	k8s.io/cli-runtime v0.35.4 // indirect
+	k8s.io/cli-runtime v0.36.0 // indirect
 	k8s.io/component-base v0.35.4 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260319004828-5883c5ee87b9 // indirect
