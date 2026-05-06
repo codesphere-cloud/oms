@@ -115,6 +115,27 @@ var _ = Describe("PortalClient", func() {
 			})
 		})
 
+		Context("HTTP Request has Status: TooManyRequests", func() {
+			BeforeEach(func() {
+				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
+					func(req *http.Request) (*http.Response, error) {
+						return &http.Response{
+							StatusCode: http.StatusTooManyRequests,
+						}, nil
+					})
+			})
+
+			It("returns a rate limit error without calling the health check", func() {
+				testRequest, err := http.NewRequest("GET", "fake", nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				resp, err := client.AuthorizedHttpRequest(testRequest)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("rate limit exceeded"))
+				Expect(resp).To(BeNil())
+			})
+		})
+
 		Context("HTTP Request has Non-OK Status", func() {
 			BeforeEach(func() {
 				mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
