@@ -188,6 +188,25 @@ codesphere:
 			Expect(rootConfig.Registry.Server).To(Equal("minimal.registry.com"))
 			Expect(rootConfig.Codesphere.DeployConfig.Images).To(BeEmpty())
 		})
+
+		It("should handle LTS 1.77.2 format where codesphere is a path string", func() {
+			lts177Yaml := `registry:
+  server: registry.example.com
+codesphere: /etc/codesphere/codesphere.yaml
+`
+			err := os.WriteFile(configFile, []byte(lts177Yaml), 0644)
+			Expect(err).NotTo(HaveOccurred())
+
+			data, err := os.ReadFile(configFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = rootConfig.Unmarshal(data)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(rootConfig.Registry.Server).To(Equal("registry.example.com"))
+			Expect(rootConfig.CodesphereConfigPath).To(Equal("/etc/codesphere/codesphere.yaml"))
+			Expect(rootConfig.Codesphere.DeployConfig.Images).To(BeEmpty())
+		})
 	})
 
 	Describe("ExtractBomRefs", func() {

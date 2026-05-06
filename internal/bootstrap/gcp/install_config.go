@@ -245,6 +245,15 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 
+	var lts177JumpboxConfigBytes, lts177CodesphereBytes []byte
+	if IsLTS177(b.Env.InstallVersion) {
+		var err error
+		lts177JumpboxConfigBytes, lts177CodesphereBytes, err = GenerateLTS177JumpboxFiles(b.Env.InstallConfig)
+		if err != nil {
+			return fmt.Errorf("failed to prepare LTS 1.77.2 jumpbox files: %w", err)
+		}
+	}
+
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
 		if err != nil {
@@ -269,16 +278,35 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
+	if lts177CodesphereBytes != nil {
+		lts177LocalCSPath := LTS177LocalCodesphereConfigPath(b.Env.InstallConfigPath)
+		if err := b.fw.CreateAndWrite(lts177LocalCSPath, lts177CodesphereBytes, "Codesphere Config (LTS 1.77.2)"); err != nil {
+			return fmt.Errorf("failed to write LTS 1.77.2 codesphere config file: %w", err)
+		}
+		lts177JumpboxConfigPath := LTS177LocalJumpboxConfigPath(b.Env.InstallConfigPath)
+		if err := b.fw.CreateAndWrite(lts177JumpboxConfigPath, lts177JumpboxConfigBytes, "Jumpbox Config (LTS 1.77.2)"); err != nil {
+			return fmt.Errorf("failed to write LTS 1.77.2 jumpbox config file: %w", err)
+		}
+	}
+
 	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
+	if lts177CodesphereBytes != nil {
+		lts177JumpboxConfigPath := LTS177LocalJumpboxConfigPath(b.Env.InstallConfigPath)
+		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, lts177JumpboxConfigPath, remoteInstallConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to copy LTS 1.77.2 jumpbox config to jumpbox: %w", err)
+		}
+	} else {
+		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
+		}
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
+	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}

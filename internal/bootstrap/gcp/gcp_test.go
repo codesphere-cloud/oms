@@ -1073,6 +1073,55 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			Context("LTS 1.77.2", func() {
+				BeforeEach(func() {
+					csEnv.InstallVersion = "codesphere-lts-v1.77.2"
+				})
+				JustBeforeEach(func() {
+					// Inject a stub binary builder so tests don't invoke `go build`.
+					bs.OmsBinaryBuilder = func() (string, func(), error) {
+						f, err := os.CreateTemp("", "oms-test-binary-*")
+						Expect(err).NotTo(HaveOccurred())
+						f.Close()
+						return f.Name(), func() { os.Remove(f.Name()) }, nil
+					}
+				})
+				It("downloads package, updates OMS binary, and installs codesphere", func() {
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms download package -f installer.tar.gz -H abc1234567890 codesphere-lts-v1.77.2").Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), mock.Anything, "/tmp/oms-new").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"chmod +x /tmp/oms-new && mv /tmp/oms-new /usr/local/bin/oms").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p codesphere-lts-v1.77.2-abc1234567890-installer.tar.gz").Return(nil)
+
+					err := bs.InstallCodesphere()
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("fails when OmsBinaryBuilder fails", func() {
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms download package -f installer.tar.gz -H abc1234567890 codesphere-lts-v1.77.2").Return(nil)
+					bs.OmsBinaryBuilder = func() (string, func(), error) {
+						return "", func() {}, fmt.Errorf("build failed")
+					}
+
+					err := bs.InstallCodesphere()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to update OMS binary on jumpbox for LTS 1.77.2"))
+				})
+
+				It("fails when copying binary to jumpbox fails", func() {
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms download package -f installer.tar.gz -H abc1234567890 codesphere-lts-v1.77.2").Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), mock.Anything, "/tmp/oms-new").Return(fmt.Errorf("copy failed"))
+
+					err := bs.InstallCodesphere()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to update OMS binary on jumpbox for LTS 1.77.2"))
+				})
+			})
+
 			Context("with local package", func() {
 				BeforeEach(func() {
 					csEnv.InstallLocal = "fake-installer-lite.tar.gz"

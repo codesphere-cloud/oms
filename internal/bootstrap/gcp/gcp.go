@@ -80,9 +80,10 @@ type GCPBootstrapper struct {
 	// Environment
 	Env *CodesphereEnvironment
 	// SSH command runner
-	NodeClient   node.NodeClient
-	PortalClient portal.Portal
-	GitHubClient github.GitHubClient
+	NodeClient       node.NodeClient
+	PortalClient     portal.Portal
+	GitHubClient     github.GitHubClient
+	OmsBinaryBuilder func() (string, func(), error)
 }
 
 type CodesphereEnvironment struct {
@@ -163,16 +164,17 @@ func NewGCPBootstrapper(
 	gitHubClient github.GitHubClient,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:          ctx,
-		stlog:        stlog,
-		fw:           fw,
-		icg:          icg,
-		GCPClient:    gcpClient,
-		Env:          CodesphereEnv,
-		NodeClient:   sshRunner,
-		PortalClient: portalClient,
-		Time:         time,
-		GitHubClient: gitHubClient,
+		ctx:              ctx,
+		stlog:            stlog,
+		fw:               fw,
+		icg:              icg,
+		GCPClient:        gcpClient,
+		Env:              CodesphereEnv,
+		NodeClient:       sshRunner,
+		PortalClient:     portalClient,
+		Time:             time,
+		GitHubClient:     gitHubClient,
+		OmsBinaryBuilder: BuildOmsLinuxBinary,
 	}, nil
 }
 
@@ -841,9 +843,38 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
+	if IsLTS177(b.Env.InstallVersion) {
+		if err := b.ensureNewOmsBinaryOnJumpbox(); err != nil {
+			return fmt.Errorf("failed to update OMS binary on jumpbox for LTS 1.77.2: %w", err)
+		}
+	}
+
 	err = b.runInstallCommand(fullPackageFilename)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// ensureNewOmsBinaryOnJumpbox copies a freshly-built linux/amd64 OMS binary to
+// the jumpbox, replacing the old installed version.
+func (b *GCPBootstrapper) ensureNewOmsBinaryOnJumpbox() error {
+	b.stlog.Logf("Updating OMS binary on jumpbox for LTS 1.77.2 compatibility...")
+
+	binaryPath, cleanup, err := b.OmsBinaryBuilder()
+	if err != nil {
+		return fmt.Errorf("failed to prepare OMS linux binary: %w", err)
+	}
+	defer cleanup()
+
+	const remoteTmpPath = "/tmp/oms-new"
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, binaryPath, remoteTmpPath); err != nil {
+		return fmt.Errorf("failed to copy OMS binary to jumpbox: %w", err)
+	}
+
+	if err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("chmod +x %s && mv %s /usr/local/bin/oms", remoteTmpPath, remoteTmpPath)); err != nil {
+		return fmt.Errorf("failed to install OMS binary on jumpbox: %w", err)
 	}
 
 	return nil

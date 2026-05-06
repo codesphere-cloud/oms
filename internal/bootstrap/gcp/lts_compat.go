@@ -33,11 +33,7 @@ func IsLTS177(installVersion string) bool {
 // SetLTS177CodesphereInRoot applies LTS 1.77.2 compatibility to the RootConfig:
 //  1. Filters unsupported experiments from codesphere.experiments.
 //  2. Strips each ManagedServiceConfig down to {Name, Version} only.
-//  3. Sets CodesphereConfigPath so that RootConfig.Marshal() writes
-//     `codesphere: /etc/codesphere/codesphere.yaml` instead of an inline object.
-//
-// It returns the serialized codesphere config bytes that must be written to
-// a separate local file (to be copied to CodesphereConfigPath on the jumpbox).
+//  3. Sets CodesphereConfigPath
 func SetLTS177CodesphereInRoot(root *files.RootConfig) ([]byte, error) {
 	ApplyLTS177Compat(&root.Codesphere)
 	root.CodesphereConfigPath = lts177CodesphereRemotePath
@@ -57,7 +53,6 @@ func LTS177LocalCodesphereConfigPath(configPath string) string {
 
 // LTS177LocalJumpboxConfigPath derives the local path for the jumpbox-specific config.yaml
 // from the main config path (same directory, filename "config-jumpbox.yaml").
-// This file has `codesphere: /etc/codesphere/codesphere.yaml` instead of an inline object.
 func LTS177LocalJumpboxConfigPath(configPath string) string {
 	return filepath.Join(filepath.Dir(configPath), "config-jumpbox.yaml")
 }
@@ -66,9 +61,7 @@ func LTS177LocalJumpboxConfigPath(configPath string) string {
 // without modifying the original root config:
 //   - jumpboxConfigBytes: config.yaml with inline compat-stripped codesphere object
 //   - codesphereBytes: standalone codesphere.yaml with the same compat-stripped codesphere config
-//     (written locally as a debugging artifact; not copied to the jumpbox)
 func GenerateLTS177JumpboxFiles(root *files.RootConfig) (jumpboxConfigBytes, codesphereBytes []byte, err error) {
-	// Work on a copy of the codesphere config so the original is not modified.
 	csCopy := root.Codesphere
 	ApplyLTS177Compat(&csCopy)
 
@@ -78,8 +71,6 @@ func GenerateLTS177JumpboxFiles(root *files.RootConfig) (jumpboxConfigBytes, cod
 	}
 
 	// Generate the jumpbox config with the compat-stripped codesphere inlined.
-	// Do NOT set CodesphereConfigPath — the LTS 1.77.2 private-cloud-installer.js
-	// expects an inline codesphere object, not a path string.
 	rootCopy := *root
 	rootCopy.Codesphere = csCopy
 
@@ -95,9 +86,7 @@ func GenerateLTS177JumpboxFiles(root *files.RootConfig) (jumpboxConfigBytes, cod
 //
 //  1. Experiments that did not exist at the 1.77.2 release are removed.
 //  2. ManagedServices is cleared: the LTS 1.77.2 schema requires full provider definitions
-//     (author, category, configSchema, detailsSchema, secretsSchema, description,
-//     displayName, iconUrl, plans, backend) which are not stored in config.yaml.
-//     Setting the field to nil causes it to be omitted from the YAML (via omitempty),
+//     which are not stored in config.yaml. Setting the field to nil causes it to be omitted from the YAML,
 //     which passes the toUndefOr validator in the LTS 1.77.2 private-cloud-installer.js.
 func ApplyLTS177Compat(cfg *files.CodesphereConfig) {
 	cfg.Experiments = FilterExperiments(cfg.Experiments, lts177UnsupportedExperiments)
@@ -121,11 +110,6 @@ func FilterExperiments(experiments, unsupported []string) []string {
 }
 
 // BuildOmsLinuxBinary returns the path to an OMS binary built for linux/amd64.
-// When already running on linux/amd64 it returns the path to the current executable.
-// On other platforms it cross-compiles from the current working directory using the
-// Go toolchain (which must be available on PATH).
-// The caller is responsible for invoking the returned cleanup function to remove any
-// temporary files that were created.
 func BuildOmsLinuxBinary() (path string, cleanup func(), err error) {
 	noop := func() {}
 

@@ -418,6 +418,93 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.Engine).To(Equal("fake-engine"))
 				})
 			})
+
+			Context("When install version is codesphere-lts-v1.77.2", func() {
+				BeforeEach(func() {
+					csEnv.InstallVersion = "codesphere-lts-v1.77.2"
+					csEnv.Experiments = gcp.DefaultExperiments
+					csEnv.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
+						{
+							Name:        "postgres",
+							Version:     "v1",
+							Author:      "Codesphere",
+							DisplayName: "PostgreSQL",
+							Backend: files.ManagedServiceBackend{
+								API: files.ManagedServiceAPI{Endpoint: "http://ms-backend:3000"},
+							},
+						},
+						{
+							Name:    "s3",
+							Version: "v2",
+						},
+					}
+				})
+				It("generates the LTS jumpbox files and copies them to the jumpbox", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					fw.EXPECT().CreateAndWrite("codesphere.yaml", mock.Anything, mock.Anything).Return(nil)
+					fw.EXPECT().CreateAndWrite("config-jumpbox.yaml", mock.Anything, mock.Anything).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					// config-jumpbox.yaml → /etc/codesphere/config.yaml, prod.vault.yaml → secrets dir
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+				})
+				It("does not modify the in-memory codesphere config for LTS 1.77.2", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					fw.EXPECT().CreateAndWrite(mock.Anything, mock.Anything, mock.Anything).Return(nil).Times(2)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					// config-jumpbox.yaml → /etc/codesphere/config.yaml, prod.vault.yaml → secrets dir
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					// In-memory config must be preserved (compat is applied only to jumpbox files)
+					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ContainElement("secret-management"))
+					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ContainElement("sub-path-mount"))
+					Expect(bs.Env.InstallConfig.CodesphereConfigPath).To(BeEmpty())
+
+					services := bs.Env.InstallConfig.Codesphere.ManagedServices
+					Expect(services[0].Author).To(Equal("Codesphere"))
+					Expect(services[0].DisplayName).To(Equal("PostgreSQL"))
+					Expect(services[0].Backend.API.Endpoint).To(Equal("http://ms-backend:3000"))
+				})
+			})
+
+			Context("When install version is not codesphere-lts-v1.77.2", func() {
+				BeforeEach(func() {
+					csEnv.InstallVersion = "master"
+					csEnv.Experiments = gcp.DefaultExperiments
+					csEnv.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
+						{
+							Name:        "postgres",
+							Version:     "v1",
+							Author:      "Codesphere",
+							DisplayName: "PostgreSQL",
+						},
+					}
+				})
+				It("does not filter experiments for non-LTS versions", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ContainElement("secret-management"))
+					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ContainElement("sub-path-mount"))
+					Expect(bs.Env.InstallConfig.Codesphere.ManagedServices[0].Author).To(Equal("Codesphere"))
+					Expect(bs.Env.InstallConfig.Codesphere.ManagedServices[0].DisplayName).To(Equal("PostgreSQL"))
+				})
+			})
 		})
 
 		Describe("Invalid cases", func() {

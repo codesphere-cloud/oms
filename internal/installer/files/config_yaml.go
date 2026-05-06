@@ -62,6 +62,8 @@ type RootConfig struct {
 	MetalLB                *MetalLBConfig                `yaml:"metallb,omitempty"`
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
+
+	CodesphereConfigPath string `yaml:"-"`
 }
 
 type DatacenterConfig struct {
@@ -490,18 +492,18 @@ type OAuthConfig struct {
 
 type ManagedServiceConfig struct {
 	Name          string                      `yaml:"name"`
-	Backend       ManagedServiceBackend       `yaml:"backend"`
-	Author        string                      `yaml:"author"`
-	Category      string                      `yaml:"category"`
-	ConfigSchema  map[string]interface{}      `yaml:"configSchema"`
-	DetailsSchema map[string]interface{}      `yaml:"detailsSchema"`
-	SecretsSchema map[string]interface{}      `yaml:"secretsSchema"`
-	Description   string                      `yaml:"description"`
-	DisplayName   string                      `yaml:"displayName"`
-	IconURL       string                      `yaml:"iconUrl"`
-	Scope         string                      `yaml:"scope"`
-	Plans         []ServicePlan               `yaml:"plans"`
-	Version       string                      `yaml:"version"`
+	Version       string                      `yaml:"version,omitempty"`
+	Backend       ManagedServiceBackend       `yaml:"backend,omitempty"`
+	Author        string                      `yaml:"author,omitempty"`
+	Category      string                      `yaml:"category,omitempty"`
+	ConfigSchema  map[string]interface{}      `yaml:"configSchema,omitempty"`
+	DetailsSchema map[string]interface{}      `yaml:"detailsSchema,omitempty"`
+	SecretsSchema map[string]interface{}      `yaml:"secretsSchema,omitempty"`
+	Description   string                      `yaml:"description,omitempty"`
+	DisplayName   string                      `yaml:"displayName,omitempty"`
+	IconURL       string                      `yaml:"iconUrl,omitempty"`
+	Scope         string                      `yaml:"scope,omitempty"`
+	Plans         []ServicePlan               `yaml:"plans,omitempty"`
 	Backups       *ManagedServiceBackups      `yaml:"backups,omitempty"`
 	Capabilities  *ManagedServiceCapabilities `yaml:"capabilities,omitempty"`
 }
@@ -603,14 +605,76 @@ type S3ManagedServiceConfig struct {
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
-// Marshal serializes the RootConfig to YAML
+// Marshal serializes the RootConfig to YAML.
+// When CodesphereConfigPath is set, the codesphere section is written as a file-path
+// reference string instead of an inline object.
 func (c *RootConfig) Marshal() ([]byte, error) {
-	return yaml.Marshal(c)
+	if c.CodesphereConfigPath == "" {
+		return yaml.Marshal(c)
+	}
+
+	// Marshal normally first —> yaml.Marshal uses struct field tags and does NOT
+	// call this Marshal() method.
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse into a node tree so we can swap out the codesphere value.
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return nil, err
+	}
+
+	if err := replaceYAMLMappingValue(&root, "codesphere", c.CodesphereConfigPath); err != nil {
+		return nil, fmt.Errorf("failed to set codesphere path reference: %w", err)
+	}
+
+	return yaml.Marshal(&root)
 }
 
-// Unmarshal deserializes YAML data into the RootConfig
+// replaceYAMLMappingValue replaces the value of a top-level mapping key with a plain string scalar.
+func replaceYAMLMappingValue(root *yaml.Node, key, value string) error {
+	mapping := root
+	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
+		mapping = root.Content[0]
+	}
+	if mapping.Kind != yaml.MappingNode {
+		return fmt.Errorf("expected a YAML mapping node, got kind %d", mapping.Kind)
+	}
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			mapping.Content[i+1] = &yaml.Node{
+				Kind:  yaml.ScalarNode,
+				Tag:   "!!str",
+				Value: value,
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("key %q not found in YAML mapping", key)
+}
+
+// Unmarshal deserializes YAML data into the RootConfig.
 func (c *RootConfig) Unmarshal(data []byte) error {
-	return yaml.Unmarshal(data, c)
+	// Parse the document into a raw node first so we can inspect the codesphere field.
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return err
+	}
+	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
+		mapping := doc.Content[0]
+		if mapping.Kind == yaml.MappingNode {
+			for i := 0; i+1 < len(mapping.Content); i += 2 {
+				if mapping.Content[i].Value == "codesphere" && mapping.Content[i+1].Kind == yaml.ScalarNode {
+					c.CodesphereConfigPath = mapping.Content[i+1].Value
+					mapping.Content = append(mapping.Content[:i], mapping.Content[i+2:]...)
+					break
+				}
+			}
+		}
+	}
+	return doc.Decode(c)
 }
 
 func NewRootConfig() RootConfig {
