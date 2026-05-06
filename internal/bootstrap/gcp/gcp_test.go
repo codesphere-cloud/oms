@@ -1082,8 +1082,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					bs.OmsBinaryBuilder = func() (string, func(), error) {
 						f, err := os.CreateTemp("", "oms-test-binary-*")
 						Expect(err).NotTo(HaveOccurred())
-						f.Close()
-						return f.Name(), func() { os.Remove(f.Name()) }, nil
+						Expect(f.Close()).To(Succeed())
+						return f.Name(), func() { Expect(os.Remove(f.Name())).To(Succeed()) }, nil
 					}
 				})
 				It("downloads package, updates OMS binary, and installs codesphere", func() {

@@ -131,9 +131,11 @@ func BuildOmsLinuxBinary() (path string, cleanup func(), err error) {
 	if err != nil {
 		return "", noop, fmt.Errorf("failed to create temp file for OMS binary: %w", err)
 	}
-	outFile.Close()
+	if err = outFile.Close(); err != nil {
+		return "", noop, fmt.Errorf("failed to close temp file for OMS binary: %w", err)
+	}
 	outPath := outFile.Name()
-	rmCleanup := func() { os.Remove(outPath) }
+	rmCleanup := func() { _ = os.Remove(outPath) }
 
 	cmd := exec.Command("go", "build", "-o", outPath, "./cli")
 	cmd.Dir = cwd
