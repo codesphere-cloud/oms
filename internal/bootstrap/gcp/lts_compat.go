@@ -5,10 +5,7 @@ package gcp
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 
 	"go.yaml.in/yaml/v3"
 
@@ -17,10 +14,6 @@ import (
 
 const lts177InstallVersion = "codesphere-lts-v1.77.2"
 
-// lts177CodesphereRemotePath is the path where the separate codesphere config
-// file will be placed on the jumpbox for the LTS 1.77.2 installer.
-const lts177CodesphereRemotePath = "/etc/codesphere/codesphere.yaml"
-
 // lts177UnsupportedExperiments are experiments that did not exist in the LTS 1.77.2 release
 // and therefore must be removed from the config before passing it to the LTS installer.
 var lts177UnsupportedExperiments = []string{"secret-management", "sub-path-mount"}
@@ -28,21 +21,6 @@ var lts177UnsupportedExperiments = []string{"secret-management", "sub-path-mount
 // IsLTS177 reports whether the given installVersion is the LTS 1.77.2 release.
 func IsLTS177(installVersion string) bool {
 	return installVersion == lts177InstallVersion
-}
-
-// SetLTS177CodesphereInRoot applies LTS 1.77.2 compatibility to the RootConfig:
-//  1. Filters unsupported experiments from codesphere.experiments.
-//  2. Strips each ManagedServiceConfig down to {Name, Version} only.
-//  3. Sets CodesphereConfigPath
-func SetLTS177CodesphereInRoot(root *files.RootConfig) ([]byte, error) {
-	ApplyLTS177Compat(&root.Codesphere)
-	root.CodesphereConfigPath = lts177CodesphereRemotePath
-
-	data, err := yaml.Marshal(root.Codesphere)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal LTS 1.77.2 codesphere config: %w", err)
-	}
-	return data, nil
 }
 
 // LTS177LocalCodesphereConfigPath derives the local path for the separate codesphere
@@ -107,43 +85,4 @@ func FilterExperiments(experiments, unsupported []string) []string {
 		}
 	}
 	return filtered
-}
-
-// BuildOmsLinuxBinary returns the path to an OMS binary built for linux/amd64.
-func BuildOmsLinuxBinary() (path string, cleanup func(), err error) {
-	noop := func() {}
-
-	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
-		execPath, err := os.Executable()
-		if err != nil {
-			return "", noop, fmt.Errorf("failed to locate current OMS binary: %w", err)
-		}
-		return execPath, noop, nil
-	}
-
-	// Cross-compile for linux/amd64 from the current working directory (project root).
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", noop, fmt.Errorf("failed to determine project directory: %w", err)
-	}
-
-	outFile, err := os.CreateTemp("", "oms-linux-amd64-*")
-	if err != nil {
-		return "", noop, fmt.Errorf("failed to create temp file for OMS binary: %w", err)
-	}
-	if err = outFile.Close(); err != nil {
-		return "", noop, fmt.Errorf("failed to close temp file for OMS binary: %w", err)
-	}
-	outPath := outFile.Name()
-	rmCleanup := func() { _ = os.Remove(outPath) }
-
-	cmd := exec.Command("go", "build", "-o", outPath, "./cli")
-	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=amd64")
-	if output, cmdErr := cmd.CombinedOutput(); cmdErr != nil {
-		rmCleanup()
-		return "", noop, fmt.Errorf("failed to cross-compile OMS binary for linux/amd64: %w\n%s", cmdErr, output)
-	}
-
-	return outPath, rmCleanup, nil
 }

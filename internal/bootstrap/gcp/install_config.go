@@ -278,13 +278,14 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
+	jumpboxConfigLocalPath := b.Env.InstallConfigPath
 	if lts177CodesphereBytes != nil {
 		lts177LocalCSPath := LTS177LocalCodesphereConfigPath(b.Env.InstallConfigPath)
 		if err := b.fw.CreateAndWrite(lts177LocalCSPath, lts177CodesphereBytes, "Codesphere Config (LTS 1.77.2)"); err != nil {
 			return fmt.Errorf("failed to write LTS 1.77.2 codesphere config file: %w", err)
 		}
-		lts177JumpboxConfigPath := LTS177LocalJumpboxConfigPath(b.Env.InstallConfigPath)
-		if err := b.fw.CreateAndWrite(lts177JumpboxConfigPath, lts177JumpboxConfigBytes, "Jumpbox Config (LTS 1.77.2)"); err != nil {
+		jumpboxConfigLocalPath = LTS177LocalJumpboxConfigPath(b.Env.InstallConfigPath)
+		if err := b.fw.CreateAndWrite(jumpboxConfigLocalPath, lts177JumpboxConfigBytes, "Jumpbox Config (LTS 1.77.2)"); err != nil {
 			return fmt.Errorf("failed to write LTS 1.77.2 jumpbox config file: %w", err)
 		}
 	}
@@ -293,17 +294,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	if lts177CodesphereBytes != nil {
-		lts177JumpboxConfigPath := LTS177LocalJumpboxConfigPath(b.Env.InstallConfigPath)
-		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, lts177JumpboxConfigPath, remoteInstallConfigPath)
-		if err != nil {
-			return fmt.Errorf("failed to copy LTS 1.77.2 jumpbox config to jumpbox: %w", err)
-		}
-	} else {
-		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
-		if err != nil {
-			return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
-		}
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, jumpboxConfigLocalPath, remoteInstallConfigPath); err != nil {
+		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}
 
 	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
