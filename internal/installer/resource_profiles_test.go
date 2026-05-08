@@ -93,7 +93,6 @@ var _ = Describe("ApplyResourceProfile", func() {
 
 			pgOperator := MustMap[any](config.Cluster.PgOperator.Override["cloudnative-pg"])
 			AssertZeroRequests(MustMap[any](pgOperator["resources"])["requests"])
-			Expect(MustMap[any](pgOperator["config"])["clusterWide"]).To(Equal(false))
 
 			barmanCloud := MustMap[any](config.Cluster.BarmanCloudPlugin.Override["plugin-barman-cloud"])
 			AssertZeroRequests(MustMap[any](barmanCloud["resources"])["requests"])

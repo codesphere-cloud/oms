@@ -175,9 +175,6 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	}
 	config.Cluster.PgOperator.Override = util.DeepMergeMaps(config.Cluster.PgOperator.Override, map[string]any{
 		"cloudnative-pg": map[string]any{
-			"config": map[string]any{
-				"clusterWide": false,
-			},
 			"resources": map[string]any{
 				"requests": zeroRequests(),
 			},
