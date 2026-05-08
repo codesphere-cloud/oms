@@ -245,15 +245,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 
-	var lts177JumpboxConfigBytes, lts177CodesphereBytes []byte
-	if IsLTS177(b.Env.InstallVersion) {
-		var err error
-		lts177JumpboxConfigBytes, lts177CodesphereBytes, err = GenerateLTS177JumpboxFiles(b.Env.InstallConfig)
-		if err != nil {
-			return fmt.Errorf("failed to prepare LTS 1.77.2 jumpbox files: %w", err)
-		}
-	}
-
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
 		if err != nil {
@@ -279,14 +270,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 
 	jumpboxConfigLocalPath := b.Env.InstallConfigPath
-	if lts177CodesphereBytes != nil {
-		lts177LocalCSPath := LTS177LocalCodesphereConfigPath(b.Env.InstallConfigPath)
-		if err := b.fw.CreateAndWrite(lts177LocalCSPath, lts177CodesphereBytes, "Codesphere Config (LTS 1.77.2)"); err != nil {
-			return fmt.Errorf("failed to write LTS 1.77.2 codesphere config file: %w", err)
-		}
-		jumpboxConfigLocalPath = LTS177LocalJumpboxConfigPath(b.Env.InstallConfigPath)
-		if err := b.fw.CreateAndWrite(jumpboxConfigLocalPath, lts177JumpboxConfigBytes, "Jumpbox Config (LTS 1.77.2)"); err != nil {
-			return fmt.Errorf("failed to write LTS 1.77.2 jumpbox config file: %w", err)
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil && ltsSpec.RequiresJumpboxFiles {
+		var err error
+		jumpboxConfigLocalPath, err = b.writeLTSJumpboxFiles(ltsSpec)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -390,6 +378,27 @@ func (b *GCPBootstrapper) EncryptVault() error {
 	}
 
 	return nil
+}
+
+// writeLTSJumpboxFiles generates the LTS-specific codesphere.yaml and config-jumpbox.yaml
+// files locally and returns the path to config-jumpbox.yaml for copying to the jumpbox.
+func (b *GCPBootstrapper) writeLTSJumpboxFiles(spec *LTSSpec) (jumpboxConfigLocalPath string, err error) {
+	jumpboxConfigBytes, codesphereBytes, err := GenerateLTSJumpboxFiles(b.Env.InstallConfig, spec)
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare %s jumpbox files: %w", spec.InstallVersion, err)
+	}
+
+	csPath := LocalCodesphereConfigPath(b.Env.InstallConfigPath)
+	if err := b.fw.CreateAndWrite(csPath, codesphereBytes, "Codesphere Config ("+spec.InstallVersion+")"); err != nil {
+		return "", fmt.Errorf("failed to write %s codesphere config file: %w", spec.InstallVersion, err)
+	}
+
+	jumpboxConfigLocalPath = LocalJumpboxConfigPath(b.Env.InstallConfigPath)
+	if err := b.fw.CreateAndWrite(jumpboxConfigLocalPath, jumpboxConfigBytes, "Jumpbox Config ("+spec.InstallVersion+")"); err != nil {
+		return "", fmt.Errorf("failed to write %s jumpbox config file: %w", spec.InstallVersion, err)
+	}
+
+	return jumpboxConfigLocalPath, nil
 }
 
 // decryptVault creates an unencrypted copy of the vault in dst on the jumpbox

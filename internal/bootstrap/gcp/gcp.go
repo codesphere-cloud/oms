@@ -62,8 +62,6 @@ func GetDNSRecordNames(baseDomain string) []struct {
 
 var DefaultExperiments []string = []string{
 	"managed-services",
-	// "headless-services",
-	// "vcluster",
 	"custom-service-image",
 	"ms-in-ls",
 	"secret-management",
@@ -843,9 +841,9 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
-	if IsLTS177(b.Env.InstallVersion) {
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil && ltsSpec.RequiresOmsBinaryUpdate {
 		if err := b.ensureNewOmsBinaryOnJumpbox(); err != nil {
-			return fmt.Errorf("failed to update OMS binary on jumpbox for LTS 1.77.2: %w", err)
+			return fmt.Errorf("failed to update OMS binary on jumpbox for %s: %w", b.Env.InstallVersion, err)
 		}
 	}
 
@@ -860,7 +858,7 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 // ensureNewOmsBinaryOnJumpbox copies a freshly-built linux/amd64 OMS binary to
 // the jumpbox, replacing the old installed version.
 func (b *GCPBootstrapper) ensureNewOmsBinaryOnJumpbox() error {
-	b.stlog.Logf("Updating OMS binary on jumpbox for LTS 1.77.2 compatibility...")
+	b.stlog.Logf("Updating OMS binary on jumpbox for %s compatibility...", b.Env.InstallVersion)
 
 	binaryPath, cleanup, err := b.OmsBinaryBuilder()
 	if err != nil {

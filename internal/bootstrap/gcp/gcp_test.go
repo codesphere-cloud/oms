@@ -1108,7 +1108,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 					err := bs.InstallCodesphere()
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to update OMS binary on jumpbox for LTS 1.77.2"))
+					Expect(err.Error()).To(ContainSubstring("failed to update OMS binary on jumpbox for codesphere-lts-v1.77.2"))
 				})
 
 				It("fails when copying binary to jumpbox fails", func() {
@@ -1118,7 +1118,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 					err := bs.InstallCodesphere()
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to update OMS binary on jumpbox for LTS 1.77.2"))
+					Expect(err.Error()).To(ContainSubstring("failed to update OMS binary on jumpbox for codesphere-lts-v1.77.2"))
 				})
 			})
 

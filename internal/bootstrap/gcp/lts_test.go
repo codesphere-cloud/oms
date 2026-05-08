@@ -11,25 +11,30 @@ import (
 )
 
 var _ = Describe("LTS Compatibility", func() {
-	Describe("IsLTS177", func() {
-		It("returns true for the exact LTS 1.77.2 version string", func() {
-			Expect(gcp.IsLTS177("codesphere-lts-v1.77.2")).To(BeTrue())
+	Describe("FindLTSSpec", func() {
+		It("returns a spec for the LTS 1.77.2 version string", func() {
+			spec := gcp.FindLTSSpec("codesphere-lts-v1.77.2")
+			Expect(spec).NotTo(BeNil())
+			Expect(spec.InstallVersion).To(Equal("codesphere-lts-v1.77.2"))
+			Expect(spec.RequiresJumpboxFiles).To(BeTrue())
+			Expect(spec.RequiresOmsBinaryUpdate).To(BeTrue())
+			Expect(spec.ClearManagedServices).To(BeTrue())
 		})
 
-		It("returns false for another LTS version", func() {
-			Expect(gcp.IsLTS177("codesphere-lts-v1.80.0")).To(BeFalse())
+		It("returns nil for another LTS version", func() {
+			Expect(gcp.FindLTSSpec("codesphere-lts-v1.80.0")).To(BeNil())
 		})
 
-		It("returns false for an empty string", func() {
-			Expect(gcp.IsLTS177("")).To(BeFalse())
+		It("returns nil for an empty string", func() {
+			Expect(gcp.FindLTSSpec("")).To(BeNil())
 		})
 
-		It("returns false for a non-LTS version", func() {
-			Expect(gcp.IsLTS177("master")).To(BeFalse())
+		It("returns nil for a non-LTS version", func() {
+			Expect(gcp.FindLTSSpec("master")).To(BeNil())
 		})
 
-		It("returns false for a partial match", func() {
-			Expect(gcp.IsLTS177("codesphere-lts-v1.77.2-extra")).To(BeFalse())
+		It("returns nil for a partial match", func() {
+			Expect(gcp.FindLTSSpec("codesphere-lts-v1.77.2-extra")).To(BeNil())
 		})
 	})
 
@@ -60,12 +65,19 @@ var _ = Describe("LTS Compatibility", func() {
 		})
 	})
 
-	Describe("ApplyLTS177Compat", func() {
+	Describe("ApplyLTSCompat", func() {
+		var spec *gcp.LTSSpec
+
+		BeforeEach(func() {
+			spec = gcp.FindLTSSpec("codesphere-lts-v1.77.2")
+			Expect(spec).NotTo(BeNil())
+		})
+
 		It("removes unsupported experiments from the config", func() {
 			cfg := &files.CodesphereConfig{
 				Experiments: []string{"managed-services", "custom-service-image", "secret-management", "ms-in-ls", "sub-path-mount"},
 			}
-			gcp.ApplyLTS177Compat(cfg)
+			gcp.ApplyLTSCompat(cfg, spec)
 			Expect(cfg.Experiments).To(ConsistOf("managed-services", "custom-service-image", "ms-in-ls"))
 			Expect(cfg.Experiments).NotTo(ContainElement("secret-management"))
 			Expect(cfg.Experiments).NotTo(ContainElement("sub-path-mount"))
@@ -105,7 +117,7 @@ var _ = Describe("LTS Compatibility", func() {
 				},
 			}
 
-			gcp.ApplyLTS177Compat(cfg)
+			gcp.ApplyLTSCompat(cfg, spec)
 
 			Expect(cfg.ManagedServices).To(BeNil())
 		})
@@ -115,7 +127,7 @@ var _ = Describe("LTS Compatibility", func() {
 				ManagedServices: nil,
 				Experiments:     []string{"custom-service-image"},
 			}
-			Expect(func() { gcp.ApplyLTS177Compat(cfg) }).NotTo(Panic())
+			Expect(func() { gcp.ApplyLTSCompat(cfg, spec) }).NotTo(Panic())
 			Expect(cfg.ManagedServices).To(BeEmpty())
 		})
 
@@ -123,15 +135,21 @@ var _ = Describe("LTS Compatibility", func() {
 			cfg := &files.CodesphereConfig{
 				Experiments: []string{},
 			}
-			gcp.ApplyLTS177Compat(cfg)
+			gcp.ApplyLTSCompat(cfg, spec)
 			Expect(cfg.Experiments).To(BeEmpty())
 		})
 	})
 
-	Describe("GenerateLTS177JumpboxFiles", func() {
-		var root *files.RootConfig
+	Describe("GenerateLTSJumpboxFiles", func() {
+		var (
+			root *files.RootConfig
+			spec *gcp.LTSSpec
+		)
 
 		BeforeEach(func() {
+			spec = gcp.FindLTSSpec("codesphere-lts-v1.77.2")
+			Expect(spec).NotTo(BeNil())
+
 			root = &files.RootConfig{
 				Codesphere: files.CodesphereConfig{
 					Experiments: []string{"managed-services", "custom-service-image", "secret-management", "ms-in-ls", "sub-path-mount"},
@@ -144,7 +162,7 @@ var _ = Describe("LTS Compatibility", func() {
 		})
 
 		It("does not modify the original root config", func() {
-			_, _, err := gcp.GenerateLTS177JumpboxFiles(root)
+			_, _, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(root.Codesphere.Experiments).To(ContainElement("secret-management"))
 			Expect(root.Codesphere.ManagedServices[0].Author).To(Equal("Codesphere"))
@@ -152,48 +170,46 @@ var _ = Describe("LTS Compatibility", func() {
 		})
 
 		It("returns codesphere bytes with compat applied", func() {
-			_, csBytes, err := gcp.GenerateLTS177JumpboxFiles(root)
+			_, csBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(csBytes).NotTo(BeEmpty())
 			csYAML := string(csBytes)
-			// ManagedServices is cleared in LTS 1.77.2 compat mode
 			Expect(csYAML).NotTo(ContainSubstring("managedServices"))
 			Expect(csYAML).NotTo(ContainSubstring("secret-management"))
 		})
 
 		It("returns jumpbox config bytes with inline compat-stripped codesphere", func() {
-			jumpboxBytes, _, err := gcp.GenerateLTS177JumpboxFiles(root)
+			jumpboxBytes, _, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(jumpboxBytes).NotTo(BeEmpty())
 			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("/etc/codesphere/codesphere.yaml"))
-			// ManagedServices is cleared in LTS 1.77.2 compat mode
 			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("managedServices"))
 		})
 
-		It("jumpbox config bytes do not contain inline codesphere fields", func() {
-			jumpboxBytes, _, err := gcp.GenerateLTS177JumpboxFiles(root)
+		It("jumpbox config bytes do not contain unsupported experiment", func() {
+			jumpboxBytes, _, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("secret-management"))
 		})
 	})
 
-	Describe("LTS177LocalJumpboxConfigPath", func() {
+	Describe("LocalJumpboxConfigPath", func() {
 		It("returns config-jumpbox.yaml in same directory as config.yaml", func() {
-			Expect(gcp.LTS177LocalJumpboxConfigPath("config.yaml")).To(Equal("config-jumpbox.yaml"))
+			Expect(gcp.LocalJumpboxConfigPath("config.yaml")).To(Equal("config-jumpbox.yaml"))
 		})
 
 		It("uses the directory of the given config path", func() {
-			Expect(gcp.LTS177LocalJumpboxConfigPath("/etc/codesphere/config.yaml")).To(Equal("/etc/codesphere/config-jumpbox.yaml"))
+			Expect(gcp.LocalJumpboxConfigPath("/etc/codesphere/config.yaml")).To(Equal("/etc/codesphere/config-jumpbox.yaml"))
 		})
 	})
 
-	Describe("LTS177LocalCodesphereConfigPath", func() {
+	Describe("LocalCodesphereConfigPath", func() {
 		It("returns codesphere.yaml in same directory as config.yaml", func() {
-			Expect(gcp.LTS177LocalCodesphereConfigPath("config.yaml")).To(Equal("codesphere.yaml"))
+			Expect(gcp.LocalCodesphereConfigPath("config.yaml")).To(Equal("codesphere.yaml"))
 		})
 
 		It("uses the directory of the given config path", func() {
-			Expect(gcp.LTS177LocalCodesphereConfigPath("/etc/codesphere/config.yaml")).To(Equal("/etc/codesphere/codesphere.yaml"))
+			Expect(gcp.LocalCodesphereConfigPath("/etc/codesphere/config.yaml")).To(Equal("/etc/codesphere/codesphere.yaml"))
 		})
 	})
 })
