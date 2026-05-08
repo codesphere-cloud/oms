@@ -277,8 +277,8 @@ var _ = Describe("DownloadPackages", func() {
 		})
 
 		AfterEach(func() {
-			staleFile.Close()
-			os.Remove(staleFile.Name())
+			Expect(staleFile.Close()).To(Succeed())
+			Expect(os.Remove(staleFile.Name())).To(Succeed())
 		})
 
 		It("deletes the partial file and retries from scratch when resumed download fails verification", func() {
@@ -303,8 +303,8 @@ var _ = Describe("DownloadPackages", func() {
 			emptyFile, createErr := os.CreateTemp("", "empty-download-*")
 			Expect(createErr).NotTo(HaveOccurred())
 			DeferCleanup(func() {
-				emptyFile.Close()
-				os.Remove(emptyFile.Name())
+				Expect(emptyFile.Close()).To(Succeed())
+				Expect(os.Remove(emptyFile.Name())).To(Succeed())
 			})
 
 			mockFileWriter.EXPECT().OpenAppend(fullFilename).Return(emptyFile, nil)
