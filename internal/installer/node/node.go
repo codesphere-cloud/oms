@@ -274,7 +274,7 @@ func (n *Node) EnableRootLogin() error {
 }
 
 func (n *Node) HasInotifyWatchesConfigured() bool {
-	return n.hasSysctlLine("fs.inotify.max_user_watches=1048576")
+	return n.hasSysctlLine("fs.inotify.max_user_watches=1048576") && n.isSysctlActive("fs.inotify.max_user_watches", "1048576")
 }
 
 func (n *Node) ConfigureInotifyWatches() error {
@@ -282,7 +282,7 @@ func (n *Node) ConfigureInotifyWatches() error {
 }
 
 func (n *Node) HasMemoryMapConfigured() bool {
-	return n.hasSysctlLine("vm.max_map_count=262144")
+	return n.hasSysctlLine("vm.max_map_count=262144") && n.isSysctlActive("vm.max_map_count", "262144")
 }
 
 func (n *Node) ConfigureMemoryMap() error {
@@ -342,18 +342,26 @@ func (n *Node) hasSysctlLine(line string) bool {
 	return true
 }
 
+func (n *Node) isSysctlActive(key, expected string) bool {
+	checkCommand := fmt.Sprintf("sudo sysctl -n %s | grep -q '^%s$'", key, expected)
+	err := n.RunSSHCommand("root", checkCommand)
+	return err == nil
+}
+
 // configureSysctlLine appends a specific line to /etc/sysctl.conf and applies the settings on the remote node via SSH
 func (n *Node) configureSysctlLine(line string) error {
-	cmds := []string{
-		fmt.Sprintf("echo '%s' | sudo tee -a /etc/sysctl.conf", line),
-		"sudo sysctl -p",
-	}
-	for _, cmd := range cmds {
-		err := n.RunSSHCommand("root", cmd)
-		if err != nil {
-			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
+	if !n.hasSysctlLine(line) {
+		cmd := fmt.Sprintf("echo '%s' | sudo tee -a /etc/sysctl.conf", line)
+		if err := n.RunSSHCommand("root", cmd); err != nil {
+			return fmt.Errorf("failed to append to sysctl.conf: %w", err)
 		}
 	}
+
+	err := n.RunSSHCommand("root", "sudo sysctl -p")
+	if err != nil {
+		return fmt.Errorf("failed to run sysctl -p: %w", err)
+	}
+
 	return nil
 }
 
