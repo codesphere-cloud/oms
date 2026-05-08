@@ -271,6 +271,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	jumpboxConfigLocalPath := b.Env.InstallConfigPath
 	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil && ltsSpec.RequiresJumpboxFiles {
+		// Old LTS installers: inline compat-stripped codesphere in jumpbox config.
 		var err error
 		jumpboxConfigLocalPath, err = b.writeLTSJumpboxFiles(ltsSpec)
 		if err != nil {

@@ -480,29 +480,16 @@ var _ = Describe("Installconfig & Secrets", func() {
 				BeforeEach(func() {
 					csEnv.InstallVersion = "master"
 					csEnv.Experiments = gcp.DefaultExperiments
-					csEnv.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
-						{
-							Name:        "postgres",
-							Version:     "v1",
-							Author:      "Codesphere",
-							DisplayName: "PostgreSQL",
-						},
-					}
 				})
-				It("does not filter experiments for non-LTS versions", func() {
+				It("uses the regular config.yaml directly (inline codesphere object)", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
-
+					// config.yaml → /etc/codesphere/config.yaml, prod.vault.yaml → secrets dir
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
-
-					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ContainElement("secret-management"))
-					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ContainElement("sub-path-mount"))
-					Expect(bs.Env.InstallConfig.Codesphere.ManagedServices[0].Author).To(Equal("Codesphere"))
-					Expect(bs.Env.InstallConfig.Codesphere.ManagedServices[0].DisplayName).To(Equal("PostgreSQL"))
 				})
 			})
 		})

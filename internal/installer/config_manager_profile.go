@@ -241,7 +241,7 @@ func (g *InstallConfig) applyCommonProperties() {
 						Description: "0.5 vCPU / 500 MB Memory",
 						Parameters: map[string]files.PlanParam{
 							"storage": {
-								PricedAs: "storage-mb",
+								PricedAs: "storage-mib",
 								Schema: map[string]interface{}{
 									"type":                "integer",
 									"default":             10240,
