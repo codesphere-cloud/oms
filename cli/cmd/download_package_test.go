@@ -277,7 +277,7 @@ var _ = Describe("DownloadPackages", func() {
 		})
 
 		AfterEach(func() {
-			Expect(staleFile.Close()).To(Succeed())
+			_ = staleFile.Close() // may already be closed by the code under test
 			Expect(os.Remove(staleFile.Name())).To(Succeed())
 		})
 
@@ -303,7 +303,7 @@ var _ = Describe("DownloadPackages", func() {
 			emptyFile, createErr := os.CreateTemp("", "empty-download-*")
 			Expect(createErr).NotTo(HaveOccurred())
 			DeferCleanup(func() {
-				Expect(emptyFile.Close()).To(Succeed())
+				_ = emptyFile.Close() // may already be closed by the code under test
 				Expect(os.Remove(emptyFile.Name())).To(Succeed())
 			})
 
