@@ -21,7 +21,7 @@ require (
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.29.0
-	github.com/codesphere-cloud/cs-go v1.0.0
+	github.com/codesphere-cloud/cs-go v1.0.1
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/getsops/sops/v3 v3.12.2
 	github.com/jedib0t/go-pretty/v6 v6.7.10
