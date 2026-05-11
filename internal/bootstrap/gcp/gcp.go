@@ -128,20 +128,26 @@ type CodesphereEnvironment struct {
 	Secrets           *files.InstallVault `json:"-"`
 
 	// GCP Specific
-	ProjectDisplayName    string `json:"project_display_name"`
-	BillingAccount        string `json:"billing_account"`
-	BaseDomain            string `json:"base_domain"`
-	GitHubAppClientID     string `json:"-"`
-	GitHubAppClientSecret string `json:"-"`
-	SecretsDir            string `json:"secrets_dir"`
-	FolderID              string `json:"folder_id"`
-	SSHPublicKeyPath      string `json:"-"`
-	SSHPrivateKeyPath     string `json:"-"`
-	DatacenterID          int    `json:"-"`
-	CustomPgIP            string `json:"custom_pg_ip"`
-	Region                string `json:"region"`
-	Zone                  string `json:"zone"`
-	DNSZoneName           string `json:"dns_zone_name"`
+	ProjectDisplayName         string `json:"project_display_name"`
+	BillingAccount             string `json:"billing_account"`
+	BaseDomain                 string `json:"base_domain"`
+	GitHubAppClientID          string `json:"-"`
+	GitHubAppClientSecret      string `json:"-"`
+	GitLabAppClientID          string `json:"-"`
+	GitLabAppClientSecret      string `json:"-"`
+	BitbucketAppClientID       string `json:"-"`
+	BitbucketAppClientSecret   string `json:"-"`
+	AzureDevOpsAppClientID     string `json:"-"`
+	AzureDevOpsAppClientSecret string `json:"-"`
+	SecretsDir                 string `json:"secrets_dir"`
+	FolderID                   string `json:"folder_id"`
+	SSHPublicKeyPath           string `json:"-"`
+	SSHPrivateKeyPath          string `json:"-"`
+	DatacenterID               int    `json:"-"`
+	CustomPgIP                 string `json:"custom_pg_ip"`
+	Region                     string `json:"region"`
+	Zone                       string `json:"zone"`
+	DNSZoneName                string `json:"dns_zone_name"`
 
 	// Test user creation
 	CreateTestUser bool   `json:"-"`
