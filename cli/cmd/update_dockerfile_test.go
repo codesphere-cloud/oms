@@ -139,17 +139,19 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 			mockFileIO := util.NewMockFileIO(GinkgoT())
 
-			// Create a temporary file for the Dockerfile
+			// Write content to a temp file, then reopen read-only (mirrors real FileIO.Open)
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
+			Expect(err).To(BeNil())
+			_, err = tempFile.WriteString(sampleDockerfileContent)
+			Expect(err).To(BeNil())
+			tempFileName := tempFile.Name()
+			Expect(tempFile.Close()).To(Succeed())
+			tempFile, err = os.Open(tempFileName)
 			Expect(err).To(BeNil())
 			DeferCleanup(func() {
 				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
+				Expect(os.Remove(tempFileName)).To(Succeed())
 			})
-			_, err = tempFile.WriteString(sampleDockerfileContent)
-			Expect(err).To(BeNil())
-			// Reset file position to beginning
-			_, _ = tempFile.Seek(0, 0)
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = ""
@@ -173,17 +175,19 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 			mockFileIO := util.NewMockFileIO(GinkgoT())
 
-			// Create a temporary file for the Dockerfile
+			// Write content to a temp file, then reopen read-only (mirrors real FileIO.Open)
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
+			Expect(err).To(BeNil())
+			_, err = tempFile.WriteString(sampleDockerfileContent)
+			Expect(err).To(BeNil())
+			tempFileName := tempFile.Name()
+			Expect(tempFile.Close()).To(Succeed())
+			tempFile, err = os.Open(tempFileName)
 			Expect(err).To(BeNil())
 			DeferCleanup(func() {
 				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
+				Expect(os.Remove(tempFileName)).To(Succeed())
 			})
-			_, err = tempFile.WriteString(sampleDockerfileContent)
-			Expect(err).To(BeNil())
-			// Reset file position to beginning
-			_, _ = tempFile.Seek(0, 0)
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = ""
@@ -206,17 +210,19 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 			mockFileIO := util.NewMockFileIO(GinkgoT())
 
-			// Create a temporary file for the Dockerfile
+			// Write content to a temp file, then reopen read-only (mirrors real FileIO.Open)
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
+			Expect(err).To(BeNil())
+			_, err = tempFile.WriteString(sampleDockerfileContent)
+			Expect(err).To(BeNil())
+			tempFileName := tempFile.Name()
+			Expect(tempFile.Close()).To(Succeed())
+			tempFile, err = os.Open(tempFileName)
 			Expect(err).To(BeNil())
 			DeferCleanup(func() {
 				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
+				Expect(os.Remove(tempFileName)).To(Succeed())
 			})
-			_, err = tempFile.WriteString(sampleDockerfileContent)
-			Expect(err).To(BeNil())
-			// Reset file position to beginning
-			_, _ = tempFile.Seek(0, 0)
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = "workspace-agent-20.04.tar"
@@ -239,17 +245,19 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 			mockFileIO := util.NewMockFileIO(GinkgoT())
 
-			// Create a temporary file for the Dockerfile
+			// Write content to a temp file, then reopen read-only (mirrors real FileIO.Open)
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
+			Expect(err).To(BeNil())
+			_, err = tempFile.WriteString(sampleDockerfileContent)
+			Expect(err).To(BeNil())
+			tempFileName := tempFile.Name()
+			Expect(tempFile.Close()).To(Succeed())
+			tempFile, err = os.Open(tempFileName)
 			Expect(err).To(BeNil())
 			DeferCleanup(func() {
 				_ = tempFile.Close()
-				_ = os.Remove(tempFile.Name())
+				Expect(os.Remove(tempFileName)).To(Succeed())
 			})
-			_, err = tempFile.WriteString(sampleDockerfileContent)
-			Expect(err).To(BeNil())
-			// Reset file position to beginning
-			_, _ = tempFile.Seek(0, 0)
 
 			c.Opts.Dockerfile = "custom/Dockerfile"
 			c.Opts.Baseimage = "workspace-agent-24.04.tar"
