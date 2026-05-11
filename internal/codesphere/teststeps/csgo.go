@@ -6,7 +6,7 @@ package teststeps
 import (
 	"context"
 	"fmt"
-	"slices"
+	"log"
 	"strconv"
 	"time"
 )
@@ -200,22 +200,33 @@ func (s *WaitForRunningStep) Name() string { return stepNameWaitForRunning }
 
 func (s *WaitForRunningStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("Waiting for workspace %d run stage to be running", *workspaceID))
+	var lastErr error
 	for {
 		select {
 		case <-ctx.Done():
 			c.logFailure()
+			if lastErr != nil {
+				return fmt.Errorf("timed out waiting for workspace to be running: %w", lastErr)
+			}
 			return fmt.Errorf("timed out waiting for workspace to be running")
 		default:
 		}
 
 		states, err := c.Client.GetPipelineState(*workspaceID, smoketestPipelineStage)
 		if err != nil {
-			time.Sleep(pipelineStatePollDelay)
-			continue
+			lastErr = err
+			log.Printf("failed to get pipeline state, retrying: %s", err)
+			select {
+			case <-ctx.Done():
+				c.logFailure()
+				return fmt.Errorf("timed out waiting for workspace to be running: %w", lastErr)
+			case <-time.After(pipelineStatePollDelay):
+				continue
+			}
 		}
 
 		for _, st := range states {
-			if slices.Contains([]string{pipelineStateFailure, pipelineStateAborted}, st.State) {
+			if st.State == pipelineStateFailure || st.State == pipelineStateAborted {
 				c.logFailure()
 				return fmt.Errorf("workspace run stage reached unexpected state: %s (server: %s, replica: %s)", st.State, st.Server, st.Replica)
 			}
@@ -233,7 +244,12 @@ func (s *WaitForRunningStep) Run(ctx context.Context, c *SmoketestCodesphereOpts
 			return nil
 		}
 
-		time.Sleep(pipelineStatePollDelay)
+		select {
+		case <-ctx.Done():
+			c.logFailure()
+			return fmt.Errorf("timed out waiting for workspace to be running")
+		case <-time.After(pipelineStatePollDelay):
+		}
 	}
 }
 

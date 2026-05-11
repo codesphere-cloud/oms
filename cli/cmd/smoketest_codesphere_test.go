@@ -451,6 +451,60 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			Expect(err).To(MatchError(ContainSubstring("unexpected state")))
 		})
 
+		It("retries GetPipelineState on error and times out including the last error", func() {
+			mockClient.EXPECT().CreateWorkspace(
+				teamIdInt,
+				planIdInt,
+				mock.AnythingOfType("string"),
+				(*string)(nil), // empty workspace
+			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().SetEnvVar(
+				workspaceId,
+				"TEST_VAR",
+				"smoketest",
+			).Return(nil).Once()
+
+			mockClient.EXPECT().ExecuteCommand(
+				workspaceId,
+				mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "> ci.yml")
+				}),
+			).Return(nil).Once()
+
+			mockClient.EXPECT().ExecuteCommand(
+				workspaceId,
+				mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "> index.html")
+				}),
+			).Return(nil).Once()
+
+			mockClient.EXPECT().SyncLandscape(
+				workspaceId,
+				"ci.yml",
+			).Return(nil).Once()
+
+			mockClient.EXPECT().StartPipeline(
+				workspaceId,
+				"ci.yml",
+				"run",
+			).Return(nil).Once()
+
+			mockClient.EXPECT().GetPipelineState(
+				workspaceId,
+				"run",
+			).Return(nil, fmt.Errorf("connection refused")).Once()
+
+			mockClient.EXPECT().DeleteWorkspace(
+				workspaceId,
+			).Return(nil).Once()
+
+			opts.Timeout = 100 * time.Millisecond
+			err := c.RunSmoketest()
+			Expect(err).To(MatchError(ContainSubstring("timed out")))
+			Expect(err).To(MatchError(ContainSubstring("connection refused")))
+		})
+
 		It("returns cleanup error when DeleteWorkspace fails", func() {
 			mockClient.EXPECT().CreateWorkspace(
 				teamIdInt, // teamID
