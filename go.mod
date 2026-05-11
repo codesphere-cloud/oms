@@ -51,7 +51,6 @@ require (
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/google/go-github/v74 v74.0.0
-	github.com/google/go-github/v85 v85.0.0
 	github.com/lib/pq v1.12.3
 	github.com/rook/rook/pkg/apis v0.0.0-20260430173414-a4316348cc58
 )
@@ -66,7 +65,7 @@ require (
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
-	cloud.google.com/go/kms v1.29.0 // indirect
+	cloud.google.com/go/kms v1.30.0 // indirect
 	cloud.google.com/go/longrunning v0.9.0 // indirect
 	cloud.google.com/go/monitoring v1.24.3 // indirect
 	cloud.google.com/go/storage v1.60.0 // indirect
@@ -171,7 +170,7 @@ require (
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/butuzov/ireturn v0.4.1 // indirect
 	github.com/butuzov/mirror v1.3.0 // indirect
-	github.com/caarlos0/env/v11 v11.4.0 // indirect
+	github.com/caarlos0/env/v11 v11.4.1 // indirect
 	github.com/caarlos0/go-reddit/v3 v3.0.1 // indirect
 	github.com/caarlos0/go-version v0.2.2 // indirect
 	github.com/caarlos0/log v0.6.0 // indirect
@@ -384,7 +383,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/term v0.5.2 // indirect
-	github.com/modelcontextprotocol/registry v1.6.0 // indirect
+	github.com/modelcontextprotocol/registry v1.7.7 // indirect
 	github.com/moricho/tparallel v0.3.2 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
