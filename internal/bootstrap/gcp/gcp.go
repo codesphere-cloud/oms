@@ -139,6 +139,10 @@ type CodesphereEnvironment struct {
 	BitbucketAppClientSecret   string `json:"-"`
 	AzureDevOpsAppClientID     string `json:"-"`
 	AzureDevOpsAppClientSecret string `json:"-"`
+	OidcProviderName           string `json:"-"`
+	OidcIssuerURL              string `json:"-"`
+	OidcClientID               string `json:"-"`
+	OidcClientSecret           string `json:"-"`
 	SecretsDir                 string `json:"secrets_dir"`
 	FolderID                   string `json:"folder_id"`
 	SSHPublicKeyPath           string `json:"-"`

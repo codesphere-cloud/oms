@@ -311,6 +311,7 @@ type CodesphereConfig struct {
 	Plans                      PlansConfig            `yaml:"plans"`
 	UnderprovisionFactors      *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
+	OAuth                      *OAuthProvidersConfig  `yaml:"oauth,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
@@ -337,6 +338,21 @@ type OpenBaoConfig struct {
 	User   string `yaml:"user,omitempty"`
 
 	Password string `yaml:"-"`
+}
+
+type OAuthProvidersConfig struct {
+	Oidc *OidcOAuthProvider `yaml:"oidc,omitempty"`
+}
+
+type OidcOAuthProvider struct {
+	Type      string   `yaml:"type"`
+	Enabled   bool     `yaml:"enabled"`
+	Name      string   `yaml:"name"`
+	IssuerURL string   `yaml:"issuerUrl"`
+	Scopes    []string `yaml:"scopes,omitempty"`
+
+	ClientID     string `yaml:"-"`
+	ClientSecret string `yaml:"-"`
 }
 
 type CertIssuerType string
@@ -657,6 +673,26 @@ func (c *RootConfig) addCodesphereSecrets(vault *InstallVault) {
 				},
 			},
 		)
+	}
+
+	// OIDC OAuth secrets
+	if c.Codesphere.OAuth != nil && c.Codesphere.OAuth.Oidc != nil {
+		if c.Codesphere.OAuth.Oidc.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "oidcClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.OAuth.Oidc.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.OAuth.Oidc.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "oidcClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.OAuth.Oidc.ClientSecret,
+				},
+			})
+		}
 	}
 
 	// GitHub secrets
