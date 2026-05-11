@@ -159,18 +159,21 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		ControlPlanes: []files.K8sNode{
 			{
 				IPAddress: b.Env.ControlPlaneNodes[0].GetInternalIP(),
+				SSHPort:   22,
 			},
 		},
 		Workers: []files.K8sNode{
 			{
 				IPAddress: b.Env.ControlPlaneNodes[0].GetInternalIP(),
+				SSHPort:   22,
 			},
-
 			{
 				IPAddress: b.Env.ControlPlaneNodes[1].GetInternalIP(),
+				SSHPort:   22,
 			},
 			{
 				IPAddress: b.Env.ControlPlaneNodes[2].GetInternalIP(),
+				SSHPort:   22,
 			},
 		},
 	}

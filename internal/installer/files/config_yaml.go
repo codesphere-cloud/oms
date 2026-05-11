@@ -177,7 +177,9 @@ type KubernetesConfig struct {
 }
 
 type K8sNode struct {
-	IPAddress string `yaml:"ipAddress"`
+	IPAddress  string `yaml:"ipAddress"`
+	SSHAddress string `yaml:"sshAddress,omitempty"`
+	SSHPort    int    `yaml:"sshPort,omitempty"`
 }
 
 type ClusterConfig struct {

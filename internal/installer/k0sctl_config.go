@@ -69,12 +69,20 @@ type K0sctlApplyHooks struct {
 }
 
 func createK0sctlHost(node files.K8sNode, role string, installFlags []string, sshKeyPath string, k0sBinaryPath string) K0sctlHost {
+	sshAddress := node.IPAddress
+	if node.SSHAddress != "" {
+		sshAddress = node.SSHAddress
+	}
+	sshPort := 22
+	if node.SSHPort != 0 {
+		sshPort = node.SSHPort
+	}
 	host := K0sctlHost{
 		Role: role,
 		SSH: K0sctlSSH{
-			Address: node.IPAddress,
+			Address: sshAddress,
 			User:    "root",
-			Port:    22,
+			Port:    sshPort,
 			KeyPath: sshKeyPath,
 		},
 		InstallFlags:   installFlags,
