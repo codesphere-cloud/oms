@@ -23,7 +23,7 @@ import (
 func mockFullTestRun(mockClient *codesphere.MockClient, teamId, planId, workspaceId int) {
 	// Expect the rest of the steps to run with the fetched plan ID
 	mockClient.EXPECT().CreateWorkspace(
-		teamId,                        // teamID
+		teamId,
 		planId,                        // fetched planID
 		mock.AnythingOfType("string"), // workspace name is timestamped
 		(*string)(nil),                // empty workspace
@@ -187,8 +187,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 		It("deletes workspace even on CreateWorkspace failure", func() {
 			mockClient.EXPECT().CreateWorkspace(
-				teamIdInt, // teamID
-				planIdInt, // planID
+				teamIdInt,
+				planIdInt,
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(0, fmt.Errorf("create failed")).Once()
@@ -201,8 +201,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			workspaceID := 789
 
 			mockClient.EXPECT().CreateWorkspace(
-				teamIdInt, // teamID
-				planIdInt, // planID
+				teamIdInt,
+				planIdInt,
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceID, nil).Once()
@@ -223,8 +223,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 		It("deletes workspace on ExecuteCommand failure", func() {
 			mockClient.EXPECT().CreateWorkspace(
-				teamIdInt, // teamID
-				planIdInt, // planID
+				teamIdInt,
+				planIdInt,
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
@@ -253,8 +253,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 		It("deletes workspace on SyncLandscape failure", func() {
 			mockClient.EXPECT().CreateWorkspace(
-				teamIdInt, // teamID
-				planIdInt, // planID
+				teamIdInt,
+				planIdInt,
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
@@ -296,8 +296,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 		It("deletes workspace on StartPipeline failure", func() {
 			mockClient.EXPECT().CreateWorkspace(
-				teamIdInt, // teamID
-				planIdInt, // planID
+				teamIdInt,
+				planIdInt,
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
@@ -345,8 +345,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 		It("deletes workspace when run stage reaches failure state", func() {
 			mockClient.EXPECT().CreateWorkspace(
-				teamIdInt, // teamID
-				planIdInt, // planID
+				teamIdInt,
+				planIdInt,
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
@@ -399,8 +399,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 		It("deletes workspace when run stage reaches aborted state", func() {
 			mockClient.EXPECT().CreateWorkspace(
-				teamIdInt, // teamID
-				planIdInt, // planID
+				teamIdInt,
+				planIdInt,
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
@@ -507,8 +507,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 		It("returns cleanup error when DeleteWorkspace fails", func() {
 			mockClient.EXPECT().CreateWorkspace(
-				teamIdInt, // teamID
-				planIdInt, // planID
+				teamIdInt,
+				planIdInt,
 				mock.AnythingOfType("string"),
 				(*string)(nil), // empty workspace
 			).Return(workspaceId, nil).Once()
@@ -565,8 +565,8 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			opts.Steps = []string{"createWorkspace", "setEnvVar"}
 
 			mockClient.EXPECT().CreateWorkspace(
-				teamIdInt, // teamID
-				planIdInt, // planID
+				teamIdInt,
+				planIdInt,
 				mock.AnythingOfType("string"),
 				(*string)(nil),
 			).Return(workspaceId, nil).Once()
