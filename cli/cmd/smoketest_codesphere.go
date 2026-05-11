@@ -29,6 +29,7 @@ var availableSteps = []teststeps.SmokeTestStep{
 	&teststeps.CreateFilesStep{},
 	&teststeps.SyncLandscapeStep{},
 	&teststeps.StartPipelineStep{},
+	&teststeps.WaitForRunningStep{},
 	&teststeps.DeleteWorkspaceStep{},
 }
 

@@ -6,6 +6,7 @@ package teststeps
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -20,7 +21,14 @@ const (
 	stepNameCreateFiles     = "createFiles"
 	stepNameSyncLandscape   = "syncLandscape"
 	stepNameStartPipeline   = "startPipeline"
+	stepNameWaitForRunning  = "waitForRunning"
 	stepNameDeleteWorkspace = "deleteWorkspace"
+
+	ideServer              = "codesphere-ide"
+	pipelineStateRunning   = "running"
+	pipelineStateFailure   = "failure"
+	pipelineStateAborted   = "aborted"
+	pipelineStatePollDelay = 5 * time.Second
 
 	ciYmlContent = `schemaVersion: v0.2
 prepare:
@@ -184,6 +192,49 @@ func (s *StartPipelineStep) Run(ctx context.Context, c *SmoketestCodesphereOpts,
 	}
 	c.logSuccess()
 	return nil
+}
+
+type WaitForRunningStep struct{}
+
+func (s *WaitForRunningStep) Name() string { return stepNameWaitForRunning }
+
+func (s *WaitForRunningStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
+	c.logStep(fmt.Sprintf("Waiting for workspace %d run stage to be running", *workspaceID))
+	for {
+		select {
+		case <-ctx.Done():
+			c.logFailure()
+			return fmt.Errorf("timed out waiting for workspace to be running")
+		default:
+		}
+
+		states, err := c.Client.GetPipelineState(*workspaceID, smoketestPipelineStage)
+		if err != nil {
+			time.Sleep(pipelineStatePollDelay)
+			continue
+		}
+
+		for _, st := range states {
+			if slices.Contains([]string{pipelineStateFailure, pipelineStateAborted}, st.State) {
+				c.logFailure()
+				return fmt.Errorf("workspace run stage reached unexpected state: %s (server: %s, replica: %s)", st.State, st.Server, st.Replica)
+			}
+		}
+
+		allRunning := len(states) > 0
+		for _, st := range states {
+			if st.Server != ideServer && st.State != pipelineStateRunning {
+				allRunning = false
+				break
+			}
+		}
+		if allRunning {
+			c.logSuccess()
+			return nil
+		}
+
+		time.Sleep(pipelineStatePollDelay)
+	}
 }
 
 type DeleteWorkspaceStep struct{}
