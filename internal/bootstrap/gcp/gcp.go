@@ -386,7 +386,12 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	return b.validateGitProviderParams()
+	err = b.validateGitProviderParams()
+	if err != nil {
+		return err
+	}
+
+	return b.validateOidcParams()
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -466,6 +471,16 @@ func (b *GCPBootstrapper) validateGitProviderParams() error {
 		if p.secret != "" && p.id == "" {
 			return fmt.Errorf("%s client secret is set but client ID is missing", p.name)
 		}
+	}
+
+	return nil
+}
+
+// validateOidcParams checks that OIDC OAuth provider credentials are fully specified (all or none of issuer URL, client ID, client secret)
+func (b *GCPBootstrapper) validateOidcParams() error {
+	oidcParams := []string{b.Env.OidcIssuerURL, b.Env.OidcClientID, b.Env.OidcClientSecret}
+	if slices.Contains(oidcParams, "") && strings.Join(oidcParams, "") != "" {
+		return fmt.Errorf("OIDC OAuth provider credentials are not fully specified (all or none of OidcIssuerURL, OidcClientID, OidcClientSecret must be set)")
 	}
 
 	return nil
