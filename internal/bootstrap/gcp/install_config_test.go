@@ -522,6 +522,67 @@ var _ = Describe("Installconfig & Secrets", func() {
 				})
 			})
 
+			Context("When OIDC OAuth provider is fully configured", func() {
+				BeforeEach(func() {
+					csEnv.OidcIssuerURL = "https://dev-idp.example.com"
+					csEnv.OidcClientID = "oidc-client-id"
+					csEnv.OidcClientSecret = "oidc-client-secret"
+					csEnv.OidcProviderName = "MyIDP"
+				})
+				It("sets OIDC OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth).NotTo(BeNil())
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc).NotTo(BeNil())
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Type).To(Equal("oidc"))
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Enabled).To(BeTrue())
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Name).To(Equal("MyIDP"))
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.IssuerURL).To(Equal("https://dev-idp.example.com"))
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Scopes).To(Equal([]string{"openid", "profile", "email"}))
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.ClientID).To(Equal("oidc-client-id"))
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.ClientSecret).To(Equal("oidc-client-secret"))
+				})
+			})
+
+			Context("When OIDC OAuth provider name is not set", func() {
+				BeforeEach(func() {
+					csEnv.OidcIssuerURL = "https://dev-idp.example.com"
+					csEnv.OidcClientID = "oidc-client-id"
+					csEnv.OidcClientSecret = "oidc-client-secret"
+				})
+				It("defaults OIDC provider name to OIDC", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Name).To(Equal("OIDC"))
+				})
+			})
+
+			Context("When OIDC OAuth provider is not configured", func() {
+				It("skips setting OIDC OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth).To(BeNil())
+				})
+			})
+
 			Context("When OpenBao config is set", func() {
 				BeforeEach(func() {
 					csEnv.OpenBaoURI = "https://openbao.example.com"

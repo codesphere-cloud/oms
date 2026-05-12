@@ -506,6 +506,45 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
+		Context("When OIDC issuer URL is set but client ID and secret are missing", func() {
+			BeforeEach(func() {
+				csEnv.OidcIssuerURL = "https://idp.example.com"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("OIDC OAuth provider credentials are not fully specified")))
+			})
+		})
+		Context("When OIDC client ID and secret are set but issuer URL is missing", func() {
+			BeforeEach(func() {
+				csEnv.OidcClientID = "oidc-id"
+				csEnv.OidcClientSecret = "oidc-secret"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("OIDC OAuth provider credentials are not fully specified")))
+			})
+		})
+		Context("When only OIDC client ID is set", func() {
+			BeforeEach(func() {
+				csEnv.OidcClientID = "oidc-id"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("OIDC OAuth provider credentials are not fully specified")))
+			})
+		})
+		Context("When all OIDC params are set", func() {
+			BeforeEach(func() {
+				csEnv.OidcIssuerURL = "https://idp.example.com"
+				csEnv.OidcClientID = "oidc-id"
+				csEnv.OidcClientSecret = "oidc-secret"
+			})
+			It("succeeds", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
 	})
 
 	Describe("EnsureInstallConfig", func() {

@@ -297,6 +297,24 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		}
 	}
+	if b.Env.OidcIssuerURL != "" && b.Env.OidcClientID != "" && b.Env.OidcClientSecret != "" {
+		name := b.Env.OidcProviderName
+		if name == "" {
+			name = "OIDC"
+		}
+		b.Env.InstallConfig.Codesphere.OAuth = &files.OAuthProvidersConfig{
+			Oidc: &files.OidcOAuthProvider{
+				Type:         "oidc",
+				Enabled:      true,
+				Name:         name,
+				IssuerURL:    b.Env.OidcIssuerURL,
+				Scopes:       []string{"openid", "profile", "email"},
+				ClientID:     b.Env.OidcClientID,
+				ClientSecret: b.Env.OidcClientSecret,
+			},
+		}
+	}
+
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 
