@@ -5,9 +5,9 @@ This project includes code licensed under the following terms:
  
 ----------
 Module: cloud.google.com/go/artifactregistry
-Version: v1.24.0
+Version: v1.25.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.24.0/artifactregistry/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.25.0/artifactregistry/LICENSE
  
 ----------
 Module: cloud.google.com/go/auth
@@ -35,9 +35,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata
  
 ----------
 Module: cloud.google.com/go/iam/apiv1/iampb
-Version: v1.10.0
+Version: v1.11.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.10.0/iam/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.11.0/iam/LICENSE
  
 ----------
 Module: cloud.google.com/go/longrunning
@@ -215,9 +215,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.3.3/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.0.0
+Version: v1.0.1
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.0.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.0.1/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
