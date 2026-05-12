@@ -395,6 +395,133 @@ var _ = Describe("Installconfig & Secrets", func() {
 				})
 			})
 
+			Context("When GitLab credentials are set", func() {
+				BeforeEach(func() {
+					csEnv.GitLabAppClientID = "gitlab-app-client-id"
+					csEnv.GitLabAppClientSecret = "gitlab-app-client-secret"
+				})
+				It("sets GitLab OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab).NotTo(BeNil())
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.Enabled).To(BeTrue())
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.URL).To(Equal("https://gitlab.com"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.API.BaseURL).To(Equal("https://gitlab.com"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.Issuer).To(Equal("https://gitlab.com"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.AuthorizationEndpoint).To(Equal("https://gitlab.com/oauth/authorize"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.TokenEndpoint).To(Equal("https://gitlab.com/oauth/token"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.ClientAuthMethod).To(Equal("client_secret_post"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.RedirectURI).To(Equal("https://cs.example.com/ide/auth/gitlab/callback"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.ClientID).To(Equal("gitlab-app-client-id"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.ClientSecret).To(Equal("gitlab-app-client-secret"))
+				})
+			})
+
+			Context("When GitLab credentials are not set", func() {
+				It("skips setting GitLab OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab).To(BeNil())
+				})
+			})
+
+			Context("When Bitbucket credentials are set", func() {
+				BeforeEach(func() {
+					csEnv.BitbucketAppClientID = "bitbucket-app-client-id"
+					csEnv.BitbucketAppClientSecret = "bitbucket-app-client-secret"
+				})
+				It("sets Bitbucket OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket).NotTo(BeNil())
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.Enabled).To(BeTrue())
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.URL).To(Equal("https://bitbucket.org"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.API.BaseURL).To(Equal("https://api.bitbucket.org/2.0"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.Issuer).To(Equal("https://bitbucket.org"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.AuthorizationEndpoint).To(Equal("https://bitbucket.org/site/oauth2/authorize"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.TokenEndpoint).To(Equal("https://bitbucket.org/site/oauth2/access_token"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.ClientAuthMethod).To(Equal("client_secret_post"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.RedirectURI).To(Equal("https://cs.example.com/ide/auth/bitbucket/callback"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.ClientID).To(Equal("bitbucket-app-client-id"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.ClientSecret).To(Equal("bitbucket-app-client-secret"))
+				})
+			})
+
+			Context("When Bitbucket credentials are not set", func() {
+				It("skips setting Bitbucket OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket).To(BeNil())
+				})
+			})
+
+			Context("When Azure DevOps credentials are set", func() {
+				BeforeEach(func() {
+					csEnv.AzureDevOpsAppClientID = "azure-devops-app-client-id"
+					csEnv.AzureDevOpsAppClientSecret = "azure-devops-app-client-secret"
+				})
+				It("sets Azure DevOps OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps).NotTo(BeNil())
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.Enabled).To(BeTrue())
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.URL).To(Equal("https://dev.azure.com"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.API.BaseURL).To(Equal("https://dev.azure.com"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.Issuer).To(Equal("https://login.microsoftonline.com/common/v2.0"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.AuthorizationEndpoint).To(Equal("https://login.microsoftonline.com/common/oauth2/v2.0/authorize"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.TokenEndpoint).To(Equal("https://login.microsoftonline.com/common/oauth2/v2.0/token"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.ClientAuthMethod).To(Equal("client_secret_post"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.Scope).To(Equal("openid offline_access https://app.vssps.visualstudio.com/vso.code_full"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.RedirectURI).To(Equal("https://cs.example.com/ide/auth/azure-dev-ops/callback"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.ClientID).To(Equal("azure-devops-app-client-id"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.ClientSecret).To(Equal("azure-devops-app-client-secret"))
+				})
+			})
+
+			Context("When Azure DevOps credentials are not set", func() {
+				It("skips setting Azure DevOps OAuth configuration", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps).To(BeNil())
+				})
+			})
+
 			Context("When OpenBao config is set", func() {
 				BeforeEach(func() {
 					csEnv.OpenBaoURI = "https://openbao.example.com"

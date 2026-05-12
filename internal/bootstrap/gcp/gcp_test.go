@@ -425,6 +425,89 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateGitProviderParams", func() {
+		Context("When GitLab client ID is set but secret is missing", func() {
+			BeforeEach(func() {
+				csEnv.GitLabAppClientID = "some-id"
+				csEnv.GitLabAppClientSecret = ""
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("GitLab client ID is set but client secret is missing")))
+			})
+		})
+		Context("When GitLab client secret is set but ID is missing", func() {
+			BeforeEach(func() {
+				csEnv.GitLabAppClientID = ""
+				csEnv.GitLabAppClientSecret = "some-secret"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("GitLab client secret is set but client ID is missing")))
+			})
+		})
+		Context("When Bitbucket client ID is set but secret is missing", func() {
+			BeforeEach(func() {
+				csEnv.BitbucketAppClientID = "some-id"
+				csEnv.BitbucketAppClientSecret = ""
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("Bitbucket client ID is set but client secret is missing")))
+			})
+		})
+		Context("When Bitbucket client secret is set but ID is missing", func() {
+			BeforeEach(func() {
+				csEnv.BitbucketAppClientID = ""
+				csEnv.BitbucketAppClientSecret = "some-secret"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("Bitbucket client secret is set but client ID is missing")))
+			})
+		})
+		Context("When Azure DevOps client ID is set but secret is missing", func() {
+			BeforeEach(func() {
+				csEnv.AzureDevOpsAppClientID = "some-id"
+				csEnv.AzureDevOpsAppClientSecret = ""
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("Azure DevOps client ID is set but client secret is missing")))
+			})
+		})
+		Context("When Azure DevOps client secret is set but ID is missing", func() {
+			BeforeEach(func() {
+				csEnv.AzureDevOpsAppClientID = ""
+				csEnv.AzureDevOpsAppClientSecret = "some-secret"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("Azure DevOps client secret is set but client ID is missing")))
+			})
+		})
+		Context("When all providers have both ID and secret set", func() {
+			BeforeEach(func() {
+				csEnv.GitLabAppClientID = "gl-id"
+				csEnv.GitLabAppClientSecret = "gl-secret"
+				csEnv.BitbucketAppClientID = "bb-id"
+				csEnv.BitbucketAppClientSecret = "bb-secret"
+				csEnv.AzureDevOpsAppClientID = "az-id"
+				csEnv.AzureDevOpsAppClientSecret = "az-secret"
+			})
+			It("succeeds", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+		Context("When no provider credentials are set", func() {
+			It("succeeds", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+	})
+
 	Describe("EnsureInstallConfig", func() {
 		Describe("Valid EnsureInstallConfig", func() {
 			BeforeEach(func() {
