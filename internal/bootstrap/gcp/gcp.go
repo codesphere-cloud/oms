@@ -377,7 +377,12 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	return b.validateGitHubParams()
+	err = b.validateGitHubParams()
+	if err != nil {
+		return err
+	}
+
+	return b.validateGitProviderParams()
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -433,6 +438,30 @@ func (b *GCPBootstrapper) validateGitHubParams() error {
 	ghAppParams := []string{b.Env.GitHubAppName, b.Env.GitHubAppClientID, b.Env.GitHubAppClientSecret}
 	if slices.Contains(ghAppParams, "") && strings.Join(ghAppParams, "") != "" {
 		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GitHubAppClientID, GitHubAppClientSecret must be set)")
+	}
+
+	return nil
+}
+
+// validateGitProviderParams checks that git provider credentials are fully specified (both client ID and secret, or neither)
+func (b *GCPBootstrapper) validateGitProviderParams() error {
+	providers := []struct {
+		name   string
+		id     string
+		secret string
+	}{
+		{"GitLab", b.Env.GitLabAppClientID, b.Env.GitLabAppClientSecret},
+		{"Bitbucket", b.Env.BitbucketAppClientID, b.Env.BitbucketAppClientSecret},
+		{"Azure DevOps", b.Env.AzureDevOpsAppClientID, b.Env.AzureDevOpsAppClientSecret},
+	}
+
+	for _, p := range providers {
+		if p.id != "" && p.secret == "" {
+			return fmt.Errorf("%s client ID is set but client secret is missing", p.name)
+		}
+		if p.secret != "" && p.id == "" {
+			return fmt.Errorf("%s client secret is set but client ID is missing", p.name)
+		}
 	}
 
 	return nil
