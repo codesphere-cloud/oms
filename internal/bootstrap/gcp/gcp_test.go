@@ -545,6 +545,35 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
+		Context("When external Loki endpoint is set", func() {
+			BeforeEach(func() {
+				csEnv.ExternalLokiEndpoint = "https://loki.example.com/loki/api/v1/push"
+				csEnv.ExternalLokiSecret = "loki-password"
+				csEnv.ExternalLokiUser = "loki-user"
+			})
+			It("succeeds", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+		Context("When external Loki secret is set without endpoint", func() {
+			BeforeEach(func() {
+				csEnv.ExternalLokiSecret = "loki-password"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("external Loki endpoint is required")))
+			})
+		})
+		Context("When external Loki user is set without endpoint", func() {
+			BeforeEach(func() {
+				csEnv.ExternalLokiUser = "loki-user"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("external Loki endpoint is required")))
+			})
+		})
 	})
 
 	Describe("EnsureInstallConfig", func() {

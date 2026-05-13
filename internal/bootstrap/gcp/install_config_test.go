@@ -606,6 +606,49 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.Engine).To(Equal("fake-engine"))
 				})
 			})
+			Context("When external Loki config is set", func() {
+				BeforeEach(func() {
+					csEnv.ExternalLokiEndpoint = "https://loki.example.com/loki/api/v1/push"
+					csEnv.ExternalLokiSecret = "fake-loki-password"
+					csEnv.ExternalLokiUser = "fake-loki-user"
+				})
+				It("sets Grafana Alloy Loki config", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					loki := bs.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled).To(BeTrue())
+					Expect(loki.Endpoint).To(Equal("https://loki.example.com/loki/api/v1/push"))
+					Expect(loki.Password).To(Equal("fake-loki-password"))
+					Expect(loki.User).To(Equal("fake-loki-user"))
+				})
+			})
+			Context("When only external Loki endpoint is set", func() {
+				BeforeEach(func() {
+					csEnv.ExternalLokiEndpoint = "https://loki.example.com/loki/api/v1/push"
+				})
+				It("sets Grafana Alloy Loki config without a password secret", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					loki := bs.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki
+					Expect(loki.Endpoint).To(Equal("https://loki.example.com/loki/api/v1/push"))
+					Expect(loki.Password).To(BeEmpty())
+					Expect(loki.User).To(BeEmpty())
+				})
+			})
 		})
 
 		Describe("Invalid cases", func() {

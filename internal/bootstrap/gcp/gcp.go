@@ -114,6 +114,9 @@ type CodesphereEnvironment struct {
 	RegistryUser         string          `json:"-"`
 	Experiments          []string        `json:"experiments"`
 	FeatureFlags         map[string]bool `json:"feature_flags"`
+	ExternalLokiEndpoint string          `json:"external_loki_endpoint,omitempty"`
+	ExternalLokiSecret   string          `json:"-"`
+	ExternalLokiUser     string          `json:"external_loki_user,omitempty"`
 
 	// OpenBao
 	OpenBaoURI      string `json:"-"`
@@ -391,7 +394,12 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	return b.validateOidcParams()
+	err = b.validateOidcParams()
+	if err != nil {
+		return err
+	}
+
+	return b.validateExternalLokiParams()
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -481,6 +489,18 @@ func (b *GCPBootstrapper) validateOidcParams() error {
 	oidcParams := []string{b.Env.OidcIssuerURL, b.Env.OidcClientID, b.Env.OidcClientSecret}
 	if slices.Contains(oidcParams, "") && strings.Join(oidcParams, "") != "" {
 		return fmt.Errorf("OIDC OAuth provider credentials are not fully specified (all or none of OidcIssuerURL, OidcClientID, OidcClientSecret must be set)")
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) validateExternalLokiParams() error {
+	if b.Env.ExternalLokiEndpoint != "" {
+		return nil
+	}
+
+	if b.Env.ExternalLokiSecret != "" || b.Env.ExternalLokiUser != "" {
+		return fmt.Errorf("external Loki endpoint is required when external Loki secret or user is set")
 	}
 
 	return nil
