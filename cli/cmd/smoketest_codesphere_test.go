@@ -505,6 +505,62 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			Expect(err).To(MatchError(ContainSubstring("connection refused")))
 		})
 
+		It("does not return success when only IDE server is in running state", func() {
+			mockClient.EXPECT().CreateWorkspace(
+				teamIdInt,
+				planIdInt,
+				mock.AnythingOfType("string"),
+				(*string)(nil),
+			).Return(workspaceId, nil).Once()
+
+			mockClient.EXPECT().SetEnvVar(
+				workspaceId,
+				"TEST_VAR",
+				"smoketest",
+			).Return(nil).Once()
+
+			mockClient.EXPECT().ExecuteCommand(
+				workspaceId,
+				mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "> ci.yml")
+				}),
+			).Return(nil).Once()
+
+			mockClient.EXPECT().ExecuteCommand(
+				workspaceId,
+				mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "> index.html")
+				}),
+			).Return(nil).Once()
+
+			mockClient.EXPECT().SyncLandscape(
+				workspaceId,
+				"ci.yml",
+			).Return(nil).Once()
+
+			mockClient.EXPECT().StartPipeline(
+				workspaceId,
+				"ci.yml",
+				"run",
+			).Return(nil).Once()
+
+			// Only IDE server running — must NOT be treated as success
+			mockClient.EXPECT().GetPipelineState(
+				workspaceId,
+				"run",
+			).Return([]api.PipelineStatus{
+				{State: "running", Server: "codesphere-ide", Replica: "replica-0"},
+			}, nil).Once()
+
+			mockClient.EXPECT().DeleteWorkspace(
+				workspaceId,
+			).Return(nil).Once()
+
+			opts.Timeout = 100 * time.Millisecond
+			err := c.RunSmoketest()
+			Expect(err).To(MatchError(ContainSubstring("timed out")))
+		})
+
 		It("returns cleanup error when DeleteWorkspace fails", func() {
 			mockClient.EXPECT().CreateWorkspace(
 				teamIdInt,

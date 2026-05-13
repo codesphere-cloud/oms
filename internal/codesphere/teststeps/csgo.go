@@ -20,8 +20,7 @@ const (
 	stepNameSetEnvVar       = "setEnvVar"
 	stepNameCreateFiles     = "createFiles"
 	stepNameSyncLandscape   = "syncLandscape"
-	stepNameStartPipeline   = "startPipeline"
-	stepNameWaitForRunning  = "waitForRunning"
+	stepNameExecuteRunStage = "executeRunStage"
 	stepNameDeleteWorkspace = "deleteWorkspace"
 
 	ideServer              = "codesphere-ide"
@@ -180,26 +179,16 @@ func (s *SyncLandscapeStep) Run(ctx context.Context, c *SmoketestCodesphereOpts,
 	return nil
 }
 
-type StartPipelineStep struct{}
+type ExecuteRunStageStep struct{}
 
-func (s *StartPipelineStep) Name() string { return stepNameStartPipeline }
+func (s *ExecuteRunStageStep) Name() string { return stepNameExecuteRunStage }
 
-func (s *StartPipelineStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
-	c.logStep(fmt.Sprintf("Starting '%s' pipeline stage", smoketestPipelineStage))
+func (s *ExecuteRunStageStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
+	c.logStep(fmt.Sprintf("Executing '%s' pipeline stage", smoketestPipelineStage))
 	if err := c.Client.StartPipeline(*workspaceID, c.Profile, smoketestPipelineStage); err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to start pipeline: %w", err)
 	}
-	c.logSuccess()
-	return nil
-}
-
-type WaitForRunningStep struct{}
-
-func (s *WaitForRunningStep) Name() string { return stepNameWaitForRunning }
-
-func (s *WaitForRunningStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
-	c.logStep(fmt.Sprintf("Waiting for workspace %d run stage to be running", *workspaceID))
 	var lastErr error
 	for {
 		select {
@@ -232,14 +221,19 @@ func (s *WaitForRunningStep) Run(ctx context.Context, c *SmoketestCodesphereOpts
 			}
 		}
 
-		allRunning := len(states) > 0
+		hasNonIdeServer := false
+		allNonIdeRunning := true
 		for _, st := range states {
-			if st.Server != ideServer && st.State != pipelineStateRunning {
-				allRunning = false
+			if st.Server == ideServer {
+				continue
+			}
+			hasNonIdeServer = true
+			if st.State != pipelineStateRunning {
+				allNonIdeRunning = false
 				break
 			}
 		}
-		if allRunning {
+		if hasNonIdeServer && allNonIdeRunning {
 			c.logSuccess()
 			return nil
 		}
