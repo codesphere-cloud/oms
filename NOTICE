@@ -23,9 +23,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.61.0
+Version: v1.62.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.61.0/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.62.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
@@ -1331,15 +1331,15 @@ License URL: https://github.com/kubernetes/kubectl/blob/v0.35.4/LICENSE
  
 ----------
 Module: k8s.io/utils
-Version: v0.0.0-20260319190234-28399d86e0b5
+Version: v0.0.0-20260507154919-ff6756f316d2
 License: Apache-2.0
-License URL: https://github.com/kubernetes/utils/blob/28399d86e0b5/LICENSE
+License URL: https://github.com/kubernetes/utils/blob/ff6756f316d2/LICENSE
  
 ----------
 Module: k8s.io/utils/internal/third_party/forked/golang
-Version: v0.0.0-20260319190234-28399d86e0b5
+Version: v0.0.0-20260507154919-ff6756f316d2
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/utils/blob/28399d86e0b5/internal/third_party/forked/golang/LICENSE
+License URL: https://github.com/kubernetes/utils/blob/ff6756f316d2/internal/third_party/forked/golang/LICENSE
  
 ----------
 Module: oras.land/oras-go/v2
