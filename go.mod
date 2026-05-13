@@ -16,7 +16,7 @@ require (
 	cloud.google.com/go/artifactregistry v1.25.0
 	cloud.google.com/go/compute v1.62.0
 	cloud.google.com/go/iam v1.11.0
-	cloud.google.com/go/resourcemanager v1.14.0
+	cloud.google.com/go/resourcemanager v1.15.0
 	cloud.google.com/go/serviceusage v1.13.0
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.5.0
