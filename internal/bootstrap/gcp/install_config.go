@@ -317,6 +317,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
+	b.applyExternalLokiConfig()
 
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
@@ -357,6 +358,28 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 
 	return nil
+}
+
+func (b *GCPBootstrapper) applyExternalLokiConfig() {
+	if b.Env.ExternalLokiEndpoint == "" {
+		return
+	}
+
+	if b.Env.InstallConfig.Cluster.Monitoring == nil {
+		b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+	}
+	if b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy == nil {
+		b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{}
+	}
+
+	loki := &files.LokiConnectionConfig{
+		Endpoint: b.Env.ExternalLokiEndpoint,
+		User:     b.Env.ExternalLokiUser,
+		Password: b.Env.ExternalLokiSecret,
+	}
+
+	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled = true
+	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki = loki
 }
 
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname

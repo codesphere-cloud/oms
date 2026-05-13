@@ -407,6 +407,15 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 		}
 	}
 
+	// Monitoring secrets
+	if g.Config.Cluster.Monitoring != nil &&
+		g.Config.Cluster.Monitoring.GrafanaAlloy != nil &&
+		g.Config.Cluster.Monitoring.GrafanaAlloy.Loki != nil {
+		if secret, ok := secretsMap[files.LokiGatewayPasswordSecretName]; ok && secret.Fields != nil {
+			g.Config.Cluster.Monitoring.GrafanaAlloy.Loki.Password = secret.Fields.Password
+		}
+	}
+
 	return nil
 }
 
