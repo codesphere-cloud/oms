@@ -192,10 +192,9 @@ func (s *DeleteWorkspaceStep) Name() string { return stepNameDeleteWorkspace }
 
 func (s *DeleteWorkspaceStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
 	c.logStep(fmt.Sprintf("\nDeleting workspace %d", *workspaceID))
-	deleteErr := c.Client.DeleteWorkspace(*workspaceID)
-	if deleteErr != nil {
+	if err := c.Client.DeleteWorkspace(*workspaceID); err != nil {
 		c.logFailure()
-		return fmt.Errorf("failed to delete workspace: %w", deleteErr)
+		return fmt.Errorf("failed to delete workspace: %w", err)
 	}
 	c.logSuccess()
 	return nil

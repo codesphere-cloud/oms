@@ -222,6 +222,71 @@ func (_c *MockClient_ExecuteCommand_Call) RunAndReturn(run func(workspaceID int,
 	return _c
 }
 
+// GetPipelineState provides a mock function for the type MockClient
+func (_mock *MockClient) GetPipelineState(workspaceID int, stage string) ([]api.PipelineStatus, error) {
+	ret := _mock.Called(workspaceID, stage)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetPipelineState")
+	}
+
+	var r0 []api.PipelineStatus
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, string) ([]api.PipelineStatus, error)); ok {
+		return returnFunc(workspaceID, stage)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, string) []api.PipelineStatus); ok {
+		r0 = returnFunc(workspaceID, stage)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]api.PipelineStatus)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, string) error); ok {
+		r1 = returnFunc(workspaceID, stage)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_GetPipelineState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPipelineState'
+type MockClient_GetPipelineState_Call struct {
+	*mock.Call
+}
+
+// GetPipelineState is a helper method to define mock.On call
+//   - workspaceID int
+//   - stage string
+func (_e *MockClient_Expecter) GetPipelineState(workspaceID interface{}, stage interface{}) *MockClient_GetPipelineState_Call {
+	return &MockClient_GetPipelineState_Call{Call: _e.mock.On("GetPipelineState", workspaceID, stage)}
+}
+
+func (_c *MockClient_GetPipelineState_Call) Run(run func(workspaceID int, stage string)) *MockClient_GetPipelineState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockClient_GetPipelineState_Call) Return(statuses []api.PipelineStatus, err error) *MockClient_GetPipelineState_Call {
+	_c.Call.Return(statuses, err)
+	return _c
+}
+
+func (_c *MockClient_GetPipelineState_Call) RunAndReturn(run func(workspaceID int, stage string) ([]api.PipelineStatus, error)) *MockClient_GetPipelineState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListTeams provides a mock function for the type MockClient
 func (_mock *MockClient) ListTeams() ([]api.Team, error) {
 	ret := _mock.Called()
@@ -391,6 +456,109 @@ func (_c *MockClient_SetEnvVar_Call) Return(err error) *MockClient_SetEnvVar_Cal
 }
 
 func (_c *MockClient_SetEnvVar_Call) RunAndReturn(run func(workspaceID int, key string, value string) error) *MockClient_SetEnvVar_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// StopPipeline provides a mock function for the type MockClient
+func (_mock *MockClient) StopPipeline(workspaceID int, stage string) error {
+	ret := _mock.Called(workspaceID, stage)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StopPipeline")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(int, string) error); ok {
+		r0 = returnFunc(workspaceID, stage)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockClient_StopPipeline_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StopPipeline'
+type MockClient_StopPipeline_Call struct {
+	*mock.Call
+}
+
+// StopPipeline is a helper method to define mock.On call
+//   - workspaceID int
+//   - stage string
+func (_e *MockClient_Expecter) StopPipeline(workspaceID interface{}, stage interface{}) *MockClient_StopPipeline_Call {
+	return &MockClient_StopPipeline_Call{Call: _e.mock.On("StopPipeline", workspaceID, stage)}
+}
+
+func (_c *MockClient_StopPipeline_Call) Run(run func(workspaceID int, stage string)) *MockClient_StopPipeline_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(arg0, arg1)
+	})
+	return _c
+}
+
+func (_c *MockClient_StopPipeline_Call) Return(err error) *MockClient_StopPipeline_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockClient_StopPipeline_Call) RunAndReturn(run func(workspaceID int, stage string) error) *MockClient_StopPipeline_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// TeardownLandscape provides a mock function for the type MockClient
+func (_mock *MockClient) TeardownLandscape(workspaceID int) error {
+	ret := _mock.Called(workspaceID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for TeardownLandscape")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(int) error); ok {
+		r0 = returnFunc(workspaceID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockClient_TeardownLandscape_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'TeardownLandscape'
+type MockClient_TeardownLandscape_Call struct {
+	*mock.Call
+}
+
+// TeardownLandscape is a helper method to define mock.On call
+//   - workspaceID int
+func (_e *MockClient_Expecter) TeardownLandscape(workspaceID interface{}) *MockClient_TeardownLandscape_Call {
+	return &MockClient_TeardownLandscape_Call{Call: _e.mock.On("TeardownLandscape", workspaceID)}
+}
+
+func (_c *MockClient_TeardownLandscape_Call) Run(run func(workspaceID int)) *MockClient_TeardownLandscape_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		run(arg0)
+	})
+	return _c
+}
+
+func (_c *MockClient_TeardownLandscape_Call) Return(err error) *MockClient_TeardownLandscape_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockClient_TeardownLandscape_Call) RunAndReturn(run func(workspaceID int) error) *MockClient_TeardownLandscape_Call {
 	_c.Call.Return(run)
 	return _c
 }

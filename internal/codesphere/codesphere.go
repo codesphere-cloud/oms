@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/cs-go/api"
+	"github.com/codesphere-cloud/cs-go/api/openapi_client"
 )
 
 // Client interface abstracts Codesphere API operations for testing
@@ -21,6 +22,9 @@ type Client interface {
 	ExecuteCommand(workspaceID int, command string) error
 	SyncLandscape(workspaceID int, profile string) error
 	StartPipeline(workspaceID int, profile, stage string) error
+	StopPipeline(workspaceID int, stage string) error
+	GetPipelineState(workspaceID int, stage string) ([]api.PipelineStatus, error)
+	TeardownLandscape(workspaceID int) error
 	DeleteWorkspace(workspaceID int) error
 	ListWorkspacePlans() ([]api.WorkspacePlan, error)
 	ListTeams() ([]api.Team, error)
@@ -29,6 +33,8 @@ type Client interface {
 // APIClient wraps the cs-go API client
 type APIClient struct {
 	client *api.Client
+	rawAPI *openapi_client.APIClient
+	ctx    context.Context
 }
 
 // NewClient creates a new Codesphere API client
@@ -51,7 +57,12 @@ func NewClient(baseURL, token string) (*APIClient, error) {
 		Token:   token,
 	})
 
-	return &APIClient{client: client}, nil
+	cfg := openapi_client.NewConfiguration()
+	cfg.Servers = []openapi_client.ServerConfiguration{{URL: parsedURL.String()}}
+	rawAPI := openapi_client.NewAPIClient(cfg)
+	rawCtx := context.WithValue(ctx, openapi_client.ContextAccessToken, token)
+
+	return &APIClient{client: client, rawAPI: rawAPI, ctx: rawCtx}, nil
 }
 
 // CreateWorkspace creates a new workspace and waits for it to be running
@@ -104,6 +115,29 @@ func (c *APIClient) StartPipeline(workspaceID int, profile, stage string) error 
 	err := c.client.StartPipelineStage(workspaceID, profile, stage)
 	if err != nil {
 		return fmt.Errorf("failed to start pipeline: %w", err)
+	}
+	return nil
+}
+
+// StopPipeline stops a running pipeline stage
+func (c *APIClient) StopPipeline(workspaceID int, stage string) error {
+	_, err := c.rawAPI.WorkspacesAPI.WorkspacesStopPipelineStage(c.ctx, float32(workspaceID), stage).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to stop pipeline: %w", err)
+	}
+	return nil
+}
+
+// GetPipelineState returns the current status of a pipeline stage
+func (c *APIClient) GetPipelineState(workspaceID int, stage string) ([]api.PipelineStatus, error) {
+	return c.client.GetPipelineState(workspaceID, stage)
+}
+
+// TeardownLandscape tears down all running services in the workspace landscape
+func (c *APIClient) TeardownLandscape(workspaceID int) error {
+	_, err := c.rawAPI.WorkspacesAPI.WorkspacesTeardownLandscape(c.ctx, float32(workspaceID)).Execute()
+	if err != nil {
+		return fmt.Errorf("failed to teardown landscape: %w", err)
 	}
 	return nil
 }
