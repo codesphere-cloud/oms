@@ -174,7 +174,107 @@ var _ = Describe("ExtractVault", func() {
 			Expect(foundPass).To(BeTrue(), "Password secret for service %s not found", service)
 		}
 	})
+
+	It("extracts GitLab secrets into vault", func() {
+		config := files.NewRootConfig()
+		config.Codesphere = files.CodesphereConfig{
+			GitProviders: &files.GitProvidersConfig{
+				GitLab: &files.GitProviderConfig{
+					OAuth: files.OAuthConfig{
+						ClientID:     "gl-client-id",
+						ClientSecret: "gl-client-secret",
+					},
+				},
+			},
+		}
+
+		vault := config.ExtractVault()
+
+		assertSecretPassword(vault, "gitlabAppClientId", "gl-client-id")
+		assertSecretPassword(vault, "gitlabAppClientSecret", "gl-client-secret")
+	})
+
+	It("extracts Bitbucket secrets into vault", func() {
+		config := files.NewRootConfig()
+		config.Codesphere = files.CodesphereConfig{
+			GitProviders: &files.GitProvidersConfig{
+				Bitbucket: &files.GitProviderConfig{
+					OAuth: files.OAuthConfig{
+						ClientID:     "bb-client-id",
+						ClientSecret: "bb-client-secret",
+					},
+				},
+			},
+		}
+
+		vault := config.ExtractVault()
+
+		assertSecretPassword(vault, "bitbucketAppsClientId", "bb-client-id")
+		assertSecretPassword(vault, "bitbucketAppsClientSecret", "bb-client-secret")
+	})
+
+	It("extracts Azure DevOps secrets into vault", func() {
+		config := files.NewRootConfig()
+		config.Codesphere = files.CodesphereConfig{
+			GitProviders: &files.GitProvidersConfig{
+				AzureDevOps: &files.GitProviderConfig{
+					OAuth: files.OAuthConfig{
+						ClientID:     "az-client-id",
+						ClientSecret: "az-client-secret",
+					},
+				},
+			},
+		}
+
+		vault := config.ExtractVault()
+
+		assertSecretPassword(vault, "azureDevOpsAppClientId", "az-client-id")
+		assertSecretPassword(vault, "azureDevOpsAppClientSecret", "az-client-secret")
+	})
+
+	It("does not include git provider secrets when providers are not set", func() {
+		config := files.NewRootConfig()
+		config.Codesphere = files.CodesphereConfig{}
+
+		vault := config.ExtractVault()
+
+		for _, secret := range vault.Secrets {
+			Expect(secret.Name).NotTo(BeElementOf(
+				"gitlabAppClientId", "gitlabAppClientSecret",
+				"bitbucketAppsClientId", "bitbucketAppsClientSecret",
+				"azureDevOpsAppClientId", "azureDevOpsAppClientSecret",
+			))
+		}
+	})
+
+	It("extracts OIDC OAuth secrets into vault", func() {
+		config := files.NewRootConfig()
+		config.Codesphere = files.CodesphereConfig{
+			OAuth: &files.OAuthProvidersConfig{
+				Oidc: &files.OidcOAuthProvider{
+					ClientID:     "oidc-client-id",
+					ClientSecret: "oidc-client-secret",
+				},
+			},
+		}
+
+		vault := config.ExtractVault()
+
+		assertSecretPassword(vault, "oidcClientId", "oidc-client-id")
+		assertSecretPassword(vault, "oidcClientSecret", "oidc-client-secret")
+	})
 })
+
+func assertSecretPassword(vault *files.InstallVault, name string, expectedPassword string) {
+	for _, secret := range vault.Secrets {
+		if secret.Name == name {
+			ExpectWithOffset(1, secret.Fields).NotTo(BeNil(), "Secret %s has no fields", name)
+			ExpectWithOffset(1, secret.Fields.Password).To(Equal(expectedPassword), "Secret %s password mismatch", name)
+			return
+		}
+	}
+	Fail("Secret " + name + " not found in vault")
+}
 
 func capitalize(s string) string {
 	if s == "" {
