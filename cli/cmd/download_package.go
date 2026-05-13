@@ -102,46 +102,53 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 
 	fullFilename := build.BuildPackageFilename(filename)
 	for retried := false; ; retried = true {
-		out, err := c.FileWriter.OpenAppend(fullFilename)
-		if err != nil {
-			out, err = c.FileWriter.Create(fullFilename)
+		shouldRetry, err := func() (bool, error) {
+			out, err := c.FileWriter.OpenAppend(fullFilename)
 			if err != nil {
-				return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
+				out, err = c.FileWriter.Create(fullFilename)
+				if err != nil {
+					return false, fmt.Errorf("failed to create file %s: %w", fullFilename, err)
+				}
 			}
-		}
+			defer util.CloseFileIgnoreError(out)
 
-		// get already downloaded file size of fullFilename
-		fileSize := 0
-		if fileInfo, statErr := out.Stat(); statErr == nil {
-			fileSize = int(fileInfo.Size())
-		}
+			// get already downloaded file size of fullFilename
+			fileSize := 0
+			if fileInfo, statErr := out.Stat(); statErr == nil {
+				fileSize = int(fileInfo.Size())
+			}
 
-		err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet)
-		util.CloseFileIgnoreError(out)
-		if err != nil {
-			return fmt.Errorf("failed to download build: %w", err)
-		}
+			if err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet); err != nil {
+				return false, fmt.Errorf("failed to download build: %w", err)
+			}
 
-		verifyFile, err := c.FileWriter.Open(fullFilename)
-		if err != nil {
+			verifyFile, err := c.FileWriter.Open(fullFilename)
+			if err != nil {
+				return false, err
+			}
+			defer util.CloseFileIgnoreError(verifyFile)
+
+			verifyErr := p.VerifyBuildArtifactDownload(verifyFile, download)
+			if verifyErr == nil {
+				return false, nil
+			}
+
+			// A resumed download can carry stale or corrupt bytes from a previous
+			// interrupted attempt, causing verification to fail even though the
+			// re-download itself succeeded. Delete the partial file so the next
+			// iteration downloads the full artifact from scratch.
+			if !retried && fileSize > 0 {
+				log.Println("Verification failed on resumed download; retrying from scratch...")
+				if removeErr := c.FileWriter.Remove(fullFilename); removeErr == nil {
+					return true, nil
+				}
+			}
+
+			return false, fmt.Errorf("failed to verify artifact: %w", verifyErr)
+		}()
+
+		if err != nil || !shouldRetry {
 			return err
 		}
-		verifyErr := p.VerifyBuildArtifactDownload(verifyFile, download)
-		util.CloseFileIgnoreError(verifyFile)
-
-		if verifyErr == nil {
-			return nil
-		}
-
-		if !retried && fileSize > 0 {
-			// Resumed from a partial file but verification failed, stale or corrupt bytes.
-			// Delete the partial file and retry the full download from scratch.
-			log.Println("Verification failed on resumed download; retrying from scratch...")
-			if removeErr := c.FileWriter.Remove(fullFilename); removeErr == nil {
-				continue
-			}
-		}
-
-		return fmt.Errorf("failed to verify artifact: %w", verifyErr)
 	}
 }
