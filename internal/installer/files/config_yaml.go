@@ -714,6 +714,66 @@ func (c *RootConfig) addCodesphereSecrets(vault *InstallVault) {
 			})
 		}
 	}
+
+	// GitLab secrets
+	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.GitLab != nil {
+		if c.Codesphere.GitProviders.GitLab.OAuth.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "gitlabAppClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.GitLab.OAuth.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.GitProviders.GitLab.OAuth.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "gitlabAppClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.GitLab.OAuth.ClientSecret,
+				},
+			})
+		}
+	}
+
+	// Bitbucket secrets
+	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.Bitbucket != nil {
+		if c.Codesphere.GitProviders.Bitbucket.OAuth.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "bitbucketAppsClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.Bitbucket.OAuth.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.GitProviders.Bitbucket.OAuth.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "bitbucketAppsClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.Bitbucket.OAuth.ClientSecret,
+				},
+			})
+		}
+	}
+
+	// Azure DevOps secrets
+	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.AzureDevOps != nil {
+		if c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "azureDevOpsAppClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "azureDevOpsAppClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientSecret,
+				},
+			})
+		}
+	}
 }
 
 func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
