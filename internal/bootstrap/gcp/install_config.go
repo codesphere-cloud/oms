@@ -100,6 +100,10 @@ func (b *GCPBootstrapper) recoverVault() error {
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	// Update install config with necessary values
 	b.Env.InstallConfig.Datacenter.ID = b.Env.DatacenterID
+	if b.Env.DatacenterName == "" {
+		b.Env.DatacenterName = "dev"
+	}
+	b.Env.InstallConfig.Datacenter.Name = b.Env.DatacenterName
 	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
 	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
 	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir

@@ -26,6 +26,7 @@ oms beta bootstrap-gcp [flags]
       --create-test-user                        Create a test user with API token on the bootstrapped instance for smoke testing (default: false)
       --custom-pg-ip string                     Custom PostgreSQL IP (optional)
       --datacenter-id int                       Datacenter ID (default: 1) (default 1)
+      --datacenter-name string                  Datacenter name (default: dev) (default "dev")
       --dns-project-id string                   GCP Project ID for Cloud DNS (optional)
       --dns-zone-name string                    Cloud DNS Zone Name (optional) (default "oms-testing")
       --experiments stringArray                 Experiments to enable in Codesphere installation (optional) (default [managed-services,headless-services,vcluster,custom-service-image,ms-in-ls,secret-management,sub-path-mount])

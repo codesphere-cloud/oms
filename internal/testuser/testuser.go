@@ -24,20 +24,22 @@ const (
 	tokenPrefix  = "CS_"
 
 	// Default connection parameters.
-	DefaultPort    = 5432
-	DefaultUser    = "postgres"
-	DefaultDBName  = "codesphere"
-	DefaultSSLMode = "disable"
+	DefaultPort         = 5432
+	DefaultUser         = "postgres"
+	DefaultDBName       = "codesphere"
+	DefaultSSLMode      = "disable"
+	DefaultDatacenterID = 1
 )
 
 // CreateTestUserOpts contains the options for creating a test user.
 type CreateTestUserOpts struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	DBName   string
-	SSLMode  string
+	Host         string
+	Port         int
+	User         string
+	Password     string
+	DBName       string
+	SSLMode      string
+	DatacenterID int
 }
 
 // TestUserResult contains the result of creating a test user.
@@ -67,6 +69,9 @@ func New(opts CreateTestUserOpts) (*TestUserCreator, error) {
 	}
 	if opts.SSLMode == "" {
 		opts.SSLMode = DefaultSSLMode
+	}
+	if opts.DatacenterID == 0 {
+		opts.DatacenterID = DefaultDatacenterID
 	}
 	if opts.Host == "" {
 		return nil, fmt.Errorf("host is required")
@@ -238,12 +243,16 @@ func (c *TestUserCreator) insertEmailConfirmation(tx *sql.Tx) error {
 
 func (c *TestUserCreator) insertTeam(tx *sql.Tx) (int, error) {
 	var teamID int
+	datacenterID := c.opts.DatacenterID
+	if datacenterID == 0 {
+		datacenterID = DefaultDatacenterID
+	}
 	err := tx.QueryRow(`
 		INSERT INTO "teamService".teams
 			(id, "name", description, first_team, default_data_center_id, deleted, deletion_pending, created_at)
-		VALUES(nextval('"teamService".teams_id_seq'::regclass), $1, '', true, 1, false, false, CURRENT_TIMESTAMP)
+		VALUES(nextval('"teamService".teams_id_seq'::regclass), $1, '', true, $2, false, false, CURRENT_TIMESTAMP)
 		RETURNING id`,
-		TestTeamName,
+		TestTeamName, datacenterID,
 	).Scan(&teamID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert team: %w", err)

@@ -23,6 +23,7 @@ oms create test-user [flags]
 ### Options
 
 ```
+      --datacenter-id int          Datacenter ID for the created test team (default 1)
   -h, --help                       help for test-user
       --postgres-db string         PostgreSQL database name (default "codesphere")
       --postgres-host string       PostgreSQL host address (required)
