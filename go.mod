@@ -33,7 +33,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/crypto v0.50.0
-	golang.org/x/mod v0.35.0
+	golang.org/x/mod v0.36.0
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.42.0
 	google.golang.org/api v0.279.0
@@ -51,7 +51,6 @@ require (
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/google/go-github/v74 v74.0.0
-	github.com/google/go-github/v86 v86.0.0
 	github.com/lib/pq v1.12.3
 	github.com/rook/rook/pkg/apis v0.0.0-20260430173414-a4316348cc58
 )
