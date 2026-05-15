@@ -821,22 +821,16 @@ func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
 	}
 
 	if c.Codesphere.CentralOtel != nil {
-		if c.Codesphere.CentralOtel.Username != "" {
+		if c.Codesphere.CentralOtel.Username != "" && c.Codesphere.CentralOtel.Password != "" {
 			vault.SetSecret(SecretEntry{
-				Name: "centralOtelUsername",
+				Name: "centralOtelCreds",
 				Fields: &SecretFields{
-					Password: c.Codesphere.CentralOtel.Username,
-				},
-			})
-		}
-		if c.Codesphere.CentralOtel.Password != "" {
-			vault.SetSecret(SecretEntry{
-				Name: "centralOtelPassword",
-				Fields: &SecretFields{
+					Username: c.Codesphere.CentralOtel.Username,
 					Password: c.Codesphere.CentralOtel.Password,
 				},
 			})
 		}
+
 	}
 }
 
