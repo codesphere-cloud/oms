@@ -64,10 +64,10 @@ type OpenBaoInstaller struct {
 	Config    OpenBaoInstallerConfig
 
 	// Intermediate state populated during the install pipeline
-	ctx           context.Context
-	password      string
+	ctx            context.Context
+	password       string
 	drBackupExists bool
-	unsealSecret  *corev1.Secret
+	unsealSecret   *corev1.Secret
 }
 
 // NewOpenBaoInstaller constructs an OpenBaoInstaller with real Kubernetes and Helm clients.
@@ -96,8 +96,8 @@ func (o *OpenBaoInstaller) validateConfig() error {
 	if r < 1 {
 		return fmt.Errorf("--replicas must be >= 1, got %d", r)
 	}
-	if r == 2 {
-		return fmt.Errorf("--replicas=2 is invalid: Raft requires 1 (single-node) or an odd number >= 3 for HA")
+	if r > 1 && r%2 == 0 {
+		return fmt.Errorf("--replicas=%d is invalid: Raft requires 1 (single-node) or an odd number >= 3 for HA", r)
 	}
 	return nil
 }
@@ -339,7 +339,11 @@ func (o *OpenBaoInstaller) WaitForInitialization() error {
 			}
 			// Secret doesn't exist yet — keep polling
 			o.Logger.LogRetry()
-			time.Sleep(interval)
+			select {
+			case <-o.ctx.Done():
+				return o.ctx.Err()
+			case <-time.After(interval):
+			}
 			interval = minDuration(interval*2, maxPollInterval)
 			continue
 		}
@@ -364,7 +368,11 @@ func (o *OpenBaoInstaller) WaitForInitialization() error {
 		}
 
 		o.Logger.LogRetry()
-		time.Sleep(interval)
+		select {
+		case <-o.ctx.Done():
+			return o.ctx.Err()
+		case <-time.After(interval):
+		}
 		interval = minDuration(interval*2, maxPollInterval)
 	}
 }
@@ -396,20 +404,34 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 		return fmt.Errorf("creating DR backup directory: %w", err)
 	}
 
-	// Write plaintext to a temp file (sops encrypts in-place)
-	tmpFile := o.Config.DRBackupPath + ".tmp.json"
-	if err := os.WriteFile(tmpFile, plaintext, 0o600); err != nil {
+	// Write plaintext to a temp file (sops encrypts in-place).
+	// Use os.CreateTemp to avoid predictable filenames (symlink attacks).
+	tmpFile, err := os.CreateTemp(dir, "openbao-dr-*.json")
+	if err != nil {
+		return fmt.Errorf("creating temp backup file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer func() { _ = os.Remove(tmpPath) }() // clean up temp file on failure or panic
+
+	if err := tmpFile.Chmod(0o600); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("setting temp file permissions: %w", err)
+	}
+	if _, err := tmpFile.Write(plaintext); err != nil {
+		_ = tmpFile.Close()
 		return fmt.Errorf("writing temp backup file: %w", err)
 	}
-	defer func() { _ = os.Remove(tmpFile) }() // clean up temp file on failure
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("closing temp backup file: %w", err)
+	}
 
 	// Encrypt using sops + age
-	if err := EncryptFileWithSOPS(tmpFile, o.Config.DRBackupPath, o.Config.AgeRecipient); err != nil {
+	if err := EncryptFileWithSOPS(tmpPath, o.Config.DRBackupPath, o.Config.AgeRecipient); err != nil {
 		return fmt.Errorf("encrypting DR backup: %w", err)
 	}
 
-	// Remove temp file on success
-	_ = os.Remove(tmpFile)
+	// Remove temp file on success (deferred remove handles failure/panic)
+	_ = os.Remove(tmpPath)
 
 	log.Printf("DR backup encrypted and saved to: %s", o.Config.DRBackupPath)
 	return nil
@@ -502,7 +524,11 @@ func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
 		}
 
 		o.Logger.LogRetry()
-		time.Sleep(interval)
+		select {
+		case <-o.ctx.Done():
+			return o.ctx.Err()
+		case <-time.After(interval):
+		}
 		interval = minDuration(interval*2, maxPollInterval)
 	}
 }

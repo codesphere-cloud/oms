@@ -6,7 +6,9 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -37,7 +39,13 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	recipient, keyPath, err := installer.ResolveAgeKey("")
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return fmt.Errorf("determining user config directory: %w", err)
+	}
+	fallbackDir := filepath.Join(configDir, "sops", "age")
+
+	recipient, keyPath, err := installer.ResolveAgeKey(fallbackDir)
 	if err != nil {
 		return fmt.Errorf("resolving age key: %w", err)
 	}
@@ -103,6 +111,9 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 func validateOpenBaoPrereqs() error {
 	if _, err := exec.LookPath("sops"); err != nil {
 		return fmt.Errorf("sops not found in PATH — install it with: brew install sops")
+	}
+	if _, err := exec.LookPath("age-keygen"); err != nil {
+		return fmt.Errorf("age-keygen not found in PATH — install it with: brew install age")
 	}
 	return nil
 }

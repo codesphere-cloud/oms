@@ -63,6 +63,11 @@ func VaultGVR() schema.GroupVersionResource {
 }
 
 // GvrForUnstructured maps an unstructured object's GVK to the appropriate GVR.
+//
+// This uses a hand-rolled lookup table rather than a discovery-backed RESTMapper
+// to avoid requiring a cluster round-trip during resolution. New kinds used in
+// embedded templates will need a corresponding case here. If this grows unwieldy,
+// consider switching to restmapper.NewDiscoveryRESTMapper.
 func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
 	gvk := obj.GroupVersionKind()
 
@@ -98,7 +103,14 @@ func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionReso
 			Resource: "rolebindings",
 		}, nil
 	default:
-		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s", gvk)
+		// Generic fallback: lowercase kind + "s". This covers most built-in
+		// resources (e.g., ConfigMap -> configmaps, Secret -> secrets) but will
+		// produce incorrect plurals for irregular kinds (e.g., Ingress).
+		return schema.GroupVersionResource{
+			Group:    gvk.Group,
+			Version:  gvk.Version,
+			Resource: strings.ToLower(gvk.Kind) + "s",
+		}, nil
 	}
 }
 
