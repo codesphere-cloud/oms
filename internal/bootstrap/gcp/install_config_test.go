@@ -85,6 +85,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			Region:                "us-central1",
 			Zone:                  "us-central1-a",
 			DatacenterID:          1,
+			DatacenterName:        "dev",
 			BaseDomain:            "example.com",
 			DNSProjectID:          "dns-project",
 			DNSZoneName:           "test-zone",
@@ -321,6 +322,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(bs.Env.InstallConfig.Datacenter.ID).To(Equal(1))
+				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("dev"))
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(map[string]bool{}))
 				Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(gcp.DefaultExperiments))
@@ -342,6 +344,20 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(cloudDns["project"]).To(Equal(bs.Env.DNSProjectID))
 
 				Expect(bs.Env.InstallConfig.Codesphere.OpenBao).To(BeNil())
+			})
+			It("uses the configured datacenter name", func() {
+				csEnv.DatacenterName = "staging"
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("staging"))
 			})
 			Context("When Experiments are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
