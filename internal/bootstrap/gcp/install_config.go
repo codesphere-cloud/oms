@@ -335,7 +335,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 
 	if b.Env.CentralOtelUsername != "" && b.Env.CentralOtelPassword != "" {
-		b.Env.InstallConfig.Codesphere.CentralOtel = &files.CentralOtelCredentials{
+		if b.Env.InstallConfig.Cluster.Monitoring == nil {
+			b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+		}
+		b.Env.InstallConfig.Cluster.Monitoring.CentralOtel = &files.CentralOtelCredentials{
+			Enabled:  true,
 			Username: b.Env.CentralOtelUsername,
 			Password: b.Env.CentralOtelPassword,
 		}

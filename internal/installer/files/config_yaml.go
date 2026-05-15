@@ -313,7 +313,6 @@ type CodesphereConfig struct {
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
 	OAuth                      *OAuthProvidersConfig  `yaml:"oauth,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
-	CentralOtel                *CentralOtelCredentials `yaml:"centralOtel,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
@@ -342,8 +341,9 @@ type OpenBaoConfig struct {
 }
 
 type CentralOtelCredentials struct {
-	Username   string `yaml:"username,omitempty"`
-	Password   string `yaml:"-"`
+	Enabled  bool   `yaml:"enabled"`
+	Username string `yaml:"username,omitempty"`
+	Password string `yaml:"-"`
 }
 
 type OAuthProvidersConfig struct {
@@ -553,6 +553,7 @@ type MonitoringConfig struct {
 	Loki             *LokiConfig             `yaml:"loki,omitempty"`
 	Grafana          *GrafanaConfig          `yaml:"grafana,omitempty"`
 	GrafanaAlloy     *GrafanaAlloyConfig     `yaml:"grafanaAlloy,omitempty"`
+	CentralOtel      *CentralOtelCredentials `yaml:"centralOtel,omitempty"`
 }
 
 type PrometheusConfig struct {
@@ -820,13 +821,13 @@ func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
 		}
 	}
 
-	if c.Codesphere.CentralOtel != nil {
-		if c.Codesphere.CentralOtel.Username != "" && c.Codesphere.CentralOtel.Password != "" {
+	if c.Cluster.Monitoring.CentralOtel != nil {
+		if c.Cluster.Monitoring.CentralOtel.Username != "" && c.Cluster.Monitoring.CentralOtel.Password != "" {
 			vault.SetSecret(SecretEntry{
 				Name: "centralOtelCreds",
 				Fields: &SecretFields{
-					Username: c.Codesphere.CentralOtel.Username,
-					Password: c.Codesphere.CentralOtel.Password,
+					Username: c.Cluster.Monitoring.CentralOtel.Username,
+					Password: c.Cluster.Monitoring.CentralOtel.Password,
 				},
 			})
 		}

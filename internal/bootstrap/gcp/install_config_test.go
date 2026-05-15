@@ -604,7 +604,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					csEnv.CentralOtelUsername = "otel-user"
 					csEnv.CentralOtelPassword = "otel-password"
 				})
-				It("sets CentralOtel credentials in install config", func() {
+				It("sets CentralOtel credentials in install config with Enabled true", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -613,9 +613,12 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel).NotTo(BeNil())
-					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel.Username).To(Equal("otel-user"))
-					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel.Password).To(Equal("otel-password"))
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).NotTo(BeNil())
+					centralOtel := bs.Env.InstallConfig.Cluster.Monitoring.CentralOtel
+					Expect(centralOtel).NotTo(BeNil())
+					Expect(centralOtel.Enabled).To(BeTrue())
+					Expect(centralOtel.Username).To(Equal("otel-user"))
+					Expect(centralOtel.Password).To(Equal("otel-password"))
 				})
 			})
 
@@ -633,7 +636,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel).To(BeNil())
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).To(BeNil())
 				})
 			})
 
@@ -651,12 +654,12 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel).To(BeNil())
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).To(BeNil())
 				})
 			})
 
 			Context("When CentralOtel credentials are not set", func() {
-				It("leaves CentralOtel nil", func() {
+				It("leaves Monitoring.CentralOtel nil", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -665,7 +668,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel).To(BeNil())
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).To(BeNil())
 				})
 			})
 

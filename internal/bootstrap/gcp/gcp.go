@@ -114,6 +114,8 @@ type CodesphereEnvironment struct {
 	RegistryUser         string          `json:"-"`
 	Experiments          []string        `json:"experiments"`
 	FeatureFlags         map[string]bool `json:"feature_flags"`
+	CentralOtelUsername  string          `json:"-"`
+	CentralOtelPassword  string          `json:"-"`
 	ExternalLokiEndpoint string          `json:"external_loki_endpoint,omitempty"`
 	ExternalLokiSecret   string          `json:"-"`
 	ExternalLokiUser     string          `json:"external_loki_user,omitempty"`
@@ -146,8 +148,6 @@ type CodesphereEnvironment struct {
 	OidcIssuerURL              string `json:"-"`
 	OidcClientID               string `json:"-"`
 	OidcClientSecret           string `json:"-"`
-	CentralOtelUsername        string `json:"-"`
-	CentralOtelPassword        string `json:"-"`
 	SecretsDir                 string `json:"secrets_dir"`
 	FolderID                   string `json:"folder_id"`
 	SSHPublicKeyPath           string `json:"-"`
