@@ -33,6 +33,7 @@ type InstallOpenBaoOpts struct {
 	BaoUsername       string
 	DRBackupPath      string
 	Replicas          int
+	StorageSize       string
 	Timeout           time.Duration
 }
 
@@ -57,6 +58,7 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 		Username:          c.Opts.BaoUsername,
 		DRBackupPath:      c.Opts.DRBackupPath,
 		Replicas:          c.Opts.Replicas,
+		StorageSize:       c.Opts.StorageSize,
 		Timeout:           c.Opts.Timeout,
 		AgeRecipient:      recipient,
 		AgeKeyPath:        keyPath,
@@ -88,7 +90,6 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 				4. Apply the Vault CR with desired-state configuration
 				5. Wait for initialization to complete
 				6. Extract and encrypt unseal keys + password as SOPS DR backup
-				7. Remove root token from cluster for security
 
 				The command is idempotent and safe to re-run.`),
 			Example: formatExamples("install openbao", []packageio.Example{
@@ -103,6 +104,7 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 	openbao.cmd.Flags().StringVar(&openbao.Opts.BaoUsername, "bao-user", "admin", "Username for the userpass auth method")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.DRBackupPath, "dr-backup-path", "", "Path for SOPS-encrypted DR backup file (required)")
 	openbao.cmd.Flags().IntVar(&openbao.Opts.Replicas, "replicas", 1, "Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA)")
+	openbao.cmd.Flags().StringVar(&openbao.Opts.StorageSize, "storage-size", "10Gi", "PVC storage size for each OpenBao replica (only used with replicas > 1)")
 	openbao.cmd.Flags().DurationVar(&openbao.Opts.Timeout, "timeout", 5*time.Minute, "Timeout for waiting on initialization")
 
 	util.MarkFlagRequired(openbao.cmd, "dr-backup-path")

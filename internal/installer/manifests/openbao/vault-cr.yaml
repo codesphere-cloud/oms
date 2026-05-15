@@ -50,7 +50,7 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 10Gi
+            storage: {{ .StorageSize }}
   volumeMounts:
     - name: openbao-data
       mountPath: /openbao/data
@@ -87,7 +87,7 @@ spec:
   unsealConfig:
     options:
       preFlightChecks: false
-      storeRootToken: true
+      storeRootToken: false
     kubernetes:
       secretNamespace: {{ .Namespace }}
       secretName: openbao-unseal-keys

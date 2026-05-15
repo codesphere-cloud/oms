@@ -13,7 +13,6 @@ This command performs the full lifecycle:
 4. Apply the Vault CR with desired-state configuration
 5. Wait for initialization to complete
 6. Extract and encrypt unseal keys + password as SOPS DR backup
-7. Remove root token from cluster for security
 
 The command is idempotent and safe to re-run.
 
@@ -43,6 +42,7 @@ $ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --timeout 10
   -h, --help                    help for openbao
       --replicas int            Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA) (default 1)
       --secrets-engine string   Name of the KV-v2 secrets engine to provision (default "cs-secrets-engine")
+      --storage-size string     PVC storage size for each OpenBao replica (only used with replicas > 1) (default "10Gi")
       --timeout duration        Timeout for waiting on initialization (default 5m0s)
 ```
 

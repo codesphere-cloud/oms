@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
@@ -20,6 +22,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -85,64 +88,6 @@ var _ = Describe("OpenBaoInstaller", func() {
 		})
 	})
 
-	Describe("SecurityCleanup", func() {
-		It("removes root_token from the unseal secret", func() {
-			// Pre-create the secret with root_token and unseal keys
-			secret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "openbao-unseal-keys",
-					Namespace: "vault",
-				},
-				Data: map[string][]byte{
-					"vault-unseal-0": []byte("unseal-key-data"),
-					"root_token":     []byte("root-token-value"),
-				},
-			}
-			_, err := clientset.CoreV1().Secrets("vault").Create(ctx, secret, metav1.CreateOptions{})
-			Expect(err).ToNot(HaveOccurred())
-
-			inst := &installer.OpenBaoInstaller{
-				Clientset: clientset,
-				Logger:    bootstrap.NewStepLogger(true),
-				Config:    installer.OpenBaoInstallerConfig{},
-			}
-			inst.SetCtx(ctx)
-
-			err = inst.SecurityCleanup()
-			Expect(err).ToNot(HaveOccurred())
-
-			// Verify root_token was removed
-			updated, err := clientset.CoreV1().Secrets("vault").Get(ctx, "openbao-unseal-keys", metav1.GetOptions{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(updated.Data).ToNot(HaveKey("root_token"))
-			Expect(updated.Data).To(HaveKey("vault-unseal-0"))
-		})
-
-		It("is a no-op when root_token is already absent", func() {
-			secret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "openbao-unseal-keys",
-					Namespace: "vault",
-				},
-				Data: map[string][]byte{
-					"vault-unseal-0": []byte("unseal-key-data"),
-				},
-			}
-			_, err := clientset.CoreV1().Secrets("vault").Create(ctx, secret, metav1.CreateOptions{})
-			Expect(err).ToNot(HaveOccurred())
-
-			inst := &installer.OpenBaoInstaller{
-				Clientset: clientset,
-				Logger:    bootstrap.NewStepLogger(true),
-				Config:    installer.OpenBaoInstallerConfig{},
-			}
-			inst.SetCtx(ctx)
-
-			err = inst.SecurityCleanup()
-			Expect(err).ToNot(HaveOccurred())
-		})
-	})
-
 	Describe("PreFlightDRCheck", func() {
 		Context("when no DR backup file exists", func() {
 			It("proceeds without error", func() {
@@ -186,7 +131,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
-			// Pre-create the secret with data
+			// Pre-create the secret with data (no root_token — storeRootToken is false)
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "openbao-unseal-keys",
@@ -194,7 +139,6 @@ var _ = Describe("OpenBaoInstaller", func() {
 				},
 				Data: map[string][]byte{
 					"vault-unseal-0": []byte("key-data"),
-					"root_token":     []byte("root-token"),
 				},
 			}
 			_, err = clientset.CoreV1().Secrets("vault").Create(ctx, secret, metav1.CreateOptions{})
@@ -213,7 +157,6 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(err).ToNot(HaveOccurred())
 			result := inst.GetUnsealSecret()
 			Expect(result.Data).To(HaveKey("vault-unseal-0"))
-			Expect(result.Data).To(HaveKey("root_token"))
 		})
 
 		It("times out when secret does not appear", func() {
@@ -254,7 +197,6 @@ var _ = Describe("OpenBaoInstaller", func() {
 			secret := &corev1.Secret{
 				Data: map[string][]byte{
 					"vault-unseal-0": []byte("test-unseal-key-0"),
-					"root_token":     []byte("test-root-token"),
 				},
 			}
 
@@ -311,6 +253,179 @@ var _ = Describe("OpenBaoInstaller", func() {
 			p2, err := installer.GenerateSecurePassword(32)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(p1).ToNot(Equal(p2))
+		})
+	})
+
+	Describe("Vault CR template rendering", func() {
+		// templateData mirrors the unexported vaultCRTemplateData struct
+		// so the test can render the template independently.
+		type templateData struct {
+			Namespace         string
+			OpenBaoImage      string
+			BankVaultsImage   string
+			SecretsEngineName string
+			BaoUsername       string
+			BaoPassword       string
+			Replicas          int
+			StorageSize       string
+			RetryJoinAddrs    []string
+		}
+
+		renderTemplate := func(data templateData) []map[string]interface{} {
+			raw, err := os.ReadFile("manifests/openbao/vault-cr.yaml")
+			Expect(err).ToNot(HaveOccurred())
+
+			tmpl, err := template.New("vault-cr").Parse(string(raw))
+			Expect(err).ToNot(HaveOccurred())
+
+			var buf bytes.Buffer
+			Expect(tmpl.Execute(&buf, data)).To(Succeed())
+
+			// Decode multi-doc YAML into a slice of generic maps
+			decoder := yaml.NewYAMLOrJSONDecoder(&buf, 4096)
+			var docs []map[string]interface{}
+			for {
+				var doc map[string]interface{}
+				if err := decoder.Decode(&doc); err != nil {
+					break
+				}
+				if doc != nil {
+					docs = append(docs, doc)
+				}
+			}
+			return docs
+		}
+
+		findDoc := func(docs []map[string]interface{}, kind string) map[string]interface{} {
+			for _, doc := range docs {
+				if doc["kind"] == kind {
+					return doc
+				}
+			}
+			return nil
+		}
+
+		It("renders valid YAML with file storage for replicas=1", func() {
+			data := templateData{
+				Namespace:         "vault",
+				OpenBaoImage:      "quay.io/openbao/openbao:2.1.0",
+				BankVaultsImage:   "ghcr.io/bank-vaults/bank-vaults:v1.31.3",
+				SecretsEngineName: "cs-secrets-engine",
+				BaoUsername:       "admin",
+				BaoPassword:       "test-password",
+				Replicas:          1,
+				StorageSize:       "10Gi",
+				RetryJoinAddrs:    nil,
+			}
+
+			docs := renderTemplate(data)
+			// Expect 4 documents: ServiceAccount, Role, RoleBinding, Vault
+			Expect(docs).To(HaveLen(4))
+
+			// Verify Vault CR
+			vault := findDoc(docs, "Vault")
+			Expect(vault).ToNot(BeNil())
+
+			spec := vault["spec"].(map[string]interface{})
+			Expect(spec["size"]).To(BeNumerically("==", 1))
+			Expect(spec["image"]).To(Equal("quay.io/openbao/openbao:2.1.0"))
+
+			// Should NOT have volumeClaimTemplates for single-node
+			Expect(spec).ToNot(HaveKey("volumeClaimTemplates"))
+			Expect(spec).ToNot(HaveKey("volumeMounts"))
+
+			// Config should use file storage, not raft
+			config := spec["config"].(map[string]interface{})
+			storage := config["storage"].(map[string]interface{})
+			Expect(storage).To(HaveKey("file"))
+			Expect(storage).ToNot(HaveKey("raft"))
+
+			// Unseal config should have storeRootToken: false
+			unsealConfig := spec["unsealConfig"].(map[string]interface{})
+			options := unsealConfig["options"].(map[string]interface{})
+			Expect(options["storeRootToken"]).To(BeFalse())
+
+			// Verify externalConfig has the secrets engine
+			externalConfig := spec["externalConfig"].(map[string]interface{})
+			secrets := externalConfig["secrets"].([]interface{})
+			Expect(secrets).To(HaveLen(1))
+			secretEntry := secrets[0].(map[string]interface{})
+			Expect(secretEntry["path"]).To(Equal("cs-secrets-engine"))
+
+			// Verify auth config
+			auth := externalConfig["auth"].([]interface{})
+			Expect(auth).To(HaveLen(1))
+			authEntry := auth[0].(map[string]interface{})
+			Expect(authEntry["type"]).To(Equal("userpass"))
+			users := authEntry["users"].([]interface{})
+			user := users[0].(map[string]interface{})
+			Expect(user["username"]).To(Equal("admin"))
+			Expect(user["password"]).To(Equal("test-password"))
+
+			// Verify vaultContainerSpec has NO HA env vars
+			containerSpec := spec["vaultContainerSpec"].(map[string]interface{})
+			Expect(containerSpec).ToNot(HaveKey("env"))
+		})
+
+		It("renders valid YAML with raft storage, PVCs, and retry_join for replicas=3", func() {
+			retryJoinAddrs := []string{
+				"http://openbao-0.vault.svc.cluster.local:8200",
+				"http://openbao-1.vault.svc.cluster.local:8200",
+				"http://openbao-2.vault.svc.cluster.local:8200",
+			}
+
+			data := templateData{
+				Namespace:         "vault",
+				OpenBaoImage:      "quay.io/openbao/openbao:2.1.0",
+				BankVaultsImage:   "ghcr.io/bank-vaults/bank-vaults:v1.31.3",
+				SecretsEngineName: "cs-secrets-engine",
+				BaoUsername:       "admin",
+				BaoPassword:       "test-password",
+				Replicas:          3,
+				StorageSize:       "20Gi",
+				RetryJoinAddrs:    retryJoinAddrs,
+			}
+
+			docs := renderTemplate(data)
+			Expect(docs).To(HaveLen(4))
+
+			vault := findDoc(docs, "Vault")
+			Expect(vault).ToNot(BeNil())
+
+			spec := vault["spec"].(map[string]interface{})
+			Expect(spec["size"]).To(BeNumerically("==", 3))
+
+			// Should have volumeClaimTemplates for HA
+			Expect(spec).To(HaveKey("volumeClaimTemplates"))
+			vcts := spec["volumeClaimTemplates"].([]interface{})
+			Expect(vcts).To(HaveLen(1))
+			vct := vcts[0].(map[string]interface{})
+			vctSpec := vct["spec"].(map[string]interface{})
+			resources := vctSpec["resources"].(map[string]interface{})
+			requests := resources["requests"].(map[string]interface{})
+			Expect(requests["storage"]).To(Equal("20Gi"))
+
+			// Should have volumeMounts
+			Expect(spec).To(HaveKey("volumeMounts"))
+
+			// Config should use raft storage with retry_join
+			config := spec["config"].(map[string]interface{})
+			storage := config["storage"].(map[string]interface{})
+			Expect(storage).To(HaveKey("raft"))
+			Expect(storage).ToNot(HaveKey("file"))
+			raft := storage["raft"].(map[string]interface{})
+			retryJoin := raft["retry_join"].([]interface{})
+			Expect(retryJoin).To(HaveLen(3))
+
+			// Verify vaultContainerSpec has HA env vars
+			containerSpec := spec["vaultContainerSpec"].(map[string]interface{})
+			Expect(containerSpec).To(HaveKey("env"))
+			envVars := containerSpec["env"].([]interface{})
+			envNames := make([]string, 0, len(envVars))
+			for _, e := range envVars {
+				envNames = append(envNames, e.(map[string]interface{})["name"].(string))
+			}
+			Expect(envNames).To(ContainElements("POD_NAME", "BAO_CLUSTER_ADDR", "BAO_API_ADDR"))
 		})
 	})
 })

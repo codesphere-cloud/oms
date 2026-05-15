@@ -49,6 +49,7 @@ type OpenBaoInstallerConfig struct {
 	Username          string
 	DRBackupPath      string
 	Replicas          int
+	StorageSize       string
 	Timeout           time.Duration
 	AgeRecipient      string
 	AgeKeyPath        string
@@ -154,11 +155,6 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 	err = o.Logger.Step("Extracting and encrypting DR backup", o.ExtractAndEncrypt)
 	if err != nil {
 		return fmt.Errorf("failed to extract and encrypt DR backup: %w", err)
-	}
-
-	err = o.Logger.Step("Security cleanup (removing root token from cluster)", o.SecurityCleanup)
-	if err != nil {
-		return fmt.Errorf("failed to clean up root token: %w", err)
 	}
 
 	log.Printf("OpenBao bootstrap complete. DR backup saved to: %s", o.Config.DRBackupPath)
@@ -275,6 +271,7 @@ type vaultCRTemplateData struct {
 	BaoUsername       string
 	BaoPassword       string
 	Replicas          int
+	StorageSize       string
 	RetryJoinAddrs    []string
 }
 
@@ -304,6 +301,7 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 		BaoUsername:       o.Config.Username,
 		BaoPassword:       o.password,
 		Replicas:          o.Config.Replicas,
+		StorageSize:       o.Config.StorageSize,
 		RetryJoinAddrs:    retryJoinAddrs,
 	}
 
@@ -359,18 +357,13 @@ func (o *OpenBaoInstaller) WaitForInitialization() error {
 			continue
 		}
 
-		// Check if the secret has meaningful data: at least one unseal key
-		// must be present. We do NOT accept root_token alone because
-		// bank-vaults could theoretically write root_token before the
-		// unseal keys in a partial update, and a DR backup without unseal
-		// keys would be useless.
+		// Check if the secret has meaningful data: at least one key must be
+		// present, indicating bank-vaults has completed initialization and
+		// written the unseal keys. Bank-vaults writes all keys atomically
+		// during Init(), so any data means init is done.
 		if len(secret.Data) > 0 {
-			for key := range secret.Data {
-				if key == "vault-unseal-0" || key == "vault-unseal-key-0" || key == "unseal-key-0" {
-					o.unsealSecret = secret
-					return nil
-				}
-			}
+			o.unsealSecret = secret
+			return nil
 		}
 
 		o.Logger.LogRetry()
@@ -440,33 +433,6 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 	_ = os.Remove(tmpPath)
 
 	log.Printf("DR backup encrypted and saved to: %s", o.Config.DRBackupPath)
-	return nil
-}
-
-// SecurityCleanup removes the root_token key from the openbao-unseal-keys Secret.
-// This ensures that even if the cluster is compromised, root access is not available.
-// Only unseal keys remain for Bank-Vaults to handle pod restart unsealing.
-func (o *OpenBaoInstaller) SecurityCleanup() error {
-	secretsClient := o.Clientset.CoreV1().Secrets(openBaoNamespace)
-
-	secret, err := secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("fetching unseal secret for cleanup: %w", err)
-	}
-
-	if _, hasRoot := secret.Data["root_token"]; !hasRoot {
-		log.Println("root_token already absent from unseal secret — no cleanup needed")
-		return nil
-	}
-
-	delete(secret.Data, "root_token")
-
-	_, err = secretsClient.Update(o.ctx, secret, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("patching unseal secret to remove root_token: %w", err)
-	}
-
-	log.Println("root_token removed from cluster secret")
 	return nil
 }
 
