@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
@@ -237,13 +238,16 @@ var _ = Describe("OpenBaoInstaller", func() {
 				Skip("sops/age not available")
 			}
 
-			// Generate a real age key for testing
+			// Generate a real age key for testing and extract the public key
+			// directly from age-keygen output (format: "Public key: age1...").
+			// This avoids calling ResolveAgeKey which probes env vars and
+			// default config paths, making the test sensitive to the host.
 			keyFile := filepath.Join(tmpDir, "age_key.txt")
 			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
 			Expect(err).ToNot(HaveOccurred(), string(out))
 
-			recipient, _, err := installer.ResolveAgeKey(tmpDir)
-			Expect(err).ToNot(HaveOccurred())
+			recipient := extractAgeRecipient(string(out))
+			Expect(recipient).To(HavePrefix("age1"), "could not extract public key from age-keygen output")
 
 			backupPath := filepath.Join(tmpDir, "backup.enc.json")
 
@@ -310,3 +314,14 @@ var _ = Describe("OpenBaoInstaller", func() {
 		})
 	})
 })
+
+// extractAgeRecipient extracts the public key from age-keygen's output.
+// age-keygen -o <file> prints "Public key: age1..." to stderr.
+func extractAgeRecipient(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if strings.HasPrefix(line, "Public key: ") {
+			return strings.TrimPrefix(line, "Public key: ")
+		}
+	}
+	return ""
+}

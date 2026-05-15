@@ -116,9 +116,13 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		return fmt.Errorf("pre-flight DR check failed: %w", err)
 	}
 
-	err = o.Logger.Step("Generating secure password", o.GeneratePassword)
-	if err != nil {
-		return fmt.Errorf("failed to generate secure password: %w", err)
+	// Only generate a new password for fresh installs; on DR restore the
+	// password was already extracted from the backup in PreFlightDRCheck.
+	if !o.drBackupExists {
+		err = o.Logger.Step("Generating secure password", o.GeneratePassword)
+		if err != nil {
+			return fmt.Errorf("failed to generate secure password: %w", err)
+		}
 	}
 
 	err = o.Logger.Step("Deploying Bank-Vaults Operator", o.DeployBankVaultsOperator)
@@ -170,10 +174,13 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 		return fmt.Errorf("--dr-backup-path is required")
 	}
 
-	if _, err := os.Stat(o.Config.DRBackupPath); os.IsNotExist(err) {
-		log.Println("No existing DR backup found — proceeding with fresh initialization")
-		o.drBackupExists = false
-		return nil
+	if _, err := os.Stat(o.Config.DRBackupPath); err != nil {
+		if os.IsNotExist(err) {
+			log.Println("No existing DR backup found — proceeding with fresh initialization")
+			o.drBackupExists = false
+			return nil
+		}
+		return fmt.Errorf("checking DR backup file %s: %w", o.Config.DRBackupPath, err)
 	}
 
 	log.Printf("Found existing DR backup at %s — restoring unseal keys", o.Config.DRBackupPath)
@@ -227,6 +234,10 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 			return fmt.Errorf("updating unseal secret from DR backup: %w", err)
 		}
 	}
+
+	// Reuse the password from the DR backup so the Vault CR is rendered with
+	// the same credential that OpenBao already has configured.
+	o.password = backup.Password
 
 	log.Println("Unseal keys restored from DR backup successfully")
 	o.drBackupExists = true

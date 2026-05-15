@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -65,7 +67,10 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("initializing openbao installer: %w", err)
 	}
 
-	return inst.Install(context.Background())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	return inst.Install(ctx)
 }
 
 // AddInstallOpenBaoCmd registers the openbao subcommand under install.
