@@ -359,22 +359,17 @@ func (o *OpenBaoInstaller) WaitForInitialization() error {
 			continue
 		}
 
-		// Check if the secret has meaningful data (at least one unseal key)
+		// Check if the secret has meaningful data: at least one unseal key
+		// must be present. We do NOT accept root_token alone because
+		// bank-vaults could theoretically write root_token before the
+		// unseal keys in a partial update, and a DR backup without unseal
+		// keys would be useless.
 		if len(secret.Data) > 0 {
-			hasUnsealKey := false
 			for key := range secret.Data {
 				if key == "vault-unseal-0" || key == "vault-unseal-key-0" || key == "unseal-key-0" {
-					hasUnsealKey = true
-					break
+					o.unsealSecret = secret
+					return nil
 				}
-			}
-			// Also accept if root_token is present (indicates init is done)
-			if _, hasRoot := secret.Data["root_token"]; hasRoot {
-				hasUnsealKey = true
-			}
-			if hasUnsealKey {
-				o.unsealSecret = secret
-				return nil
 			}
 		}
 
