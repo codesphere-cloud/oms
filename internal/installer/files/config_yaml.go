@@ -340,12 +340,6 @@ type OpenBaoConfig struct {
 	Password string `yaml:"-"`
 }
 
-type CentralOtelCredentials struct {
-	Enabled  bool   `yaml:"enabled"`
-	Username string `yaml:"username,omitempty"`
-	Password string `yaml:"-"`
-}
-
 type OAuthProvidersConfig struct {
 	Oidc *OidcOAuthProvider `yaml:"oidc,omitempty"`
 }
@@ -553,7 +547,7 @@ type MonitoringConfig struct {
 	Loki             *LokiConfig             `yaml:"loki,omitempty"`
 	Grafana          *GrafanaConfig          `yaml:"grafana,omitempty"`
 	GrafanaAlloy     *GrafanaAlloyConfig     `yaml:"grafanaAlloy,omitempty"`
-	CentralOtel      *CentralOtelCredentials `yaml:"centralOtel,omitempty"`
+	CentralOtel      *CentralOtelConfig      `yaml:"centralOtel,omitempty"`
 }
 
 type PrometheusConfig struct {
@@ -597,6 +591,13 @@ type LokiConnectionConfig struct {
 	User     string `yaml:"user,omitempty"`
 
 	Password string `yaml:"-"`
+}
+
+type CentralOtelConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Username string        `yaml:"username,omitempty"`
+	Password string        `yaml:"-"`
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type CephHostConfig struct {

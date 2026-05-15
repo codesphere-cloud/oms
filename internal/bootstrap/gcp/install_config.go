@@ -338,7 +338,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		if b.Env.InstallConfig.Cluster.Monitoring == nil {
 			b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
 		}
-		b.Env.InstallConfig.Cluster.Monitoring.CentralOtel = &files.CentralOtelCredentials{
+		b.Env.InstallConfig.Cluster.Monitoring.CentralOtel = &files.CentralOtelConfig{
 			Enabled:  true,
 			Username: b.Env.CentralOtelUsername,
 			Password: b.Env.CentralOtelPassword,
