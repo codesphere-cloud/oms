@@ -599,6 +599,76 @@ var _ = Describe("Installconfig & Secrets", func() {
 				})
 			})
 
+			Context("When CentralOtel credentials are fully set", func() {
+				BeforeEach(func() {
+					csEnv.CentralOtelUsername = "otel-user"
+					csEnv.CentralOtelPassword = "otel-password"
+				})
+				It("sets CentralOtel credentials in install config", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel).NotTo(BeNil())
+					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel.Username).To(Equal("otel-user"))
+					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel.Password).To(Equal("otel-password"))
+				})
+			})
+
+			Context("When only CentralOtel username is set", func() {
+				BeforeEach(func() {
+					csEnv.CentralOtelUsername = "otel-user"
+					csEnv.CentralOtelPassword = ""
+				})
+				It("skips setting CentralOtel credentials", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel).To(BeNil())
+				})
+			})
+
+			Context("When only CentralOtel password is set", func() {
+				BeforeEach(func() {
+					csEnv.CentralOtelUsername = ""
+					csEnv.CentralOtelPassword = "otel-password"
+				})
+				It("skips setting CentralOtel credentials", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel).To(BeNil())
+				})
+			})
+
+			Context("When CentralOtel credentials are not set", func() {
+				It("leaves CentralOtel nil", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.CentralOtel).To(BeNil())
+				})
+			})
+
 			Context("When OpenBao config is set", func() {
 				BeforeEach(func() {
 					csEnv.OpenBaoURI = "https://openbao.example.com"

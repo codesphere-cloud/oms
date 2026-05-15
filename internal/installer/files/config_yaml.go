@@ -313,6 +313,7 @@ type CodesphereConfig struct {
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
 	OAuth                      *OAuthProvidersConfig  `yaml:"oauth,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
+	CentralOtel                *CentralOtelCredentials `yaml:"centralOtel,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
@@ -338,6 +339,11 @@ type OpenBaoConfig struct {
 	User   string `yaml:"user,omitempty"`
 
 	Password string `yaml:"-"`
+}
+
+type CentralOtelCredentials struct {
+	Username   string `yaml:"username,omitempty"`
+	Password   string `yaml:"-"`
 }
 
 type OAuthProvidersConfig struct {
@@ -800,23 +806,38 @@ func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
 }
 
 func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
-	if c.Cluster.Monitoring == nil ||
-		c.Cluster.Monitoring.GrafanaAlloy == nil ||
-		c.Cluster.Monitoring.GrafanaAlloy.Loki == nil {
-		return
+	if c.Cluster.Monitoring != nil &&
+		c.Cluster.Monitoring.GrafanaAlloy != nil &&
+		c.Cluster.Monitoring.GrafanaAlloy.Loki != nil {
+		loki := c.Cluster.Monitoring.GrafanaAlloy.Loki
+		if loki.Password != "" {
+			vault.SetSecret(SecretEntry{
+				Name: LokiGatewayPasswordSecretName,
+				Fields: &SecretFields{
+					Password: loki.Password,
+				},
+			})
+		}
 	}
 
-	loki := c.Cluster.Monitoring.GrafanaAlloy.Loki
-	if loki.Password == "" {
-		return
+	if c.Codesphere.CentralOtel != nil {
+		if c.Codesphere.CentralOtel.Username != "" {
+			vault.SetSecret(SecretEntry{
+				Name: "centralOtelUsername",
+				Fields: &SecretFields{
+					Password: c.Codesphere.CentralOtel.Username,
+				},
+			})
+		}
+		if c.Codesphere.CentralOtel.Password != "" {
+			vault.SetSecret(SecretEntry{
+				Name: "centralOtelPassword",
+				Fields: &SecretFields{
+					Password: c.Codesphere.CentralOtel.Password,
+				},
+			})
+		}
 	}
-
-	vault.SetSecret(SecretEntry{
-		Name: LokiGatewayPasswordSecretName,
-		Fields: &SecretFields{
-			Password: loki.Password,
-		},
-	})
 }
 
 func (c *RootConfig) addACMESecrets(vault *InstallVault) {

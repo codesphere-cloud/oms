@@ -53,6 +53,8 @@ oms beta bootstrap-gcp [flags]
       --oidc-client-secret string               OIDC OAuth provider Client Secret (optional)
       --oidc-issuer-url string                  OIDC OAuth provider issuer URL (optional)
       --oidc-provider-name string               OIDC OAuth provider display name (optional)
+      --central-otel-username string            Central OpenTelemetry username. Needed when sending spans to central collector (optional)
+        --central-otel-password string          Central OpenTelemetry password. Needed when sending spans to central collector (optional)
       --openbao-engine string                   OpenBao engine name (default: cs-secrets-engine) (default "cs-secrets-engine")
       --openbao-password string                 OpenBao password (optional)
       --openbao-uri string                      URI for OpenBao (optional)

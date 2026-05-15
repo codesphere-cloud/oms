@@ -146,6 +146,8 @@ type CodesphereEnvironment struct {
 	OidcIssuerURL              string `json:"-"`
 	OidcClientID               string `json:"-"`
 	OidcClientSecret           string `json:"-"`
+	CentralOtelUsername        string `json:"-"`
+	CentralOtelPassword        string `json:"-"`
 	SecretsDir                 string `json:"secrets_dir"`
 	FolderID                   string `json:"folder_id"`
 	SSHPublicKeyPath           string `json:"-"`
