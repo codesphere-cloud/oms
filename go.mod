@@ -21,7 +21,7 @@ require (
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.29.1
-	github.com/codesphere-cloud/cs-go v1.1.0
+	github.com/codesphere-cloud/cs-go v1.1.1
 	github.com/creativeprojects/go-selfupdate v1.5.2
 	github.com/getsops/sops/v3 v3.13.0
 	github.com/jedib0t/go-pretty/v6 v6.7.10
@@ -51,7 +51,6 @@ require (
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/google/go-github/v74 v74.0.0
-	github.com/google/go-github/v86 v86.0.0
 	github.com/lib/pq v1.12.3
 	github.com/rook/rook/pkg/apis v0.0.0-20260430173414-a4316348cc58
 )
