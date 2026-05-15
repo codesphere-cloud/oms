@@ -14,6 +14,7 @@ import (
 	"helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/registry"
 	"helm.sh/helm/v4/pkg/release"
 	"helm.sh/helm/v4/pkg/storage/driver"
 )
@@ -61,20 +62,26 @@ type HelmClient interface {
 // ---------------------------------------------------------------------------
 
 type helmClient struct {
-	settings         *cli.EnvSettings
 	defaultNamespace string
 	driver           string
 }
 
 func NewHelmClient(namespace string) (HelmClient, error) {
 	return &helmClient{
-		settings:         cli.New(),
 		defaultNamespace: namespace,
 		driver:           os.Getenv("HELM_DRIVER"),
 	}, nil
 }
 
-func (h *helmClient) newActionConfig(namespace string) (*action.Configuration, error) {
+// helmEnv holds the per-call Helm action configuration and CLI settings.
+// Both are scoped to the same namespace so that the RESTClientGetter, Helm
+// storage driver, and LocateChart all operate in the intended namespace.
+type helmEnv struct {
+	actionConfig *action.Configuration
+	settings     *cli.EnvSettings
+}
+
+func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 	if namespace == "" {
 		namespace = h.defaultNamespace
 	}
@@ -82,25 +89,38 @@ func (h *helmClient) newActionConfig(namespace string) (*action.Configuration, e
 		return nil, fmt.Errorf("helm namespace is required")
 	}
 
+	// Create per-call settings so the RESTClientGetter uses the correct
+	// namespace for Kubernetes operations (resource deployment), not just
+	// Helm storage. Without this, resources land in the kubeconfig context's
+	// default namespace instead of the requested one.
+	settings := cli.New()
+	settings.SetNamespace(namespace)
+
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(
-		h.settings.RESTClientGetter(),
+		settings.RESTClientGetter(),
 		namespace,
 		h.driver,
 	); err != nil {
 		return nil, fmt.Errorf("helm action config init failed: %w", err)
 	}
 
-	return actionConfig, nil
+	registryClient, err := registry.NewClient()
+	if err != nil {
+		return nil, fmt.Errorf("helm registry client init failed: %w", err)
+	}
+	actionConfig.RegistryClient = registryClient
+
+	return &helmEnv{actionConfig: actionConfig, settings: settings}, nil
 }
 
 func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, error) {
-	actionConfig, err := h.newActionConfig(namespace)
+	env, err := h.newHelmEnv(namespace)
 	if err != nil {
 		return nil, err
 	}
 
-	listClient := action.NewList(actionConfig)
+	listClient := action.NewList(env.actionConfig)
 	listClient.Filter = "^" + releaseName + "$"
 	listClient.Deployed = true
 	listClient.SetStateMask()
@@ -136,12 +156,12 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 }
 
 func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
-	actionConfig, err := h.newActionConfig(cfg.Namespace)
+	env, err := h.newHelmEnv(cfg.Namespace)
 	if err != nil {
 		return err
 	}
 
-	installClient := action.NewInstall(actionConfig)
+	installClient := action.NewInstall(env.actionConfig)
 	installClient.ReleaseName = cfg.ReleaseName
 	installClient.Namespace = cfg.Namespace
 	installClient.CreateNamespace = cfg.CreateNamespace
@@ -151,7 +171,7 @@ func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
 	installClient.RepoURL = cfg.RepoURL
 	installClient.Timeout = 5 * time.Minute
 
-	chartPath, err := installClient.LocateChart(cfg.ChartName, h.settings)
+	chartPath, err := installClient.LocateChart(cfg.ChartName, env.settings)
 	if err != nil {
 		return fmt.Errorf("LocateChart failed: %w", err)
 	}
@@ -170,11 +190,6 @@ func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
 }
 
 func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error {
-	actionConfig, err := h.newActionConfig(cfg.Namespace)
-	if err != nil {
-		return err
-	}
-
 	if opts.InstallIfNotExist {
 		// If a release does not exist, install it.
 		rel, err := h.FindRelease(cfg.Namespace, cfg.ReleaseName)
@@ -186,14 +201,19 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 		}
 	}
 
-	upgradeClient := action.NewUpgrade(actionConfig)
+	env, err := h.newHelmEnv(cfg.Namespace)
+	if err != nil {
+		return err
+	}
+
+	upgradeClient := action.NewUpgrade(env.actionConfig)
 	upgradeClient.Namespace = cfg.Namespace
 	upgradeClient.WaitStrategy = "watcher"
 	upgradeClient.Version = cfg.Version
 	upgradeClient.RepoURL = cfg.RepoURL
 	upgradeClient.Timeout = 5 * time.Minute
 
-	chartPath, err := upgradeClient.LocateChart(cfg.ChartName, h.settings)
+	chartPath, err := upgradeClient.LocateChart(cfg.ChartName, env.settings)
 	if err != nil {
 		return fmt.Errorf("LocateChart failed: %w", err)
 	}

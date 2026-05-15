@@ -152,3 +152,20 @@ func EncryptFileWithSOPS(src, target, recipient string) error {
 	}
 	return nil
 }
+
+// DecryptFileWithSOPS decrypts a SOPS-encrypted file and returns the plaintext bytes.
+// If keyPath is non-empty, SOPS_AGE_KEY_FILE is set for the sops process.
+func DecryptFileWithSOPS(src, keyPath string) ([]byte, error) {
+	cmd := exec.Command("sops", "--decrypt", src)
+	if keyPath != "" {
+		cmd.Env = append(os.Environ(), "SOPS_AGE_KEY_FILE="+keyPath)
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("sops decrypt failed: %s", string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("sops decrypt failed: %w", err)
+	}
+	return out, nil
+}

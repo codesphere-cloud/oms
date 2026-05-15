@@ -53,6 +53,15 @@ func RenderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
 	return []byte(content), nil
 }
 
+// VaultGVR returns the GroupVersionResource for the bank-vaults Vault CRD.
+func VaultGVR() schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    "vault.banzaicloud.com",
+		Version:  "v1alpha1",
+		Resource: "vaults",
+	}
+}
+
 // GvrForUnstructured maps an unstructured object's GVK to the appropriate GVR.
 func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
 	gvk := obj.GroupVersionKind()
@@ -63,6 +72,30 @@ func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionReso
 			Group:    gvk.Group,
 			Version:  gvk.Version,
 			Resource: "appprojects",
+		}, nil
+	case "Vault":
+		return schema.GroupVersionResource{
+			Group:    gvk.Group,
+			Version:  gvk.Version,
+			Resource: "vaults",
+		}, nil
+	case "ServiceAccount":
+		return schema.GroupVersionResource{
+			Group:    gvk.Group,
+			Version:  gvk.Version,
+			Resource: "serviceaccounts",
+		}, nil
+	case "Role":
+		return schema.GroupVersionResource{
+			Group:    gvk.Group,
+			Version:  gvk.Version,
+			Resource: "roles",
+		}, nil
+	case "RoleBinding":
+		return schema.GroupVersionResource{
+			Group:    gvk.Group,
+			Version:  gvk.Version,
+			Resource: "rolebindings",
 		}, nil
 	default:
 		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s", gvk)
