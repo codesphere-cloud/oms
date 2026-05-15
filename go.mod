@@ -45,13 +45,12 @@ require (
 	k8s.io/apimachinery v0.36.1
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2
-	sigs.k8s.io/controller-runtime v0.24.0
+	sigs.k8s.io/controller-runtime v0.24.1
 )
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/google/go-github/v74 v74.0.0
-	github.com/google/go-github/v86 v86.0.0
 	github.com/lib/pq v1.12.3
 	github.com/rook/rook/pkg/apis v0.0.0-20260430173414-a4316348cc58
 )
