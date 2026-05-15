@@ -151,6 +151,7 @@ type CodesphereEnvironment struct {
 	SSHPublicKeyPath           string `json:"-"`
 	SSHPrivateKeyPath          string `json:"-"`
 	DatacenterID               int    `json:"-"`
+	DatacenterName             string `json:"-"`
 	CustomPgIP                 string `json:"custom_pg_ip"`
 	Region                     string `json:"region"`
 	Zone                       string `json:"zone"`
@@ -359,12 +360,13 @@ func (b *GCPBootstrapper) createTestUser() error {
 	}
 
 	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
-		Host:     pgHost,
-		Port:     testuser.DefaultPort,
-		User:     testuser.DefaultUser,
-		Password: pgPassword,
-		DBName:   testuser.DefaultDBName,
-		SSLMode:  "require",
+		Host:         pgHost,
+		Port:         testuser.DefaultPort,
+		User:         testuser.DefaultUser,
+		Password:     pgPassword,
+		DBName:       testuser.DefaultDBName,
+		SSLMode:      "require",
+		DatacenterID: b.Env.DatacenterID,
 	})
 	if err != nil {
 		return err

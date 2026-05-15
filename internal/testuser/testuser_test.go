@@ -133,7 +133,7 @@ var _ = Describe("createInDB", func() {
 
 		// Expect: insert team
 		m.ExpectQuery(`INSERT INTO "teamService".teams`).
-			WithArgs(TestTeamName).
+			WithArgs(TestTeamName, DefaultDatacenterID).
 			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
 
 		// Expect: insert team member
@@ -208,13 +208,46 @@ var _ = Describe("createInDB", func() {
 			WithArgs(TestEmail).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 		m.ExpectQuery(`INSERT INTO "teamService".teams`).
-			WithArgs(TestTeamName).
+			WithArgs(TestTeamName, DefaultDatacenterID).
 			WillReturnError(fmt.Errorf("db error"))
 		m.ExpectRollback()
 
 		_, err = (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test"}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to insert team"))
+		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
+	})
+
+	It("uses a custom datacenter ID for the created team", func() {
+		sqlDB, m, err := sqlmock.New()
+		Expect(err).NotTo(HaveOccurred())
+		defer func() { _ = sqlDB.Close() }()
+
+		m.ExpectQuery(`SELECT EXISTS`).
+			WithArgs(TestEmail).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		m.ExpectBegin()
+		m.ExpectQuery(`INSERT INTO authservice.credentials`).
+			WithArgs(TestEmail, hashedPassword).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(42))
+		m.ExpectExec(`INSERT INTO authservice.email_confirmations`).
+			WithArgs(TestEmail).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		m.ExpectQuery(`INSERT INTO "teamService".teams`).
+			WithArgs(TestTeamName, 77).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
+		m.ExpectExec(`INSERT INTO "teamService".team_members`).
+			WithArgs(42, 7).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		m.ExpectExec(`INSERT INTO public_api_service.tokens`).
+			WithArgs(hashedToken, 42).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		m.ExpectCommit()
+
+		result, err := (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test", DatacenterID: 77}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Email).To(Equal(TestEmail))
 		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
 	})
 })
