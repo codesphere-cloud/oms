@@ -280,7 +280,7 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 	var retryJoinAddrs []string
 	if o.Config.Replicas > 1 {
 		for i := 0; i < o.Config.Replicas; i++ {
-			addr := fmt.Sprintf("http://openbao-%d.openbao.%s.svc.cluster.local:8200", i, openBaoNamespace)
+			addr := fmt.Sprintf("http://openbao-%d.%s.svc.cluster.local:8200", i, openBaoNamespace)
 			retryJoinAddrs = append(retryJoinAddrs, addr)
 		}
 	}

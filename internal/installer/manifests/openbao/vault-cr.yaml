@@ -80,7 +80,9 @@ spec:
           fieldRef:
             fieldPath: metadata.name
       - name: BAO_CLUSTER_ADDR
-        value: "https://$(POD_NAME).openbao.{{ .Namespace }}.svc.cluster.local:8201"
+        value: "https://$(POD_NAME).{{ .Namespace }}.svc.cluster.local:8201"
+      - name: BAO_API_ADDR
+        value: "http://$(POD_NAME).{{ .Namespace }}.svc.cluster.local:8200"
     {{- end }}
   unsealConfig:
     options:
