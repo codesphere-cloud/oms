@@ -167,7 +167,7 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 // Sets o.drBackupExists to true if a DR backup was found and restored.
 func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 	if o.Config.DRBackupPath == "" {
-		return fmt.Errorf("--dr-backup-path is required")
+		return fmt.Errorf("DRBackupPath must be set")
 	}
 
 	if _, err := os.Stat(o.Config.DRBackupPath); err != nil {
@@ -231,9 +231,10 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 		}
 	}
 
-	// Reuse the password from the DR backup so the Vault CR is rendered with
-	// the same credential that OpenBao already has configured.
+	// Reuse the password and username from the DR backup so the Vault CR is
+	// rendered with the same credentials that OpenBao already has configured.
 	o.password = backup.Password
+	o.Config.Username = backup.Username
 
 	log.Println("Unseal keys restored from DR backup successfully")
 	o.drBackupExists = true
@@ -282,15 +283,14 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 		return fmt.Errorf("parsing vault CR template: %w", err)
 	}
 
-	// Build retry_join addresses for Raft HA so each node can autonomously
-	// find and join the cluster leader, preventing pods from getting stuck
-	// in an uninitialized state due to sidecar timing races.
+	// Build retry_join addresses for Raft so each node can autonomously
+	// find and join the cluster leader. For a single replica this produces
+	// one self-referencing address, which is harmless and means scaling up
+	// later only requires changing the replica count.
 	var retryJoinAddrs []string
-	if o.Config.Replicas > 1 {
-		for i := 0; i < o.Config.Replicas; i++ {
-			addr := fmt.Sprintf("http://openbao-%d.%s.svc.cluster.local:8200", i, openBaoNamespace)
-			retryJoinAddrs = append(retryJoinAddrs, addr)
-		}
+	for i := 0; i < o.Config.Replicas; i++ {
+		addr := fmt.Sprintf("http://openbao-%d.%s.svc.cluster.local:8200", i, openBaoNamespace)
+		retryJoinAddrs = append(retryJoinAddrs, addr)
 	}
 
 	data := vaultCRTemplateData{

@@ -104,7 +104,7 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 	openbao.cmd.Flags().StringVar(&openbao.Opts.BaoUsername, "bao-user", "admin", "Username for the userpass auth method")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.DRBackupPath, "dr-backup-path", "", "Path for SOPS-encrypted DR backup file (required)")
 	openbao.cmd.Flags().IntVar(&openbao.Opts.Replicas, "replicas", 1, "Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA)")
-	openbao.cmd.Flags().StringVar(&openbao.Opts.StorageSize, "storage-size", "10Gi", "PVC storage size for each OpenBao replica (only used with replicas > 1)")
+	openbao.cmd.Flags().StringVar(&openbao.Opts.StorageSize, "storage-size", "10Gi", "PVC storage size for each OpenBao replica")
 	openbao.cmd.Flags().DurationVar(&openbao.Opts.Timeout, "timeout", 5*time.Minute, "Timeout for waiting on initialization")
 
 	util.MarkFlagRequired(openbao.cmd, "dr-backup-path")

@@ -119,7 +119,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 				err := inst.PreFlightDRCheck()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("--dr-backup-path is required"))
+				Expect(err.Error()).To(ContainSubstring("DRBackupPath must be set"))
 			})
 		})
 	})
@@ -305,7 +305,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 			return nil
 		}
 
-		It("renders valid YAML with file storage for replicas=1", func() {
+		It("renders valid YAML with raft storage and PVC for replicas=1", func() {
 			data := templateData{
 				Namespace:         "vault",
 				OpenBaoImage:      "quay.io/openbao/openbao:2.1.0",
@@ -315,7 +315,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				BaoPassword:       "test-password",
 				Replicas:          1,
 				StorageSize:       "10Gi",
-				RetryJoinAddrs:    nil,
+				RetryJoinAddrs:    []string{"http://openbao-0.vault.svc.cluster.local:8200"},
 			}
 
 			docs := renderTemplate(data)
@@ -330,15 +330,27 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(spec["size"]).To(BeNumerically("==", 1))
 			Expect(spec["image"]).To(Equal("quay.io/openbao/openbao:2.1.0"))
 
-			// Should NOT have volumeClaimTemplates for single-node
-			Expect(spec).ToNot(HaveKey("volumeClaimTemplates"))
-			Expect(spec).ToNot(HaveKey("volumeMounts"))
+			// Should have volumeClaimTemplates (raft always needs persistent storage)
+			Expect(spec).To(HaveKey("volumeClaimTemplates"))
+			vcts := spec["volumeClaimTemplates"].([]interface{})
+			Expect(vcts).To(HaveLen(1))
+			vct := vcts[0].(map[string]interface{})
+			vctSpec := vct["spec"].(map[string]interface{})
+			resources := vctSpec["resources"].(map[string]interface{})
+			requests := resources["requests"].(map[string]interface{})
+			Expect(requests["storage"]).To(Equal("10Gi"))
 
-			// Config should use file storage, not raft
+			// Should have volumeMounts
+			Expect(spec).To(HaveKey("volumeMounts"))
+
+			// Config should use raft storage (always, even for single node)
 			config := spec["config"].(map[string]interface{})
 			storage := config["storage"].(map[string]interface{})
-			Expect(storage).To(HaveKey("file"))
-			Expect(storage).ToNot(HaveKey("raft"))
+			Expect(storage).To(HaveKey("raft"))
+			Expect(storage).ToNot(HaveKey("file"))
+			raft := storage["raft"].(map[string]interface{})
+			retryJoin := raft["retry_join"].([]interface{})
+			Expect(retryJoin).To(HaveLen(1))
 
 			// Unseal config should have storeRootToken: false
 			unsealConfig := spec["unsealConfig"].(map[string]interface{})
@@ -362,9 +374,9 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(user["username"]).To(Equal("admin"))
 			Expect(user["password"]).To(Equal("test-password"))
 
-			// Verify vaultContainerSpec has NO HA env vars
+			// Verify vaultContainerSpec has env vars (always present now)
 			containerSpec := spec["vaultContainerSpec"].(map[string]interface{})
-			Expect(containerSpec).ToNot(HaveKey("env"))
+			Expect(containerSpec).To(HaveKey("env"))
 		})
 
 		It("renders valid YAML with raft storage, PVCs, and retry_join for replicas=3", func() {

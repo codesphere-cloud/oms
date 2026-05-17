@@ -145,15 +145,13 @@ var _ = Describe("GvrForUnstructured", func() {
 		Expect(gvr.Resource).To(Equal("appprojects"))
 	})
 
-	It("falls back to lowercase+s pluralization for unmapped kinds", func() {
+	It("returns an error for an unknown kind", func() {
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("v1")
 		obj.SetKind("ConfigMap")
 
-		gvr, err := util.GvrForUnstructured(obj)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(gvr.Group).To(Equal(""))
-		Expect(gvr.Version).To(Equal("v1"))
-		Expect(gvr.Resource).To(Equal("configmaps"))
+		_, err := util.GvrForUnstructured(obj)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("no GVR mapping"))
 	})
 })

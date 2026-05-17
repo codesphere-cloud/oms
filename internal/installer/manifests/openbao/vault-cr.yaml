@@ -41,7 +41,6 @@ spec:
   image: {{ .OpenBaoImage }}
   bankVaultsImage: {{ .BankVaultsImage }}
   serviceAccount: openbao
-  {{- if gt .Replicas 1 }}
   volumeClaimTemplates:
     - metadata:
         name: openbao-data
@@ -54,7 +53,6 @@ spec:
   volumeMounts:
     - name: openbao-data
       mountPath: /openbao/data
-  {{- end }}
   vaultContainerSpec:
     name: vault
     command:
@@ -73,7 +71,6 @@ spec:
       initialDelaySeconds: 5
       periodSeconds: 10
       failureThreshold: 30
-    {{- if gt .Replicas 1 }}
     env:
       - name: POD_NAME
         valueFrom:
@@ -83,7 +80,6 @@ spec:
         value: "https://$(POD_NAME).{{ .Namespace }}.svc.cluster.local:8201"
       - name: BAO_API_ADDR
         value: "http://$(POD_NAME).{{ .Namespace }}.svc.cluster.local:8200"
-    {{- end }}
   unsealConfig:
     options:
       preFlightChecks: false
@@ -94,7 +90,6 @@ spec:
   config:
     ui: true
     storage:
-      {{- if gt .Replicas 1 }}
       raft:
         path: /openbao/data
         {{- if .RetryJoinAddrs }}
@@ -103,10 +98,6 @@ spec:
           - leader_api_addr: "{{ . }}"
           {{- end }}
         {{- end }}
-      {{- else }}
-      file:
-        path: /openbao/file
-      {{- end }}
     listener:
       tcp:
         address: "0.0.0.0:8200"

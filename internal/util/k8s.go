@@ -103,14 +103,7 @@ func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionReso
 			Resource: "rolebindings",
 		}, nil
 	default:
-		// Generic fallback: lowercase kind + "s". This covers most built-in
-		// resources (e.g., ConfigMap -> configmaps, Secret -> secrets) but will
-		// produce incorrect plurals for irregular kinds (e.g., Ingress).
-		return schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: strings.ToLower(gvk.Kind) + "s",
-		}, nil
+		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s — add an explicit case to GvrForUnstructured", gvk)
 	}
 }
 
