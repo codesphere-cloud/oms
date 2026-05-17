@@ -105,12 +105,12 @@ spec:
     api_addr: http://openbao.{{ .Namespace }}:8200
   externalConfig:
     secrets:
-      - path: {{ .SecretsEngineName }}
+      - path: "{{ .SecretsEngineName }}"
         type: kv
         options:
           version: "2"
     policies:
-      - name: {{ .SecretsEngineName }}-rw
+      - name: "{{ .SecretsEngineName }}-rw"
         rules: |
           path "{{ .SecretsEngineName }}/data/*" {
             capabilities = ["create", "read", "update", "delete", "list"]
@@ -121,6 +121,6 @@ spec:
     auth:
       - type: userpass
         users:
-          - username: {{ .BaoUsername }}
-            password: {{ .BaoPassword }}
-            policies: {{ .SecretsEngineName }}-rw
+          - username: "{{ .BaoUsername }}"
+            password: "{{ .BaoPassword }}"
+            policies: "{{ .SecretsEngineName }}-rw"

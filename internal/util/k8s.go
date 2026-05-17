@@ -62,49 +62,34 @@ func VaultGVR() schema.GroupVersionResource {
 	}
 }
 
+// gvrMappings maps Kubernetes Kind names to their plural resource names.
+// New kinds used in embedded templates need a corresponding entry here.
+var gvrMappings = map[string]string{
+	"AppProject":     "appprojects",
+	"Vault":          "vaults",
+	"ServiceAccount": "serviceaccounts",
+	"Role":           "roles",
+	"RoleBinding":    "rolebindings",
+}
+
 // GvrForUnstructured maps an unstructured object's GVK to the appropriate GVR.
 //
 // This uses a hand-rolled lookup table rather than a discovery-backed RESTMapper
 // to avoid requiring a cluster round-trip during resolution. New kinds used in
-// embedded templates will need a corresponding case here. If this grows unwieldy,
-// consider switching to restmapper.NewDiscoveryRESTMapper.
+// embedded templates will need a corresponding entry in gvrMappings. If this
+// grows unwieldy, consider switching to restmapper.NewDiscoveryRESTMapper.
 func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
 	gvk := obj.GroupVersionKind()
 
-	switch gvk.Kind {
-	case "AppProject":
-		return schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: "appprojects",
-		}, nil
-	case "Vault":
-		return schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: "vaults",
-		}, nil
-	case "ServiceAccount":
-		return schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: "serviceaccounts",
-		}, nil
-	case "Role":
-		return schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: "roles",
-		}, nil
-	case "RoleBinding":
-		return schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: "rolebindings",
-		}, nil
-	default:
-		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s — add an explicit case to GvrForUnstructured", gvk)
+	resource, ok := gvrMappings[gvk.Kind]
+	if !ok {
+		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s — add an entry to gvrMappings", gvk)
 	}
+	return schema.GroupVersionResource{
+		Group:    gvk.Group,
+		Version:  gvk.Version,
+		Resource: resource,
+	}, nil
 }
 
 // ApplyUnstructured creates or updates an unstructured resource using the dynamic client.

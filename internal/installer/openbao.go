@@ -11,7 +11,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -157,7 +156,7 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to extract and encrypt DR backup: %w", err)
 	}
 
-	log.Printf("OpenBao bootstrap complete. DR backup saved to: %s", o.Config.DRBackupPath)
+	o.Logger.Logf("OpenBao bootstrap complete. DR backup saved to: %s", o.Config.DRBackupPath)
 	return nil
 }
 
@@ -172,14 +171,14 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 
 	if _, err := os.Stat(o.Config.DRBackupPath); err != nil {
 		if os.IsNotExist(err) {
-			log.Println("No existing DR backup found — proceeding with fresh initialization")
+			o.Logger.Logf("No existing DR backup found — proceeding with fresh initialization")
 			o.drBackupExists = false
 			return nil
 		}
 		return fmt.Errorf("checking DR backup file %s: %w", o.Config.DRBackupPath, err)
 	}
 
-	log.Printf("Found existing DR backup at %s — restoring unseal keys", o.Config.DRBackupPath)
+	o.Logger.Logf("Found existing DR backup at %s — restoring unseal keys", o.Config.DRBackupPath)
 
 	// Decrypt using sops
 	decrypted, err := DecryptFileWithSOPS(o.Config.DRBackupPath, o.Config.AgeKeyPath)
@@ -234,12 +233,12 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 	// Reuse the password and username from the DR backup so the Vault CR is
 	// rendered with the same credentials that OpenBao already has configured.
 	if o.Config.Username != backup.Username {
-		log.Printf("Warning: --bao-user=%q differs from DR backup username %q — using backup value", o.Config.Username, backup.Username)
+		o.Logger.Logf("Warning: --bao-user=%q differs from DR backup username %q — using backup value", o.Config.Username, backup.Username)
 	}
 	o.password = backup.Password
 	o.Config.Username = backup.Username
 
-	log.Println("Unseal keys restored from DR backup successfully")
+	o.Logger.Logf("Unseal keys restored from DR backup successfully")
 	o.drBackupExists = true
 	return nil
 }
@@ -334,30 +333,15 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 // WaitForInitialization polls the openbao-unseal-keys Secret until it contains
 // unseal key data, indicating that Bank-Vaults has completed initialization.
 func (o *OpenBaoInstaller) WaitForInitialization() error {
-	deadline := time.Now().Add(o.Config.Timeout)
-	interval := pollInterval
-
 	secretsClient := o.Clientset.CoreV1().Secrets(openBaoNamespace)
 
-	for {
-		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out waiting for openbao-unseal-keys to be populated (timeout: %s)", o.Config.Timeout)
-		}
-
+	return o.pollUntil("waiting for openbao-unseal-keys to be populated", func() (bool, error) {
 		secret, err := secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
 		if err != nil {
-			if !k8serrors.IsNotFound(err) {
-				return fmt.Errorf("fetching unseal secret: %w", err)
+			if k8serrors.IsNotFound(err) {
+				return false, nil // Secret doesn't exist yet — keep polling
 			}
-			// Secret doesn't exist yet — keep polling
-			o.Logger.LogRetry()
-			select {
-			case <-o.ctx.Done():
-				return o.ctx.Err()
-			case <-time.After(interval):
-			}
-			interval = minDuration(interval*2, maxPollInterval)
-			continue
+			return false, fmt.Errorf("fetching unseal secret: %w", err)
 		}
 
 		// Check if the secret has meaningful data: at least one key must be
@@ -366,17 +350,10 @@ func (o *OpenBaoInstaller) WaitForInitialization() error {
 		// during Init(), so any data means init is done.
 		if len(secret.Data) > 0 {
 			o.unsealSecret = secret
-			return nil
+			return true, nil
 		}
-
-		o.Logger.LogRetry()
-		select {
-		case <-o.ctx.Done():
-			return o.ctx.Err()
-		case <-time.After(interval):
-		}
-		interval = minDuration(interval*2, maxPollInterval)
-	}
+		return false, nil
+	})
 }
 
 // ExtractAndEncrypt reads the unseal keys Secret, combines it with the generated
@@ -432,10 +409,7 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 		return fmt.Errorf("encrypting DR backup: %w", err)
 	}
 
-	// Remove temp file on success (deferred remove handles failure/panic)
-	_ = os.Remove(tmpPath)
-
-	log.Printf("DR backup encrypted and saved to: %s", o.Config.DRBackupPath)
+	o.Logger.Logf("DR backup encrypted and saved to: %s", o.Config.DRBackupPath)
 	return nil
 }
 
@@ -469,7 +443,7 @@ func (o *OpenBaoInstaller) DeleteStaleUnsealKeys() error {
 		return fmt.Errorf("deleting stale unseal secret: %w", delErr)
 	}
 
-	log.Println("Stale unseal keys removed (vault CR deleted, pods terminated)")
+	o.Logger.Logf("Stale unseal keys removed (vault CR deleted, pods terminated)")
 	return nil
 }
 
@@ -477,24 +451,38 @@ func (o *OpenBaoInstaller) DeleteStaleUnsealKeys() error {
 // in the vault namespace, or until the context deadline is exceeded.
 func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
 	selector := labels.SelectorFromSet(labels.Set{"vault_cr": "openbao"}).String()
-	deadline := time.Now().Add(o.Config.Timeout)
-	interval := pollInterval
 
-	for {
-		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out waiting for vault pods to terminate (timeout: %s)", o.Config.Timeout)
-		}
-
+	return o.pollUntil("waiting for vault pods to terminate", func() (bool, error) {
 		list, err := o.Clientset.CoreV1().Pods(openBaoNamespace).List(o.ctx, metav1.ListOptions{
 			LabelSelector: selector,
 		})
 		if err != nil {
 			if k8serrors.IsNotFound(err) {
-				return nil
+				return true, nil
 			}
-			return fmt.Errorf("listing vault pods: %w", err)
+			return false, fmt.Errorf("listing vault pods: %w", err)
 		}
-		if len(list.Items) == 0 {
+		return len(list.Items) == 0, nil
+	})
+}
+
+// pollUntil runs check in a loop with exponential backoff until it returns
+// true or the configured timeout expires. timeoutMsg describes the operation
+// for the timeout error message.
+func (o *OpenBaoInstaller) pollUntil(timeoutMsg string, check func() (bool, error)) error {
+	deadline := time.Now().Add(o.Config.Timeout)
+	interval := pollInterval
+
+	for {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out %s (timeout: %s)", timeoutMsg, o.Config.Timeout)
+		}
+
+		done, err := check()
+		if err != nil {
+			return err
+		}
+		if done {
 			return nil
 		}
 
@@ -504,7 +492,7 @@ func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
 			return o.ctx.Err()
 		case <-time.After(interval):
 		}
-		interval = minDuration(interval*2, maxPollInterval)
+		interval = min(interval*2, maxPollInterval)
 	}
 }
 
@@ -572,10 +560,3 @@ func (o *OpenBaoInstaller) GetUnsealSecret() *corev1.Secret {
 	return o.unsealSecret
 }
 
-// minDuration returns the smaller of two durations.
-func minDuration(a, b time.Duration) time.Duration {
-	if a < b {
-		return a
-	}
-	return b
-}
