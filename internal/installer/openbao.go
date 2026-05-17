@@ -233,6 +233,9 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 
 	// Reuse the password and username from the DR backup so the Vault CR is
 	// rendered with the same credentials that OpenBao already has configured.
+	if o.Config.Username != backup.Username {
+		log.Printf("Warning: --bao-user=%q differs from DR backup username %q — using backup value", o.Config.Username, backup.Username)
+	}
 	o.password = backup.Password
 	o.Config.Username = backup.Username
 
