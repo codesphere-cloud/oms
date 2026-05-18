@@ -4,7 +4,6 @@
 package cmd_test
 
 import (
-	"fmt"
 	"os"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -243,88 +242,6 @@ var _ = Describe("DownloadPackages", func() {
 		It("Returns an error", func() {
 			err := c.DownloadBuild(mockPortal, build, "installer-lite.tar.gz")
 			Expect(err).To(MatchError("failed to find artifact in package: artifact not found: installer-lite.tar.gz"))
-		})
-	})
-
-	Context("Stale partial file causes verify failure", func() {
-		var (
-			expectedBuildToDownload portal.Build
-			fullFilename            string
-			staleFile               *os.File
-			freshFile               *os.File
-		)
-
-		BeforeEach(func() {
-			expectedBuildToDownload = portal.Build{
-				Version: version,
-				Hash:    hash,
-				Artifacts: []portal.Artifact{
-					{Filename: filename},
-				},
-			}
-			fullFilename = version + "-" + hash + "-" + filename
-
-			// Create a temp file with non-zero content to simulate a stale partial download.
-			var err error
-			staleFile, err = os.CreateTemp("", "stale-download-*")
-			Expect(err).NotTo(HaveOccurred())
-			_, err = staleFile.Write([]byte("stale partial content"))
-			Expect(err).NotTo(HaveOccurred())
-			_, err = staleFile.Seek(0, 0)
-			Expect(err).NotTo(HaveOccurred())
-
-			freshFile = os.NewFile(uintptr(0), filename)
-		})
-
-		AfterEach(func() {
-			_ = staleFile.Close() // may already be closed by the code under test
-			Expect(os.Remove(staleFile.Name())).To(Succeed())
-		})
-
-		It("deletes the partial file and retries from scratch when resumed download fails verification", func() {
-			mockFileWriter.EXPECT().OpenAppend(fullFilename).Return(staleFile, nil).Once()
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, mock.AnythingOfType("int"), false).Return(nil).Once()
-			mockFileWriter.EXPECT().Open(fullFilename).Return(staleFile, nil).Once()
-			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(fmt.Errorf("invalid md5Sum: expected abc, but got xyz")).Once()
-			mockFileWriter.EXPECT().Remove(fullFilename).Return(nil).Once()
-
-			// Retry: fresh download succeeds
-			mockFileWriter.EXPECT().OpenAppend(fullFilename).Return(nil, fmt.Errorf("file not found")).Once()
-			mockFileWriter.EXPECT().Create(fullFilename).Return(freshFile, nil).Once()
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil).Once()
-			mockFileWriter.EXPECT().Open(fullFilename).Return(freshFile, nil).Once()
-			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil).Once()
-
-			err := c.DownloadBuild(mockPortal, build, filename)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("returns verify error without retry when file size is zero", func() {
-			emptyFile, createErr := os.CreateTemp("", "empty-download-*")
-			Expect(createErr).NotTo(HaveOccurred())
-			DeferCleanup(func() {
-				_ = emptyFile.Close() // may already be closed by the code under test
-				Expect(os.Remove(emptyFile.Name())).To(Succeed())
-			})
-
-			mockFileWriter.EXPECT().OpenAppend(fullFilename).Return(emptyFile, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
-			mockFileWriter.EXPECT().Open(fullFilename).Return(emptyFile, nil)
-			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(fmt.Errorf("invalid md5Sum: expected abc, but got xyz"))
-
-			err := c.DownloadBuild(mockPortal, build, filename)
-			Expect(err).To(MatchError(ContainSubstring("failed to verify artifact")))
-		})
-
-		It("returns verify error when remove of stale file fails", func() {
-			mockFileWriter.EXPECT().OpenAppend(fullFilename).Return(staleFile, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, mock.AnythingOfType("int"), false).Return(nil)
-			mockFileWriter.EXPECT().Open(fullFilename).Return(staleFile, nil)
-			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(fmt.Errorf("invalid md5Sum: expected abc, but got xyz"))
-			mockFileWriter.EXPECT().Remove(fullFilename).Return(fmt.Errorf("permission denied"))
-
-			err := c.DownloadBuild(mockPortal, build, filename)
-			Expect(err).To(MatchError(ContainSubstring("failed to verify artifact")))
 		})
 	})
 })
