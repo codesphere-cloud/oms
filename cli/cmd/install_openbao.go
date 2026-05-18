@@ -117,10 +117,10 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 // validateOpenBaoPrereqs checks that required external tools are available.
 func validateOpenBaoPrereqs() error {
 	if _, err := exec.LookPath("sops"); err != nil {
-		return fmt.Errorf("sops not found in PATH — install it with: brew install sops")
+		return fmt.Errorf("sops not found in PATH — install from https://github.com/getsops/sops")
 	}
 	if _, err := exec.LookPath("age-keygen"); err != nil {
-		return fmt.Errorf("age-keygen not found in PATH — install it with: brew install age")
+		return fmt.Errorf("age-keygen not found in PATH — install from https://github.com/FiloSottile/age")
 	}
 	return nil
 }

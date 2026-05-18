@@ -91,6 +91,8 @@ func NewOpenBaoInstaller(cfg OpenBaoInstallerConfig) (*OpenBaoInstaller, error) 
 	}, nil
 }
 
+const defaultTimeout = 5 * time.Minute
+
 func (o *OpenBaoInstaller) validateConfig() error {
 	r := o.Config.Replicas
 	if r < 1 {
@@ -98,6 +100,9 @@ func (o *OpenBaoInstaller) validateConfig() error {
 	}
 	if r > 1 && r%2 == 0 {
 		return fmt.Errorf("--replicas=%d is invalid: Raft requires 1 (single-node) or an odd number >= 3 for HA", r)
+	}
+	if o.Config.Timeout <= 0 {
+		o.Config.Timeout = defaultTimeout
 	}
 	return nil
 }
