@@ -135,10 +135,11 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to deploy Bank-Vaults Operator: %w", err)
 	}
 
-	// Clean up stale unseal keys after the namespace exists but before the
-	// Vault CR triggers pods. We must wait for any existing vault pods to
-	// terminate first; otherwise the old bank-vaults sidecar's retry loop
-	// will re-create the secret after we delete it (race condition).
+	// If a previous install left behind an unseal-keys Secret (e.g. Raft storage
+	// was wiped or the cluster was rebuilt), those keys belong to the old master
+	// key and will cause bank-vaults to permanently fail unsealing the new instance.
+	// We delete the Vault CR first and wait for pods to exit, otherwise the old
+	// sidecar's retry loop re-creates the secret after we remove it.
 	if !o.drBackupExists {
 		err = o.Logger.Step("Removing stale unseal keys", o.DeleteStaleUnsealKeys)
 		if err != nil {
@@ -185,19 +186,16 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 
 	o.Logger.Logf("Found existing DR backup at %s — restoring unseal keys", o.Config.DRBackupPath)
 
-	// Decrypt using sops
 	decrypted, err := DecryptFileWithSOPS(o.Config.DRBackupPath, o.Config.AgeKeyPath)
 	if err != nil {
 		return err
 	}
 
-	// Parse the decrypted JSON to extract unseal keys
 	var backup drBackup
 	if err := json.Unmarshal(decrypted, &backup); err != nil {
 		return fmt.Errorf("parsing DR backup: %w", err)
 	}
 
-	// Reconstruct the K8s Secret from the backup
 	secretData := make(map[string][]byte)
 	for k, v := range backup.UnsealKeys {
 		secretData[k] = []byte(v)
@@ -211,12 +209,10 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 		Data: secretData,
 	}
 
-	// Ensure namespace exists
 	if err := o.ensureNamespace(o.ctx); err != nil {
 		return err
 	}
 
-	// Create or update the Secret
 	secretsClient := o.Clientset.CoreV1().Secrets(openBaoNamespace)
 	existing, err := secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
 	if err != nil {
@@ -364,7 +360,6 @@ func (o *OpenBaoInstaller) WaitForInitialization() error {
 // ExtractAndEncrypt reads the unseal keys Secret, combines it with the generated
 // password, and creates a SOPS-encrypted backup file.
 func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
-	// Build the DR backup payload
 	backup := drBackup{
 		UnsealKeys: make(map[string]string),
 		Password:   o.password,
@@ -376,13 +371,11 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 		backup.UnsealKeys[key] = string(val)
 	}
 
-	// Marshal to JSON
 	plaintext, err := json.MarshalIndent(backup, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling DR backup: %w", err)
 	}
 
-	// Ensure the output directory exists
 	dir := filepath.Dir(o.Config.DRBackupPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("creating DR backup directory: %w", err)
@@ -409,7 +402,6 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 		return fmt.Errorf("closing temp backup file: %w", err)
 	}
 
-	// Encrypt using sops + age
 	if err := EncryptFileWithSOPS(tmpPath, o.Config.DRBackupPath, o.Config.AgeRecipient); err != nil {
 		return fmt.Errorf("encrypting DR backup: %w", err)
 	}
@@ -418,16 +410,18 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 	return nil
 }
 
-// DeleteStaleUnsealKeys safely removes the openbao-unseal-keys Secret so that
-// bank-vaults can perform a clean initialization on the next pod start.
+// DeleteStaleUnsealKeys removes unseal keys left by a prior installation whose
+// Raft storage no longer exists (e.g. cluster rebuild, PVC deletion). Without
+// removal, bank-vaults would attempt to unseal with the old master key's shares
+// and fail permanently — the new instance needs to run a fresh init.
 //
-// The method first deletes the Vault CR (which terminates all vault pods) and
-// waits for every pod to exit, preventing the race where the old bank-vaults
-// sidecar recreates the secret after the installer deletes it.
+// To prevent the old bank-vaults sidecar from re-creating the secret via its
+// retry loop, the Vault CR is deleted first and we wait for all pods to exit
+// before removing the secret.
 func (o *OpenBaoInstaller) DeleteStaleUnsealKeys() error {
 	vaultGVR := k8s.VaultGVR()
 
-	// Attempt to delete the Vault CR. Not an error if it doesn't exist yet.
+	// Tolerates NotFound — this may be a first-time install with no prior Vault CR.
 	delErr := o.DynClient.Resource(vaultGVR).Namespace(openBaoNamespace).Delete(
 		o.ctx, "openbao", metav1.DeleteOptions{},
 	)
@@ -435,7 +429,6 @@ func (o *OpenBaoInstaller) DeleteStaleUnsealKeys() error {
 		return fmt.Errorf("deleting Vault CR: %w", delErr)
 	}
 
-	// Wait for all vault pods (labelled vault_cr=openbao) to terminate.
 	if err := o.waitForVaultPodsGone(); err != nil {
 		return err
 	}
@@ -540,17 +533,17 @@ func GenerateSecurePassword(length int) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-// SetCtx sets the context for testing purposes.
+// SetCtx is a test helper.
 func (o *OpenBaoInstaller) SetCtx(ctx context.Context) {
 	o.ctx = ctx
 }
 
-// SetUnsealSecret sets the unseal secret for testing purposes.
+// SetUnsealSecret is a test helper.
 func (o *OpenBaoInstaller) SetUnsealSecret(secret *corev1.Secret) {
 	o.unsealSecret = secret
 }
 
-// SetPassword sets the password for testing purposes.
+// SetPassword is a test helper.
 func (o *OpenBaoInstaller) SetPassword(password string) {
 	o.password = password
 }

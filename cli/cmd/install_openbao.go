@@ -20,7 +20,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// InstallOpenBaoCmd represents the openbao command
+// InstallOpenBaoCmd wraps the cobra command and options for 'oms install openbao'.
 type InstallOpenBaoCmd struct {
 	cmd  *cobra.Command
 	Opts *InstallOpenBaoOpts

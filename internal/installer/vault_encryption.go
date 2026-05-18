@@ -68,7 +68,6 @@ func ResolveAgeKey(fallbackDir string) (recipient string, keyPath string, err er
 		if !os.IsNotExist(err) {
 			return "", "", fmt.Errorf("failed to read age key from fallback location %s: %w", keyPath, err)
 		}
-		// File does not exist, will generate a new key.
 		recipient, err = generateAgeKey(keyPath)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to generate age key: %w", err)
@@ -135,7 +134,6 @@ func generateAgeKey(keyPath string) (string, error) {
 		return "", fmt.Errorf("age-keygen failed: %w: %s", err, out)
 	}
 
-	// Read back the generated file to extract the public key.
 	recipient, err := readRecipientFromFile(keyPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read generated age key: %w", err)
@@ -143,7 +141,7 @@ func generateAgeKey(keyPath string) (string, error) {
 	return recipient, nil
 }
 
-// EncryptFileWithSOPS encrypts a file in-place using SOPS with the given age recipient.
+// EncryptFileWithSOPS encrypts src with SOPS+age and writes ciphertext to target.
 func EncryptFileWithSOPS(src, target, recipient string) error {
 	cmd := exec.Command("sops", "--encrypt", "--age", recipient, "--output", target, src)
 	out, err := cmd.CombinedOutput()

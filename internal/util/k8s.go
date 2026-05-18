@@ -141,7 +141,7 @@ func ApplySecretFromYAML(ctx context.Context, clientset kubernetes.Interface, da
 	return nil
 }
 
-// newClients creates both a typed and dynamic Kubernetes client
+// NewClients creates both a typed and dynamic Kubernetes client
 // using the current kubeconfig context (respects KUBECONFIG env var
 // and defaults to ~/.kube/config).
 func NewClients() (kubernetes.Interface, dynamic.Interface, error) {

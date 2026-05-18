@@ -38,7 +38,7 @@ type ChartConfig struct {
 }
 
 type UpgradeChartOptions struct {
-	InstallIfNotExist bool // if true, perform an install if the release does not already exist
+	InstallIfNotExist bool
 }
 
 // HelmClient is the seam that makes the Helm SDK mockable.
@@ -191,7 +191,6 @@ func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
 
 func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error {
 	if opts.InstallIfNotExist {
-		// If a release does not exist, install it.
 		rel, err := h.FindRelease(cfg.Namespace, cfg.ReleaseName)
 		if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
 			return err
