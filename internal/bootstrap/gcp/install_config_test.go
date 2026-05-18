@@ -614,7 +614,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(bs.Env.InstallConfig.Cluster.Monitoring).NotTo(BeNil())
-					centralOtel := bs.Env.InstallConfig.Cluster.Monitoring.CentralOtel
+					centralOtel := bs.Env.InstallConfig.Cluster.Monitoring.CentralOtelExport
 					Expect(centralOtel).NotTo(BeNil())
 					Expect(centralOtel.Enabled).To(BeTrue())
 					Expect(centralOtel.Username).To(Equal("otel-user"))

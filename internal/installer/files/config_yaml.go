@@ -541,13 +541,13 @@ type ManagedServiceBackendsConfig struct {
 }
 
 type MonitoringConfig struct {
-	Prometheus       *PrometheusConfig       `yaml:"prometheus,omitempty"`
-	BlackboxExporter *BlackboxExporterConfig `yaml:"blackboxExporter,omitempty"`
-	PushGateway      *PushGatewayConfig      `yaml:"pushGateway,omitempty"`
-	Loki             *LokiConfig             `yaml:"loki,omitempty"`
-	Grafana          *GrafanaConfig          `yaml:"grafana,omitempty"`
-	GrafanaAlloy     *GrafanaAlloyConfig     `yaml:"grafanaAlloy,omitempty"`
-	CentralOtel      *CentralOtelConfig      `yaml:"centralOtel,omitempty"`
+	Prometheus        *PrometheusConfig       `yaml:"prometheus,omitempty"`
+	BlackboxExporter  *BlackboxExporterConfig `yaml:"blackboxExporter,omitempty"`
+	PushGateway       *PushGatewayConfig      `yaml:"pushGateway,omitempty"`
+	Loki              *LokiConfig             `yaml:"loki,omitempty"`
+	Grafana           *GrafanaConfig          `yaml:"grafana,omitempty"`
+	GrafanaAlloy      *GrafanaAlloyConfig     `yaml:"grafanaAlloy,omitempty"`
+	CentralOtelExport *CentralOtelConfig      `yaml:"centralOtelExport,omitempty"`
 }
 
 type PrometheusConfig struct {
@@ -822,13 +822,13 @@ func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
 		}
 	}
 
-	if c.Cluster.Monitoring != nil && c.Cluster.Monitoring.CentralOtel != nil {
-		if c.Cluster.Monitoring.CentralOtel.Username != "" && c.Cluster.Monitoring.CentralOtel.Password != "" {
+	if c.Cluster.Monitoring != nil && c.Cluster.Monitoring.CentralOtelExport != nil {
+		if c.Cluster.Monitoring.CentralOtelExport.Username != "" && c.Cluster.Monitoring.CentralOtelExport.Password != "" {
 			vault.SetSecret(SecretEntry{
 				Name: "centralOtelCreds",
 				Fields: &SecretFields{
-					Username: c.Cluster.Monitoring.CentralOtel.Username,
-					Password: c.Cluster.Monitoring.CentralOtel.Password,
+					Username: c.Cluster.Monitoring.CentralOtelExport.Username,
+					Password: c.Cluster.Monitoring.CentralOtelExport.Password,
 				},
 			})
 		}
