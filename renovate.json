@@ -6,7 +6,7 @@
       "matchPackageNames": ["*"],
       "postUpgradeTasks": {
           "commands": [
-            "go tool go-licenses report --template .NOTICE.template ./... > NOTICE",
+            "make generate-notice",
             "go generate ./..."
           ]
       }
