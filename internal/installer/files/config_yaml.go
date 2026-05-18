@@ -822,7 +822,7 @@ func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
 		}
 	}
 
-	if c.Cluster.Monitoring.CentralOtel != nil {
+	if c.Cluster.Monitoring != nil && c.Cluster.Monitoring.CentralOtel != nil {
 		if c.Cluster.Monitoring.CentralOtel.Username != "" && c.Cluster.Monitoring.CentralOtel.Password != "" {
 			vault.SetSecret(SecretEntry{
 				Name: "centralOtelCreds",
