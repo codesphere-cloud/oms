@@ -45,6 +45,9 @@ generate-license: generate
 	go tool go-licenses report --template .NOTICE.template ./... > NOTICE
 	copywrite headers apply
 
+generate-notice:
+	go tool go-licenses report --template .NOTICE.template ./... > NOTICE
+
 run-lima:
 	limactl start ./hack/lima-oms.yaml
 

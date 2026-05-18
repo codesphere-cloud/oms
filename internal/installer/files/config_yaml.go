@@ -311,6 +311,7 @@ type CodesphereConfig struct {
 	Plans                      PlansConfig            `yaml:"plans"`
 	UnderprovisionFactors      *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
 	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
+	OAuth                      *OAuthProvidersConfig  `yaml:"oauth,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
@@ -337,6 +338,21 @@ type OpenBaoConfig struct {
 	User   string `yaml:"user,omitempty"`
 
 	Password string `yaml:"-"`
+}
+
+type OAuthProvidersConfig struct {
+	Oidc *OidcOAuthProvider `yaml:"oidc,omitempty"`
+}
+
+type OidcOAuthProvider struct {
+	Type      string   `yaml:"type"`
+	Enabled   bool     `yaml:"enabled"`
+	Name      string   `yaml:"name"`
+	IssuerURL string   `yaml:"issuerUrl"`
+	Scopes    []string `yaml:"scopes,omitempty"`
+
+	ClientID     string `yaml:"-"`
+	ClientSecret string `yaml:"-"`
 }
 
 type CertIssuerType string
@@ -562,8 +578,18 @@ type GrafanaConfig struct {
 }
 
 type GrafanaAlloyConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Override ChartOverride `yaml:"override,omitempty"`
+	Enabled  bool                  `yaml:"enabled"`
+	Loki     *LokiConnectionConfig `yaml:"loki,omitempty"`
+	Override ChartOverride         `yaml:"override,omitempty"`
+}
+
+const LokiGatewayPasswordSecretName = "lokiGatewayBasicAuthPassword"
+
+type LokiConnectionConfig struct {
+	Endpoint string `yaml:"endpoint"`
+	User     string `yaml:"user,omitempty"`
+
+	Password string `yaml:"-"`
 }
 
 type CephHostConfig struct {
@@ -635,6 +661,7 @@ func (c *RootConfig) AddSecretsToVault(vault *InstallVault) *InstallVault {
 	c.addRegistrySecrets(vault)
 	c.addKubeConfigSecret(vault)
 	c.addOpenBaoSecrets(vault)
+	c.addMonitoringSecrets(vault)
 
 	return vault
 }
@@ -659,6 +686,26 @@ func (c *RootConfig) addCodesphereSecrets(vault *InstallVault) {
 		)
 	}
 
+	// OIDC OAuth secrets
+	if c.Codesphere.OAuth != nil && c.Codesphere.OAuth.Oidc != nil {
+		if c.Codesphere.OAuth.Oidc.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "oidcClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.OAuth.Oidc.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.OAuth.Oidc.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "oidcClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.OAuth.Oidc.ClientSecret,
+				},
+			})
+		}
+	}
+
 	// GitHub secrets
 	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.GitHub != nil {
 		if c.Codesphere.GitProviders.GitHub.OAuth.ClientID != "" {
@@ -678,6 +725,66 @@ func (c *RootConfig) addCodesphereSecrets(vault *InstallVault) {
 			})
 		}
 	}
+
+	// GitLab secrets
+	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.GitLab != nil {
+		if c.Codesphere.GitProviders.GitLab.OAuth.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "gitlabAppClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.GitLab.OAuth.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.GitProviders.GitLab.OAuth.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "gitlabAppClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.GitLab.OAuth.ClientSecret,
+				},
+			})
+		}
+	}
+
+	// Bitbucket secrets
+	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.Bitbucket != nil {
+		if c.Codesphere.GitProviders.Bitbucket.OAuth.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "bitbucketAppsClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.Bitbucket.OAuth.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.GitProviders.Bitbucket.OAuth.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "bitbucketAppsClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.Bitbucket.OAuth.ClientSecret,
+				},
+			})
+		}
+	}
+
+	// Azure DevOps secrets
+	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.AzureDevOps != nil {
+		if c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientID != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "azureDevOpsAppClientId",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientID,
+				},
+			})
+		}
+		if c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientSecret != "" {
+			vault.Secrets = append(vault.Secrets, SecretEntry{
+				Name: "azureDevOpsAppClientSecret",
+				Fields: &SecretFields{
+					Password: c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientSecret,
+				},
+			})
+		}
+	}
 }
 
 func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
@@ -690,6 +797,26 @@ func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
 			},
 		})
 	}
+}
+
+func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
+	if c.Cluster.Monitoring == nil ||
+		c.Cluster.Monitoring.GrafanaAlloy == nil ||
+		c.Cluster.Monitoring.GrafanaAlloy.Loki == nil {
+		return
+	}
+
+	loki := c.Cluster.Monitoring.GrafanaAlloy.Loki
+	if loki.Password == "" {
+		return
+	}
+
+	vault.SetSecret(SecretEntry{
+		Name: LokiGatewayPasswordSecretName,
+		Fields: &SecretFields{
+			Password: loki.Password,
+		},
+	})
 }
 
 func (c *RootConfig) addACMESecrets(vault *InstallVault) {

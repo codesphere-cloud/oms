@@ -114,6 +114,9 @@ type CodesphereEnvironment struct {
 	RegistryUser         string          `json:"-"`
 	Experiments          []string        `json:"experiments"`
 	FeatureFlags         map[string]bool `json:"feature_flags"`
+	ExternalLokiEndpoint string          `json:"external_loki_endpoint,omitempty"`
+	ExternalLokiSecret   string          `json:"-"`
+	ExternalLokiUser     string          `json:"external_loki_user,omitempty"`
 
 	// OpenBao
 	OpenBaoURI      string `json:"-"`
@@ -128,20 +131,31 @@ type CodesphereEnvironment struct {
 	Secrets           *files.InstallVault `json:"-"`
 
 	// GCP Specific
-	ProjectDisplayName    string `json:"project_display_name"`
-	BillingAccount        string `json:"billing_account"`
-	BaseDomain            string `json:"base_domain"`
-	GitHubAppClientID     string `json:"-"`
-	GitHubAppClientSecret string `json:"-"`
-	SecretsDir            string `json:"secrets_dir"`
-	FolderID              string `json:"folder_id"`
-	SSHPublicKeyPath      string `json:"-"`
-	SSHPrivateKeyPath     string `json:"-"`
-	DatacenterID          int    `json:"-"`
-	CustomPgIP            string `json:"custom_pg_ip"`
-	Region                string `json:"region"`
-	Zone                  string `json:"zone"`
-	DNSZoneName           string `json:"dns_zone_name"`
+	ProjectDisplayName         string `json:"project_display_name"`
+	BillingAccount             string `json:"billing_account"`
+	BaseDomain                 string `json:"base_domain"`
+	GitHubAppClientID          string `json:"-"`
+	GitHubAppClientSecret      string `json:"-"`
+	GitLabAppClientID          string `json:"-"`
+	GitLabAppClientSecret      string `json:"-"`
+	BitbucketAppClientID       string `json:"-"`
+	BitbucketAppClientSecret   string `json:"-"`
+	AzureDevOpsAppClientID     string `json:"-"`
+	AzureDevOpsAppClientSecret string `json:"-"`
+	OidcProviderName           string `json:"-"`
+	OidcIssuerURL              string `json:"-"`
+	OidcClientID               string `json:"-"`
+	OidcClientSecret           string `json:"-"`
+	SecretsDir                 string `json:"secrets_dir"`
+	FolderID                   string `json:"folder_id"`
+	SSHPublicKeyPath           string `json:"-"`
+	SSHPrivateKeyPath          string `json:"-"`
+	DatacenterID               int    `json:"-"`
+	DatacenterName             string `json:"-"`
+	CustomPgIP                 string `json:"custom_pg_ip"`
+	Region                     string `json:"region"`
+	Zone                       string `json:"zone"`
+	DNSZoneName                string `json:"dns_zone_name"`
 
 	// Test user creation
 	CreateTestUser bool   `json:"-"`
@@ -346,12 +360,13 @@ func (b *GCPBootstrapper) createTestUser() error {
 	}
 
 	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
-		Host:     pgHost,
-		Port:     testuser.DefaultPort,
-		User:     testuser.DefaultUser,
-		Password: pgPassword,
-		DBName:   testuser.DefaultDBName,
-		SSLMode:  "require",
+		Host:         pgHost,
+		Port:         testuser.DefaultPort,
+		User:         testuser.DefaultUser,
+		Password:     pgPassword,
+		DBName:       testuser.DefaultDBName,
+		SSLMode:      "require",
+		DatacenterID: b.Env.DatacenterID,
 	})
 	if err != nil {
 		return err
@@ -371,7 +386,22 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	return b.validateGitHubParams()
+	err = b.validateGitHubParams()
+	if err != nil {
+		return err
+	}
+
+	err = b.validateGitProviderParams()
+	if err != nil {
+		return err
+	}
+
+	err = b.validateOidcParams()
+	if err != nil {
+		return err
+	}
+
+	return b.validateExternalLokiParams()
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -427,6 +457,52 @@ func (b *GCPBootstrapper) validateGitHubParams() error {
 	ghAppParams := []string{b.Env.GitHubAppName, b.Env.GitHubAppClientID, b.Env.GitHubAppClientSecret}
 	if slices.Contains(ghAppParams, "") && strings.Join(ghAppParams, "") != "" {
 		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GitHubAppClientID, GitHubAppClientSecret must be set)")
+	}
+
+	return nil
+}
+
+// validateGitProviderParams checks that git provider credentials are fully specified (both client ID and secret, or neither)
+func (b *GCPBootstrapper) validateGitProviderParams() error {
+	providers := []struct {
+		name   string
+		id     string
+		secret string
+	}{
+		{"GitLab", b.Env.GitLabAppClientID, b.Env.GitLabAppClientSecret},
+		{"Bitbucket", b.Env.BitbucketAppClientID, b.Env.BitbucketAppClientSecret},
+		{"Azure DevOps", b.Env.AzureDevOpsAppClientID, b.Env.AzureDevOpsAppClientSecret},
+	}
+
+	for _, p := range providers {
+		if p.id != "" && p.secret == "" {
+			return fmt.Errorf("%s client ID is set but client secret is missing", p.name)
+		}
+		if p.secret != "" && p.id == "" {
+			return fmt.Errorf("%s client secret is set but client ID is missing", p.name)
+		}
+	}
+
+	return nil
+}
+
+// validateOidcParams checks that OIDC OAuth provider credentials are fully specified (all or none of issuer URL, client ID, client secret)
+func (b *GCPBootstrapper) validateOidcParams() error {
+	oidcParams := []string{b.Env.OidcIssuerURL, b.Env.OidcClientID, b.Env.OidcClientSecret}
+	if slices.Contains(oidcParams, "") && strings.Join(oidcParams, "") != "" {
+		return fmt.Errorf("OIDC OAuth provider credentials are not fully specified (all or none of OidcIssuerURL, OidcClientID, OidcClientSecret must be set)")
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) validateExternalLokiParams() error {
+	if b.Env.ExternalLokiEndpoint != "" {
+		return nil
+	}
+
+	if b.Env.ExternalLokiSecret != "" || b.Env.ExternalLokiUser != "" {
+		return fmt.Errorf("external Loki endpoint is required when external Loki secret or user is set")
 	}
 
 	return nil

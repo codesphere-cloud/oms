@@ -100,6 +100,10 @@ func (b *GCPBootstrapper) recoverVault() error {
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	// Update install config with necessary values
 	b.Env.InstallConfig.Datacenter.ID = b.Env.DatacenterID
+	if b.Env.DatacenterName == "" {
+		b.Env.DatacenterName = "dev"
+	}
+	b.Env.InstallConfig.Datacenter.Name = b.Env.DatacenterName
 	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
 	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
 	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
@@ -242,8 +246,82 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		}
 	}
+	if b.Env.GitLabAppClientID != "" && b.Env.GitLabAppClientSecret != "" {
+		b.Env.InstallConfig.Codesphere.GitProviders.GitLab = &files.GitProviderConfig{
+			Enabled: true,
+			URL:     "https://gitlab.com",
+			API: files.APIConfig{
+				BaseURL: "https://gitlab.com",
+			},
+			OAuth: files.OAuthConfig{
+				Issuer:                "https://gitlab.com",
+				AuthorizationEndpoint: "https://gitlab.com/oauth/authorize",
+				TokenEndpoint:         "https://gitlab.com/oauth/token",
+				ClientAuthMethod:      "client_secret_post",
+				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/gitlab/callback",
+				ClientID:              b.Env.GitLabAppClientID,
+				ClientSecret:          b.Env.GitLabAppClientSecret,
+			},
+		}
+	}
+	if b.Env.BitbucketAppClientID != "" && b.Env.BitbucketAppClientSecret != "" {
+		b.Env.InstallConfig.Codesphere.GitProviders.Bitbucket = &files.GitProviderConfig{
+			Enabled: true,
+			URL:     "https://bitbucket.org",
+			API: files.APIConfig{
+				BaseURL: "https://api.bitbucket.org/2.0",
+			},
+			OAuth: files.OAuthConfig{
+				Issuer:                "https://bitbucket.org",
+				AuthorizationEndpoint: "https://bitbucket.org/site/oauth2/authorize",
+				TokenEndpoint:         "https://bitbucket.org/site/oauth2/access_token",
+				ClientAuthMethod:      "client_secret_post",
+				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/bitbucket/callback",
+				ClientID:              b.Env.BitbucketAppClientID,
+				ClientSecret:          b.Env.BitbucketAppClientSecret,
+			},
+		}
+	}
+	if b.Env.AzureDevOpsAppClientID != "" && b.Env.AzureDevOpsAppClientSecret != "" {
+		b.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps = &files.GitProviderConfig{
+			Enabled: true,
+			URL:     "https://dev.azure.com",
+			API: files.APIConfig{
+				BaseURL: "https://dev.azure.com",
+			},
+			OAuth: files.OAuthConfig{
+				Issuer:                "https://login.microsoftonline.com/common/v2.0",
+				AuthorizationEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+				TokenEndpoint:         "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+				ClientAuthMethod:      "client_secret_post",
+				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/azure-dev-ops/callback",
+				Scope:                 "openid offline_access https://app.vssps.visualstudio.com/vso.code_full",
+				ClientID:              b.Env.AzureDevOpsAppClientID,
+				ClientSecret:          b.Env.AzureDevOpsAppClientSecret,
+			},
+		}
+	}
+	if b.Env.OidcIssuerURL != "" && b.Env.OidcClientID != "" && b.Env.OidcClientSecret != "" {
+		name := b.Env.OidcProviderName
+		if name == "" {
+			name = "OIDC"
+		}
+		b.Env.InstallConfig.Codesphere.OAuth = &files.OAuthProvidersConfig{
+			Oidc: &files.OidcOAuthProvider{
+				Type:         "oidc",
+				Enabled:      true,
+				Name:         name,
+				IssuerURL:    b.Env.OidcIssuerURL,
+				Scopes:       []string{"openid", "profile", "email"},
+				ClientID:     b.Env.OidcClientID,
+				ClientSecret: b.Env.OidcClientSecret,
+			},
+		}
+	}
+
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
+	b.applyExternalLokiConfig()
 
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
@@ -284,6 +362,28 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 
 	return nil
+}
+
+func (b *GCPBootstrapper) applyExternalLokiConfig() {
+	if b.Env.ExternalLokiEndpoint == "" {
+		return
+	}
+
+	if b.Env.InstallConfig.Cluster.Monitoring == nil {
+		b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+	}
+	if b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy == nil {
+		b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{}
+	}
+
+	loki := &files.LokiConnectionConfig{
+		Endpoint: b.Env.ExternalLokiEndpoint,
+		User:     b.Env.ExternalLokiUser,
+		Password: b.Env.ExternalLokiSecret,
+	}
+
+	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled = true
+	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki = loki
 }
 
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname

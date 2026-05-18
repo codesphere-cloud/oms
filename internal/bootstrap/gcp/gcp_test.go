@@ -425,6 +425,157 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateGitProviderParams", func() {
+		Context("When GitLab client ID is set but secret is missing", func() {
+			BeforeEach(func() {
+				csEnv.GitLabAppClientID = "some-id"
+				csEnv.GitLabAppClientSecret = ""
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("GitLab client ID is set but client secret is missing")))
+			})
+		})
+		Context("When GitLab client secret is set but ID is missing", func() {
+			BeforeEach(func() {
+				csEnv.GitLabAppClientID = ""
+				csEnv.GitLabAppClientSecret = "some-secret"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("GitLab client secret is set but client ID is missing")))
+			})
+		})
+		Context("When Bitbucket client ID is set but secret is missing", func() {
+			BeforeEach(func() {
+				csEnv.BitbucketAppClientID = "some-id"
+				csEnv.BitbucketAppClientSecret = ""
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("Bitbucket client ID is set but client secret is missing")))
+			})
+		})
+		Context("When Bitbucket client secret is set but ID is missing", func() {
+			BeforeEach(func() {
+				csEnv.BitbucketAppClientID = ""
+				csEnv.BitbucketAppClientSecret = "some-secret"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("Bitbucket client secret is set but client ID is missing")))
+			})
+		})
+		Context("When Azure DevOps client ID is set but secret is missing", func() {
+			BeforeEach(func() {
+				csEnv.AzureDevOpsAppClientID = "some-id"
+				csEnv.AzureDevOpsAppClientSecret = ""
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("Azure DevOps client ID is set but client secret is missing")))
+			})
+		})
+		Context("When Azure DevOps client secret is set but ID is missing", func() {
+			BeforeEach(func() {
+				csEnv.AzureDevOpsAppClientID = ""
+				csEnv.AzureDevOpsAppClientSecret = "some-secret"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("Azure DevOps client secret is set but client ID is missing")))
+			})
+		})
+		Context("When all providers have both ID and secret set", func() {
+			BeforeEach(func() {
+				csEnv.GitLabAppClientID = "gl-id"
+				csEnv.GitLabAppClientSecret = "gl-secret"
+				csEnv.BitbucketAppClientID = "bb-id"
+				csEnv.BitbucketAppClientSecret = "bb-secret"
+				csEnv.AzureDevOpsAppClientID = "az-id"
+				csEnv.AzureDevOpsAppClientSecret = "az-secret"
+			})
+			It("succeeds", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+		Context("When no provider credentials are set", func() {
+			It("succeeds", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+		Context("When OIDC issuer URL is set but client ID and secret are missing", func() {
+			BeforeEach(func() {
+				csEnv.OidcIssuerURL = "https://idp.example.com"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("OIDC OAuth provider credentials are not fully specified")))
+			})
+		})
+		Context("When OIDC client ID and secret are set but issuer URL is missing", func() {
+			BeforeEach(func() {
+				csEnv.OidcClientID = "oidc-id"
+				csEnv.OidcClientSecret = "oidc-secret"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("OIDC OAuth provider credentials are not fully specified")))
+			})
+		})
+		Context("When only OIDC client ID is set", func() {
+			BeforeEach(func() {
+				csEnv.OidcClientID = "oidc-id"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("OIDC OAuth provider credentials are not fully specified")))
+			})
+		})
+		Context("When all OIDC params are set", func() {
+			BeforeEach(func() {
+				csEnv.OidcIssuerURL = "https://idp.example.com"
+				csEnv.OidcClientID = "oidc-id"
+				csEnv.OidcClientSecret = "oidc-secret"
+			})
+			It("succeeds", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+		Context("When external Loki endpoint is set", func() {
+			BeforeEach(func() {
+				csEnv.ExternalLokiEndpoint = "https://loki.example.com/loki/api/v1/push"
+				csEnv.ExternalLokiSecret = "loki-password"
+				csEnv.ExternalLokiUser = "loki-user"
+			})
+			It("succeeds", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+		Context("When external Loki secret is set without endpoint", func() {
+			BeforeEach(func() {
+				csEnv.ExternalLokiSecret = "loki-password"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("external Loki endpoint is required")))
+			})
+		})
+		Context("When external Loki user is set without endpoint", func() {
+			BeforeEach(func() {
+				csEnv.ExternalLokiUser = "loki-user"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("external Loki endpoint is required")))
+			})
+		})
+	})
+
 	Describe("EnsureInstallConfig", func() {
 		Describe("Valid EnsureInstallConfig", func() {
 			BeforeEach(func() {
@@ -905,8 +1056,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when ConfigureMemoryMap fails", func() {
 				mock.InOrder(
-					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(1),                // for inotify
-					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch")).Times(2), // for memory map
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(1),                // hasSysctlLine (grep exists)
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(1),                // isSysctlActive (grep exists) -> properly configured!
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch")).Times(1), // hasSysctlLine (grep doesn't exist)
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch")).Times(1), // hasSysctlLine grep
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch")).Times(1), // tee command fails
 				)
 
 				err := bs.EnsureHostsConfigured()
