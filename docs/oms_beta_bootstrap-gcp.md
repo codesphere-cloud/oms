@@ -23,6 +23,8 @@ oms beta bootstrap-gcp [flags]
       --billing-account string                  GCP Billing Account ID (required)
       --bitbucket-app-client-id string          Bitbucket App Client ID (optional)
       --bitbucket-app-client-secret string      Bitbucket App Client Secret (optional)
+      --central-otel-password string            Central OpenTelemetry password. Needed when sending spans to central collector (optional)
+      --central-otel-username string            Central OpenTelemetry username. Needed when sending spans to central collector (optional)
       --create-test-user                        Create a test user with API token on the bootstrapped instance for smoke testing (default: false)
       --custom-pg-ip string                     Custom PostgreSQL IP (optional)
       --datacenter-id int                       Datacenter ID (default: 1) (default 1)

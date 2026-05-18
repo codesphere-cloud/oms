@@ -541,12 +541,13 @@ type ManagedServiceBackendsConfig struct {
 }
 
 type MonitoringConfig struct {
-	Prometheus       *PrometheusConfig       `yaml:"prometheus,omitempty"`
-	BlackboxExporter *BlackboxExporterConfig `yaml:"blackboxExporter,omitempty"`
-	PushGateway      *PushGatewayConfig      `yaml:"pushGateway,omitempty"`
-	Loki             *LokiConfig             `yaml:"loki,omitempty"`
-	Grafana          *GrafanaConfig          `yaml:"grafana,omitempty"`
-	GrafanaAlloy     *GrafanaAlloyConfig     `yaml:"grafanaAlloy,omitempty"`
+	Prometheus        *PrometheusConfig       `yaml:"prometheus,omitempty"`
+	BlackboxExporter  *BlackboxExporterConfig `yaml:"blackboxExporter,omitempty"`
+	PushGateway       *PushGatewayConfig      `yaml:"pushGateway,omitempty"`
+	Loki              *LokiConfig             `yaml:"loki,omitempty"`
+	Grafana           *GrafanaConfig          `yaml:"grafana,omitempty"`
+	GrafanaAlloy      *GrafanaAlloyConfig     `yaml:"grafanaAlloy,omitempty"`
+	CentralOtelExport *CentralOtelConfig      `yaml:"centralOtelExport,omitempty"`
 }
 
 type PrometheusConfig struct {
@@ -590,6 +591,13 @@ type LokiConnectionConfig struct {
 	User     string `yaml:"user,omitempty"`
 
 	Password string `yaml:"-"`
+}
+
+type CentralOtelConfig struct {
+	Enabled  bool          `yaml:"enabled"`
+	Username string        `yaml:"username,omitempty"`
+	Password string        `yaml:"-"`
+	Override ChartOverride `yaml:"override,omitempty"`
 }
 
 type CephHostConfig struct {
@@ -800,23 +808,32 @@ func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
 }
 
 func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
-	if c.Cluster.Monitoring == nil ||
-		c.Cluster.Monitoring.GrafanaAlloy == nil ||
-		c.Cluster.Monitoring.GrafanaAlloy.Loki == nil {
-		return
+	if c.Cluster.Monitoring != nil &&
+		c.Cluster.Monitoring.GrafanaAlloy != nil &&
+		c.Cluster.Monitoring.GrafanaAlloy.Loki != nil {
+		loki := c.Cluster.Monitoring.GrafanaAlloy.Loki
+		if loki.Password != "" {
+			vault.SetSecret(SecretEntry{
+				Name: LokiGatewayPasswordSecretName,
+				Fields: &SecretFields{
+					Password: loki.Password,
+				},
+			})
+		}
 	}
 
-	loki := c.Cluster.Monitoring.GrafanaAlloy.Loki
-	if loki.Password == "" {
-		return
-	}
+	if c.Cluster.Monitoring != nil && c.Cluster.Monitoring.CentralOtelExport != nil {
+		if c.Cluster.Monitoring.CentralOtelExport.Username != "" && c.Cluster.Monitoring.CentralOtelExport.Password != "" {
+			vault.SetSecret(SecretEntry{
+				Name: "centralOtelCreds",
+				Fields: &SecretFields{
+					Username: c.Cluster.Monitoring.CentralOtelExport.Username,
+					Password: c.Cluster.Monitoring.CentralOtelExport.Password,
+				},
+			})
+		}
 
-	vault.SetSecret(SecretEntry{
-		Name: LokiGatewayPasswordSecretName,
-		Fields: &SecretFields{
-			Password: loki.Password,
-		},
-	})
+	}
 }
 
 func (c *RootConfig) addACMESecrets(vault *InstallVault) {

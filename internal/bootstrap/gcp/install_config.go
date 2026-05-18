@@ -334,6 +334,17 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
+	if b.Env.CentralOtelUsername != "" && b.Env.CentralOtelPassword != "" {
+		if b.Env.InstallConfig.Cluster.Monitoring == nil {
+			b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+		}
+		b.Env.InstallConfig.Cluster.Monitoring.CentralOtelExport = &files.CentralOtelConfig{
+			Enabled:  true,
+			Username: b.Env.CentralOtelUsername,
+			Password: b.Env.CentralOtelPassword,
+		}
+	}
+
 	if b.Env.OpenBaoURI != "" {
 		b.Env.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
 			Engine:   b.Env.OpenBaoEngine,
