@@ -53,7 +53,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 		},
 		Opts:          opts,
 		Env:           env.NewEnv(),
-		CodesphereEnv: &gcp.CodesphereEnvironment{},
+		CodesphereEnv: &gcp.CodesphereEnvironment{FeatureFlags: map[string]bool{}},
 	}
 	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
 
@@ -85,6 +85,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Preemptible, "preemptible", false, "Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.SpotVMs, "spot-vms", false, "Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. Mutually exclusive with --preemptible (default: false)")
 	flags.IntVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterID, "datacenter-id", 1, "Datacenter ID (default: 1)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterName, "datacenter-name", "dev", "Datacenter name (default: dev)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CustomPgIP, "custom-pg-ip", "", "Custom PostgreSQL IP (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Region, "region", "europe-west4", "GCP Region (default: europe-west4)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
@@ -98,6 +99,9 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: local-container)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiEndpoint, "external-loki-endpoint", "", "External Loki endpoint for Grafana Alloy log forwarding (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiSecret, "external-loki-secret", "", "External Loki password stored in the generated vault (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiUser, "external-loki-user", "", "External Loki username for Grafana Alloy log forwarding (optional)")
 
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallConfigPath, "install-config", "config.yaml", "Path to install config file (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "prod.vault.yaml", "Path to secrets files (optional)")

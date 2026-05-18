@@ -281,4 +281,27 @@ codesphere:
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
+
+	Describe("ExtractVault", func() {
+		It("extracts external Loki password into the configured vault secret", func() {
+			rootConfig.Cluster.Monitoring = &files.MonitoringConfig{
+				GrafanaAlloy: &files.GrafanaAlloyConfig{
+					Loki: &files.LokiConnectionConfig{
+						Endpoint: "https://loki.example.com/loki/api/v1/push",
+						Password: "fake-loki-password",
+						User:     "fake-loki-user",
+					},
+				},
+			}
+
+			vault := rootConfig.ExtractVault()
+
+			Expect(vault.Secrets).To(ContainElement(files.SecretEntry{
+				Name: files.LokiGatewayPasswordSecretName,
+				Fields: &files.SecretFields{
+					Password: "fake-loki-password",
+				},
+			}))
+		})
+	})
 })

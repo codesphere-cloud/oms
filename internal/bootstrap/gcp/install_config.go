@@ -100,6 +100,10 @@ func (b *GCPBootstrapper) recoverVault() error {
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	// Update install config with necessary values
 	b.Env.InstallConfig.Datacenter.ID = b.Env.DatacenterID
+	if b.Env.DatacenterName == "" {
+		b.Env.DatacenterName = "dev"
+	}
+	b.Env.InstallConfig.Datacenter.Name = b.Env.DatacenterName
 	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
 	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
 	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
@@ -320,6 +324,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
+	b.applyExternalLokiConfig()
 
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
@@ -369,6 +374,28 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 
 	return nil
+}
+
+func (b *GCPBootstrapper) applyExternalLokiConfig() {
+	if b.Env.ExternalLokiEndpoint == "" {
+		return
+	}
+
+	if b.Env.InstallConfig.Cluster.Monitoring == nil {
+		b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+	}
+	if b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy == nil {
+		b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{}
+	}
+
+	loki := &files.LokiConnectionConfig{
+		Endpoint: b.Env.ExternalLokiEndpoint,
+		User:     b.Env.ExternalLokiUser,
+		Password: b.Env.ExternalLokiSecret,
+	}
+
+	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled = true
+	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki = loki
 }
 
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname

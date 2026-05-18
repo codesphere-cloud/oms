@@ -600,8 +600,18 @@ type GrafanaConfig struct {
 }
 
 type GrafanaAlloyConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Override ChartOverride `yaml:"override,omitempty"`
+	Enabled  bool                  `yaml:"enabled"`
+	Loki     *LokiConnectionConfig `yaml:"loki,omitempty"`
+	Override ChartOverride         `yaml:"override,omitempty"`
+}
+
+const LokiGatewayPasswordSecretName = "lokiGatewayBasicAuthPassword"
+
+type LokiConnectionConfig struct {
+	Endpoint string `yaml:"endpoint"`
+	User     string `yaml:"user,omitempty"`
+
+	Password string `yaml:"-"`
 }
 
 type CephHostConfig struct {
@@ -735,6 +745,7 @@ func (c *RootConfig) AddSecretsToVault(vault *InstallVault) *InstallVault {
 	c.addRegistrySecrets(vault)
 	c.addKubeConfigSecret(vault)
 	c.addOpenBaoSecrets(vault)
+	c.addMonitoringSecrets(vault)
 
 	return vault
 }
@@ -870,6 +881,26 @@ func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
 			},
 		})
 	}
+}
+
+func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
+	if c.Cluster.Monitoring == nil ||
+		c.Cluster.Monitoring.GrafanaAlloy == nil ||
+		c.Cluster.Monitoring.GrafanaAlloy.Loki == nil {
+		return
+	}
+
+	loki := c.Cluster.Monitoring.GrafanaAlloy.Loki
+	if loki.Password == "" {
+		return
+	}
+
+	vault.SetSecret(SecretEntry{
+		Name: LokiGatewayPasswordSecretName,
+		Fields: &SecretFields{
+			Password: loki.Password,
+		},
+	})
 }
 
 func (c *RootConfig) addACMESecrets(vault *InstallVault) {

@@ -1,4 +1,15 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>codesphere-cloud/renovate-config:go-config"]
+  "extends": ["github>codesphere-cloud/renovate-config:go-config"],
+  "packageRules": [
+    {
+      "matchPackageNames": ["*"],
+      "postUpgradeTasks": {
+          "commands": [
+            "make generate-notice",
+            "go generate ./..."
+          ]
+      }
+    }
+  ]
 }
