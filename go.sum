@@ -3768,7 +3768,6 @@ github.com/google/go-github/v74 v74.0.0 h1:yZcddTUn8DPbj11GxnMrNiAnXH14gNs559AsU
 github.com/google/go-github/v74 v74.0.0/go.mod h1:ubn/YdyftV80VPSI26nSJvaEsTOnsjrxG3o9kJhcyak=
 github.com/google/go-github/v84 v84.0.0 h1:I/0Xn5IuChMe8TdmI2bbim5nyhaRFJ7DEdzmD2w+yVA=
 github.com/google/go-github/v84 v84.0.0/go.mod h1:WwYL1z1ajRdlaPszjVu/47x1L0PXukJBn73xsiYrRRQ=
-github.com/google/go-github/v87 v87.0.0/go.mod h1:hGUoT5pwm/ck5uLL+wroSVQfg8mpe+buxllCcGV4VaM=
 github.com/google/go-licenses/v2 v2.0.1 h1:ti+9bi5o7DKbeeg5eBb/uZTgsaPNoJaLCh93cRcXsW8=
 github.com/google/go-licenses/v2 v2.0.1/go.mod h1:efibo0EDNGkau6AIMOViGW+rTNPudhxX9rCxtfw5zKE=
 github.com/google/go-pkcs11 v0.2.0/go.mod h1:6eQoGcuNJpa7jnd5pMGdkSaQpNDYvPlXWMcjXXThLlY=
@@ -4660,8 +4659,8 @@ github.com/rogpeppe/go-internal v1.12.0/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99
 github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWNMNyH2VO9fmH0o=
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
-github.com/rook/rook/pkg/apis v0.0.0-20260430173414-a4316348cc58 h1:l2yqPAKU6cccwYhKDP/VWYrz+Gwr9T4QB3ydUQ06+Tw=
-github.com/rook/rook/pkg/apis v0.0.0-20260430173414-a4316348cc58/go.mod h1:JddpJA9c/XW14YFeOpM5l/wszuUHEGyaHZtDgW/nb3M=
+github.com/rook/rook/pkg/apis v0.0.0-20260518043125-b0066cecdd83 h1:OQfN5uaJ4tcGE2kgPUMrx74H+pk8Q9EPjhQ/63a+4yA=
+github.com/rook/rook/pkg/apis v0.0.0-20260518043125-b0066cecdd83/go.mod h1:MS9txQS2Ptts2AuPhhHmiM49yC/7ky9HidPm49C7UX8=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937 h1:1TpdIqF9mtQfhNfwOpXdpJTMhx66PonVCCvYcGWvu/I=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937/go.mod h1:jOxzr6jXuSz9UztMhEpcBi1/vPygUA4z9kFuFj+6zd8=
 github.com/rs/xid v1.2.1/go.mod h1:+uKXf+4Djp6Md1KODXJxgGQPKngRmWyn10oCKFzNHOQ=
