@@ -329,9 +329,9 @@ License URL: https://github.com/getsops/gopgagent/blob/7044f28e491e/LICENSE
  
 ----------
 Module: github.com/getsops/sops/v3
-Version: v3.13.0
+Version: v3.13.1
 License: MPL-2.0
-License URL: https://github.com/getsops/sops/blob/v3.13.0/LICENSE
+License URL: https://github.com/getsops/sops/blob/v3.13.1/LICENSE
  
 ----------
 Module: github.com/go-errors/errors
@@ -1121,9 +1121,9 @@ License URL: https://cs.opensource.google/go/x/mod/+/v0.36.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.53.0
+Version: v0.54.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.53.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.54.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
