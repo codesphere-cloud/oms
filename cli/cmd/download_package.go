@@ -101,37 +101,54 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	}
 
 	fullFilename := build.BuildPackageFilename(filename)
-	out, err := c.FileWriter.OpenAppend(fullFilename)
-	if err != nil {
-		out, err = c.FileWriter.Create(fullFilename)
-		if err != nil {
-			return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
+	for retried := false; ; retried = true {
+		shouldRetry, err := func() (bool, error) {
+			out, err := c.FileWriter.OpenAppend(fullFilename)
+			if err != nil {
+				out, err = c.FileWriter.Create(fullFilename)
+				if err != nil {
+					return false, fmt.Errorf("failed to create file %s: %w", fullFilename, err)
+				}
+			}
+			defer util.CloseFileIgnoreError(out)
+
+			// get already downloaded file size of fullFilename
+			fileSize := 0
+			if fileInfo, statErr := out.Stat(); statErr == nil {
+				fileSize = int(fileInfo.Size())
+			}
+
+			if err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet); err != nil {
+				return false, fmt.Errorf("failed to download build: %w", err)
+			}
+
+			verifyFile, err := c.FileWriter.Open(fullFilename)
+			if err != nil {
+				return false, err
+			}
+			defer util.CloseFileIgnoreError(verifyFile)
+
+			verifyErr := p.VerifyBuildArtifactDownload(verifyFile, download)
+			if verifyErr == nil {
+				return false, nil
+			}
+
+			// A resumed download can carry stale or corrupt bytes from a previous
+			// interrupted attempt, causing verification to fail even though the
+			// re-download itself succeeded. Delete the partial file so the next
+			// iteration downloads the full artifact from scratch.
+			if !retried && fileSize > 0 {
+				log.Println("Verification failed on resumed download; retrying from scratch...")
+				if removeErr := c.FileWriter.Remove(fullFilename); removeErr == nil {
+					return true, nil
+				}
+			}
+
+			return false, fmt.Errorf("failed to verify artifact: %w", verifyErr)
+		}()
+
+		if err != nil || !shouldRetry {
+			return err
 		}
 	}
-	defer util.CloseFileIgnoreError(out)
-
-	// get already downloaded file size of fullFilename
-	fileSize := 0
-	fileInfo, err := out.Stat()
-	if err == nil {
-		fileSize = int(fileInfo.Size())
-	}
-
-	err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet)
-	if err != nil {
-		return fmt.Errorf("failed to download build: %w", err)
-	}
-
-	verifyFile, err := c.FileWriter.Open(fullFilename)
-	if err != nil {
-		return err
-	}
-	defer util.CloseFileIgnoreError(verifyFile)
-
-	err = p.VerifyBuildArtifactDownload(verifyFile, download)
-	if err != nil {
-		return fmt.Errorf("failed to verify artifact: %w", err)
-	}
-
-	return nil
 }
