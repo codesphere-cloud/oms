@@ -6,6 +6,7 @@
       "matchPackageNames": ["*"],
       "postUpgradeTasks": {
           "commands": [
+            "go mod tidy",
             "make generate-notice",
             "go generate ./..."
           ]
