@@ -194,7 +194,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
 		"issuers": map[string]interface{}{
 			"letsEncryptHttp": map[string]interface{}{
-				"enabled": true,
+				"enabled": !b.Env.GoogleACMEIssuer,
 			},
 			"acme": map[string]interface{}{
 				"dnsSolver": map[string]interface{}{
@@ -207,12 +207,22 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
+	acmeConfig := &files.ACMEConfig{
+		Email:  "oms-testing@" + b.Env.BaseDomain,
+		Server: "https://acme-v02.api.letsencrypt.org/directory",
+	}
+	if b.Env.GoogleACMEIssuer {
+		keyID, b64MacKey, err := b.GCPClient.CreatePublicCAExternalAccountKey(b.Env.ProjectID)
+		if err != nil {
+			return fmt.Errorf("failed to obtain Google Public CA EAB credentials: %w", err)
+		}
+		acmeConfig.Server = "https://dv.acme-v02.api.pki.goog/directory"
+		acmeConfig.EABKeyID = keyID
+		acmeConfig.EABMacKey = b64MacKey
+	}
 	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
 		Type: "acme",
-		Acme: &files.ACMEConfig{
-			Email:  "oms-testing@" + b.Env.BaseDomain,
-			Server: "https://acme-v02.api.letsencrypt.org/directory",
-		},
+		Acme: acmeConfig,
 	}
 
 	b.Env.InstallConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain

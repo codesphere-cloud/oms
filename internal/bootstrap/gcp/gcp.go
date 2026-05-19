@@ -120,6 +120,9 @@ type CodesphereEnvironment struct {
 	ExternalLokiSecret   string          `json:"-"`
 	ExternalLokiUser     string          `json:"external_loki_user,omitempty"`
 
+	// ACME Issuer
+	GoogleACMEIssuer bool `json:"google_acme_issuer,omitempty"`
+
 	// OpenBao
 	OpenBaoURI      string `json:"-"`
 	OpenBaoEngine   string `json:"-"`
