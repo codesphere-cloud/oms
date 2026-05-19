@@ -165,6 +165,9 @@ func (b *GCPBootstrapper) EnsureAPIsEnabled() error {
 		"artifactregistry.googleapis.com",
 		"dns.googleapis.com",
 	}
+	if b.Env.GoogleACMEIssuer {
+		apis = append(apis, "publicca.googleapis.com")
+	}
 
 	err := b.GCPClient.EnableAPIs(b.Env.ProjectID, apis)
 	if err != nil {

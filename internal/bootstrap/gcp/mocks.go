@@ -504,6 +504,72 @@ func (_c *MockGCPClientManager_CreateProjectID_Call) RunAndReturn(run func(proje
 	return _c
 }
 
+// CreatePublicCAExternalAccountKey provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) CreatePublicCAExternalAccountKey(projectID string) (string, string, error) {
+	ret := _mock.Called(projectID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreatePublicCAExternalAccountKey")
+	}
+
+	var r0 string
+	var r1 string
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string) (string, string, error)); ok {
+		return returnFunc(projectID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) string); ok {
+		r0 = returnFunc(projectID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) string); ok {
+		r1 = returnFunc(projectID)
+	} else {
+		r1 = ret.Get(1).(string)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string) error); ok {
+		r2 = returnFunc(projectID)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockGCPClientManager_CreatePublicCAExternalAccountKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreatePublicCAExternalAccountKey'
+type MockGCPClientManager_CreatePublicCAExternalAccountKey_Call struct {
+	*mock.Call
+}
+
+// CreatePublicCAExternalAccountKey is a helper method to define mock.On call
+//   - projectID string
+func (_e *MockGCPClientManager_Expecter) CreatePublicCAExternalAccountKey(projectID interface{}) *MockGCPClientManager_CreatePublicCAExternalAccountKey_Call {
+	return &MockGCPClientManager_CreatePublicCAExternalAccountKey_Call{Call: _e.mock.On("CreatePublicCAExternalAccountKey", projectID)}
+}
+
+func (_c *MockGCPClientManager_CreatePublicCAExternalAccountKey_Call) Run(run func(projectID string)) *MockGCPClientManager_CreatePublicCAExternalAccountKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_CreatePublicCAExternalAccountKey_Call) Return(keyID string, b64MacKey string, err error) *MockGCPClientManager_CreatePublicCAExternalAccountKey_Call {
+	_c.Call.Return(keyID, b64MacKey, err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_CreatePublicCAExternalAccountKey_Call) RunAndReturn(run func(projectID string) (string, string, error)) *MockGCPClientManager_CreatePublicCAExternalAccountKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateServiceAccount provides a mock function for the type MockGCPClientManager
 func (_mock *MockGCPClientManager) CreateServiceAccount(projectID string, name string, displayName string) (string, bool, error) {
 	ret := _mock.Called(projectID, name, displayName)

@@ -45,6 +45,7 @@ oms beta bootstrap-gcp [flags]
       --github-team-slug string                 GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.
       --gitlab-app-client-id string             GitLab App Client ID (optional)
       --gitlab-app-client-secret string         GitLab App Client Secret (optional)
+      --google-acme-issuer                      Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)
   -h, --help                                    help for bootstrap-gcp
       --install-config string                   Path to install config file (optional) (default "config.yaml")
       --install-hash string                     Codesphere package hash to install (default: none)
