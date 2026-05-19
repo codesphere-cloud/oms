@@ -25,4 +25,5 @@ func AddInstallCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 
 	AddInstallCodesphereCmd(install.cmd, opts)
 	AddInstallK0sCmd(install.cmd, opts)
+	AddInstallOpenBaoCmd(install.cmd, opts)
 }

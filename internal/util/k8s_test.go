@@ -145,6 +145,54 @@ var _ = Describe("GvrForUnstructured", func() {
 		Expect(gvr.Resource).To(Equal("appprojects"))
 	})
 
+	It("returns the correct GVR for Vault", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("vault.banzaicloud.com/v1alpha1")
+		obj.SetKind("Vault")
+
+		gvr, err := util.GvrForUnstructured(obj)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(gvr.Group).To(Equal("vault.banzaicloud.com"))
+		Expect(gvr.Version).To(Equal("v1alpha1"))
+		Expect(gvr.Resource).To(Equal("vaults"))
+	})
+
+	It("returns the correct GVR for ServiceAccount", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("v1")
+		obj.SetKind("ServiceAccount")
+
+		gvr, err := util.GvrForUnstructured(obj)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(gvr.Group).To(Equal(""))
+		Expect(gvr.Version).To(Equal("v1"))
+		Expect(gvr.Resource).To(Equal("serviceaccounts"))
+	})
+
+	It("returns the correct GVR for Role", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("rbac.authorization.k8s.io/v1")
+		obj.SetKind("Role")
+
+		gvr, err := util.GvrForUnstructured(obj)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(gvr.Group).To(Equal("rbac.authorization.k8s.io"))
+		Expect(gvr.Version).To(Equal("v1"))
+		Expect(gvr.Resource).To(Equal("roles"))
+	})
+
+	It("returns the correct GVR for RoleBinding", func() {
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("rbac.authorization.k8s.io/v1")
+		obj.SetKind("RoleBinding")
+
+		gvr, err := util.GvrForUnstructured(obj)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(gvr.Group).To(Equal("rbac.authorization.k8s.io"))
+		Expect(gvr.Version).To(Equal("v1"))
+		Expect(gvr.Resource).To(Equal("rolebindings"))
+	})
+
 	It("returns an error for an unknown kind", func() {
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("v1")
