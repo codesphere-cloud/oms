@@ -82,7 +82,7 @@ spec:
         value: "http://$(POD_NAME).{{ .Namespace }}.svc.cluster.local:8200"
   unsealConfig:
     options:
-      preFlightChecks: false
+      preFlightChecks: true
       storeRootToken: false
     kubernetes:
       secretNamespace: {{ .Namespace }}

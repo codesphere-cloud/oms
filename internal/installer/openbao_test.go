@@ -356,6 +356,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 			unsealConfig := spec["unsealConfig"].(map[string]interface{})
 			options := unsealConfig["options"].(map[string]interface{})
 			Expect(options["storeRootToken"]).To(BeFalse())
+			Expect(options["preFlightChecks"]).To(BeTrue())
 
 			// Verify externalConfig has the secrets engine
 			externalConfig := spec["externalConfig"].(map[string]interface{})

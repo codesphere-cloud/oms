@@ -4,12 +4,16 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -35,11 +39,19 @@ type InstallOpenBaoOpts struct {
 	Replicas          int
 	StorageSize       string
 	Timeout           time.Duration
+	AgeKeyFile        string
+	Yes               bool
 }
 
 func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	if err := validateOpenBaoPrereqs(); err != nil {
 		return err
+	}
+
+	// If --age-key-file is provided, set SOPS_AGE_KEY_FILE so ResolveAgeKey
+	// picks it up. Otherwise, fall back to the normal auto-discovery chain.
+	if c.Opts.AgeKeyFile != "" {
+		os.Setenv("SOPS_AGE_KEY_FILE", c.Opts.AgeKeyFile)
 	}
 
 	configDir, err := os.UserConfigDir()
@@ -67,6 +79,32 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	inst, err := installer.NewOpenBaoInstaller(cfg)
 	if err != nil {
 		return fmt.Errorf("initializing openbao installer: %w", err)
+	}
+
+	inst.ConfirmFunc = func() error {
+		if c.Opts.Yes {
+			return nil
+		}
+
+		fmt.Printf("\nWARNING: No DR backup found at: %s\n", c.Opts.DRBackupPath)
+		fmt.Println("This will perform a FRESH OpenBao initialization:")
+		fmt.Println("  - Existing Vault CR will be deleted")
+		fmt.Println("  - All OpenBao pods will be terminated")
+		fmt.Println("  - Persistent volume claims (data) will be deleted")
+		fmt.Println("  - Existing unseal keys will be removed")
+		fmt.Println("")
+		fmt.Println("If you intended to restore from a backup, verify --dr-backup-path is correct.")
+		fmt.Print("\nType 'yes' to continue: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to read confirmation: %w", err)
+		}
+		if strings.TrimSpace(strings.ToLower(input)) != "yes" {
+			return fmt.Errorf("aborted: type 'yes' to continue or pass --yes")
+		}
+		return nil
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -106,6 +144,8 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 	openbao.cmd.Flags().IntVar(&openbao.Opts.Replicas, "replicas", 1, "Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA)")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.StorageSize, "storage-size", "10Gi", "PVC storage size for each OpenBao replica")
 	openbao.cmd.Flags().DurationVar(&openbao.Opts.Timeout, "timeout", 5*time.Minute, "Timeout for waiting on initialization")
+	openbao.cmd.Flags().StringVarP(&openbao.Opts.AgeKeyFile, "age-key-file", "k", "", "Path to age private key file for SOPS encryption/decryption (auto-detected if not set)")
+	openbao.cmd.Flags().BoolVarP(&openbao.Opts.Yes, "yes", "y", false, "Auto-approve fresh initialization when no DR backup is found")
 
 	util.MarkFlagRequired(openbao.cmd, "dr-backup-path")
 
