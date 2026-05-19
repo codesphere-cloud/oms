@@ -114,6 +114,7 @@ type CodesphereEnvironment struct {
 	RegistryUser         string          `json:"-"`
 	Experiments          []string        `json:"experiments"`
 	FeatureFlags         map[string]bool `json:"feature_flags"`
+	CentralOtelEndpoint  string          `json:"-"`
 	CentralOtelUsername  string          `json:"-"`
 	CentralOtelPassword  string          `json:"-"`
 	ExternalLokiEndpoint string          `json:"external_loki_endpoint,omitempty"`

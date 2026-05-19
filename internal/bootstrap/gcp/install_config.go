@@ -340,6 +340,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 		b.Env.InstallConfig.Cluster.Monitoring.CentralOtelExport = &files.CentralOtelConfig{
 			Enabled:  true,
+			Endpoint: b.Env.CentralOtelEndpoint,
 			Username: b.Env.CentralOtelUsername,
 			Password: b.Env.CentralOtelPassword,
 		}

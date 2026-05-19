@@ -74,6 +74,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcIssuerURL, "oidc-issuer-url", "", "OIDC OAuth provider issuer URL (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcClientID, "oidc-client-id", "", "OIDC OAuth provider Client ID (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcClientSecret, "oidc-client-secret", "", "OIDC OAuth provider Client Secret (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelEndpoint, "central-otel-endpoint", "", "Central OpenTelemetry collector endpoint. Needed when sending spans to central collector (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelUsername, "central-otel-username", "", "Central OpenTelemetry username. Needed when sending spans to central collector (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelPassword, "central-otel-password", "", "Central OpenTelemetry password. Needed when sending spans to central collector (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug. Required scopes: read:packages, read:org.")

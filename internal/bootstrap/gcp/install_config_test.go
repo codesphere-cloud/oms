@@ -601,6 +601,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 			Context("When CentralOtel credentials are fully set", func() {
 				BeforeEach(func() {
+				    csEnv.CentralOtelEndpoint = "https://otel.example.com"
 					csEnv.CentralOtelUsername = "otel-user"
 					csEnv.CentralOtelPassword = "otel-password"
 				})
@@ -617,6 +618,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					centralOtel := bs.Env.InstallConfig.Cluster.Monitoring.CentralOtelExport
 					Expect(centralOtel).NotTo(BeNil())
 					Expect(centralOtel.Enabled).To(BeTrue())
+					Expect(centralOtel.Endpoint).To(Equal("https://otel.example.com"))
 					Expect(centralOtel.Username).To(Equal("otel-user"))
 					Expect(centralOtel.Password).To(Equal("otel-password"))
 				})

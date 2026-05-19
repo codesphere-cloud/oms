@@ -595,6 +595,7 @@ type LokiConnectionConfig struct {
 
 type CentralOtelConfig struct {
 	Enabled  bool          `yaml:"enabled"`
+	Endpoint string        `yaml:"endpoint,omitempty"`
 	Username string        `yaml:"username,omitempty"`
 	Password string        `yaml:"-"`
 	Override ChartOverride `yaml:"override,omitempty"`
