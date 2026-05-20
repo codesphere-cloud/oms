@@ -196,9 +196,6 @@ func (g *InstallConfig) applyCommonProperties() {
 					Backups:             true,
 					PointInTimeRecovery: true,
 				},
-				// ConfigSchema: ,
-				// DetailsSchema
-				// secretsSchema
 				Backups: &files.ManagedServiceBackups{
 					ConfigSchema: map[string]any{
 						"type": "object",
