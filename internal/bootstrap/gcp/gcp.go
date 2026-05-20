@@ -114,9 +114,6 @@ type CodesphereEnvironment struct {
 	RegistryUser         string          `json:"-"`
 	Experiments          []string        `json:"experiments"`
 	FeatureFlags         map[string]bool `json:"feature_flags"`
-	CentralOtelEndpoint  string          `json:"-"`
-	CentralOtelUsername  string          `json:"-"`
-	CentralOtelPassword  string          `json:"-"`
 	ExternalLokiEndpoint string          `json:"external_loki_endpoint,omitempty"`
 	ExternalLokiSecret   string          `json:"-"`
 	ExternalLokiUser     string          `json:"external_loki_user,omitempty"`
@@ -126,6 +123,12 @@ type CodesphereEnvironment struct {
 	OpenBaoEngine   string `json:"-"`
 	OpenBaoUser     string `json:"-"`
 	OpenBaoPassword string `json:"-"`
+
+	CentralOtelEndpoint    string `json:"-"`
+	CentralOtelUsername    string `json:"-"`
+	CentralOtelPassword    string `json:"-"`
+	CentralOtelSpanMetrics bool   `json:"-"`
+	LocalTraceExport       bool   `json:"-"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`

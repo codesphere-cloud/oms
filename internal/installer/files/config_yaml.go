@@ -315,6 +315,7 @@ type CodesphereConfig struct {
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
+	TelemetryExport            *TelemetryExport       `yaml:"telemetryExport,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
 
 	DomainAuthPrivateKey string `yaml:"-"`
@@ -397,6 +398,13 @@ type FlavorConfig struct {
 	// Image can be a referenced image or a plain string
 	Image ImageRef    `yaml:"image"`
 	Pool  map[int]int `yaml:"pool"`
+}
+
+type TelemetryExport struct {
+	Endpoint     string `yaml:"endpoint"`
+	RemoteExport bool   `yaml:"remoteExport"`
+	Traces       bool   `yaml:"traces"`
+	SpanMetrics  bool   `yaml:"spanMetrics"`
 }
 
 type ChartOverride = map[string]interface{}
@@ -595,7 +603,6 @@ type LokiConnectionConfig struct {
 
 type CentralOtelConfig struct {
 	Enabled  bool          `yaml:"enabled"`
-	Endpoint string        `yaml:"endpoint,omitempty"`
 	Username string        `yaml:"username,omitempty"`
 	Password string        `yaml:"-"`
 	Override ChartOverride `yaml:"override,omitempty"`

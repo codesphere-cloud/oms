@@ -319,6 +319,15 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
+	if b.Env.CentralOtelPassword != "" || b.Env.LocalTraceExport != false {
+		b.Env.InstallConfig.Codesphere.TelemetryExport = &files.TelemetryExport{
+			Endpoint:     b.Env.CentralOtelEndpoint,
+			RemoteExport: b.Env.CentralOtelPassword != "",
+			Traces:       b.Env.LocalTraceExport,
+			SpanMetrics:  b.Env.CentralOtelSpanMetrics,
+		}
+	}
+
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 	b.applyExternalLokiConfig()
@@ -340,7 +349,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 		b.Env.InstallConfig.Cluster.Monitoring.CentralOtelExport = &files.CentralOtelConfig{
 			Enabled:  true,
-			Endpoint: b.Env.CentralOtelEndpoint,
 			Username: b.Env.CentralOtelUsername,
 			Password: b.Env.CentralOtelPassword,
 		}
