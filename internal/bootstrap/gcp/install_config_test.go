@@ -599,6 +599,110 @@ var _ = Describe("Installconfig & Secrets", func() {
 				})
 			})
 
+			Context("When CentralOtel credentials are fully set", func() {
+				BeforeEach(func() {
+					csEnv.CentralOtelUsername = "otel-user"
+					csEnv.CentralOtelPassword = "otel-password"
+				})
+				It("sets CentralOtel credentials in install config with Enabled true", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).NotTo(BeNil())
+					centralOtel := bs.Env.InstallConfig.Cluster.Monitoring.CentralOtelExport
+					Expect(centralOtel).NotTo(BeNil())
+					Expect(centralOtel.Enabled).To(BeTrue())
+					Expect(centralOtel.Username).To(Equal("otel-user"))
+					Expect(centralOtel.Password).To(Equal("otel-password"))
+				})
+			})
+
+			Context("When only CentralOtel username is set", func() {
+				BeforeEach(func() {
+					csEnv.CentralOtelUsername = "otel-user"
+					csEnv.CentralOtelPassword = ""
+				})
+				It("skips setting CentralOtel credentials", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).To(BeNil())
+				})
+			})
+
+			Context("When only CentralOtel password is set", func() {
+				BeforeEach(func() {
+					csEnv.CentralOtelUsername = ""
+					csEnv.CentralOtelPassword = "otel-password"
+				})
+				It("skips setting CentralOtel credentials", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).To(BeNil())
+				})
+			})
+
+			Context("When CentralOtel credentials are not set", func() {
+				It("leaves Monitoring.CentralOtel nil", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).To(BeNil())
+				})
+			})
+
+			Context("When Google ACME issuer is enabled", func() {
+				BeforeEach(func() {
+					csEnv.GoogleACMEIssuer = true
+				})
+				It("requests EAB credentials from Public CA and uses them in the ACME config", func() {
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-eab-key-id", "fake-eab-mac-key", nil)
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.Server).To(Equal("https://dv.acme-v02.api.pki.goog/directory"))
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.EABKeyID).To(Equal("fake-eab-key-id"))
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.EABMacKey).To(Equal("fake-eab-mac-key"))
+
+					issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+					httpIssuer := issuers["letsEncryptHttp"].(map[string]interface{})
+					Expect(httpIssuer["enabled"]).To(Equal(false))
+				})
+				It("returns an error when the publicca API call fails", func() {
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("", "", fmt.Errorf("api boom"))
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to obtain Google Public CA EAB credentials"))
+				})
+			})
+
 			Context("When OpenBao config is set", func() {
 				BeforeEach(func() {
 					csEnv.OpenBaoURI = "https://openbao.example.com"

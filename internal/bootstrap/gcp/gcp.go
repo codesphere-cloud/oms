@@ -113,9 +113,14 @@ type CodesphereEnvironment struct {
 	RegistryUser         string          `json:"-"`
 	Experiments          []string        `json:"experiments"`
 	FeatureFlags         map[string]bool `json:"feature_flags"`
+	CentralOtelUsername  string          `json:"-"`
+	CentralOtelPassword  string          `json:"-"`
 	ExternalLokiEndpoint string          `json:"external_loki_endpoint,omitempty"`
 	ExternalLokiSecret   string          `json:"-"`
 	ExternalLokiUser     string          `json:"external_loki_user,omitempty"`
+
+	// ACME Issuer
+	GoogleACMEIssuer bool `json:"google_acme_issuer,omitempty"`
 
 	// OpenBao
 	OpenBaoURI      string `json:"-"`

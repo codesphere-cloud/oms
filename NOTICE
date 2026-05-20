@@ -329,9 +329,9 @@ License URL: https://github.com/getsops/gopgagent/blob/7044f28e491e/LICENSE
  
 ----------
 Module: github.com/getsops/sops/v3
-Version: v3.13.0
+Version: v3.13.1
 License: MPL-2.0
-License URL: https://github.com/getsops/sops/blob/v3.13.0/LICENSE
+License URL: https://github.com/getsops/sops/blob/v3.13.1/LICENSE
  
 ----------
 Module: github.com/go-errors/errors
@@ -809,9 +809,9 @@ License URL: https://github.com/munnerz/goautoneg/blob/a7dc8b61c822/LICENSE
  
 ----------
 Module: github.com/onsi/gomega
-Version: v1.40.0
+Version: v1.41.0
 License: MIT
-License URL: https://github.com/onsi/gomega/blob/v1.40.0/LICENSE
+License URL: https://github.com/onsi/gomega/blob/v1.41.0/LICENSE
  
 ----------
 Module: github.com/opencontainers/go-digest
@@ -893,9 +893,9 @@ License URL: https://github.com/prometheus/procfs/blob/v0.20.1/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260430173414-a4316348cc58
+Version: v0.0.0-20260519021904-1167f3ff9fe1
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/a4316348cc58/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/1167f3ff9fe1/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1121,9 +1121,9 @@ License URL: https://cs.opensource.google/go/x/mod/+/v0.36.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.53.0
+Version: v0.54.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.53.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.54.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
@@ -1169,15 +1169,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.279.0
+Version: v0.280.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.279.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.280.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.279.0
+Version: v0.280.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.279.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.280.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1193,9 +1193,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/7cedc36a6bc4/googlea
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20260427160629-7cedc36a6bc4
+Version: v0.0.0-20260511170946-3700d4141b60
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/7cedc36a6bc4/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/3700d4141b60/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc

@@ -74,6 +74,8 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcIssuerURL, "oidc-issuer-url", "", "OIDC OAuth provider issuer URL (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcClientID, "oidc-client-id", "", "OIDC OAuth provider Client ID (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcClientSecret, "oidc-client-secret", "", "OIDC OAuth provider Client Secret (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelUsername, "central-otel-username", "", "Central OpenTelemetry username. Needed when sending spans to central collector (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelPassword, "central-otel-password", "", "Central OpenTelemetry password. Needed when sending spans to central collector (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug. Required scopes: read:packages, read:org.")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppName, "github-app-name", "", "GitHub App Name (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamOrg, "github-team-org", "", "GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.")
@@ -110,6 +112,8 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", false, "Suppress SSH command output (default: false)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.CreateTestUser, "create-test-user", false, "Create a test user with API token on the bootstrapped instance for smoke testing (default: false)")
 	flags.Int64Var(&bootstrapGcpCmd.CodesphereEnv.RootDiskSize, "root-disk-size", 50, "Instance root disk size in GB (default: 50)")
+
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.GoogleACMEIssuer, "google-acme-issuer", false, "Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)")
 
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoURI, "openbao-uri", "", "URI for OpenBao (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")

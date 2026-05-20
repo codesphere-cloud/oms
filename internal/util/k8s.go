@@ -53,20 +53,43 @@ func RenderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
 	return []byte(content), nil
 }
 
+// VaultGVR returns the GroupVersionResource for the bank-vaults Vault CRD.
+func VaultGVR() schema.GroupVersionResource {
+	return schema.GroupVersionResource{
+		Group:    "vault.banzaicloud.com",
+		Version:  "v1alpha1",
+		Resource: "vaults",
+	}
+}
+
+// gvrMappings maps Kubernetes Kind names to their plural resource names.
+// New kinds used in embedded templates need a corresponding entry here.
+var gvrMappings = map[string]string{
+	"AppProject":     "appprojects",
+	"Vault":          "vaults",
+	"ServiceAccount": "serviceaccounts",
+	"Role":           "roles",
+	"RoleBinding":    "rolebindings",
+}
+
 // GvrForUnstructured maps an unstructured object's GVK to the appropriate GVR.
+//
+// This uses a hand-rolled lookup table rather than a discovery-backed RESTMapper
+// to avoid requiring a cluster round-trip during resolution. New kinds used in
+// embedded templates will need a corresponding entry in gvrMappings. If this
+// grows unwieldy, consider switching to restmapper.NewDiscoveryRESTMapper.
 func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
 	gvk := obj.GroupVersionKind()
 
-	switch gvk.Kind {
-	case "AppProject":
-		return schema.GroupVersionResource{
-			Group:    gvk.Group,
-			Version:  gvk.Version,
-			Resource: "appprojects",
-		}, nil
-	default:
-		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s", gvk)
+	resource, ok := gvrMappings[gvk.Kind]
+	if !ok {
+		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s — add an entry to gvrMappings", gvk)
 	}
+	return schema.GroupVersionResource{
+		Group:    gvk.Group,
+		Version:  gvk.Version,
+		Resource: resource,
+	}, nil
 }
 
 // ApplyUnstructured creates or updates an unstructured resource using the dynamic client.
@@ -118,7 +141,7 @@ func ApplySecretFromYAML(ctx context.Context, clientset kubernetes.Interface, da
 	return nil
 }
 
-// newClients creates both a typed and dynamic Kubernetes client
+// NewClients creates both a typed and dynamic Kubernetes client
 // using the current kubeconfig context (respects KUBECONFIG env var
 // and defaults to ~/.kube/config).
 func NewClients() (kubernetes.Interface, dynamic.Interface, error) {

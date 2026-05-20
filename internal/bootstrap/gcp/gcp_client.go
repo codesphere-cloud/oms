@@ -27,6 +27,7 @@ import (
 	"google.golang.org/api/dns/v1"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
+	publicca "google.golang.org/api/publicca/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -61,6 +62,7 @@ type GCPClientManager interface {
 	EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error
 	EnsureDNSRecordSets(projectID, zoneName string, records []*dns.ResourceRecordSet) error
 	DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error
+	CreatePublicCAExternalAccountKey(projectID string) (keyID, b64MacKey string, err error)
 }
 
 // Concrete implementation
@@ -853,6 +855,23 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 		return fmt.Errorf("failed to delete DNS records: %w", err)
 	}
 	return nil
+}
+
+// CreatePublicCAExternalAccountKey requests a fresh External Account Binding
+// key pair from the Google Public CA, used to register an ACME account against
+// https://dv.acme-v02.api.pki.goog/directory. The publicca.googleapis.com API
+// must be enabled on the project.
+func (c *GCPClient) CreatePublicCAExternalAccountKey(projectID string) (string, string, error) {
+	svc, err := publicca.NewService(c.ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create publicca client: %w", err)
+	}
+	parent := fmt.Sprintf("projects/%s/locations/global", projectID)
+	key, err := svc.Projects.Locations.ExternalAccountKeys.Create(parent, &publicca.ExternalAccountKey{}).Context(c.ctx).Do()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create public CA external account key: %w", err)
+	}
+	return key.KeyId, key.B64MacKey, nil
 }
 
 // Helper functions

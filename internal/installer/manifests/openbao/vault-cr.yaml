@@ -1,0 +1,126 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openbao
+  namespace: {{ .Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: openbao-secrets
+  namespace: {{ .Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: openbao-secrets
+  namespace: {{ .Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openbao-secrets
+subjects:
+  - kind: ServiceAccount
+    name: openbao
+    namespace: {{ .Namespace }}
+---
+apiVersion: vault.banzaicloud.com/v1alpha1
+kind: Vault
+metadata:
+  name: openbao
+  namespace: {{ .Namespace }}
+spec:
+  size: {{ .Replicas }}
+  image: {{ .OpenBaoImage }}
+  bankVaultsImage: {{ .BankVaultsImage }}
+  serviceAccount: openbao
+  volumeClaimTemplates:
+    - metadata:
+        name: openbao-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .StorageSize }}
+  volumeMounts:
+    - name: openbao-data
+      mountPath: /openbao/data
+  vaultContainerSpec:
+    name: vault
+    command:
+      - bao
+      - server
+      - -config=/vault/config
+    # Override the operator's default liveness probe to accept 501 (uninitialized)
+    # and 503 (sealed) responses as healthy. Without this, Kubernetes kills vault
+    # after 3 failures (~30s) before bank-vaults can complete initialization,
+    # causing a crash loop where stale keys accumulate in the secret.
+    livenessProbe:
+      httpGet:
+        path: /v1/sys/health?standbyok=true&uninitcode=204&sealedcode=204
+        port: 8200
+        scheme: HTTP
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      failureThreshold: 30
+    env:
+      - name: POD_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+      - name: BAO_CLUSTER_ADDR
+        value: "http://$(POD_NAME).{{ .Namespace }}.svc.cluster.local:8201"
+      - name: BAO_API_ADDR
+        value: "http://$(POD_NAME).{{ .Namespace }}.svc.cluster.local:8200"
+  unsealConfig:
+    options:
+      preFlightChecks: false
+      storeRootToken: false
+    kubernetes:
+      secretNamespace: {{ .Namespace }}
+      secretName: openbao-unseal-keys
+  config:
+    ui: true
+    storage:
+      raft:
+        path: /openbao/data
+        {{- if .RetryJoinAddrs }}
+        retry_join:
+          {{- range .RetryJoinAddrs }}
+          - leader_api_addr: "{{ . }}"
+          {{- end }}
+        {{- end }}
+    listener:
+      tcp:
+        address: "0.0.0.0:8200"
+        tls_disable: true
+    api_addr: http://openbao.{{ .Namespace }}:8200
+  externalConfig:
+    secrets:
+      - path: "{{ .SecretsEngineName }}"
+        type: kv
+        options:
+          version: "2"
+    policies:
+      - name: "{{ .SecretsEngineName }}-rw"
+        rules: |
+          path "{{ .SecretsEngineName }}/data/*" {
+            capabilities = ["create", "read", "update", "delete", "list"]
+          }
+          path "{{ .SecretsEngineName }}/metadata/*" {
+            capabilities = ["list", "read", "delete"]
+          }
+    auth:
+      - type: userpass
+        users:
+          - username: "{{ .BaoUsername }}"
+            password: "{{ .BaoPassword }}"
+            policies: "{{ .SecretsEngineName }}-rw"
