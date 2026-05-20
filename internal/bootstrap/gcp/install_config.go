@@ -319,7 +319,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
-	if b.Env.CentralOtelPassword != "" || b.Env.LocalTraceExport != false {
+	if b.Env.CentralOtelPassword != "" || b.Env.LocalTraceExport {
 		b.Env.InstallConfig.Codesphere.TelemetryExport = &files.TelemetryExport{
 			Endpoint:     b.Env.CentralOtelEndpoint,
 			RemoteExport: b.Env.CentralOtelPassword != "",
