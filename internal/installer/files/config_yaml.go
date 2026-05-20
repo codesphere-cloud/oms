@@ -195,7 +195,6 @@ type ClusterConfig struct {
 
 type ClusterCertificates struct {
 	CA       CAConfig      `yaml:"ca"`
-	ACME     *ACMEConfig   `yaml:"acme,omitempty"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
@@ -211,9 +210,9 @@ type ACMEConfig struct {
 	Email                string     `yaml:"email,omitempty"`
 	Server               string     `yaml:"server,omitempty"`
 	PrivateKeySecretName string     `yaml:"-"`
-	Solver               ACMESolver `yaml:"solver"`
+	Solver               ACMESolver `yaml:"-"`
 
-	EABKeyID  string `yaml:"-"`
+	EABKeyID  string `yaml:"eabKeyId,omitempty"`
 	EABMacKey string `yaml:"-"`
 }
 
@@ -621,12 +620,17 @@ type S3ManagedServiceConfig struct {
 
 // Marshal serializes the RootConfig to YAML
 func (c *RootConfig) Marshal() ([]byte, error) {
+	c.buildACMEOverride()
 	return yaml.Marshal(c)
 }
 
 // Unmarshal deserializes YAML data into the RootConfig
 func (c *RootConfig) Unmarshal(data []byte) error {
-	return yaml.Unmarshal(data, c)
+	if err := yaml.Unmarshal(data, c); err != nil {
+		return err
+	}
+	c.extractACMESolverFromOverride()
+	return nil
 }
 
 func NewRootConfig() RootConfig {
@@ -837,30 +841,21 @@ func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
 }
 
 func (c *RootConfig) addACMESecrets(vault *InstallVault) {
-	if c.Cluster.Certificates.ACME == nil || !c.Cluster.Certificates.ACME.Enabled {
+	if c.Codesphere.CertIssuer.Acme == nil || !c.Codesphere.CertIssuer.Acme.Enabled {
 		return
 	}
 
-	if c.Cluster.Certificates.ACME.EABKeyID != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: "acmeEabKeyId",
-			Fields: &SecretFields{
-				Password: c.Cluster.Certificates.ACME.EABKeyID,
-			},
-		})
-	}
-
-	if c.Cluster.Certificates.ACME.EABMacKey != "" {
+	if c.Codesphere.CertIssuer.Acme.EABMacKey != "" {
 		vault.Secrets = append(vault.Secrets, SecretEntry{
 			Name: "acmeEabMacKey",
 			Fields: &SecretFields{
-				Password: c.Cluster.Certificates.ACME.EABMacKey,
+				Password: c.Codesphere.CertIssuer.Acme.EABMacKey,
 			},
 		})
 	}
 
-	if c.Cluster.Certificates.ACME.Solver.DNS01 != nil {
-		for key, value := range c.Cluster.Certificates.ACME.Solver.DNS01.Secrets {
+	if c.Codesphere.CertIssuer.Acme.Solver.DNS01 != nil {
+		for key, value := range c.Codesphere.CertIssuer.Acme.Solver.DNS01.Secrets {
 			vault.Secrets = append(vault.Secrets, SecretEntry{
 				Name: fmt.Sprintf("acmeDNS01%s", Capitalize(key)),
 				Fields: &SecretFields{
@@ -1010,4 +1005,91 @@ func Capitalize(s string) string {
 	}
 	s = strings.ReplaceAll(s, "_", "")
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// buildACMEOverride populates cluster.certificates.override with the ACME solver
+// configuration from codesphere.certIssuer.acme.solver, matching the documented
+// config.yaml structure.
+func (c *RootConfig) buildACMEOverride() {
+	if c.Codesphere.CertIssuer.Acme == nil || c.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
+		return
+	}
+
+	dns01 := c.Codesphere.CertIssuer.Acme.Solver.DNS01
+
+	acmeOverride := map[string]interface{}{}
+
+	// Build dnsSolver section
+	if dns01.Provider != "" {
+		solverConfig := map[string]interface{}{}
+		if dns01.Config != nil {
+			for k, v := range dns01.Config {
+				solverConfig[k] = v
+			}
+		}
+		acmeOverride["dnsSolver"] = map[string]interface{}{
+			dns01.Provider: solverConfig,
+		}
+	}
+
+	if c.Cluster.Certificates.Override == nil {
+		c.Cluster.Certificates.Override = map[string]interface{}{}
+	}
+
+	issuers, ok := c.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+	if !ok {
+		issuers = map[string]interface{}{}
+	}
+
+	// Merge with existing acme override (don't clobber user-provided fields like solverSecret)
+	existingAcme, ok := issuers["acme"].(map[string]interface{})
+	if !ok {
+		existingAcme = map[string]interface{}{}
+	}
+	for k, v := range acmeOverride {
+		existingAcme[k] = v
+	}
+
+	issuers["acme"] = existingAcme
+	c.Cluster.Certificates.Override["issuers"] = issuers
+}
+
+// extractACMESolverFromOverride populates the ACMEConfig.Solver from
+// cluster.certificates.override.issuers.acme.dnsSolver after unmarshaling.
+func (c *RootConfig) extractACMESolverFromOverride() {
+	if c.Codesphere.CertIssuer.Acme == nil {
+		return
+	}
+
+	override := c.Cluster.Certificates.Override
+	if override == nil {
+		return
+	}
+
+	issuers, ok := override["issuers"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	acmeIssuer, ok := issuers["acme"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	dnsSolver, ok := acmeIssuer["dnsSolver"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	// The dnsSolver map has the provider name as key
+	for provider, cfg := range dnsSolver {
+		solver := &ACMEDNS01Solver{
+			Provider: provider,
+		}
+		if cfgMap, ok := cfg.(map[string]interface{}); ok && len(cfgMap) > 0 {
+			solver.Config = cfgMap
+		}
+		c.Codesphere.CertIssuer.Acme.Solver.DNS01 = solver
+		break // only one provider expected
+	}
 }

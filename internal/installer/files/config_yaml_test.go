@@ -9,6 +9,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
@@ -283,6 +284,168 @@ codesphere:
 					Password: "fake-loki-password",
 				},
 			}))
+		})
+	})
+
+	Describe("ACME config structure", func() {
+		// Verifies the marshaled YAML matches the structure documented at:
+		// https://docs.codesphere.com/private-cloud/cluster-ingress-ca-options
+		It("should marshal config.yaml to the expected ACME structure", func() {
+			rootConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+				Type: files.CertIssuerTypeACME,
+				Acme: &files.ACMEConfig{
+					Enabled:   true,
+					Server:    "https://acme-v02.api.letsencrypt.org/directory",
+					Email:     "admin@example.com",
+					EABKeyID:  "my-eab-key-id",
+					EABMacKey: "my-eab-mac-key",
+					Solver: files.ACMESolver{
+						DNS01: &files.ACMEDNS01Solver{
+							Provider: "cloudflare",
+							Config: map[string]interface{}{
+								"apiTokenSecretRef": map[string]interface{}{
+									"name": "acme-solver",
+									"key":  "api-token",
+								},
+							},
+							Secrets: map[string]string{
+								"api-token": "fake-api-token",
+							},
+						},
+					},
+				},
+			}
+			// Only set user-provided override fields; buildACMEOverride (called by Marshal)
+			// generates the dnsSolver section from the Solver config.
+
+			data, err := rootConfig.Marshal()
+			Expect(err).NotTo(HaveOccurred())
+
+			var raw map[string]interface{}
+			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
+
+			// Expected codesphere.certIssuer per upstream docs (no solver field)
+			expectedCertIssuer := map[string]interface{}{
+				"type": "acme",
+				"acme": map[string]interface{}{
+					"enabled":  true,
+					"server":   "https://acme-v02.api.letsencrypt.org/directory",
+					"email":    "admin@example.com",
+					"eabKeyId": "my-eab-key-id",
+				},
+			}
+
+			// Expected cluster.certificates.override per upstream docs
+			expectedOverride := map[string]interface{}{
+				"issuers": map[string]interface{}{
+					"acme": map[string]interface{}{
+						"dnsSolver": map[string]interface{}{
+							"cloudflare": map[string]interface{}{
+								"apiTokenSecretRef": map[string]interface{}{
+									"name": "acme-solver",
+									"key":  "api-token",
+								},
+							},
+						},
+					},
+				},
+			}
+
+			// Deep compare relevant sections
+			codesphere := raw["codesphere"].(map[string]interface{})
+			Expect(codesphere["certIssuer"]).To(Equal(expectedCertIssuer))
+
+			cluster := raw["cluster"].(map[string]interface{})
+			certs := cluster["certificates"].(map[string]interface{})
+			Expect(certs["override"]).To(Equal(expectedOverride))
+		})
+
+		It("should unmarshal ACME config from upstream docs format and populate Solver", func() {
+			acmeYaml := `codesphere:
+  certIssuer:
+    type: acme
+    acme:
+      enabled: true
+      server: https://acme-v02.api.letsencrypt.org/directory
+      email: admin@example.com
+      eabKeyId: my-eab-key-id
+cluster:
+  certificates:
+    override:
+      issuers:
+        acme:
+          dnsSolver:
+            cloudflare:
+              apiTokenSecretRef:
+                key: api-token
+                name: acme-solver
+          solverSecret:
+            data:
+              api-token: fake-api-token
+            name: acme-solver
+`
+			var parsed files.RootConfig
+			err := parsed.Unmarshal([]byte(acmeYaml))
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(parsed.Codesphere.CertIssuer.Type).To(Equal(files.CertIssuerTypeACME))
+			Expect(parsed.Codesphere.CertIssuer.Acme).NotTo(BeNil())
+			Expect(parsed.Codesphere.CertIssuer.Acme.Server).To(Equal("https://acme-v02.api.letsencrypt.org/directory"))
+			Expect(parsed.Codesphere.CertIssuer.Acme.Email).To(Equal("admin@example.com"))
+			Expect(parsed.Codesphere.CertIssuer.Acme.EABKeyID).To(Equal("my-eab-key-id"))
+
+			// Solver should be populated from override
+			Expect(parsed.Codesphere.CertIssuer.Acme.Solver.DNS01).NotTo(BeNil())
+			Expect(parsed.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider).To(Equal("cloudflare"))
+		})
+
+		It("should marshal vault secrets to the expected ACME structure", func() {
+			rootConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+				Type: files.CertIssuerTypeACME,
+				Acme: &files.ACMEConfig{
+					Enabled:   true,
+					Server:    "https://acme-v02.api.letsencrypt.org/directory",
+					Email:     "admin@example.com",
+					EABKeyID:  "my-eab-key-id",
+					EABMacKey: "my-eab-mac-key",
+					Solver: files.ACMESolver{
+						DNS01: &files.ACMEDNS01Solver{
+							Provider: "cloudflare",
+							Secrets: map[string]string{
+								"api-token": "fake-cloudflare-token",
+							},
+						},
+					},
+				},
+			}
+
+			vault := rootConfig.ExtractVault()
+			vaultData, err := vault.Marshal()
+			Expect(err).NotTo(HaveOccurred())
+
+			var raw map[string]interface{}
+			Expect(yaml.Unmarshal(vaultData, &raw)).NotTo(HaveOccurred())
+
+			// Expected vault structure per upstream docs
+			expectedSecrets := []interface{}{
+				map[string]interface{}{
+					"name": "acmeEabMacKey",
+					"fields": map[string]interface{}{
+						"password": "my-eab-mac-key",
+					},
+				},
+				map[string]interface{}{
+					"name": "acmeDNS01Api-token",
+					"fields": map[string]interface{}{
+						"password": "fake-cloudflare-token",
+					},
+				},
+			}
+
+			secrets := raw["secrets"].([]interface{})
+			for _, expected := range expectedSecrets {
+				Expect(secrets).To(ContainElement(expected))
+			}
 		})
 	})
 })

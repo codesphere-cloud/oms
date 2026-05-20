@@ -290,55 +290,61 @@ func (c *UpdateInstallConfigCmd) applyACMEUpdates(config *files.RootConfig, trac
 	}
 
 	acmeChanged := false
-	if config.Cluster.Certificates.ACME == nil {
-		config.Cluster.Certificates.ACME = &files.ACMEConfig{}
+	if config.Codesphere.CertIssuer.Acme == nil {
+		config.Codesphere.CertIssuer.Acme = &files.ACMEConfig{}
 	}
 
-	if !config.Cluster.Certificates.ACME.Enabled {
+	if config.Codesphere.CertIssuer.Type != files.CertIssuerTypeACME {
+		log.Printf("Setting cert issuer type to ACME\n")
+		config.Codesphere.CertIssuer.Type = files.CertIssuerTypeACME
+		acmeChanged = true
+	}
+
+	if !config.Codesphere.CertIssuer.Acme.Enabled {
 		log.Printf("Enabling ACME certificate issuer\n")
-		config.Cluster.Certificates.ACME.Enabled = true
+		config.Codesphere.CertIssuer.Acme.Enabled = true
 		acmeChanged = true
 	}
 
-	if c.Opts.ACMEIssuerName != "" && config.Cluster.Certificates.ACME.Name != c.Opts.ACMEIssuerName {
-		log.Printf("Updating ACME issuer name: %s -> %s\n", config.Cluster.Certificates.ACME.Name, c.Opts.ACMEIssuerName)
-		config.Cluster.Certificates.ACME.Name = c.Opts.ACMEIssuerName
+	if c.Opts.ACMEIssuerName != "" && config.Codesphere.CertIssuer.Acme.Name != c.Opts.ACMEIssuerName {
+		log.Printf("Updating ACME issuer name: %s -> %s\n", config.Codesphere.CertIssuer.Acme.Name, c.Opts.ACMEIssuerName)
+		config.Codesphere.CertIssuer.Acme.Name = c.Opts.ACMEIssuerName
 		acmeChanged = true
 	}
 
-	if c.Opts.ACMEEmail != "" && config.Cluster.Certificates.ACME.Email != c.Opts.ACMEEmail {
-		log.Printf("Updating ACME email: %s -> %s\n", config.Cluster.Certificates.ACME.Email, c.Opts.ACMEEmail)
-		config.Cluster.Certificates.ACME.Email = c.Opts.ACMEEmail
+	if c.Opts.ACMEEmail != "" && config.Codesphere.CertIssuer.Acme.Email != c.Opts.ACMEEmail {
+		log.Printf("Updating ACME email: %s -> %s\n", config.Codesphere.CertIssuer.Acme.Email, c.Opts.ACMEEmail)
+		config.Codesphere.CertIssuer.Acme.Email = c.Opts.ACMEEmail
 		acmeChanged = true
 	}
 
-	if c.Opts.ACMEServer != "" && config.Cluster.Certificates.ACME.Server != c.Opts.ACMEServer {
-		log.Printf("Updating ACME server: %s -> %s\n", config.Cluster.Certificates.ACME.Server, c.Opts.ACMEServer)
-		config.Cluster.Certificates.ACME.Server = c.Opts.ACMEServer
+	if c.Opts.ACMEServer != "" && config.Codesphere.CertIssuer.Acme.Server != c.Opts.ACMEServer {
+		log.Printf("Updating ACME server: %s -> %s\n", config.Codesphere.CertIssuer.Acme.Server, c.Opts.ACMEServer)
+		config.Codesphere.CertIssuer.Acme.Server = c.Opts.ACMEServer
 		acmeChanged = true
 	}
 
-	if c.Opts.ACMEEABKeyID != "" && config.Cluster.Certificates.ACME.EABKeyID != c.Opts.ACMEEABKeyID {
-		log.Printf("Updating ACME EAB key ID: %s -> %s\n", config.Cluster.Certificates.ACME.EABKeyID, c.Opts.ACMEEABKeyID)
-		config.Cluster.Certificates.ACME.EABKeyID = c.Opts.ACMEEABKeyID
+	if c.Opts.ACMEEABKeyID != "" && config.Codesphere.CertIssuer.Acme.EABKeyID != c.Opts.ACMEEABKeyID {
+		log.Printf("Updating ACME EAB key ID: %s -> %s\n", config.Codesphere.CertIssuer.Acme.EABKeyID, c.Opts.ACMEEABKeyID)
+		config.Codesphere.CertIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
 		acmeChanged = true
 	}
 
-	if c.Opts.ACMEEABMacKey != "" && config.Cluster.Certificates.ACME.EABMacKey != c.Opts.ACMEEABMacKey {
+	if c.Opts.ACMEEABMacKey != "" && config.Codesphere.CertIssuer.Acme.EABMacKey != c.Opts.ACMEEABMacKey {
 		log.Printf("Updating ACME EAB MAC key\n")
-		config.Cluster.Certificates.ACME.EABMacKey = c.Opts.ACMEEABMacKey
+		config.Codesphere.CertIssuer.Acme.EABMacKey = c.Opts.ACMEEABMacKey
 		acmeChanged = true
 	}
 
 	// Update DNS-01 solver configuration
 	if c.Opts.ACMEDNS01Provider != "" {
-		if config.Cluster.Certificates.ACME.Solver.DNS01 == nil {
-			config.Cluster.Certificates.ACME.Solver.DNS01 = &files.ACMEDNS01Solver{}
+		if config.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
+			config.Codesphere.CertIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{}
 		}
-		if config.Cluster.Certificates.ACME.Solver.DNS01.Provider != c.Opts.ACMEDNS01Provider {
+		if config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider != c.Opts.ACMEDNS01Provider {
 			log.Printf("Updating ACME DNS-01 provider: %s -> %s\n",
-				config.Cluster.Certificates.ACME.Solver.DNS01.Provider, c.Opts.ACMEDNS01Provider)
-			config.Cluster.Certificates.ACME.Solver.DNS01.Provider = c.Opts.ACMEDNS01Provider
+				config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider, c.Opts.ACMEDNS01Provider)
+			config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider = c.Opts.ACMEDNS01Provider
 			acmeChanged = true
 		}
 	}
