@@ -130,14 +130,17 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			Hostname:  b.Env.CephNodes[0].GetName(),
 			IsMaster:  true,
 			IPAddress: b.Env.CephNodes[0].GetInternalIP(),
+			SSHPort:   22,
 		},
 		{
 			Hostname:  b.Env.CephNodes[1].GetName(),
 			IPAddress: b.Env.CephNodes[1].GetInternalIP(),
+			SSHPort:   22,
 		},
 		{
 			Hostname:  b.Env.CephNodes[2].GetName(),
 			IPAddress: b.Env.CephNodes[2].GetInternalIP(),
+			SSHPort:   22,
 		},
 	}
 	b.Env.InstallConfig.Ceph.OSDs = []files.CephOSD{
@@ -336,6 +339,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 	b.applyExternalLokiConfig()
 
+	b.Env.InstallConfig.GeneratedForVersion = b.Env.InstallVersion
+
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
 		if err != nil {
@@ -505,20 +510,15 @@ func (b *GCPBootstrapper) EncryptVault() error {
 	return nil
 }
 
-// writeLTSJumpboxFiles generates the LTS-specific codesphere.yaml and config-jumpbox.yaml
-// files locally and returns the path to config-jumpbox.yaml for copying to the jumpbox.
+// writeLTSJumpboxFiles generates the LTS-versioned config-lts-<version>.yaml locally
+// and returns its path for copying to the jumpbox.
 func (b *GCPBootstrapper) writeLTSJumpboxFiles(spec *LTSSpec) (jumpboxConfigLocalPath string, err error) {
-	jumpboxConfigBytes, codesphereBytes, err := GenerateLTSJumpboxFiles(b.Env.InstallConfig, spec)
+	jumpboxConfigBytes, err := GenerateLTSJumpboxFiles(b.Env.InstallConfig, spec)
 	if err != nil {
-		return "", fmt.Errorf("failed to prepare %s jumpbox files: %w", spec.InstallVersion, err)
+		return "", fmt.Errorf("failed to prepare %s jumpbox config: %w", spec.InstallVersion, err)
 	}
 
-	csPath := LocalCodesphereConfigPath(b.Env.InstallConfigPath)
-	if err := b.fw.CreateAndWrite(csPath, codesphereBytes, "Codesphere Config ("+spec.InstallVersion+")"); err != nil {
-		return "", fmt.Errorf("failed to write %s codesphere config file: %w", spec.InstallVersion, err)
-	}
-
-	jumpboxConfigLocalPath = LocalJumpboxConfigPath(b.Env.InstallConfigPath)
+	jumpboxConfigLocalPath = LocalLTSConfigPath(b.Env.InstallConfigPath, spec)
 	if err := b.fw.CreateAndWrite(jumpboxConfigLocalPath, jumpboxConfigBytes, "Jumpbox Config ("+spec.InstallVersion+")"); err != nil {
 		return "", fmt.Errorf("failed to write %s jumpbox config file: %w", spec.InstallVersion, err)
 	}

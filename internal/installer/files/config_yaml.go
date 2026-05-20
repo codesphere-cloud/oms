@@ -52,6 +52,7 @@ type SecretFields struct {
 
 // RootConfig represents the relevant parts of the configuration file
 type RootConfig struct {
+	GeneratedForVersion    string                        `yaml:"generatedForVersion,omitempty"`
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
@@ -141,6 +142,7 @@ type CephHost struct {
 	Hostname  string `yaml:"hostname"`
 	IPAddress string `yaml:"ipAddress"`
 	IsMaster  bool   `yaml:"isMaster"`
+	SSHPort   int    `yaml:"sshPort,omitempty"`
 }
 
 type CephOSD struct {

@@ -750,11 +750,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("generates the LTS jumpbox files and copies them to the jumpbox", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					fw.EXPECT().CreateAndWrite("codesphere.yaml", mock.Anything, mock.Anything).Return(nil)
-					fw.EXPECT().CreateAndWrite("config-jumpbox.yaml", mock.Anything, mock.Anything).Return(nil)
+					fw.EXPECT().CreateAndWrite("config-lts-1_77_2.yaml", mock.Anything, mock.Anything).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
-
-					// config-jumpbox.yaml → /etc/codesphere/config.yaml, prod.vault.yaml → secrets dir
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -763,10 +760,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("does not modify the in-memory codesphere config for LTS 1.77.2", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					fw.EXPECT().CreateAndWrite(mock.Anything, mock.Anything, mock.Anything).Return(nil).Times(2)
+					fw.EXPECT().CreateAndWrite(mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
-
-					// config-jumpbox.yaml → /etc/codesphere/config.yaml, prod.vault.yaml → secrets dir
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()

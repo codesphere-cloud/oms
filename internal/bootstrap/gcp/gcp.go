@@ -922,10 +922,14 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
-	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil && ltsSpec.RequiresOmsBinaryUpdate {
-		if err := b.ensureNewOmsBinaryOnJumpbox(); err != nil {
-			return fmt.Errorf("failed to update OMS binary on jumpbox for %s: %w", b.Env.InstallVersion, err)
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil {
+		if ltsSpec.RequiresOmsBinaryUpdate {
+			if err := b.ensureNewOmsBinaryOnJumpbox(); err != nil {
+				return fmt.Errorf("failed to update OMS binary on jumpbox for %s: %w", b.Env.InstallVersion, err)
+			}
 		}
+		b.startLTSCephMasterWatcher()
+		defer b.stopLTSCephMasterWatcher()
 	}
 
 	err = b.runInstallCommand(fullPackageFilename)
@@ -957,6 +961,38 @@ func (b *GCPBootstrapper) ensureNewOmsBinaryOnJumpbox() error {
 	}
 
 	return nil
+}
+
+// startLTSCephMasterWatcher starts a background process on the ceph master node that continuously
+// re-adds the master to the Ceph orchestrator host inventory. This is required for LTS versions
+// because the installer's configureHosts step applies a declarative host spec containing only the
+// non-master nodes, which removes the master from the inventory. The watcher restores it within
+// seconds, before the subsequent configureMonitors step runs.
+func (b *GCPBootstrapper) startLTSCephMasterWatcher() {
+	if len(b.Env.CephNodes) == 0 || len(b.Env.InstallConfig.Ceph.Hosts) == 0 {
+		return
+	}
+	masterHost := b.Env.InstallConfig.Ceph.Hosts[0]
+	// Use cephadm shell (same as the installer) so the command runs inside the ceph container,
+	// bypassing any standalone-binary or keyring availability issues on the host.
+	// The FSID is auto-detected from /var/lib/ceph/; all output is logged for diagnostics.
+	cmd := fmt.Sprintf(
+		`nohup bash -c "while true; do FSID=\$(ls /var/lib/ceph/ 2>/dev/null | head -1); [ -n \"\$FSID\" ] && [ -x /usr/local/bin/cephadm ] && /usr/local/bin/cephadm shell --fsid \"\$FSID\" -- ceph orch host add %s %s 2>&1; sleep 3; done" > /tmp/ceph-host-watcher.log 2>&1 & echo $! > /tmp/ceph-host-watcher.pid`,
+		masterHost.Hostname,
+		masterHost.IPAddress,
+	)
+	if err := b.Env.CephNodes[0].RunSSHCommand("root", cmd); err != nil {
+		b.stlog.Logf("Note: could not start ceph master host watcher on %s: %v", masterHost.Hostname, err)
+	}
+}
+
+// stopLTSCephMasterWatcher stops the background watcher started by startLTSCephMasterWatcher.
+func (b *GCPBootstrapper) stopLTSCephMasterWatcher() {
+	if len(b.Env.CephNodes) == 0 || len(b.Env.InstallConfig.Ceph.Hosts) == 0 {
+		return
+	}
+	cmd := `kill $(cat /tmp/ceph-host-watcher.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/ceph-host-watcher.pid /tmp/ceph-host-watcher.log`
+	_ = b.Env.CephNodes[0].RunSSHCommand("root", cmd)
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {

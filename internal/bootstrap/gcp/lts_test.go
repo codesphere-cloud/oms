@@ -162,24 +162,32 @@ var _ = Describe("LTS Compatibility", func() {
 		})
 
 		It("does not modify the original root config", func() {
-			_, _, err := gcp.GenerateLTSJumpboxFiles(root, spec)
+			_, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(root.Codesphere.Experiments).To(ContainElement("secret-management"))
 			Expect(root.Codesphere.ManagedServices[0].Author).To(Equal("Codesphere"))
 			Expect(root.CodesphereConfigPath).To(BeEmpty())
 		})
 
-		It("returns codesphere bytes with compat applied", func() {
-			_, csBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
+		It("clears GeneratedForVersion in the LTS config so the old installer ignores it", func() {
+			root.GeneratedForVersion = "codesphere-lts-v1.77.2"
+			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(csBytes).NotTo(BeEmpty())
-			csYAML := string(csBytes)
-			Expect(csYAML).NotTo(ContainSubstring("managedServices"))
-			Expect(csYAML).NotTo(ContainSubstring("secret-management"))
+			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("generatedForVersion"))
+			// Original must not be modified
+			Expect(root.GeneratedForVersion).To(Equal("codesphere-lts-v1.77.2"))
+		})
+
+		It("returns codesphere bytes with compat applied", func() {
+			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(jumpboxBytes).NotTo(BeEmpty())
+			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("managedServices"))
+			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("secret-management"))
 		})
 
 		It("returns jumpbox config bytes with inline compat-stripped codesphere", func() {
-			jumpboxBytes, _, err := gcp.GenerateLTSJumpboxFiles(root, spec)
+			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(jumpboxBytes).NotTo(BeEmpty())
 			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("/etc/codesphere/codesphere.yaml"))
@@ -187,29 +195,27 @@ var _ = Describe("LTS Compatibility", func() {
 		})
 
 		It("jumpbox config bytes do not contain unsupported experiment", func() {
-			jumpboxBytes, _, err := gcp.GenerateLTSJumpboxFiles(root, spec)
+			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("secret-management"))
 		})
 	})
 
-	Describe("LocalJumpboxConfigPath", func() {
-		It("returns config-jumpbox.yaml in same directory as config.yaml", func() {
-			Expect(gcp.LocalJumpboxConfigPath("config.yaml")).To(Equal("config-jumpbox.yaml"))
-		})
-
-		It("uses the directory of the given config path", func() {
-			Expect(gcp.LocalJumpboxConfigPath("/etc/codesphere/config.yaml")).To(Equal("/etc/codesphere/config-jumpbox.yaml"))
+	Describe("LTSConfigFileSuffix", func() {
+		It("converts the LTS 1.77.2 version string to a filesystem-safe suffix", func() {
+			Expect(gcp.LTSConfigFileSuffix("codesphere-lts-v1.77.2")).To(Equal("lts-1_77_2"))
 		})
 	})
 
-	Describe("LocalCodesphereConfigPath", func() {
-		It("returns codesphere.yaml in same directory as config.yaml", func() {
-			Expect(gcp.LocalCodesphereConfigPath("config.yaml")).To(Equal("codesphere.yaml"))
+	Describe("LocalLTSConfigPath", func() {
+		It("returns config-lts-1_77_2.yaml in same directory as config.yaml", func() {
+			spec := gcp.FindLTSSpec("codesphere-lts-v1.77.2")
+			Expect(gcp.LocalLTSConfigPath("config.yaml", spec)).To(Equal("config-lts-1_77_2.yaml"))
 		})
 
 		It("uses the directory of the given config path", func() {
-			Expect(gcp.LocalCodesphereConfigPath("/etc/codesphere/config.yaml")).To(Equal("/etc/codesphere/codesphere.yaml"))
+			spec := gcp.FindLTSSpec("codesphere-lts-v1.77.2")
+			Expect(gcp.LocalLTSConfigPath("/etc/codesphere/config.yaml", spec)).To(Equal("/etc/codesphere/config-lts-1_77_2.yaml"))
 		})
 	})
 })

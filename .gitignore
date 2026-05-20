@@ -48,8 +48,6 @@ internal/util/testdata/
 config.yaml
 prod.vault.yaml
 configure-k0s.sh
-config-jumpbox.yaml
-codesphere.yaml
 
 # Debugger files
 __debug*

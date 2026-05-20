@@ -351,7 +351,11 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 	if len(c.Opts.CephHosts) > 0 {
 		cephHosts := []files.CephHost{}
 		for _, hostCfg := range c.Opts.CephHosts {
-			cephHosts = append(cephHosts, files.CephHost(hostCfg))
+			cephHosts = append(cephHosts, files.CephHost{
+				Hostname:  hostCfg.Hostname,
+				IPAddress: hostCfg.IPAddress,
+				IsMaster:  hostCfg.IsMaster,
+			})
 		}
 		config.Ceph.Hosts = cephHosts
 	}

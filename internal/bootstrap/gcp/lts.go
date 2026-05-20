@@ -6,8 +6,7 @@ package gcp
 import (
 	"fmt"
 	"path/filepath"
-
-	"go.yaml.in/yaml/v3"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
@@ -25,8 +24,8 @@ type LTSSpec struct {
 	// Required when the LTS schema expects full provider definitions, not the abbreviated
 	// form stored in config.yaml.
 	ClearManagedServices bool
-	// RequiresJumpboxFiles instructs the bootstrap to generate a separate config-jumpbox.yaml
-	// and codesphere.yaml (with compat applied) instead of using the standard config.yaml.
+	// RequiresJumpboxFiles instructs the bootstrap to generate LTS-versioned compat config files
+	// (e.g. config-lts-1_77_2.yaml and codesphere-lts-1_77_2.yaml) instead of using config.yaml directly.
 	RequiresJumpboxFiles bool
 	// RequiresOmsBinaryUpdate instructs the bootstrap to build a fresh linux/amd64 OMS binary
 	// and deploy it to the jumpbox before running the installer.
@@ -59,40 +58,40 @@ func FindLTSSpec(installVersion string) *LTSSpec {
 	return nil
 }
 
-// LocalCodesphereConfigPath derives the local path for the separate codesphere config file
-// from the main config path (same directory, filename "codesphere.yaml").
-func LocalCodesphereConfigPath(configPath string) string {
-	return filepath.Join(filepath.Dir(configPath), "codesphere.yaml")
+// LTSConfigFileSuffix derives a filesystem-safe suffix from an LTS installVersion string.
+// For example, "codesphere-lts-v1.77.2" -> "lts-1_77_2".
+func LTSConfigFileSuffix(installVersion string) string {
+	s := strings.TrimPrefix(installVersion, "codesphere-")
+	s = strings.ReplaceAll(s, "v", "")
+	s = strings.ReplaceAll(s, ".", "_")
+	return s
 }
 
-// LocalJumpboxConfigPath derives the local path for the jumpbox-specific config from the
-// main config path (same directory, filename "config-jumpbox.yaml").
-func LocalJumpboxConfigPath(configPath string) string {
-	return filepath.Join(filepath.Dir(configPath), "config-jumpbox.yaml")
+// LocalLTSConfigPath derives the local path for the LTS-specific jumpbox config from the
+// main config path. For example, with installVersion "codesphere-lts-v1.77.2" and
+// configPath "config.yaml" it returns "config-lts-1_77_2.yaml".
+func LocalLTSConfigPath(configPath string, spec *LTSSpec) string {
+	return filepath.Join(filepath.Dir(configPath), "config-"+LTSConfigFileSuffix(spec.InstallVersion)+".yaml")
 }
 
-// GenerateLTSJumpboxFiles generates the two files needed on the jumpbox for an LTS release
-// without modifying the original root config:
-//   - jumpboxConfigBytes: config.yaml with inline compat-stripped codesphere object
-//   - codesphereBytes: standalone codesphere.yaml with the same compat-stripped codesphere config
-func GenerateLTSJumpboxFiles(root *files.RootConfig, spec *LTSSpec) (jumpboxConfigBytes, codesphereBytes []byte, err error) {
+// GenerateLTSJumpboxFiles generates the LTS-versioned config file needed on the jumpbox
+// without modifying the original root config. It returns the bytes for
+// config-lts-<version>.yaml with the compat-stripped codesphere section inlined.
+func GenerateLTSJumpboxFiles(root *files.RootConfig, spec *LTSSpec) (jumpboxConfigBytes []byte, err error) {
 	csCopy := root.Codesphere
 	ApplyLTSCompat(&csCopy, spec)
 
-	codesphereBytes, err = yaml.Marshal(csCopy)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal %s codesphere config: %w", spec.InstallVersion, err)
-	}
-
 	rootCopy := *root
 	rootCopy.Codesphere = csCopy
+	// Clear the version annotation so the old LTS installer does not encounter an unknown field.
+	rootCopy.GeneratedForVersion = ""
 
 	jumpboxConfigBytes, err = rootCopy.Marshal()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to marshal %s jumpbox config: %w", spec.InstallVersion, err)
+		return nil, fmt.Errorf("failed to marshal %s jumpbox config: %w", spec.InstallVersion, err)
 	}
 
-	return jumpboxConfigBytes, codesphereBytes, nil
+	return jumpboxConfigBytes, nil
 }
 
 // ApplyLTSCompat adjusts a CodesphereConfig to be compatible with the given LTS release:
