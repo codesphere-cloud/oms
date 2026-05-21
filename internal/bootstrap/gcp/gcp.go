@@ -407,7 +407,12 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	return b.validateExternalLokiParams()
+	err = b.validateExternalLokiParams()
+	if err != nil {
+		return err
+	}
+
+	return b.validateCentralOtelParams()
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -509,6 +514,21 @@ func (b *GCPBootstrapper) validateExternalLokiParams() error {
 
 	if b.Env.ExternalLokiSecret != "" || b.Env.ExternalLokiUser != "" {
 		return fmt.Errorf("external Loki endpoint is required when external Loki secret or user is set")
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) validateCentralOtelParams() error {
+	if b.Env.CentralOtelEndpoint != "" && b.Env.CentralOtelPassword == "" {
+		return fmt.Errorf("central OTel password is required when central OTel endpoint is set")
+	}
+
+	if b.Env.CentralOtelUsername != "" && b.Env.CentralOtelPassword == "" {
+		return fmt.Errorf("central OTel username is set but password is missing")
+	}
+	if b.Env.CentralOtelPassword != "" && b.Env.CentralOtelUsername == "" {
+		return fmt.Errorf("central OTel password is set but username is missing")
 	}
 
 	return nil
