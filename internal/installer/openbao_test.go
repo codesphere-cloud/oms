@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/fake"
@@ -49,20 +50,24 @@ var _ = Describe("OpenBaoInstaller", func() {
 	})
 
 	Describe("Install — deploy Bank-Vaults Operator", func() {
-		It("calls UpgradeChart with InstallIfNotExist for the operator", func() {
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+		It("performs fresh install when operator does not exist", func() {
+			// FindRelease returns nil (no existing release in target namespace)
+			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
+
+			// No ClusterRole exists (fake clientset has nothing), so InstallChart is called
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.ReleaseName == "vault-operator" &&
 					cfg.ChartName == "oci://ghcr.io/bank-vaults/helm-charts/vault-operator" &&
 					cfg.Version == "1.22.5" &&
 					cfg.Namespace == "vault" &&
 					cfg.CreateNamespace == true
-			}), installer.UpgradeChartOptions{InstallIfNotExist: true}).Return(nil)
+			})).Return(nil)
 
 			inst := &installer.OpenBaoInstaller{
 				Helm:      helmMock,
 				Clientset: clientset,
 				Logger:    bootstrap.NewStepLogger(true),
-				Config:    installer.OpenBaoInstallerConfig{},
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
 			}
 			inst.SetCtx(ctx)
 
@@ -70,15 +75,64 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("returns an error when Helm fails", func() {
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.Anything).
+		It("upgrades when release already exists in target namespace", func() {
+			// FindRelease returns an existing release
+			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(&installer.ReleaseInfo{
+				Name:             "vault-operator",
+				InstalledVersion: "1.22.0",
+			}, nil)
+
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ReleaseName == "vault-operator" &&
+					cfg.Namespace == "vault"
+			}), installer.UpgradeChartOptions{}).Return(nil)
+
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+			}
+			inst.SetCtx(ctx)
+
+			err := inst.DeployBankVaultsOperator()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("skips deployment when operator exists in another namespace", func() {
+			// FindRelease returns nil (not in target namespace)
+			helmMock.EXPECT().FindRelease("second", "vault-operator").Return(nil, nil)
+
+			// Pre-create the ClusterRole to simulate operator installed elsewhere
+			cr := &rbacv1.ClusterRole{
+				ObjectMeta: metav1.ObjectMeta{Name: "vault-operator"},
+			}
+			_, err := clientset.RbacV1().ClusterRoles().Create(ctx, cr, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "second"},
+			}
+			inst.SetCtx(ctx)
+
+			// Should not call InstallChart or UpgradeChart
+			err = inst.DeployBankVaultsOperator()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("returns an error when Helm InstallChart fails", func() {
+			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything).
 				Return(fmt.Errorf("chart not found"))
 
 			inst := &installer.OpenBaoInstaller{
 				Helm:      helmMock,
 				Clientset: clientset,
 				Logger:    bootstrap.NewStepLogger(true),
-				Config:    installer.OpenBaoInstallerConfig{},
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
 			}
 			inst.SetCtx(ctx)
 
@@ -148,7 +202,8 @@ var _ = Describe("OpenBaoInstaller", func() {
 				Clientset: clientset,
 				Logger:    bootstrap.NewStepLogger(true),
 				Config: installer.OpenBaoInstallerConfig{
-					Timeout: 5 * time.Second,
+					Namespace: "vault",
+					Timeout:   5 * time.Second,
 				},
 			}
 			inst.SetCtx(ctx)
@@ -164,7 +219,8 @@ var _ = Describe("OpenBaoInstaller", func() {
 				Clientset: clientset,
 				Logger:    bootstrap.NewStepLogger(true),
 				Config: installer.OpenBaoInstallerConfig{
-					Timeout: 1 * time.Second,
+					Namespace: "vault",
+					Timeout:   1 * time.Second,
 				},
 			}
 			inst.SetCtx(ctx)

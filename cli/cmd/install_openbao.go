@@ -33,6 +33,7 @@ type InstallOpenBaoCmd struct {
 // InstallOpenBaoOpts holds the CLI flags for the OpenBao installer.
 type InstallOpenBaoOpts struct {
 	*GlobalOptions
+	Namespace         string
 	SecretsEngineName string
 	BaoUsername       string
 	DRBackupPath      string
@@ -66,6 +67,7 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	cfg := installer.OpenBaoInstallerConfig{
+		Namespace:         c.Opts.Namespace,
 		SecretsEngineName: c.Opts.SecretsEngineName,
 		Username:          c.Opts.BaoUsername,
 		DRBackupPath:      c.Opts.DRBackupPath,
@@ -138,6 +140,7 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 		},
 		Opts: &InstallOpenBaoOpts{GlobalOptions: opts},
 	}
+	openbao.cmd.Flags().StringVarP(&openbao.Opts.Namespace, "namespace", "n", installer.DefaultOpenBaoNamespace, "Kubernetes namespace for OpenBao deployment")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.SecretsEngineName, "secrets-engine", "cs-secrets-engine", "Name of the KV-v2 secrets engine to provision")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.BaoUsername, "bao-user", "admin", "Username for the userpass auth method (ignored on restore, uses DR backup value)")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.DRBackupPath, "dr-backup-path", "", "Path for SOPS-encrypted DR backup file (required)")
