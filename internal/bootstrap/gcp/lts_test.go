@@ -39,23 +39,22 @@ var _ = Describe("LTS Compatibility", func() {
 	})
 
 	Describe("FilterExperiments", func() {
-		It("removes unsupported experiments", func() {
+		It("keeps only allowed experiments", func() {
 			input := []string{"managed-services", "custom-service-image", "secret-management", "ms-in-ls", "sub-path-mount"}
-			unsupported := []string{"secret-management", "sub-path-mount"}
-			result := gcp.FilterExperiments(input, unsupported)
+			allowed := []string{"managed-services", "custom-service-image", "ms-in-ls"}
+			result := gcp.FilterExperiments(input, allowed)
 			Expect(result).To(ConsistOf("managed-services", "custom-service-image", "ms-in-ls"))
 		})
 
-		It("returns the same slice when nothing is unsupported", func() {
+		It("returns all experiments when all are allowed", func() {
 			input := []string{"managed-services", "custom-service-image"}
-			result := gcp.FilterExperiments(input, []string{})
+			result := gcp.FilterExperiments(input, input)
 			Expect(result).To(ConsistOf("managed-services", "custom-service-image"))
 		})
 
-		It("returns empty slice when all experiments are unsupported", func() {
+		It("returns empty slice when no experiments are allowed", func() {
 			input := []string{"secret-management", "sub-path-mount"}
-			unsupported := []string{"secret-management", "sub-path-mount"}
-			result := gcp.FilterExperiments(input, unsupported)
+			result := gcp.FilterExperiments(input, []string{})
 			Expect(result).To(BeEmpty())
 		})
 
@@ -73,7 +72,7 @@ var _ = Describe("LTS Compatibility", func() {
 			Expect(spec).NotTo(BeNil())
 		})
 
-		It("removes unsupported experiments from the config", func() {
+		It("keeps only supported experiments", func() {
 			cfg := &files.CodesphereConfig{
 				Experiments: []string{"managed-services", "custom-service-image", "secret-management", "ms-in-ls", "sub-path-mount"},
 			}

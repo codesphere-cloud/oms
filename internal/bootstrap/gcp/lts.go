@@ -17,9 +17,9 @@ import (
 type LTSSpec struct {
 	// InstallVersion is the exact install version string that identifies this LTS release.
 	InstallVersion string
-	// UnsupportedExperiments lists experiments that did not exist at this LTS release
-	// and must be stripped from the config before passing it to the LTS installer.
-	UnsupportedExperiments []string
+	// Experiments lists all experiments supported by this LTS release.
+	// Only these experiments are passed to the installer, any others are stripped.
+	Experiments []string
 	// ClearManagedServices instructs the compat layer to set ManagedServices to nil.
 	// Required when the LTS schema expects full provider definitions, not the abbreviated
 	// form stored in config.yaml.
@@ -37,9 +37,10 @@ type LTSSpec struct {
 var ltsRegistry = []LTSSpec{
 	{
 		InstallVersion: "codesphere-lts-v1.77.2",
-		UnsupportedExperiments: []string{
-			"secret-management",
-			"sub-path-mount",
+		Experiments: []string{
+			"managed-services",
+			"custom-service-image",
+			"ms-in-ls",
 		},
 		ClearManagedServices:    true,
 		RequiresJumpboxFiles:    true,
@@ -95,25 +96,25 @@ func GenerateLTSJumpboxFiles(root *files.RootConfig, spec *LTSSpec) (jumpboxConf
 }
 
 // ApplyLTSCompat adjusts a CodesphereConfig to be compatible with the given LTS release:
-//  1. Experiments not present in the LTS release are removed.
+//  1. Only experiments listed in the LTS spec are kept; all others are stripped.
 //  2. ManagedServices is cleared when the LTS schema requires full provider definitions.
 func ApplyLTSCompat(cfg *files.CodesphereConfig, spec *LTSSpec) {
-	cfg.Experiments = FilterExperiments(cfg.Experiments, spec.UnsupportedExperiments)
+	cfg.Experiments = FilterExperiments(cfg.Experiments, spec.Experiments)
 	if spec.ClearManagedServices {
 		cfg.ManagedServices = nil
 	}
 }
 
-// FilterExperiments returns a new slice of experiments with the unsupported ones removed.
-func FilterExperiments(experiments, unsupported []string) []string {
-	unsupportedSet := make(map[string]struct{}, len(unsupported))
-	for _, u := range unsupported {
-		unsupportedSet[u] = struct{}{}
+// FilterExperiments returns a new slice containing only the experiments present in the allowed list.
+func FilterExperiments(experiments, allowed []string) []string {
+	allowedSet := make(map[string]struct{}, len(allowed))
+	for _, a := range allowed {
+		allowedSet[a] = struct{}{}
 	}
 
 	filtered := make([]string, 0, len(experiments))
 	for _, exp := range experiments {
-		if _, remove := unsupportedSet[exp]; !remove {
+		if _, ok := allowedSet[exp]; ok {
 			filtered = append(filtered, exp)
 		}
 	}
