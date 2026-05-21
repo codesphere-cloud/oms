@@ -1022,15 +1022,8 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
 		packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
-	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
-	if err != nil {
-		// A stale partial file from a previous (different) build can cause MD5 verification to
-		// fail even after a successful byte-range resume. Delete it and retry from scratch.
-		b.stlog.Logf("Download failed; removing any stale partial file and retrying from scratch...")
-		cleanAndRetryCmd := fmt.Sprintf("rm -f %s && %s", fullPackageFilename, downloadCmd)
-		if retryErr := b.Env.Jumpbox.RunSSHCommand("root", cleanAndRetryCmd); retryErr != nil {
-			return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", retryErr)
-		}
+	if err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd); err != nil {
+		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
 	return fullPackageFilename, nil
