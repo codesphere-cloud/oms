@@ -1337,23 +1337,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 			})
 
-			It("retries with a clean slate when download fails, succeeds on retry", func() {
-				downloadCmd := "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3"
-				cleanAndRetryCmd := "rm -f v1.2.3-abc1234567890-installer.tar.gz && " + downloadCmd
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", downloadCmd).Return(fmt.Errorf("md5 mismatch")).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", cleanAndRetryCmd).Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-					"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil).Once()
-
-				err := bs.InstallCodesphere()
-				Expect(err).NotTo(HaveOccurred())
-			})
-
 			It("fails when download package fails", func() {
 				downloadCmd := "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3"
-				cleanAndRetryCmd := "rm -f v1.2.3-abc1234567890-installer.tar.gz && " + downloadCmd
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", downloadCmd).Return(fmt.Errorf("download error")).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", cleanAndRetryCmd).Return(fmt.Errorf("download error on retry")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
