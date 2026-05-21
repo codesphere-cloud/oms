@@ -110,6 +110,7 @@ type PostgresPrimaryConfig struct {
 	SSLConfig SSLConfig `yaml:"sslConfig"`
 	IP        string    `yaml:"ip"`
 	Hostname  string    `yaml:"hostname"`
+	SSHPort   int       `yaml:"sshPort,omitempty"`
 
 	PrivateKey string `yaml:"-"`
 }

@@ -122,6 +122,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	previousPrimaryHostname := b.Env.InstallConfig.Postgres.Primary.Hostname
 	b.Env.InstallConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
 	b.Env.InstallConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
+	b.Env.InstallConfig.Postgres.Primary.SSHPort = 22
 
 	b.Env.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
 	b.Env.InstallConfig.Ceph.NodesSubnet = "10.10.0.0/20"
