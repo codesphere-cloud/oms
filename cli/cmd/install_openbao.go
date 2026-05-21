@@ -52,7 +52,9 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	// If --age-key-file is provided, set SOPS_AGE_KEY_FILE so ResolveAgeKey
 	// picks it up. Otherwise, fall back to the normal auto-discovery chain.
 	if c.Opts.AgeKeyFile != "" {
-		os.Setenv("SOPS_AGE_KEY_FILE", c.Opts.AgeKeyFile)
+		if err := os.Setenv("SOPS_AGE_KEY_FILE", c.Opts.AgeKeyFile); err != nil {
+			return fmt.Errorf("setting SOPS_AGE_KEY_FILE: %w", err)
+		}
 	}
 
 	configDir, err := os.UserConfigDir()
