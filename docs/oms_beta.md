@@ -20,4 +20,5 @@ Be aware that that usage and behavior may change as the features are developed.
 * [oms beta bootstrap-local](oms_beta_bootstrap-local.md)	 - Bootstrap a local Codesphere environment
 * [oms beta extend](oms_beta_extend.md)	 - Extend Codesphere ressources such as base images.
 * [oms beta install](oms_beta_install.md)	 - Install beta components
+* [oms beta vault-secret](oms_beta_vault-secret.md)	 - Create a Kubernetes secret from a SOPS-encrypted vault file
 
