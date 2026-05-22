@@ -27,4 +27,5 @@ func AddBetaCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	AddBootstrapGcpCmd(beta.cmd, opts)
 	AddBootstrapLocalCmd(beta.cmd)
 	AddBetaInstallCmd(beta.cmd, opts)
+	AddBetaVaultSecretCmd(beta.cmd, opts)
 }
