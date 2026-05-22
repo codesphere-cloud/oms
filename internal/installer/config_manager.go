@@ -391,12 +391,9 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 	}
 
 	// ACME secrets
-	if g.Config.Cluster.Certificates.ACME != nil {
-		if secret, ok := secretsMap["acmeEabKeyId"]; ok && secret.Fields != nil {
-			g.Config.Cluster.Certificates.ACME.EABKeyID = secret.Fields.Password
-		}
+	if g.Config.Codesphere.CertIssuer.Acme != nil {
 		if secret, ok := secretsMap["acmeEabMacKey"]; ok && secret.Fields != nil {
-			g.Config.Cluster.Certificates.ACME.EABMacKey = secret.Fields.Password
+			g.Config.Codesphere.CertIssuer.Acme.EABMacKey = secret.Fields.Password
 		}
 	}
 

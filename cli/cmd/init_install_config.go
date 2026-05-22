@@ -420,31 +420,32 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 
 	// ACME configuration
 	if c.Opts.ACMEEnabled {
-		if config.Cluster.Certificates.ACME == nil {
-			config.Cluster.Certificates.ACME = &files.ACMEConfig{}
+		if config.Codesphere.CertIssuer.Acme == nil {
+			config.Codesphere.CertIssuer.Acme = &files.ACMEConfig{}
 		}
-		config.Cluster.Certificates.ACME.Enabled = true
+		config.Codesphere.CertIssuer.Type = files.CertIssuerTypeACME
+		config.Codesphere.CertIssuer.Acme.Enabled = true
 
 		if c.Opts.ACMEIssuerName != "" {
-			config.Cluster.Certificates.ACME.Name = c.Opts.ACMEIssuerName
+			config.Codesphere.CertIssuer.Acme.Name = c.Opts.ACMEIssuerName
 		}
 		if c.Opts.ACMEEmail != "" {
-			config.Cluster.Certificates.ACME.Email = c.Opts.ACMEEmail
+			config.Codesphere.CertIssuer.Acme.Email = c.Opts.ACMEEmail
 		}
 		if c.Opts.ACMEServer != "" {
-			config.Cluster.Certificates.ACME.Server = c.Opts.ACMEServer
+			config.Codesphere.CertIssuer.Acme.Server = c.Opts.ACMEServer
 		}
 
 		if c.Opts.ACMEEABKeyID != "" {
-			config.Cluster.Certificates.ACME.EABKeyID = c.Opts.ACMEEABKeyID
+			config.Codesphere.CertIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
 		}
 		if c.Opts.ACMEEABMacKey != "" {
-			config.Cluster.Certificates.ACME.EABMacKey = c.Opts.ACMEEABMacKey
+			config.Codesphere.CertIssuer.Acme.EABMacKey = c.Opts.ACMEEABMacKey
 		}
 
 		// Configure DNS-01 solver
 		if c.Opts.ACMEDNS01Provider != "" {
-			config.Cluster.Certificates.ACME.Solver.DNS01 = &files.ACMEDNS01Solver{
+			config.Codesphere.CertIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{
 				Provider: c.Opts.ACMEDNS01Provider,
 			}
 		}
