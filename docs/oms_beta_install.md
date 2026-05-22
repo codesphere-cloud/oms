@@ -12,4 +12,5 @@ Install beta components
 
 * [oms beta](oms_beta.md)	 - Commands for early testing
 * [oms beta install argocd](oms_beta_install_argocd.md)	 - Install an ArgoCD helm release
+* [oms beta install pc-apps](oms_beta_install_pc-apps.md)	 - Install the pc-apps Helm chart from a private OCI registry
 
