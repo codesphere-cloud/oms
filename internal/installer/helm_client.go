@@ -55,15 +55,25 @@ type HelmClient interface {
 
 	// UpgradeChart upgrades an existing Helm release and returns an error on failure.
 	UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error
+
+	// LoginRegistry authenticates against an OCI registry for private chart pulls.
+	LoginRegistry(ctx context.Context, host, username, password string) error
 }
 
 // ---------------------------------------------------------------------------
 // Concrete implementation backed by the Helm Go SDK v4
 // ---------------------------------------------------------------------------
 
+type registryCredentials struct {
+	host     string
+	username string
+	password string
+}
+
 type helmClient struct {
 	defaultNamespace string
 	driver           string
+	registryCreds    *registryCredentials
 }
 
 func NewHelmClient(namespace string) (HelmClient, error) {
@@ -71,6 +81,15 @@ func NewHelmClient(namespace string) (HelmClient, error) {
 		defaultNamespace: namespace,
 		driver:           os.Getenv("HELM_DRIVER"),
 	}, nil
+}
+
+func (h *helmClient) LoginRegistry(_ context.Context, host, username, password string) error {
+	h.registryCreds = &registryCredentials{
+		host:     host,
+		username: username,
+		password: password,
+	}
+	return nil
 }
 
 // helmEnv holds the per-call Helm action configuration and CLI settings.
@@ -109,6 +128,17 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 	if err != nil {
 		return nil, fmt.Errorf("helm registry client init failed: %w", err)
 	}
+
+	if h.registryCreds != nil {
+		err = registryClient.Login(
+			h.registryCreds.host,
+			registry.LoginOptBasicAuth(h.registryCreds.username, h.registryCreds.password),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("helm registry login to %q failed: %w", h.registryCreds.host, err)
+		}
+	}
+
 	actionConfig.RegistryClient = registryClient
 
 	return &helmEnv{actionConfig: actionConfig, settings: settings}, nil
