@@ -23,9 +23,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.63.0
+Version: v1.64.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.63.0/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.64.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
@@ -1187,9 +1187,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/7cedc36a6bc4/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/api
-Version: v0.0.0-20260427160629-7cedc36a6bc4
+Version: v0.0.0-20260511170946-3700d4141b60
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/7cedc36a6bc4/googleapis/api/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/3700d4141b60/googleapis/api/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
