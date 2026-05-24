@@ -59,9 +59,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.
  
 ----------
 Module: code.gitea.io/sdk/gitea
-Version: v0.24.1
+Version: v0.25.1
 License: MIT
-License URL: https://gitea.com/gitea/go-sdk/src/tag/gitea/v0.24.1/gitea/LICENSE
+License URL: https://gitea.com/gitea/go-sdk/src/tag/gitea/v0.25.1/gitea/LICENSE
  
 ----------
 Module: dario.cat/mergo
