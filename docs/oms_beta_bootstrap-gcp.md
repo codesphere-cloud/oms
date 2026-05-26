@@ -53,7 +53,7 @@ oms beta bootstrap-gcp [flags]
       --install-local string                    Install Codesphere from local package (default: none)
   -s, --install-skip-steps stringArray          Installation steps to skip during Codesphere installation (optional)
       --install-version string                  Codesphere version to install (default: none)
-      --local-trace-export                      Enable local trace export (default: false)
+      --local-trace-endpoint string             Endpoint for exporting traces to an in-cluster storage (optional)
       --oidc-client-id string                   OIDC OAuth provider Client ID (optional)
       --oidc-client-secret string               OIDC OAuth provider Client Secret (optional)
       --oidc-issuer-url string                  OIDC OAuth provider issuer URL (optional)
