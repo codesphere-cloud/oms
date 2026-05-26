@@ -66,6 +66,10 @@ func (a *argoCDResources) ApplyAll(ctx context.Context) error {
 		}
 	}
 
+	if a.OciPassword == "" {
+		return fmt.Errorf("OCI registry password is required but not set")
+	}
+
 	if err := a.applyHelmRegistrySecret(ctx); err != nil {
 		return fmt.Errorf("applying helm registry secret: %w", err)
 	}
