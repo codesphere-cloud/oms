@@ -4,12 +4,15 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
 // InstallPCAppsCmd represents the pc-apps command
@@ -20,29 +23,31 @@ type InstallPCAppsCmd struct {
 
 type InstallPCAppsOpts struct {
 	*GlobalOptions
-	Chart       string
 	Version     string
 	Namespace   string
-	Username    string
 	ValuesFiles []string
 }
 
 func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
-	var password string
-	if c.Opts.Username != "" {
-		pw, err := c.resolvePassword()
-		if err != nil {
-			return err
-		}
-		password = pw
+	kubeConfig, err := ctrlconfig.GetConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load kubernetes config: %w", err)
+	}
+
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return fmt.Errorf("failed to add kubernetes scheme: %w", err)
+	}
+
+	kubeClient, err := ctrlclient.New(kubeConfig, ctrlclient.Options{Scheme: scheme})
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
 	pcApps, err := installer.NewPCApps(
-		c.Opts.Chart,
+		kubeClient,
 		c.Opts.Version,
 		c.Opts.Namespace,
-		c.Opts.Username,
-		password,
 		c.Opts.ValuesFiles,
 	)
 	if err != nil {
@@ -56,25 +61,6 @@ func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// resolvePassword reads the password from the OMS_REPO_PASSWORD environment variable,
-// or prompts the user interactively if the env var is not set.
-func (c *InstallPCAppsCmd) resolvePassword() (string, error) {
-	if pw := os.Getenv("OMS_REPO_PASSWORD"); len(pw) != 0 {
-		return pw, nil
-	}
-
-	fmt.Print("Registry password/token: ")
-	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Println()
-	if err != nil {
-		return "", fmt.Errorf("failed to read password: %w", err)
-	}
-	if len(pw) == 0 {
-		return "", fmt.Errorf("password is required; set OMS_REPO_PASSWORD or enter it when prompted")
-	}
-	return string(pw), nil
-}
-
 func AddPCAppsCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	pcApps := InstallPCAppsCmd{
 		Opts: InstallPCAppsOpts{
@@ -83,28 +69,26 @@ func AddPCAppsCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	}
 	pcApps.cmd = &cobra.Command{
 		Use:   "pc-apps",
-		Short: "Install the pc-apps Helm chart from a private OCI registry",
-		Long: packageio.Long(`Install or upgrade the pc-apps Helm chart from a private OCI registry
-			into the target cluster. This chart deploys ArgoCD Application resources
-			that manage the platform components.
+		Short: "Install the pc-applications Helm chart from a private OCI registry",
+		Long: packageio.Long(`Install or upgrade the pc-applications Helm chart from a private OCI
+			registry into the target cluster. This chart deploys ArgoCD Application
+			resources that manage the platform components.
 
-			If --username is provided, the registry password is read from the
-			OMS_REPO_PASSWORD environment variable or prompted interactively.
-			Otherwise, credentials are read from the Kubernetes secret
-			"argocd-codesphere-oci-read" in the argocd namespace (created by
-			"oms beta install argocd --deploy-dc-config --registry-password <token>").`),
+			Registry credentials and chart URL are read automatically from the
+			Kubernetes secret "argocd-codesphere-oci-read" in the argocd namespace.
+			This secret is created by "oms beta install argocd --deploy-dc-config".`),
 		Example: formatExamples("beta install pc-apps", []packageio.Example{
-			{Cmd: "--version 1.0.0", Desc: "Install a specific version (credentials from K8s secret)"},
-			{Cmd: "--version 1.0.0 --username CodesphereBot", Desc: "Install with explicit registry credentials (prompts for password)"},
-			{Cmd: "--chart oci://ghcr.io/codesphere-cloud/charts/pc-apps --version 1.0.0 -f base.yaml -f dc-overlay.yaml", Desc: "Install with custom chart and values files"},
+			{Cmd: "--version 1.0.0", Desc: "Install a specific version"},
+			{Cmd: "--version 1.0.0 -f base.yaml -f dc-overlay.yaml", Desc: "Install with custom values files"},
+			{Cmd: "--version 1.0.0 --namespace custom-ns", Desc: "Install into a custom namespace"},
 		}),
 	}
-	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Chart, "chart", "oci://ghcr.io/codesphere-cloud/charts/pc-apps", "Full OCI chart URL")
-	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Version, "version", "", "Chart version to install (default: latest)")
+	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Version, "version", "", "Chart version to install (required)")
 	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Namespace, "namespace", "argocd", "Target namespace for the Helm release")
-	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Username, "username", "", "Username for OCI registry authentication (if omitted, reads from K8s secret)")
 	pcApps.cmd.Flags().StringArrayVarP(&pcApps.Opts.ValuesFiles, "values", "f", nil, "Path to values YAML file (can be specified multiple times, merged in order)")
 	pcApps.cmd.RunE = pcApps.RunE
+
+	util.MarkFlagRequired(pcApps.cmd, "version")
 
 	AddCmd(parentCmd, pcApps.cmd)
 }

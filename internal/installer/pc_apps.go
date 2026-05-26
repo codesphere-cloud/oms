@@ -8,14 +8,13 @@ import (
 	"fmt"
 	"log"
 	"net/url"
-	"os"
-	"path"
-	"strings"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/cli/values"
+	"helm.sh/helm/v4/pkg/getter"
 )
 
 const (
@@ -24,26 +23,29 @@ const (
 	ociCredentialSecretName = "argocd-codesphere-oci-read"
 	// ociCredentialNamespace is the namespace where the credential secret lives.
 	ociCredentialNamespace = "argocd"
+	// pcAppsReleaseName is the fixed Helm release name for the pc-applications chart.
+	pcAppsReleaseName = "pc-applications"
 )
 
-// PCApps holds the configuration for installing the pc-apps Helm chart from
-// a private OCI registry.
+// PCApps holds the configuration for installing the pc-applications Helm chart
+// from a private OCI registry.
 type PCApps struct {
-	ChartURL    string   // full OCI chart reference, e.g. "oci://ghcr.io/codesphere-cloud/charts/pc-apps"
-	Version     string   // chart version ("" means latest)
-	Namespace   string   // target namespace (default: "argocd")
-	Username    string   // OCI registry username (optional, falls back to K8s secret)
-	Password    string   // OCI registry password/token (optional, falls back to K8s secret)
+	Version     string   // chart version (required)
+	Namespace   string   // target namespace for the Helm release
 	ValuesFiles []string // paths to values YAML files, merged in order
 	Helm        HelmClient
-	Clientset   kubernetes.Interface
+	Client      client.Client
 }
 
-// NewPCApps creates a new PCApps installer with a real Helm client and
-// Kubernetes clientset for credential fallback.
-func NewPCApps(chartURL, version, namespace, username, password string, valuesFiles []string) (*PCApps, error) {
+// NewPCApps creates a new PCApps installer. It validates that required fields
+// are non-empty but does not apply defaults — defaults live on the CLI flag
+// declarations only.
+func NewPCApps(c client.Client, version, namespace string, valuesFiles []string) (*PCApps, error) {
+	if version == "" {
+		return nil, fmt.Errorf("version is required")
+	}
 	if namespace == "" {
-		namespace = "argocd"
+		return nil, fmt.Errorf("namespace is required")
 	}
 
 	helm, err := NewHelmClient(namespace)
@@ -51,209 +53,87 @@ func NewPCApps(chartURL, version, namespace, username, password string, valuesFi
 		return nil, fmt.Errorf("creating helm client: %w", err)
 	}
 
-	clientset, err := newTypedK8sClient()
-	if err != nil {
-		return nil, fmt.Errorf("creating kubernetes client: %w", err)
-	}
-
 	return &PCApps{
-		ChartURL:    chartURL,
 		Version:     version,
 		Namespace:   namespace,
-		Username:    username,
-		Password:    password,
 		ValuesFiles: valuesFiles,
 		Helm:        helm,
-		Clientset:   clientset,
+		Client:      c,
 	}, nil
 }
 
-// newTypedK8sClient builds only a typed kubernetes.Interface from the
-// current kubeconfig, avoiding construction of an unused dynamic client.
-func newTypedK8sClient() (kubernetes.Interface, error) {
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	configOverrides := &clientcmd.ConfigOverrides{}
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
-
-	cfg, err := kubeConfig.ClientConfig()
-	if err != nil {
-		return nil, fmt.Errorf("loading kubeconfig: %w", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("creating kubernetes clientset: %w", err)
-	}
-
-	return clientset, nil
-}
-
-// resolveCredentials returns the username and password to use for OCI registry
-// authentication. If explicit credentials are provided on the struct, those are
-// used. Otherwise it falls back to reading the K8s Secret created by
-// "oms beta install argocd".
-func (p *PCApps) resolveCredentials(ctx context.Context) (username, password string, err error) {
-	if p.Username != "" && p.Password != "" {
-		return p.Username, p.Password, nil
-	}
-
-	// Partial credentials (one set, the other missing) are treated as an error
-	// to avoid silently falling back with potentially mismatched credentials.
-	if p.Username != "" && p.Password == "" {
-		return "", "", fmt.Errorf("--username was provided but password is missing; set OMS_REPO_PASSWORD or enter it when prompted")
-	}
-	if p.Username == "" && p.Password != "" {
-		return "", "", fmt.Errorf("password was provided but --username is missing")
-	}
-
-	secret, err := p.Clientset.CoreV1().Secrets(ociCredentialNamespace).Get(ctx, ociCredentialSecretName, metav1.GetOptions{})
-	if err != nil {
-		return "", "", fmt.Errorf(
-			"no credentials provided and K8s secret %q not found in namespace %q: %w\n"+
-				"Provide --username or run 'oms beta install argocd --deploy-dc-config --registry-password <token>' first",
+// resolveFromSecret reads the OCI registry credentials and chart base URL from
+// the K8s Secret created by "oms beta install argocd --deploy-dc-config".
+// It returns the full OCI chart URL, username, and password.
+func (p *PCApps) resolveFromSecret(ctx context.Context) (chartURL, username, password string, err error) {
+	secret := &corev1.Secret{}
+	key := client.ObjectKey{Name: ociCredentialSecretName, Namespace: ociCredentialNamespace}
+	if err := p.Client.Get(ctx, key, secret); err != nil {
+		return "", "", "", fmt.Errorf(
+			"K8s secret %q not found in namespace %q: %w\n"+
+				"Run 'oms beta install argocd --deploy-dc-config' first to create registry credentials",
 			ociCredentialSecretName, ociCredentialNamespace, err,
 		)
 	}
 
+	baseURL := string(secret.Data["url"])
 	username = string(secret.Data["username"])
 	password = string(secret.Data["password"])
-	if username == "" || password == "" {
-		return "", "", fmt.Errorf(
-			"K8s secret %q in namespace %q is missing username or password fields",
+
+	if baseURL == "" || username == "" || password == "" {
+		return "", "", "", fmt.Errorf(
+			"K8s secret %q in namespace %q is missing required fields (url, username, or password)",
 			ociCredentialSecretName, ociCredentialNamespace,
 		)
 	}
 
-	log.Printf("Using credentials from K8s secret %q\n", ociCredentialSecretName)
-	return username, password, nil
+	chartURL = "oci://" + baseURL + "/" + pcAppsReleaseName
+	log.Printf("Using credentials from K8s secret %q (registry: %s)\n", ociCredentialSecretName, baseURL)
+	return chartURL, username, password, nil
 }
 
 // Install authenticates against the OCI registry and installs or upgrades the
-// pc-apps Helm chart.
+// pc-applications Helm chart.
 func (p *PCApps) Install(ctx context.Context) error {
-	host, releaseName, err := parseOCIChartURL(p.ChartURL)
-	if err != nil {
-		return err
-	}
-
 	// Validate values files before any network calls so local errors fail fast.
-	values, err := LoadAndMergeValues(p.ValuesFiles)
+	valueOpts := values.Options{ValueFiles: p.ValuesFiles}
+	vals, err := valueOpts.MergeValues(getter.All(cli.New()))
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
 	}
 
-	username, password, err := p.resolveCredentials(ctx)
+	chartURL, username, password, err := p.resolveFromSecret(ctx)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("Authenticating against OCI registry %q...\n", host)
-	if err := p.Helm.LoginRegistry(ctx, host, username, password); err != nil {
+	parsed, err := url.Parse(chartURL)
+	if err != nil {
+		return fmt.Errorf("parsing chart URL %q: %w", chartURL, err)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("chart URL %q has no host", chartURL)
+	}
+
+	log.Printf("Authenticating against OCI registry %q...\n", parsed.Host)
+	if err := p.Helm.LoginRegistry(ctx, parsed.Host, username, password); err != nil {
 		return fmt.Errorf("registry login failed: %w", err)
 	}
 
 	cfg := ChartConfig{
-		ReleaseName:     releaseName,
-		ChartName:       p.ChartURL,
+		ReleaseName:     pcAppsReleaseName,
+		ChartName:       chartURL,
 		Namespace:       p.Namespace,
 		Version:         p.Version,
-		Values:          values,
+		Values:          vals,
 		CreateNamespace: true,
 	}
 
-	if p.Version != "" {
-		log.Printf("Installing/Upgrading %s (version %s) into namespace %s\n", releaseName, p.Version, p.Namespace)
-	} else {
-		log.Printf("Installing/Upgrading %s (latest) into namespace %s\n", releaseName, p.Namespace)
+	log.Printf("Installing/Upgrading %s (version %s) into namespace %s\n", pcAppsReleaseName, p.Version, p.Namespace)
+	if err := p.Helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{InstallIfNotExist: true}); err != nil {
+		return fmt.Errorf("install/upgrade failed: %w", err)
 	}
 
-	existing, err := p.Helm.FindRelease(p.Namespace, releaseName)
-	if err != nil {
-		return fmt.Errorf("checking existing release: %w", err)
-	}
-
-	if existing != nil {
-		log.Printf("Found existing release %s (chart version %s), upgrading...\n", releaseName, existing.InstalledVersion)
-		if err := p.Helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{}); err != nil {
-			return fmt.Errorf("upgrade failed: %w", err)
-		}
-		fmt.Printf("Successfully upgraded %s\n", releaseName)
-	} else {
-		log.Printf("No existing release found, performing fresh install...\n")
-		if err := p.Helm.InstallChart(ctx, cfg); err != nil {
-			return fmt.Errorf("install failed: %w", err)
-		}
-		fmt.Printf("Successfully installed %s\n", releaseName)
-	}
-
+	fmt.Printf("Successfully installed/upgraded %s\n", pcAppsReleaseName)
 	return nil
-}
-
-// parseOCIChartURL extracts the registry host and chart name from an OCI URL.
-// Example: "oci://ghcr.io/codesphere-cloud/charts/pc-apps" -> ("ghcr.io", "pc-apps", nil)
-func parseOCIChartURL(chartURL string) (host string, chartName string, err error) {
-	if !strings.HasPrefix(chartURL, "oci://") {
-		return "", "", fmt.Errorf("chart URL must start with \"oci://\", got %q", chartURL)
-	}
-
-	// Replace oci:// with https:// for standard URL parsing
-	parsed, err := url.Parse(strings.Replace(chartURL, "oci://", "https://", 1))
-	if err != nil {
-		return "", "", fmt.Errorf("parsing chart URL %q: %w", chartURL, err)
-	}
-
-	host = parsed.Host
-	if host == "" {
-		return "", "", fmt.Errorf("chart URL %q has no host", chartURL)
-	}
-
-	chartName = path.Base(parsed.Path)
-	if chartName == "" || chartName == "." || chartName == "/" {
-		return "", "", fmt.Errorf("chart URL %q has no chart name in path", chartURL)
-	}
-
-	return host, chartName, nil
-}
-
-// LoadAndMergeValues reads multiple YAML values files and deep-merges them in
-// order (later files override earlier ones).
-func LoadAndMergeValues(files []string) (map[string]interface{}, error) {
-	merged := map[string]interface{}{}
-
-	for _, f := range files {
-		data, err := os.ReadFile(f)
-		if err != nil {
-			return nil, fmt.Errorf("reading values file %q: %w", f, err)
-		}
-
-		var vals map[string]interface{}
-		if err := yaml.Unmarshal(data, &vals); err != nil {
-			return nil, fmt.Errorf("parsing values file %q: %w", f, err)
-		}
-
-		merged = deepMerge(merged, vals)
-	}
-
-	return merged, nil
-}
-
-// deepMerge recursively merges src into dst. Values in src take precedence.
-func deepMerge(dst, src map[string]interface{}) map[string]interface{} {
-	for key, srcVal := range src {
-		dstVal, exists := dst[key]
-		if !exists {
-			dst[key] = srcVal
-			continue
-		}
-
-		// If both are maps, recurse
-		srcMap, srcOk := srcVal.(map[string]interface{})
-		dstMap, dstOk := dstVal.(map[string]interface{})
-		if srcOk && dstOk {
-			dst[key] = deepMerge(dstMap, srcMap)
-		} else {
-			dst[key] = srcVal
-		}
-	}
-	return dst
 }
