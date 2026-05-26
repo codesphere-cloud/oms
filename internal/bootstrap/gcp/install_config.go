@@ -178,6 +178,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
+
+	b.Env.InstallConfig.Cluster.Kyverno = &files.KyvernoConfig{
+		Enabled: false,
+	}
+
 	b.Env.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
 	b.Env.InstallConfig.Cluster.Gateway.Annotations = map[string]string{
 		"cloud.google.com/load-balancer-ipv4": b.Env.GatewayIP,
