@@ -401,10 +401,11 @@ type FlavorConfig struct {
 }
 
 type TelemetryExport struct {
-	Endpoint     string `yaml:"endpoint"`
-	RemoteExport bool   `yaml:"remoteExport"`
-	Traces       bool   `yaml:"traces"`
-	SpanMetrics  bool   `yaml:"spanMetrics"`
+	RemoteEndpoint string `yaml:"endpoint"`
+	RemoteExport   bool   `yaml:"remoteExport"`
+	Traces         bool   `yaml:"traces"`
+	TraceEndpoint  string `yaml:"traceEndpoint,omitempty"`
+	SpanMetrics    bool   `yaml:"spanMetrics"`
 }
 
 type ChartOverride = map[string]interface{}

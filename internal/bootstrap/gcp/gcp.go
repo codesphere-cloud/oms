@@ -128,7 +128,7 @@ type CodesphereEnvironment struct {
 	CentralOtelUsername    string `json:"-"`
 	CentralOtelPassword    string `json:"-"`
 	CentralOtelSpanMetrics bool   `json:"-"`
-	LocalTraceExport       bool   `json:"-"`
+	LocalTraceEndpoint     string `json:"-"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -412,7 +412,7 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	return b.validateCentralOtelParams()
+	return b.validateTelemetryExportParams()
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -519,7 +519,7 @@ func (b *GCPBootstrapper) validateExternalLokiParams() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) validateCentralOtelParams() error {
+func (b *GCPBootstrapper) validateTelemetryExportParams() error {
 	if b.Env.CentralOtelEndpoint != "" && b.Env.CentralOtelPassword == "" {
 		return fmt.Errorf("central OTel password is required when central OTel endpoint is set")
 	}

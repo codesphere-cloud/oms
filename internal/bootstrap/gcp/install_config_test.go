@@ -756,16 +756,16 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					te := bs.Env.InstallConfig.Codesphere.TelemetryExport
 					Expect(te).NotTo(BeNil())
-					Expect(te.Endpoint).To(Equal("https://otel.example.com"))
+					Expect(te.RemoteEndpoint).To(Equal("https://otel.example.com"))
 					Expect(te.RemoteExport).To(BeTrue())
 					Expect(te.Traces).To(BeFalse())
 					Expect(te.SpanMetrics).To(BeTrue())
 				})
 			})
 
-			Context("When LocalTraceExport is true (no password)", func() {
+			Context("When LocalTraceEndpoint is set (no password)", func() {
 				BeforeEach(func() {
-					csEnv.LocalTraceExport = true
+					csEnv.LocalTraceEndpoint = "http://localhost:4318"
 					csEnv.CentralOtelEndpoint = "https://otel.example.com"
 				})
 				It("sets TelemetryExport with Traces true and RemoteExport false", func() {
@@ -779,17 +779,17 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					te := bs.Env.InstallConfig.Codesphere.TelemetryExport
 					Expect(te).NotTo(BeNil())
-					Expect(te.Endpoint).To(Equal("https://otel.example.com"))
+					Expect(te.RemoteEndpoint).To(Equal("https://otel.example.com"))
 					Expect(te.RemoteExport).To(BeFalse())
 					Expect(te.Traces).To(BeTrue())
+					Expect(te.TraceEndpoint).To(Equal("http://localhost:4318"))
 					Expect(te.SpanMetrics).To(BeFalse())
 				})
 			})
 
-			Context("When both CentralOtelPassword and LocalTraceExport are set", func() {
+			Context("When both CentralOtelPassword and LocalTraceEndpoint are set", func() {
 				BeforeEach(func() {
 					csEnv.CentralOtelPassword = "otel-secret"
-					csEnv.LocalTraceExport = true
 					csEnv.CentralOtelEndpoint = "https://otel.example.com"
 					csEnv.CentralOtelSpanMetrics = true
 				})
@@ -804,9 +804,9 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					te := bs.Env.InstallConfig.Codesphere.TelemetryExport
 					Expect(te).NotTo(BeNil())
-					Expect(te.Endpoint).To(Equal("https://otel.example.com"))
+					Expect(te.RemoteEndpoint).To(Equal("https://otel.example.com"))
 					Expect(te.RemoteExport).To(BeTrue())
-					Expect(te.Traces).To(BeTrue())
+					Expect(te.Traces).To(BeFalse())
 					Expect(te.SpanMetrics).To(BeTrue())
 				})
 			})
