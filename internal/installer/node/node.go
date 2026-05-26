@@ -116,7 +116,18 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 
 const jumpboxUser = "ubuntu"
 
-// NewNode creates a new Node with the given File
+// NewNode creates a new Node with the given keyPath, FileIO, and NodeClient.
+// Use this constructor when creating nodes from outside the node package so that
+// the unexported keyPath field is correctly initialized.
+func NewNode(keyPath string, fileIO util.FileIO, nodeClient NodeClient) *Node {
+	return &Node{
+		keyPath:     util.ExpandPath(keyPath),
+		FileIO:      fileIO,
+		NodeClient:  nodeClient,
+		clientCache: make(map[string]*ssh.Client),
+	}
+}
+
 // CreateSubNode creates a Node object representing a node behind a jumpbox
 func (n *Node) CreateSubNode(name string, externalIP string, internalIP string) *Node {
 	return &Node{

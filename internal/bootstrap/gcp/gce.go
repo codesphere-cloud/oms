@@ -91,10 +91,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	}
 
 	// Create nodes from results (in main goroutine, not in spawned goroutines)
-	b.Env.Jumpbox = &node.Node{
-		NodeClient: b.NodeClient,
-		FileIO:     b.fw,
-	}
+	b.Env.Jumpbox = node.NewNode(b.Env.SSHPrivateKeyPath, b.fw, b.NodeClient)
 	for result := range resultCh {
 		switch result.vmType {
 		case "jumpbox":
@@ -460,10 +457,7 @@ func (b *GCPBootstrapper) GetNodeByName(name string) (*node.Node, error) {
 		return nil, fmt.Errorf("failed to get instance %s: %w", name, err)
 	}
 
-	existingNode := &node.Node{
-		NodeClient: b.NodeClient,
-		FileIO:     b.fw,
-	}
+	existingNode := node.NewNode(b.Env.SSHPrivateKeyPath, b.fw, b.NodeClient)
 
 	internalIP, externalIP := ExtractInstanceIPs(existingInstance)
 	existingNode.UpdateNode(name, externalIP, internalIP)
