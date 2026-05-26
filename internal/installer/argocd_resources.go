@@ -60,16 +60,20 @@ func (a *argoCDResources) ApplyAll(ctx context.Context) error {
 		return fmt.Errorf("applying app projects: %w", err)
 	}
 
-	if err := a.applyLocalCluster(ctx); err != nil {
-		return fmt.Errorf("applying local cluster secret: %w", err)
+	if a.DatacenterId != "" {
+		if err := a.applyLocalCluster(ctx); err != nil {
+			return fmt.Errorf("applying local cluster secret: %w", err)
+		}
 	}
 
 	if err := a.applyHelmRegistrySecret(ctx); err != nil {
 		return fmt.Errorf("applying helm registry secret: %w", err)
 	}
 
-	if err := a.applyGitRepoSecret(ctx); err != nil {
-		return fmt.Errorf("applying git repo secret: %w", err)
+	if a.GitPassword != "" {
+		if err := a.applyGitRepoSecret(ctx); err != nil {
+			return fmt.Errorf("applying git repo secret: %w", err)
+		}
 	}
 
 	return nil
