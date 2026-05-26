@@ -237,7 +237,7 @@ var _ = Describe("PCApps.Install", func() {
 		})
 
 		AfterEach(func() {
-			os.RemoveAll(tmpDir)
+			Expect(os.RemoveAll(tmpDir)).To(Succeed())
 		})
 
 		It("merges multiple values files in order", func() {
@@ -299,7 +299,7 @@ var _ = Describe("LoadAndMergeValues", func() {
 	})
 
 	AfterEach(func() {
-		os.RemoveAll(tmpDir)
+		Expect(os.RemoveAll(tmpDir)).To(Succeed())
 	})
 
 	It("returns empty map for no files", func() {

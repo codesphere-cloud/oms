@@ -77,6 +77,15 @@ func (p *PCApps) resolveCredentials(ctx context.Context) (username, password str
 		return p.Username, p.Password, nil
 	}
 
+	// Partial credentials (one set, the other missing) are treated as an error
+	// to avoid silently falling back with potentially mismatched credentials.
+	if p.Username != "" && p.Password == "" {
+		return "", "", fmt.Errorf("--username was provided but password is missing; set OMS_REPO_PASSWORD or enter it when prompted")
+	}
+	if p.Username == "" && p.Password != "" {
+		return "", "", fmt.Errorf("password was provided but --username is missing")
+	}
+
 	secret, err := p.Clientset.CoreV1().Secrets(ociCredentialNamespace).Get(ctx, ociCredentialSecretName, metav1.GetOptions{})
 	if err != nil {
 		return "", "", fmt.Errorf(

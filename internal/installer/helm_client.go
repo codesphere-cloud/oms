@@ -64,16 +64,9 @@ type HelmClient interface {
 // Concrete implementation backed by the Helm Go SDK v4
 // ---------------------------------------------------------------------------
 
-type registryCredentials struct {
-	host     string
-	username string
-	password string
-}
-
 type helmClient struct {
 	defaultNamespace string
 	driver           string
-	registryCreds    *registryCredentials
 	registryClient   *registry.Client
 }
 
@@ -94,11 +87,6 @@ func (h *helmClient) LoginRegistry(_ context.Context, host, username, password s
 		return fmt.Errorf("registry login to %q failed: %w", host, err)
 	}
 
-	h.registryCreds = &registryCredentials{
-		host:     host,
-		username: username,
-		password: password,
-	}
 	h.registryClient = registryClient
 	return nil
 }
