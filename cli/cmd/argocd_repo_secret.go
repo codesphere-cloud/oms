@@ -3,9 +3,11 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/installer"
@@ -55,10 +57,26 @@ func (c *InstallArgoCDRepoSecretCmd) RunE(_ *cobra.Command, args []string) error
 }
 
 // resolvePassword reads the password from the OMS_REPO_PASSWORD environment variable,
-// or prompts the user interactively if the env var is not set.
+// from stdin if piped, or prompts the user interactively if neither is available.
 func (c *InstallArgoCDRepoSecretCmd) resolvePassword() (string, error) {
 	if pw := os.Getenv("OMS_REPO_PASSWORD"); len(pw) != 0 {
 		return pw, nil
+	}
+
+	// If stdin is not a terminal, read the password from the pipe.
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		scanner := bufio.NewScanner(os.Stdin)
+		if scanner.Scan() {
+			pw := strings.TrimSpace(scanner.Text())
+			if len(pw) == 0 {
+				return "", fmt.Errorf("password is required; received empty input from stdin")
+			}
+			return pw, nil
+		}
+		if err := scanner.Err(); err != nil {
+			return "", fmt.Errorf("failed to read password from stdin: %w", err)
+		}
+		return "", fmt.Errorf("password is required; no input received from stdin")
 	}
 
 	fmt.Print("Repository password/token: ")
@@ -86,7 +104,7 @@ func AddArgoCDRepoSecretCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 				The password is read from the OMS_REPO_PASSWORD environment variable.
 				If not set, it will be prompted interactively (hidden input).
 				You can also pipe the password via stdin: echo "token" | oms beta install argocd-repo-secret ...`),
-			Example: formatExamples("install argocd-repo-secret", []packageio.Example{
+			Example: formatExamples("beta install argocd-repo-secret", []packageio.Example{
 				{Cmd: "", Desc: "Create the secret using defaults (prompts for password)"},
 				{Cmd: "--url my-mirror.example.com/charts", Desc: "Use a mirrored registry URL"},
 				{Cmd: "--url my-mirror.example.com/charts --username MyBot", Desc: "Use a mirrored registry with custom username"},

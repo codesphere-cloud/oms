@@ -14,6 +14,8 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+// NOTE: Assertions use secret.StringData because the fake client does not perform
+// the server-side StringData -> Data (base64) conversion that real Kubernetes does.
 var _ = Describe("ArgoCDRepoSecret.Apply", func() {
 
 	var (

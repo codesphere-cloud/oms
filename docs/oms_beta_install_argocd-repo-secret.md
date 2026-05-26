@@ -21,13 +21,13 @@ oms beta install argocd-repo-secret [flags]
 
 ```
 # Create the secret using defaults (prompts for password)
-$ oms install argocd-repo-secret
+$ oms beta install argocd-repo-secret
 
 # Use a mirrored registry URL
-$ oms install argocd-repo-secret --url my-mirror.example.com/charts
+$ oms beta install argocd-repo-secret --url my-mirror.example.com/charts
 
 # Use a mirrored registry with custom username
-$ oms install argocd-repo-secret --url my-mirror.example.com/charts --username MyBot
+$ oms beta install argocd-repo-secret --url my-mirror.example.com/charts --username MyBot
 
 ```
 
