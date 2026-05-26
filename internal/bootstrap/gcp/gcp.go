@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -755,6 +756,12 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		}
 	}
 
+	if b.Env.SSHPrivateKeyPath != "" {
+		if err := b.ensureSSHKeyOnJumpbox(); err != nil {
+			return fmt.Errorf("failed to copy SSH private key to jumpbox: %w", err)
+		}
+	}
+
 	hasOms := b.Env.Jumpbox.HasCommand("oms")
 	if hasOms {
 		return nil
@@ -763,6 +770,26 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 	err := b.Env.Jumpbox.InstallOms()
 	if err != nil {
 		return fmt.Errorf("failed to install OMS on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// ensureSSHKeyOnJumpbox copies the SSH private key from the local machine to the
+// jumpbox so that the installer script can SSH from the jumpbox to the cluster nodes.
+func (b *GCPBootstrapper) ensureSSHKeyOnJumpbox() error {
+	expandedKeyPath := util.ExpandPath(b.Env.SSHPrivateKeyPath)
+	keyFileName := filepath.Base(expandedKeyPath)
+	remoteKeyPath := "/root/.ssh/" + keyFileName
+
+	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, expandedKeyPath, remoteKeyPath)
+	if err != nil {
+		return fmt.Errorf("failed to copy SSH private key to /root/.ssh: %w", err)
+	}
+
+	err = b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("chmod 600 %s", remoteKeyPath))
+	if err != nil {
+		return fmt.Errorf("failed to set permissions on SSH private key: %w", err)
 	}
 
 	return nil
