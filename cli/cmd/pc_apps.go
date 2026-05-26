@@ -3,7 +3,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -28,7 +27,7 @@ type InstallPCAppsOpts struct {
 	ValuesFiles []string
 }
 
-func (c *InstallPCAppsCmd) RunE(_ *cobra.Command, args []string) error {
+func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
 	var password string
 	if c.Opts.Username != "" {
 		pw, err := c.resolvePassword()
@@ -50,7 +49,7 @@ func (c *InstallPCAppsCmd) RunE(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
 	}
 
-	if err := pcApps.Install(context.Background()); err != nil {
+	if err := pcApps.Install(cmd.Context()); err != nil {
 		return fmt.Errorf("failed to install pc-apps: %w", err)
 	}
 
@@ -93,7 +92,7 @@ func AddPCAppsCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 			OMS_REPO_PASSWORD environment variable or prompted interactively.
 			Otherwise, credentials are read from the Kubernetes secret
 			"argocd-codesphere-oci-read" in the argocd namespace (created by
-			"oms beta install argocd").`),
+			"oms beta install argocd --deploy-dc-config --registry-password <token>").`),
 		Example: formatExamples("beta install pc-apps", []packageio.Example{
 			{Cmd: "--version 1.0.0", Desc: "Install a specific version (credentials from K8s secret)"},
 			{Cmd: "--version 1.0.0 --username CodesphereBot", Desc: "Install with explicit registry credentials (prompts for password)"},

@@ -12,7 +12,7 @@ If --username is provided, the registry password is read from the
 OMS_REPO_PASSWORD environment variable or prompted interactively.
 Otherwise, credentials are read from the Kubernetes secret
 "argocd-codesphere-oci-read" in the argocd namespace (created by
-"oms beta install argocd").
+"oms beta install argocd --deploy-dc-config --registry-password <token>").
 
 ```
 oms beta install pc-apps [flags]

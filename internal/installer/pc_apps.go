@@ -12,9 +12,9 @@ import (
 	"path"
 	"strings"
 
-	k8s "github.com/codesphere-cloud/oms/internal/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 	"gopkg.in/yaml.v3"
 )
 
@@ -51,9 +51,9 @@ func NewPCApps(chartURL, version, namespace, username, password string, valuesFi
 		return nil, fmt.Errorf("creating helm client: %w", err)
 	}
 
-	clientset, _, err := k8s.NewClients()
+	clientset, err := newTypedK8sClient()
 	if err != nil {
-		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
+		return nil, fmt.Errorf("creating kubernetes client: %w", err)
 	}
 
 	return &PCApps{
@@ -66,6 +66,26 @@ func NewPCApps(chartURL, version, namespace, username, password string, valuesFi
 		Helm:        helm,
 		Clientset:   clientset,
 	}, nil
+}
+
+// newTypedK8sClient builds only a typed kubernetes.Interface from the
+// current kubeconfig, avoiding construction of an unused dynamic client.
+func newTypedK8sClient() (kubernetes.Interface, error) {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	configOverrides := &clientcmd.ConfigOverrides{}
+	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides)
+
+	cfg, err := kubeConfig.ClientConfig()
+	if err != nil {
+		return nil, fmt.Errorf("loading kubeconfig: %w", err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating kubernetes clientset: %w", err)
+	}
+
+	return clientset, nil
 }
 
 // resolveCredentials returns the username and password to use for OCI registry
@@ -90,7 +110,7 @@ func (p *PCApps) resolveCredentials(ctx context.Context) (username, password str
 	if err != nil {
 		return "", "", fmt.Errorf(
 			"no credentials provided and K8s secret %q not found in namespace %q: %w\n"+
-				"Provide --username or run 'oms beta install argocd' first",
+				"Provide --username or run 'oms beta install argocd --deploy-dc-config --registry-password <token>' first",
 			ociCredentialSecretName, ociCredentialNamespace, err,
 		)
 	}
@@ -116,6 +136,12 @@ func (p *PCApps) Install(ctx context.Context) error {
 		return err
 	}
 
+	// Validate values files before any network calls so local errors fail fast.
+	values, err := LoadAndMergeValues(p.ValuesFiles)
+	if err != nil {
+		return fmt.Errorf("loading values files: %w", err)
+	}
+
 	username, password, err := p.resolveCredentials(ctx)
 	if err != nil {
 		return err
@@ -124,11 +150,6 @@ func (p *PCApps) Install(ctx context.Context) error {
 	log.Printf("Authenticating against OCI registry %q...\n", host)
 	if err := p.Helm.LoginRegistry(ctx, host, username, password); err != nil {
 		return fmt.Errorf("registry login failed: %w", err)
-	}
-
-	values, err := LoadAndMergeValues(p.ValuesFiles)
-	if err != nil {
-		return fmt.Errorf("loading values files: %w", err)
 	}
 
 	cfg := ChartConfig{

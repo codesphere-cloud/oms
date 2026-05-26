@@ -267,8 +267,6 @@ var _ = Describe("PCApps.Install", func() {
 		It("returns an error for non-existent values file", func() {
 			pcApps.ValuesFiles = []string{"/nonexistent/values.yaml"}
 
-			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", username, password).Return(nil)
-
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("reading values file"))
@@ -279,8 +277,6 @@ var _ = Describe("PCApps.Install", func() {
 			Expect(os.WriteFile(badFile, []byte("{{invalid yaml"), 0644)).To(Succeed())
 
 			pcApps.ValuesFiles = []string{badFile}
-
-			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", username, password).Return(nil)
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
