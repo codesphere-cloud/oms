@@ -13,6 +13,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 var _ = Describe("PCApps.Install", func() {
@@ -25,12 +28,14 @@ var _ = Describe("PCApps.Install", func() {
 	)
 
 	var (
-		helmMock *installer.MockHelmClient
-		pcApps   *installer.PCApps
+		helmMock  *installer.MockHelmClient
+		clientset *fake.Clientset
+		pcApps    *installer.PCApps
 	)
 
 	BeforeEach(func() {
 		helmMock = installer.NewMockHelmClient(GinkgoT())
+		clientset = fake.NewClientset()
 		pcApps = &installer.PCApps{
 			ChartURL:  chartURL,
 			Version:   version,
@@ -38,6 +43,7 @@ var _ = Describe("PCApps.Install", func() {
 			Username:  username,
 			Password:  password,
 			Helm:      helmMock,
+			Clientset: clientset,
 		}
 	})
 
@@ -136,6 +142,88 @@ var _ = Describe("PCApps.Install", func() {
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no host"))
+		})
+	})
+
+	Context("credential fallback from K8s secret", func() {
+		const (
+			secretUsername = "github"
+			secretPassword = "token-from-k8s-secret"
+		)
+
+		BeforeEach(func() {
+			// No explicit credentials
+			pcApps.Username = ""
+			pcApps.Password = ""
+
+			// Create the K8s secret that "install argocd" would have created
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "argocd-codesphere-oci-read",
+					Namespace: "argocd",
+				},
+				Data: map[string][]byte{
+					"username": []byte(secretUsername),
+					"password": []byte(secretPassword),
+				},
+			}
+			_, err := clientset.CoreV1().Secrets("argocd").Create(
+				context.Background(), secret, metav1.CreateOptions{},
+			)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("reads credentials from the K8s secret and installs successfully", func() {
+			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
+			helmMock.EXPECT().FindRelease(namespace, "pc-apps").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything).Return(nil)
+
+			err := pcApps.Install(context.Background())
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("no credentials and no K8s secret", func() {
+		BeforeEach(func() {
+			pcApps.Username = ""
+			pcApps.Password = ""
+			// clientset has no secrets
+		})
+
+		It("returns a clear error suggesting how to fix", func() {
+			err := pcApps.Install(context.Background())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("argocd-codesphere-oci-read"))
+			Expect(err.Error()).To(ContainSubstring("oms beta install argocd"))
+		})
+	})
+
+	Context("K8s secret exists but missing fields", func() {
+		BeforeEach(func() {
+			pcApps.Username = ""
+			pcApps.Password = ""
+
+			// Secret exists but with empty data
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "argocd-codesphere-oci-read",
+					Namespace: "argocd",
+				},
+				Data: map[string][]byte{
+					"username": []byte("github"),
+					// password is missing
+				},
+			}
+			_, err := clientset.CoreV1().Secrets("argocd").Create(
+				context.Background(), secret, metav1.CreateOptions{},
+			)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("returns an error about missing fields", func() {
+			err := pcApps.Install(context.Background())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("missing username or password"))
 		})
 	})
 

@@ -29,20 +29,13 @@ type InstallPCAppsOpts struct {
 }
 
 func (c *InstallPCAppsCmd) RunE(_ *cobra.Command, args []string) error {
-	requiredFlags := map[string]string{
-		"chart":    c.Opts.Chart,
-		"username": c.Opts.Username,
-	}
-
-	for flagName, value := range requiredFlags {
-		if value == "" {
-			return fmt.Errorf("flag --%s is required", flagName)
+	var password string
+	if c.Opts.Username != "" {
+		pw, err := c.resolvePassword()
+		if err != nil {
+			return err
 		}
-	}
-
-	password, err := c.resolvePassword()
-	if err != nil {
-		return err
+		password = pw
 	}
 
 	pcApps, err := installer.NewPCApps(
@@ -85,26 +78,32 @@ func (c *InstallPCAppsCmd) resolvePassword() (string, error) {
 
 func AddPCAppsCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	pcApps := InstallPCAppsCmd{
-		cmd: &cobra.Command{
-			Use:   "pc-apps",
-			Short: "Install the pc-apps Helm chart from a private OCI registry",
-			Long: packageio.Long(`Install or upgrade the pc-apps Helm chart from a private OCI registry
-				into the target cluster. This chart deploys ArgoCD Application resources
-				that manage the platform components.
-
-				The registry password is read from the OMS_REPO_PASSWORD environment variable.
-				If not set, it will be prompted interactively (hidden input).`),
-			Example: formatExamples("install pc-apps", []packageio.Example{
-				{Cmd: "--chart oci://ghcr.io/codesphere-cloud/charts/pc-apps --version 1.0.0 --username CodesphereBot", Desc: "Install a specific version (prompts for password)"},
-				{Cmd: "--chart oci://ghcr.io/codesphere-cloud/charts/pc-apps --username CodesphereBot -f base.yaml -f dc-overlay.yaml", Desc: "Install latest with multiple values files"},
-				{Cmd: "--chart oci://ghcr.io/codesphere-cloud/charts/pc-apps --username CodesphereBot --namespace custom-ns", Desc: "Install into a custom namespace"},
-			}),
+		Opts: InstallPCAppsOpts{
+			GlobalOptions: opts,
 		},
 	}
-	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Chart, "chart", "", "Full OCI chart URL (e.g. oci://ghcr.io/codesphere-cloud/charts/pc-apps)")
+	pcApps.cmd = &cobra.Command{
+		Use:   "pc-apps",
+		Short: "Install the pc-apps Helm chart from a private OCI registry",
+		Long: packageio.Long(`Install or upgrade the pc-apps Helm chart from a private OCI registry
+			into the target cluster. This chart deploys ArgoCD Application resources
+			that manage the platform components.
+
+			If --username is provided, the registry password is read from the
+			OMS_REPO_PASSWORD environment variable or prompted interactively.
+			Otherwise, credentials are read from the Kubernetes secret
+			"argocd-codesphere-oci-read" in the argocd namespace (created by
+			"oms beta install argocd").`),
+		Example: formatExamples("beta install pc-apps", []packageio.Example{
+			{Cmd: "--version 1.0.0", Desc: "Install a specific version (credentials from K8s secret)"},
+			{Cmd: "--version 1.0.0 --username CodesphereBot", Desc: "Install with explicit registry credentials (prompts for password)"},
+			{Cmd: "--chart oci://ghcr.io/codesphere-cloud/charts/pc-apps --version 1.0.0 -f base.yaml -f dc-overlay.yaml", Desc: "Install with custom chart and values files"},
+		}),
+	}
+	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Chart, "chart", "oci://ghcr.io/codesphere-cloud/charts/pc-apps", "Full OCI chart URL")
 	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Version, "version", "", "Chart version to install (default: latest)")
 	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Namespace, "namespace", "argocd", "Target namespace for the Helm release")
-	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Username, "username", "", "Username for OCI registry authentication")
+	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Username, "username", "", "Username for OCI registry authentication (if omitted, reads from K8s secret)")
 	pcApps.cmd.Flags().StringArrayVarP(&pcApps.Opts.ValuesFiles, "values", "f", nil, "Path to values YAML file (can be specified multiple times, merged in order)")
 	pcApps.cmd.RunE = pcApps.RunE
 

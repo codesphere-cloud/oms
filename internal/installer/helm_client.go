@@ -74,6 +74,7 @@ type helmClient struct {
 	defaultNamespace string
 	driver           string
 	registryCreds    *registryCredentials
+	registryClient   *registry.Client
 }
 
 func NewHelmClient(namespace string) (HelmClient, error) {
@@ -84,11 +85,21 @@ func NewHelmClient(namespace string) (HelmClient, error) {
 }
 
 func (h *helmClient) LoginRegistry(_ context.Context, host, username, password string) error {
+	registryClient, err := registry.NewClient()
+	if err != nil {
+		return fmt.Errorf("creating registry client: %w", err)
+	}
+
+	if err := registryClient.Login(host, registry.LoginOptBasicAuth(username, password)); err != nil {
+		return fmt.Errorf("registry login to %q failed: %w", host, err)
+	}
+
 	h.registryCreds = &registryCredentials{
 		host:     host,
 		username: username,
 		password: password,
 	}
+	h.registryClient = registryClient
 	return nil
 }
 
@@ -124,22 +135,16 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 		return nil, fmt.Errorf("helm action config init failed: %w", err)
 	}
 
-	registryClient, err := registry.NewClient()
-	if err != nil {
-		return nil, fmt.Errorf("helm registry client init failed: %w", err)
-	}
-
-	if h.registryCreds != nil {
-		err = registryClient.Login(
-			h.registryCreds.host,
-			registry.LoginOptBasicAuth(h.registryCreds.username, h.registryCreds.password),
-		)
+	if h.registryClient != nil {
+		// Reuse the registry client that was authenticated during LoginRegistry.
+		actionConfig.RegistryClient = h.registryClient
+	} else {
+		registryClient, err := registry.NewClient()
 		if err != nil {
-			return nil, fmt.Errorf("helm registry login to %q failed: %w", h.registryCreds.host, err)
+			return nil, fmt.Errorf("helm registry client init failed: %w", err)
 		}
+		actionConfig.RegistryClient = registryClient
 	}
-
-	actionConfig.RegistryClient = registryClient
 
 	return &helmEnv{actionConfig: actionConfig, settings: settings}, nil
 }

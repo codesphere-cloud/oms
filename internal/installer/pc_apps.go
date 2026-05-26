@@ -12,7 +12,18 @@ import (
 	"path"
 	"strings"
 
+	k8s "github.com/codesphere-cloud/oms/internal/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	// ociCredentialSecretName is the K8s Secret created by "oms beta install argocd"
+	// that stores OCI registry credentials for pulling Codesphere charts.
+	ociCredentialSecretName = "argocd-codesphere-oci-read"
+	// ociCredentialNamespace is the namespace where the credential secret lives.
+	ociCredentialNamespace = "argocd"
 )
 
 // PCApps holds the configuration for installing the pc-apps Helm chart from
@@ -21,13 +32,15 @@ type PCApps struct {
 	ChartURL    string   // full OCI chart reference, e.g. "oci://ghcr.io/codesphere-cloud/charts/pc-apps"
 	Version     string   // chart version ("" means latest)
 	Namespace   string   // target namespace (default: "argocd")
-	Username    string   // OCI registry username
-	Password    string   // OCI registry password/token
+	Username    string   // OCI registry username (optional, falls back to K8s secret)
+	Password    string   // OCI registry password/token (optional, falls back to K8s secret)
 	ValuesFiles []string // paths to values YAML files, merged in order
 	Helm        HelmClient
+	Clientset   kubernetes.Interface
 }
 
-// NewPCApps creates a new PCApps installer with a real Helm client.
+// NewPCApps creates a new PCApps installer with a real Helm client and
+// Kubernetes clientset for credential fallback.
 func NewPCApps(chartURL, version, namespace, username, password string, valuesFiles []string) (*PCApps, error) {
 	if namespace == "" {
 		namespace = "argocd"
@@ -38,6 +51,11 @@ func NewPCApps(chartURL, version, namespace, username, password string, valuesFi
 		return nil, fmt.Errorf("creating helm client: %w", err)
 	}
 
+	clientset, _, err := k8s.NewClients()
+	if err != nil {
+		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
+	}
+
 	return &PCApps{
 		ChartURL:    chartURL,
 		Version:     version,
@@ -46,7 +64,39 @@ func NewPCApps(chartURL, version, namespace, username, password string, valuesFi
 		Password:    password,
 		ValuesFiles: valuesFiles,
 		Helm:        helm,
+		Clientset:   clientset,
 	}, nil
+}
+
+// resolveCredentials returns the username and password to use for OCI registry
+// authentication. If explicit credentials are provided on the struct, those are
+// used. Otherwise it falls back to reading the K8s Secret created by
+// "oms beta install argocd".
+func (p *PCApps) resolveCredentials(ctx context.Context) (username, password string, err error) {
+	if p.Username != "" && p.Password != "" {
+		return p.Username, p.Password, nil
+	}
+
+	secret, err := p.Clientset.CoreV1().Secrets(ociCredentialNamespace).Get(ctx, ociCredentialSecretName, metav1.GetOptions{})
+	if err != nil {
+		return "", "", fmt.Errorf(
+			"no credentials provided and K8s secret %q not found in namespace %q: %w\n"+
+				"Provide --username or run 'oms beta install argocd' first",
+			ociCredentialSecretName, ociCredentialNamespace, err,
+		)
+	}
+
+	username = string(secret.Data["username"])
+	password = string(secret.Data["password"])
+	if username == "" || password == "" {
+		return "", "", fmt.Errorf(
+			"K8s secret %q in namespace %q is missing username or password fields",
+			ociCredentialSecretName, ociCredentialNamespace,
+		)
+	}
+
+	log.Printf("Using credentials from K8s secret %q\n", ociCredentialSecretName)
+	return username, password, nil
 }
 
 // Install authenticates against the OCI registry and installs or upgrades the
@@ -57,8 +107,13 @@ func (p *PCApps) Install(ctx context.Context) error {
 		return err
 	}
 
+	username, password, err := p.resolveCredentials(ctx)
+	if err != nil {
+		return err
+	}
+
 	log.Printf("Authenticating against OCI registry %q...\n", host)
-	if err := p.Helm.LoginRegistry(ctx, host, p.Username, p.Password); err != nil {
+	if err := p.Helm.LoginRegistry(ctx, host, username, password); err != nil {
 		return fmt.Errorf("registry login failed: %w", err)
 	}
 
