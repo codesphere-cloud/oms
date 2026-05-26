@@ -8,8 +8,11 @@ Install or upgrade the pc-apps Helm chart from a private OCI registry
 into the target cluster. This chart deploys ArgoCD Application resources
 that manage the platform components.
 
-The registry password is read from the OMS_REPO_PASSWORD environment variable.
-If not set, it will be prompted interactively (hidden input).
+If --username is provided, the registry password is read from the
+OMS_REPO_PASSWORD environment variable or prompted interactively.
+Otherwise, credentials are read from the Kubernetes secret
+"argocd-codesphere-oci-read" in the argocd namespace (created by
+"oms beta install argocd").
 
 ```
 oms beta install pc-apps [flags]
@@ -18,24 +21,24 @@ oms beta install pc-apps [flags]
 ### Examples
 
 ```
-# Install a specific version (prompts for password)
-$ oms install pc-apps --chart oci://ghcr.io/codesphere-cloud/charts/pc-apps --version 1.0.0 --username CodesphereBot
+# Install a specific version (credentials from K8s secret)
+$ oms beta install pc-apps --version 1.0.0
 
-# Install latest with multiple values files
-$ oms install pc-apps --chart oci://ghcr.io/codesphere-cloud/charts/pc-apps --username CodesphereBot -f base.yaml -f dc-overlay.yaml
+# Install with explicit registry credentials (prompts for password)
+$ oms beta install pc-apps --version 1.0.0 --username CodesphereBot
 
-# Install into a custom namespace
-$ oms install pc-apps --chart oci://ghcr.io/codesphere-cloud/charts/pc-apps --username CodesphereBot --namespace custom-ns
+# Install with custom chart and values files
+$ oms beta install pc-apps --chart oci://ghcr.io/codesphere-cloud/charts/pc-apps --version 1.0.0 -f base.yaml -f dc-overlay.yaml
 
 ```
 
 ### Options
 
 ```
-      --chart string         Full OCI chart URL (e.g. oci://ghcr.io/codesphere-cloud/charts/pc-apps)
+      --chart string         Full OCI chart URL (default "oci://ghcr.io/codesphere-cloud/charts/pc-apps")
   -h, --help                 help for pc-apps
       --namespace string     Target namespace for the Helm release (default "argocd")
-      --username string      Username for OCI registry authentication
+      --username string      Username for OCI registry authentication (if omitted, reads from K8s secret)
   -f, --values stringArray   Path to values YAML file (can be specified multiple times, merged in order)
       --version string       Chart version to install (default: latest)
 ```
