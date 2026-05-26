@@ -401,7 +401,7 @@ type FlavorConfig struct {
 }
 
 type TelemetryExport struct {
-	RemoteEndpoint string `yaml:"endpoint"`
+	RemoteEndpoint string `yaml:"remoteEndpoint"`
 	RemoteExport   bool   `yaml:"remoteExport"`
 	Traces         bool   `yaml:"traces"`
 	TraceEndpoint  string `yaml:"traceEndpoint,omitempty"`
