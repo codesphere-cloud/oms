@@ -893,9 +893,9 @@ License URL: https://github.com/prometheus/procfs/blob/v0.20.1/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260519021904-1167f3ff9fe1
+Version: v0.0.0-20260526050911-9560986a2fe2
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/1167f3ff9fe1/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/9560986a2fe2/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1121,9 +1121,9 @@ License URL: https://cs.opensource.google/go/x/mod/+/v0.36.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.54.0
+Version: v0.55.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.54.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.55.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
