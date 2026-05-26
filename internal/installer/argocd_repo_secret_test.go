@@ -32,13 +32,13 @@ var _ = Describe("ArgoCDRepoSecret.Apply", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	Context("creating a new Helm OCI repository secret", func() {
+	Context("creating the codesphere-helm-repo secret", func() {
 		It("creates the secret with all expected fields", func() {
 			repoSecret := &installer.ArgoCDRepoSecret{
 				Config: installer.ArgoCDRepoSecretConfig{
-					Name:       "ghcr-codesphere-helm-repo",
+					Name:       "codesphere-helm-repo",
 					URL:        "ghcr.io/codesphere-cloud/charts",
-					RepoName:   "ghcr-codesphere",
+					RepoName:   "codesphere-helm-repo",
 					Type:       "helm",
 					Username:   "CodesphereBot",
 					Password:   "super-secret-token",
@@ -51,30 +51,30 @@ var _ = Describe("ArgoCDRepoSecret.Apply", func() {
 			err := repoSecret.Apply(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "ghcr-codesphere-helm-repo", metav1.GetOptions{})
+			secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "codesphere-helm-repo", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(secret.Labels).To(HaveKeyWithValue("argocd.argoproj.io/secret-type", "repository"))
 			Expect(secret.StringData["type"]).To(Equal("helm"))
 			Expect(secret.StringData["url"]).To(Equal("ghcr.io/codesphere-cloud/charts"))
-			Expect(secret.StringData["name"]).To(Equal("ghcr-codesphere"))
+			Expect(secret.StringData["name"]).To(Equal("codesphere-helm-repo"))
 			Expect(secret.StringData["username"]).To(Equal("CodesphereBot"))
 			Expect(secret.StringData["password"]).To(Equal("super-secret-token"))
 			Expect(secret.StringData["enableOCI"]).To(Equal("true"))
 		})
 	})
 
-	Context("creating a git repo-creds secret", func() {
-		It("creates the secret with git type and repo-creds label", func() {
+	Context("using a mirrored registry URL", func() {
+		It("creates the secret with the custom URL", func() {
 			repoSecret := &installer.ArgoCDRepoSecret{
 				Config: installer.ArgoCDRepoSecretConfig{
-					Name:       "my-git-repo",
-					URL:        "https://github.com/my-org",
-					RepoName:   "my-org",
-					Type:       "git",
-					Username:   "bot-user",
-					Password:   "git-token",
-					EnableOCI:  false,
-					SecretType: "repo-creds",
+					Name:       "codesphere-helm-repo",
+					URL:        "my-mirror.example.com/charts",
+					RepoName:   "codesphere-helm-repo",
+					Type:       "helm",
+					Username:   "CodesphereBot",
+					Password:   "mirror-token",
+					EnableOCI:  true,
+					SecretType: "repository",
 				},
 				Clientset: fakeClient,
 			}
@@ -82,15 +82,10 @@ var _ = Describe("ArgoCDRepoSecret.Apply", func() {
 			err := repoSecret.Apply(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "my-git-repo", metav1.GetOptions{})
+			secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "codesphere-helm-repo", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(secret.Labels).To(HaveKeyWithValue("argocd.argoproj.io/secret-type", "repo-creds"))
-			Expect(secret.StringData["type"]).To(Equal("git"))
-			Expect(secret.StringData["url"]).To(Equal("https://github.com/my-org"))
-			Expect(secret.StringData["name"]).To(Equal("my-org"))
-			Expect(secret.StringData["username"]).To(Equal("bot-user"))
-			Expect(secret.StringData["password"]).To(Equal("git-token"))
-			Expect(secret.StringData["enableOCI"]).To(Equal("false"))
+			Expect(secret.StringData["url"]).To(Equal("my-mirror.example.com/charts"))
+			Expect(secret.StringData["username"]).To(Equal("CodesphereBot"))
 		})
 	})
 
@@ -99,7 +94,7 @@ var _ = Describe("ArgoCDRepoSecret.Apply", func() {
 			// Create initial secret
 			existing := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "ghcr-codesphere-helm-repo",
+					Name:      "codesphere-helm-repo",
 					Namespace: "argocd",
 					Labels: map[string]string{
 						"argocd.argoproj.io/secret-type": "repository",
@@ -114,9 +109,9 @@ var _ = Describe("ArgoCDRepoSecret.Apply", func() {
 
 			repoSecret := &installer.ArgoCDRepoSecret{
 				Config: installer.ArgoCDRepoSecretConfig{
-					Name:       "ghcr-codesphere-helm-repo",
+					Name:       "codesphere-helm-repo",
 					URL:        "ghcr.io/codesphere-cloud/charts",
-					RepoName:   "ghcr-codesphere",
+					RepoName:   "codesphere-helm-repo",
 					Type:       "helm",
 					Username:   "CodesphereBot",
 					Password:   "new-password",
@@ -129,7 +124,7 @@ var _ = Describe("ArgoCDRepoSecret.Apply", func() {
 			err = repoSecret.Apply(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
-			secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "ghcr-codesphere-helm-repo", metav1.GetOptions{})
+			secret, err := fakeClient.CoreV1().Secrets("argocd").Get(ctx, "codesphere-helm-repo", metav1.GetOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(secret.StringData["password"]).To(Equal("new-password"))
 		})

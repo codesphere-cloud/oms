@@ -1,11 +1,13 @@
 ## oms beta install argocd-repo-secret
 
-Create or update an ArgoCD repository secret
+Create or update the Codesphere Helm repository secret in ArgoCD
 
 ### Synopsis
 
-Create or update an ArgoCD repository secret for authenticating against
-Helm OCI registries or Git repositories.
+Create or update the ArgoCD repository secret for authenticating against
+the Codesphere Helm chart OCI registry.
+
+Use --url to point to a mirror of the registry if needed.
 
 The password is read from the OMS_REPO_PASSWORD environment variable.
 If not set, it will be prompted interactively (hidden input).
@@ -18,25 +20,23 @@ oms beta install argocd-repo-secret [flags]
 ### Examples
 
 ```
-# Create a Helm OCI registry secret (prompts for password)
-$ oms install argocd-repo-secret --name ghcr-codesphere-helm-repo --url ghcr.io/codesphere-cloud/charts --repo-name ghcr-codesphere --type helm --username CodesphereBot --enable-oci
+# Create the secret using defaults (prompts for password)
+$ oms install argocd-repo-secret
 
-# Create a git repo credentials secret (set OMS_REPO_PASSWORD env var beforehand)
-$ oms install argocd-repo-secret --name my-git-repo --url https://github.com/my-org --repo-name my-org --type git --username bot --secret-type repo-creds
+# Use a mirrored registry URL
+$ oms install argocd-repo-secret --url my-mirror.example.com/charts
+
+# Use a mirrored registry with custom username
+$ oms install argocd-repo-secret --url my-mirror.example.com/charts --username MyBot
 
 ```
 
 ### Options
 
 ```
-      --enable-oci           Enable OCI support (sets enableOCI: "true" in the secret)
-  -h, --help                 help for argocd-repo-secret
-      --name string          Name of the Kubernetes Secret (metadata.name)
-      --repo-name string     Display name for the repository in ArgoCD
-      --secret-type string   ArgoCD secret type label value ("repository" or "repo-creds") (default "repository")
-      --type string          Repository type: "helm" or "git"
-      --url string           Repository URL (e.g. ghcr.io/codesphere-cloud/charts)
-      --username string      Username for repository authentication
+  -h, --help              help for argocd-repo-secret
+      --url string        Helm OCI registry URL (customize for mirrors) (default "ghcr.io/codesphere-cloud/charts")
+      --username string   Username for registry authentication (default "CodesphereBot")
 ```
 
 ### SEE ALSO
