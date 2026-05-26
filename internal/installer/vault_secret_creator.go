@@ -26,15 +26,9 @@ func NewVaultSecretCreator(c client.Client) *VaultSecretCreator {
 // CreateSecretFromVault decrypts a SOPS-encrypted vault file and creates or
 // updates a Kubernetes secret with its contents in the target cluster.
 //
-// vaultFile is the path to the SOPS-encrypted prod.vault.yaml.
-// ageKeyPath is the path to the age private key used for decryption; if empty,
-// SOPS falls back to the SOPS_AGE_KEY / SOPS_AGE_KEY_FILE env vars and the
-// default key location (~/.config/sops/age/keys.txt).
-// namespace and secretName identify the target Kubernetes secret.
-//
 // Each vault entry is mapped to one or more secret keys:
 //   - File entries produce a single key equal to the entry name.
-//   - Field entries produce "entryName/password" and, when present, "entryName/username".
+//   - Field entries produce "entryName.password" and, when present, "entryName.username".
 func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vaultFile, ageKeyPath, namespace, secretName string) error {
 	decrypted, err := DecryptFileWithSOPS(vaultFile, ageKeyPath)
 	if err != nil {
@@ -73,16 +67,16 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vaultFil
 
 // vaultToSecretData converts the entries of an InstallVault into Kubernetes secret data.
 // File entries produce a single key equal to the entry name containing the file content.
-// Field entries produce "entryName/password" and, when a username is present, "entryName/username".
+// Field entries produce "entryName.password" and, when a username is present, "entryName.username".
 func vaultToSecretData(vault *files.InstallVault) (map[string][]byte, error) {
 	data := make(map[string][]byte)
 	for _, entry := range vault.Secrets {
 		if entry.File != nil {
 			data[entry.Name] = []byte(entry.File.Content)
 		} else if entry.Fields != nil {
-			data[entry.Name+"/password"] = []byte(entry.Fields.Password)
+			data[entry.Name+".password"] = []byte(entry.Fields.Password)
 			if entry.Fields.Username != "" {
-				data[entry.Name+"/username"] = []byte(entry.Fields.Username)
+				data[entry.Name+".username"] = []byte(entry.Fields.Username)
 			}
 		}
 	}

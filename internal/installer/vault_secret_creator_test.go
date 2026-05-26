@@ -29,8 +29,8 @@ var _ = Describe("vaultToSecretData", func() {
 		}
 		data, err := vaultToSecretData(vault)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(data).To(HaveKeyWithValue("dbAdmin/password", []byte("s3cr3t")))
-		Expect(data).NotTo(HaveKey("dbAdmin/username"))
+		Expect(data).To(HaveKeyWithValue("dbAdmin.password", []byte("s3cr3t")))
+		Expect(data).NotTo(HaveKey("dbAdmin.username"))
 	})
 
 	It("stores field entry with username and password under entryName/username and entryName/password", func() {
@@ -41,8 +41,8 @@ var _ = Describe("vaultToSecretData", func() {
 		}
 		data, err := vaultToSecretData(vault)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(data).To(HaveKeyWithValue("registry/username", []byte("robot")))
-		Expect(data).To(HaveKeyWithValue("registry/password", []byte("token123")))
+		Expect(data).To(HaveKeyWithValue("registry.username", []byte("robot")))
+		Expect(data).To(HaveKeyWithValue("registry.password", []byte("token123")))
 	})
 
 	It("handles a mix of file and field entries", func() {
@@ -55,8 +55,8 @@ var _ = Describe("vaultToSecretData", func() {
 		data, err := vaultToSecretData(vault)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(data).To(HaveKey("sshKey"))
-		Expect(data).To(HaveKey("git/username"))
-		Expect(data).To(HaveKey("git/password"))
+		Expect(data).To(HaveKey("git.username"))
+		Expect(data).To(HaveKey("git.password"))
 		Expect(data).To(HaveLen(3))
 	})
 
@@ -77,6 +77,6 @@ var _ = Describe("vaultToSecretData", func() {
 		data, err := vaultToSecretData(vault)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(data).NotTo(HaveKey("empty"))
-		Expect(data).To(HaveKey("real/password"))
+		Expect(data).To(HaveKey("real.password"))
 	})
 })
