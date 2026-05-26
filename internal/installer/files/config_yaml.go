@@ -189,6 +189,7 @@ type ClusterConfig struct {
 	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
 	BarmanCloudPlugin   *BarmanCloudPluginConfig   `yaml:"BarmanCloudPluginConfig,omitempty"`
 	RgwLoadBalancer     *RgwLoadBalancerConfig     `yaml:"rgwLoadBalancer,omitempty"`
+	Kyverno             *KyvernoConfig             `yaml:"kyverno,omitempty"`
 
 	IngressCAKey string `yaml:"-"`
 }
@@ -259,6 +260,10 @@ type BarmanCloudPluginConfig struct {
 type RgwLoadBalancerConfig struct {
 	Enabled  bool          `yaml:"enabled"`
 	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type KyvernoConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 type MetalLBConfig struct {
@@ -836,7 +841,6 @@ func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
 				},
 			})
 		}
-
 	}
 }
 
