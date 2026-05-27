@@ -113,6 +113,18 @@ var _ = Describe("Installconfig & Secrets", func() {
 			})
 			It("uses existing when config file exists", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
+				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
+
+				err := bs.EnsureInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("loads existing vault before existing config for templating", func() {
+				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
+				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -144,6 +156,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				It("overwrites an existing config", func() {
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+					fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 					icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -156,6 +169,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 				err := bs.EnsureInstallConfig()
@@ -250,6 +264,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+					fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 					err := bs.EnsureInstallConfig()

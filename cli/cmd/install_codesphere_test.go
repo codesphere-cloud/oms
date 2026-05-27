@@ -510,6 +510,10 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 		Expect(privKeyFlag).NotTo(BeNil())
 		Expect(privKeyFlag.Shorthand).To(Equal("k"))
 
+		vaultFlag := codesphereCmd.Flags().Lookup("vault")
+		Expect(vaultFlag).NotTo(BeNil())
+		Expect(vaultFlag.DefValue).To(Equal("prod.vault.yaml"))
+
 		skipStepFlag := codesphereCmd.Flags().Lookup("skip-steps")
 		Expect(skipStepFlag).NotTo(BeNil())
 		Expect(skipStepFlag.Shorthand).To(Equal("s"))

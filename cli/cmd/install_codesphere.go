@@ -16,8 +16,10 @@ import (
 	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
@@ -35,6 +37,7 @@ type InstallCodesphereOpts struct {
 	Package          string
 	Force            bool
 	Config           string
+	Vault            string
 	PrivKey          string
 	SkipSteps        []string
 	CodesphereOnly   bool
@@ -79,6 +82,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from")
 	codesphere.cmd.Flags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
 	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Config, "config", "c", "", "Path to the Codesphere Private Cloud configuration file (yaml)")
+	codesphere.cmd.Flags().StringVar(&codesphere.Opts.Vault, "vault", "prod.vault.yaml", "Path to the SOPS-encrypted prod.vault.yaml file used for config templating")
 	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Path to the private key to encrypt/decrypt secrets")
 	codesphere.cmd.Flags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, kubernetes")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
@@ -98,10 +102,27 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", goos, goarch)
 	}
 
+	originalConfig := c.Opts.Config
+	cleanup := func() {}
+	if c.Opts.Vault != "" {
+		store := installer.NewLazyVaultTemplatingSecretStore(c.Opts.Vault, c.Opts.PrivKey)
+		renderedConfig, renderCleanup, err := configtemplating.RenderConfigFileToTempIfNeeded(c.Opts.Config, store)
+		if err != nil {
+			return fmt.Errorf("failed to render config template: %w", err)
+		}
+		cleanup = renderCleanup
+		c.Opts.Config = renderedConfig
+	}
+	defer cleanup()
+	defer func() {
+		c.Opts.Config = originalConfig
+	}()
+
 	config, err := cm.ParseConfigYaml(c.Opts.Config)
 	if err != nil {
 		return fmt.Errorf("failed to extract config.yaml: %w", err)
 	}
+	c.warnIfVaultDirDiffersFromSecretsDir(config)
 
 	err = pm.Extract(c.Opts.Force)
 	if err != nil {
@@ -244,6 +265,28 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 	log.Println("Private cloud installer script finished.")
 
 	return nil
+}
+
+func (c *InstallCodesphereCmd) warnIfVaultDirDiffersFromSecretsDir(config files.RootConfig) {
+	if c.Opts.Vault == "" || config.Secrets.BaseDir == "" {
+		return
+	}
+
+	vaultDir, err := filepath.Abs(filepath.Dir(c.Opts.Vault))
+	if err != nil {
+		log.Printf("Warning: failed to resolve vault directory for %s: %v", c.Opts.Vault, err)
+		return
+	}
+
+	secretsDir, err := filepath.Abs(config.Secrets.BaseDir)
+	if err != nil {
+		log.Printf("Warning: failed to resolve configured secrets baseDir %s: %v", config.Secrets.BaseDir, err)
+		return
+	}
+
+	if vaultDir != secretsDir {
+		log.Printf("Warning: config secrets.baseDir (%s) does not match the directory of --vault (%s)", secretsDir, vaultDir)
+	}
 }
 
 func (c *InstallCodesphereCmd) ListPackageContents(pm installer.PackageManager) ([]string, error) {

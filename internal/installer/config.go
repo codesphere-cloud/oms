@@ -5,7 +5,6 @@ package installer
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -30,15 +29,9 @@ func NewConfig() *Config {
 func (c *Config) ParseConfigYaml(configPath string) (files.RootConfig, error) {
 	rootConfig := files.NewRootConfig()
 
-	file, err := c.FileIO.Open(configPath)
+	data, err := c.FileIO.ReadFile(configPath)
 	if err != nil {
 		return rootConfig, fmt.Errorf("failed to open config file: %w", err)
-	}
-	defer util.CloseFileIgnoreError(file)
-
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return rootConfig, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	if err := rootConfig.Unmarshal(data); err != nil {

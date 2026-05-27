@@ -19,6 +19,7 @@ like downloading new versions.
 
 * [oms beta](oms_beta.md)	 - Commands for early testing
 * [oms build](oms_build.md)	 - Build and push images to a registry
+* [oms config](oms_config.md)	 - Work with OMS configuration files
 * [oms create](oms_create.md)	 - Create resources for Codesphere
 * [oms download](oms_download.md)	 - Download resources available through OMS
 * [oms init](oms_init.md)	 - Initialize configuration files
@@ -30,4 +31,3 @@ like downloading new versions.
 * [oms smoketest](oms_smoketest.md)	 - Run smoke tests for Codesphere components
 * [oms update](oms_update.md)	 - Update OMS related resources
 * [oms version](oms_version.md)	 - Print version
-

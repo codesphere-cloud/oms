@@ -37,4 +37,3 @@ oms beta bootstrap-local [flags]
 ### SEE ALSO
 
 * [oms beta](oms_beta.md)	 - Commands for early testing
-
