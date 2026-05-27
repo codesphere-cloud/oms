@@ -787,7 +787,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				})
 			})
 
-			Context("When both CentralOtelPassword and LocalTraceEndpoint are set", func() {
+			Context("When both CentralOtelPassword and CentralOtelEndpoint are set", func() {
 				BeforeEach(func() {
 					csEnv.CentralOtelPassword = "otel-secret"
 					csEnv.CentralOtelEndpoint = "https://otel.example.com"
@@ -811,7 +811,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				})
 			})
 
-			Context("When neither CentralOtelPassword nor LocalTraceExport are set", func() {
+			Context("When neither CentralOtelPassword nor LocalTraceEndpoint are set", func() {
 				It("leaves TelemetryExport nil", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
