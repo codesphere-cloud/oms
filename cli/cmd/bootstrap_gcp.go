@@ -165,6 +165,11 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		}
 	}
 
+	if apiKey, err := c.Env.GetOmsPortalApiKey(); err == nil {
+		c.CodesphereEnv.PortalAPIKey = apiKey
+		c.CodesphereEnv.PortalAPIURL = c.Env.GetOmsPortalApi()
+	}
+
 	for _, flag := range c.FeatureFlagList {
 		c.CodesphereEnv.FeatureFlags[flag] = true
 	}

@@ -171,6 +171,10 @@ type CodesphereEnvironment struct {
 	CreateTestUser bool   `json:"-"`
 	OmsWorkdir     string `json:"-"`
 	RootDiskSize   int64  `json:"root_disk_size"`
+
+	// Portal credentials to forward to the jumpbox
+	PortalAPIKey string `json:"-"`
+	PortalAPIURL string `json:"-"`
 }
 
 func NewGCPBootstrapper(
@@ -1030,6 +1034,10 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
 		packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
+	if b.Env.PortalAPIKey != "" {
+		downloadCmd = fmt.Sprintf("OMS_PORTAL_API_KEY=%s OMS_PORTAL_API=%s %s",
+			b.Env.PortalAPIKey, b.Env.PortalAPIURL, downloadCmd)
+	}
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
