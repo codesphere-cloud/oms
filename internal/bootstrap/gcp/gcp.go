@@ -114,8 +114,6 @@ type CodesphereEnvironment struct {
 	RegistryUser         string          `json:"-"`
 	Experiments          []string        `json:"experiments"`
 	FeatureFlags         map[string]bool `json:"feature_flags"`
-	CentralOtelUsername  string          `json:"-"`
-	CentralOtelPassword  string          `json:"-"`
 	ExternalLokiEndpoint string          `json:"external_loki_endpoint,omitempty"`
 	ExternalLokiSecret   string          `json:"-"`
 	ExternalLokiUser     string          `json:"external_loki_user,omitempty"`
@@ -128,6 +126,12 @@ type CodesphereEnvironment struct {
 	OpenBaoEngine   string `json:"-"`
 	OpenBaoUser     string `json:"-"`
 	OpenBaoPassword string `json:"-"`
+
+	CentralOtelEndpoint    string `json:"-"`
+	CentralOtelUsername    string `json:"-"`
+	CentralOtelPassword    string `json:"-"`
+	CentralOtelSpanMetrics bool   `json:"-"`
+	LocalTraceEndpoint     string `json:"-"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -406,7 +410,12 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	return b.validateExternalLokiParams()
+	err = b.validateExternalLokiParams()
+	if err != nil {
+		return err
+	}
+
+	return b.validateTelemetryExportParams()
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -508,6 +517,21 @@ func (b *GCPBootstrapper) validateExternalLokiParams() error {
 
 	if b.Env.ExternalLokiSecret != "" || b.Env.ExternalLokiUser != "" {
 		return fmt.Errorf("external Loki endpoint is required when external Loki secret or user is set")
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) validateTelemetryExportParams() error {
+	if b.Env.CentralOtelEndpoint != "" && b.Env.CentralOtelPassword == "" {
+		return fmt.Errorf("central OTel password is required when central OTel endpoint is set")
+	}
+
+	if b.Env.CentralOtelUsername != "" && b.Env.CentralOtelPassword == "" {
+		return fmt.Errorf("central OTel username is set but password is missing")
+	}
+	if b.Env.CentralOtelPassword != "" && b.Env.CentralOtelUsername == "" {
+		return fmt.Errorf("central OTel password is set but username is missing")
 	}
 
 	return nil

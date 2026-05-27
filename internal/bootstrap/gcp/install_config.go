@@ -335,6 +335,16 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
+	if b.Env.CentralOtelPassword != "" || b.Env.LocalTraceEndpoint != "" {
+		b.Env.InstallConfig.Codesphere.TelemetryExport = &files.TelemetryExport{
+			RemoteEndpoint: b.Env.CentralOtelEndpoint,
+			RemoteExport:   b.Env.CentralOtelPassword != "",
+			Traces:         b.Env.LocalTraceEndpoint != "",
+			TraceEndpoint:  b.Env.LocalTraceEndpoint,
+			SpanMetrics:    b.Env.CentralOtelSpanMetrics,
+		}
+	}
+
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 	b.applyExternalLokiConfig()
