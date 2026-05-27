@@ -348,6 +348,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 	b.applyExternalLokiConfig()
+	b.applyPrometheusRemoteWriteConfig()
 
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
@@ -421,6 +422,28 @@ func (b *GCPBootstrapper) applyExternalLokiConfig() {
 
 	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled = true
 	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki = loki
+}
+
+func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig() {
+	if b.Env.PrometheusRemoteWriteURL == "" {
+		return
+	}
+
+	if b.Env.InstallConfig.Cluster.Monitoring == nil {
+		b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+	}
+	if b.Env.InstallConfig.Cluster.Monitoring.Prometheus == nil {
+		b.Env.InstallConfig.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
+	}
+	if b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
+		b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{}
+	}
+
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Enabled = true
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Url = b.Env.PrometheusRemoteWriteURL
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.ClusterName = b.Env.ProjectName
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Username = b.Env.PrometheusRemoteWriteUser
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Password = b.Env.PrometheusRemoteWritePassword
 }
 
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname
