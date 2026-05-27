@@ -23,7 +23,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/yaml"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -61,7 +63,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 					cfg.Version == "1.22.5" &&
 					cfg.Namespace == "vault" &&
 					cfg.CreateNamespace == true
-			})).Return(nil)
+			}), mock.Anything).Return(nil)
 
 			inst := &installer.OpenBaoInstaller{
 				Helm:      helmMock,
@@ -125,7 +127,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 		It("returns an error when Helm InstallChart fails", func() {
 			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
-			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything).
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).
 				Return(fmt.Errorf("chart not found"))
 
 			inst := &installer.OpenBaoInstaller{
@@ -495,6 +497,83 @@ var _ = Describe("OpenBaoInstaller", func() {
 				envNames = append(envNames, e.(map[string]interface{})["name"].(string))
 			}
 			Expect(envNames).To(ContainElements("POD_NAME", "BAO_CLUSTER_ADDR", "BAO_API_ADDR"))
+		})
+	})
+
+	Describe("HasExistingDeployment", func() {
+		It("returns false when the target namespace does not exist", func() {
+			// Use a fake dynamic client with no objects — namespace "new-ns" does not exist.
+			scheme := runtime.NewScheme()
+			dynClient := dynamicfake.NewSimpleDynamicClient(scheme)
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				DynClient: dynClient,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "non-existent-ns"},
+			}
+			inst.SetCtx(ctx)
+
+			exists, err := inst.HasExistingDeployment()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeFalse())
+		})
+
+		It("returns true when PVCs with vault_cr=openbao exist in the namespace", func() {
+			scheme := runtime.NewScheme()
+			dynClient := dynamicfake.NewSimpleDynamicClient(scheme)
+
+			// Pre-create the namespace
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Since fake dynamic client returns NotFound for unregistered resources,
+			// the hasExistingDeployment method will fall through to PVC check.
+			// Create a PVC with the vault_cr=openbao label to verify detection.
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "vault-raft-openbao-0",
+					Namespace: "vault",
+					Labels:    map[string]string{"vault_cr": "openbao"},
+				},
+			}
+			_, err = clientset.CoreV1().PersistentVolumeClaims("vault").Create(ctx, pvc, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				DynClient: dynClient,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+			}
+			inst.SetCtx(ctx)
+
+			exists, checkErr := inst.HasExistingDeployment()
+			Expect(checkErr).ToNot(HaveOccurred())
+			Expect(exists).To(BeTrue())
+		})
+
+		It("returns false when namespace exists but has no vault resources", func() {
+			scheme := runtime.NewScheme()
+			dynClient := dynamicfake.NewSimpleDynamicClient(scheme)
+
+			// Pre-create the namespace
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "empty-ns"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				DynClient: dynClient,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "empty-ns"},
+			}
+			inst.SetCtx(ctx)
+
+			exists, checkErr := inst.HasExistingDeployment()
+			Expect(checkErr).ToNot(HaveOccurred())
+			Expect(exists).To(BeFalse())
 		})
 	})
 })

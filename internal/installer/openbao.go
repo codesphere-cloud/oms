@@ -204,9 +204,10 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 }
 
 // PreFlightDRCheck checks if a SOPS-encrypted DR backup exists.
-// If it does, the backup is decrypted and the unseal keys Secret is pre-applied
-// so that Bank-Vaults can unseal an existing OpenBao instance.
-// Sets o.drBackupExists to true if a DR backup was found and restored.
+// If it does, the backup is decrypted and the unseal keys are stored in memory
+// (backupUnsealKeys) for later use by WaitForInitialization, which handles
+// creating/updating the Kubernetes Secret with retry logic.
+// Sets o.drBackupExists to true if a DR backup was found and processed.
 func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 	if o.Config.DRBackupPath == "" {
 		return fmt.Errorf("DRBackupPath must be set")
@@ -300,7 +301,7 @@ func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 	}
 
 	// Operator does not exist — perform fresh install.
-	return o.Helm.InstallChart(o.ctx, cfg)
+	return o.Helm.InstallChart(o.ctx, cfg, InstallChartOptions{})
 }
 
 // vaultCRTemplateData holds the values injected into the Vault CR template.
@@ -460,13 +461,18 @@ func (o *OpenBaoInstaller) WaitForPodsReady() error {
 			return false, fmt.Errorf("listing vault pods: %w", err)
 		}
 
-		readyCount := 0
+		var activePods int
+		var readyCount int
 		for i := range list.Items {
+			if list.Items[i].DeletionTimestamp != nil {
+				continue // Skip terminating pods
+			}
+			activePods++
 			if isPodReady(&list.Items[i]) {
 				readyCount++
 			}
 		}
-		return readyCount >= expected, nil
+		return activePods == expected && readyCount == expected, nil
 	})
 }
 
@@ -567,7 +573,11 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 		o.ctx, metav1.ListOptions{LabelSelector: "vault_cr=openbao"},
 	)
 	if err != nil {
-		return fmt.Errorf("listing stale PVCs: %w", err)
+		if !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("listing stale PVCs: %w", err)
+		}
+		// Namespace doesn't exist yet — no stale PVCs to clean.
+		pvcList = &corev1.PersistentVolumeClaimList{}
 	}
 	for i := range pvcList.Items {
 		delErr = o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).Delete(
@@ -614,6 +624,9 @@ func (o *OpenBaoInstaller) hasExistingDeployment() (bool, error) {
 		o.ctx, metav1.ListOptions{LabelSelector: "vault_cr=openbao"},
 	)
 	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return false, nil // Namespace doesn't exist — no prior deployment.
+		}
 		return false, fmt.Errorf("listing PVCs: %w", err)
 	}
 	return len(pvcList.Items) > 0, nil
@@ -731,3 +744,9 @@ func (o *OpenBaoInstaller) GetDRBackupExists() bool {
 func (o *OpenBaoInstaller) GetUnsealSecret() *corev1.Secret {
 	return o.unsealSecret
 }
+
+// HasExistingDeployment is a test helper that exposes hasExistingDeployment.
+func (o *OpenBaoInstaller) HasExistingDeployment() (bool, error) {
+	return o.hasExistingDeployment()
+}
+
