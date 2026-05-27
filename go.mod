@@ -53,7 +53,7 @@ require (
 	github.com/google/go-github/v74 v74.0.0
 	github.com/google/go-github/v88 v88.0.0
 	github.com/lib/pq v1.12.3
-	github.com/rook/rook/pkg/apis v0.0.0-20260526050911-9560986a2fe2
+	github.com/rook/rook/pkg/apis v0.0.0-20260526191009-8dd1778655f0
 )
 
 require (
