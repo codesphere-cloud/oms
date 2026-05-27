@@ -37,7 +37,7 @@ var _ = Describe("ArgoCD.Install", func() {
 					cfg.ReleaseName == "argocd" &&
 					cfg.Namespace == "argocd" &&
 					cfg.CreateNamespace == true
-			})).Return(nil)
+			}), mock.Anything).Return(nil)
 
 			err := a.Install()
 			Expect(err).ToNot(HaveOccurred())
@@ -47,7 +47,7 @@ var _ = Describe("ArgoCD.Install", func() {
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.Version == ""
-			})).Return(nil)
+			}), mock.Anything).Return(nil)
 
 			a = &installer.ArgoCD{Version: "", Helm: helmMock}
 
@@ -56,7 +56,7 @@ var _ = Describe("ArgoCD.Install", func() {
 		})
 
 		It("returns an error when InstallChart fails", func() {
-			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything).
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).
 				Return(errors.New("chart not found"))
 
 			err := a.Install()
@@ -144,7 +144,7 @@ var _ = Describe("ArgoCD.Install", func() {
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.ChartName == "argo-cd" &&
 					cfg.RepoURL == "https://argoproj.github.io/argo-helm"
-			})).Return(nil)
+			}), mock.Anything).Return(nil)
 
 			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
 
@@ -157,7 +157,7 @@ var _ = Describe("ArgoCD.Install", func() {
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				dex, ok := cfg.Values["dex"].(map[string]interface{})
 				return ok && dex["enabled"] == false
-			})).Return(nil)
+			}), mock.Anything).Return(nil)
 
 			a = &installer.ArgoCD{Version: "7.0.0", Helm: helmMock}
 
@@ -169,7 +169,7 @@ var _ = Describe("ArgoCD.Install", func() {
 	Context("full installation", func() {
 		BeforeEach(func() {
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
-			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything).Return(nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		})
 		It("installs extra ArgoCD resources when FullInstall option in true", func() {
 			argoCDResourcesMock.EXPECT().ApplyAll(mock.Anything).Return(nil)
@@ -181,6 +181,60 @@ var _ = Describe("ArgoCD.Install", func() {
 		It("does not install extra ArgoCD resources when FullInstall option in false", func() {
 			a.FullInstall = false
 
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("ForceConflicts", func() {
+		It("passes ForceConflicts=true to InstallChart on a fresh install", func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.MatchedBy(func(opts installer.InstallChartOptions) bool {
+				return opts.ForceConflicts == true
+			})).Return(nil)
+
+			a.ForceConflicts = true
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("passes ForceConflicts=true to UpgradeChart on an existing release", func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(&installer.ReleaseInfo{
+				Name: "argocd", InstalledVersion: "6.0.0",
+			}, nil)
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.MatchedBy(func(opts installer.UpgradeChartOptions) bool {
+				return opts.ForceConflicts == true
+			})).Return(nil)
+
+			a.ForceConflicts = true
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("RepoURL", func() {
+		BeforeEach(func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+		})
+
+		It("uses a custom HTTP repo URL", func() {
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.RepoURL == "https://my.repo/helm" &&
+					cfg.ChartName == "argo-cd"
+			}), mock.Anything).Return(nil)
+
+			a.RepoURL = "https://my.repo/helm"
+			err := a.Install()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("builds the full OCI chart reference and clears RepoURL", func() {
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ChartName == "oci://ghcr.io/argoproj/argo-helm/argo-cd" &&
+					cfg.RepoURL == ""
+			}), mock.Anything).Return(nil)
+
+			a.RepoURL = "oci://ghcr.io/argoproj/argo-helm"
 			err := a.Install()
 			Expect(err).ToNot(HaveOccurred())
 		})

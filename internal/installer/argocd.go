@@ -8,24 +8,32 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"helm.sh/helm/v4/pkg/action"
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/cli/values"
+	"helm.sh/helm/v4/pkg/getter"
 )
+
+const argoCDDefaultRepoURL = "https://argoproj.github.io/argo-helm"
 
 // ArgoCD holds the user-facing configuration for the install/upgrade command.
 type ArgoCD struct {
-	Version      string
-	DatacenterId string
-	OciPassword  string
-	GitPassword  string
-	FullInstall  bool
-	Helm         HelmClient // inject a real or mock client
-	Resources    ArgoCDResources
+	Version        string
+	DatacenterId   string
+	OciPassword    string
+	GitPassword    string
+	FullInstall    bool
+	ForceConflicts bool
+	RepoURL        string // defaults to argoCDDefaultRepoURL if empty
+	ValueFiles     []string
+	Helm           HelmClient // inject a real or mock client
+	Resources      ArgoCDResources
 }
 
-func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool) (*ArgoCD, error) {
+func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool, forceConflicts bool, repoURL string, valueFiles []string) (*ArgoCD, error) {
 	settings := cli.New()
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(settings.RESTClientGetter(), "argocd", os.Getenv("HELM_DRIVER")); err != nil {
@@ -41,13 +49,16 @@ func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit stri
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}
 	return &ArgoCD{
-		Version:      version,
-		DatacenterId: dcId,
-		OciPassword:  passwordOCI,
-		GitPassword:  passwordGit,
-		FullInstall:  fullInstall,
-		Helm:         helm,
-		Resources:    resources,
+		Version:        version,
+		DatacenterId:   dcId,
+		OciPassword:    passwordOCI,
+		GitPassword:    passwordGit,
+		FullInstall:    fullInstall,
+		ForceConflicts: forceConflicts,
+		RepoURL:        repoURL,
+		ValueFiles:     valueFiles,
+		Helm:           helm,
+		Resources:      resources,
 	}, nil
 }
 
@@ -62,18 +73,23 @@ func (a *ArgoCD) Install() error {
 
 	ctx := context.Background()
 
+	vals, err := (&values.Options{
+		ValueFiles: a.ValueFiles,
+		Values:     []string{"dex.enabled=false"},
+	}).MergeValues(getter.All(cli.New()))
+	if err != nil {
+		return fmt.Errorf("loading values files: %w", err)
+	}
+
+	chartName, repoURL := a.resolveChartRef("argo-cd")
 	cfg := ChartConfig{
 		ReleaseName:     "argocd",
-		ChartName:       "argo-cd",
-		RepoURL:         "https://argoproj.github.io/argo-helm",
+		ChartName:       chartName,
+		RepoURL:         repoURL,
 		Namespace:       "argocd",
 		Version:         a.Version,
 		CreateNamespace: true,
-		Values: map[string]interface{}{
-			"dex": map[string]interface{}{
-				"enabled": false,
-			},
-		},
+		Values:          vals,
 	}
 
 	existing, err := a.Helm.FindRelease(cfg.Namespace, cfg.ReleaseName)
@@ -107,7 +123,7 @@ func (a *ArgoCD) Install() error {
 func (a *ArgoCD) install(ctx context.Context, cfg ChartConfig) error {
 	log.Println("No existing ArgoCD release found, performing fresh install")
 
-	if err := a.Helm.InstallChart(ctx, cfg); err != nil {
+	if err := a.Helm.InstallChart(ctx, cfg, InstallChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
 		return err
 	}
 
@@ -145,7 +161,7 @@ func (a *ArgoCD) upgrade(ctx context.Context, cfg ChartConfig, existing *Release
 		log.Printf("Upgrading ArgoCD from %s to latest\n", existing.InstalledVersion)
 	}
 
-	if err := a.Helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{}); err != nil {
+	if err := a.Helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
 		return err
 	}
 
@@ -155,6 +171,21 @@ func (a *ArgoCD) upgrade(ctx context.Context, cfg ChartConfig, existing *Release
 		fmt.Println("Successfully upgraded Argo CD to the latest chart version")
 	}
 	return nil
+}
+
+// resolveChartRef returns the (chartName, repoURL) pair to use in ChartConfig.
+// For OCI repos the full reference is passed as chartName and repoURL is empty,
+// because helm's LocateChart expects "oci://<registry>/<repo>/<chart>" as the
+// chart name with no separate RepoURL.
+func (a *ArgoCD) resolveChartRef(chartName string) (string, string) {
+	repoURL := a.RepoURL
+	if repoURL == "" {
+		repoURL = argoCDDefaultRepoURL
+	}
+	if strings.HasPrefix(repoURL, "oci://") {
+		return strings.TrimRight(repoURL, "/") + "/" + chartName, ""
+	}
+	return chartName, repoURL
 }
 
 func (a *ArgoCD) showPostInstallHints() {
