@@ -33,12 +33,12 @@ func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit stri
 	}
 	helm, err := NewHelmClient("argocd")
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
 
 	resources, err := NewArgoCDResources(dcId, passwordOCI, passwordGit)
 	if err != nil {
-		return nil, fmt.Errorf("init argocd resources client failed: %v", err)
+		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}
 	return &ArgoCD{
 		Version:      version,
