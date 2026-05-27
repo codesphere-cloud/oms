@@ -6,6 +6,7 @@ package installer
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"log"
 
@@ -67,7 +68,7 @@ func (a *argoCDResources) ApplyAll(ctx context.Context) error {
 	}
 
 	if a.OciPassword == "" {
-		return fmt.Errorf("OCI registry password is required but not set")
+		return errors.New("OCI registry password is required but not set")
 	}
 
 	if err := a.applyHelmRegistrySecret(ctx); err != nil {
