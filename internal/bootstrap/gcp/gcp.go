@@ -5,10 +5,13 @@ package gcp
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"log"
-	"path/filepath"
+	"os"
 	"slices"
 	"strings"
 	"time"
@@ -24,6 +27,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
+	"golang.org/x/crypto/ssh"
 	"google.golang.org/api/dns/v1"
 )
 
@@ -272,6 +276,11 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	err = b.stlog.Step("Ensure root login enabled", b.EnsureRootLoginEnabled)
 	if err != nil {
 		return fmt.Errorf("failed to ensure root login is enabled: %w", err)
+	}
+
+	err = b.stlog.Step("Ensure jumpbox bootstrap key", b.EnsureJumpboxBootstrapKey)
+	if err != nil {
+		return fmt.Errorf("failed to ensure jumpbox bootstrap key: %w", err)
 	}
 
 	err = b.stlog.Step("Ensure jumpbox configured", b.EnsureJumpboxConfigured)
@@ -748,17 +757,74 @@ func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
 	return nil
 }
 
+// EnsureJumpboxBootstrapKey generates an ephemeral ed25519 keypair locally, copies the private
+// key to the jumpbox's /root/.ssh/id_ed25519, and authorizes the matching public key on every
+// cluster node. This lets the private-cloud-installer.js running as root on the jumpbox reach all
+// cluster nodes via plain SSH without requiring agent forwarding.
+func (b *GCPBootstrapper) EnsureJumpboxBootstrapKey() error {
+	// Generate an ephemeral keypair locally (key never touches the jumpbox disk in the user's name).
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return fmt.Errorf("failed to generate bootstrap SSH keypair: %w", err)
+	}
+
+	// Encode private key to OpenSSH PEM format.
+	privPEMBlock, err := ssh.MarshalPrivateKey(priv, "oms-bootstrap")
+	if err != nil {
+		return fmt.Errorf("failed to marshal bootstrap private key: %w", err)
+	}
+	privKeyBytes := pem.EncodeToMemory(privPEMBlock)
+
+	// Write private key to a local temp file so CopyFile can read it.
+	tmpFile, err := os.CreateTemp("", "oms-bootstrap-key-*.pem")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file for bootstrap key: %w", err)
+	}
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	if _, err := tmpFile.Write(privKeyBytes); err != nil {
+		_ = tmpFile.Close()
+		return fmt.Errorf("failed to write bootstrap private key to temp file: %w", err)
+	}
+	_ = tmpFile.Close()
+
+	// Copy private key to jumpbox and lock down permissions.
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, tmpFile.Name(), "/root/.ssh/id_ed25519"); err != nil {
+		return fmt.Errorf("failed to copy bootstrap private key to jumpbox: %w", err)
+	}
+	if err := b.Env.Jumpbox.RunSSHCommand("root", "chmod 600 /root/.ssh/id_ed25519"); err != nil {
+		return fmt.Errorf("failed to set permissions on bootstrap private key: %w", err)
+	}
+
+	// Build the authorized_keys entry for the generated public key.
+	sshPub, err := ssh.NewPublicKey(pub)
+	if err != nil {
+		return fmt.Errorf("failed to create SSH public key from bootstrap keypair: %w", err)
+	}
+	pubKeyLine := strings.TrimSpace(string(ssh.MarshalAuthorizedKey(sshPub)))
+
+	// Authorize the public key on every cluster node root user.
+	addKeyCmd := fmt.Sprintf(
+		"mkdir -p /root/.ssh && chmod 700 /root/.ssh && touch /root/.ssh/authorized_keys && "+
+			"chmod 600 /root/.ssh/authorized_keys && "+
+			"(grep -qxF '%s' /root/.ssh/authorized_keys || echo '%s' >> /root/.ssh/authorized_keys)",
+		pubKeyLine, pubKeyLine)
+
+	allNodes := append(b.Env.ControlPlaneNodes, b.Env.PostgreSQLNode)
+	allNodes = append(allNodes, b.Env.CephNodes...)
+	for _, n := range allNodes {
+		if err := n.RunSSHCommand("root", addKeyCmd); err != nil {
+			return fmt.Errorf("failed to authorize bootstrap key on node %s: %w", n.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
 func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 	if !b.Env.Jumpbox.HasAcceptEnvConfigured() {
 		err := b.Env.Jumpbox.ConfigureAcceptEnv()
 		if err != nil {
 			return fmt.Errorf("failed to configure AcceptEnv on jumpbox: %w", err)
-		}
-	}
-
-	if b.Env.SSHPrivateKeyPath != "" {
-		if err := b.ensureSSHKeyOnJumpbox(); err != nil {
-			return fmt.Errorf("failed to copy SSH private key to jumpbox: %w", err)
 		}
 	}
 
@@ -770,26 +836,6 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 	err := b.Env.Jumpbox.InstallOms()
 	if err != nil {
 		return fmt.Errorf("failed to install OMS on jumpbox: %w", err)
-	}
-
-	return nil
-}
-
-// ensureSSHKeyOnJumpbox copies the SSH private key from the local machine to the
-// jumpbox so that the installer script can SSH from the jumpbox to the cluster nodes.
-func (b *GCPBootstrapper) ensureSSHKeyOnJumpbox() error {
-	expandedKeyPath := util.ExpandPath(b.Env.SSHPrivateKeyPath)
-	keyFileName := filepath.Base(expandedKeyPath)
-	remoteKeyPath := "/root/.ssh/" + keyFileName
-
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, expandedKeyPath, remoteKeyPath)
-	if err != nil {
-		return fmt.Errorf("failed to copy SSH private key to /root/.ssh: %w", err)
-	}
-
-	err = b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("chmod 600 %s", remoteKeyPath))
-	if err != nil {
-		return fmt.Errorf("failed to set permissions on SSH private key: %w", err)
 	}
 
 	return nil

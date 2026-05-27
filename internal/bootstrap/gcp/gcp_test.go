@@ -210,6 +210,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().WaitReady(mock.Anything, mock.Anything).Return(nil).Return(nil)
 			nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
+			// EnsureJumpboxBootstrapKey
+			nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), mock.Anything, "/root/.ssh/id_ed25519").Return(nil)
+
 			// EnsureAgeKey
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p /etc/codesphere/secrets; age-keygen -o /etc/codesphere/secrets/age_key.txt").Return(nil)
 			nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/etc/codesphere/secrets/age_key.txt").Return(false)
@@ -999,6 +1002,48 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureRootLoginEnabled()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to enable root login"))
+			})
+		})
+	})
+
+	Describe("EnsureJumpboxBootstrapKey", func() {
+		Describe("Valid EnsureJumpboxBootstrapKey", func() {
+			It("copies private key to jumpbox and authorizes public key on all cluster nodes", func() {
+				nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), mock.Anything, "/root/.ssh/id_ed25519").Return(nil)
+				// chmod on jumpbox + authorized_keys update on 7 nodes (3 control plane + 1 postgres + 3 ceph)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8)
+
+				err := bs.EnsureJumpboxBootstrapKey()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Describe("Invalid cases", func() {
+			It("fails when CopyFile to jumpbox fails", func() {
+				nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), mock.Anything, "/root/.ssh/id_ed25519").Return(fmt.Errorf("copy failed"))
+
+				err := bs.EnsureJumpboxBootstrapKey()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to copy bootstrap private key"))
+			})
+
+			It("fails when chmod on jumpbox fails", func() {
+				nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), mock.Anything, "/root/.ssh/id_ed25519").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "chmod 600 /root/.ssh/id_ed25519").Return(fmt.Errorf("chmod failed"))
+
+				err := bs.EnsureJumpboxBootstrapKey()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to set permissions"))
+			})
+
+			It("fails when authorizing key on a cluster node fails", func() {
+				nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), mock.Anything, "/root/.ssh/id_ed25519").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "chmod 600 /root/.ssh/id_ed25519").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch"))
+
+				err := bs.EnsureJumpboxBootstrapKey()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to authorize bootstrap key"))
 			})
 		})
 	})

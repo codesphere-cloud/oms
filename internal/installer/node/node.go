@@ -91,7 +91,9 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 
 	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
 	_ = session.Setenv("OMS_PORTAL_API", os.Getenv("OMS_PORTAL_API"))
-	_ = agent.RequestAgentForwarding(session) // Best effort, ignore errors
+	if err := agent.RequestAgentForwarding(session); err != nil {
+		log.Printf("Warning: SSH agent forwarding request denied: %v", err)
+	}
 
 	var stderrBuf bytes.Buffer
 	session.Stderr = &stderrBuf
@@ -273,6 +275,7 @@ func (n *Node) EnableRootLogin() error {
 	cmds := []string{
 		"sudo sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config",
 		"sudo sed -i 's/no-port-forwarding.*$//g' /root/.ssh/authorized_keys",
+		"sudo sh -c \"grep -qxF 'AllowAgentForwarding yes' /etc/ssh/sshd_config || echo 'AllowAgentForwarding yes' >> /etc/ssh/sshd_config\"",
 		"sudo systemctl restart sshd",
 	}
 	for _, cmd := range cmds {
@@ -648,17 +651,37 @@ func (n *Node) loadPrivateKey() (ssh.Signer, error) {
 	return signer, nil
 }
 
-// setupAgentForwarding sets up SSH agent forwarding on the client (best effort)
+// setupAgentForwarding sets up SSH agent forwarding on the client (best effort).
 func (n *Node) setupAgentForwarding(client *ssh.Client) error {
-	authSocket := os.Getenv("SSH_AUTH_SOCK")
-	if authSocket == "" {
+	// Prefer existing local SSH agent.
+	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
+		conn, err := net.Dial("unix", authSocket)
+		if err == nil {
+			return agent.ForwardToAgent(client, agent.NewClient(conn))
+		}
+	}
+
+	// Fall back to an in-memory keyring so the remote installer can reach cluster
+	// nodes via agent forwarding
+	if n.keyPath == "" {
 		return nil
 	}
 
-	conn, err := net.Dial("unix", authSocket)
+	keyBytes, err := n.FileIO.ReadFile(n.keyPath)
 	if err != nil {
-		return fmt.Errorf("failed to connect to SSH agent: %v", err)
+		return nil // best effort
 	}
 
-	return agent.ForwardToAgent(client, agent.NewClient(conn))
+	rawKey, err := ssh.ParseRawPrivateKey(keyBytes)
+	if err != nil {
+		// Passphrase-protected keys are not supported here; skip silently.
+		return nil
+	}
+
+	keyring := agent.NewKeyring()
+	if err := keyring.Add(agent.AddedKey{PrivateKey: rawKey}); err != nil {
+		return nil // best effort
+	}
+
+	return agent.ForwardToAgent(client, keyring)
 }
