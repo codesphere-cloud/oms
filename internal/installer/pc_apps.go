@@ -5,6 +5,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"net/url"
@@ -25,6 +26,8 @@ const (
 	ociCredentialNamespace = "argocd"
 	// pcAppsReleaseName is the fixed Helm release name for the pc-applications chart.
 	pcAppsReleaseName = "pc-applications"
+	// pcAppsChartName is the chart name used when constructing the OCI chart URL.
+	pcAppsChartName = "pc-applications"
 )
 
 // PCApps holds the configuration for installing the pc-applications Helm chart
@@ -42,10 +45,10 @@ type PCApps struct {
 // declarations only.
 func NewPCApps(c client.Client, version, namespace string, valuesFiles []string) (*PCApps, error) {
 	if version == "" {
-		return nil, fmt.Errorf("version is required")
+		return nil, errors.New("version is required")
 	}
 	if namespace == "" {
-		return nil, fmt.Errorf("namespace is required")
+		return nil, errors.New("namespace is required")
 	}
 
 	helm, err := NewHelmClient(namespace)
@@ -87,7 +90,7 @@ func (p *PCApps) resolveFromSecret(ctx context.Context) (chartURL, username, pas
 		)
 	}
 
-	chartURL = "oci://" + baseURL + "/" + pcAppsReleaseName
+	chartURL = "oci://" + baseURL + "/" + pcAppsChartName
 	log.Printf("Using credentials from K8s secret %q (registry: %s)\n", ociCredentialSecretName, baseURL)
 	return chartURL, username, password, nil
 }

@@ -141,7 +141,7 @@ var _ = Describe("PCApps.Install", func() {
 			}
 		})
 
-		It("returns a clear error suggesting how to fix", func() {
+		It("returns a clear error", func() {
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("argocd-codesphere-oci-read"))
