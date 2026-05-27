@@ -577,6 +577,38 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(MatchError(ContainSubstring("external Loki endpoint is required")))
 			})
 		})
+
+		Context("When central OTel endpoint is set but password is missing", func() {
+			BeforeEach(func() {
+				csEnv.CentralOtelEndpoint = "https://otel.example.com"
+				csEnv.CentralOtelUsername = "otel-user"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("central OTel password is required when central OTel endpoint is set")))
+			})
+		})
+
+		Context("When central OTel username is set but password is missing", func() {
+			BeforeEach(func() {
+				csEnv.CentralOtelUsername = "otel-user"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("central OTel username is set but password is missing")))
+			})
+		})
+
+		Context("When central OTel password is set but username is missing", func() {
+			BeforeEach(func() {
+				csEnv.CentralOtelPassword = "otel-secret"
+				csEnv.CentralOtelEndpoint = "https://otel.example.com"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("central OTel password is set but username is missing")))
+			})
+		})
 	})
 
 	Describe("EnsureInstallConfig", func() {
