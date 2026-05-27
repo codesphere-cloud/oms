@@ -790,7 +790,7 @@ func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
 // cluster node. This lets the private-cloud-installer.js running as root on the jumpbox reach all
 // cluster nodes via plain SSH without requiring agent forwarding.
 func (b *GCPBootstrapper) EnsureJumpboxBootstrapKey() error {
-	// Generate an ephemeral keypair locally (key never touches the jumpbox disk in the user's name).
+	// Generate an ephemeral keypair locally
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return fmt.Errorf("failed to generate bootstrap SSH keypair: %w", err)
