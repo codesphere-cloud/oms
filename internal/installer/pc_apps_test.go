@@ -70,12 +70,7 @@ var _ = Describe("PCApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(newSecret()).
 				Build()
-			pcApps = &installer.PCApps{
-				Version:   version,
-				Namespace: namespace,
-				Helm:      helmMock,
-				Client:    fakeClient,
-			}
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil)
 		})
 
 		It("reads credentials from K8s secret and calls UpgradeChart with InstallIfNotExist", func() {
@@ -109,12 +104,7 @@ var _ = Describe("PCApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(newSecret()).
 				Build()
-			pcApps = &installer.PCApps{
-				Version:   version,
-				Namespace: namespace,
-				Helm:      helmMock,
-				Client:    fakeClient,
-			}
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil)
 		})
 
 		It("returns an error without attempting install", func() {
@@ -133,12 +123,7 @@ var _ = Describe("PCApps.Install", func() {
 			fakeClient = fake.NewClientBuilder().
 				WithScheme(scheme).
 				Build()
-			pcApps = &installer.PCApps{
-				Version:   version,
-				Namespace: namespace,
-				Helm:      helmMock,
-				Client:    fakeClient,
-			}
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil)
 		})
 
 		It("returns a clear error", func() {
@@ -166,12 +151,7 @@ var _ = Describe("PCApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(secret).
 				Build()
-			pcApps = &installer.PCApps{
-				Version:   version,
-				Namespace: namespace,
-				Helm:      helmMock,
-				Client:    fakeClient,
-			}
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil)
 		})
 
 		It("returns an error about missing fields", func() {
@@ -206,13 +186,7 @@ var _ = Describe("PCApps.Install", func() {
 			overlay := filepath.Join(tmpDir, "overlay.yaml")
 			Expect(os.WriteFile(overlay, []byte("foo: overridden\nnested:\n  b: 99\n  c: 3\n"), 0644)).To(Succeed())
 
-			pcApps = &installer.PCApps{
-				Version:     version,
-				Namespace:   namespace,
-				ValuesFiles: []string{base, overlay},
-				Helm:        helmMock,
-				Client:      fakeClient,
-			}
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{base, overlay})
 
 			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
@@ -231,13 +205,7 @@ var _ = Describe("PCApps.Install", func() {
 		})
 
 		It("returns an error for non-existent values file", func() {
-			pcApps = &installer.PCApps{
-				Version:     version,
-				Namespace:   namespace,
-				ValuesFiles: []string{"/nonexistent/values.yaml"},
-				Helm:        helmMock,
-				Client:      fakeClient,
-			}
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{"/nonexistent/values.yaml"})
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
@@ -248,13 +216,7 @@ var _ = Describe("PCApps.Install", func() {
 			badFile := filepath.Join(tmpDir, "bad.yaml")
 			Expect(os.WriteFile(badFile, []byte("{{invalid yaml"), 0644)).To(Succeed())
 
-			pcApps = &installer.PCApps{
-				Version:     version,
-				Namespace:   namespace,
-				ValuesFiles: []string{badFile},
-				Helm:        helmMock,
-				Client:      fakeClient,
-			}
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{badFile})
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())

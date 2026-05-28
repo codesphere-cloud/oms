@@ -33,11 +33,11 @@ const (
 // PCApps holds the configuration for installing the pc-applications Helm chart
 // from a private OCI registry.
 type PCApps struct {
-	Version     string   // chart version (required)
-	Namespace   string   // target namespace for the Helm release
-	ValuesFiles []string // paths to values YAML files, merged in order
-	Helm        HelmClient
-	Client      client.Client
+	version     string   // chart version (required)
+	namespace   string   // target namespace for the Helm release
+	valuesFiles []string // paths to values YAML files, merged in order
+	helm        HelmClient
+	client      client.Client
 }
 
 // NewPCApps creates a new PCApps installer. It validates that required fields
@@ -57,11 +57,11 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string)
 	}
 
 	return &PCApps{
-		Version:     version,
-		Namespace:   namespace,
-		ValuesFiles: valuesFiles,
-		Helm:        helm,
-		Client:      c,
+		version:     version,
+		namespace:   namespace,
+		valuesFiles: valuesFiles,
+		helm:        helm,
+		client:      c,
 	}, nil
 }
 
@@ -71,7 +71,7 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string)
 func (p *PCApps) resolveFromSecret(ctx context.Context) (chartURL, username, password string, err error) {
 	secret := &corev1.Secret{}
 	key := client.ObjectKey{Name: ociCredentialSecretName, Namespace: ociCredentialNamespace}
-	if err := p.Client.Get(ctx, key, secret); err != nil {
+	if err := p.client.Get(ctx, key, secret); err != nil {
 		return "", "", "", fmt.Errorf(
 			"K8s secret %q not found in namespace %q: %w\n"+
 				"Run 'oms beta install argocd --deploy-dc-config' first to create registry credentials",
@@ -99,7 +99,7 @@ func (p *PCApps) resolveFromSecret(ctx context.Context) (chartURL, username, pas
 // pc-applications Helm chart.
 func (p *PCApps) Install(ctx context.Context) error {
 	// Validate values files before any network calls so local errors fail fast.
-	valueOpts := values.Options{ValueFiles: p.ValuesFiles}
+	valueOpts := values.Options{ValueFiles: p.valuesFiles}
 	vals, err := valueOpts.MergeValues(getter.All(cli.New()))
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
@@ -119,24 +119,36 @@ func (p *PCApps) Install(ctx context.Context) error {
 	}
 
 	log.Printf("Authenticating against OCI registry %q...\n", parsed.Host)
-	if err := p.Helm.LoginRegistry(ctx, parsed.Host, username, password); err != nil {
+	if err := p.helm.LoginRegistry(ctx, parsed.Host, username, password); err != nil {
 		return fmt.Errorf("registry login failed: %w", err)
 	}
 
 	cfg := ChartConfig{
 		ReleaseName:     pcAppsReleaseName,
 		ChartName:       chartURL,
-		Namespace:       p.Namespace,
-		Version:         p.Version,
+		Namespace:       p.namespace,
+		Version:         p.version,
 		Values:          vals,
 		CreateNamespace: true,
 	}
 
-	log.Printf("Installing/Upgrading %s (version %s) into namespace %s\n", pcAppsReleaseName, p.Version, p.Namespace)
-	if err := p.Helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{InstallIfNotExist: true}); err != nil {
+	log.Printf("Installing/Upgrading %s (version %s) into namespace %s\n", pcAppsReleaseName, p.version, p.namespace)
+	if err := p.helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{InstallIfNotExist: true}); err != nil {
 		return fmt.Errorf("install/upgrade failed: %w", err)
 	}
 
 	fmt.Printf("Successfully installed/upgraded %s\n", pcAppsReleaseName)
 	return nil
+}
+
+// NewPCAppsForTesting creates a PCApps instance with injected dependencies for
+// use in tests. This avoids exporting struct fields solely for test access.
+func NewPCAppsForTesting(helm HelmClient, c client.Client, version, namespace string, valuesFiles []string) *PCApps {
+	return &PCApps{
+		version:     version,
+		namespace:   namespace,
+		valuesFiles: valuesFiles,
+		helm:        helm,
+		client:      c,
+	}
 }

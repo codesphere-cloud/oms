@@ -9,8 +9,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
@@ -34,12 +32,7 @@ func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load kubernetes config: %w", err)
 	}
 
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add kubernetes scheme: %w", err)
-	}
-
-	kubeClient, err := ctrlclient.New(kubeConfig, ctrlclient.Options{Scheme: scheme})
+	kubeClient, err := ctrlclient.New(kubeConfig, ctrlclient.Options{})
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
