@@ -279,18 +279,23 @@ func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 	}
 
 	// Check if the release already exists in the target namespace.
-	rel, err := o.Helm.FindRelease(o.Config.Namespace, cfg.ReleaseName)
-	if err != nil {
-		return err
-	}
-	if rel != nil {
-		// Release exists in target namespace — upgrade in place.
-		return o.Helm.UpgradeChart(o.ctx, cfg, UpgradeChartOptions{})
+	// If the namespace doesn't exist yet, there's certainly no release in it,
+	// so we skip the Helm query (which would fail on a non-existent namespace).
+	_, nsErr := o.Clientset.CoreV1().Namespaces().Get(o.ctx, o.Config.Namespace, metav1.GetOptions{})
+	if nsErr == nil {
+		rel, err := o.Helm.FindRelease(o.Config.Namespace, cfg.ReleaseName)
+		if err != nil {
+			return err
+		}
+		if rel != nil {
+			// Release exists in target namespace — upgrade in place.
+			return o.Helm.UpgradeChart(o.ctx, cfg, UpgradeChartOptions{})
+		}
 	}
 
 	// Release not found in target namespace. Check if the operator is already
 	// deployed cluster-wide (in another namespace) by looking for its ClusterRole.
-	_, err = o.Clientset.RbacV1().ClusterRoles().Get(o.ctx, "vault-operator", metav1.GetOptions{})
+	_, err := o.Clientset.RbacV1().ClusterRoles().Get(o.ctx, "vault-operator", metav1.GetOptions{})
 	if err == nil {
 		// Operator already installed in another namespace — skip.
 		o.Logger.Logf("Bank-Vaults Operator already installed in the cluster, skipping deployment")

@@ -53,6 +53,11 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 	Describe("Install — deploy Bank-Vaults Operator", func() {
 		It("performs fresh install when operator does not exist", func() {
+			// Pre-create the namespace so FindRelease is reachable.
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
 			// FindRelease returns nil (no existing release in target namespace)
 			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
 
@@ -73,11 +78,37 @@ var _ = Describe("OpenBaoInstaller", func() {
 			}
 			inst.SetCtx(ctx)
 
+			err = inst.DeployBankVaultsOperator()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("performs fresh install when target namespace does not exist", func() {
+			// Namespace "new-ns" is NOT created — FindRelease must be skipped.
+			// No ClusterRole exists, so InstallChart is called directly.
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ReleaseName == "vault-operator" &&
+					cfg.Namespace == "new-ns" &&
+					cfg.CreateNamespace == true
+			})).Return(nil)
+
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "new-ns"},
+			}
+			inst.SetCtx(ctx)
+
 			err := inst.DeployBankVaultsOperator()
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("upgrades when release already exists in target namespace", func() {
+			// Pre-create the namespace so FindRelease is reachable.
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
 			// FindRelease returns an existing release
 			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(&installer.ReleaseInfo{
 				Name:             "vault-operator",
@@ -97,11 +128,16 @@ var _ = Describe("OpenBaoInstaller", func() {
 			}
 			inst.SetCtx(ctx)
 
-			err := inst.DeployBankVaultsOperator()
+			err = inst.DeployBankVaultsOperator()
 			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("skips deployment when operator exists in another namespace", func() {
+			// Pre-create the namespace so FindRelease is reachable.
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "second"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
 			// FindRelease returns nil (not in target namespace)
 			helmMock.EXPECT().FindRelease("second", "vault-operator").Return(nil, nil)
 
@@ -109,7 +145,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 			cr := &rbacv1.ClusterRole{
 				ObjectMeta: metav1.ObjectMeta{Name: "vault-operator"},
 			}
-			_, err := clientset.RbacV1().ClusterRoles().Create(ctx, cr, metav1.CreateOptions{})
+			_, err = clientset.RbacV1().ClusterRoles().Create(ctx, cr, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
 			inst := &installer.OpenBaoInstaller{
@@ -126,6 +162,11 @@ var _ = Describe("OpenBaoInstaller", func() {
 		})
 
 		It("returns an error when Helm InstallChart fails", func() {
+			// Pre-create the namespace so FindRelease is reachable.
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
 			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).
 				Return(fmt.Errorf("chart not found"))
@@ -138,7 +179,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 			}
 			inst.SetCtx(ctx)
 
-			err := inst.DeployBankVaultsOperator()
+			err = inst.DeployBankVaultsOperator()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("chart not found"))
 		})
