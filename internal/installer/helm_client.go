@@ -60,6 +60,9 @@ type HelmClient interface {
 
 	// UpgradeChart upgrades an existing Helm release and returns an error on failure.
 	UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error
+
+	// LoginRegistry authenticates against an OCI registry for private chart pulls.
+	LoginRegistry(ctx context.Context, host, username, password string) error
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +72,7 @@ type HelmClient interface {
 type helmClient struct {
 	defaultNamespace string
 	driver           string
+	registryClient   *registry.Client
 }
 
 func NewHelmClient(namespace string) (HelmClient, error) {
@@ -76,6 +80,23 @@ func NewHelmClient(namespace string) (HelmClient, error) {
 		defaultNamespace: namespace,
 		driver:           os.Getenv("HELM_DRIVER"),
 	}, nil
+}
+
+// LoginRegistry authenticates against an OCI registry. The context parameter
+// is accepted for interface consistency but is not used by the underlying
+// Helm registry client.
+func (h *helmClient) LoginRegistry(_ context.Context, host, username, password string) error {
+	registryClient, err := registry.NewClient()
+	if err != nil {
+		return fmt.Errorf("creating registry client: %w", err)
+	}
+
+	if err := registryClient.Login(host, registry.LoginOptBasicAuth(username, password)); err != nil {
+		return fmt.Errorf("registry login to %q failed: %w", host, err)
+	}
+
+	h.registryClient = registryClient
+	return nil
 }
 
 // helmEnv holds the per-call Helm action configuration and CLI settings.
@@ -110,11 +131,16 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 		return nil, fmt.Errorf("helm action config init failed: %w", err)
 	}
 
-	registryClient, err := registry.NewClient()
-	if err != nil {
-		return nil, fmt.Errorf("helm registry client init failed: %w", err)
+	if h.registryClient != nil {
+		// Reuse the registry client that was authenticated during LoginRegistry.
+		actionConfig.RegistryClient = h.registryClient
+	} else {
+		registryClient, err := registry.NewClient()
+		if err != nil {
+			return nil, fmt.Errorf("helm registry client init failed: %w", err)
+		}
+		actionConfig.RegistryClient = registryClient
 	}
-	actionConfig.RegistryClient = registryClient
 
 	return &helmEnv{actionConfig: actionConfig, settings: settings}, nil
 }
