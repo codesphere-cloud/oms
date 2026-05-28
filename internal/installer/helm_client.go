@@ -77,6 +77,9 @@ func NewHelmClient(namespace string) (HelmClient, error) {
 	}, nil
 }
 
+// LoginRegistry authenticates against an OCI registry. The context parameter
+// is accepted for interface consistency but is not used by the underlying
+// Helm registry client.
 func (h *helmClient) LoginRegistry(_ context.Context, host, username, password string) error {
 	registryClient, err := registry.NewClient()
 	if err != nil {

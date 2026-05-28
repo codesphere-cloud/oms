@@ -6,7 +6,6 @@ package installer_test
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -80,7 +79,7 @@ var _ = Describe("PCApps.Install", func() {
 					cfg.ChartName == expectedChartURL &&
 					cfg.Namespace == namespace &&
 					cfg.Version == version &&
-					cfg.CreateNamespace == true
+					cfg.CreateNamespace
 			}), installer.UpgradeChartOptions{InstallIfNotExist: true}).Return(nil)
 
 			err := pcApps.Install(context.Background())
@@ -195,9 +194,9 @@ var _ = Describe("PCApps.Install", func() {
 					return false
 				}
 				return cfg.Values["foo"] == "overridden" &&
-					fmt.Sprint(nested["a"]) == "1" &&
-					fmt.Sprint(nested["b"]) == "99" &&
-					fmt.Sprint(nested["c"]) == "3"
+					nested["a"].(float64) == 1 &&
+					nested["b"].(float64) == 99 &&
+					nested["c"].(float64) == 3
 			}), installer.UpgradeChartOptions{InstallIfNotExist: true}).Return(nil)
 
 			err := pcApps.Install(context.Background())

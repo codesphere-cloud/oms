@@ -68,7 +68,7 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string)
 // resolveFromSecret reads the OCI registry credentials and chart base URL from
 // the K8s Secret created by "oms beta install argocd --deploy-dc-config".
 // It returns the full OCI chart URL, username, and password.
-func (p *PCApps) resolveFromSecret(ctx context.Context) (chartURL, username, password string, err error) {
+func (p *PCApps) resolveFromSecret(ctx context.Context) (chartURL, username, password string, _ error) {
 	secret := &corev1.Secret{}
 	key := client.ObjectKey{Name: ociCredentialSecretName, Namespace: ociCredentialNamespace}
 	if err := p.client.Get(ctx, key, secret); err != nil {
@@ -90,7 +90,11 @@ func (p *PCApps) resolveFromSecret(ctx context.Context) (chartURL, username, pas
 		)
 	}
 
-	chartURL = "oci://" + baseURL + "/" + pcAppsChartName
+	joined, err := url.JoinPath("oci://"+baseURL, pcAppsChartName)
+	if err != nil {
+		return "", "", "", fmt.Errorf("constructing chart URL: %w", err)
+	}
+	chartURL = joined
 	log.Printf("Using credentials from K8s secret %q (registry: %s)\n", ociCredentialSecretName, baseURL)
 	return chartURL, username, password, nil
 }
@@ -137,7 +141,7 @@ func (p *PCApps) Install(ctx context.Context) error {
 		return fmt.Errorf("install/upgrade failed: %w", err)
 	}
 
-	fmt.Printf("Successfully installed/upgraded %s\n", pcAppsReleaseName)
+	log.Printf("Successfully installed/upgraded %s\n", pcAppsReleaseName)
 	return nil
 }
 
