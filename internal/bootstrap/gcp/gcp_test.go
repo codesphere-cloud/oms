@@ -595,16 +595,26 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password are required when remote write URL is set")))
 			})
 		})
-		Context("When Prometheus remote write URL is set but only password is missing", func() {
+		Context("When Prometheus remote write URL is set but only username is missing", func() {
 			BeforeEach(func() {
 				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
-				csEnv.PrometheusRemoteWriteUser = "prom-user"
+				csEnv.PrometheusRemoteWritePassword = "prom-password"
 			})
 			It("returns an error", func() {
 				err := bs.ValidateInput()
 				Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password are required when remote write URL is set")))
 			})
 		})
+        Context("When Prometheus remote write URL is set but only password is missing", func() {
+    		BeforeEach(func() {
+   				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
+   				csEnv.PrometheusRemoteWriteUser = "prom-user"
+   			})
+           It("returns an error", func() {
+    			err := bs.ValidateInput()
+    			Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password are required when remote write URL is set")))
+   			})
+        })
 		Context("When Prometheus remote write credentials are set but URL is missing", func() {
 			BeforeEach(func() {
 				csEnv.PrometheusRemoteWriteUser = "prom-user"

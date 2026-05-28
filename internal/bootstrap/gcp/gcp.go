@@ -532,7 +532,7 @@ func (b *GCPBootstrapper) validateExternalLokiParams() error {
 
 func (b *GCPBootstrapper) validatePrometheusRemoteWriteParams() error {
 	if b.Env.PrometheusRemoteWriteURL != "" && (b.Env.PrometheusRemoteWriteUser == "" || b.Env.PrometheusRemoteWritePassword == "") {
-		return fmt.Errorf("prometheus remote write username and password are required when remote write URL is set")
+		return fmt.Errorf("prometheus remote write username and password must both be set when remote write URL is specified")
 	}
 	if (b.Env.PrometheusRemoteWriteUser != "" || b.Env.PrometheusRemoteWritePassword != "") && b.Env.PrometheusRemoteWriteURL == "" {
 		return fmt.Errorf("prometheus remote write URL is required when remote write username or password is set")
