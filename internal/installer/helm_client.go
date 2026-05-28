@@ -127,6 +127,10 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 
 	listClient := action.NewList(env.actionConfig)
 	listClient.Filter = "^" + releaseName + "$"
+	listClient.Deployed = true
+	// Also include failed releases in the search, since a failed release with the same name would block installation of a new release with that name.
+	// We want to detect that case and be able to update the failed release.
+	listClient.Failed = true
 	listClient.SetStateMask()
 
 	releases, err := listClient.Run()

@@ -7,11 +7,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
-	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart/common/util"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
@@ -34,11 +33,6 @@ type ArgoCD struct {
 }
 
 func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool, forceConflicts bool, repoURL string, valueFiles []string) (*ArgoCD, error) {
-	settings := cli.New()
-	actionConfig := new(action.Configuration)
-	if err := actionConfig.Init(settings.RESTClientGetter(), "argocd", os.Getenv("HELM_DRIVER")); err != nil {
-		return nil, fmt.Errorf("init helm client failed: %w", err)
-	}
 	helm, err := NewHelmClient("argocd")
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
@@ -65,6 +59,10 @@ func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit stri
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
 func (a *ArgoCD) Install() error {
+	if err := a.validateRepoURL(); err != nil {
+		return err
+	}
+
 	if a.Version != "" {
 		log.Printf("Installing/Upgrading ArgoCD helm chart version %s\n", a.Version)
 	} else {
@@ -75,11 +73,17 @@ func (a *ArgoCD) Install() error {
 
 	vals, err := (&values.Options{
 		ValueFiles: a.ValueFiles,
-		Values:     []string{"dex.enabled=false"},
 	}).MergeValues(getter.All(cli.New()))
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
 	}
+
+	// Apply our defaults underneath the user-provided values so value files can
+	// override them. MergeTables gives precedence to dst (the user values).
+	defaults := map[string]any{
+		"dex": map[string]any{"enabled": false},
+	}
+	vals = util.MergeTables(vals, defaults)
 
 	chartName, repoURL := a.resolveChartRef("argo-cd")
 	cfg := ChartConfig{
@@ -171,6 +175,19 @@ func (a *ArgoCD) upgrade(ctx context.Context, cfg ChartConfig, existing *Release
 		fmt.Println("Successfully upgraded Argo CD to the latest chart version")
 	}
 	return nil
+}
+
+// validateRepoURL ensures a non-empty RepoURL uses a supported scheme.
+func (a *ArgoCD) validateRepoURL() error {
+	if a.RepoURL == "" {
+		return nil
+	}
+	for _, prefix := range []string{"http://", "https://", "oci://"} {
+		if strings.HasPrefix(a.RepoURL, prefix) {
+			return nil
+		}
+	}
+	return fmt.Errorf("invalid repo URL %q: must start with http://, https://, or oci://", a.RepoURL)
 }
 
 // resolveChartRef returns the (chartName, repoURL) pair to use in ChartConfig.
