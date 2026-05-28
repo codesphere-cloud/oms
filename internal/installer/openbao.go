@@ -282,6 +282,9 @@ func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 	// If the namespace doesn't exist yet, there's certainly no release in it,
 	// so we skip the Helm query (which would fail on a non-existent namespace).
 	_, nsErr := o.Clientset.CoreV1().Namespaces().Get(o.ctx, o.Config.Namespace, metav1.GetOptions{})
+	if nsErr != nil && !k8serrors.IsNotFound(nsErr) {
+		return fmt.Errorf("checking namespace %s: %w", o.Config.Namespace, nsErr)
+	}
 	if nsErr == nil {
 		rel, err := o.Helm.FindRelease(o.Config.Namespace, cfg.ReleaseName)
 		if err != nil {
@@ -723,35 +726,5 @@ func GenerateSecurePassword(length int) (string, error) {
 		return "", fmt.Errorf("generating random bytes: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
-// SetCtx is a test helper.
-func (o *OpenBaoInstaller) SetCtx(ctx context.Context) {
-	o.ctx = ctx
-}
-
-// SetUnsealSecret is a test helper.
-func (o *OpenBaoInstaller) SetUnsealSecret(secret *corev1.Secret) {
-	o.unsealSecret = secret
-}
-
-// SetPassword is a test helper.
-func (o *OpenBaoInstaller) SetPassword(password string) {
-	o.password = password
-}
-
-// GetDRBackupExists returns whether a DR backup was found during pre-flight check.
-func (o *OpenBaoInstaller) GetDRBackupExists() bool {
-	return o.drBackupExists
-}
-
-// GetUnsealSecret returns the unseal secret populated during initialization.
-func (o *OpenBaoInstaller) GetUnsealSecret() *corev1.Secret {
-	return o.unsealSecret
-}
-
-// HasExistingDeployment is a test helper that exposes hasExistingDeployment.
-func (o *OpenBaoInstaller) HasExistingDeployment() (bool, error) {
-	return o.hasExistingDeployment()
 }
 

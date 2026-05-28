@@ -89,7 +89,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				return cfg.ReleaseName == "vault-operator" &&
 					cfg.Namespace == "new-ns" &&
 					cfg.CreateNamespace == true
-			})).Return(nil)
+			}), mock.Anything).Return(nil)
 
 			inst := &installer.OpenBaoInstaller{
 				Helm:      helmMock,
@@ -269,6 +269,185 @@ var _ = Describe("OpenBaoInstaller", func() {
 			inst.SetCtx(ctx)
 
 			err := inst.WaitForInitialization()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("timed out"))
+		})
+	})
+
+	Describe("WaitForPodsReady", func() {
+		It("succeeds when all expected pods are running and ready", func() {
+			// Pre-create the namespace
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create 3 ready pods
+			for i := 0; i < 3; i++ {
+				pod := &corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("openbao-%d", i),
+						Namespace: "vault",
+						Labels:    map[string]string{"vault_cr": "openbao"},
+					},
+					Status: corev1.PodStatus{
+						Phase: corev1.PodRunning,
+						Conditions: []corev1.PodCondition{
+							{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+						},
+					},
+				}
+				_, err = clientset.CoreV1().Pods("vault").Create(ctx, pod, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace: "vault",
+					Replicas:  3,
+					Timeout:   5 * time.Second,
+				},
+			}
+			inst.SetCtx(ctx)
+
+			err = inst.WaitForPodsReady()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("times out when fewer pods than expected exist", func() {
+			// Pre-create the namespace
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create only 1 ready pod but expect 3
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openbao-0",
+					Namespace: "vault",
+					Labels:    map[string]string{"vault_cr": "openbao"},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					Conditions: []corev1.PodCondition{
+						{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+					},
+				},
+			}
+			_, err = clientset.CoreV1().Pods("vault").Create(ctx, pod, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace: "vault",
+					Replicas:  3,
+					Timeout:   1 * time.Second,
+				},
+			}
+			inst.SetCtx(ctx)
+
+			err = inst.WaitForPodsReady()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("timed out"))
+		})
+
+		It("excludes terminating pods from the count", func() {
+			// Pre-create the namespace
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			now := metav1.Now()
+
+			// Create 1 ready pod and 1 terminating pod — expect 2 replicas
+			readyPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openbao-0",
+					Namespace: "vault",
+					Labels:    map[string]string{"vault_cr": "openbao"},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					Conditions: []corev1.PodCondition{
+						{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+					},
+				},
+			}
+			terminatingPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "openbao-1",
+					Namespace:         "vault",
+					Labels:            map[string]string{"vault_cr": "openbao"},
+					DeletionTimestamp: &now,
+					Finalizers:        []string{"test-finalizer"}, // Required for DeletionTimestamp in fake
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					Conditions: []corev1.PodCondition{
+						{Type: corev1.PodReady, Status: corev1.ConditionTrue},
+					},
+				},
+			}
+			_, err = clientset.CoreV1().Pods("vault").Create(ctx, readyPod, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			_, err = clientset.CoreV1().Pods("vault").Create(ctx, terminatingPod, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace: "vault",
+					Replicas:  2,
+					Timeout:   1 * time.Second,
+				},
+			}
+			inst.SetCtx(ctx)
+
+			// Only 1 active pod (terminating is excluded), but need 2 → times out
+			err = inst.WaitForPodsReady()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("timed out"))
+		})
+
+		It("times out when pod exists but is not ready", func() {
+			// Pre-create the namespace
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Create a pod that is Running but not Ready
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openbao-0",
+					Namespace: "vault",
+					Labels:    map[string]string{"vault_cr": "openbao"},
+				},
+				Status: corev1.PodStatus{
+					Phase: corev1.PodRunning,
+					Conditions: []corev1.PodCondition{
+						{Type: corev1.PodReady, Status: corev1.ConditionFalse},
+					},
+				},
+			}
+			_, err = clientset.CoreV1().Pods("vault").Create(ctx, pod, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace: "vault",
+					Replicas:  1,
+					Timeout:   1 * time.Second,
+				},
+			}
+			inst.SetCtx(ctx)
+
+			err = inst.WaitForPodsReady()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("timed out"))
 		})
