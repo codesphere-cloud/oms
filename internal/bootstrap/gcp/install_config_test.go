@@ -789,7 +789,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(rw).NotTo(BeNil())
 					Expect(rw.Enabled).To(BeTrue())
 					Expect(rw.Url).To(Equal("https://prometheus.example.com/api/v1/write"))
-					Expect(rw.ClusterName).To(Equal(csEnv.ProjectName))
+					Expect(rw.ClusterName).To(Equal(csEnv.DatacenterName))
 					Expect(rw.Username).To(Equal("prom-user"))
 					Expect(rw.Password).To(Equal("prom-password"))
 				})

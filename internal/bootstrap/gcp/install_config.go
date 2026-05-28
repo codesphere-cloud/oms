@@ -441,7 +441,7 @@ func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig() {
 
 	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Enabled = true
 	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Url = b.Env.PrometheusRemoteWriteURL
-	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.ClusterName = b.Env.ProjectName
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.ClusterName = b.Env.DatacenterName
 	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Username = b.Env.PrometheusRemoteWriteUser
 	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Password = b.Env.PrometheusRemoteWritePassword
 }
