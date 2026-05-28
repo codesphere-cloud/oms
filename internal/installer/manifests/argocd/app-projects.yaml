@@ -85,6 +85,3 @@ spec:
   sourceRepos: []
   sourceNamespaces: []
   destinations: []
-  namespaceResourceBlacklist:
-    - group: "*"
-      kind: "*"
