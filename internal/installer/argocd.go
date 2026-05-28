@@ -23,6 +23,7 @@ type ArgoCD struct {
 	Version        string
 	DatacenterId   string
 	OciPassword    string
+	OciRegistryURL string
 	GitPassword    string
 	FullInstall    bool
 	ForceConflicts bool
@@ -32,13 +33,13 @@ type ArgoCD struct {
 	Resources      ArgoCDResources
 }
 
-func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit string, fullInstall bool, forceConflicts bool, repoURL string, valueFiles []string) (*ArgoCD, error) {
+func NewArgoCD(version string, dcId string, passwordOCI string, ociRegistryURL string, passwordGit string, fullInstall bool, forceConflicts bool, repoURL string, valueFiles []string) (*ArgoCD, error) {
 	helm, err := NewHelmClient("argocd")
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
 
-	resources, err := NewArgoCDResources(dcId, passwordOCI, passwordGit)
+	resources, err := NewArgoCDResources(dcId, passwordOCI, ociRegistryURL, passwordGit)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}
@@ -46,6 +47,7 @@ func NewArgoCD(version string, dcId string, passwordOCI string, passwordGit stri
 		Version:        version,
 		DatacenterId:   dcId,
 		OciPassword:    passwordOCI,
+		OciRegistryURL: ociRegistryURL,
 		GitPassword:    passwordGit,
 		FullInstall:    fullInstall,
 		ForceConflicts: forceConflicts,

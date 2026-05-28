@@ -23,6 +23,7 @@ type InstallArgoCDOpts struct {
 	*GlobalOptions
 	Version        string
 	DatacenterId   string
+	RegistryURL    string
 	FullInstall    bool
 	ForceConflicts bool
 	RepoURL        string
@@ -41,7 +42,7 @@ func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
 		gitPassword = os.Getenv("OMS_GIT_PASSWORD")
 	}
 
-	install, err := installer.NewArgoCD(c.Opts.Version, c.Opts.DatacenterId, ociPassword, gitPassword, c.Opts.FullInstall, c.Opts.ForceConflicts, c.Opts.RepoURL, c.Opts.ValueFiles)
+	install, err := installer.NewArgoCD(c.Opts.Version, c.Opts.DatacenterId, ociPassword, c.Opts.RegistryURL, gitPassword, c.Opts.FullInstall, c.Opts.ForceConflicts, c.Opts.RepoURL, c.Opts.ValueFiles)
 	if err != nil {
 		return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 	}
@@ -90,6 +91,9 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 				  - Local cluster secret (only if --dc-id is provided)
 				  - Git repo credentials (only if OMS_GIT_PASSWORD env var is set)
 
+				Use --registry-url to point to a custom or mirrored OCI registry (defaults
+				to ghcr.io/codesphere-cloud/charts).
+
 				Environment variables:
 				  OMS_REGISTRY_PASSWORD  Password/token for the Helm OCI registry (required for --deploy-dc-config)
 				  OMS_GIT_PASSWORD       Password/token for git repo access (optional)`),
@@ -102,6 +106,7 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 		},
 	}
 	argocd.cmd.Flags().StringVar(&argocd.Opts.DatacenterId, "dc-id", "", "Codesphere Datacenter ID (optional, registers local cluster in ArgoCD)")
+	argocd.cmd.Flags().StringVar(&argocd.Opts.RegistryURL, "registry-url", "ghcr.io/codesphere-cloud/charts", "OCI registry URL for the Helm chart repository")
 	argocd.cmd.Flags().StringVarP(&argocd.Opts.Version, "version", "v", "", "Version of the ArgoCD helm chart to install")
 	argocd.cmd.Flags().BoolVar(&argocd.Opts.FullInstall, "deploy-dc-config", false, "Apply Codesphere-managed resources (AppProjects, Repo Creds, ...) after installing the chart")
 	argocd.cmd.Flags().StringArrayVarP(&argocd.Opts.ValueFiles, "values", "f", nil, "Specify values in a YAML file (can be specified multiple times)")
