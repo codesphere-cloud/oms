@@ -13,6 +13,9 @@ the chart install/upgrade:
   - Local cluster secret (only if --dc-id is provided)
   - Git repo credentials (only if OMS_GIT_PASSWORD env var is set)
 
+Use --registry-url to point to a custom or mirrored OCI registry (defaults
+to ghcr.io/codesphere-cloud/charts).
+
 Environment variables:
   OMS_REGISTRY_PASSWORD  Password/token for the Helm OCI registry (required for --deploy-dc-config)
   OMS_GIT_PASSWORD       Password/token for git repo access (optional)
@@ -41,13 +44,14 @@ $ oms beta install argocd --deploy-dc-config --dc-id 0
 ### Options
 
 ```
-      --dc-id string         Codesphere Datacenter ID (optional, registers local cluster in ArgoCD)
-      --deploy-dc-config     Apply Codesphere-managed resources (AppProjects, Repo Creds, ...) after installing the chart
-      --force-conflicts      Force field ownership conflicts during upgrade (sets server-side apply ForceConflicts)
-  -h, --help                 help for argocd
-      --repo string          Helm chart repository URL; supports HTTP (default: https://argoproj.github.io/argo-helm) and OCI (e.g. oci://ghcr.io/argoproj/argo-helm)
-  -f, --values stringArray   Specify values in a YAML file (can be specified multiple times)
-  -v, --version string       Version of the ArgoCD helm chart to install
+      --dc-id string          Codesphere Datacenter ID (optional, registers local cluster in ArgoCD)
+      --deploy-dc-config      Apply Codesphere-managed resources (AppProjects, Repo Creds, ...) after installing the chart
+      --force-conflicts       Force field ownership conflicts during upgrade (sets server-side apply ForceConflicts)
+  -h, --help                  help for argocd
+      --registry-url string   OCI registry URL for the Helm chart repository (default "ghcr.io/codesphere-cloud/charts")
+      --repo string           Helm chart repository URL; supports HTTP (default: https://argoproj.github.io/argo-helm) and OCI (e.g. oci://ghcr.io/argoproj/argo-helm)
+  -f, --values stringArray    Specify values in a YAML file (can be specified multiple times)
+  -v, --version string        Version of the ArgoCD helm chart to install
 ```
 
 ### SEE ALSO
