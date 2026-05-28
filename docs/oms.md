@@ -31,3 +31,4 @@ like downloading new versions.
 * [oms smoketest](oms_smoketest.md)	 - Run smoke tests for Codesphere components
 * [oms update](oms_update.md)	 - Update OMS related resources
 * [oms version](oms_version.md)	 - Print version
+

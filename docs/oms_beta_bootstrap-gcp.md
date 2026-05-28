@@ -87,3 +87,4 @@ oms beta bootstrap-gcp [flags]
 * [oms beta bootstrap-gcp cleanup](oms_beta_bootstrap-gcp_cleanup.md)	 - Clean up GCP infrastructure created by bootstrap-gcp
 * [oms beta bootstrap-gcp postconfig](oms_beta_bootstrap-gcp_postconfig.md)	 - Run post-configuration steps for GCP bootstrapping
 * [oms beta bootstrap-gcp restart-vms](oms_beta_bootstrap-gcp_restart-vms.md)	 - Restart stopped or terminated GCP VMs
+
