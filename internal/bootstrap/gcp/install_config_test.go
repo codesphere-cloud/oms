@@ -770,6 +770,45 @@ var _ = Describe("Installconfig & Secrets", func() {
 				})
 			})
 
+			Context("When Prometheus remote write is fully configured", func() {
+				BeforeEach(func() {
+					csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
+					csEnv.PrometheusRemoteWriteUser = "prom-user"
+					csEnv.PrometheusRemoteWritePassword = "prom-password"
+				})
+				It("sets Prometheus remote write config", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					rw := bs.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite
+					Expect(rw).NotTo(BeNil())
+					Expect(rw.Enabled).To(BeTrue())
+					Expect(rw.Url).To(Equal("https://prometheus.example.com/api/v1/write"))
+					Expect(rw.ClusterName).To(Equal(csEnv.DatacenterName))
+					Expect(rw.Username).To(Equal("prom-user"))
+					Expect(rw.Password).To(Equal("prom-password"))
+				})
+			})
+
+			Context("When Prometheus remote write URL is not set", func() {
+				It("leaves Prometheus remote write nil", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).To(BeNil())
+				})
+			})
+
 			Context("When CentralOtelPassword is set", func() {
 				BeforeEach(func() {
 					csEnv.CentralOtelPassword = "otel-secret"

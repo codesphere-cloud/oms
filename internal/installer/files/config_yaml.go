@@ -571,6 +571,9 @@ type PrometheusConfig struct {
 type RemoteWriteConfig struct {
 	Enabled     bool   `yaml:"enabled"`
 	ClusterName string `yaml:"clusterName,omitempty"`
+	Url         string `yaml:"url,omitempty"`
+	Username    string `yaml:"username,omitempty"`
+	Password    string `yaml:"-"`
 }
 
 type BlackboxExporterConfig struct {
@@ -847,6 +850,24 @@ func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
 				Fields: &SecretFields{
 					Username: c.Cluster.Monitoring.CentralOtelExport.Username,
 					Password: c.Cluster.Monitoring.CentralOtelExport.Password,
+				},
+			})
+		}
+	}
+
+	if c.Cluster.Monitoring != nil && c.Cluster.Monitoring.Prometheus != nil && c.Cluster.Monitoring.Prometheus.RemoteWrite != nil {
+		if c.Cluster.Monitoring.Prometheus.RemoteWrite.Username != "" && c.Cluster.Monitoring.Prometheus.RemoteWrite.Password != "" {
+			vault.SetSecret(SecretEntry{
+				Name: "promRemoteWriteUser",
+				Fields: &SecretFields{
+					Password: c.Cluster.Monitoring.Prometheus.RemoteWrite.Username,
+				},
+			})
+
+			vault.SetSecret(SecretEntry{
+				Name: "promRemoteWritePassword",
+				Fields: &SecretFields{
+					Password: c.Cluster.Monitoring.Prometheus.RemoteWrite.Password,
 				},
 			})
 		}
