@@ -26,9 +26,12 @@ $ oms install ArgoCD --version <version>
 ```
       --dc-id string               Codesphere Datacenter ID where this ArgoCD is installed
       --deploy-dc-config           Install Codesphere-managed resources (AppProjects, Repo Creds, ...) after installing the chart
+      --force-conflicts            Force field ownership conflicts during upgrade (sets server-side apply ForceConflicts)
       --git-password string        Password/token to read from the git repo where ArgoCD Application manifests are stored
   -h, --help                       help for argocd
       --registry-password string   Password/token to read from the OCI registry (e.g. ghcr.io) where Helm chart artifacts are stored
+      --repo string                Helm chart repository URL; supports HTTP (default: https://argoproj.github.io/argo-helm) and OCI (e.g. oci://ghcr.io/argoproj/argo-helm)
+  -f, --values stringArray         Specify values in a YAML file (can be specified multiple times)
   -v, --version string             Version of the ArgoCD helm chart to install
 ```
 

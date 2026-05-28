@@ -37,8 +37,13 @@ type ChartConfig struct {
 	CreateNamespace bool
 }
 
+type InstallChartOptions struct {
+	ForceConflicts bool
+}
+
 type UpgradeChartOptions struct {
 	InstallIfNotExist bool
+	ForceConflicts    bool
 }
 
 // HelmClient is the seam that makes the Helm SDK mockable.
@@ -51,7 +56,7 @@ type HelmClient interface {
 	FindRelease(namespace, releaseName string) (*ReleaseInfo, error)
 
 	// InstallChart performs a fresh Helm install and returns an error on failure.
-	InstallChart(ctx context.Context, cfg ChartConfig) error
+	InstallChart(ctx context.Context, cfg ChartConfig, opts InstallChartOptions) error
 
 	// UpgradeChart upgrades an existing Helm release and returns an error on failure.
 	UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error
@@ -123,6 +128,9 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 	listClient := action.NewList(env.actionConfig)
 	listClient.Filter = "^" + releaseName + "$"
 	listClient.Deployed = true
+	// Also include failed releases in the search, since a failed release with the same name would block installation of a new release with that name.
+	// We want to detect that case and be able to update the failed release.
+	listClient.Failed = true
 	listClient.SetStateMask()
 
 	releases, err := listClient.Run()
@@ -155,7 +163,7 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 	return nil, nil // no release found
 }
 
-func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
+func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig, opts InstallChartOptions) error {
 	env, err := h.newHelmEnv(cfg.Namespace)
 	if err != nil {
 		return err
@@ -170,6 +178,7 @@ func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
 	installClient.Version = cfg.Version
 	installClient.RepoURL = cfg.RepoURL
 	installClient.Timeout = 5 * time.Minute
+	installClient.ForceConflicts = opts.ForceConflicts
 
 	chartPath, err := installClient.LocateChart(cfg.ChartName, env.settings)
 	if err != nil {
@@ -196,7 +205,7 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 			return err
 		}
 		if rel == nil {
-			return h.InstallChart(ctx, cfg)
+			return h.InstallChart(ctx, cfg, InstallChartOptions{ForceConflicts: opts.ForceConflicts})
 		}
 	}
 
@@ -211,6 +220,7 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 	upgradeClient.Version = cfg.Version
 	upgradeClient.RepoURL = cfg.RepoURL
 	upgradeClient.Timeout = 5 * time.Minute
+	upgradeClient.ForceConflicts = opts.ForceConflicts
 
 	chartPath, err := upgradeClient.LocateChart(cfg.ChartName, env.settings)
 	if err != nil {
@@ -229,3 +239,4 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 
 	return nil
 }
+

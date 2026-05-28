@@ -23,6 +23,9 @@ type InstallArgoCDOpts struct {
 	GitPassword      string
 	RegistryPassword string
 	FullInstall      bool
+	ForceConflicts   bool
+	RepoURL          string
+	ValueFiles       []string
 }
 
 func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
@@ -39,7 +42,7 @@ func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
 			}
 		}
 	}
-	install, err := installer.NewArgoCD(c.Opts.Version, c.Opts.DatacenterId, c.Opts.RegistryPassword, c.Opts.GitPassword, c.Opts.FullInstall)
+	install, err := installer.NewArgoCD(c.Opts.Version, c.Opts.DatacenterId, c.Opts.RegistryPassword, c.Opts.GitPassword, c.Opts.FullInstall, c.Opts.ForceConflicts, c.Opts.RepoURL, c.Opts.ValueFiles)
 	if err != nil {
 		return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 	}
@@ -68,6 +71,9 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	argocd.cmd.Flags().StringVar(&argocd.Opts.DatacenterId, "dc-id", "", "Codesphere Datacenter ID where this ArgoCD is installed")
 	argocd.cmd.Flags().StringVarP(&argocd.Opts.Version, "version", "v", "", "Version of the ArgoCD helm chart to install")
 	argocd.cmd.Flags().BoolVar(&argocd.Opts.FullInstall, "deploy-dc-config", false, "Install Codesphere-managed resources (AppProjects, Repo Creds, ...) after installing the chart")
+	argocd.cmd.Flags().StringArrayVarP(&argocd.Opts.ValueFiles, "values", "f", nil, "Specify values in a YAML file (can be specified multiple times)")
+	argocd.cmd.Flags().BoolVar(&argocd.Opts.ForceConflicts, "force-conflicts", false, "Force field ownership conflicts during upgrade (sets server-side apply ForceConflicts)")
+	argocd.cmd.Flags().StringVar(&argocd.Opts.RepoURL, "repo", "", "Helm chart repository URL; supports HTTP (default: https://argoproj.github.io/argo-helm) and OCI (e.g. oci://ghcr.io/argoproj/argo-helm)")
 	argocd.cmd.RunE = argocd.RunE
 
 	AddCmd(parentCmd, argocd.cmd)
