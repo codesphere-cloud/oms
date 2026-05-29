@@ -605,16 +605,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password must both be set when remote write URL is specified")))
 			})
 		})
-        Context("When Prometheus remote write URL is set but only password is missing", func() {
-    		BeforeEach(func() {
-   				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
-   				csEnv.PrometheusRemoteWriteUser = "prom-user"
-   			})
-           It("returns an error", func() {
-    			err := bs.ValidateInput()
-    			Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password must both be set when remote write URL is specified")))
-   			})
-        })
+		Context("When Prometheus remote write URL is set but only password is missing", func() {
+			BeforeEach(func() {
+				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
+				csEnv.PrometheusRemoteWriteUser = "prom-user"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password must both be set when remote write URL is specified")))
+			})
+		})
 		Context("When Prometheus remote write credentials are set but URL is missing", func() {
 			BeforeEach(func() {
 				csEnv.PrometheusRemoteWriteUser = "prom-user"
@@ -1095,6 +1095,29 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureJumpboxConfigured()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			Context("when SSHPrivateKeyPath is set and key is absent", func() {
+				It("copies SSH key to jumpbox", func() {
+					bs.Env.SSHPrivateKeyPath = "key"
+					nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/root/.ssh/id_rsa").Return(false)
+					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), "key", "/root/.ssh/id_rsa").Return(nil)
+
+					err := bs.EnsureJumpboxConfigured()
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("when SSHPrivateKeyPath is set and key already exists", func() {
+				It("skips SSH key copy", func() {
+					bs.Env.SSHPrivateKeyPath = "key"
+					nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/root/.ssh/id_rsa").Return(true)
+					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+					err := bs.EnsureJumpboxConfigured()
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
 		})
 
 		Describe("Invalid cases", func() {
@@ -1114,6 +1137,63 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureJumpboxConfigured()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install OMS"))
+			})
+
+			Context("when SSHPrivateKeyPath is set", func() {
+				It("fails when CopyFile for SSH key fails", func() {
+					bs.Env.SSHPrivateKeyPath = "key"
+					nodeClient.EXPECT().RunCommand(mock.Anything, "ubuntu", mock.Anything).Return(nil)
+					nodeClient.EXPECT().HasFile(mock.MatchedBy(jumpboxMatcher), "/root/.ssh/id_rsa").Return(false)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p /root/.ssh && chmod 700 /root/.ssh").Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), "key", "/root/.ssh/id_rsa").Return(fmt.Errorf("copy failed"))
+
+					err := bs.EnsureJumpboxConfigured()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to copy SSH key to jumpbox"))
+				})
+			})
+		})
+	})
+
+	Describe("EnsureControlPlaneSSHKey", func() {
+		Context("when SSHPrivateKeyPath is not set", func() {
+			It("does nothing", func() {
+				bs.Env.SSHPrivateKeyPath = ""
+				err := bs.EnsureControlPlaneSSHKey()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("when SSHPrivateKeyPath is set", func() {
+			BeforeEach(func() {
+				csEnv.SSHPrivateKeyPath = "key"
+			})
+
+			It("copies SSH key when not present", func() {
+				nodeClient.EXPECT().HasFile(bs.Env.ControlPlaneNodes[0], "/root/.ssh/id_rsa").Return(false)
+				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "mkdir -p /root/.ssh && chmod 700 /root/.ssh").Return(nil)
+				nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "key", "/root/.ssh/id_rsa").Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod 600 /root/.ssh/id_rsa").Return(nil)
+
+				err := bs.EnsureControlPlaneSSHKey()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("skips copy when key already exists", func() {
+				nodeClient.EXPECT().HasFile(bs.Env.ControlPlaneNodes[0], "/root/.ssh/id_rsa").Return(true)
+
+				err := bs.EnsureControlPlaneSSHKey()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("fails when CopyFile fails", func() {
+				nodeClient.EXPECT().HasFile(bs.Env.ControlPlaneNodes[0], "/root/.ssh/id_rsa").Return(false)
+				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "mkdir -p /root/.ssh && chmod 700 /root/.ssh").Return(nil)
+				nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "key", "/root/.ssh/id_rsa").Return(fmt.Errorf("copy failed"))
+
+				err := bs.EnsureControlPlaneSSHKey()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to copy SSH key to control plane"))
 			})
 		})
 	})

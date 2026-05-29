@@ -33,9 +33,9 @@ var vmDefs = []VMDef{
 	{"ceph-1", "e2-standard-8", []string{"ceph"}, []int64{10, 100}, false},
 	{"ceph-2", "e2-standard-8", []string{"ceph"}, []int64{10, 100}, false},
 	{"ceph-3", "e2-standard-8", []string{"ceph"}, []int64{10, 100}, false},
-	{"k0s-1", "e2-standard-8", []string{"k0s"}, []int64{}, false},
-	{"k0s-2", "e2-standard-8", []string{"k0s"}, []int64{}, false},
-	{"k0s-3", "e2-standard-8", []string{"k0s"}, []int64{}, false},
+	{"k0s-1", "e2-standard-8", []string{"k0s"}, []int64{100}, false},
+	{"k0s-2", "e2-standard-8", []string{"k0s"}, []int64{100}, false},
+	{"k0s-3", "e2-standard-8", []string{"k0s"}, []int64{100}, false},
 }
 
 // validateVMProvisioningOptions checks that spot and preemptible options are not both set

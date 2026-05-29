@@ -290,6 +290,11 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure hosts are configured: %w", err)
 	}
 
+	err = b.stlog.Step("Ensure etcd disks mounted", b.EnsureEtcdDisksMounted)
+	if err != nil {
+		return fmt.Errorf("failed to ensure etcd disks are mounted: %w", err)
+	}
+
 	if b.Env.RegistryType == RegistryTypeLocalContainer {
 		err = b.stlog.Step("Ensure local container registry", b.EnsureLocalContainerRegistry)
 		if err != nil {
@@ -332,8 +337,12 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
-		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
+		err = b.stlog.Step("Ensure control plane SSH key", b.EnsureControlPlaneSSHKey)
 		if err != nil {
+			return fmt.Errorf("failed to ensure control plane SSH key: %w", err)
+		}
+
+		if err = b.stlog.Step("Install Codesphere", b.InstallCodesphere); err != nil {
 			return fmt.Errorf("failed to install Codesphere: %w", err)
 		}
 
@@ -797,6 +806,20 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		}
 	}
 
+	// Ensure SSH private key is present on the jumpbox so the Codesphere installer
+	// can SSH into worker nodes. Skip if no private key path is configured.
+	if b.Env.SSHPrivateKeyPath != "" && !b.Env.Jumpbox.NodeClient.HasFile(b.Env.Jumpbox, "/root/.ssh/id_rsa") {
+		if err := b.Env.Jumpbox.NodeClient.RunCommand(b.Env.Jumpbox, "root", "mkdir -p /root/.ssh && chmod 700 /root/.ssh"); err != nil {
+			return fmt.Errorf("failed to create .ssh directory on jumpbox: %w", err)
+		}
+		if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SSHPrivateKeyPath, "/root/.ssh/id_rsa"); err != nil {
+			return fmt.Errorf("failed to copy SSH key to jumpbox: %w", err)
+		}
+		if err := b.Env.Jumpbox.NodeClient.RunCommand(b.Env.Jumpbox, "root", "chmod 600 /root/.ssh/id_rsa"); err != nil {
+			return fmt.Errorf("failed to set SSH key permissions on jumpbox: %w", err)
+		}
+	}
+
 	hasOms := b.Env.Jumpbox.HasCommand("oms")
 	if hasOms {
 		return nil
@@ -807,6 +830,28 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		return fmt.Errorf("failed to install OMS on jumpbox: %w", err)
 	}
 
+	return nil
+}
+
+// EnsureControlPlaneSSHKey copies the SSH private key to the first control-plane node so
+// that configure-k0s.sh can SSH into the other worker nodes. Skip if no private key path
+// is configured or there are no control-plane nodes.
+func (b *GCPBootstrapper) EnsureControlPlaneSSHKey() error {
+	if len(b.Env.ControlPlaneNodes) == 0 || b.Env.SSHPrivateKeyPath == "" {
+		return nil
+	}
+	controlPlane := b.Env.ControlPlaneNodes[0]
+	if !controlPlane.NodeClient.HasFile(controlPlane, "/root/.ssh/id_rsa") {
+		if err := controlPlane.NodeClient.RunCommand(controlPlane, "root", "mkdir -p /root/.ssh && chmod 700 /root/.ssh"); err != nil {
+			return fmt.Errorf("failed to create .ssh directory on control plane: %w", err)
+		}
+		if err := controlPlane.NodeClient.CopyFile(controlPlane, b.Env.SSHPrivateKeyPath, "/root/.ssh/id_rsa"); err != nil {
+			return fmt.Errorf("failed to copy SSH key to control plane: %w", err)
+		}
+		if err := controlPlane.NodeClient.RunCommand(controlPlane, "root", "chmod 600 /root/.ssh/id_rsa"); err != nil {
+			return fmt.Errorf("failed to set SSH key permissions on control plane: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -829,6 +874,44 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 		}
 	}
 
+	return nil
+}
+
+// EnsureEtcdDisksMounted formats and mounts the dedicated etcd disk (/dev/sdb) on each control
+// plane node at /var/lib/k0s/etcd. The disk is persisted via /etc/fstab using its UUID.
+// This must run before k0s is installed so etcd writes land on the dedicated PD-SSD.
+func (b *GCPBootstrapper) EnsureEtcdDisksMounted() error {
+	for _, n := range b.Env.ControlPlaneNodes {
+		// Idempotency check: skip if already mounted.
+		if err := n.RunSSHCommand("root", "mountpoint -q /var/lib/k0s/etcd"); err == nil {
+			b.stlog.Logf("etcd disk already mounted on %s, skipping", n.GetName())
+			continue
+		}
+
+		// Format /dev/sdb with ext4 if it has no filesystem yet.
+		if err := n.RunSSHCommand("root", "blkid -s TYPE -o value /dev/sdb | grep -q ext4"); err != nil {
+			b.stlog.Logf("Formatting etcd disk on %s", n.GetName())
+			if err := n.RunSSHCommand("root", "mkfs.ext4 -F /dev/sdb"); err != nil {
+				return fmt.Errorf("failed to format etcd disk on %s: %w", n.GetName(), err)
+			}
+		}
+
+		// Create mount point directory.
+		if err := n.RunSSHCommand("root", "mkdir -p /var/lib/k0s/etcd"); err != nil {
+			return fmt.Errorf("failed to create etcd mount point on %s: %w", n.GetName(), err)
+		}
+
+		// Register in /etc/fstab by UUID (survives reboots) and mount.
+		fstabAndMount := `DISK_UUID=$(blkid -s UUID -o value /dev/sdb) && ` +
+			`grep -qF "UUID=$DISK_UUID" /etc/fstab || ` +
+			`echo "UUID=$DISK_UUID /var/lib/k0s/etcd ext4 defaults,noatime 0 2" >> /etc/fstab && ` +
+			`mount /var/lib/k0s/etcd`
+		if err := n.RunSSHCommand("root", fstabAndMount); err != nil {
+			return fmt.Errorf("failed to mount etcd disk on %s: %w", n.GetName(), err)
+		}
+
+		b.stlog.Logf("etcd disk mounted at /var/lib/k0s/etcd on %s", n.GetName())
+	}
 	return nil
 }
 
@@ -1031,10 +1114,10 @@ func (b *GCPBootstrapper) GenerateK0sConfigScript() error {
 
 cat <<EOF > cloud.conf
 [Global]
-project-id = "$PROJECT_ID"
+project-id = "` + b.Env.ProjectID + `"
 EOF
 
-cat <<EOF >> cc-deployment.yaml
+cat <<EOF > cc-deployment.yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -1085,7 +1168,7 @@ spec:
 EOF
 
 KUBECTL="/etc/codesphere/deps/kubernetes/files/k0s kubectl"
-$KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system
+$KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml | $KUBECTL apply -f -
 echo alias kubectl=\"$KUBECTL\" >> /root/.bashrc
 echo alias k=\"$KUBECTL\" >> /root/.bashrc
 
@@ -1097,11 +1180,11 @@ $KUBECTL apply -f cc-deployment.yaml
 $KUBECTL patch svc public-gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + b.Env.PublicGatewayIP + `'"}}'
 $KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + b.Env.GatewayIP + `'"}}'
 
-sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
+grep -qF -- --enable-cloud-provider /etc/systemd/system/k0scontroller.service || sed -i '/ExecStart=/s/$/ --enable-cloud-provider/' /etc/systemd/system/k0scontroller.service
 
-ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[1].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 root@` + b.Env.ControlPlaneNodes[1].GetInternalIP() + ` "grep -qF -- --enable-cloud-provider /etc/systemd/system/k0sworker.service || sed -i '/ExecStart=/s/\$/ --enable-cloud-provider/' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker" || true
 
-ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[2].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
+ssh -o StrictHostKeyChecking=no -o ConnectTimeout=60 root@` + b.Env.ControlPlaneNodes[2].GetInternalIP() + ` "grep -qF -- --enable-cloud-provider /etc/systemd/system/k0sworker.service || sed -i '/ExecStart=/s/\$/ --enable-cloud-provider/' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker" || true
 
 systemctl daemon-reload
 systemctl restart k0scontroller
