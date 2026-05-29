@@ -1095,7 +1095,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureJumpboxConfigured()
 				Expect(err).NotTo(HaveOccurred())
 			})
-
 		})
 
 		Describe("Invalid cases", func() {
@@ -1116,7 +1115,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install OMS"))
 			})
-
 		})
 	})
 
