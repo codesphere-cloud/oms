@@ -337,11 +337,6 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
-		err = b.stlog.Step("Ensure control plane SSH key", b.EnsureControlPlaneSSHKey)
-		if err != nil {
-			return fmt.Errorf("failed to ensure control plane SSH key: %w", err)
-		}
-
 		if err = b.stlog.Step("Install Codesphere", b.InstallCodesphere); err != nil {
 			return fmt.Errorf("failed to install Codesphere: %w", err)
 		}
@@ -806,20 +801,6 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		}
 	}
 
-	// Ensure SSH private key is present on the jumpbox so the Codesphere installer
-	// can SSH into worker nodes. Skip if no private key path is configured.
-	if b.Env.SSHPrivateKeyPath != "" && !b.Env.Jumpbox.NodeClient.HasFile(b.Env.Jumpbox, "/root/.ssh/id_rsa") {
-		if err := b.Env.Jumpbox.NodeClient.RunCommand(b.Env.Jumpbox, "root", "mkdir -p /root/.ssh && chmod 700 /root/.ssh"); err != nil {
-			return fmt.Errorf("failed to create .ssh directory on jumpbox: %w", err)
-		}
-		if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SSHPrivateKeyPath, "/root/.ssh/id_rsa"); err != nil {
-			return fmt.Errorf("failed to copy SSH key to jumpbox: %w", err)
-		}
-		if err := b.Env.Jumpbox.NodeClient.RunCommand(b.Env.Jumpbox, "root", "chmod 600 /root/.ssh/id_rsa"); err != nil {
-			return fmt.Errorf("failed to set SSH key permissions on jumpbox: %w", err)
-		}
-	}
-
 	hasOms := b.Env.Jumpbox.HasCommand("oms")
 	if hasOms {
 		return nil
@@ -830,28 +811,6 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		return fmt.Errorf("failed to install OMS on jumpbox: %w", err)
 	}
 
-	return nil
-}
-
-// EnsureControlPlaneSSHKey copies the SSH private key to the first control-plane node so
-// that configure-k0s.sh can SSH into the other worker nodes. Skip if no private key path
-// is configured or there are no control-plane nodes.
-func (b *GCPBootstrapper) EnsureControlPlaneSSHKey() error {
-	if len(b.Env.ControlPlaneNodes) == 0 || b.Env.SSHPrivateKeyPath == "" {
-		return nil
-	}
-	controlPlane := b.Env.ControlPlaneNodes[0]
-	if !controlPlane.NodeClient.HasFile(controlPlane, "/root/.ssh/id_rsa") {
-		if err := controlPlane.NodeClient.RunCommand(controlPlane, "root", "mkdir -p /root/.ssh && chmod 700 /root/.ssh"); err != nil {
-			return fmt.Errorf("failed to create .ssh directory on control plane: %w", err)
-		}
-		if err := controlPlane.NodeClient.CopyFile(controlPlane, b.Env.SSHPrivateKeyPath, "/root/.ssh/id_rsa"); err != nil {
-			return fmt.Errorf("failed to copy SSH key to control plane: %w", err)
-		}
-		if err := controlPlane.NodeClient.RunCommand(controlPlane, "root", "chmod 600 /root/.ssh/id_rsa"); err != nil {
-			return fmt.Errorf("failed to set SSH key permissions on control plane: %w", err)
-		}
-	}
 	return nil
 }
 
