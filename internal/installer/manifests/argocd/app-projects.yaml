@@ -72,19 +72,3 @@ spec:
       groups:
         - ops@codesphere.com
         - development@codesphere.com
----
-# yaml-language-server: $schema=https://raw.githubusercontent.com/datreeio/CRDs-catalog/refs/heads/main/argoproj.io/appproject_v1alpha1.json
-# The default project has the most permissive settings and needs to be explicitly restricted
-# https://argo-cd.readthedocs.io/en/stable/user-guide/projects/#the-default-project
-apiVersion: argoproj.io/v1alpha1
-kind: AppProject
-metadata:
-  name: default
-  namespace: argocd
-spec:
-  sourceRepos: []
-  sourceNamespaces: []
-  destinations: []
-  namespaceResourceBlacklist:
-    - group: "*"
-      kind: "*"

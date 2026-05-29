@@ -6,6 +6,7 @@ package installer
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"log"
 
@@ -23,23 +24,25 @@ type argoCDResources struct {
 	clientset kubernetes.Interface
 	dynClient dynamic.Interface
 
-	DatacenterId string
-	OciPassword  string
-	GitPassword  string
+	DatacenterId   string
+	OciPassword    string
+	OciRegistryURL string
+	GitPassword    string
 }
 
-func NewArgoCDResources(dataCenterId string, ociPassword string, gitPassword string) (ArgoCDResources, error) {
+func NewArgoCDResources(dataCenterId string, ociPassword string, ociRegistryURL string, gitPassword string) (ArgoCDResources, error) {
 	clientset, dynClient, err := k8s.NewClients()
 	if err != nil {
 		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 	}
 
 	return &argoCDResources{
-		clientset:    clientset,
-		dynClient:    dynClient,
-		DatacenterId: dataCenterId,
-		OciPassword:  ociPassword,
-		GitPassword:  gitPassword,
+		clientset:      clientset,
+		dynClient:      dynClient,
+		DatacenterId:   dataCenterId,
+		OciPassword:    ociPassword,
+		OciRegistryURL: ociRegistryURL,
+		GitPassword:    gitPassword,
 	}, nil
 }
 
@@ -60,16 +63,24 @@ func (a *argoCDResources) ApplyAll(ctx context.Context) error {
 		return fmt.Errorf("applying app projects: %w", err)
 	}
 
-	if err := a.applyLocalCluster(ctx); err != nil {
-		return fmt.Errorf("applying local cluster secret: %w", err)
+	if a.DatacenterId != "" {
+		if err := a.applyLocalCluster(ctx); err != nil {
+			return fmt.Errorf("applying local cluster secret: %w", err)
+		}
+	}
+
+	if a.OciPassword == "" {
+		return errors.New("OCI registry password is required but not set")
 	}
 
 	if err := a.applyHelmRegistrySecret(ctx); err != nil {
 		return fmt.Errorf("applying helm registry secret: %w", err)
 	}
 
-	if err := a.applyGitRepoSecret(ctx); err != nil {
-		return fmt.Errorf("applying git repo secret: %w", err)
+	if a.GitPassword != "" {
+		if err := a.applyGitRepoSecret(ctx); err != nil {
+			return fmt.Errorf("applying git repo secret: %w", err)
+		}
 	}
 
 	return nil
@@ -110,6 +121,7 @@ func (a *argoCDResources) applyHelmRegistrySecret(ctx context.Context) error {
 	log.Println("Applying helm registry secret... ")
 	rendered, err := k8s.RenderTemplate(helmRegistryTpl, map[string]string{
 		"SECRET_CODESPHERE_OCI_READ": a.OciPassword,
+		"OCI_REGISTRY_URL":           a.OciRegistryURL,
 	})
 	if err != nil {
 		return fmt.Errorf("rendering helm registry template: %w", err)
