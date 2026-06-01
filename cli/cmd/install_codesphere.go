@@ -19,11 +19,46 @@ import (
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
+
+// knownInstallerSteps mirrors SKIPPABLE_STEPS from private-cloud-installer.ts.
+var knownInstallerSteps = []string{
+	"copy-dependencies",
+	"extract-dependencies",
+	"load-container-images",
+	"sops",
+	"docker",
+	"postgres",
+	"ceph",
+	"kubernetes",
+	"set-up-cluster",
+	"codesphere",
+	"ms-backends",
+}
+
+// infraSteps are run in Phase 1 (before ArgoCD) when --argocd is active.
+var infraSteps = []string{
+	"copy-dependencies",
+	"extract-dependencies",
+	"load-container-images",
+	"sops",
+	"docker",
+	"postgres",
+	"ceph",
+	"kubernetes",
+}
+
+// clusterSteps depend on ArgoCD-managed components and run in Phase 2.
+var clusterSteps = []string{"set-up-cluster", "codesphere", "ms-backends"}
 
 // InstallCodesphereCmd represents the codesphere command
 type InstallCodesphereCmd struct {
@@ -42,6 +77,12 @@ type InstallCodesphereOpts struct {
 	SkipSteps        []string
 	CodesphereOnly   bool
 	DirectConnection bool
+	UseArgoCD        bool
+	RegistryURL      string
+	VaultFile        string
+	AgeKeyPath       string
+	VaultNamespace   string
+	VaultSecretName  string
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
@@ -87,6 +128,12 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere.cmd.Flags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, kubernetes")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
+	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.UseArgoCD, "argocd", false, "After installation: deploy vault secrets, update the ArgoCD OCI pull secret, and install pc-apps from the BOM version")
+	codesphere.cmd.Flags().StringVar(&codesphere.Opts.RegistryURL, "registry-url", "ghcr.io/codesphere-cloud/charts", "OCI registry URL used for the ArgoCD helm pull secret (only relevant with --argocd)")
+	codesphere.cmd.Flags().StringVar(&codesphere.Opts.VaultFile, "vault-file", "", "Path to the SOPS-encrypted vault file to deploy as a Kubernetes secret (only relevant with --argocd)")
+	codesphere.cmd.Flags().StringVar(&codesphere.Opts.AgeKeyPath, "age-key", "", "Path to the age private key used to decrypt --vault-file (optional, uses default search paths if omitted)")
+	codesphere.cmd.Flags().StringVar(&codesphere.Opts.VaultNamespace, "vault-namespace", argocd.DefaultVaultNamespace, "Kubernetes namespace for the vault secret (only relevant with --argocd)")
+	codesphere.cmd.Flags().StringVar(&codesphere.Opts.VaultSecretName, "vault-secret-name", argocd.DefaultVaultSecretName, "Name of the Kubernetes secret created from the vault (only relevant with --argocd)")
 
 	util.MarkFlagRequired(codesphere.cmd, "package")
 	util.MarkFlagRequired(codesphere.cmd, "config")
@@ -226,6 +273,10 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 		}
 	}
 
+	if err := validateSkipSteps(c.Opts.SkipSteps); err != nil {
+		return err
+	}
+
 	// Install codesphere with node
 	nodePath := filepath.Join(pm.GetWorkDir(), "node")
 	err = os.Chmod(nodePath, 0755)
@@ -234,37 +285,131 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 	}
 
 	log.Printf("Using Node.js executable: %s", nodePath)
-	log.Println("Starting private cloud installer script...")
 	installerPath := filepath.Join(pm.GetWorkDir(), "private-cloud-installer.js")
 	archivePath := filepath.Join(pm.GetWorkDir(), "deps.tar.gz")
 
-	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", c.Opts.Config, "--privKey", c.Opts.PrivKey}
-	if len(c.Opts.SkipSteps) > 0 {
-		for _, step := range c.Opts.SkipSteps {
-			cmdArgs = append(cmdArgs, "--skipStep", step)
+	if c.Opts.UseArgoCD {
+		// Phase 1: infra only — skip cluster steps so ArgoCD deps are in place first.
+		log.Println("Phase 1: running infra installation (skipping cluster steps)...")
+		phase1Args := c.buildInstallerCmdArgs(installerPath, archivePath, clusterSteps)
+		if err := c.runInstallerCmd(nodePath, phase1Args); err != nil {
+			return fmt.Errorf("phase 1 (infra) installer failed: %w", err)
 		}
+		log.Println("Phase 1 complete.")
+
+		// ArgoCD integration: deploy secrets and ArgoCD-managed components.
+		log.Println("Running ArgoCD integration...")
+		if err := c.runArgoCDIntegration(pm, config); err != nil {
+			return fmt.Errorf("argocd integration failed: %w", err)
+		}
+		log.Println("ArgoCD integration complete.")
+
+		// Phase 2: cluster steps — infra is done and ArgoCD components are healthy.
+		log.Println("Phase 2: running cluster installation (set-up-cluster, codesphere, ms-backends)...")
+		phase2Args := c.buildInstallerCmdArgs(installerPath, archivePath, infraSteps)
+		if err := c.runInstallerCmd(nodePath, phase2Args); err != nil {
+			return fmt.Errorf("phase 2 (cluster) installer failed: %w", err)
+		}
+		log.Println("Phase 2 complete.")
+	} else {
+		log.Println("Starting private cloud installer script...")
+		cmdArgs := c.buildInstallerCmdArgs(installerPath, archivePath, nil)
+		if err := c.runInstallerCmd(nodePath, cmdArgs); err != nil {
+			return fmt.Errorf("failed to run installer script: %w", err)
+		}
+		log.Println("Private cloud installer script finished.")
 	}
 
+	return nil
+}
+
+// validateSkipSteps returns an error if any step is not in knownInstallerSteps.
+func validateSkipSteps(steps []string) error {
+	for _, step := range steps {
+		if !slices.Contains(knownInstallerSteps, step) {
+			return fmt.Errorf("unknown --skip-step %q; valid steps are: %s", step, strings.Join(knownInstallerSteps, ", "))
+		}
+	}
+	return nil
+}
+
+// buildInstallerCmdArgs builds the node command arguments, merging user-provided
+// skip steps with any additional steps to skip (e.g. phase-specific steps).
+func (c *InstallCodesphereCmd) buildInstallerCmdArgs(installerPath, archivePath string, extraSkips []string) []string {
+	skipSet := make(map[string]struct{}, len(c.Opts.SkipSteps)+len(extraSkips))
+	for _, s := range c.Opts.SkipSteps {
+		skipSet[s] = struct{}{}
+	}
+	for _, s := range extraSkips {
+		skipSet[s] = struct{}{}
+	}
+
+	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", c.Opts.Config, "--privKey", c.Opts.PrivKey}
+	for step := range skipSet {
+		cmdArgs = append(cmdArgs, "--skipStep", step)
+	}
 	if c.Opts.CodesphereOnly {
 		cmdArgs = append(cmdArgs, "--codesphereOnly")
 	}
-
 	if c.Opts.DirectConnection {
 		cmdArgs = append(cmdArgs, "--directConnection")
 	}
+	return cmdArgs
+}
 
+// runInstallerCmd executes the node installer with the given arguments,
+// wiring stdio through to the current process.
+func (c *InstallCodesphereCmd) runInstallerCmd(nodePath string, cmdArgs []string) error {
 	cmd := exec.Command(nodePath, cmdArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
+	return cmd.Run()
+}
 
-	err = cmd.Run()
+// runArgoCDIntegration deploys vault secrets, updates the ArgoCD OCI pull
+// secret, and installs pc-apps using the version recorded in the package BOM.
+func (c *InstallCodesphereCmd) runArgoCDIntegration(pm installer.PackageManager, config files.RootConfig) error {
+	ctx := context.Background()
+
+	// Build a k8s client with the full client-go scheme so corev1 types are
+	// registered (required for vault secret creation).
+	kubeConfig, err := ctrlconfig.GetConfig()
 	if err != nil {
-		return fmt.Errorf("failed to run installer script: %w", err)
+		return fmt.Errorf("failed to load kubernetes config: %w", err)
 	}
-	log.Println("Private cloud installer script finished.")
+	scheme := k8sruntime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		return fmt.Errorf("failed to register kubernetes scheme: %w", err)
+	}
+	kubeClient, err := ctrlclient.New(kubeConfig, ctrlclient.Options{Scheme: scheme})
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes client: %w", err)
+	}
 
-	return nil
+	// Resolve OCI password from env var or interactive prompt.
+	ociPassword, err := resolveOCIPassword()
+	if err != nil {
+		return fmt.Errorf("OCI password required for ArgoCD integration: %w", err)
+	}
+
+	// Derive registry URL: prefer explicit flag, then config registry server.
+	registryURL := c.Opts.RegistryURL
+	if registryURL == "" && config.Registry != nil && config.Registry.Server != "" {
+		registryURL = config.Registry.Server
+	}
+
+	return argocd.Run(ctx, kubeClient, argocd.Opts{
+		BomPath:         pm.GetDependencyPath("bom.json"),
+		DatacenterID:    fmt.Sprintf("%d", config.Datacenter.ID),
+		OCIPassword:     ociPassword,
+		RegistryURL:     registryURL,
+		InstallArgoCD:   false,
+		VaultFile:       c.Opts.VaultFile,
+		AgeKeyPath:      c.Opts.AgeKeyPath,
+		VaultNamespace:  c.Opts.VaultNamespace,
+		VaultSecretName: c.Opts.VaultSecretName,
+	})
 }
 
 func (c *InstallCodesphereCmd) warnIfVaultDirDiffersFromSecretsDir(config files.RootConfig) {

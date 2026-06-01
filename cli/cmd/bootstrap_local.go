@@ -22,6 +22,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	"github.com/spf13/cobra"
@@ -87,6 +88,12 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallDir, "install-dir", ".installer", "Directory for config, secrets, and bundle files")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallConfigPath, "install-config", "", "Path to install config file (default: <install-dir>/config.yaml)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "", "Path to secrets file (default: <install-dir>/prod.vault.yaml)")
+	// ArgoCD integration
+	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.UseArgoCD, "argocd", false, "After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDRegistryURL, "registry-url", "ghcr.io/codesphere-cloud/charts", "OCI registry URL used for the ArgoCD helm pull secret (only relevant with --argocd)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDVaultFile, "vault-file", "", "Path to the SOPS-encrypted vault file to deploy as a Kubernetes secret (only relevant with --argocd)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDVaultNamespace, "vault-namespace", argocd.DefaultVaultNamespace, "Kubernetes namespace for the vault secret (only relevant with --argocd)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDVaultSecretName, "vault-secret-name", argocd.DefaultVaultSecretName, "Name of the Kubernetes secret created from the vault (only relevant with --argocd)")
 	bootstrapLocalCmd.cmd.RunE = bootstrapLocalCmd.RunE
 
 	util.MarkFlagRequired(bootstrapLocalCmd.cmd, "registry-user")

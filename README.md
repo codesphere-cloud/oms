@@ -75,6 +75,57 @@ The OMS CLI organizes its functionality into several top-level commands, each wi
 
 See our [Usage Documentation](docs) for usage information about the specific subcommands.
 
+##### `oms install codesphere`
+
+Install a Codesphere instance with the provided package, configuration file, and private key.
+Uses the `private-cloud-installer.js` script included in the package to perform the installation.
+
+```
+oms install codesphere [flags]
+```
+
+**Examples**
+
+```sh
+# Skip most pre-installation steps (e.g. re-apply Codesphere helm charts only)
+oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml \
+  -s copy-dependencies,extract-dependencies,load-container-images,ceph,postgres,kubernetes,docker
+
+# Skip loading container images (lite package without images)
+oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml \
+  -s load-container-images
+
+# Full install with ArgoCD-based post-steps: deploy vault secrets, update OCI pull secret, install pc-apps
+oms install codesphere -p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml \
+  --argocd --vault-file prod.vault.yaml --age-key age_key.txt
+```
+
+**Options**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `-p, --package` | | Package file (`.tar.gz`) to load binaries and installer from (**required**) |
+| `-c, --config` | | Path to the Codesphere Private Cloud configuration file (yaml) (**required**) |
+| `-k, --priv-key` | | Path to the private key to encrypt/decrypt secrets (**required**) |
+| `-f, --force` | `false` | Enforce package extraction |
+| `-s, --skip-steps` | | Steps to skip (e.g. `copy-dependencies`, `load-container-images`, `ceph`, `kubernetes`) |
+| `--codesphere-only` | `false` | Install only Codesphere without dependencies |
+| `--direct-connection` | `false` | Use direct connection to cluster nodes |
+| `--argocd` | `false` | After installation: deploy vault secrets, update ArgoCD OCI pull secret, and install pc-apps from the BOM version |
+| `--vault-file` | | Path to the SOPS-encrypted vault file to deploy as a Kubernetes secret (with `--argocd`) |
+| `--age-key` | | Path to the age private key for vault decryption (with `--argocd`, optional) |
+| `--vault-namespace` | `codesphere` | Kubernetes namespace for the vault secret (with `--argocd`) |
+| `--vault-secret-name` | `cs-vault` | Name of the Kubernetes secret created from the vault (with `--argocd`) |
+| `--registry-url` | `ghcr.io/codesphere-cloud/charts` | OCI registry URL for the ArgoCD helm pull secret (with `--argocd`) |
+
+**ArgoCD integration (`--argocd`)**
+
+When `--argocd` is set the following steps run after the node installer completes:
+
+1. **Vault secrets** — decrypts `--vault-file` with the age key and creates/updates the K8s secret `--vault-secret-name` in `--vault-namespace`. Skipped if `--vault-file` is not provided.
+2. **ArgoCD OCI pull secret** — creates or updates the `argocd-codesphere-oci-read` secret in the `argocd` namespace. Requires `OMS_REGISTRY_PASSWORD` to be set or an interactive terminal for the prompt.
+3. **pc-applications** — reads the chart version from `bom.json` (`components["pc-applications"].files.chart.ociRef`) and installs or upgrades the `pc-applications` Helm chart. Prints a warning and skips if the component is absent from the BOM.
+
 ### How to Build?
 
 ```shell

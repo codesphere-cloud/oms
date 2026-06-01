@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -458,6 +459,14 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 		return fmt.Errorf("failed to resolve absolute key path: %w", err)
 	}
 
+	if b.Env.UseArgoCD {
+		log.Println("Running ArgoCD integration...")
+		if err := b.runArgoCDIntegration(bundleDir); err != nil {
+			return fmt.Errorf("argocd integration failed: %w", err)
+		}
+		log.Println("ArgoCD integration complete.")
+	}
+
 	// Create a temporary NodePort service for PostgreSQL so that
 	// install-components.js can reach the database without a long-lived
 	// kubectl port-forward session.
@@ -503,4 +512,29 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 
 	log.Println("Codesphere installer finished successfully.")
 	return nil
+}
+
+// runArgoCDIntegration installs ArgoCD, deploys vault secrets (when configured),
+// updates the OCI pull secret, and installs pc-apps from the BOM version.
+func (b *LocalBootstrapper) runArgoCDIntegration(bundleDir string) error {
+	dcId := "0"
+	if b.Env.InstallConfig != nil {
+		dcId = fmt.Sprintf("%d", b.Env.InstallConfig.Datacenter.ID)
+	}
+	registryURL := b.Env.ArgoCDRegistryURL
+	if registryURL == "" && b.Env.InstallConfig != nil && b.Env.InstallConfig.Registry != nil {
+		registryURL = b.Env.InstallConfig.Registry.Server
+	}
+
+	return argocd.Run(b.ctx, b.kubeClient, argocd.Opts{
+		BomPath:         filepath.Join(bundleDir, "bom.json"),
+		DatacenterID:    dcId,
+		OCIPassword:     b.Env.RegistryPassword,
+		RegistryURL:     registryURL,
+		InstallArgoCD:   true,
+		VaultFile:       b.Env.ArgoCDVaultFile,
+		AgeKeyPath:      b.ageKeyPath,
+		VaultNamespace:  b.Env.ArgoCDVaultNamespace,
+		VaultSecretName: b.Env.ArgoCDVaultSecretName,
+	})
 }

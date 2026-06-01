@@ -89,6 +89,12 @@ type CodesphereEnvironment struct {
 	K0s                bool                `json:"-"`
 	PodCIDR            string              `json:"pod_cidr"`
 	ServiceCIDR        string              `json:"service_cidr"`
+	// ArgoCD integration
+	UseArgoCD             bool   `json:"-"`
+	ArgoCDRegistryURL     string `json:"-"`
+	ArgoCDVaultFile       string `json:"-"`
+	ArgoCDVaultNamespace  string `json:"-"`
+	ArgoCDVaultSecretName string `json:"-"`
 }
 
 func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, helm installer.HelmClient, env *CodesphereEnvironment) *LocalBootstrapper {
