@@ -14,22 +14,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type ConfigTemplateCmd struct {
+type TemplateConfigCmd struct {
 	cmd  *cobra.Command
-	Opts ConfigTemplateOpts
+	Opts TemplateConfigOpts
 }
 
-type ConfigTemplateOpts struct {
+type TemplateConfigOpts struct {
 	*GlobalOptions
 	Config string
 	Vault  string
 	AgeKey string
 }
 
-func (c *ConfigTemplateCmd) RunE(cmd *cobra.Command, _ []string) error {
+func (c *TemplateConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	rendered, err := c.Render()
 	if err != nil {
 		return err
+	}
+
+	if _, err := fmt.Fprintln(cmd.ErrOrStderr(), "Warning: the rendered config is printed to stdout in plaintext and may contain secrets from the vault."); err != nil {
+		return fmt.Errorf("failed to write warning message: %w", err)
 	}
 
 	if _, err := fmt.Fprint(cmd.OutOrStdout(), string(rendered)); err != nil {
@@ -39,15 +43,15 @@ func (c *ConfigTemplateCmd) RunE(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func AddConfigTemplateCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
-	templateCmd := &ConfigTemplateCmd{
+func AddTemplateConfigCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
+	configCmd := &TemplateConfigCmd{
 		cmd: &cobra.Command{
-			Use:   "template",
+			Use:   "config",
 			Short: "Render a config.yaml template using secrets from a vault file",
 			Long: io.Long(`Render a config.yaml template using secrets from a prod.vault.yaml file.
 
 This command prints the rendered configuration to stdout so templating can be tested without running an installation.`),
-			Example: formatExamples("config template", []io.Example{
+			Example: formatExamples("template config", []io.Example{
 				{
 					Cmd:  "--config config.yaml --vault prod.vault.yaml --age-key age_key.txt",
 					Desc: "Render config.yaml with secrets from prod.vault.yaml",
@@ -55,23 +59,23 @@ This command prints the rendered configuration to stdout so templating can be te
 			}),
 			Args: cobra.ExactArgs(0),
 		},
-		Opts: ConfigTemplateOpts{GlobalOptions: opts},
+		Opts: TemplateConfigOpts{GlobalOptions: opts},
 	}
 
-	templateCmd.cmd.Flags().StringVarP(&templateCmd.Opts.Config, "config", "c", "", "Path to the config.yaml template to render (required)")
-	templateCmd.cmd.Flags().StringVarP(&templateCmd.Opts.Vault, "vault", "v", "", "Path to the SOPS-encrypted prod.vault.yaml file (required)")
-	templateCmd.cmd.Flags().StringVarP(&templateCmd.Opts.AgeKey, "age-key", "k", "", "Path to the age key file used to decrypt the vault (required)")
+	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.Config, "config", "c", "", "Path to the config.yaml template to render (required)")
+	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.Vault, "vault", "v", "", "Path to the SOPS-encrypted prod.vault.yaml file (required)")
+	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.AgeKey, "age-key", "k", "", "Path to the age key file used to decrypt the vault (required)")
 
-	util.MarkFlagRequired(templateCmd.cmd, "config")
-	util.MarkFlagRequired(templateCmd.cmd, "vault")
-	util.MarkFlagRequired(templateCmd.cmd, "age-key")
+	util.MarkFlagRequired(configCmd.cmd, "config")
+	util.MarkFlagRequired(configCmd.cmd, "vault")
+	util.MarkFlagRequired(configCmd.cmd, "age-key")
 
-	AddCmd(parentCmd, templateCmd.cmd)
+	AddCmd(parentCmd, configCmd.cmd)
 
-	templateCmd.cmd.RunE = templateCmd.RunE
+	configCmd.cmd.RunE = configCmd.RunE
 }
 
-func (c *ConfigTemplateCmd) Render() ([]byte, error) {
+func (c *TemplateConfigCmd) Render() ([]byte, error) {
 	data, err := os.ReadFile(c.Opts.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %w", c.Opts.Config, err)

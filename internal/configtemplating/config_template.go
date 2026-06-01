@@ -15,6 +15,9 @@ type SecretStore interface {
 	LookupSecret(name string, selector ...string) (string, error)
 }
 
+// RenderInstallConfigTemplate renders the given config template data, resolving
+// any `secret` template calls against store, and returns the rendered bytes.
+// Referencing a missing template key or a missing secret is treated as an error.
 func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error) {
 	tmpl, err := template.New("install-config").
 		Option("missingkey=error").
@@ -39,10 +42,10 @@ func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error)
 	return rendered.Bytes(), nil
 }
 
-// RenderConfigFileToTempIfNeeded renders configPath with store into a temporary
+// RenderConfigFileToTemp renders configPath with store into a temporary
 // 0600 YAML file and returns that path plus a cleanup function. Callers should
 // pass the returned path to downstream code and defer cleanup immediately.
-func RenderConfigFileToTempIfNeeded(configPath string, store SecretStore) (string, func(), error) {
+func RenderConfigFileToTemp(configPath string, store SecretStore) (string, func(), error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)

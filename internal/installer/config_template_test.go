@@ -4,6 +4,7 @@
 package installer_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -82,12 +83,13 @@ var _ = Describe("Config templating", func() {
 		plaintextVaultPath := filepath.Join(tempDir, "prod.vault.plain.yaml")
 		ageKeyPath := filepath.Join(tempDir, "age_key.txt")
 
-		Expect(os.WriteFile(configPath, []byte(`secrets:
-  baseDir: "`+tempDir+`"
+		configYaml := fmt.Sprintf(`secrets:
+  baseDir: %q
 codesphere:
   override:
     apiToken: "{{ secret "apiToken" }}"
-`), 0644)).To(Succeed())
+`, tempDir)
+		Expect(os.WriteFile(configPath, []byte(configYaml), 0644)).To(Succeed())
 		vaultYaml, err := vault.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.WriteFile(plaintextVaultPath, vaultYaml, 0600)).To(Succeed())
@@ -96,7 +98,7 @@ codesphere:
 		Expect(err).NotTo(HaveOccurred())
 		Expect(installer.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
-		renderedPath, cleanup, err := configtemplating.RenderConfigFileToTempIfNeeded(
+		renderedPath, cleanup, err := configtemplating.RenderConfigFileToTemp(
 			configPath,
 			installer.NewLazyVaultTemplatingSecretStore(vaultPath, ageKeyPath),
 		)

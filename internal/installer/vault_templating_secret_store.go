@@ -12,16 +12,22 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
+// VaultTemplatingSecretStore resolves secrets referenced from config templates
+// against a SOPS-encrypted install vault. The vault can either be provided
+// directly or loaded lazily from disk on first lookup.
 type VaultTemplatingSecretStore struct {
 	vault      *files.InstallVault
 	vaultPath  string
 	ageKeyPath string
 }
 
+// NewVaultTemplatingSecretStore returns a store backed by an already-decrypted vault.
 func NewVaultTemplatingSecretStore(vault *files.InstallVault) *VaultTemplatingSecretStore {
 	return &VaultTemplatingSecretStore{vault: vault}
 }
 
+// NewLazyVaultTemplatingSecretStore returns a store that decrypts and loads the
+// vault from vaultPath using ageKeyPath on the first secret lookup.
 func NewLazyVaultTemplatingSecretStore(vaultPath, ageKeyPath string) *VaultTemplatingSecretStore {
 	return &VaultTemplatingSecretStore{
 		vaultPath:  vaultPath,
@@ -29,6 +35,8 @@ func NewLazyVaultTemplatingSecretStore(vaultPath, ageKeyPath string) *VaultTempl
 	}
 }
 
+// NewVaultTemplatingSecretStoreFromFile decrypts and loads the vault from
+// vaultPath using ageKeyPath and returns a store backed by it.
 func NewVaultTemplatingSecretStoreFromFile(vaultPath, ageKeyPath string) (*VaultTemplatingSecretStore, error) {
 	vault, err := LoadVaultData(vaultPath, ageKeyPath)
 	if err != nil {
@@ -37,19 +45,12 @@ func NewVaultTemplatingSecretStoreFromFile(vaultPath, ageKeyPath string) (*Vault
 	return NewVaultTemplatingSecretStore(vault), nil
 }
 
+// LookupSecret returns the value of the named secret, optionally narrowed by a
+// field selector (e.g. "password", "file.content"). The vault is loaded lazily
+// on first use when the store was created without a preloaded vault.
 func (s *VaultTemplatingSecretStore) LookupSecret(name string, selector ...string) (string, error) {
-	if s == nil {
-		return "", errors.New("vault secret store is not configured")
-	}
-	if s.vault == nil {
-		if s.vaultPath == "" {
-			return "", errors.New("vault secret store is not configured")
-		}
-		vault, err := LoadVaultData(s.vaultPath, s.ageKeyPath)
-		if err != nil {
-			return "", err
-		}
-		s.vault = vault
+	if err := s.ensureVault(); err != nil {
+		return "", err
 	}
 
 	for _, entry := range s.vault.Secrets {
@@ -59,6 +60,23 @@ func (s *VaultTemplatingSecretStore) LookupSecret(name string, selector ...strin
 	}
 
 	return "", fmt.Errorf("secret %q not found in vault", name)
+}
+
+// ensureVault lazily decrypts and loads the vault from disk when the store was
+// created without a preloaded vault (see NewLazyVaultTemplatingSecretStore).
+func (s *VaultTemplatingSecretStore) ensureVault() error {
+	if s.vault != nil {
+		return nil
+	}
+	if s.vaultPath == "" {
+		return errors.New("error initializing vault: vaultPath not set")
+	}
+	vault, err := LoadVaultData(s.vaultPath, s.ageKeyPath)
+	if err != nil {
+		return fmt.Errorf("error initializing vault: %w", err)
+	}
+	s.vault = vault
+	return nil
 }
 
 func selectVaultSecretValue(entry files.SecretEntry, selector ...string) (string, error) {
@@ -94,6 +112,8 @@ func selectVaultSecretValue(entry files.SecretEntry, selector ...string) (string
 	return "", fmt.Errorf("selector %q is not available on secret %q", field, entry.Name)
 }
 
+// LoadVaultData reads, SOPS-decrypts, and parses the vault at vaultPath using
+// the age key at ageKeyPath, returning the decoded install vault.
 func LoadVaultData(vaultPath, ageKeyPath string) (*files.InstallVault, error) {
 	data, err := os.ReadFile(vaultPath)
 	if err != nil {
@@ -138,6 +158,8 @@ func isSOPSEncryptedYAML(data []byte) (bool, error) {
 		return false, nil
 	}
 
+	// A mapping node stores its keys and values as a flat list alternating
+	// key, value, key, value, ... so we step by 2 to visit each key/value pair.
 	for i := 0; i+1 < len(root.Content); i += 2 {
 		if root.Content[i].Value == "sops" && root.Content[i+1].Kind == yaml.MappingNode {
 			return true, nil

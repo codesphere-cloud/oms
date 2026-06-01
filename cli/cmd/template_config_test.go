@@ -18,7 +18,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("ConfigTemplateCmd", func() {
+var _ = Describe("TemplateConfigCmd", func() {
 	It("renders config templates with secrets from a vault file", func() {
 		if !sopsAndAgeAvailable() {
 			Skip("sops and age-keygen not available")
@@ -70,8 +70,8 @@ postgres:
 		rootCmd.SetOut(&output)
 		rootCmd.SetErr(&output)
 		rootCmd.SetArgs([]string{
-			"config",
 			"template",
+			"config",
 			"--config",
 			configPath,
 			"--vault",
@@ -88,13 +88,13 @@ postgres:
 		Expect(output.String()).To(ContainSubstring("password: 'admin-secret'"))
 	})
 
-	It("adds the template command with required flags", func() {
+	It("adds the config command with required flags", func() {
 		rootCmd := cmd.GetRootCmd()
 
-		configCmd, _, err := rootCmd.Find([]string{"config", "template"})
+		configCmd, _, err := rootCmd.Find([]string{"template", "config"})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(configCmd).NotTo(BeNil())
-		Expect(configCmd.Use).To(Equal("template"))
+		Expect(configCmd.Use).To(Equal("config"))
 		Expect(configCmd.Short).To(Equal("Render a config.yaml template using secrets from a vault file"))
 
 		Expect(configCmd.Flags().Lookup("config")).NotTo(BeNil())

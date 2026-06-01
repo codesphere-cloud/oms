@@ -106,7 +106,7 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 	cleanup := func() {}
 	if c.Opts.Vault != "" {
 		store := installer.NewLazyVaultTemplatingSecretStore(c.Opts.Vault, c.Opts.PrivKey)
-		renderedConfig, renderCleanup, err := configtemplating.RenderConfigFileToTempIfNeeded(c.Opts.Config, store)
+		renderedConfig, renderCleanup, err := configtemplating.RenderConfigFileToTemp(c.Opts.Config, store)
 		if err != nil {
 			return fmt.Errorf("failed to render config template: %w", err)
 		}
