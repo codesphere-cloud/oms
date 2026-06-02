@@ -263,7 +263,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(cpNode.GetInternalIP()).To(Equal("10.0.0.1"))
 			}
 
-			Expect(len(bs.Env.InstallConfig.Codesphere.ManagedServices)).To(Equal(4))
+			Expect(len(bs.Env.InstallConfig.Codesphere.ManagedServices)).To(Equal(5))
 		})
 	})
 
@@ -605,16 +605,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password must both be set when remote write URL is specified")))
 			})
 		})
-        Context("When Prometheus remote write URL is set but only password is missing", func() {
-    		BeforeEach(func() {
-   				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
-   				csEnv.PrometheusRemoteWriteUser = "prom-user"
-   			})
-           It("returns an error", func() {
-    			err := bs.ValidateInput()
-    			Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password must both be set when remote write URL is specified")))
-   			})
-        })
+		Context("When Prometheus remote write URL is set but only password is missing", func() {
+			BeforeEach(func() {
+				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
+				csEnv.PrometheusRemoteWriteUser = "prom-user"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password must both be set when remote write URL is specified")))
+			})
+		})
 		Context("When Prometheus remote write credentials are set but URL is missing", func() {
 			BeforeEach(func() {
 				csEnv.PrometheusRemoteWriteUser = "prom-user"

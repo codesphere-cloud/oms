@@ -181,6 +181,7 @@ func (g *InstallConfig) applyCommonProperties() {
 			{Name: "babelfish", Version: "v1"},
 			{Name: "s3", Version: "v1"},
 			{Name: "virtual-k8s", Version: "v1"},
+			{Name: "ferretdb", Version: "v0"},
 		}
 	}
 	if g.Config.Secrets.BaseDir == "" {
