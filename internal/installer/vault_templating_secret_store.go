@@ -50,7 +50,7 @@ func NewVaultTemplatingSecretStoreFromFile(vaultPath, ageKeyPath string) (*Vault
 // on first use when the store was created without a preloaded vault.
 func (s *VaultTemplatingSecretStore) LookupSecret(name string, selector ...string) (string, error) {
 	if err := s.ensureVault(); err != nil {
-		return "", err
+		return "", fmt.Errorf("error ensuring the vault: %w", err)
 	}
 
 	for _, entry := range s.vault.Secrets {
@@ -69,11 +69,11 @@ func (s *VaultTemplatingSecretStore) ensureVault() error {
 		return nil
 	}
 	if s.vaultPath == "" {
-		return errors.New("error initializing vault: vaultPath not set")
+		return errors.New("vaultPath not set")
 	}
 	vault, err := LoadVaultData(s.vaultPath, s.ageKeyPath)
 	if err != nil {
-		return fmt.Errorf("error initializing vault: %w", err)
+		return err
 	}
 	s.vault = vault
 	return nil
