@@ -8,6 +8,20 @@ Render a config.yaml template using secrets from a prod.vault.yaml file.
 
 This command prints the rendered configuration to stdout so templating can be tested without running an installation.
 
+Template syntax in config.yaml:
+
+  # Inject a secret value (defaults to the "content"/"password" field)
+  someKey: "{{ secret "mySecret" }}"
+
+  # Select a specific field
+  username: "{{ secret "mySecret" "fields.username" }}"
+  password: "{{ secret "mySecret" "fields.password" }}"
+
+  # Inject a file secret's content
+  caCert: "{{ secret "caCert" "file.content" }}"
+
+Secret names and selectors must match entries in the prod.vault.yaml file.
+
 ```
 oms template config [flags]
 ```
