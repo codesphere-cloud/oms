@@ -5,6 +5,9 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -162,15 +165,34 @@ codesphere:
 
 	Context("valid configuration", func() {
 		It("validates successfully", func() {
+			if !sopsAndAgeAvailableForUpdateInstallConfig() {
+				Skip("sops and age-keygen not available")
+			}
+
 			_, err := configFile.WriteString(validConfig)
 			Expect(err).NotTo(HaveOccurred())
 			err = configFile.Close()
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = vaultFile.WriteString(validVault)
-			Expect(err).NotTo(HaveOccurred())
 			err = vaultFile.Close()
 			Expect(err).NotTo(HaveOccurred())
+			tempDir := GinkgoT().TempDir()
+			ageKeyPath := filepath.Join(tempDir, "age_key.txt")
+			plaintextVaultPath := filepath.Join(tempDir, "prod.vault.plain.yaml")
+			Expect(os.WriteFile(plaintextVaultPath, []byte(validVault), 0600)).To(Succeed())
+			Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
+			recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(installer.EncryptFileWithSOPS(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
+			previousAgeKeyFile, hadPreviousAgeKeyFile := os.LookupEnv("SOPS_AGE_KEY_FILE")
+			Expect(os.Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)).To(Succeed())
+			DeferCleanup(func() {
+				if hadPreviousAgeKeyFile {
+					Expect(os.Setenv("SOPS_AGE_KEY_FILE", previousAgeKeyFile)).To(Succeed())
+					return
+				}
+				Expect(os.Unsetenv("SOPS_AGE_KEY_FILE")).To(Succeed())
+			})
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{

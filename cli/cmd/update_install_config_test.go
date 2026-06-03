@@ -6,6 +6,8 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -36,6 +38,10 @@ var _ = Describe("UpdateInstallConfig", func() {
 	)
 
 	BeforeEach(func() {
+		if !sopsAndAgeAvailableForUpdateInstallConfig() {
+			Skip("sops and age-keygen not available")
+		}
+
 		var err error
 		configFile, err = os.CreateTemp("", "config-*.yaml")
 		Expect(err).NotTo(HaveOccurred())
@@ -177,8 +183,23 @@ codesphere:
 		err = os.WriteFile(configFile.Name(), []byte(initialConfig), 0644)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = os.WriteFile(vaultFile.Name(), []byte(initialVault), 0644)
+		ageKeyPath := filepath.Join(GinkgoT().TempDir(), "age_key.txt")
+		plaintextVaultPath := filepath.Join(filepath.Dir(ageKeyPath), "prod.vault.plain.yaml")
+		err = os.WriteFile(plaintextVaultPath, []byte(initialVault), 0600)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
+		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(installer.EncryptFileWithSOPS(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
+		previousAgeKeyFile, hadPreviousAgeKeyFile := os.LookupEnv("SOPS_AGE_KEY_FILE")
+		Expect(os.Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)).To(Succeed())
+		DeferCleanup(func() {
+			if hadPreviousAgeKeyFile {
+				Expect(os.Setenv("SOPS_AGE_KEY_FILE", previousAgeKeyFile)).To(Succeed())
+				return
+			}
+			Expect(os.Unsetenv("SOPS_AGE_KEY_FILE")).To(Succeed())
+		})
 
 		opts = &UpdateInstallConfigOpts{
 			GlobalOptions: &GlobalOptions{},
@@ -349,9 +370,7 @@ codesphere:
 		)
 
 		BeforeEach(func() {
-			var err error
-			initialVaultContent, err = os.ReadFile(vaultFile.Name())
-			Expect(err).NotTo(HaveOccurred())
+			initialVaultContent = []byte(initialVault)
 		})
 
 		It("should preserve all vault entries during non-certificate update", func() {
@@ -432,6 +451,16 @@ codesphere:
 		})
 	})
 })
+
+func sopsAndAgeAvailableForUpdateInstallConfig() bool {
+	if _, err := exec.LookPath("sops"); err != nil {
+		return false
+	}
+	if _, err := exec.LookPath("age-keygen"); err != nil {
+		return false
+	}
+	return true
+}
 
 var _ = Describe("SecretDependencyTracker", func() {
 	var tracker *SecretDependencyTracker

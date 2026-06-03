@@ -27,6 +27,10 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 	}
 
 	if b.fw.Exists(b.Env.InstallConfigPath) {
+		if err := b.loadVaultForConfigTemplating(); err != nil {
+			return err
+		}
+
 		err := b.icg.LoadInstallConfigFromFile(b.Env.InstallConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config file: %w", err)
@@ -41,6 +45,18 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 	}
 
 	b.Env.InstallConfig = b.icg.GetInstallConfig()
+
+	return nil
+}
+
+func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
+	if !b.fw.Exists(b.Env.SecretsFilePath) {
+		return nil
+	}
+
+	if err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath); err != nil {
+		return fmt.Errorf("failed to load vault file for config templating: %w", err)
+	}
 
 	return nil
 }
