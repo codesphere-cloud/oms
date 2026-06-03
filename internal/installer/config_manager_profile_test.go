@@ -153,7 +153,7 @@ var _ = Describe("ConfigManagerProfile", func() {
 
 					// Managed service config
 					Expect(config.Codesphere.ManagedServices).ToNot(BeNil())
-					Expect(len(config.Codesphere.ManagedServices)).To(Equal(4))
+					Expect(len(config.Codesphere.ManagedServices)).To(Equal(5))
 
 					// Secrets
 					Expect(config.Secrets.BaseDir).To(Equal("/root/secrets"))

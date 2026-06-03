@@ -8,7 +8,7 @@ metadata:
     argocd.argoproj.io/secret-type: repository
 stringData:
   name: codesphere-charts
-  url: ghcr.io/codesphere-cloud/charts
+  url: "${OCI_REGISTRY_URL}"
   type: helm
   username: github
   password: "${SECRET_CODESPHERE_OCI_READ}"

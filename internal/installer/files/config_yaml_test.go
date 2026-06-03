@@ -285,6 +285,49 @@ codesphere:
 				},
 			}))
 		})
+
+		It("extracts Prometheus remote write credentials into vault secrets", func() {
+			rootConfig.Cluster.Monitoring = &files.MonitoringConfig{
+				Prometheus: &files.PrometheusConfig{
+					RemoteWrite: &files.RemoteWriteConfig{
+						Enabled:     true,
+						Url:         "https://prometheus.example.com/api/v1/write",
+						ClusterName: "test-cluster",
+						Username:    "prom-user",
+						Password:    "prom-password",
+					},
+				},
+			}
+
+			vault := rootConfig.ExtractVault()
+
+			Expect(vault.Secrets).To(ContainElement(files.SecretEntry{
+				Name:   "promRemoteWriteUser",
+				Fields: &files.SecretFields{Password: "prom-user"},
+			}))
+			Expect(vault.Secrets).To(ContainElement(files.SecretEntry{
+				Name:   "promRemoteWritePassword",
+				Fields: &files.SecretFields{Password: "prom-password"},
+			}))
+		})
+
+		It("skips Prometheus remote write secrets when credentials are missing", func() {
+			rootConfig.Cluster.Monitoring = &files.MonitoringConfig{
+				Prometheus: &files.PrometheusConfig{
+					RemoteWrite: &files.RemoteWriteConfig{
+						Enabled: true,
+						Url:     "https://prometheus.example.com/api/v1/write",
+					},
+				},
+			}
+
+			vault := rootConfig.ExtractVault()
+
+			for _, s := range vault.Secrets {
+				Expect(s.Name).NotTo(Equal("promRemoteWriteUser"))
+				Expect(s.Name).NotTo(Equal("promRemoteWritePassword"))
+			}
+		})
 	})
 
 	Describe("ACME config structure", func() {
