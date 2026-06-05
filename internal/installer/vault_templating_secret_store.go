@@ -124,16 +124,16 @@ func LoadVaultData(vaultPath, ageKeyPath string) (*files.InstallVault, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect vault file %s: %w", vaultPath, err)
 	}
-	if !encrypted {
-		return nil, fmt.Errorf("vault file %s is not SOPS-encrypted", vaultPath)
+
+	if encrypted {
+		decrypted, err := DecryptFileWithSOPS(vaultPath, ageKeyPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decrypt vault.yaml: %w", err)
+		}
+		data = decrypted
 	}
 
-	decrypted, err := DecryptFileWithSOPS(vaultPath, ageKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt vault.yaml: %w", err)
-	}
-
-	vault, err := parseVaultData(decrypted)
+	vault, err := parseVaultData(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse decrypted vault.yaml: %w", err)
 	}
