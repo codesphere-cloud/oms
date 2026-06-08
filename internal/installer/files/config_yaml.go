@@ -196,13 +196,13 @@ type ClusterConfig struct {
 	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
 	BarmanCloudPlugin   *BarmanCloudPluginConfig   `yaml:"BarmanCloudPluginConfig,omitempty"`
 	RgwLoadBalancer     *RgwLoadBalancerConfig     `yaml:"rgwLoadBalancer,omitempty"`
+	Kyverno             *KyvernoConfig             `yaml:"kyverno,omitempty"`
 
 	IngressCAKey string `yaml:"-"`
 }
 
 type ClusterCertificates struct {
 	CA       CAConfig      `yaml:"ca"`
-	ACME     *ACMEConfig   `yaml:"acme,omitempty"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
@@ -218,9 +218,9 @@ type ACMEConfig struct {
 	Email                string     `yaml:"email,omitempty"`
 	Server               string     `yaml:"server,omitempty"`
 	PrivateKeySecretName string     `yaml:"-"`
-	Solver               ACMESolver `yaml:"solver"`
+	Solver               ACMESolver `yaml:"-"`
 
-	EABKeyID  string `yaml:"-"`
+	EABKeyID  string `yaml:"eabKeyId,omitempty"`
 	EABMacKey string `yaml:"-"`
 }
 
@@ -267,6 +267,10 @@ type BarmanCloudPluginConfig struct {
 type RgwLoadBalancerConfig struct {
 	Enabled  bool          `yaml:"enabled"`
 	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type KyvernoConfig struct {
+	Enabled bool `yaml:"enabled"`
 }
 
 type MetalLBConfig struct {
@@ -322,6 +326,7 @@ type CodesphereConfig struct {
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
+	TelemetryExport            *TelemetryExport       `yaml:"telemetryExport,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
 
 	DomainAuthPrivateKey string `yaml:"-"`
@@ -404,6 +409,14 @@ type FlavorConfig struct {
 	// Image can be a referenced image or a plain string
 	Image ImageRef    `yaml:"image"`
 	Pool  map[int]int `yaml:"pool"`
+}
+
+type TelemetryExport struct {
+	RemoteEndpoint string `yaml:"remoteEndpoint"`
+	RemoteExport   bool   `yaml:"remoteExport"`
+	Traces         bool   `yaml:"traces"`
+	TraceEndpoint  string `yaml:"traceEndpoint,omitempty"`
+	SpanMetrics    bool   `yaml:"spanMetrics"`
 }
 
 type ChartOverride = map[string]interface{}
@@ -583,6 +596,9 @@ type PrometheusConfig struct {
 type RemoteWriteConfig struct {
 	Enabled     bool   `yaml:"enabled"`
 	ClusterName string `yaml:"clusterName,omitempty"`
+	Url         string `yaml:"url,omitempty"`
+	Username    string `yaml:"username,omitempty"`
+	Password    string `yaml:"-"`
 }
 
 type BlackboxExporterConfig struct {
@@ -648,6 +664,7 @@ type S3ManagedServiceConfig struct {
 // When CodesphereConfigPath is set, the codesphere section is written as a file-path
 // reference string instead of an inline object.
 func (c *RootConfig) Marshal() ([]byte, error) {
+	c.buildACMEOverride()
 	if c.CodesphereConfigPath == "" {
 		return yaml.Marshal(c)
 	}
@@ -713,7 +730,11 @@ func (c *RootConfig) Unmarshal(data []byte) error {
 			}
 		}
 	}
-	return doc.Decode(c)
+	if err := doc.Decode(c); err != nil {
+		return err
+	}
+	c.extractACMESolverFromOverride()
+	return nil
 }
 
 func NewRootConfig() RootConfig {
@@ -919,35 +940,43 @@ func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
 				},
 			})
 		}
+	}
 
+	if c.Cluster.Monitoring != nil && c.Cluster.Monitoring.Prometheus != nil && c.Cluster.Monitoring.Prometheus.RemoteWrite != nil {
+		if c.Cluster.Monitoring.Prometheus.RemoteWrite.Username != "" && c.Cluster.Monitoring.Prometheus.RemoteWrite.Password != "" {
+			vault.SetSecret(SecretEntry{
+				Name: "promRemoteWriteUser",
+				Fields: &SecretFields{
+					Password: c.Cluster.Monitoring.Prometheus.RemoteWrite.Username,
+				},
+			})
+
+			vault.SetSecret(SecretEntry{
+				Name: "promRemoteWritePassword",
+				Fields: &SecretFields{
+					Password: c.Cluster.Monitoring.Prometheus.RemoteWrite.Password,
+				},
+			})
+		}
 	}
 }
 
 func (c *RootConfig) addACMESecrets(vault *InstallVault) {
-	if c.Cluster.Certificates.ACME == nil || !c.Cluster.Certificates.ACME.Enabled {
+	if c.Codesphere.CertIssuer.Acme == nil || !c.Codesphere.CertIssuer.Acme.Enabled {
 		return
 	}
 
-	if c.Cluster.Certificates.ACME.EABKeyID != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: "acmeEabKeyId",
-			Fields: &SecretFields{
-				Password: c.Cluster.Certificates.ACME.EABKeyID,
-			},
-		})
-	}
-
-	if c.Cluster.Certificates.ACME.EABMacKey != "" {
+	if c.Codesphere.CertIssuer.Acme.EABMacKey != "" {
 		vault.Secrets = append(vault.Secrets, SecretEntry{
 			Name: "acmeEabMacKey",
 			Fields: &SecretFields{
-				Password: c.Cluster.Certificates.ACME.EABMacKey,
+				Password: c.Codesphere.CertIssuer.Acme.EABMacKey,
 			},
 		})
 	}
 
-	if c.Cluster.Certificates.ACME.Solver.DNS01 != nil {
-		for key, value := range c.Cluster.Certificates.ACME.Solver.DNS01.Secrets {
+	if c.Codesphere.CertIssuer.Acme.Solver.DNS01 != nil {
+		for key, value := range c.Codesphere.CertIssuer.Acme.Solver.DNS01.Secrets {
 			vault.Secrets = append(vault.Secrets, SecretEntry{
 				Name: fmt.Sprintf("acmeDNS01%s", Capitalize(key)),
 				Fields: &SecretFields{
@@ -1097,4 +1126,91 @@ func Capitalize(s string) string {
 	}
 	s = strings.ReplaceAll(s, "_", "")
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// buildACMEOverride populates cluster.certificates.override with the ACME solver
+// configuration from codesphere.certIssuer.acme.solver, matching the documented
+// config.yaml structure.
+func (c *RootConfig) buildACMEOverride() {
+	if c.Codesphere.CertIssuer.Acme == nil || c.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
+		return
+	}
+
+	dns01 := c.Codesphere.CertIssuer.Acme.Solver.DNS01
+
+	acmeOverride := map[string]interface{}{}
+
+	// Build dnsSolver section
+	if dns01.Provider != "" {
+		solverConfig := map[string]interface{}{}
+		if dns01.Config != nil {
+			for k, v := range dns01.Config {
+				solverConfig[k] = v
+			}
+		}
+		acmeOverride["dnsSolver"] = map[string]interface{}{
+			dns01.Provider: solverConfig,
+		}
+	}
+
+	if c.Cluster.Certificates.Override == nil {
+		c.Cluster.Certificates.Override = map[string]interface{}{}
+	}
+
+	issuers, ok := c.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+	if !ok {
+		issuers = map[string]interface{}{}
+	}
+
+	// Merge with existing acme override (don't clobber user-provided fields like solverSecret)
+	existingAcme, ok := issuers["acme"].(map[string]interface{})
+	if !ok {
+		existingAcme = map[string]interface{}{}
+	}
+	for k, v := range acmeOverride {
+		existingAcme[k] = v
+	}
+
+	issuers["acme"] = existingAcme
+	c.Cluster.Certificates.Override["issuers"] = issuers
+}
+
+// extractACMESolverFromOverride populates the ACMEConfig.Solver from
+// cluster.certificates.override.issuers.acme.dnsSolver after unmarshaling.
+func (c *RootConfig) extractACMESolverFromOverride() {
+	if c.Codesphere.CertIssuer.Acme == nil {
+		return
+	}
+
+	override := c.Cluster.Certificates.Override
+	if override == nil {
+		return
+	}
+
+	issuers, ok := override["issuers"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	acmeIssuer, ok := issuers["acme"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	dnsSolver, ok := acmeIssuer["dnsSolver"].(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	// The dnsSolver map has the provider name as key
+	for provider, cfg := range dnsSolver {
+		solver := &ACMEDNS01Solver{
+			Provider: provider,
+		}
+		if cfgMap, ok := cfg.(map[string]interface{}); ok && len(cfgMap) > 0 {
+			solver.Config = cfgMap
+		}
+		c.Codesphere.CertIssuer.Acme.Solver.DNS01 = solver
+		break // only one provider expected
+	}
 }

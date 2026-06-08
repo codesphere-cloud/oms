@@ -21,4 +21,5 @@ func AddBetaInstallCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	}
 	AddCmd(rootCmd, install.cmd)
 	AddArgoCDCmd(install.cmd, opts)
+	AddPCAppsCmd(install.cmd, opts)
 }

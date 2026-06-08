@@ -113,6 +113,18 @@ var _ = Describe("Installconfig & Secrets", func() {
 			})
 			It("uses existing when config file exists", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
+				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
+
+				err := bs.EnsureInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("loads existing vault before existing config for templating", func() {
+				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
+				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -144,6 +156,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				It("overwrites an existing config", func() {
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+					fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 					icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -156,6 +169,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 				err := bs.EnsureInstallConfig()
@@ -250,6 +264,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+					fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 					err := bs.EnsureInstallConfig()
@@ -837,6 +852,131 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(loki.Endpoint).To(Equal("https://loki.example.com/loki/api/v1/push"))
 					Expect(loki.Password).To(BeEmpty())
 					Expect(loki.User).To(BeEmpty())
+				})
+			})
+
+			Context("When Prometheus remote write is fully configured", func() {
+				BeforeEach(func() {
+					csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
+					csEnv.PrometheusRemoteWriteUser = "prom-user"
+					csEnv.PrometheusRemoteWritePassword = "prom-password"
+				})
+				It("sets Prometheus remote write config", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					rw := bs.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite
+					Expect(rw).NotTo(BeNil())
+					Expect(rw.Enabled).To(BeTrue())
+					Expect(rw.Url).To(Equal("https://prometheus.example.com/api/v1/write"))
+					Expect(rw.ClusterName).To(Equal(csEnv.DatacenterName))
+					Expect(rw.Username).To(Equal("prom-user"))
+					Expect(rw.Password).To(Equal("prom-password"))
+				})
+			})
+
+			Context("When Prometheus remote write URL is not set", func() {
+				It("leaves Prometheus remote write nil", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Cluster.Monitoring).To(BeNil())
+				})
+			})
+
+			Context("When CentralOtelPassword is set", func() {
+				BeforeEach(func() {
+					csEnv.CentralOtelPassword = "otel-secret"
+					csEnv.CentralOtelEndpoint = "https://otel.example.com"
+					csEnv.CentralOtelSpanMetrics = true
+				})
+				It("sets TelemetryExport with RemoteExport true", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					te := bs.Env.InstallConfig.Codesphere.TelemetryExport
+					Expect(te).NotTo(BeNil())
+					Expect(te.RemoteEndpoint).To(Equal("https://otel.example.com"))
+					Expect(te.RemoteExport).To(BeTrue())
+					Expect(te.Traces).To(BeFalse())
+					Expect(te.SpanMetrics).To(BeTrue())
+				})
+			})
+
+			Context("When LocalTraceEndpoint is set (no password)", func() {
+				BeforeEach(func() {
+					csEnv.LocalTraceEndpoint = "http://localhost:4318"
+					csEnv.CentralOtelEndpoint = "https://otel.example.com"
+				})
+				It("sets TelemetryExport with Traces true and RemoteExport false", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					te := bs.Env.InstallConfig.Codesphere.TelemetryExport
+					Expect(te).NotTo(BeNil())
+					Expect(te.RemoteEndpoint).To(Equal("https://otel.example.com"))
+					Expect(te.RemoteExport).To(BeFalse())
+					Expect(te.Traces).To(BeTrue())
+					Expect(te.TraceEndpoint).To(Equal("http://localhost:4318"))
+					Expect(te.SpanMetrics).To(BeFalse())
+				})
+			})
+
+			Context("When both CentralOtelPassword and CentralOtelEndpoint are set", func() {
+				BeforeEach(func() {
+					csEnv.CentralOtelPassword = "otel-secret"
+					csEnv.CentralOtelEndpoint = "https://otel.example.com"
+					csEnv.CentralOtelSpanMetrics = true
+				})
+				It("sets TelemetryExport with both RemoteExport and Traces true", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					te := bs.Env.InstallConfig.Codesphere.TelemetryExport
+					Expect(te).NotTo(BeNil())
+					Expect(te.RemoteEndpoint).To(Equal("https://otel.example.com"))
+					Expect(te.RemoteExport).To(BeTrue())
+					Expect(te.Traces).To(BeFalse())
+					Expect(te.SpanMetrics).To(BeTrue())
+				})
+			})
+
+			Context("When neither CentralOtelPassword nor LocalTraceEndpoint are set", func() {
+				It("leaves TelemetryExport nil", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.TelemetryExport).To(BeNil())
 				})
 			})
 		})

@@ -882,16 +882,16 @@ func (_c *MockHelmClient_FindRelease_Call) RunAndReturn(run func(namespace strin
 }
 
 // InstallChart provides a mock function for the type MockHelmClient
-func (_mock *MockHelmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
-	ret := _mock.Called(ctx, cfg)
+func (_mock *MockHelmClient) InstallChart(ctx context.Context, cfg ChartConfig, opts InstallChartOptions) error {
+	ret := _mock.Called(ctx, cfg, opts)
 
 	if len(ret) == 0 {
 		panic("no return value specified for InstallChart")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, ChartConfig) error); ok {
-		r0 = returnFunc(ctx, cfg)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ChartConfig, InstallChartOptions) error); ok {
+		r0 = returnFunc(ctx, cfg, opts)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -906,11 +906,12 @@ type MockHelmClient_InstallChart_Call struct {
 // InstallChart is a helper method to define mock.On call
 //   - ctx context.Context
 //   - cfg ChartConfig
-func (_e *MockHelmClient_Expecter) InstallChart(ctx interface{}, cfg interface{}) *MockHelmClient_InstallChart_Call {
-	return &MockHelmClient_InstallChart_Call{Call: _e.mock.On("InstallChart", ctx, cfg)}
+//   - opts InstallChartOptions
+func (_e *MockHelmClient_Expecter) InstallChart(ctx interface{}, cfg interface{}, opts interface{}) *MockHelmClient_InstallChart_Call {
+	return &MockHelmClient_InstallChart_Call{Call: _e.mock.On("InstallChart", ctx, cfg, opts)}
 }
 
-func (_c *MockHelmClient_InstallChart_Call) Run(run func(ctx context.Context, cfg ChartConfig)) *MockHelmClient_InstallChart_Call {
+func (_c *MockHelmClient_InstallChart_Call) Run(run func(ctx context.Context, cfg ChartConfig, opts InstallChartOptions)) *MockHelmClient_InstallChart_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -920,9 +921,14 @@ func (_c *MockHelmClient_InstallChart_Call) Run(run func(ctx context.Context, cf
 		if args[1] != nil {
 			arg1 = args[1].(ChartConfig)
 		}
+		var arg2 InstallChartOptions
+		if args[2] != nil {
+			arg2 = args[2].(InstallChartOptions)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -933,7 +939,76 @@ func (_c *MockHelmClient_InstallChart_Call) Return(err error) *MockHelmClient_In
 	return _c
 }
 
-func (_c *MockHelmClient_InstallChart_Call) RunAndReturn(run func(ctx context.Context, cfg ChartConfig) error) *MockHelmClient_InstallChart_Call {
+func (_c *MockHelmClient_InstallChart_Call) RunAndReturn(run func(ctx context.Context, cfg ChartConfig, opts InstallChartOptions) error) *MockHelmClient_InstallChart_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// LoginRegistry provides a mock function for the type MockHelmClient
+func (_mock *MockHelmClient) LoginRegistry(ctx context.Context, host string, username string, password string) error {
+	ret := _mock.Called(ctx, host, username, password)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LoginRegistry")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
+		r0 = returnFunc(ctx, host, username, password)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockHelmClient_LoginRegistry_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoginRegistry'
+type MockHelmClient_LoginRegistry_Call struct {
+	*mock.Call
+}
+
+// LoginRegistry is a helper method to define mock.On call
+//   - ctx context.Context
+//   - host string
+//   - username string
+//   - password string
+func (_e *MockHelmClient_Expecter) LoginRegistry(ctx interface{}, host interface{}, username interface{}, password interface{}) *MockHelmClient_LoginRegistry_Call {
+	return &MockHelmClient_LoginRegistry_Call{Call: _e.mock.On("LoginRegistry", ctx, host, username, password)}
+}
+
+func (_c *MockHelmClient_LoginRegistry_Call) Run(run func(ctx context.Context, host string, username string, password string)) *MockHelmClient_LoginRegistry_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockHelmClient_LoginRegistry_Call) Return(err error) *MockHelmClient_LoginRegistry_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockHelmClient_LoginRegistry_Call) RunAndReturn(run func(ctx context.Context, host string, username string, password string) error) *MockHelmClient_LoginRegistry_Call {
 	_c.Call.Return(run)
 	return _c
 }

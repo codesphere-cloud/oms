@@ -557,4 +557,3 @@ func (o *OpenBaoInstaller) GetDRBackupExists() bool {
 func (o *OpenBaoInstaller) GetUnsealSecret() *corev1.Secret {
 	return o.unsealSecret
 }
-

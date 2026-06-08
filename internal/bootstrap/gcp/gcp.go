@@ -87,39 +87,40 @@ type GCPBootstrapper struct {
 }
 
 type CodesphereEnvironment struct {
-	ProjectID            string          `json:"project_id"`
-	ProjectTTL           string          `json:"project_ttl"`
-	ProjectName          string          `json:"project_name"`
-	DNSProjectID         string          `json:"dns_project_id"`
-	Jumpbox              *node.Node      `json:"jumpbox"`
-	PostgreSQLNode       *node.Node      `json:"postgres_node"`
-	ControlPlaneNodes    []*node.Node    `json:"control_plane_nodes"`
-	CephNodes            []*node.Node    `json:"ceph_nodes"`
-	ContainerRegistryURL string          `json:"-"`
-	ExistingConfigUsed   bool            `json:"-"`
-	InstallVersion       string          `json:"install_version"`
-	InstallLocal         string          `json:"install_local"`
-	InstallHash          string          `json:"install_hash"`
-	InstallSkipSteps     []string        `json:"install_skip_steps"`
-	Preemptible          bool            `json:"preemptible"`
-	SpotVMs              bool            `json:"spot_vms"`
-	WriteConfig          bool            `json:"-"`
-	RecoverConfig        bool            `json:"-"`
-	GatewayIP            string          `json:"gateway_ip"`
-	PublicGatewayIP      string          `json:"public_gateway_ip"`
-	RegistryType         RegistryType    `json:"registry_type"`
-	GitHubPAT            string          `json:"-"`
-	GitHubAppName        string          `json:"-"`
-	GitHubTeamOrg        string          `json:"github_team_org"`
-	GitHubTeamSlug       string          `json:"github_team_slug"`
-	RegistryUser         string          `json:"-"`
-	Experiments          []string        `json:"experiments"`
-	FeatureFlags         map[string]bool `json:"feature_flags"`
-	CentralOtelUsername  string          `json:"-"`
-	CentralOtelPassword  string          `json:"-"`
-	ExternalLokiEndpoint string          `json:"external_loki_endpoint,omitempty"`
-	ExternalLokiSecret   string          `json:"-"`
-	ExternalLokiUser     string          `json:"external_loki_user,omitempty"`
+	ProjectID                     string          `json:"project_id"`
+	ProjectTTL                    string          `json:"project_ttl"`
+	ProjectName                   string          `json:"project_name"`
+	DNSProjectID                  string          `json:"dns_project_id"`
+	Jumpbox                       *node.Node      `json:"jumpbox"`
+	PostgreSQLNode                *node.Node      `json:"postgres_node"`
+	ControlPlaneNodes             []*node.Node    `json:"control_plane_nodes"`
+	CephNodes                     []*node.Node    `json:"ceph_nodes"`
+	ContainerRegistryURL          string          `json:"-"`
+	ExistingConfigUsed            bool            `json:"-"`
+	InstallVersion                string          `json:"install_version"`
+	InstallLocal                  string          `json:"install_local"`
+	InstallHash                   string          `json:"install_hash"`
+	InstallSkipSteps              []string        `json:"install_skip_steps"`
+	Preemptible                   bool            `json:"preemptible"`
+	SpotVMs                       bool            `json:"spot_vms"`
+	WriteConfig                   bool            `json:"-"`
+	RecoverConfig                 bool            `json:"-"`
+	GatewayIP                     string          `json:"gateway_ip"`
+	PublicGatewayIP               string          `json:"public_gateway_ip"`
+	RegistryType                  RegistryType    `json:"registry_type"`
+	GitHubPAT                     string          `json:"-"`
+	GitHubAppName                 string          `json:"-"`
+	GitHubTeamOrg                 string          `json:"github_team_org"`
+	GitHubTeamSlug                string          `json:"github_team_slug"`
+	RegistryUser                  string          `json:"-"`
+	Experiments                   []string        `json:"experiments"`
+	FeatureFlags                  map[string]bool `json:"feature_flags"`
+	ExternalLokiEndpoint          string          `json:"external_loki_endpoint,omitempty"`
+	ExternalLokiSecret            string          `json:"-"`
+	ExternalLokiUser              string          `json:"external_loki_user,omitempty"`
+	PrometheusRemoteWriteUser     string          `json:"prometheus_remote_write_user,omitempty"`
+	PrometheusRemoteWritePassword string          `json:"-"`
+	PrometheusRemoteWriteURL      string          `json:"prometheus_remote_write_url,omitempty"`
 
 	// ACME Issuer
 	GoogleACMEIssuer bool `json:"google_acme_issuer,omitempty"`
@@ -129,6 +130,12 @@ type CodesphereEnvironment struct {
 	OpenBaoEngine   string `json:"-"`
 	OpenBaoUser     string `json:"-"`
 	OpenBaoPassword string `json:"-"`
+
+	CentralOtelEndpoint    string `json:"-"`
+	CentralOtelUsername    string `json:"-"`
+	CentralOtelPassword    string `json:"-"`
+	CentralOtelSpanMetrics bool   `json:"-"`
+	LocalTraceEndpoint     string `json:"-"`
 
 	// Config
 	InstallConfigPath string              `json:"-"`
@@ -408,7 +415,17 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	return b.validateExternalLokiParams()
+	err = b.validateExternalLokiParams()
+	if err != nil {
+		return err
+	}
+
+	err = b.validatePrometheusRemoteWriteParams()
+	if err != nil {
+		return err
+	}
+
+	return b.validateTelemetryExportParams()
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -510,6 +527,31 @@ func (b *GCPBootstrapper) validateExternalLokiParams() error {
 
 	if b.Env.ExternalLokiSecret != "" || b.Env.ExternalLokiUser != "" {
 		return fmt.Errorf("external Loki endpoint is required when external Loki secret or user is set")
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) validatePrometheusRemoteWriteParams() error {
+	if b.Env.PrometheusRemoteWriteURL != "" && (b.Env.PrometheusRemoteWriteUser == "" || b.Env.PrometheusRemoteWritePassword == "") {
+		return fmt.Errorf("prometheus remote write username and password must both be set when remote write URL is specified")
+	}
+	if (b.Env.PrometheusRemoteWriteUser != "" || b.Env.PrometheusRemoteWritePassword != "") && b.Env.PrometheusRemoteWriteURL == "" {
+		return fmt.Errorf("prometheus remote write URL is required when remote write username or password is set")
+	}
+	return nil
+}
+
+func (b *GCPBootstrapper) validateTelemetryExportParams() error {
+	if b.Env.CentralOtelEndpoint != "" && b.Env.CentralOtelPassword == "" {
+		return fmt.Errorf("central OTel password is required when central OTel endpoint is set")
+	}
+
+	if b.Env.CentralOtelUsername != "" && b.Env.CentralOtelPassword == "" {
+		return fmt.Errorf("central OTel username is set but password is missing")
+	}
+	if b.Env.CentralOtelPassword != "" && b.Env.CentralOtelUsername == "" {
+		return fmt.Errorf("central OTel password is set but username is missing")
 	}
 
 	return nil

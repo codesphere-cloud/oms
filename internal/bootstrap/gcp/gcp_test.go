@@ -574,6 +574,89 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(MatchError(ContainSubstring("external Loki endpoint is required")))
 			})
 		})
+
+		Context("When Prometheus remote write is fully configured", func() {
+			BeforeEach(func() {
+				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
+				csEnv.PrometheusRemoteWriteUser = "prom-user"
+				csEnv.PrometheusRemoteWritePassword = "prom-password"
+			})
+			It("succeeds", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+		Context("When Prometheus remote write URL is set but credentials are missing", func() {
+			BeforeEach(func() {
+				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password must both be set when remote write URL is specified")))
+			})
+		})
+		Context("When Prometheus remote write URL is set but only username is missing", func() {
+			BeforeEach(func() {
+				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
+				csEnv.PrometheusRemoteWritePassword = "prom-password"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password must both be set when remote write URL is specified")))
+			})
+		})
+		Context("When Prometheus remote write URL is set but only password is missing", func() {
+			BeforeEach(func() {
+				csEnv.PrometheusRemoteWriteURL = "https://prometheus.example.com/api/v1/write"
+				csEnv.PrometheusRemoteWriteUser = "prom-user"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("prometheus remote write username and password must both be set when remote write URL is specified")))
+			})
+		})
+		Context("When Prometheus remote write credentials are set but URL is missing", func() {
+			BeforeEach(func() {
+				csEnv.PrometheusRemoteWriteUser = "prom-user"
+				csEnv.PrometheusRemoteWritePassword = "prom-password"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("prometheus remote write URL is required when remote write username or password is set")))
+			})
+		})
+
+		Context("When central OTel endpoint is set but password is missing", func() {
+			BeforeEach(func() {
+				csEnv.CentralOtelEndpoint = "https://otel.example.com"
+				csEnv.CentralOtelUsername = "otel-user"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("central OTel password is required when central OTel endpoint is set")))
+			})
+		})
+
+		Context("When central OTel username is set but password is missing", func() {
+			BeforeEach(func() {
+				csEnv.CentralOtelUsername = "otel-user"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("central OTel username is set but password is missing")))
+			})
+		})
+
+		Context("When central OTel password is set but username is missing", func() {
+			BeforeEach(func() {
+				csEnv.CentralOtelPassword = "otel-secret"
+				csEnv.CentralOtelEndpoint = "https://otel.example.com"
+			})
+			It("returns an error", func() {
+				err := bs.ValidateInput()
+				Expect(err).To(MatchError(ContainSubstring("central OTel password is set but username is missing")))
+			})
+		})
 	})
 
 	Describe("EnsureInstallConfig", func() {
@@ -582,6 +665,18 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 			It("uses existing when config file exists", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
+				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
+
+				err := bs.EnsureInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("loads existing vault before existing config for templating", func() {
+				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
+				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -603,6 +698,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 				err := bs.EnsureInstallConfig()

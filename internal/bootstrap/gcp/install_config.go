@@ -27,6 +27,10 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 	}
 
 	if b.fw.Exists(b.Env.InstallConfigPath) {
+		if err := b.loadVaultForConfigTemplating(); err != nil {
+			return err
+		}
+
 		err := b.icg.LoadInstallConfigFromFile(b.Env.InstallConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config file: %w", err)
@@ -41,6 +45,18 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 	}
 
 	b.Env.InstallConfig = b.icg.GetInstallConfig()
+
+	return nil
+}
+
+func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
+	if !b.fw.Exists(b.Env.SecretsFilePath) {
+		return nil
+	}
+
+	if err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath); err != nil {
+		return fmt.Errorf("failed to load vault file for config templating: %w", err)
+	}
 
 	return nil
 }
@@ -185,6 +201,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
+
+	b.Env.InstallConfig.Cluster.Kyverno = &files.KyvernoConfig{
+		Enabled: false,
+	}
+
 	b.Env.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
 	b.Env.InstallConfig.Cluster.Gateway.Annotations = map[string]string{
 		"cloud.google.com/load-balancer-ipv4": b.Env.GatewayIP,
@@ -215,8 +236,9 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		},
 	}
 	acmeConfig := &files.ACMEConfig{
-		Email:  "oms-testing@" + b.Env.BaseDomain,
-		Server: "https://acme-v02.api.letsencrypt.org/directory",
+		Enabled: true,
+		Email:   "oms-testing@" + b.Env.BaseDomain,
+		Server:  "https://acme-v02.api.letsencrypt.org/directory",
 	}
 	if b.Env.GoogleACMEIssuer {
 		keyID, b64MacKey, err := b.GCPClient.CreatePublicCAExternalAccountKey(b.Env.ProjectID)
@@ -336,9 +358,20 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
+	if b.Env.CentralOtelPassword != "" || b.Env.LocalTraceEndpoint != "" {
+		b.Env.InstallConfig.Codesphere.TelemetryExport = &files.TelemetryExport{
+			RemoteEndpoint: b.Env.CentralOtelEndpoint,
+			RemoteExport:   b.Env.CentralOtelPassword != "",
+			Traces:         b.Env.LocalTraceEndpoint != "",
+			TraceEndpoint:  b.Env.LocalTraceEndpoint,
+			SpanMetrics:    b.Env.CentralOtelSpanMetrics,
+		}
+	}
+
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 	b.applyExternalLokiConfig()
+	b.applyPrometheusRemoteWriteConfig()
 
 	b.Env.InstallConfig.GeneratedForVersion = b.Env.InstallVersion
 
@@ -423,6 +456,28 @@ func (b *GCPBootstrapper) applyExternalLokiConfig() {
 
 	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled = true
 	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki = loki
+}
+
+func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig() {
+	if b.Env.PrometheusRemoteWriteURL == "" {
+		return
+	}
+
+	if b.Env.InstallConfig.Cluster.Monitoring == nil {
+		b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+	}
+	if b.Env.InstallConfig.Cluster.Monitoring.Prometheus == nil {
+		b.Env.InstallConfig.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
+	}
+	if b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
+		b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{}
+	}
+
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Enabled = true
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Url = b.Env.PrometheusRemoteWriteURL
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.ClusterName = b.Env.DatacenterName
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Username = b.Env.PrometheusRemoteWriteUser
+	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Password = b.Env.PrometheusRemoteWritePassword
 }
 
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname

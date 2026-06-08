@@ -74,8 +74,6 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcIssuerURL, "oidc-issuer-url", "", "OIDC OAuth provider issuer URL (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcClientID, "oidc-client-id", "", "OIDC OAuth provider Client ID (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcClientSecret, "oidc-client-secret", "", "OIDC OAuth provider Client Secret (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelUsername, "central-otel-username", "", "Central OpenTelemetry username. Needed when sending spans to central collector (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelPassword, "central-otel-password", "", "Central OpenTelemetry password. Needed when sending spans to central collector (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug. Required scopes: read:packages, read:org.")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppName, "github-app-name", "", "GitHub App Name (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamOrg, "github-team-org", "", "GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.")
@@ -104,6 +102,9 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiEndpoint, "external-loki-endpoint", "", "External Loki endpoint for Grafana Alloy log forwarding (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiSecret, "external-loki-secret", "", "External Loki password stored in the generated vault (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiUser, "external-loki-user", "", "External Loki username for Grafana Alloy log forwarding (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.PrometheusRemoteWriteURL, "prometheus-remote-write-url", "", "Prometheus remote write URL (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.PrometheusRemoteWriteUser, "prometheus-remote-write-user", "", "Prometheus remote write username (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.PrometheusRemoteWritePassword, "prometheus-remote-write-password", "", "Prometheus remote write password stored in the generated vault (optional)")
 
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallConfigPath, "install-config", "config.yaml", "Path to install config file (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "prod.vault.yaml", "Path to secrets files (optional)")
@@ -119,6 +120,12 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoUser, "openbao-user", "admin", "OpenBao username (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoPassword, "openbao-password", "", "OpenBao password (optional)")
+
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelEndpoint, "central-otel-endpoint", "", "Central OpenTelemetry collector endpoint. Needed when sending spans to central collector (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelUsername, "central-otel-username", "", "Central OpenTelemetry username. Needed when sending spans to central collector (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelPassword, "central-otel-password", "", "Central OpenTelemetry password. Needed when sending spans to central collector (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.LocalTraceEndpoint, "local-trace-endpoint", "", "Endpoint for exporting traces to an in-cluster storage (optional)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelSpanMetrics, "central-otel-span-metrics", false, "Enable span metrics in Central OpenTelemetry export (default: false)")
 
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")

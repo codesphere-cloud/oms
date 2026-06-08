@@ -5,10 +5,10 @@ package installer
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"net/url"
 
+	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
@@ -57,15 +57,15 @@ func NewInstallConfigManager() InstallConfigManager {
 }
 
 func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
-	file, err := g.fileIO.Open(configPath)
-	if err != nil {
-		return err
-	}
-	defer util.CloseFileIgnoreError(file)
-
-	data, err := io.ReadAll(file)
+	data, err := g.fileIO.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read %s: %w", configPath, err)
+	}
+
+	store := NewVaultTemplatingSecretStore(g.Vault)
+	data, err = configtemplating.RenderInstallConfigTemplate(data, store)
+	if err != nil {
+		return err
 	}
 
 	config := files.NewRootConfig()
@@ -78,20 +78,9 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 }
 
 func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
-	vaultFile, err := g.fileIO.Open(vaultPath)
+	vault, err := LoadVaultData(vaultPath, "")
 	if err != nil {
-		return fmt.Errorf("error opening vault file: %v", err)
-	}
-	defer util.CloseFileIgnoreError(vaultFile)
-
-	vaultData, err := io.ReadAll(vaultFile)
-	if err != nil {
-		return fmt.Errorf("failed to read vault.yaml: %v", err)
-	}
-
-	vault := &files.InstallVault{}
-	if err := vault.Unmarshal(vaultData); err != nil {
-		return fmt.Errorf("failed to parse vault.yaml: %v", err)
+		return err
 	}
 
 	g.Vault = vault
@@ -403,12 +392,9 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 	}
 
 	// ACME secrets
-	if g.Config.Cluster.Certificates.ACME != nil {
-		if secret, ok := secretsMap["acmeEabKeyId"]; ok && secret.Fields != nil {
-			g.Config.Cluster.Certificates.ACME.EABKeyID = secret.Fields.Password
-		}
+	if g.Config.Codesphere.CertIssuer.Acme != nil {
 		if secret, ok := secretsMap["acmeEabMacKey"]; ok && secret.Fields != nil {
-			g.Config.Cluster.Certificates.ACME.EABMacKey = secret.Fields.Password
+			g.Config.Codesphere.CertIssuer.Acme.EABMacKey = secret.Fields.Password
 		}
 	}
 

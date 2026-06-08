@@ -37,8 +37,13 @@ type ChartConfig struct {
 	CreateNamespace bool
 }
 
+type InstallChartOptions struct {
+	ForceConflicts bool
+}
+
 type UpgradeChartOptions struct {
 	InstallIfNotExist bool
+	ForceConflicts    bool
 }
 
 // HelmClient is the seam that makes the Helm SDK mockable.
@@ -51,10 +56,13 @@ type HelmClient interface {
 	FindRelease(namespace, releaseName string) (*ReleaseInfo, error)
 
 	// InstallChart performs a fresh Helm install and returns an error on failure.
-	InstallChart(ctx context.Context, cfg ChartConfig) error
+	InstallChart(ctx context.Context, cfg ChartConfig, opts InstallChartOptions) error
 
 	// UpgradeChart upgrades an existing Helm release and returns an error on failure.
 	UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error
+
+	// LoginRegistry authenticates against an OCI registry for private chart pulls.
+	LoginRegistry(ctx context.Context, host, username, password string) error
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +72,7 @@ type HelmClient interface {
 type helmClient struct {
 	defaultNamespace string
 	driver           string
+	registryClient   *registry.Client
 }
 
 func NewHelmClient(namespace string) (HelmClient, error) {
@@ -71,6 +80,23 @@ func NewHelmClient(namespace string) (HelmClient, error) {
 		defaultNamespace: namespace,
 		driver:           os.Getenv("HELM_DRIVER"),
 	}, nil
+}
+
+// LoginRegistry authenticates against an OCI registry. The context parameter
+// is accepted for interface consistency but is not used by the underlying
+// Helm registry client.
+func (h *helmClient) LoginRegistry(_ context.Context, host, username, password string) error {
+	registryClient, err := registry.NewClient()
+	if err != nil {
+		return fmt.Errorf("creating registry client: %w", err)
+	}
+
+	if err := registryClient.Login(host, registry.LoginOptBasicAuth(username, password)); err != nil {
+		return fmt.Errorf("registry login to %q failed: %w", host, err)
+	}
+
+	h.registryClient = registryClient
+	return nil
 }
 
 // helmEnv holds the per-call Helm action configuration and CLI settings.
@@ -105,11 +131,16 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 		return nil, fmt.Errorf("helm action config init failed: %w", err)
 	}
 
-	registryClient, err := registry.NewClient()
-	if err != nil {
-		return nil, fmt.Errorf("helm registry client init failed: %w", err)
+	if h.registryClient != nil {
+		// Reuse the registry client that was authenticated during LoginRegistry.
+		actionConfig.RegistryClient = h.registryClient
+	} else {
+		registryClient, err := registry.NewClient()
+		if err != nil {
+			return nil, fmt.Errorf("helm registry client init failed: %w", err)
+		}
+		actionConfig.RegistryClient = registryClient
 	}
-	actionConfig.RegistryClient = registryClient
 
 	return &helmEnv{actionConfig: actionConfig, settings: settings}, nil
 }
@@ -123,6 +154,9 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 	listClient := action.NewList(env.actionConfig)
 	listClient.Filter = "^" + releaseName + "$"
 	listClient.Deployed = true
+	// Also include failed releases in the search, since a failed release with the same name would block installation of a new release with that name.
+	// We want to detect that case and be able to update the failed release.
+	listClient.Failed = true
 	listClient.SetStateMask()
 
 	releases, err := listClient.Run()
@@ -155,7 +189,7 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 	return nil, nil // no release found
 }
 
-func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
+func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig, opts InstallChartOptions) error {
 	env, err := h.newHelmEnv(cfg.Namespace)
 	if err != nil {
 		return err
@@ -170,6 +204,7 @@ func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig) error {
 	installClient.Version = cfg.Version
 	installClient.RepoURL = cfg.RepoURL
 	installClient.Timeout = 5 * time.Minute
+	installClient.ForceConflicts = opts.ForceConflicts
 
 	chartPath, err := installClient.LocateChart(cfg.ChartName, env.settings)
 	if err != nil {
@@ -196,7 +231,7 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 			return err
 		}
 		if rel == nil {
-			return h.InstallChart(ctx, cfg)
+			return h.InstallChart(ctx, cfg, InstallChartOptions{ForceConflicts: opts.ForceConflicts})
 		}
 	}
 
@@ -211,6 +246,7 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 	upgradeClient.Version = cfg.Version
 	upgradeClient.RepoURL = cfg.RepoURL
 	upgradeClient.Timeout = 5 * time.Minute
+	upgradeClient.ForceConflicts = opts.ForceConflicts
 
 	chartPath, err := upgradeClient.LocateChart(cfg.ChartName, env.settings)
 	if err != nil {
@@ -229,3 +265,4 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 
 	return nil
 }
+

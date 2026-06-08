@@ -33,6 +33,7 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
   -p, --package string       Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from
   -k, --priv-key string      Path to the private key to encrypt/decrypt secrets
   -s, --skip-steps strings   Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, kubernetes
+      --vault string         Path to the SOPS-encrypted prod.vault.yaml file used for config templating (default "prod.vault.yaml")
 ```
 
 ### SEE ALSO
