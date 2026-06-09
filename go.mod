@@ -1,6 +1,6 @@
 module github.com/codesphere-cloud/oms
 
-go 1.26.3
+go 1.26.4
 
 replace (
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
