@@ -1115,9 +1115,9 @@ License URL: https://cs.opensource.google/go/x/crypto/+/v0.53.0:LICENSE
  
 ----------
 Module: golang.org/x/mod/semver
-Version: v0.36.0
+Version: v0.37.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/mod/+/v0.36.0:LICENSE
+License URL: https://cs.opensource.google/go/x/mod/+/v0.37.0:LICENSE
  
 ----------
 Module: golang.org/x/net
