@@ -1169,15 +1169,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.282.0
+Version: v0.284.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.282.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.284.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.282.0
+Version: v0.284.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.282.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.284.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1193,9 +1193,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/3700d4141b60/googlea
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20260523011958-0a33c5d7ca68
+Version: v0.0.0-20260526163538-3dc84a4a5aaa
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/0a33c5d7ca68/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/3dc84a4a5aaa/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc
