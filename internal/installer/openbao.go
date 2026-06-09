@@ -32,6 +32,7 @@ var vaultCRTemplate []byte
 
 const (
 	openBaoUnsealSecretName  = "openbao-unseal-keys"
+	openBaoHeadlessService   = "openbao"
 	DefaultOpenBaoNamespace  = "vault"
 	openBaoImage             = "quay.io/openbao/openbao:2.1.0"
 	bankVaultsImage          = "ghcr.io/bank-vaults/bank-vaults:v1.31.3"
@@ -80,6 +81,12 @@ type OpenBaoInstaller struct {
 
 // NewOpenBaoInstaller constructs an OpenBaoInstaller with real Kubernetes and Helm clients.
 func NewOpenBaoInstaller(cfg OpenBaoInstallerConfig) (*OpenBaoInstaller, error) {
+	// Apply namespace default here so the Helm client is always initialised with
+	// the correct namespace, even when --namespace was not supplied by the caller.
+	if cfg.Namespace == "" {
+		cfg.Namespace = DefaultOpenBaoNamespace
+	}
+
 	helm, err := NewHelmClient(cfg.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("creating helm client: %w", err)
@@ -338,7 +345,7 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 	// later only requires changing the replica count.
 	var retryJoinAddrs []string
 	for i := 0; i < o.Config.Replicas; i++ {
-		addr := fmt.Sprintf("http://openbao-%d.%s.svc.cluster.local:8200", i, o.Config.Namespace)
+		addr := fmt.Sprintf("http://openbao-%d.%s.%s.svc.cluster.local:8200", i, openBaoHeadlessService, o.Config.Namespace)
 		retryJoinAddrs = append(retryJoinAddrs, addr)
 	}
 
@@ -597,6 +604,9 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	}
 	if len(pvcList.Items) > 0 {
 		o.Logger.Logf("Deleted %d stale PVC(s)", len(pvcList.Items))
+		if err := o.waitForPVCsGone(); err != nil {
+			return err
+		}
 	}
 
 	// Now it is safe to delete the stale secret.
@@ -654,6 +664,26 @@ func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
 				return true, nil
 			}
 			return false, fmt.Errorf("listing vault pods: %w", err)
+		}
+		return len(list.Items) == 0, nil
+	})
+}
+
+// waitForPVCsGone polls until no PVCs with label vault_cr=openbao remain in the
+// target namespace. This ensures asynchronous PVC deletion has fully completed
+// before the install pipeline creates new resources, avoiding conflicts.
+func (o *OpenBaoInstaller) waitForPVCsGone() error {
+	selector := labels.SelectorFromSet(labels.Set{"vault_cr": "openbao"}).String()
+
+	return o.pollUntil("waiting for stale PVCs to be deleted", func() (bool, error) {
+		list, err := o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).List(
+			o.ctx, metav1.ListOptions{LabelSelector: selector},
+		)
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, fmt.Errorf("listing PVCs: %w", err)
 		}
 		return len(list.Items) == 0, nil
 	})

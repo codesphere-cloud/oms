@@ -593,7 +593,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				BaoPassword:       "test-password",
 				Replicas:          1,
 				StorageSize:       "10Gi",
-				RetryJoinAddrs:    []string{"http://openbao-0.vault.svc.cluster.local:8200"},
+				RetryJoinAddrs:    []string{"http://openbao-0.openbao.vault.svc.cluster.local:8200"},
 			}
 
 			docs := renderTemplate(data)
@@ -660,9 +660,9 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 		It("renders valid YAML with raft storage, PVCs, and retry_join for replicas=3", func() {
 			retryJoinAddrs := []string{
-				"http://openbao-0.vault.svc.cluster.local:8200",
-				"http://openbao-1.vault.svc.cluster.local:8200",
-				"http://openbao-2.vault.svc.cluster.local:8200",
+				"http://openbao-0.openbao.vault.svc.cluster.local:8200",
+				"http://openbao-1.openbao.vault.svc.cluster.local:8200",
+				"http://openbao-2.openbao.vault.svc.cluster.local:8200",
 			}
 
 			data := templateData{
