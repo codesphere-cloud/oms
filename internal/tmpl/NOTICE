@@ -647,9 +647,9 @@ License URL: https://github.com/ianlancetaylor/demangle/blob/96ee0021ea0f/LICENS
  
 ----------
 Module: github.com/jedib0t/go-pretty/v6
-Version: v6.7.10
+Version: v6.8.0
 License: MIT
-License URL: https://github.com/jedib0t/go-pretty/blob/v6.7.10/LICENSE
+License URL: https://github.com/jedib0t/go-pretty/blob/v6.8.0/LICENSE
  
 ----------
 Module: github.com/jmoiron/sqlx
