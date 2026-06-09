@@ -403,6 +403,55 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("invalid image tag format"))
 			})
+
+			It("fails when skipped steps are defined in both config.yaml and cli args", func() {
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockFileIO := util.NewMockFileIO(GinkgoT())
+
+				c.Opts.Config = "valid-config.yaml"
+				c.Opts.SkipSteps = []string{"kubernetes"}
+				config := files.RootConfig{
+					Operations: &files.OperationsConfig{
+						Skip: []string{"ceph"},
+					},
+				}
+
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(config, nil)
+
+				// Setup temp dir for node executable check (because os.Chmod uses real FS)
+				tempDir, err := os.MkdirTemp("", "test-install")
+				Expect(err).To(BeNil())
+				defer func() {
+					_ = os.RemoveAll(tempDir)
+				}()
+
+				// Create dummy node file
+				nodeFile := filepath.Join(tempDir, "node")
+				err = os.WriteFile(nodeFile, []byte("#!/bin/sh\nexit 0"), 0755)
+				Expect(err).To(BeNil())
+
+				mockPackageManager.EXPECT().Extract(false).Return(nil)
+				mockPackageManager.EXPECT().GetWorkDir().Return(tempDir).Maybe()
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO).Maybe()
+				mockFileIO.EXPECT().Exists(tempDir).Return(true)
+
+				// Create complete mock directory entries with all required files
+				mockEntries := []os.DirEntry{
+					&MockDirEntry{name: "deps.tar.gz", isDir: false},
+					&MockDirEntry{name: "node", isDir: false},
+					&MockDirEntry{name: "private-cloud-installer.js", isDir: false},
+					&MockDirEntry{name: "kubectl", isDir: false},
+				}
+				mockFileIO.EXPECT().ReadDir(tempDir).Return(mockEntries, nil)
+
+				mockPackageManager.EXPECT().ExtractDependency("bom.json", false).Return(nil)
+
+				err = c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("skipped steps can either be defined in config.yaml under `.operations.skip` or supplied via `--skip-step` flag, but not both"))
+			})
 		})
 	})
 
