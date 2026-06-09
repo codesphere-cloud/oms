@@ -62,6 +62,11 @@ type RootConfig struct {
 	MetalLB                *MetalLBConfig                `yaml:"metallb,omitempty"`
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
+	Operations             *OperationsConfig             `yaml:"operations,omitempty"`
+}
+
+type OperationsConfig struct {
+	Skip []string
 }
 
 type DatacenterConfig struct {
