@@ -239,12 +239,14 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 	archivePath := filepath.Join(pm.GetWorkDir(), "deps.tar.gz")
 
 	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", c.Opts.Config, "--privKey", c.Opts.PrivKey}
-	if len(config.Operations.Skip) > 0 && len(c.Opts.SkipSteps) > 0 {
-		return fmt.Errorf("skipped steps can either be defined in config.yaml under `.operations.skip` or supplied via `--skip-step` flag, but not both")
-	}
+	if config.Operations != nil {
+		if len(config.Operations.Skip) > 0 && len(c.Opts.SkipSteps) > 0 {
+			return fmt.Errorf("skipped steps can either be defined in config.yaml under `.operations.skip` or supplied via `--skip-step` flag, but not both")
+		}
 
-	for _, step := range config.Operations.Skip {
-		cmdArgs = append(cmdArgs, "--skipStep", step)
+		for _, step := range config.Operations.Skip {
+			cmdArgs = append(cmdArgs, "--skipStep", step)
+		}
 	}
 
 	for _, step := range c.Opts.SkipSteps {
