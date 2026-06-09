@@ -87,6 +87,8 @@ var _ = Describe("ApplyResourceProfile", func() {
 			Expect(config.ManagedServiceBackends).NotTo(BeNil())
 			Expect(config.ManagedServiceBackends.Postgres).NotTo(BeNil())
 			Expect(config.ManagedServiceBackends.S3).NotTo(BeNil())
+			Expect(config.ManagedServiceBackends.K8sBackend).NotTo(BeNil())
+			Expect(config.ManagedServiceBackends.RabbitMqOperator).NotTo(BeNil())
 
 			trustManager := MustMap[any](config.Cluster.TrustManager.Override["trust-manager"])
 			AssertZeroRequests(MustMap[any](trustManager["resources"])["requests"])
@@ -106,6 +108,13 @@ var _ = Describe("ApplyResourceProfile", func() {
 			managedS3 := config.ManagedServiceBackends.S3.Override
 			Expect(managedS3["replicas"]).To(Equal(1))
 			AssertZeroRequests(MustMap[any](managedS3["resources"])["requests"])
+
+			managedK8sBackend := config.ManagedServiceBackends.K8sBackend.Override
+			Expect(managedK8sBackend["replicas"]).To(Equal(1))
+			AssertZeroRequests(MustMap[any](managedK8sBackend["resources"])["requests"])
+
+			// TODO(CU-869dm2x7t): add assertions for rabbitmq operator once it's updated to support resource and replica configuration
+			Expect(config.ManagedServiceBackends.RabbitMqOperator.Override).To(BeNil())
 		})
 	})
 
