@@ -651,7 +651,7 @@ func (o *OpenBaoInstaller) hasExistingDeployment() (bool, error) {
 }
 
 // waitForVaultPodsGone polls until no pods with label vault_cr=openbao remain
-// in the vault namespace, or until the context deadline is exceeded.
+// in the target namespace, or until the context deadline is exceeded.
 func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
 	selector := labels.SelectorFromSet(labels.Set{"vault_cr": "openbao"}).String()
 
