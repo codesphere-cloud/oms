@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"time"
 
@@ -569,6 +570,7 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 //  4. Delete the unseal-keys Secret
 func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	vaultGVR := k8s.VaultGVR()
+	var cleaned []string
 
 	// Tolerates NotFound — this may be a first-time install with no prior Vault CR.
 	delErr := o.DynClient.Resource(vaultGVR).Namespace(o.Config.Namespace).Delete(
@@ -576,6 +578,9 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	)
 	if delErr != nil && !k8serrors.IsNotFound(delErr) {
 		return fmt.Errorf("deleting Vault CR: %w", delErr)
+	}
+	if delErr == nil {
+		cleaned = append(cleaned, "Vault CR")
 	}
 
 	if err := o.waitForVaultPodsGone(); err != nil {
@@ -603,7 +608,7 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 		}
 	}
 	if len(pvcList.Items) > 0 {
-		o.Logger.Logf("Deleted %d stale PVC(s)", len(pvcList.Items))
+		cleaned = append(cleaned, fmt.Sprintf("%d PVC(s)", len(pvcList.Items)))
 		if err := o.waitForPVCsGone(); err != nil {
 			return err
 		}
@@ -616,8 +621,15 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	if delErr != nil && !k8serrors.IsNotFound(delErr) {
 		return fmt.Errorf("deleting stale unseal secret: %w", delErr)
 	}
+	if delErr == nil {
+		cleaned = append(cleaned, "unseal secret")
+	}
 
-	o.Logger.Logf("Stale install state cleaned (CR, pods, PVCs, unseal secret)")
+	if len(cleaned) > 0 {
+		o.Logger.Logf("Cleaned stale resources: %s", strings.Join(cleaned, ", "))
+	} else {
+		o.Logger.Logf("No stale install state found in namespace %q", o.Config.Namespace)
+	}
 	return nil
 }
 
