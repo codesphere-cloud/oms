@@ -88,7 +88,12 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 		log.Printf("Downloading k0sctl %s from %s", version, downloadURL)
 	}
 
-	path, err := downloadBinary(k.FileWriter, k.Http, k.Env.GetOmsWorkdir(), "k0sctl", downloadURL, force, quiet)
+	cacheDir, err := k.Env.GetOmsCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine cache directory: %w", err)
+	}
+
+	path, err := downloadBinary(k.FileWriter, k.Http, cacheDir, "k0sctl", downloadURL, force, quiet)
 	if err != nil {
 		return "", err
 	}

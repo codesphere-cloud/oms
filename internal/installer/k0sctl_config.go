@@ -126,10 +126,9 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 	// Track added IPs to avoid duplicates
 	addedIPs := make(map[string]bool)
 
-	// Add controller+worker nodes from control planes
-	controllerFlags := []string{"--enable-worker", "--no-taints"}
+	// Add controller-only nodes from control planes
 	for _, cp := range installConfig.Kubernetes.ControlPlanes {
-		host := createK0sctlHost(cp, "controller+worker", controllerFlags, sshKeyPath, k0sBinaryPath)
+		host := createK0sctlHost(cp, "controller", nil, sshKeyPath, k0sBinaryPath)
 		k0sctlConfig.Spec.Hosts = append(k0sctlConfig.Spec.Hosts, host)
 		addedIPs[cp.IPAddress] = true
 	}

@@ -37,15 +37,15 @@ var _ = Describe("K0sctlConfig", func() {
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(3))
 			})
 
-			It("should assign controller+worker role to control plane nodes", func() {
+			It("should assign controller role to control plane nodes", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(1))
-				Expect(k0sctlConfig.Spec.Hosts[0].Role).To(Equal("controller+worker"))
-				Expect(k0sctlConfig.Spec.Hosts[0].InstallFlags).To(ContainElements("--enable-worker", "--no-taints"))
+				Expect(k0sctlConfig.Spec.Hosts[0].Role).To(Equal("controller"))
+				Expect(k0sctlConfig.Spec.Hosts[0].InstallFlags).To(BeNil())
 			})
 
 			It("should assign worker role to dedicated worker nodes", func() {
@@ -60,8 +60,8 @@ var _ = Describe("K0sctlConfig", func() {
 
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(3))
 
-				// First host should be controller+worker
-				Expect(k0sctlConfig.Spec.Hosts[0].Role).To(Equal("controller+worker"))
+				// First host should be controller
+				Expect(k0sctlConfig.Spec.Hosts[0].Role).To(Equal("controller"))
 
 				// Worker nodes should have worker role with no install flags
 				Expect(k0sctlConfig.Spec.Hosts[1].Role).To(Equal("worker"))
@@ -82,7 +82,7 @@ var _ = Describe("K0sctlConfig", func() {
 				// Should only have 2 hosts: 1 control plane + 1 unique worker
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(2))
 				Expect(k0sctlConfig.Spec.Hosts[0].SSH.Address).To(Equal("10.0.1.10"))
-				Expect(k0sctlConfig.Spec.Hosts[0].Role).To(Equal("controller+worker"))
+				Expect(k0sctlConfig.Spec.Hosts[0].Role).To(Equal("controller"))
 				Expect(k0sctlConfig.Spec.Hosts[1].SSH.Address).To(Equal("10.0.2.10"))
 				Expect(k0sctlConfig.Spec.Hosts[1].Role).To(Equal("worker"))
 			})

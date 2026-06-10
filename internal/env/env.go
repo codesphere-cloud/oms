@@ -6,6 +6,7 @@ package env
 import (
 	"errors"
 	"os"
+	"path/filepath"
 )
 
 //mockery:generate: true
@@ -13,6 +14,7 @@ type Env interface {
 	GetOmsPortalApiKey() (string, error)
 	GetOmsPortalApi() string
 	GetOmsWorkdir() string
+	GetOmsCacheDir() (string, error)
 }
 
 type Environment struct {
@@ -36,6 +38,14 @@ func (e *Environment) GetOmsWorkdir() string {
 		return "./oms-workdir"
 	}
 	return workdir
+}
+
+func (e *Environment) GetOmsCacheDir() (string, error) {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(cacheDir, "oms"), nil
 }
 
 func (e *Environment) GetOmsPortalApi() string {
