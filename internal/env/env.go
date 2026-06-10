@@ -13,6 +13,7 @@ type Env interface {
 	GetOmsPortalApiKey() (string, error)
 	GetOmsPortalApi() string
 	GetOmsWorkdir() string
+	GetOmsRegistry() string
 }
 
 type Environment struct {
@@ -42,6 +43,17 @@ func (e *Environment) GetOmsPortalApi() string {
 	apiUrl := os.Getenv("OMS_PORTAL_API")
 	if apiUrl == "" {
 		return "https://oms-portal.codesphere.com/api"
+	}
+	return apiUrl
+}
+
+// GetOmsRegistry returns the base URL for the OCI registry proxy.
+// It derives the registry URL from OMS_PORTAL_API by stripping the /api suffix.
+func (e *Environment) GetOmsRegistry() string {
+	apiUrl := e.GetOmsPortalApi()
+	// Strip trailing /api to get the registry base URL
+	if len(apiUrl) > 4 && apiUrl[len(apiUrl)-4:] == "/api" {
+		return apiUrl[:len(apiUrl)-4]
 	}
 	return apiUrl
 }

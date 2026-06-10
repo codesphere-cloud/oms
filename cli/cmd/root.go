@@ -88,6 +88,9 @@ func GetRootCmd() *cobra.Command {
 	// Resource creation commands
 	AddCreateCmd(rootCmd, opts)
 
+	// Container image commands
+	AddPullCmd(rootCmd, opts)
+
 	return rootCmd
 }
 
