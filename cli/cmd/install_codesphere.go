@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -276,6 +277,7 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 	for step, _ := range skippableSteps {
 		executedSteps = append(executedSteps, step)
 	}
+	sort.Strings(executedSteps)
 
 	prompt := installer.NewPrompter(true)
 	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
