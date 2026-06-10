@@ -243,41 +243,41 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 
 	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", c.Opts.Config, "--privKey", c.Opts.PrivKey}
 
-	skippableSteps := map[string]struct{}{
-		"copy-dependencies":     {},
-		"extract-dependencies":  {},
-		"load-container-images": {},
-		"sops":                  {},
-		"docker":                {},
-		"postgres":              {},
-		"ceph":                  {},
-		"kubernetes":            {},
-		"set-up-cluster":        {},
-		"codesphere":            {},
-		"ms-backends":           {},
+	executableSteps := map[string]bool{
+		"copy-dependencies":     true,
+		"extract-dependencies":  true,
+		"load-container-images": true,
+		"sops":                  true,
+		"docker":                true,
+		"postgres":              true,
+		"ceph":                  true,
+		"kubernetes":            true,
+		"set-up-cluster":        true,
+		"codesphere":            true,
+		"ms-backends":           true,
 	}
 
-	skippedSteps := map[string]struct{}{}
 	if config.Operations != nil {
 		for _, step := range config.Operations.Skip {
-			skippedSteps[step] = struct{}{}
+			executableSteps[step] = false
 		}
 	}
 
 	for _, step := range c.Opts.SkipSteps {
-		skippedSteps[step] = struct{}{}
+		executableSteps[step] = false
 	}
 
-	for step, _ := range skippedSteps {
-		cmdArgs = append(cmdArgs, "--skipStep", step)
-		if _, ok := skippableSteps[step]; ok {
-			delete(skippableSteps, step)
+	for step, executed := range executableSteps {
+		if !executed {
+			cmdArgs = append(cmdArgs, "--skipStep", step)
 		}
 	}
 
 	executedSteps := []string{}
-	for step, _ := range skippableSteps {
-		executedSteps = append(executedSteps, step)
+	for step, executed := range executableSteps {
+		if executed {
+			executedSteps = append(executedSteps, step)
+		}
 	}
 	sort.Strings(executedSteps)
 
