@@ -253,25 +253,19 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 		"codesphere":            {},
 		"ms-backends":           {},
 	}
-	skippedSteps := []string{}
 
+	skippedSteps := map[string]struct{}{}
 	if config.Operations != nil {
-		if len(config.Operations.Skip) > 0 && len(c.Opts.SkipSteps) > 0 {
-			return fmt.Errorf("skipped steps can either be defined in config.yaml under `.operations.skip` or supplied via `--skip-step` flag, but not both")
-		}
-
 		for _, step := range config.Operations.Skip {
-			skippedSteps = append(skippedSteps, step)
+			skippedSteps[step] = struct{}{}
 		}
 	}
 
-	if len(c.Opts.SkipSteps) > 0 {
-		for _, step := range c.Opts.SkipSteps {
-			skippedSteps = append(skippedSteps, step)
-		}
+	for _, step := range c.Opts.SkipSteps {
+		skippedSteps[step] = struct{}{}
 	}
 
-	for _, step := range skippedSteps {
+	for step, _ := range skippedSteps {
 		cmdArgs = append(cmdArgs, "--skipStep", step)
 		if _, ok := skippableSteps[step]; ok {
 			delete(skippableSteps, step)
@@ -279,8 +273,8 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 	}
 
 	executedSteps := []string{}
-	for component, _ := range skippableSteps {
-		executedSteps = append(executedSteps, component)
+	for step, _ := range skippableSteps {
+		executedSteps = append(executedSteps, step)
 	}
 
 	prompt := installer.NewPrompter(true)
