@@ -43,6 +43,7 @@ type InstallCodesphereOpts struct {
 	SkipSteps        []string
 	CodesphereOnly   bool
 	DirectConnection bool
+	AutoApprove      bool
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
@@ -88,6 +89,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere.cmd.Flags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, kubernetes")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
+	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
 
 	util.MarkFlagRequired(codesphere.cmd, "package")
 	util.MarkFlagRequired(codesphere.cmd, "config")
@@ -279,9 +281,9 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 	}
 	sort.Strings(executedSteps)
 
-	prompt := installer.NewPrompter(true)
+	prompt := installer.NewPrompter(!c.Opts.AutoApprove)
 	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
-	if prompt.String(msg, "no") != "yes" {
+	if prompt.String(msg, "yes") != "yes" {
 		return fmt.Errorf("Installation aborted")
 	}
 
