@@ -267,24 +267,21 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 		executableSteps[step] = false
 	}
 
+	executedSteps := []string{}
 	for step, executed := range executableSteps {
 		if !executed {
 			cmdArgs = append(cmdArgs, "--skipStep", step)
-		}
-	}
-
-	executedSteps := []string{}
-	for step, executed := range executableSteps {
-		if executed {
+		} else {
 			executedSteps = append(executedSteps, step)
 		}
 	}
+
 	sort.Strings(executedSteps)
 
 	prompt := installer.NewPrompter(!c.Opts.AutoApprove)
 	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
 	if prompt.String(msg, "yes") != "yes" {
-		return fmt.Errorf("Installation aborted")
+		return fmt.Errorf("installation aborted")
 	}
 
 	if c.Opts.CodesphereOnly {

@@ -66,7 +66,7 @@ type RootConfig struct {
 }
 
 type OperationsConfig struct {
-	Skip []string
+	Skip []string `yaml:"skip"`
 }
 
 type DatacenterConfig struct {
