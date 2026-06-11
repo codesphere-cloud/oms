@@ -361,7 +361,7 @@ func (n *Node) isSysctlActive(key, expected string) bool {
 }
 
 // configureSysctlLine appends a specific line to /etc/sysctl.conf and applies the settings on the remote node via SSH
-func (n *Node) configureSysctlLines(line string) error {
+func (n *Node) configureSysctlLine(line string) error {
 	if !n.hasSysctlLine(line) {
 		cmd := fmt.Sprintf("echo '%s' | sudo tee -a /etc/sysctl.conf", line)
 		if err := n.RunSSHCommand("root", cmd); err != nil {
