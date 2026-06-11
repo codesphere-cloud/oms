@@ -291,6 +291,7 @@ func (n *Node) ConfigureInotifyWatches() error {
 			return fmt.Errorf("failed to configure systctl line '%s': %w", ln, err)
 		}
 	}
+	return nil
 }
 
 func (n *Node) HasMemoryMapConfigured() bool {
