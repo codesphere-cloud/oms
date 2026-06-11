@@ -3,7 +3,7 @@
   "extends": ["github>codesphere-cloud/renovate-config:go-config"],
   "packageRules": [
     {
-      "matchPackageNames": ["*"],
+      "matchManagers": ["gomod"],
       "postUpgradeTasks": {
           "commands": [
             "go mod tidy",
