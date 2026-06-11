@@ -89,8 +89,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 }
 
 const (
-	defaultK0sPath   = "kubernetes/files/k0s"
-	k0sctlConfigFile = "k0sctl-config.yaml"
+	defaultK0sPath = "kubernetes/files/k0s"
 )
 
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
@@ -190,7 +189,7 @@ func (c *InstallK0sCmd) generateK0sctlConfig(config *files.RootConfig, k0sVersio
 		return "", fmt.Errorf("failed to marshal k0sctl config: %w", err)
 	}
 
-	k0sctlConfigPath := filepath.Join(c.Env.GetOmsWorkdir(), k0sctlConfigFile)
+	k0sctlConfigPath := filepath.Join(c.Env.GetOmsWorkdir(), fmt.Sprintf("k0sctl-config-%s.yaml", config.Datacenter.Name))
 	if err := c.FileWriter.WriteFile(k0sctlConfigPath, k0sctlConfigData, 0644); err != nil {
 		return "", fmt.Errorf("failed to write k0sctl config: %w", err)
 	}

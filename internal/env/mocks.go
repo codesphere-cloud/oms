@@ -35,6 +35,59 @@ func (_m *MockEnv) EXPECT() *MockEnv_Expecter {
 	return &MockEnv_Expecter{mock: &_m.Mock}
 }
 
+// GetOmsCacheDir provides a mock function for the type MockEnv
+func (_mock *MockEnv) GetOmsCacheDir() (string, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetOmsCacheDir")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (string, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() string); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockEnv_GetOmsCacheDir_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetOmsCacheDir'
+type MockEnv_GetOmsCacheDir_Call struct {
+	*mock.Call
+}
+
+// GetOmsCacheDir is a helper method to define mock.On call
+func (_e *MockEnv_Expecter) GetOmsCacheDir() *MockEnv_GetOmsCacheDir_Call {
+	return &MockEnv_GetOmsCacheDir_Call{Call: _e.mock.On("GetOmsCacheDir")}
+}
+
+func (_c *MockEnv_GetOmsCacheDir_Call) Run(run func()) *MockEnv_GetOmsCacheDir_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockEnv_GetOmsCacheDir_Call) Return(s string, err error) *MockEnv_GetOmsCacheDir_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockEnv_GetOmsCacheDir_Call) RunAndReturn(run func() (string, error)) *MockEnv_GetOmsCacheDir_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetOmsPortalApi provides a mock function for the type MockEnv
 func (_mock *MockEnv) GetOmsPortalApi() string {
 	ret := _mock.Called()

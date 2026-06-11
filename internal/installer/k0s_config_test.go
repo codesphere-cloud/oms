@@ -42,8 +42,13 @@ var _ = Describe("K0sConfig", func() {
 				Expect(k0sConfig.Spec.Network.PodCIDR).To(Equal("10.244.0.0/16"))
 				Expect(k0sConfig.Spec.Network.ServiceCIDR).To(Equal("10.96.0.0/12"))
 				Expect(k0sConfig.Spec.Network.Provider).To(Equal("calico"))
+				Expect(k0sConfig.Spec.Network.ClusterDomain).To(Equal("cluster.local"))
 				Expect(k0sConfig.Spec.Storage.Etcd).ToNot(BeNil())
 				Expect(k0sConfig.Spec.Storage.Etcd.PeerAddress).To(Equal("10.0.1.10"))
+
+				// Check Images configuration
+				Expect(k0sConfig.Spec.Images).ToNot(BeNil())
+				Expect(k0sConfig.Spec.Images.DefaultPullPolicy).To(Equal("IfNotPresent"))
 
 				// Check Konnectivity configuration (prevents webhook failures)
 				Expect(k0sConfig.Spec.Konnectivity).ToNot(BeNil())

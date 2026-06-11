@@ -38,9 +38,10 @@ type K0sAPI struct {
 }
 
 type K0sNetwork struct {
-	PodCIDR     string `yaml:"podCIDR,omitempty"`
-	ServiceCIDR string `yaml:"serviceCIDR,omitempty"`
-	Provider    string `yaml:"provider,omitempty"`
+	PodCIDR       string `yaml:"podCIDR,omitempty"`
+	ServiceCIDR   string `yaml:"serviceCIDR,omitempty"`
+	Provider      string `yaml:"provider,omitempty"`
+	ClusterDomain string `yaml:"clusterDomain,omitempty"`
 }
 
 type K0sStorage struct {
@@ -107,13 +108,14 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 		}
 
 		k0sConfig.Spec.Network = &K0sNetwork{
-			Provider:    "calico",
-			PodCIDR:     defaultIfEmpty(installConfig.Kubernetes.PodCIDR, "100.96.0.0/11"),
-			ServiceCIDR: defaultIfEmpty(installConfig.Kubernetes.ServiceCIDR, "100.64.0.0/13"),
+			Provider:      "calico",
+			PodCIDR:       defaultIfEmpty(installConfig.Kubernetes.PodCIDR, "100.96.0.0/11"),
+			ServiceCIDR:   defaultIfEmpty(installConfig.Kubernetes.ServiceCIDR, "100.64.0.0/13"),
+			ClusterDomain: "cluster.local",
 		}
 
 		k0sConfig.Spec.Images = &K0sImages{
-			DefaultPullPolicy: "Never",
+			DefaultPullPolicy: "IfNotPresent",
 		}
 
 		k0sConfig.Spec.Telemetry = &K0sTelemetry{
