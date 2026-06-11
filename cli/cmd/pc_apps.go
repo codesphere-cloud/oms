@@ -22,9 +22,10 @@ type InstallPCAppsCmd struct {
 
 type InstallPCAppsOpts struct {
 	*GlobalOptions
-	Version     string
-	Namespace   string
-	ValuesFiles []string
+	Version        string
+	Namespace      string
+	ValuesFiles    []string
+	ForceConflicts bool
 }
 
 func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
@@ -43,6 +44,7 @@ func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
 		c.Opts.Version,
 		c.Opts.Namespace,
 		c.Opts.ValuesFiles,
+		c.Opts.ForceConflicts,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
@@ -80,6 +82,7 @@ func AddPCAppsCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Version, "version", "", "Chart version to install (required)")
 	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Namespace, "namespace", "argocd", "Target namespace for the Helm release")
 	pcApps.cmd.Flags().StringArrayVarP(&pcApps.Opts.ValuesFiles, "values", "f", nil, "Path to values YAML file (can be specified multiple times, merged in order)")
+	pcApps.cmd.Flags().BoolVar(&pcApps.Opts.ForceConflicts, "force-conflicts", false, "Force field ownership conflicts during install or upgrade (sets server-side apply ForceConflicts)")
 	pcApps.cmd.RunE = pcApps.RunE
 
 	util.MarkFlagRequired(pcApps.cmd, "version")
