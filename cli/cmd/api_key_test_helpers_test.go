@@ -39,3 +39,7 @@ func (e *testEnv) GetOmsWorkdir() string {
 	}
 	return e.workdir
 }
+
+func (e *testEnv) GetOmsCacheDir() (string, error) {
+	return "/tmp/oms-cache", nil
+}
