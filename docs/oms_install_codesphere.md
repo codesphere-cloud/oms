@@ -25,6 +25,7 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
 ### Options
 
 ```
+      --auto-approve         Auto approve confirmation prompts with default values (default true)
       --codesphere-only      Install only Codesphere without dependencies
   -c, --config string        Path to the Codesphere Private Cloud configuration file (yaml)
       --direct-connection    Use direct connection for installation, requires having access to the cluster nodes from your machine

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -42,6 +43,7 @@ type InstallCodesphereOpts struct {
 	SkipSteps        []string
 	CodesphereOnly   bool
 	DirectConnection bool
+	AutoApprove      bool
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
@@ -87,6 +89,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere.cmd.Flags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, kubernetes")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
+	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
 
 	util.MarkFlagRequired(codesphere.cmd, "package")
 	util.MarkFlagRequired(codesphere.cmd, "config")
@@ -239,10 +242,46 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 	archivePath := filepath.Join(pm.GetWorkDir(), "deps.tar.gz")
 
 	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", c.Opts.Config, "--privKey", c.Opts.PrivKey}
-	if len(c.Opts.SkipSteps) > 0 {
-		for _, step := range c.Opts.SkipSteps {
-			cmdArgs = append(cmdArgs, "--skipStep", step)
+
+	executableSteps := map[string]bool{
+		"copy-dependencies":     true,
+		"extract-dependencies":  true,
+		"load-container-images": true,
+		"sops":                  true,
+		"docker":                true,
+		"postgres":              true,
+		"ceph":                  true,
+		"kubernetes":            true,
+		"set-up-cluster":        true,
+		"codesphere":            true,
+		"ms-backends":           true,
+	}
+
+	if config.Operations != nil {
+		for _, step := range config.Operations.Skip {
+			executableSteps[step] = false
 		}
+	}
+
+	for _, step := range c.Opts.SkipSteps {
+		executableSteps[step] = false
+	}
+
+	executedSteps := []string{}
+	for step, executed := range executableSteps {
+		if !executed {
+			cmdArgs = append(cmdArgs, "--skipStep", step)
+		} else {
+			executedSteps = append(executedSteps, step)
+		}
+	}
+
+	sort.Strings(executedSteps)
+
+	prompt := installer.NewPrompter(!c.Opts.AutoApprove)
+	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
+	if prompt.String(msg, "yes") != "yes" {
+		return fmt.Errorf("installation aborted")
 	}
 
 	if c.Opts.CodesphereOnly {
