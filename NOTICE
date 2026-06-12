@@ -305,9 +305,9 @@ License URL: https://github.com/felixge/httpsnoop/blob/v1.0.4/LICENSE.txt
  
 ----------
 Module: github.com/fluxcd/cli-utils/pkg
-Version: v1.2.0
+Version: v1.2.1
 License: Apache-2.0
-License URL: https://github.com/fluxcd/cli-utils/blob/v1.2.0/LICENSE
+License URL: https://github.com/fluxcd/cli-utils/blob/v1.2.1/LICENSE
  
 ----------
 Module: github.com/fsnotify/fsnotify
@@ -977,9 +977,9 @@ License URL: https://github.com/tetratelabs/wabin/blob/f6f874872834/LICENSE
  
 ----------
 Module: github.com/tetratelabs/wazero
-Version: v1.11.0
+Version: v1.12.0
 License: Apache-2.0
-License URL: https://github.com/tetratelabs/wazero/blob/v1.11.0/LICENSE
+License URL: https://github.com/tetratelabs/wazero/blob/v1.12.0/LICENSE
  
 ----------
 Module: github.com/thoas/go-funk
@@ -1235,9 +1235,9 @@ License URL: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
  
 ----------
 Module: helm.sh/helm/v4
-Version: v4.2.0
+Version: v4.2.1
 License: Apache-2.0
-License URL: https://github.com/helm/helm/blob/v4.2.0/LICENSE
+License URL: https://github.com/helm/helm/blob/v4.2.1/LICENSE
  
 ----------
 Module: k8s.io/api
@@ -1355,9 +1355,9 @@ License URL: https://github.com/kubernetes/utils/blob/ff6756f316d2/third_party/f
  
 ----------
 Module: oras.land/oras-go/v2
-Version: v2.6.0
+Version: v2.6.1
 License: Apache-2.0
-License URL: https://github.com/oras-project/oras-go/blob/v2.6.0/LICENSE
+License URL: https://github.com/oras-project/oras-go/blob/v2.6.1/LICENSE
  
 ----------
 Module: sigs.k8s.io/controller-runtime
