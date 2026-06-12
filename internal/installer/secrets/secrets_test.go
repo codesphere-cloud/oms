@@ -334,9 +334,9 @@ var _ = Describe("EnsurePostgresSecrets", func() {
 		Expect(secrets.EnsurePostgresSecrets(vault, postgres)).To(Succeed())
 
 		for _, suffix := range []string{
-				"Auth", "Deployment", "Ide", "Marketplace", "Payment", "Publicapi", "Team", "Workspace",
-				"UsageAggregationRefresher", "UsageAggregationReader",
-			} {
+			"Auth", "Deployment", "Ide", "Marketplace", "Payment", "Publicapi", "Team", "Workspace",
+			"UsageAggregationRefresher", "UsageAggregationReader",
+		} {
 			s := vault.GetSecret("postgresPassword" + suffix)
 			Expect(s).NotTo(BeNil(), "missing postgresPassword%s", suffix)
 			Expect(s.Fields.Password).To(HaveLen(32))
@@ -426,14 +426,6 @@ var _ = Describe("EnsureServiceAccountTokens", func() {
 		Expect(claims["authenticationMethod"]).To(Equal("service"))
 		Expect(claims["email"]).To(Equal("auth.service@codesphere.com"))
 		Expect(claims["userId"]).To(BeNumerically("==", -1))
-	})
-
-	It("is idempotent — does not replace existing tokens", func() {
-		Expect(secrets.EnsureServiceAccountTokens(vault)).To(Succeed())
-		original := vault.GetSecret("authServiceUserToken").Fields.Password
-
-		Expect(secrets.EnsureServiceAccountTokens(vault)).To(Succeed())
-		Expect(vault.GetSecret("authServiceUserToken").Fields.Password).To(Equal(original))
 	})
 
 	It("returns an error when tokenPrivateKey is absent", func() {

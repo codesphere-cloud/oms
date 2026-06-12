@@ -67,7 +67,7 @@ type serviceUser struct {
 }
 
 // serviceAccountTokenExpiry is the lifetime of generated service account JWTs.
-const serviceAccountTokenExpiry = 10 * 365 * 24 * time.Hour
+const serviceAccountTokenExpiry = 365 * 24 * time.Hour
 
 // codesphereServiceUsers lists all internal service accounts and the vault key for their token.
 var codesphereServiceUsers = []serviceUser{
@@ -87,10 +87,6 @@ var codesphereServiceUsers = []serviceUser{
 // and stores them in vault. Requires tokenPrivateKey to already be present (call EnsureAuthKeys
 // first). Idempotent: skips if authServiceUserToken already exists.
 func EnsureServiceAccountTokens(vault *files.InstallVault) error {
-	if vault.GetSecret("authServiceUserToken") != nil {
-		return nil
-	}
-
 	privKeyEntry := vault.GetSecret("tokenPrivateKey")
 	if privKeyEntry == nil || privKeyEntry.File == nil {
 		return fmt.Errorf("tokenPrivateKey not found in vault; call EnsureAuthKeys first")

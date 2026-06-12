@@ -9,6 +9,7 @@ import (
 	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +39,11 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vaultFil
 	vault := &files.InstallVault{}
 	if err := vault.Unmarshal(decrypted); err != nil {
 		return fmt.Errorf("failed to parse vault file: %w", err)
+	}
+
+	// Always create new service accounts tokens during creation to ensure they are always valid and updated.
+	if err := secrets.EnsureServiceAccountTokens(vault); err != nil {
+		return fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 
 	secretData, err := vaultToSecretData(vault)
