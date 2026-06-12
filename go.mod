@@ -684,6 +684,6 @@ replace (
 	k8s.io/sample-controller => k8s.io/sample-controller v0.36.1
 )
 
-replace k8s.io/cri-streaming => k8s.io/cri-streaming v0.36.1
+replace k8s.io/cri-streaming => k8s.io/cri-streaming v0.36.2
 
 replace k8s.io/streaming => k8s.io/streaming v0.36.1
