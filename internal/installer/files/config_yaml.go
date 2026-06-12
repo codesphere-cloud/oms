@@ -19,6 +19,16 @@ func (v *InstallVault) Marshal() ([]byte, error) {
 	return yaml.Marshal(v)
 }
 
+// GetSecret returns the entry with the given name, or nil if not found.
+func (v *InstallVault) GetSecret(name string) *SecretEntry {
+	for i := range v.Secrets {
+		if v.Secrets[i].Name == name {
+			return &v.Secrets[i]
+		}
+	}
+	return nil
+}
+
 // SetSecret adds or updates a secret entry in the vault.
 func (v *InstallVault) SetSecret(entry SecretEntry) {
 	for i, s := range v.Secrets {
@@ -968,7 +978,7 @@ func (c *RootConfig) addPostgresSecrets(vault *InstallVault) {
 		},
 	})
 
-	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace"}
+	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace", "usageAggregationRefresher", "usageAggregationReader"}
 	for _, service := range services {
 		vault.Secrets = append(vault.Secrets, SecretEntry{
 			Name: fmt.Sprintf("postgresUser%s", Capitalize(service)),
