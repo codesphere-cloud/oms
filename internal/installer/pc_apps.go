@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/url"
 
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -64,6 +65,31 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 		forceConflicts: forceConflicts,
 		helm:           helm,
 		client:         c,
+	}, nil
+}
+
+func NewPcAppsFromBom(c client.Client, bomPath string, namespace string) (*PCApps, error) {
+	bomCfg, err := bom.Parse(bomPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse bom.json: %w", err)
+	}
+
+	pcApps, ok := bomCfg.GetPCApps()
+	if !ok {
+		return nil, fmt.Errorf("pc-applications component not found in BOM")
+	}
+
+	helm, err := NewHelmClient(namespace)
+	if err != nil {
+		return nil, fmt.Errorf("creating helm client: %w", err)
+	}
+
+	return &PCApps{
+		version:     pcApps.Tag(),
+		namespace:   namespace,
+		valuesFiles: []string{},
+		helm:        helm,
+		client:      c,
 	}, nil
 }
 
