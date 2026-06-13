@@ -41,7 +41,7 @@ type InstallerConfig struct {
 type Installer struct {
 	InstallerConfig
 	Helm      installer.HelmClient
-	Resources installer.ArgoCDResources
+	Resources ArgoCDResources
 }
 
 func NewInstaller(cfg InstallerConfig) (*Installer, error) {
@@ -50,7 +50,7 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
 
-	resources, err := installer.NewArgoCDResources(cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+	resources, err := NewArgoCDResources(cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}

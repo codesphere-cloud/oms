@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/codesphere-cloud/oms/internal/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -24,13 +24,13 @@ func writeValuesFile(content string) string {
 var _ = Describe("Installer.Install", func() {
 	var (
 		helmMock            *installer.MockHelmClient
-		argoCDResourcesMock *installer.MockArgoCDResources
+		argoCDResourcesMock *argocd.MockArgoCDResources
 		a                   *argocd.Installer
 	)
 
 	BeforeEach(func() {
 		helmMock = installer.NewMockHelmClient(GinkgoT())
-		argoCDResourcesMock = installer.NewMockArgoCDResources(GinkgoT())
+		argoCDResourcesMock = argocd.NewMockArgoCDResources(GinkgoT())
 		a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0"}, Helm: helmMock, Resources: argoCDResourcesMock}
 	})
 

@@ -8,7 +8,7 @@ import (
 	"os"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
-	argocdinstaller "github.com/codesphere-cloud/oms/internal/argocd"
+	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )

@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codesphere-cloud/oms/internal/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
