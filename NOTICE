@@ -809,9 +809,9 @@ License URL: https://github.com/munnerz/goautoneg/blob/a7dc8b61c822/LICENSE
  
 ----------
 Module: github.com/onsi/gomega
-Version: v1.41.0
+Version: v1.42.0
 License: MIT
-License URL: https://github.com/onsi/gomega/blob/v1.41.0/LICENSE
+License URL: https://github.com/onsi/gomega/blob/v1.42.0/LICENSE
  
 ----------
 Module: github.com/opencontainers/go-digest
