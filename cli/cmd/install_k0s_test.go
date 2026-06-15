@@ -230,6 +230,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 			mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+			mockFileWriter.EXPECT().Exists(c.Opts.Vault).Return(false)
 			mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.Anything, os.FileMode(0600)).Return(nil)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
@@ -266,6 +267,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 			mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+			mockFileWriter.EXPECT().Exists(c.Opts.Vault).Return(true)
 			mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.Anything, os.FileMode(0600)).Return(nil)
 
 			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
