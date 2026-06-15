@@ -274,6 +274,38 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			It("overwrites existing kubeConfig secret in vault", func() {
+				c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+				c.Opts.Package = "test-package.tar.gz"
+				c.Opts.Version = "v1.30.0+k0s.0"
+				c.Opts.Vault = filepath.Join(tempDir, "prod.vault.yaml")
+
+				// Create an existing vault that already has a kubeConfig secret with old content
+				existingVault := &files.InstallVault{
+					Secrets: []files.SecretEntry{
+						{
+							Name: "kubeConfig",
+							File: &files.SecretFile{
+								Name:    "kubeConfig",
+								Content: "old-kubeconfig-content",
+							},
+						},
+					},
+				}
+				vaultYAML, err := existingVault.Marshal()
+				Expect(err).NotTo(HaveOccurred())
+				err = os.WriteFile(c.Opts.Vault, vaultYAML, 0600)
+				Expect(err).NotTo(HaveOccurred())
+
+				setupCommonMocks()
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\nnew: true\n", nil)
+				mockFileWriter.EXPECT().Exists(c.Opts.Vault).Return(true)
+				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.Anything, os.FileMode(0600)).Return(nil)
+
+				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
 			It("fails when GetKubeconfig fails", func() {
 				c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 				c.Opts.Package = "test-package.tar.gz"
