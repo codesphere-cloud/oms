@@ -64,7 +64,7 @@ type MockHttp_Download_Call struct {
 //   - url string
 //   - file io.Writer
 //   - quiet bool
-func (_e *MockHttp_Expecter) Download(url interface{}, file interface{}, quiet interface{}) *MockHttp_Download_Call {
+func (_e *MockHttp_Expecter) Download(url any, file any, quiet any) *MockHttp_Download_Call {
 	return &MockHttp_Download_Call{Call: _e.mock.On("Download", url, file, quiet)}
 }
 
@@ -136,7 +136,7 @@ type MockHttp_Get_Call struct {
 
 // Get is a helper method to define mock.On call
 //   - url string
-func (_e *MockHttp_Expecter) Get(url interface{}) *MockHttp_Get_Call {
+func (_e *MockHttp_Expecter) Get(url any) *MockHttp_Get_Call {
 	return &MockHttp_Get_Call{Call: _e.mock.On("Get", url)}
 }
 
@@ -200,7 +200,7 @@ type MockHttp_Request_Call struct {
 //   - url string
 //   - method string
 //   - body io.Reader
-func (_e *MockHttp_Expecter) Request(url interface{}, method interface{}, body interface{}) *MockHttp_Request_Call {
+func (_e *MockHttp_Expecter) Request(url any, method any, body any) *MockHttp_Request_Call {
 	return &MockHttp_Request_Call{Call: _e.mock.On("Request", url, method, body)}
 }
 
@@ -292,7 +292,7 @@ type MockPortal_DownloadBuildArtifact_Call struct {
 //   - file io.Writer
 //   - startByte int
 //   - quiet bool
-func (_e *MockPortal_Expecter) DownloadBuildArtifact(product interface{}, build interface{}, file interface{}, startByte interface{}, quiet interface{}) *MockPortal_DownloadBuildArtifact_Call {
+func (_e *MockPortal_Expecter) DownloadBuildArtifact(product any, build any, file any, startByte any, quiet any) *MockPortal_DownloadBuildArtifact_Call {
 	return &MockPortal_DownloadBuildArtifact_Call{Call: _e.mock.On("DownloadBuildArtifact", product, build, file, startByte, quiet)}
 }
 
@@ -372,7 +372,7 @@ type MockPortal_GetApiKeyId_Call struct {
 
 // GetApiKeyId is a helper method to define mock.On call
 //   - oldKey string
-func (_e *MockPortal_Expecter) GetApiKeyId(oldKey interface{}) *MockPortal_GetApiKeyId_Call {
+func (_e *MockPortal_Expecter) GetApiKeyId(oldKey any) *MockPortal_GetApiKeyId_Call {
 	return &MockPortal_GetApiKeyId_Call{Call: _e.mock.On("GetApiKeyId", oldKey)}
 }
 
@@ -434,7 +434,7 @@ type MockPortal_GetBuild_Call struct {
 //   - product Product
 //   - version string
 //   - hash string
-func (_e *MockPortal_Expecter) GetBuild(product interface{}, version interface{}, hash interface{}) *MockPortal_GetBuild_Call {
+func (_e *MockPortal_Expecter) GetBuild(product any, version any, hash any) *MockPortal_GetBuild_Call {
 	return &MockPortal_GetBuild_Call{Call: _e.mock.On("GetBuild", product, version, hash)}
 }
 
@@ -560,7 +560,7 @@ type MockPortal_ListBuilds_Call struct {
 // ListBuilds is a helper method to define mock.On call
 //   - product Product
 //   - sort string
-func (_e *MockPortal_Expecter) ListBuilds(product interface{}, sort interface{}) *MockPortal_ListBuilds_Call {
+func (_e *MockPortal_Expecter) ListBuilds(product any, sort any) *MockPortal_ListBuilds_Call {
 	return &MockPortal_ListBuilds_Call{Call: _e.mock.On("ListBuilds", product, sort)}
 }
 
@@ -630,7 +630,7 @@ type MockPortal_RegisterAPIKey_Call struct {
 //   - organization string
 //   - role string
 //   - expiresAt time.Time
-func (_e *MockPortal_Expecter) RegisterAPIKey(owner interface{}, organization interface{}, role interface{}, expiresAt interface{}) *MockPortal_RegisterAPIKey_Call {
+func (_e *MockPortal_Expecter) RegisterAPIKey(owner any, organization any, role any, expiresAt any) *MockPortal_RegisterAPIKey_Call {
 	return &MockPortal_RegisterAPIKey_Call{Call: _e.mock.On("RegisterAPIKey", owner, organization, role, expiresAt)}
 }
 
@@ -696,7 +696,7 @@ type MockPortal_RevokeAPIKey_Call struct {
 
 // RevokeAPIKey is a helper method to define mock.On call
 //   - key string
-func (_e *MockPortal_Expecter) RevokeAPIKey(key interface{}) *MockPortal_RevokeAPIKey_Call {
+func (_e *MockPortal_Expecter) RevokeAPIKey(key any) *MockPortal_RevokeAPIKey_Call {
 	return &MockPortal_RevokeAPIKey_Call{Call: _e.mock.On("RevokeAPIKey", key)}
 }
 
@@ -748,7 +748,7 @@ type MockPortal_UpdateAPIKey_Call struct {
 // UpdateAPIKey is a helper method to define mock.On call
 //   - key string
 //   - expiresAt time.Time
-func (_e *MockPortal_Expecter) UpdateAPIKey(key interface{}, expiresAt interface{}) *MockPortal_UpdateAPIKey_Call {
+func (_e *MockPortal_Expecter) UpdateAPIKey(key any, expiresAt any) *MockPortal_UpdateAPIKey_Call {
 	return &MockPortal_UpdateAPIKey_Call{Call: _e.mock.On("UpdateAPIKey", key, expiresAt)}
 }
 
@@ -805,7 +805,7 @@ type MockPortal_VerifyBuildArtifactDownload_Call struct {
 // VerifyBuildArtifactDownload is a helper method to define mock.On call
 //   - file io.Reader
 //   - download Build
-func (_e *MockPortal_Expecter) VerifyBuildArtifactDownload(file interface{}, download interface{}) *MockPortal_VerifyBuildArtifactDownload_Call {
+func (_e *MockPortal_Expecter) VerifyBuildArtifactDownload(file any, download any) *MockPortal_VerifyBuildArtifactDownload_Call {
 	return &MockPortal_VerifyBuildArtifactDownload_Call{Call: _e.mock.On("VerifyBuildArtifactDownload", file, download)}
 }
 
@@ -899,7 +899,7 @@ type MockHttpClient_Do_Call struct {
 
 // Do is a helper method to define mock.On call
 //   - request *http.Request
-func (_e *MockHttpClient_Expecter) Do(request interface{}) *MockHttpClient_Do_Call {
+func (_e *MockHttpClient_Expecter) Do(request any) *MockHttpClient_Do_Call {
 	return &MockHttpClient_Do_Call{Call: _e.mock.On("Do", request)}
 }
 

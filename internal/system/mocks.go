@@ -61,7 +61,7 @@ type MockImageManager_BuildImage_Call struct {
 //   - dockerfile string
 //   - tag string
 //   - buildContext string
-func (_e *MockImageManager_Expecter) BuildImage(dockerfile interface{}, tag interface{}, buildContext interface{}) *MockImageManager_BuildImage_Call {
+func (_e *MockImageManager_Expecter) BuildImage(dockerfile any, tag any, buildContext any) *MockImageManager_BuildImage_Call {
 	return &MockImageManager_BuildImage_Call{Call: _e.mock.On("BuildImage", dockerfile, tag, buildContext)}
 }
 
@@ -122,7 +122,7 @@ type MockImageManager_LoadImage_Call struct {
 
 // LoadImage is a helper method to define mock.On call
 //   - imageTarPath string
-func (_e *MockImageManager_Expecter) LoadImage(imageTarPath interface{}) *MockImageManager_LoadImage_Call {
+func (_e *MockImageManager_Expecter) LoadImage(imageTarPath any) *MockImageManager_LoadImage_Call {
 	return &MockImageManager_LoadImage_Call{Call: _e.mock.On("LoadImage", imageTarPath)}
 }
 
@@ -173,7 +173,7 @@ type MockImageManager_PushImage_Call struct {
 
 // PushImage is a helper method to define mock.On call
 //   - tag string
-func (_e *MockImageManager_Expecter) PushImage(tag interface{}) *MockImageManager_PushImage_Call {
+func (_e *MockImageManager_Expecter) PushImage(tag any) *MockImageManager_PushImage_Call {
 	return &MockImageManager_PushImage_Call{Call: _e.mock.On("PushImage", tag)}
 }
 

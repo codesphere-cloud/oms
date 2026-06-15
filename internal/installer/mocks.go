@@ -62,7 +62,7 @@ type MockArgoCDResources_ApplyAll_Call struct {
 
 // ApplyAll is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockArgoCDResources_Expecter) ApplyAll(ctx interface{}) *MockArgoCDResources_ApplyAll_Call {
+func (_e *MockArgoCDResources_Expecter) ApplyAll(ctx any) *MockArgoCDResources_ApplyAll_Call {
 	return &MockArgoCDResources_ApplyAll_Call{Call: _e.mock.On("ApplyAll", ctx)}
 }
 
@@ -149,7 +149,7 @@ type MockConfigManager_ParseConfigYaml_Call struct {
 
 // ParseConfigYaml is a helper method to define mock.On call
 //   - configPath string
-func (_e *MockConfigManager_Expecter) ParseConfigYaml(configPath interface{}) *MockConfigManager_ParseConfigYaml_Call {
+func (_e *MockConfigManager_Expecter) ParseConfigYaml(configPath any) *MockConfigManager_ParseConfigYaml_Call {
 	return &MockConfigManager_ParseConfigYaml_Call{Call: _e.mock.On("ParseConfigYaml", configPath)}
 }
 
@@ -227,7 +227,7 @@ type MockInstallConfigManager_ApplyProfile_Call struct {
 
 // ApplyProfile is a helper method to define mock.On call
 //   - profile string
-func (_e *MockInstallConfigManager_Expecter) ApplyProfile(profile interface{}) *MockInstallConfigManager_ApplyProfile_Call {
+func (_e *MockInstallConfigManager_Expecter) ApplyProfile(profile any) *MockInstallConfigManager_ApplyProfile_Call {
 	return &MockInstallConfigManager_ApplyProfile_Call{Call: _e.mock.On("ApplyProfile", profile)}
 }
 
@@ -458,7 +458,7 @@ type MockInstallConfigManager_LoadInstallConfigFromFile_Call struct {
 
 // LoadInstallConfigFromFile is a helper method to define mock.On call
 //   - configPath string
-func (_e *MockInstallConfigManager_Expecter) LoadInstallConfigFromFile(configPath interface{}) *MockInstallConfigManager_LoadInstallConfigFromFile_Call {
+func (_e *MockInstallConfigManager_Expecter) LoadInstallConfigFromFile(configPath any) *MockInstallConfigManager_LoadInstallConfigFromFile_Call {
 	return &MockInstallConfigManager_LoadInstallConfigFromFile_Call{Call: _e.mock.On("LoadInstallConfigFromFile", configPath)}
 }
 
@@ -509,7 +509,7 @@ type MockInstallConfigManager_LoadVaultFromFile_Call struct {
 
 // LoadVaultFromFile is a helper method to define mock.On call
 //   - vaultPath string
-func (_e *MockInstallConfigManager_Expecter) LoadVaultFromFile(vaultPath interface{}) *MockInstallConfigManager_LoadVaultFromFile_Call {
+func (_e *MockInstallConfigManager_Expecter) LoadVaultFromFile(vaultPath any) *MockInstallConfigManager_LoadVaultFromFile_Call {
 	return &MockInstallConfigManager_LoadVaultFromFile_Call{Call: _e.mock.On("LoadVaultFromFile", vaultPath)}
 }
 
@@ -697,7 +697,7 @@ type MockInstallConfigManager_WriteInstallConfig_Call struct {
 // WriteInstallConfig is a helper method to define mock.On call
 //   - configPath string
 //   - withComments bool
-func (_e *MockInstallConfigManager_Expecter) WriteInstallConfig(configPath interface{}, withComments interface{}) *MockInstallConfigManager_WriteInstallConfig_Call {
+func (_e *MockInstallConfigManager_Expecter) WriteInstallConfig(configPath any, withComments any) *MockInstallConfigManager_WriteInstallConfig_Call {
 	return &MockInstallConfigManager_WriteInstallConfig_Call{Call: _e.mock.On("WriteInstallConfig", configPath, withComments)}
 }
 
@@ -754,7 +754,7 @@ type MockInstallConfigManager_WriteVault_Call struct {
 // WriteVault is a helper method to define mock.On call
 //   - vaultPath string
 //   - withComments bool
-func (_e *MockInstallConfigManager_Expecter) WriteVault(vaultPath interface{}, withComments interface{}) *MockInstallConfigManager_WriteVault_Call {
+func (_e *MockInstallConfigManager_Expecter) WriteVault(vaultPath any, withComments any) *MockInstallConfigManager_WriteVault_Call {
 	return &MockInstallConfigManager_WriteVault_Call{Call: _e.mock.On("WriteVault", vaultPath, withComments)}
 }
 
@@ -849,7 +849,7 @@ type MockHelmClient_FindRelease_Call struct {
 // FindRelease is a helper method to define mock.On call
 //   - namespace string
 //   - releaseName string
-func (_e *MockHelmClient_Expecter) FindRelease(namespace interface{}, releaseName interface{}) *MockHelmClient_FindRelease_Call {
+func (_e *MockHelmClient_Expecter) FindRelease(namespace any, releaseName any) *MockHelmClient_FindRelease_Call {
 	return &MockHelmClient_FindRelease_Call{Call: _e.mock.On("FindRelease", namespace, releaseName)}
 }
 
@@ -907,7 +907,7 @@ type MockHelmClient_InstallChart_Call struct {
 //   - ctx context.Context
 //   - cfg ChartConfig
 //   - opts InstallChartOptions
-func (_e *MockHelmClient_Expecter) InstallChart(ctx interface{}, cfg interface{}, opts interface{}) *MockHelmClient_InstallChart_Call {
+func (_e *MockHelmClient_Expecter) InstallChart(ctx any, cfg any, opts any) *MockHelmClient_InstallChart_Call {
 	return &MockHelmClient_InstallChart_Call{Call: _e.mock.On("InstallChart", ctx, cfg, opts)}
 }
 
@@ -971,7 +971,7 @@ type MockHelmClient_LoginRegistry_Call struct {
 //   - host string
 //   - username string
 //   - password string
-func (_e *MockHelmClient_Expecter) LoginRegistry(ctx interface{}, host interface{}, username interface{}, password interface{}) *MockHelmClient_LoginRegistry_Call {
+func (_e *MockHelmClient_Expecter) LoginRegistry(ctx any, host any, username any, password any) *MockHelmClient_LoginRegistry_Call {
 	return &MockHelmClient_LoginRegistry_Call{Call: _e.mock.On("LoginRegistry", ctx, host, username, password)}
 }
 
@@ -1039,7 +1039,7 @@ type MockHelmClient_UpgradeChart_Call struct {
 //   - ctx context.Context
 //   - cfg ChartConfig
 //   - opts UpgradeChartOptions
-func (_e *MockHelmClient_Expecter) UpgradeChart(ctx interface{}, cfg interface{}, opts interface{}) *MockHelmClient_UpgradeChart_Call {
+func (_e *MockHelmClient_Expecter) UpgradeChart(ctx any, cfg any, opts any) *MockHelmClient_UpgradeChart_Call {
 	return &MockHelmClient_UpgradeChart_Call{Call: _e.mock.On("UpgradeChart", ctx, cfg, opts)}
 }
 
@@ -1138,7 +1138,7 @@ type MockK0sManager_Download_Call struct {
 //   - version string
 //   - force bool
 //   - quiet bool
-func (_e *MockK0sManager_Expecter) Download(version interface{}, force interface{}, quiet interface{}) *MockK0sManager_Download_Call {
+func (_e *MockK0sManager_Expecter) Download(version any, force any, quiet any) *MockK0sManager_Download_Call {
 	return &MockK0sManager_Download_Call{Call: _e.mock.On("Download", version, force, quiet)}
 }
 
@@ -1281,7 +1281,7 @@ type MockK0sctlManager_Apply_Call struct {
 //   - configPath string
 //   - k0sctlPath string
 //   - force bool
-func (_e *MockK0sctlManager_Expecter) Apply(configPath interface{}, k0sctlPath interface{}, force interface{}) *MockK0sctlManager_Apply_Call {
+func (_e *MockK0sctlManager_Expecter) Apply(configPath any, k0sctlPath any, force any) *MockK0sctlManager_Apply_Call {
 	return &MockK0sctlManager_Apply_Call{Call: _e.mock.On("Apply", configPath, k0sctlPath, force)}
 }
 
@@ -1353,7 +1353,7 @@ type MockK0sctlManager_Download_Call struct {
 //   - version string
 //   - force bool
 //   - quiet bool
-func (_e *MockK0sctlManager_Expecter) Download(version interface{}, force interface{}, quiet interface{}) *MockK0sctlManager_Download_Call {
+func (_e *MockK0sctlManager_Expecter) Download(version any, force any, quiet any) *MockK0sctlManager_Download_Call {
 	return &MockK0sctlManager_Download_Call{Call: _e.mock.On("Download", version, force, quiet)}
 }
 
@@ -1468,7 +1468,7 @@ type MockK0sctlManager_Reset_Call struct {
 // Reset is a helper method to define mock.On call
 //   - configPath string
 //   - k0sctlPath string
-func (_e *MockK0sctlManager_Expecter) Reset(configPath interface{}, k0sctlPath interface{}) *MockK0sctlManager_Reset_Call {
+func (_e *MockK0sctlManager_Expecter) Reset(configPath any, k0sctlPath any) *MockK0sctlManager_Reset_Call {
 	return &MockK0sctlManager_Reset_Call{Call: _e.mock.On("Reset", configPath, k0sctlPath)}
 }
 
@@ -1551,7 +1551,7 @@ type MockPackageManager_Extract_Call struct {
 
 // Extract is a helper method to define mock.On call
 //   - force bool
-func (_e *MockPackageManager_Expecter) Extract(force interface{}) *MockPackageManager_Extract_Call {
+func (_e *MockPackageManager_Expecter) Extract(force any) *MockPackageManager_Extract_Call {
 	return &MockPackageManager_Extract_Call{Call: _e.mock.On("Extract", force)}
 }
 
@@ -1603,7 +1603,7 @@ type MockPackageManager_ExtractDependency_Call struct {
 // ExtractDependency is a helper method to define mock.On call
 //   - file string
 //   - force bool
-func (_e *MockPackageManager_Expecter) ExtractDependency(file interface{}, force interface{}) *MockPackageManager_ExtractDependency_Call {
+func (_e *MockPackageManager_Expecter) ExtractDependency(file any, force any) *MockPackageManager_ExtractDependency_Call {
 	return &MockPackageManager_ExtractDependency_Call{Call: _e.mock.On("ExtractDependency", file, force)}
 }
 
@@ -1668,7 +1668,7 @@ type MockPackageManager_ExtractOciImageIndex_Call struct {
 
 // ExtractOciImageIndex is a helper method to define mock.On call
 //   - imagefile string
-func (_e *MockPackageManager_Expecter) ExtractOciImageIndex(imagefile interface{}) *MockPackageManager_ExtractOciImageIndex_Call {
+func (_e *MockPackageManager_Expecter) ExtractOciImageIndex(imagefile any) *MockPackageManager_ExtractOciImageIndex_Call {
 	return &MockPackageManager_ExtractOciImageIndex_Call{Call: _e.mock.On("ExtractOciImageIndex", imagefile)}
 }
 
@@ -1775,7 +1775,7 @@ type MockPackageManager_GetBaseimagePath_Call struct {
 // GetBaseimagePath is a helper method to define mock.On call
 //   - baseimage string
 //   - force bool
-func (_e *MockPackageManager_Expecter) GetBaseimagePath(baseimage interface{}, force interface{}) *MockPackageManager_GetBaseimagePath_Call {
+func (_e *MockPackageManager_Expecter) GetBaseimagePath(baseimage any, force any) *MockPackageManager_GetBaseimagePath_Call {
 	return &MockPackageManager_GetBaseimagePath_Call{Call: _e.mock.On("GetBaseimagePath", baseimage, force)}
 }
 
@@ -1884,7 +1884,7 @@ type MockPackageManager_GetDependencyPath_Call struct {
 
 // GetDependencyPath is a helper method to define mock.On call
 //   - filename string
-func (_e *MockPackageManager_Expecter) GetDependencyPath(filename interface{}) *MockPackageManager_GetDependencyPath_Call {
+func (_e *MockPackageManager_Expecter) GetDependencyPath(filename any) *MockPackageManager_GetDependencyPath_Call {
 	return &MockPackageManager_GetDependencyPath_Call{Call: _e.mock.On("GetDependencyPath", filename)}
 }
 
@@ -1944,7 +1944,7 @@ type MockPackageManager_GetFullImageTag_Call struct {
 
 // GetFullImageTag is a helper method to define mock.On call
 //   - baseimage string
-func (_e *MockPackageManager_Expecter) GetFullImageTag(baseimage interface{}) *MockPackageManager_GetFullImageTag_Call {
+func (_e *MockPackageManager_Expecter) GetFullImageTag(baseimage any) *MockPackageManager_GetFullImageTag_Call {
 	return &MockPackageManager_GetFullImageTag_Call{Call: _e.mock.On("GetFullImageTag", baseimage)}
 }
 

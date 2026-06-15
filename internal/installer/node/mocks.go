@@ -62,7 +62,7 @@ type MockNodeClient_CopyFile_Call struct {
 //   - n *Node
 //   - src string
 //   - dst string
-func (_e *MockNodeClient_Expecter) CopyFile(n interface{}, src interface{}, dst interface{}) *MockNodeClient_CopyFile_Call {
+func (_e *MockNodeClient_Expecter) CopyFile(n any, src any, dst any) *MockNodeClient_CopyFile_Call {
 	return &MockNodeClient_CopyFile_Call{Call: _e.mock.On("CopyFile", n, src, dst)}
 }
 
@@ -125,7 +125,7 @@ type MockNodeClient_DownloadFile_Call struct {
 //   - n *Node
 //   - src string
 //   - dst string
-func (_e *MockNodeClient_Expecter) DownloadFile(n interface{}, src interface{}, dst interface{}) *MockNodeClient_DownloadFile_Call {
+func (_e *MockNodeClient_Expecter) DownloadFile(n any, src any, dst any) *MockNodeClient_DownloadFile_Call {
 	return &MockNodeClient_DownloadFile_Call{Call: _e.mock.On("DownloadFile", n, src, dst)}
 }
 
@@ -187,7 +187,7 @@ type MockNodeClient_HasFile_Call struct {
 // HasFile is a helper method to define mock.On call
 //   - n *Node
 //   - filePath string
-func (_e *MockNodeClient_Expecter) HasFile(n interface{}, filePath interface{}) *MockNodeClient_HasFile_Call {
+func (_e *MockNodeClient_Expecter) HasFile(n any, filePath any) *MockNodeClient_HasFile_Call {
 	return &MockNodeClient_HasFile_Call{Call: _e.mock.On("HasFile", n, filePath)}
 }
 
@@ -245,7 +245,7 @@ type MockNodeClient_RunCommand_Call struct {
 //   - n *Node
 //   - username string
 //   - command string
-func (_e *MockNodeClient_Expecter) RunCommand(n interface{}, username interface{}, command interface{}) *MockNodeClient_RunCommand_Call {
+func (_e *MockNodeClient_Expecter) RunCommand(n any, username any, command any) *MockNodeClient_RunCommand_Call {
 	return &MockNodeClient_RunCommand_Call{Call: _e.mock.On("RunCommand", n, username, command)}
 }
 
@@ -307,7 +307,7 @@ type MockNodeClient_WaitReady_Call struct {
 // WaitReady is a helper method to define mock.On call
 //   - n *Node
 //   - timeout time.Duration
-func (_e *MockNodeClient_Expecter) WaitReady(n interface{}, timeout interface{}) *MockNodeClient_WaitReady_Call {
+func (_e *MockNodeClient_Expecter) WaitReady(n any, timeout any) *MockNodeClient_WaitReady_Call {
 	return &MockNodeClient_WaitReady_Call{Call: _e.mock.On("WaitReady", n, timeout)}
 }
 
