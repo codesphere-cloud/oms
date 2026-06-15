@@ -21,6 +21,10 @@ func IsValidIP(ip string) bool {
 type InstallConfigManager interface {
 	// Profile management
 	ApplyProfile(profile string) error
+
+	// Imports
+	FetchFromAnsibleInventory(inventoryPath string) error
+
 	// Configuration management
 	LoadInstallConfigFromFile(configPath string) error
 	LoadVaultFromFile(vaultPath string) error
@@ -30,6 +34,7 @@ type InstallConfigManager interface {
 	GetInstallConfig() *files.RootConfig
 	GetVault() *files.InstallVault
 	CollectInteractively() error
+
 	// Output
 	GenerateSecrets() error
 	WriteInstallConfig(configPath string, withComments bool) error

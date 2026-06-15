@@ -27,7 +27,9 @@ type InitInstallConfigOpts struct {
 	ConfigFile string
 	VaultFile  string
 
-	Profile        string
+	Profile              string
+	AnsibleInventoryFile string
+
 	ValidateOnly   bool
 	WithComments   bool
 	Interactive    bool
@@ -134,6 +136,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
+	c.cmd.Flags().StringVar(&c.Opts.AnsibleInventoryFile, "ansible-inventory", "", "Path to Ansible inventory file to import host information from")
+
 	c.cmd.Flags().BoolVar(&c.Opts.ValidateOnly, "validate", false, "Validate existing config files instead of creating new ones")
 	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
 	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (when true, other config flags are ignored)")
@@ -191,6 +195,14 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		}
 	} else {
 		c.updateConfigFromOpts(icg.GetInstallConfig())
+	}
+
+	// If Ansible inventory file is provided, import host information from it
+	if c.Opts.AnsibleInventoryFile != "" {
+		err = icg.FetchFromAnsibleInventory(c.Opts.AnsibleInventoryFile)
+		if err != nil {
+			return fmt.Errorf("failed to import from Ansible inventory: %w", err)
+		}
 	}
 
 	validationWarnings := icg.ValidateInstallConfig()
