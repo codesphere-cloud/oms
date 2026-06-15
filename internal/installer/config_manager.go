@@ -175,7 +175,7 @@ func (g *InstallConfig) ValidateVault() []string {
 	}
 
 	errors := []string{}
-	requiredSecrets := []string{"cephSshPrivateKey", "selfSignedCaKeyPem", "domainAuthPrivateKey", "domainAuthPublicKey"}
+	requiredSecrets := []string{"tokenPrivateKey", "tokenPublicKey", "cephSshPrivateKey", "selfSignedCaKeyPem", "domainAuthPrivateKey", "domainAuthPublicKey"}
 	foundSecrets := make(map[string]bool)
 
 	for _, secret := range g.Vault.Secrets {

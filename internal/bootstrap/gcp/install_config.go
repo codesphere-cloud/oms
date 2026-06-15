@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 )
 
 const (
@@ -473,7 +473,7 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 
 	if primaryNeedsRegen {
 		var err error
-		b.Env.InstallConfig.Postgres.Primary.PrivateKey, b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
+		b.Env.InstallConfig.Postgres.Primary.PrivateKey, b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem, err = secrets.GenerateServerCertificate(
 			b.Env.InstallConfig.Postgres.CaCertPrivateKey,
 			b.Env.InstallConfig.Postgres.CACertPem,
 			b.Env.InstallConfig.Postgres.Primary.Hostname,
@@ -481,14 +481,14 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 		if err != nil {
 			return fmt.Errorf("failed to generate primary server certificate: %w", err)
 		}
-		if err := installer.ValidateCertKeyPair(b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem, b.Env.InstallConfig.Postgres.Primary.PrivateKey); err != nil {
+		if err := secrets.ValidateCertKeyPair(b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem, b.Env.InstallConfig.Postgres.Primary.PrivateKey); err != nil {
 			return fmt.Errorf("primary PostgreSQL cert/key validation failed: %w", err)
 		}
 	}
 	// Replica certificates only regenerate if the key is missing from the vault.
 	if b.Env.InstallConfig.Postgres.Replica != nil && (b.Env.InstallConfig.Postgres.ReplicaPrivateKey == "") {
 		var err error
-		b.Env.InstallConfig.Postgres.ReplicaPrivateKey, b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
+		b.Env.InstallConfig.Postgres.ReplicaPrivateKey, b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem, err = secrets.GenerateServerCertificate(
 			b.Env.InstallConfig.Postgres.CaCertPrivateKey,
 			b.Env.InstallConfig.Postgres.CACertPem,
 			b.Env.InstallConfig.Postgres.Replica.Name,
@@ -496,7 +496,7 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 		if err != nil {
 			return fmt.Errorf("failed to generate replica server certificate: %w", err)
 		}
-		if err := installer.ValidateCertKeyPair(b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem, b.Env.InstallConfig.Postgres.ReplicaPrivateKey); err != nil {
+		if err := secrets.ValidateCertKeyPair(b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem, b.Env.InstallConfig.Postgres.ReplicaPrivateKey); err != nil {
 			return fmt.Errorf("replica PostgreSQL cert/key validation failed: %w", err)
 		}
 	}

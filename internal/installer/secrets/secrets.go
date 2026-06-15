@@ -6,9 +6,7 @@
 package secrets
 
 import (
-	"crypto/ecdsa"
 	"crypto/ed25519"
-	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -35,9 +33,6 @@ var postgresServices = []string{
 func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureAuthKeys(vault); err != nil {
 		return fmt.Errorf("ensure auth keys: %w", err)
-	}
-	if err := EnsureServiceAccountTokens(vault); err != nil {
-		return fmt.Errorf("ensure service account tokens: %w", err)
 	}
 	if err := EnsureIngressCA(vault, &config.Cluster); err != nil {
 		return fmt.Errorf("ensure ingress CA: %w", err)
@@ -76,7 +71,7 @@ var codesphereServiceUsers = []serviceUser{
 	{tokenName: "publicApiServiceUserToken", serviceID: "public-api-service", email: "public.api.service@codesphere.com"},
 	{tokenName: "deploymentServiceUserToken", serviceID: "deployment-service", email: "deployment.service@codesphere.com"},
 	{tokenName: "marketplaceServiceUserToken", serviceID: "marketplace-service", email: "marketplace.service@codesphere.com"},
-	{tokenName: "errorPageServerUserToken", serviceID: "error-page-server", email: "error.page.servere@codesphere.com"},
+	{tokenName: "errorPageServerUserToken", serviceID: "error-page-server", email: "error.page.server@codesphere.com"},
 	{tokenName: "userDeletionCronJobUserToken", serviceID: "userdeletion-cronjob", email: "userDeletion.service@codesphere.com"},
 	{tokenName: "workspaceServiceUserToken", serviceID: "workspace-service", email: "workspace.service@codesphere.com"},
 	{tokenName: "workspaceProxyUserToken", serviceID: "workspace-proxy", email: "workspace.proxy@codesphere.com"},
@@ -144,7 +139,7 @@ func EnsureAuthKeys(vault *files.InstallVault) error {
 	}
 
 	if vault.GetSecret("domainAuthPrivateKey") == nil {
-		domainPriv, domainPub, err := generateECP256PKCS8KeyPair()
+		domainPriv, domainPub, err := GenerateECDSAKeyPair()
 		if err != nil {
 			return fmt.Errorf("generate domain auth key pair: %w", err)
 		}
@@ -305,31 +300,13 @@ func generateRSAPKCS8KeyPair(bits int) (privatePEM, publicPEM string, err error)
 	return privatePEM, publicPEM, nil
 }
 
-func generateECP256PKCS8KeyPair() (privatePEM, publicPEM string, err error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return "", "", err
-	}
-	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		return "", "", err
-	}
-	privatePEM = string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes}))
-	spkiBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
-	if err != nil {
-		return "", "", err
-	}
-	publicPEM = string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: spkiBytes}))
-	return privatePEM, publicPEM, nil
-}
-
 // EnsureIngressCA generates the cluster ingress CA if not already present in vault.
 // The CA private key is written to vault; the cert PEM is set on cluster.Certificates.CA.CertPem.
 func EnsureIngressCA(vault *files.InstallVault, cluster *files.ClusterConfig) error {
 	if vault.GetSecret("selfSignedCaKeyPem") != nil {
 		return nil
 	}
-	keyPEM, certPEM, err := generateCA("Cluster Ingress CA", "DE", "Karlsruhe", "Codesphere")
+	keyPEM, certPEM, err := GenerateCA("Cluster Ingress CA", "DE", "Karlsruhe", "Codesphere")
 	if err != nil {
 		return fmt.Errorf("generate ingress CA: %w", err)
 	}
@@ -347,7 +324,7 @@ func EnsureCephSSHKeys(vault *files.InstallVault, ceph *files.CephConfig) error 
 	if vault.GetSecret("cephSshPrivateKey") != nil {
 		return nil
 	}
-	privKey, pubKey, err := generateSSHKeyPair()
+	privKey, pubKey, err := GenerateSSHKeyPair()
 	if err != nil {
 		return fmt.Errorf("generate ceph SSH keys: %w", err)
 	}
@@ -367,12 +344,12 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 		return nil
 	}
 
-	caKeyPEM, caCertPEM, err := generateCA("PostgreSQL CA", "DE", "Karlsruhe", "Codesphere")
+	caKeyPEM, caCertPEM, err := GenerateCA("PostgreSQL CA", "DE", "Karlsruhe", "Codesphere")
 	if err != nil {
 		return fmt.Errorf("generate postgres CA: %w", err)
 	}
 
-	primaryKeyPEM, primaryCertPEM, err := generateServerCertificate(
+	primaryKeyPEM, primaryCertPEM, err := GenerateServerCertificate(
 		caKeyPEM, caCertPEM,
 		postgres.Primary.Hostname,
 		[]string{postgres.Primary.IP},
@@ -380,20 +357,28 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 	if err != nil {
 		return fmt.Errorf("generate postgres primary cert: %w", err)
 	}
-	if err := validateCertKeyPair(primaryCertPEM, primaryKeyPEM); err != nil {
+	if err := ValidateCertKeyPair(primaryCertPEM, primaryKeyPEM); err != nil {
 		return fmt.Errorf("validate postgres primary cert/key: %w", err)
 	}
 
+	adminPwd, err := GeneratePassword(32)
+	if err != nil {
+		return fmt.Errorf("generate postgres admin password: %w", err)
+	}
+	replicaPwd, err := GeneratePassword(32)
+	if err != nil {
+		return fmt.Errorf("generate postgres replica password: %w", err)
+	}
 	vault.SetSecret(files.SecretEntry{Name: "postgresCaKeyPem", File: &files.SecretFile{Name: "ca.key", Content: caKeyPEM}})
-	vault.SetSecret(files.SecretEntry{Name: "postgresPassword", Fields: &files.SecretFields{Password: generatePassword(32)}})
-	vault.SetSecret(files.SecretEntry{Name: "postgresReplicaPassword", Fields: &files.SecretFields{Password: generatePassword(32)}})
+	vault.SetSecret(files.SecretEntry{Name: "postgresPassword", Fields: &files.SecretFields{Password: adminPwd}})
+	vault.SetSecret(files.SecretEntry{Name: "postgresReplicaPassword", Fields: &files.SecretFields{Password: replicaPwd}})
 	vault.SetSecret(files.SecretEntry{Name: "postgresPrimaryServerKeyPem", File: &files.SecretFile{Name: "primary.key", Content: primaryKeyPEM}})
 
 	postgres.CACertPem = caCertPEM
 	postgres.Primary.SSLConfig.ServerCertPem = primaryCertPEM
 
 	if postgres.Replica != nil {
-		replicaKeyPEM, replicaCertPEM, err := generateServerCertificate(
+		replicaKeyPEM, replicaCertPEM, err := GenerateServerCertificate(
 			caKeyPEM, caCertPEM,
 			postgres.Replica.Name,
 			[]string{postgres.Replica.IP},
@@ -401,7 +386,7 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 		if err != nil {
 			return fmt.Errorf("generate postgres replica cert: %w", err)
 		}
-		if err := validateCertKeyPair(replicaCertPEM, replicaKeyPEM); err != nil {
+		if err := ValidateCertKeyPair(replicaCertPEM, replicaKeyPEM); err != nil {
 			return fmt.Errorf("validate postgres replica cert/key: %w", err)
 		}
 		vault.SetSecret(files.SecretEntry{Name: "postgresReplicaServerKeyPem", File: &files.SecretFile{Name: "replica.key", Content: replicaKeyPEM}})
@@ -409,9 +394,13 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 	}
 
 	for _, service := range postgresServices {
+		svcPwd, err := GeneratePassword(32)
+		if err != nil {
+			return fmt.Errorf("generate postgres password for %s: %w", service, err)
+		}
 		vault.SetSecret(files.SecretEntry{
 			Name:   fmt.Sprintf("postgresPassword%s", files.Capitalize(service)),
-			Fields: &files.SecretFields{Password: generatePassword(32)},
+			Fields: &files.SecretFields{Password: svcPwd},
 		})
 	}
 

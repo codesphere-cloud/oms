@@ -27,7 +27,7 @@ var _ = Describe("EnsureAuthKeys", func() {
 
 		assertFileSecret(vault, "tokenPrivateKey", "PRIVATE KEY")
 		assertFileSecret(vault, "tokenPublicKey", "PUBLIC KEY")
-		assertFileSecret(vault, "domainAuthPrivateKey", "PRIVATE KEY")
+		assertFileSecret(vault, "domainAuthPrivateKey", "EC PRIVATE KEY")
 		assertFileSecret(vault, "domainAuthPublicKey", "PUBLIC KEY")
 	})
 
@@ -60,7 +60,7 @@ var _ = Describe("EnsureAuthKeys", func() {
 		Expect(secrets.EnsureAuthKeys(vault)).To(Succeed())
 
 		Expect(vault.GetSecret("tokenPrivateKey").File.Content).To(Equal("existing"))
-		assertFileSecret(vault, "domainAuthPrivateKey", "PRIVATE KEY")
+		assertFileSecret(vault, "domainAuthPrivateKey", "EC PRIVATE KEY")
 		assertFileSecret(vault, "domainAuthPublicKey", "PUBLIC KEY")
 	})
 
@@ -245,7 +245,7 @@ var _ = Describe("EnsureIngressCA", func() {
 
 		caKey := vault.GetSecret("selfSignedCaKeyPem")
 		Expect(caKey).NotTo(BeNil())
-		Expect(caKey.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+		Expect(caKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 		Expect(cluster.Certificates.CA.CertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 	})
 
@@ -305,7 +305,7 @@ var _ = Describe("EnsurePostgresSecrets", func() {
 
 		caKey := vault.GetSecret("postgresCaKeyPem")
 		Expect(caKey).NotTo(BeNil())
-		Expect(caKey.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+		Expect(caKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 		Expect(postgres.CACertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 	})
 
@@ -325,7 +325,7 @@ var _ = Describe("EnsurePostgresSecrets", func() {
 		Expect(secrets.EnsurePostgresSecrets(vault, postgres)).To(Succeed())
 
 		primaryKey := vault.GetSecret("postgresPrimaryServerKeyPem")
-		Expect(primaryKey.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+		Expect(primaryKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 		Expect(postgres.Primary.SSLConfig.ServerCertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 	})
 
@@ -366,7 +366,7 @@ var _ = Describe("EnsurePostgresSecrets", func() {
 
 			replicaKey := vault.GetSecret("postgresReplicaServerKeyPem")
 			Expect(replicaKey).NotTo(BeNil())
-			Expect(replicaKey.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+			Expect(replicaKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 			Expect(postgres.Replica.SSLConfig.ServerCertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 		})
 

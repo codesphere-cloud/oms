@@ -46,7 +46,7 @@ var _ = Describe("GenerateSecrets", func() {
 			pub := mgr.Vault.GetSecret("domainAuthPublicKey")
 			Expect(priv).NotTo(BeNil())
 			Expect(pub).NotTo(BeNil())
-			Expect(priv.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+			Expect(priv.File.Content).To(ContainSubstring("BEGIN EC PRIVATE KEY"))
 			Expect(pub.File.Content).To(ContainSubstring("BEGIN PUBLIC KEY"))
 		})
 
@@ -55,7 +55,7 @@ var _ = Describe("GenerateSecrets", func() {
 
 			caKey := mgr.Vault.GetSecret("selfSignedCaKeyPem")
 			Expect(caKey).NotTo(BeNil())
-			Expect(caKey.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+			Expect(caKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 
 			Expect(mgr.Config.Cluster.Certificates.CA.CertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 		})
@@ -93,7 +93,7 @@ var _ = Describe("GenerateSecrets", func() {
 
 			caKey := mgr.Vault.GetSecret("postgresCaKeyPem")
 			Expect(caKey).NotTo(BeNil())
-			Expect(caKey.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+			Expect(caKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 			Expect(mgr.Config.Postgres.CACertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 		})
 
@@ -114,7 +114,7 @@ var _ = Describe("GenerateSecrets", func() {
 
 			primaryKey := mgr.Vault.GetSecret("postgresPrimaryServerKeyPem")
 			Expect(primaryKey).NotTo(BeNil())
-			Expect(primaryKey.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+			Expect(primaryKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 			Expect(mgr.Config.Postgres.Primary.SSLConfig.ServerCertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 		})
 
@@ -148,7 +148,7 @@ var _ = Describe("GenerateSecrets", func() {
 
 			replicaKey := mgr.Vault.GetSecret("postgresReplicaServerKeyPem")
 			Expect(replicaKey).NotTo(BeNil())
-			Expect(replicaKey.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+			Expect(replicaKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 			Expect(mgr.Config.Postgres.Replica.SSLConfig.ServerCertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 		})
 
@@ -169,6 +169,54 @@ var _ = Describe("GenerateSecrets", func() {
 			Expect(mgr.GenerateSecrets()).To(Succeed())
 			Expect(mgr.Vault.GetSecret("tokenPrivateKey").File.Content).To(Equal(firstKey))
 			Expect(mgr.Vault.GetSecret("selfSignedCaKeyPem").File.Content).To(Equal(firstCA))
+		})
+
+		It("repopulates all yaml:\"-\" config fields from vault on second call", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			// Simulate a config reload: yaml:"-" fields are not persisted, so zero them out.
+			mgr.Config.Codesphere.DomainAuthPrivateKey = ""
+			mgr.Config.Codesphere.DomainAuthPublicKey = ""
+			mgr.Config.Cluster.IngressCAKey = ""
+			mgr.Config.Ceph.SshPrivateKey = ""
+
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			Expect(mgr.Config.Codesphere.DomainAuthPrivateKey).To(ContainSubstring("BEGIN EC PRIVATE KEY"))
+			Expect(mgr.Config.Codesphere.DomainAuthPublicKey).To(ContainSubstring("BEGIN PUBLIC KEY"))
+			Expect(mgr.Config.Cluster.IngressCAKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
+			Expect(mgr.Config.Ceph.SshPrivateKey).To(ContainSubstring("RSA PRIVATE KEY"))
+		})
+	})
+
+	Context("idempotency with postgres", func() {
+		BeforeEach(func() {
+			mgr.Config.Postgres = files.PostgresConfig{
+				Primary: &files.PostgresPrimaryConfig{
+					IP:       "10.50.0.2",
+					Hostname: "pg-primary",
+				},
+			}
+		})
+
+		It("repopulates all postgres yaml:\"-\" config fields from vault on second call", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			// Simulate a config reload: clear all yaml:"-" postgres fields.
+			mgr.Config.Postgres.CaCertPrivateKey = ""
+			mgr.Config.Postgres.AdminPassword = ""
+			mgr.Config.Postgres.ReplicaPassword = ""
+			mgr.Config.Postgres.UserPasswords = nil
+			mgr.Config.Postgres.Primary.PrivateKey = ""
+
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			Expect(mgr.Config.Postgres.CaCertPrivateKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
+			Expect(mgr.Config.Postgres.AdminPassword).To(HaveLen(32))
+			Expect(mgr.Config.Postgres.ReplicaPassword).To(HaveLen(32))
+			Expect(mgr.Config.Postgres.UserPasswords).To(HaveKey("auth"))
+			Expect(mgr.Config.Postgres.UserPasswords).To(HaveKey("usageAggregationRefresher"))
+			Expect(mgr.Config.Postgres.Primary.PrivateKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 		})
 	})
 

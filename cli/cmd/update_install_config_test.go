@@ -15,6 +15,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 )
 
 func quoteYAMLString(s string) string {
@@ -49,17 +50,17 @@ var _ = Describe("UpdateInstallConfig", func() {
 		vaultFile, err = os.CreateTemp("", "vault-*.yaml")
 		Expect(err).NotTo(HaveOccurred())
 
-		testCAKeyPem, testCACertPem, err = installer.GenerateCA("Test CA", "US", "Test City", "Test Org")
+		testCAKeyPem, testCACertPem, err = secrets.GenerateCA("Test CA", "US", "Test City", "Test Org")
 		Expect(err).NotTo(HaveOccurred())
 
-		testPrimaryKeyPem, testPrimaryCertPem, err := installer.GenerateServerCertificate(
+		testPrimaryKeyPem, testPrimaryCertPem, err := secrets.GenerateServerCertificate(
 			testCAKeyPem, testCACertPem,
 			"postgres-primary",
 			[]string{"10.0.0.5"},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		testReplicaKeyPem, testReplicaCertPem, err := installer.GenerateServerCertificate(
+		testReplicaKeyPem, testReplicaCertPem, err := secrets.GenerateServerCertificate(
 			testCAKeyPem, testCACertPem,
 			"postgres-replica",
 			[]string{"10.0.0.6"},
