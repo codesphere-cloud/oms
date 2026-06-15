@@ -23,7 +23,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
@@ -67,7 +69,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 					cfg.ChartName == "oci://ghcr.io/bank-vaults/helm-charts/vault-operator" &&
 					cfg.Version == "1.22.5" &&
 					cfg.Namespace == "vault" &&
-					cfg.CreateNamespace == true
+					cfg.CreateNamespace == false
 			}), mock.Anything).Return(nil)
 
 			inst := &installer.OpenBaoInstaller{
@@ -88,7 +90,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.ReleaseName == "vault-operator" &&
 					cfg.Namespace == "new-ns" &&
-					cfg.CreateNamespace == true
+					cfg.CreateNamespace == false
 			}), mock.Anything).Return(nil)
 
 			inst := &installer.OpenBaoInstaller{
@@ -794,6 +796,265 @@ var _ = Describe("OpenBaoInstaller", func() {
 			exists, checkErr := inst.HasExistingDeployment()
 			Expect(checkErr).ToNot(HaveOccurred())
 			Expect(exists).To(BeFalse())
+		})
+	})
+
+	Describe("releaseExistsInTargetNamespace", func() {
+		It("returns false without querying Helm when the namespace does not exist", func() {
+			// No namespace created, and no Helm expectations set — FindRelease
+			// must not be called.
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "absent-ns"},
+			}
+			inst.SetCtx(ctx)
+
+			exists, err := inst.ReleaseExistsInTargetNamespace("vault-operator")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeFalse())
+		})
+
+		It("returns true when a release exists in the namespace", func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(&installer.ReleaseInfo{Name: "vault-operator"}, nil)
+
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+			}
+			inst.SetCtx(ctx)
+
+			exists, err := inst.ReleaseExistsInTargetNamespace("vault-operator")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(exists).To(BeTrue())
+		})
+
+		It("wraps the error when FindRelease fails", func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, fmt.Errorf("helm boom"))
+
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+			}
+			inst.SetCtx(ctx)
+
+			_, err = inst.ReleaseExistsInTargetNamespace("vault-operator")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("finding release vault-operator in namespace vault"))
+			Expect(err.Error()).To(ContainSubstring("helm boom"))
+		})
+	})
+
+	Describe("operatorInstalledClusterWide", func() {
+		It("returns true when the vault-operator ClusterRole exists", func() {
+			cr := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "vault-operator"}}
+			_, err := clientset.RbacV1().ClusterRoles().Create(ctx, cr, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+			}
+			inst.SetCtx(ctx)
+
+			clusterWide, err := inst.OperatorInstalledClusterWide()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(clusterWide).To(BeTrue())
+		})
+
+		It("returns false when the ClusterRole does not exist", func() {
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+			}
+			inst.SetCtx(ctx)
+
+			clusterWide, err := inst.OperatorInstalledClusterWide()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(clusterWide).To(BeFalse())
+		})
+	})
+
+	Describe("ensureUnsealSecret", func() {
+		const ns = "vault"
+
+		newInstaller := func(backup map[string][]byte) *installer.OpenBaoInstaller {
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: ns},
+			}
+			inst.SetCtx(ctx)
+			inst.SetBackupUnsealKeys(backup)
+			return inst
+		}
+
+		It("creates the secret from the backup keys when absent", func() {
+			inst := newInstaller(map[string][]byte{"vault-unseal-0": []byte("backup-key")})
+
+			Expect(inst.EnsureUnsealSecret()).To(Succeed())
+
+			secret, err := clientset.CoreV1().Secrets(ns).Get(ctx, "openbao-unseal-keys", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(secret.Data).To(HaveKeyWithValue("vault-unseal-0", []byte("backup-key")))
+		})
+
+		It("overwrites an existing secret holding empty/wrong data", func() {
+			// Pre-create a secret with empty data to simulate a partially
+			// reconciled / wrong secret left by the operator.
+			existing := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "openbao-unseal-keys", Namespace: ns},
+				Data:       map[string][]byte{},
+			}
+			_, err := clientset.CoreV1().Secrets(ns).Create(ctx, existing, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := newInstaller(map[string][]byte{"vault-unseal-0": []byte("backup-key")})
+			Expect(inst.EnsureUnsealSecret()).To(Succeed())
+
+			secret, err := clientset.CoreV1().Secrets(ns).Get(ctx, "openbao-unseal-keys", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(secret.Data).To(HaveKeyWithValue("vault-unseal-0", []byte("backup-key")))
+		})
+	})
+
+	Describe("WaitForInitialization (DR restore)", func() {
+		It("populates the secret from the backup when it is initially absent", func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace: "vault",
+					Timeout:   30 * time.Second,
+				},
+			}
+			inst.SetCtx(ctx)
+			inst.SetBackupUnsealKeys(map[string][]byte{"vault-unseal-0": []byte("backup-key")})
+
+			// First poll creates the secret from backup (returns "not done yet");
+			// the next poll observes the populated secret and succeeds.
+			err = inst.WaitForInitialization()
+			Expect(err).ToNot(HaveOccurred())
+
+			secret := inst.GetUnsealSecret()
+			Expect(secret.Data).To(HaveKeyWithValue("vault-unseal-0", []byte("backup-key")))
+		})
+	})
+
+	Describe("CleanStaleInstallState", func() {
+		It("succeeds and skips the pod wait when no Vault CR exists, even if labeled pods linger", func() {
+			scheme := runtime.NewScheme()
+			dynClient := dynamicfake.NewSimpleDynamicClient(scheme) // no Vault CR registered → Delete returns NotFound
+
+			nsObj := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, nsObj, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// A lingering pod that never terminates — if the code waited for pods
+			// without a deleted CR, this would time out.
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openbao-0",
+					Namespace: "vault",
+					Labels:    map[string]string{"vault_cr": "openbao"},
+				},
+				Status: corev1.PodStatus{Phase: corev1.PodRunning},
+			}
+			_, err = clientset.CoreV1().Pods("vault").Create(ctx, pod, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				DynClient: dynClient,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault", Timeout: 2 * time.Second},
+			}
+			inst.SetCtx(ctx)
+
+			err = inst.CleanStaleInstallState()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("deletes a stale Vault CR, PVCs, and the unseal secret", func() {
+			vaultGVR := schema.GroupVersionResource{Group: "vault.banzaicloud.com", Version: "v1alpha1", Resource: "vaults"}
+			scheme := runtime.NewScheme()
+			vaultCR := &unstructured.Unstructured{}
+			vaultCR.SetGroupVersionKind(schema.GroupVersionKind{Group: "vault.banzaicloud.com", Version: "v1alpha1", Kind: "Vault"})
+			vaultCR.SetName("openbao")
+			vaultCR.SetNamespace("vault")
+			dynClient := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+				scheme,
+				map[schema.GroupVersionResource]string{vaultGVR: "VaultList"},
+				vaultCR,
+			)
+
+			nsObj := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, nsObj, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Two stale PVCs labeled for the openbao Vault CR.
+			for i := 0; i < 2; i++ {
+				pvc := &corev1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      fmt.Sprintf("vault-raft-openbao-%d", i),
+						Namespace: "vault",
+						Labels:    map[string]string{"vault_cr": "openbao"},
+					},
+				}
+				_, err = clientset.CoreV1().PersistentVolumeClaims("vault").Create(ctx, pvc, metav1.CreateOptions{})
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			// A stale unseal secret.
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "openbao-unseal-keys", Namespace: "vault"},
+				Data:       map[string][]byte{"vault-unseal-0": []byte("old")},
+			}
+			_, err = clientset.CoreV1().Secrets("vault").Create(ctx, secret, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				DynClient: dynClient,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault", Timeout: 5 * time.Second},
+			}
+			inst.SetCtx(ctx)
+
+			err = inst.CleanStaleInstallState()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Vault CR removed.
+			_, getErr := dynClient.Resource(vaultGVR).Namespace("vault").Get(ctx, "openbao", metav1.GetOptions{})
+			Expect(getErr).To(HaveOccurred())
+
+			// PVCs removed.
+			pvcs, listErr := clientset.CoreV1().PersistentVolumeClaims("vault").List(ctx, metav1.ListOptions{})
+			Expect(listErr).ToNot(HaveOccurred())
+			Expect(pvcs.Items).To(BeEmpty())
+
+			// Unseal secret removed.
+			_, secretErr := clientset.CoreV1().Secrets("vault").Get(ctx, "openbao-unseal-keys", metav1.GetOptions{})
+			Expect(secretErr).To(HaveOccurred())
 		})
 	})
 })

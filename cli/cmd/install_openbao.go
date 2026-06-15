@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -49,21 +50,16 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// If --age-key-file is provided, set SOPS_AGE_KEY_FILE so ResolveAgeKey
-	// picks it up. Otherwise, fall back to the normal auto-discovery chain.
-	if c.Opts.AgeKeyFile != "" {
-		if err := os.Setenv("SOPS_AGE_KEY_FILE", c.Opts.AgeKeyFile); err != nil {
-			return fmt.Errorf("setting SOPS_AGE_KEY_FILE: %w", err)
-		}
-	}
-
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return fmt.Errorf("determining user config directory: %w", err)
 	}
 	fallbackDir := filepath.Join(configDir, "sops", "age")
 
-	recipient, keyPath, err := installer.ResolveAgeKey(fallbackDir)
+	// Pass --age-key-file explicitly so ResolveAgeKey prefers it without
+	// mutating the process environment. When empty, the normal
+	// auto-discovery chain (env vars, default location, generation) applies.
+	recipient, keyPath, err := installer.ResolveAgeKey(c.Opts.AgeKeyFile, fallbackDir)
 	if err != nil {
 		return fmt.Errorf("resolving age key: %w", err)
 	}
@@ -90,15 +86,14 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 			return nil
 		}
 
-		fmt.Printf("\nWARNING: No DR backup found at: %s\n", c.Opts.DRBackupPath)
-		fmt.Println("This will perform a FRESH OpenBao initialization:")
-		fmt.Println("  - Existing Vault CR will be deleted")
-		fmt.Println("  - All OpenBao pods will be terminated")
-		fmt.Println("  - Persistent volume claims (data) will be deleted")
-		fmt.Println("  - Existing unseal keys will be removed")
-		fmt.Println("")
-		fmt.Println("If you intended to restore from a backup, verify --dr-backup-path is correct.")
-		fmt.Print("\nType 'yes' to continue: ")
+		log.Printf("\nWARNING: No DR backup found at: %s", c.Opts.DRBackupPath)
+		log.Println("This will perform a FRESH OpenBao initialization:")
+		log.Println("  - Existing Vault CR will be deleted")
+		log.Println("  - All OpenBao pods will be terminated")
+		log.Println("  - Persistent volume claims (data) will be deleted")
+		log.Println("  - Existing unseal keys will be removed")
+		log.Println("If you intended to restore from a backup, verify --dr-backup-path is correct.")
+		log.Print("Type 'yes' to continue: ")
 
 		reader := bufio.NewReader(os.Stdin)
 		input, err := reader.ReadString('\n')
@@ -106,7 +101,7 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 			return fmt.Errorf("failed to read confirmation: %w", err)
 		}
 		if strings.TrimSpace(strings.ToLower(input)) != "yes" {
-			return fmt.Errorf("aborted: type 'yes' to continue or pass --yes")
+			return fmt.Errorf("installation cancelled: confirmation not given (type 'yes' or pass --yes to proceed)")
 		}
 		return nil
 	}

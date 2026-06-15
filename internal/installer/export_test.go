@@ -35,3 +35,19 @@ func (o *OpenBaoInstaller) GetUnsealSecret() *corev1.Secret {
 func (o *OpenBaoInstaller) HasExistingDeployment() (bool, error) {
 	return o.hasExistingDeployment()
 }
+
+func (o *OpenBaoInstaller) SetBackupUnsealKeys(keys map[string][]byte) {
+	o.backupUnsealKeys = keys
+}
+
+func (o *OpenBaoInstaller) EnsureUnsealSecret() error {
+	return o.ensureUnsealSecret(o.Clientset.CoreV1().Secrets(o.Config.Namespace))
+}
+
+func (o *OpenBaoInstaller) ReleaseExistsInTargetNamespace(releaseName string) (bool, error) {
+	return o.releaseExistsInTargetNamespace(releaseName)
+}
+
+func (o *OpenBaoInstaller) OperatorInstalledClusterWide() (bool, error) {
+	return o.operatorInstalledClusterWide()
+}

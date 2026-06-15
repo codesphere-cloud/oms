@@ -32,18 +32,26 @@ import (
 var vaultCRTemplate []byte
 
 const (
-	openBaoUnsealSecretName  = "openbao-unseal-keys"
-	openBaoHeadlessService   = "openbao"
-	DefaultOpenBaoNamespace  = "vault"
-	openBaoImage             = "quay.io/openbao/openbao:2.1.0"
-	bankVaultsImage          = "ghcr.io/bank-vaults/bank-vaults:v1.31.3"
-	bankVaultsChartRepo      = "oci://ghcr.io/bank-vaults/helm-charts"
-	bankVaultsChartName      = "vault-operator"
-	bankVaultsChartVersion   = "1.22.5"
-	defaultPasswordLength    = 32
-	pollInterval             = 5 * time.Second
-	maxPollInterval          = 30 * time.Second
+	openBaoUnsealSecretName = "openbao-unseal-keys"
+	openBaoHeadlessService  = "openbao"
+	DefaultOpenBaoNamespace = "vault"
+	openBaoImage            = "quay.io/openbao/openbao:2.1.0"
+	bankVaultsImage         = "ghcr.io/bank-vaults/bank-vaults:v1.31.3"
+	bankVaultsChartRepo     = "oci://ghcr.io/bank-vaults/helm-charts"
+	bankVaultsChartName     = "vault-operator"
+	bankVaultsChartVersion  = "1.22.5"
+	defaultPasswordLength   = 32
+	pollInterval            = 5 * time.Second
+	maxPollInterval         = 30 * time.Second
+
+	// vaultCRLabelKey/Value identify resources (pods, PVCs) managed by the
+	// bank-vaults operator for our "openbao" Vault CR.
+	vaultCRLabelKey   = "vault_cr"
+	vaultCRLabelValue = "openbao"
 )
+
+// vaultCRLabelSelector selects all resources belonging to the "openbao" Vault CR.
+var vaultCRLabelSelector = labels.SelectorFromSet(labels.Set{vaultCRLabelKey: vaultCRLabelValue}).String()
 
 // OpenBaoInstallerConfig holds all configurable parameters for the OpenBao bootstrap.
 type OpenBaoInstallerConfig struct {
@@ -164,6 +172,17 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		}
 	}
 
+	// Ensure the namespace exists before anything that writes into it (the Helm
+	// release metadata, the Vault CR, cleanup of stale resources). This is the
+	// single namespace-creation path — DeployBankVaultsOperator deploys with
+	// CreateNamespace:false and relies on the namespace already being present.
+	err = o.Logger.Step("Ensuring namespace exists", func() error {
+		return o.ensureNamespace(o.ctx)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to ensure namespace: %w", err)
+	}
+
 	err = o.Logger.Step("Deploying Bank-Vaults Operator", o.DeployBankVaultsOperator)
 	if err != nil {
 		return fmt.Errorf("failed to deploy Bank-Vaults Operator: %w", err)
@@ -178,13 +197,6 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to clean stale install state: %w", err)
 		}
-	}
-
-	err = o.Logger.Step("Ensuring namespace exists", func() error {
-		return o.ensureNamespace(o.ctx)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to ensure namespace: %w", err)
 	}
 
 	err = o.Logger.Step("Applying Vault CR (OpenBao desired state)", o.ApplyVaultCR)
@@ -278,46 +290,72 @@ func (o *OpenBaoInstaller) GeneratePassword() error {
 // is sufficient for the entire cluster.
 func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 	cfg := ChartConfig{
-		ReleaseName:     "vault-operator",
-		ChartName:       bankVaultsChartRepo + "/" + bankVaultsChartName,
-		Version:         bankVaultsChartVersion,
-		Namespace:       o.Config.Namespace,
-		CreateNamespace: true,
+		ReleaseName: "vault-operator",
+		ChartName:   bankVaultsChartRepo + "/" + bankVaultsChartName,
+		Version:     bankVaultsChartVersion,
+		Namespace:   o.Config.Namespace,
+		// Namespace creation is handled exclusively by ensureNamespace, which
+		// runs earlier in the install pipeline — keep a single creation path.
+		CreateNamespace: false,
 		Values:          map[string]interface{}{},
 	}
 
-	// Check if the release already exists in the target namespace.
-	// If the namespace doesn't exist yet, there's certainly no release in it,
-	// so we skip the Helm query (which would fail on a non-existent namespace).
-	_, nsErr := o.Clientset.CoreV1().Namespaces().Get(o.ctx, o.Config.Namespace, metav1.GetOptions{})
-	if nsErr != nil && !k8serrors.IsNotFound(nsErr) {
-		return fmt.Errorf("checking namespace %s: %w", o.Config.Namespace, nsErr)
+	// Upgrade in place when a release already exists in the target namespace.
+	exists, err := o.releaseExistsInTargetNamespace(cfg.ReleaseName)
+	if err != nil {
+		return err
 	}
-	if nsErr == nil {
-		rel, err := o.Helm.FindRelease(o.Config.Namespace, cfg.ReleaseName)
-		if err != nil {
-			return err
-		}
-		if rel != nil {
-			// Release exists in target namespace — upgrade in place.
-			return o.Helm.UpgradeChart(o.ctx, cfg, UpgradeChartOptions{})
-		}
+	if exists {
+		return o.Helm.UpgradeChart(o.ctx, cfg, UpgradeChartOptions{})
 	}
 
-	// Release not found in target namespace. Check if the operator is already
-	// deployed cluster-wide (in another namespace) by looking for its ClusterRole.
-	_, err := o.Clientset.RbacV1().ClusterRoles().Get(o.ctx, "vault-operator", metav1.GetOptions{})
-	if err == nil {
-		// Operator already installed in another namespace — skip.
+	// Release not found in target namespace. Skip when the operator is already
+	// deployed cluster-wide (in another namespace) — one instance suffices.
+	clusterWide, err := o.operatorInstalledClusterWide()
+	if err != nil {
+		return err
+	}
+	if clusterWide {
 		o.Logger.Logf("Bank-Vaults Operator already installed in the cluster, skipping deployment")
 		return nil
-	}
-	if !k8serrors.IsNotFound(err) {
-		return fmt.Errorf("checking for existing vault-operator ClusterRole: %w", err)
 	}
 
 	// Operator does not exist — perform fresh install.
 	return o.Helm.InstallChart(o.ctx, cfg, InstallChartOptions{})
+}
+
+// releaseExistsInTargetNamespace reports whether the named Helm release exists
+// in the configured namespace. If the namespace does not exist yet there can be
+// no release in it, so it returns false without querying Helm (which would fail
+// on a non-existent namespace).
+func (o *OpenBaoInstaller) releaseExistsInTargetNamespace(releaseName string) (bool, error) {
+	_, nsErr := o.Clientset.CoreV1().Namespaces().Get(o.ctx, o.Config.Namespace, metav1.GetOptions{})
+	if nsErr != nil {
+		if k8serrors.IsNotFound(nsErr) {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking namespace %s: %w", o.Config.Namespace, nsErr)
+	}
+
+	rel, err := o.Helm.FindRelease(o.Config.Namespace, releaseName)
+	if err != nil {
+		return false, fmt.Errorf("finding release %s in namespace %s: %w", releaseName, o.Config.Namespace, err)
+	}
+	return rel != nil, nil
+}
+
+// operatorInstalledClusterWide reports whether the bank-vaults operator is
+// already installed anywhere in the cluster, detected via its cluster-scoped
+// "vault-operator" ClusterRole.
+func (o *OpenBaoInstaller) operatorInstalledClusterWide() (bool, error) {
+	_, err := o.Clientset.RbacV1().ClusterRoles().Get(o.ctx, "vault-operator", metav1.GetOptions{})
+	if err == nil {
+		return true, nil
+	}
+	if !k8serrors.IsNotFound(err) {
+		return false, fmt.Errorf("checking for existing vault-operator ClusterRole: %w", err)
+	}
+	return false, nil
 }
 
 // vaultCRTemplateData holds the values injected into the Vault CR template.
@@ -447,10 +485,19 @@ func (o *OpenBaoInstaller) ensureUnsealSecret(secretsClient corev1client.SecretI
 			Data: o.backupUnsealKeys,
 		}
 		_, err = secretsClient.Create(o.ctx, secret, metav1.CreateOptions{})
-		if err != nil && !k8serrors.IsAlreadyExists(err) {
+		if err == nil {
+			return nil
+		}
+		if !k8serrors.IsAlreadyExists(err) {
 			return fmt.Errorf("creating unseal secret from backup: %w", err)
 		}
-		return nil
+		// Secret was created concurrently (e.g. by the operator) between our Get
+		// and Create. Re-fetch so we can update its data rather than leaving
+		// whatever (possibly empty/stale) data the racing writer set.
+		existing, err = secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("re-fetching unseal secret after create conflict: %w", err)
+		}
 	}
 
 	// Update existing secret — preserve metadata, only set Data
@@ -466,7 +513,7 @@ func (o *OpenBaoInstaller) ensureUnsealSecret(secretsClient corev1client.SecretI
 // configured replica count) are in Running phase with all containers Ready.
 // This ensures scaling operations have fully completed before reporting success.
 func (o *OpenBaoInstaller) WaitForPodsReady() error {
-	selector := labels.SelectorFromSet(labels.Set{"vault_cr": "openbao"}).String()
+	selector := vaultCRLabelSelector
 	expected := o.Config.Replicas
 
 	return o.pollUntil("waiting for all OpenBao pods to be ready", func() (bool, error) {
@@ -581,16 +628,17 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	}
 	if delErr == nil {
 		cleaned = append(cleaned, "Vault CR")
-	}
-
-	if err := o.waitForVaultPodsGone(); err != nil {
-		return err
+		// Only wait for pods to terminate when we actually deleted a Vault CR —
+		// without a CR there are no operator-managed pods to wait on.
+		if err := o.waitForVaultPodsGone(); err != nil {
+			return err
+		}
 	}
 
 	// Delete PVCs associated with the prior StatefulSet so that stale Raft
 	// data does not cause OpenBao to report as "initialized" on a fresh install.
 	pvcList, err := o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).List(
-		o.ctx, metav1.ListOptions{LabelSelector: "vault_cr=openbao"},
+		o.ctx, metav1.ListOptions{LabelSelector: vaultCRLabelSelector},
 	)
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
@@ -651,7 +699,7 @@ func (o *OpenBaoInstaller) hasExistingDeployment() (bool, error) {
 
 	// Vault CR gone but PVCs may linger (e.g. CR was manually deleted).
 	pvcList, err := o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).List(
-		o.ctx, metav1.ListOptions{LabelSelector: "vault_cr=openbao"},
+		o.ctx, metav1.ListOptions{LabelSelector: vaultCRLabelSelector},
 	)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -665,7 +713,7 @@ func (o *OpenBaoInstaller) hasExistingDeployment() (bool, error) {
 // waitForVaultPodsGone polls until no pods with label vault_cr=openbao remain
 // in the target namespace, or until the context deadline is exceeded.
 func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
-	selector := labels.SelectorFromSet(labels.Set{"vault_cr": "openbao"}).String()
+	selector := vaultCRLabelSelector
 
 	return o.pollUntil("waiting for vault pods to terminate", func() (bool, error) {
 		list, err := o.Clientset.CoreV1().Pods(o.Config.Namespace).List(o.ctx, metav1.ListOptions{
@@ -685,7 +733,7 @@ func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
 // target namespace. This ensures asynchronous PVC deletion has fully completed
 // before the install pipeline creates new resources, avoiding conflicts.
 func (o *OpenBaoInstaller) waitForPVCsGone() error {
-	selector := labels.SelectorFromSet(labels.Set{"vault_cr": "openbao"}).String()
+	selector := vaultCRLabelSelector
 
 	return o.pollUntil("waiting for stale PVCs to be deleted", func() (bool, error) {
 		list, err := o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).List(
@@ -769,4 +817,3 @@ func GenerateSecurePassword(length int) (string, error) {
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
-
