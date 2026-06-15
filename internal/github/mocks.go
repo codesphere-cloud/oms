@@ -75,7 +75,7 @@ type MockGitHubClient_ListTeamMembersBySlug_Call struct {
 //   - org string
 //   - teamSlug string
 //   - opts *github.TeamListTeamMembersOptions
-func (_e *MockGitHubClient_Expecter) ListTeamMembersBySlug(ctx interface{}, org interface{}, teamSlug interface{}, opts interface{}) *MockGitHubClient_ListTeamMembersBySlug_Call {
+func (_e *MockGitHubClient_Expecter) ListTeamMembersBySlug(ctx any, org any, teamSlug any, opts any) *MockGitHubClient_ListTeamMembersBySlug_Call {
 	return &MockGitHubClient_ListTeamMembersBySlug_Call{Call: _e.mock.On("ListTeamMembersBySlug", ctx, org, teamSlug, opts)}
 }
 
@@ -153,7 +153,7 @@ type MockGitHubClient_ListUserKeys_Call struct {
 // ListUserKeys is a helper method to define mock.On call
 //   - ctx context.Context
 //   - username string
-func (_e *MockGitHubClient_Expecter) ListUserKeys(ctx interface{}, username interface{}) *MockGitHubClient_ListUserKeys_Call {
+func (_e *MockGitHubClient_Expecter) ListUserKeys(ctx any, username any) *MockGitHubClient_ListUserKeys_Call {
 	return &MockGitHubClient_ListUserKeys_Call{Call: _e.mock.On("ListUserKeys", ctx, username)}
 }
 

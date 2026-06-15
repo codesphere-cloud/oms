@@ -49,6 +49,7 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --acme-enabled                 Enable ACME certificate issuer
       --acme-issuer-name string      Name for the ACME ClusterIssuer (default "acme-issuer")
       --acme-server string           ACME server URL (default "https://acme-v02.api.letsencrypt.org/directory")
+      --ansible-inventory string     Path to Ansible inventory file to import host information from
   -c, --config string                Output file path for config.yaml (default "config.yaml")
       --dc-id int                    Datacenter ID
       --dc-name string               Datacenter name
