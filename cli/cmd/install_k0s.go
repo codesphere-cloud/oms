@@ -35,6 +35,8 @@ type InstallK0sOpts struct {
 	SSHKeyPath    string
 	Force         bool
 	NoDownload    bool
+	Vault         string
+	VaultPrivKey  string
 }
 
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
@@ -81,6 +83,9 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.NoDownload, "no-download", false, "Skip downloading k0s binary")
 
+	k0s.cmd.Flags().StringVar(&k0s.Opts.Vault, "vault", "", "Path to prod.vault.yaml to save the kubeconfig into (optional)")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.VaultPrivKey, "vault-priv-key", "", "Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)")
+
 	_ = k0s.cmd.MarkFlagRequired("install-config")
 
 	AddCmd(install, k0s.cmd)
@@ -89,7 +94,8 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 }
 
 const (
-	defaultK0sPath = "kubernetes/files/k0s"
+	defaultK0sPath            = "kubernetes/files/k0s"
+	vaultSecretNameKubeconfig = "kubeConfig"
 )
 
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
@@ -118,7 +124,17 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return err
 	}
 
-	return c.deployK0sCluster(k0sctl, k0sctlPath, k0sctlConfigPath)
+	if err := c.deployK0sCluster(k0sctl, k0sctlPath, k0sctlConfigPath); err != nil {
+		return fmt.Errorf("failed to deploy k0s cluster: %w", err)
+	}
+
+	if c.Opts.Vault != "" {
+		if err := c.saveKubeconfigToVault(k0sctl, k0sctlConfigPath, k0sctlPath); err != nil {
+			return fmt.Errorf("failed to save kubeconfig to vault: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func (c *InstallK0sCmd) loadInstallConfig() (*files.RootConfig, error) {
@@ -208,4 +224,56 @@ func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlP
 	log.Printf("To manage your cluster, use: %s kubeconfig --config %s", k0sctlPath, k0sctlConfigPath)
 
 	return nil
+}
+
+func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0sctlConfigPath, k0sctlPath string) error {
+	log.Println("Retrieving kubeconfig from k0sctl for vault...")
+	kubeconfigContent, err := k0sctl.GetKubeconfig(k0sctlConfigPath, k0sctlPath)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve kubeconfig from k0sctl: %w", err)
+	}
+
+	vault, err := c.loadOrCreateVault()
+	if err != nil {
+		return fmt.Errorf("failed to load vault: %w", err)
+	}
+
+	for _, s := range vault.Secrets {
+		if s.Name == vaultSecretNameKubeconfig {
+			log.Printf("Updating existing %s secret in vault", vaultSecretNameKubeconfig)
+			break
+		}
+	}
+
+	vault.SetSecret(files.SecretEntry{
+		Name: vaultSecretNameKubeconfig,
+		File: &files.SecretFile{
+			Name:    vaultSecretNameKubeconfig,
+			Content: kubeconfigContent,
+		},
+	})
+
+	vaultYAML, err := vault.Marshal()
+	if err != nil {
+		return fmt.Errorf("failed to marshal vault: %w", err)
+	}
+
+	if err := c.FileWriter.WriteFile(c.Opts.Vault, vaultYAML, 0600); err != nil {
+		return fmt.Errorf("failed to write vault file: %w", err)
+	}
+
+	log.Printf("Saved kubeconfig to %s", c.Opts.Vault)
+	return nil
+}
+
+func (c *InstallK0sCmd) loadOrCreateVault() (*files.InstallVault, error) {
+	if !c.FileWriter.Exists(c.Opts.Vault) {
+		return &files.InstallVault{}, nil
+	}
+
+	vault, err := installer.LoadVaultData(c.Opts.Vault, c.Opts.VaultPrivKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load vault: %w", err)
+	}
+	return vault, nil
 }

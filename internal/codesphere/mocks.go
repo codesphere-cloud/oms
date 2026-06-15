@@ -72,7 +72,7 @@ type MockClient_CreateWorkspace_Call struct {
 //   - planID int
 //   - name string
 //   - repoURL *string
-func (_e *MockClient_Expecter) CreateWorkspace(teamID interface{}, planID interface{}, name interface{}, repoURL interface{}) *MockClient_CreateWorkspace_Call {
+func (_e *MockClient_Expecter) CreateWorkspace(teamID any, planID any, name any, repoURL any) *MockClient_CreateWorkspace_Call {
 	return &MockClient_CreateWorkspace_Call{Call: _e.mock.On("CreateWorkspace", teamID, planID, name, repoURL)}
 }
 
@@ -138,7 +138,7 @@ type MockClient_DeleteWorkspace_Call struct {
 
 // DeleteWorkspace is a helper method to define mock.On call
 //   - workspaceID int
-func (_e *MockClient_Expecter) DeleteWorkspace(workspaceID interface{}) *MockClient_DeleteWorkspace_Call {
+func (_e *MockClient_Expecter) DeleteWorkspace(workspaceID any) *MockClient_DeleteWorkspace_Call {
 	return &MockClient_DeleteWorkspace_Call{Call: _e.mock.On("DeleteWorkspace", workspaceID)}
 }
 
@@ -190,7 +190,7 @@ type MockClient_ExecuteCommand_Call struct {
 // ExecuteCommand is a helper method to define mock.On call
 //   - workspaceID int
 //   - command string
-func (_e *MockClient_Expecter) ExecuteCommand(workspaceID interface{}, command interface{}) *MockClient_ExecuteCommand_Call {
+func (_e *MockClient_Expecter) ExecuteCommand(workspaceID any, command any) *MockClient_ExecuteCommand_Call {
 	return &MockClient_ExecuteCommand_Call{Call: _e.mock.On("ExecuteCommand", workspaceID, command)}
 }
 
@@ -358,7 +358,7 @@ type MockClient_SetEnvVar_Call struct {
 //   - workspaceID int
 //   - key string
 //   - value string
-func (_e *MockClient_Expecter) SetEnvVar(workspaceID interface{}, key interface{}, value interface{}) *MockClient_SetEnvVar_Call {
+func (_e *MockClient_Expecter) SetEnvVar(workspaceID any, key any, value any) *MockClient_SetEnvVar_Call {
 	return &MockClient_SetEnvVar_Call{Call: _e.mock.On("SetEnvVar", workspaceID, key, value)}
 }
 
@@ -421,7 +421,7 @@ type MockClient_StartPipeline_Call struct {
 //   - workspaceID int
 //   - profile string
 //   - stage string
-func (_e *MockClient_Expecter) StartPipeline(workspaceID interface{}, profile interface{}, stage interface{}) *MockClient_StartPipeline_Call {
+func (_e *MockClient_Expecter) StartPipeline(workspaceID any, profile any, stage any) *MockClient_StartPipeline_Call {
 	return &MockClient_StartPipeline_Call{Call: _e.mock.On("StartPipeline", workspaceID, profile, stage)}
 }
 
@@ -483,7 +483,7 @@ type MockClient_SyncLandscape_Call struct {
 // SyncLandscape is a helper method to define mock.On call
 //   - workspaceID int
 //   - profile string
-func (_e *MockClient_Expecter) SyncLandscape(workspaceID interface{}, profile interface{}) *MockClient_SyncLandscape_Call {
+func (_e *MockClient_Expecter) SyncLandscape(workspaceID any, profile any) *MockClient_SyncLandscape_Call {
 	return &MockClient_SyncLandscape_Call{Call: _e.mock.On("SyncLandscape", workspaceID, profile)}
 }
 

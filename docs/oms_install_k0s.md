@@ -52,6 +52,8 @@ $ oms install k0s --no-download
       --no-download             Skip downloading k0s binary
   -p, --package string          Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from
       --ssh-key-path string     SSH private key path for remote installation
+      --vault string            Path to prod.vault.yaml to save the kubeconfig into (optional)
+      --vault-priv-key string   Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)
   -v, --version string          Version of k0s to install
 ```
 
