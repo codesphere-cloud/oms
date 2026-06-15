@@ -94,8 +94,8 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 }
 
 const (
-	defaultK0sPath        = "kubernetes/files/k0s"
-	vaultSecretKubeConfig = "kubeConfig"
+	defaultK0sPath            = "kubernetes/files/k0s"
+	vaultSecretNameKubeconfig = "kubeConfig"
 )
 
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
@@ -231,15 +231,15 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 		return fmt.Errorf("failed to retrieve kubeconfig from k0sctl: %w", err)
 	}
 
-	vault, err := loadOrCreateVault(c.Opts.Vault, c.Opts.VaultPrivKey, c.FileWriter)
+	vault, err := c.loadOrCreateVault()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load vault: %w", err)
 	}
 
 	vault.SetSecret(files.SecretEntry{
-		Name: vaultSecretKubeConfig,
+		Name: vaultSecretNameKubeconfig,
 		File: &files.SecretFile{
-			Name:    vaultSecretKubeConfig,
+			Name:    vaultSecretNameKubeconfig,
 			Content: kubeconfigContent,
 		},
 	})
@@ -257,12 +257,12 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	return nil
 }
 
-func loadOrCreateVault(vaultPath, privKeyPath string, fw util.FileIO) (*files.InstallVault, error) {
-	if !fw.Exists(vaultPath) {
+func (c *InstallK0sCmd) loadOrCreateVault() (*files.InstallVault, error) {
+	if !c.FileWriter.Exists(c.Opts.Vault) {
 		return &files.InstallVault{}, nil
 	}
 
-	vault, err := installer.LoadVaultData(vaultPath, privKeyPath)
+	vault, err := installer.LoadVaultData(c.Opts.Vault, c.Opts.VaultPrivKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}

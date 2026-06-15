@@ -106,12 +106,9 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 	return path, nil
 }
 
-// requireBinaryAndConfig checks that k0sctl binary and config exist.
-// When allowMissingBinary is true, a missing binary returns nil.
-func (k *K0sctl) requireBinaryAndConfig(k0sctlPath, configPath string, allowMissingBinary bool) error {
-	if allowMissingBinary && !k.FileWriter.Exists(k0sctlPath) {
-		return nil
-	}
+// requireBinaryAndConfig checks that both the k0sctl binary and config exist,
+// returning an error if either is missing.
+func (k *K0sctl) requireBinaryAndConfig(k0sctlPath, configPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
 	}
@@ -122,7 +119,7 @@ func (k *K0sctl) requireBinaryAndConfig(k0sctlPath, configPath string, allowMiss
 }
 
 func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
-	if err := k.requireBinaryAndConfig(k0sctlPath, configPath, false); err != nil {
+	if err := k.requireBinaryAndConfig(k0sctlPath, configPath); err != nil {
 		return err
 	}
 
@@ -147,7 +144,10 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 }
 
 func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
-	if err := k.requireBinaryAndConfig(k0sctlPath, configPath, true); err != nil {
+	if !k.FileWriter.Exists(k0sctlPath) {
+		return nil
+	}
+	if err := k.requireBinaryAndConfig(k0sctlPath, configPath); err != nil {
 		return err
 	}
 
@@ -165,7 +165,7 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 }
 
 func (k *K0sctl) GetKubeconfig(configPath string, k0sctlPath string) (string, error) {
-	if err := k.requireBinaryAndConfig(k0sctlPath, configPath, false); err != nil {
+	if err := k.requireBinaryAndConfig(k0sctlPath, configPath); err != nil {
 		return "", err
 	}
 
