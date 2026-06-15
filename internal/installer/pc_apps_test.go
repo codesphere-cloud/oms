@@ -69,7 +69,7 @@ var _ = Describe("PCApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(newSecret()).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, false)
 		})
 
 		It("reads credentials from K8s secret and calls UpgradeChart with InstallIfNotExist", func() {
@@ -88,7 +88,16 @@ var _ = Describe("PCApps.Install", func() {
 
 		It("returns an error when UpgradeChart fails", func() {
 			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.Anything).
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ReleaseName == "pc-applications" &&
+					cfg.ChartName == expectedChartURL &&
+					cfg.Namespace == namespace &&
+					cfg.Version == version &&
+					cfg.CreateNamespace
+			}), installer.UpgradeChartOptions{
+				InstallIfNotExist: true,
+				ForceConflicts:    false,
+			}).
 				Return(errors.New("upgrade conflict"))
 
 			err := pcApps.Install(context.Background())
@@ -103,7 +112,7 @@ var _ = Describe("PCApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(newSecret()).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, false)
 		})
 
 		It("returns an error without attempting install", func() {
@@ -122,7 +131,7 @@ var _ = Describe("PCApps.Install", func() {
 			fakeClient = fake.NewClientBuilder().
 				WithScheme(scheme).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, false)
 		})
 
 		It("returns a clear error", func() {
@@ -150,7 +159,7 @@ var _ = Describe("PCApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(secret).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, false)
 		})
 
 		It("returns an error about missing fields", func() {
@@ -185,7 +194,7 @@ var _ = Describe("PCApps.Install", func() {
 			overlay := filepath.Join(tmpDir, "overlay.yaml")
 			Expect(os.WriteFile(overlay, []byte("foo: overridden\nnested:\n  b: 99\n  c: 3\n"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{base, overlay})
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{base, overlay}, false)
 
 			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
@@ -204,7 +213,7 @@ var _ = Describe("PCApps.Install", func() {
 		})
 
 		It("returns an error for non-existent values file", func() {
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{"/nonexistent/values.yaml"})
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{"/nonexistent/values.yaml"}, false)
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
@@ -215,11 +224,32 @@ var _ = Describe("PCApps.Install", func() {
 			badFile := filepath.Join(tmpDir, "bad.yaml")
 			Expect(os.WriteFile(badFile, []byte("{{invalid yaml"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{badFile})
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{badFile}, false)
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("loading values files"))
+		})
+	})
+
+	Context("ForceConflicts", func() {
+		BeforeEach(func() {
+			fakeClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(newSecret()).
+				Build()
+		})
+
+		It("passes ForceConflicts=true to UpgradeChart", func() {
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, true)
+
+			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.MatchedBy(func(opts installer.UpgradeChartOptions) bool {
+				return opts.InstallIfNotExist && opts.ForceConflicts
+			})).Return(nil)
+
+			err := pcApps.Install(context.Background())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 })
