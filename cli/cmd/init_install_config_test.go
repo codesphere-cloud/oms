@@ -139,6 +139,14 @@ codesphere:
 `
 
 		validVault = `secrets:
+  - name: tokenPrivateKey
+    file:
+      name: key.pem
+      content: "-----BEGIN PRIVATE KEY-----\nTOKEN\n-----END PRIVATE KEY-----"
+  - name: tokenPublicKey
+    file:
+      name: key.pub
+      content: "-----BEGIN PUBLIC KEY-----\nTOKEN-PUB\n-----END PUBLIC KEY-----"
   - name: cephSshPrivateKey
     file:
       name: id_rsa

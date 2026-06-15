@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+package secrets
 
 import (
 	"crypto/x509"
@@ -97,13 +97,16 @@ var _ = Describe("GenerateECDSAKeyPair", func() {
 
 var _ = Describe("GeneratePassword", func() {
 	It("generates passwords of the correct length", func() {
-		password := GeneratePassword(20)
+		password, err := GeneratePassword(20)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(password).To(HaveLen(20))
 	})
 
 	It("generates different passwords", func() {
-		password1 := GeneratePassword(20)
-		password2 := GeneratePassword(20)
+		password1, err := GeneratePassword(20)
+		Expect(err).NotTo(HaveOccurred())
+		password2, err := GeneratePassword(20)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(password1).NotTo(Equal(password2))
 	})
 })
