@@ -612,7 +612,7 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 //
 // The cleanup sequence is:
 //  1. Delete the Vault CR (stops the bank-vaults sidecar retry loop)
-//  2. Wait for all vault pods to terminate
+//  2. Wait for vault pods to terminate (only when a Vault CR was deleted)
 //  3. Delete PVCs (removes stale Raft data that would confuse initialization)
 //  4. Delete the unseal-keys Secret
 func (o *OpenBaoInstaller) CleanStaleInstallState() error {
@@ -662,7 +662,7 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 		}
 	}
 
-	// Now it is safe to delete the stale secret.
+	// Delete the stale unseal secret.
 	delErr = o.Clientset.CoreV1().Secrets(o.Config.Namespace).Delete(
 		o.ctx, openBaoUnsealSecretName, metav1.DeleteOptions{},
 	)
