@@ -83,6 +83,10 @@ type GCPBootstrapper struct {
 	NodeClient   node.NodeClient
 	PortalClient portal.Portal
 	GitHubClient github.GitHubClient
+
+	// packageFilename is the Codesphere installer package filename on the jumpbox,
+	// populated by EnsureCodespherePackage and reused by the k0s and Codesphere install steps.
+	packageFilename string
 }
 
 type CodesphereEnvironment struct {
@@ -332,6 +336,16 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
+		err = b.stlog.Step("Ensure Codesphere package on jumpbox", b.EnsureCodespherePackage)
+		if err != nil {
+			return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
+		}
+
+		err = b.stlog.Step("Install k0s", b.InstallK0s)
+		if err != nil {
+			return fmt.Errorf("failed to install k0s: %w", err)
+		}
+
 		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
 		if err != nil {
 			return fmt.Errorf("failed to install Codesphere: %w", err)
@@ -958,13 +972,30 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) InstallCodesphere() error {
+// EnsureCodespherePackage downloads or copies the Codesphere installer package onto the
+// jumpbox and records its filename for the subsequent k0s and Codesphere install steps.
+func (b *GCPBootstrapper) EnsureCodespherePackage() error {
 	fullPackageFilename, err := b.ensureCodespherePackageOnJumpbox()
 	if err != nil {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
+	b.packageFilename = fullPackageFilename
+	return nil
+}
 
-	err = b.runInstallCommand(fullPackageFilename)
+// InstallK0s deploys the k0s cluster from the jumpbox using the Codesphere package's
+// bundled k0s binary. The bootstrap now owns cluster creation (instead of the installer's
+// internal "kubernetes" step, which is skipped in runInstallCommand), so this must run
+// before the Codesphere application install. EnsureCodespherePackage must run first.
+func (b *GCPBootstrapper) InstallK0s() error {
+	b.stlog.Logf("Installing k0s cluster...")
+	installCmd := fmt.Sprintf("oms install k0s --install-config %s --package %s",
+		remoteInstallConfigPath, b.packageFilename)
+	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
+}
+
+func (b *GCPBootstrapper) InstallCodesphere() error {
+	err := b.runInstallCommand(b.packageFilename)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
@@ -1015,7 +1046,11 @@ func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 }
 
 func (b *GCPBootstrapper) generateSkipStepsArg() string {
-	skipSteps := b.Env.InstallSkipSteps
+	skipSteps := append([]string{}, b.Env.InstallSkipSteps...)
+	// The k0s cluster is created by the standalone "Install k0s" bootstrap step, so the
+	// installer must skip its own "kubernetes" (cluster creation) step. The post-cluster
+	// component steps (set-up-cluster, codesphere, ms-backends) still run.
+	skipSteps = append(skipSteps, "kubernetes")
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		skipSteps = append(skipSteps, "load-container-images")
 	}
