@@ -21,6 +21,7 @@ type K0sctlManager interface {
 	Download(version string, force bool, quiet bool) (string, error)
 	Apply(configPath string, k0sctlPath string, force bool) error
 	Reset(configPath string, k0sctlPath string) error
+	GetKubeconfig(configPath string, k0sctlPath string) (string, error)
 }
 
 type K0sctl struct {
@@ -154,4 +155,24 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 
 	log.Println("k0sctl reset completed successfully")
 	return nil
+}
+
+func (k *K0sctl) GetKubeconfig(configPath string, k0sctlPath string) (string, error) {
+	if !k.FileWriter.Exists(k0sctlPath) {
+		return "", fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
+	}
+
+	if !k.FileWriter.Exists(configPath) {
+		return "", fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
+	}
+
+	args := []string{"kubeconfig", "--config", configPath}
+
+	log.Printf("Retrieving kubeconfig from k0sctl...")
+	output, err := util.RunCommandWithOutput(k0sctlPath, args, "")
+	if err != nil {
+		return "", fmt.Errorf("k0sctl kubeconfig failed: %w", err)
+	}
+
+	return output, nil
 }

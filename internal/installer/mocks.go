@@ -1390,6 +1390,72 @@ func (_c *MockK0sctlManager_Download_Call) RunAndReturn(run func(version string,
 	return _c
 }
 
+// GetKubeconfig provides a mock function for the type MockK0sctlManager
+func (_mock *MockK0sctlManager) GetKubeconfig(configPath string, k0sctlPath string) (string, error) {
+	ret := _mock.Called(configPath, k0sctlPath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetKubeconfig")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (string, error)); ok {
+		return returnFunc(configPath, k0sctlPath)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = returnFunc(configPath, k0sctlPath)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(configPath, k0sctlPath)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockK0sctlManager_GetKubeconfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetKubeconfig'
+type MockK0sctlManager_GetKubeconfig_Call struct {
+	*mock.Call
+}
+
+// GetKubeconfig is a helper method to define mock.On call
+//   - configPath string
+//   - k0sctlPath string
+func (_e *MockK0sctlManager_Expecter) GetKubeconfig(configPath interface{}, k0sctlPath interface{}) *MockK0sctlManager_GetKubeconfig_Call {
+	return &MockK0sctlManager_GetKubeconfig_Call{Call: _e.mock.On("GetKubeconfig", configPath, k0sctlPath)}
+}
+
+func (_c *MockK0sctlManager_GetKubeconfig_Call) Run(run func(configPath string, k0sctlPath string)) *MockK0sctlManager_GetKubeconfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockK0sctlManager_GetKubeconfig_Call) Return(s string, err error) *MockK0sctlManager_GetKubeconfig_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockK0sctlManager_GetKubeconfig_Call) RunAndReturn(run func(configPath string, k0sctlPath string) (string, error)) *MockK0sctlManager_GetKubeconfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetLatestVersion provides a mock function for the type MockK0sctlManager
 func (_mock *MockK0sctlManager) GetLatestVersion() (string, error) {
 	ret := _mock.Called()
