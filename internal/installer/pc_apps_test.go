@@ -88,7 +88,16 @@ var _ = Describe("PCApps.Install", func() {
 
 		It("returns an error when UpgradeChart fails", func() {
 			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.Anything).
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ReleaseName == "pc-applications" &&
+					cfg.ChartName == expectedChartURL &&
+					cfg.Namespace == namespace &&
+					cfg.Version == version &&
+					cfg.CreateNamespace
+			}), installer.UpgradeChartOptions{
+				InstallIfNotExist: true,
+				ForceConflicts:    false,
+			}).
 				Return(errors.New("upgrade conflict"))
 
 			err := pcApps.Install(context.Background())

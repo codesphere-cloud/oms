@@ -77,6 +77,7 @@ func AddPCAppsCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 			{Cmd: "--version 1.0.0", Desc: "Install a specific version"},
 			{Cmd: "--version 1.0.0 -f base.yaml -f dc-overlay.yaml", Desc: "Install with custom values files"},
 			{Cmd: "--version 1.0.0 --namespace custom-ns", Desc: "Install into a custom namespace"},
+			{Cmd: "--version 1.0.0 --force-conflicts", Desc: "Force SSA ownership conflicts during install or upgrade"},
 		}),
 	}
 	pcApps.cmd.Flags().StringVar(&pcApps.Opts.Version, "version", "", "Chart version to install (required)")
