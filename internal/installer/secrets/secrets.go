@@ -87,17 +87,9 @@ func EnsureServiceAccountTokens(vault *files.InstallVault) error {
 		return fmt.Errorf("tokenPrivateKey not found in vault; call EnsureAuthKeys first")
 	}
 
-	block, _ := pem.Decode([]byte(privKeyEntry.File.Content))
-	if block == nil {
-		return fmt.Errorf("failed to PEM-decode tokenPrivateKey")
-	}
-	rawKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	rsaKey, err := ParseRSAPrivateKey(privKeyEntry.File.Content)
 	if err != nil {
 		return fmt.Errorf("parse tokenPrivateKey: %w", err)
-	}
-	rsaKey, ok := rawKey.(*rsa.PrivateKey)
-	if !ok {
-		return fmt.Errorf("tokenPrivateKey is not an RSA key")
 	}
 
 	expiresAt := time.Now().Add(serviceAccountTokenExpiry)
