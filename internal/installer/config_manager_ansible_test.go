@@ -382,8 +382,8 @@ k8s-workers:
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `k8s-cp:
-				hosts:
-					cs-k8s-cp-1:`
+	hosts:
+	  cs-k8s-cp-1:`
 				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
 
 				_, err = file.Write([]byte(inputInventory))
@@ -401,9 +401,9 @@ k8s-workers:
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `k8s-cp:
-				hosts:
-				cs-k8s-cp-1:
-				private_up: 1`
+	hosts:
+	  cs-k8s-cp-1:
+	    private_up: 1`
 				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
 
 				_, err = file.Write([]byte(inputInventory))
