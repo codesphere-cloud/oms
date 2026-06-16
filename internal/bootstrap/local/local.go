@@ -493,7 +493,7 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	recipient, keyPath, err := installer.ResolveAgeKey(filepath.Dir(b.Env.SecretsFilePath))
+	recipient, keyPath, err := installer.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
