@@ -4,12 +4,9 @@
 package files
 
 import (
-	"fmt"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
-
-	"github.com/codesphere-cloud/oms/internal/codesphere"
 )
 
 // Vault
@@ -75,10 +72,6 @@ type RootConfig struct {
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
 	Operations             *OperationsConfig             `yaml:"operations,omitempty"`
-
-	// ExtraSecrets holds vault entries not covered by a specific merge step.
-	// They are preserved through MergeVaultIntoConfig → ExtractVault round-trips.
-	ExtraSecrets []SecretEntry `yaml:"-"`
 }
 
 type OperationsConfig struct {
@@ -100,10 +93,6 @@ type RegistryConfig struct {
 	Server              string `yaml:"server"`
 	ReplaceImagesInBom  bool   `yaml:"replaceImagesInBom"`
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
-
-	// Stored separately in vault
-	Username string `yaml:"-"`
-	Password string `yaml:"-"`
 }
 
 type PostgresConfig struct {
@@ -115,21 +104,12 @@ type PostgresConfig struct {
 	AltName       string                 `yaml:"altName,omitempty"`
 	Port          int                    `yaml:"port,omitempty"`
 	Database      string                 `yaml:"database,omitempty"`
-
-	// Stored separately in vault
-	CaCertPrivateKey  string            `yaml:"-"`
-	AdminPassword     string            `yaml:"-"`
-	ReplicaPassword   string            `yaml:"-"`
-	ReplicaPrivateKey string            `yaml:"-"`
-	UserPasswords     map[string]string `yaml:"-"`
 }
 
 type PostgresPrimaryConfig struct {
 	SSLConfig SSLConfig `yaml:"sslConfig"`
 	IP        string    `yaml:"ip"`
 	Hostname  string    `yaml:"hostname"`
-
-	PrivateKey string `yaml:"-"`
 }
 
 type PostgresReplicaConfig struct {
@@ -148,8 +128,6 @@ type CephConfig struct {
 	NodesSubnet   string     `yaml:"nodesSubnet"`
 	Hosts         []CephHost `yaml:"hosts"`
 	OSDs          []CephOSD  `yaml:"osds"`
-
-	SshPrivateKey string `yaml:"-"`
 }
 
 type CephSSHKey struct {
@@ -211,8 +189,6 @@ type ClusterConfig struct {
 	BarmanCloudPlugin   *BarmanCloudPluginConfig   `yaml:"BarmanCloudPluginConfig,omitempty"`
 	RgwLoadBalancer     *RgwLoadBalancerConfig     `yaml:"rgwLoadBalancer,omitempty"`
 	Kyverno             *KyvernoConfig             `yaml:"kyverno,omitempty"`
-
-	IngressCAKey string `yaml:"-"`
 }
 
 type ClusterCertificates struct {
@@ -234,8 +210,7 @@ type ACMEConfig struct {
 	PrivateKeySecretName string     `yaml:"-"`
 	Solver               ACMESolver `yaml:"-"`
 
-	EABKeyID  string `yaml:"eabKeyId,omitempty"`
-	EABMacKey string `yaml:"-"`
+	EABKeyID string `yaml:"eabKeyId,omitempty"`
 }
 
 type ACMESolver struct {
@@ -342,9 +317,6 @@ type CodesphereConfig struct {
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
 	TelemetryExport            *TelemetryExport       `yaml:"telemetryExport,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
-
-	DomainAuthPrivateKey string `yaml:"-"`
-	DomainAuthPublicKey  string `yaml:"-"`
 }
 
 type MigrationConfig struct {
@@ -362,8 +334,6 @@ type OpenBaoConfig struct {
 	Engine string `yaml:"engine,omitempty"`
 	URI    string `yaml:"uri,omitempty"`
 	User   string `yaml:"user,omitempty"`
-
-	Password string `yaml:"-"`
 }
 
 type OAuthProvidersConfig struct {
@@ -376,9 +346,6 @@ type OidcOAuthProvider struct {
 	Name      string   `yaml:"name"`
 	IssuerURL string   `yaml:"issuerUrl"`
 	Scopes    []string `yaml:"scopes,omitempty"`
-
-	ClientID     string `yaml:"-"`
-	ClientSecret string `yaml:"-"`
 }
 
 type CertIssuerType string
@@ -533,9 +500,6 @@ type OAuthConfig struct {
 	Scope                 string `yaml:"scope,omitempty"`
 	RedirectURI           string `yaml:"redirectUri,omitempty"`
 	InstallationURI       string `yaml:"installationUri,omitempty"`
-
-	ClientID     string `yaml:"-"`
-	ClientSecret string `yaml:"-"`
 }
 
 type ManagedServiceConfig struct {
@@ -688,376 +652,6 @@ func (c *RootConfig) ExtractBomRefs() []string {
 	}
 
 	return bomRefs
-}
-
-func (c *RootConfig) ExtractVault() *InstallVault {
-	vault := &InstallVault{
-		Secrets: []SecretEntry{},
-	}
-
-	c.AddSecretsToVault(vault)
-	return vault
-}
-
-func (c *RootConfig) AddSecretsToVault(vault *InstallVault) *InstallVault {
-	c.addCodesphereSecrets(vault)
-	c.addIngressCASecret(vault)
-	c.addACMESecrets(vault)
-	c.addCephSecrets(vault)
-	c.addPostgresSecrets(vault)
-	c.addManagedServiceSecrets(vault)
-	c.addRegistrySecrets(vault)
-	c.addKubeConfigSecret(vault)
-	c.addOpenBaoSecrets(vault)
-	c.addMonitoringSecrets(vault)
-	c.addExtraSecrets(vault)
-
-	return vault
-}
-
-func (c *RootConfig) addExtraSecrets(vault *InstallVault) {
-	for _, s := range c.ExtraSecrets {
-		if vault.GetSecret(s.Name) == nil {
-			vault.Secrets = append(vault.Secrets, s)
-		}
-	}
-}
-
-func (c *RootConfig) addCodesphereSecrets(vault *InstallVault) {
-	if c.Codesphere.DomainAuthPrivateKey != "" {
-		vault.Secrets = append(vault.Secrets,
-			SecretEntry{
-				Name: codesphere.Secrets["domainAuthPrivateKey"],
-				File: &SecretFile{
-					Name:    "key.pem",
-					Content: c.Codesphere.DomainAuthPrivateKey,
-				},
-			},
-			SecretEntry{
-				Name: codesphere.Secrets["domainAuthPublicKey"],
-				File: &SecretFile{
-					Name:    "key.pem",
-					Content: c.Codesphere.DomainAuthPublicKey,
-				},
-			},
-		)
-	}
-
-	// OIDC OAuth secrets
-	if c.Codesphere.OAuth != nil && c.Codesphere.OAuth.Oidc != nil {
-		if c.Codesphere.OAuth.Oidc.ClientID != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["oidcClientId"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.OAuth.Oidc.ClientID,
-				},
-			})
-		}
-		if c.Codesphere.OAuth.Oidc.ClientSecret != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["oidcClientSecret"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.OAuth.Oidc.ClientSecret,
-				},
-			})
-		}
-	}
-
-	// GitHub secrets
-	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.GitHub != nil {
-		if c.Codesphere.GitProviders.GitHub.OAuth.ClientID != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["githubAppsClientId"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.GitProviders.GitHub.OAuth.ClientID,
-				},
-			})
-		}
-		if c.Codesphere.GitProviders.GitHub.OAuth.ClientSecret != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["githubAppsClientSecret"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.GitProviders.GitHub.OAuth.ClientSecret,
-				},
-			})
-		}
-	}
-
-	// GitLab secrets
-	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.GitLab != nil {
-		if c.Codesphere.GitProviders.GitLab.OAuth.ClientID != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["gitlabAppClientId"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.GitProviders.GitLab.OAuth.ClientID,
-				},
-			})
-		}
-		if c.Codesphere.GitProviders.GitLab.OAuth.ClientSecret != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["gitlabAppClientSecret"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.GitProviders.GitLab.OAuth.ClientSecret,
-				},
-			})
-		}
-	}
-
-	// Bitbucket secrets
-	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.Bitbucket != nil {
-		if c.Codesphere.GitProviders.Bitbucket.OAuth.ClientID != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["bitbucketAppsClientId"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.GitProviders.Bitbucket.OAuth.ClientID,
-				},
-			})
-		}
-		if c.Codesphere.GitProviders.Bitbucket.OAuth.ClientSecret != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["bitbucketAppsClientSecret"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.GitProviders.Bitbucket.OAuth.ClientSecret,
-				},
-			})
-		}
-	}
-
-	// Azure DevOps secrets
-	if c.Codesphere.GitProviders != nil && c.Codesphere.GitProviders.AzureDevOps != nil {
-		if c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientID != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["azureDevOpsAppClientId"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientID,
-				},
-			})
-		}
-		if c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientSecret != "" {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: codesphere.Secrets["azureDevOpsAppClientSecret"],
-				Fields: &SecretFields{
-					Password: c.Codesphere.GitProviders.AzureDevOps.OAuth.ClientSecret,
-				},
-			})
-		}
-	}
-}
-
-func (c *RootConfig) addIngressCASecret(vault *InstallVault) {
-	if c.Cluster.IngressCAKey != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: codesphere.Secrets["selfSignedCaKeyPem"],
-			File: &SecretFile{
-				Name:    "key.pem",
-				Content: c.Cluster.IngressCAKey,
-			},
-		})
-	}
-}
-
-func (c *RootConfig) addMonitoringSecrets(vault *InstallVault) {
-	if c.Cluster.Monitoring != nil &&
-		c.Cluster.Monitoring.GrafanaAlloy != nil &&
-		c.Cluster.Monitoring.GrafanaAlloy.Loki != nil {
-		loki := c.Cluster.Monitoring.GrafanaAlloy.Loki
-		if loki.Password != "" {
-			vault.SetSecret(SecretEntry{
-				Name: codesphere.Secrets["lokiGatewayBasicAuthPassword"],
-				Fields: &SecretFields{
-					Password: loki.Password,
-				},
-			})
-		}
-	}
-
-	if c.Cluster.Monitoring != nil && c.Cluster.Monitoring.CentralOtelExport != nil {
-		if c.Cluster.Monitoring.CentralOtelExport.Username != "" && c.Cluster.Monitoring.CentralOtelExport.Password != "" {
-			vault.SetSecret(SecretEntry{
-				Name: "centralOtelCreds",
-				Fields: &SecretFields{
-					Username: c.Cluster.Monitoring.CentralOtelExport.Username,
-					Password: c.Cluster.Monitoring.CentralOtelExport.Password,
-				},
-			})
-		}
-	}
-
-	if c.Cluster.Monitoring != nil && c.Cluster.Monitoring.Prometheus != nil && c.Cluster.Monitoring.Prometheus.RemoteWrite != nil {
-		if c.Cluster.Monitoring.Prometheus.RemoteWrite.Username != "" && c.Cluster.Monitoring.Prometheus.RemoteWrite.Password != "" {
-			vault.SetSecret(SecretEntry{
-				Name: "promRemoteWriteUser",
-				Fields: &SecretFields{
-					Password: c.Cluster.Monitoring.Prometheus.RemoteWrite.Username,
-				},
-			})
-
-			vault.SetSecret(SecretEntry{
-				Name: "promRemoteWritePassword",
-				Fields: &SecretFields{
-					Password: c.Cluster.Monitoring.Prometheus.RemoteWrite.Password,
-				},
-			})
-		}
-	}
-}
-
-func (c *RootConfig) addACMESecrets(vault *InstallVault) {
-	if c.Codesphere.CertIssuer.Acme == nil || !c.Codesphere.CertIssuer.Acme.Enabled {
-		return
-	}
-
-	if c.Codesphere.CertIssuer.Acme.EABMacKey != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: codesphere.Secrets["acmeEabMacKey"],
-			Fields: &SecretFields{
-				Password: c.Codesphere.CertIssuer.Acme.EABMacKey,
-			},
-		})
-	}
-
-	if c.Codesphere.CertIssuer.Acme.Solver.DNS01 != nil {
-		for key, value := range c.Codesphere.CertIssuer.Acme.Solver.DNS01.Secrets {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: fmt.Sprintf("acmeDNS01%s", Capitalize(key)),
-				Fields: &SecretFields{
-					Password: value,
-				},
-			})
-		}
-	}
-}
-
-func (c *RootConfig) addCephSecrets(vault *InstallVault) {
-	if c.Ceph.SshPrivateKey != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: codesphere.Secrets["cephSshPrivateKey"],
-			File: &SecretFile{
-				Name:    "id_rsa",
-				Content: c.Ceph.SshPrivateKey,
-			},
-		})
-	}
-}
-
-func (c *RootConfig) addPostgresSecrets(vault *InstallVault) {
-	if c.Postgres.Primary == nil {
-		return
-	}
-
-	if c.Postgres.CaCertPrivateKey != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: codesphere.Secrets["postgresCaKeyPem"],
-			File: &SecretFile{
-				Name:    "ca.key",
-				Content: c.Postgres.CaCertPrivateKey,
-			},
-		})
-	}
-
-	if c.Postgres.AdminPassword != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: codesphere.Secrets["postgresPassword"],
-			Fields: &SecretFields{
-				Password: c.Postgres.AdminPassword,
-			},
-		})
-	}
-
-	if c.Postgres.Primary.PrivateKey != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: codesphere.Secrets["postgresPrimaryServerKeyPem"],
-			File: &SecretFile{
-				Name:    "primary.key",
-				Content: c.Postgres.Primary.PrivateKey,
-			},
-		})
-	}
-
-	if c.Postgres.ReplicaPassword != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: codesphere.Secrets["postgresReplicaPassword"],
-			Fields: &SecretFields{
-				Password: c.Postgres.ReplicaPassword,
-			},
-		})
-	}
-
-	vault.Secrets = append(vault.Secrets, SecretEntry{
-		Name: codesphere.Secrets["postgresReplicaServerKeyPem"],
-		File: &SecretFile{
-			Name:    "replica.key",
-			Content: c.Postgres.ReplicaPrivateKey,
-		},
-	})
-
-	for _, svc := range codesphere.PostgresServices {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: fmt.Sprintf("postgresUser%s", Capitalize(svc.Name)),
-			Fields: &SecretFields{
-				Password: svc.DBUsername(),
-			},
-		})
-		if password, ok := c.Postgres.UserPasswords[svc.Name]; ok {
-			vault.Secrets = append(vault.Secrets, SecretEntry{
-				Name: fmt.Sprintf("postgresPassword%s", Capitalize(svc.Name)),
-				Fields: &SecretFields{
-					Password: password,
-				},
-			})
-		}
-	}
-}
-
-func (c *RootConfig) addManagedServiceSecrets(vault *InstallVault) {
-	vault.Secrets = append(vault.Secrets, SecretEntry{
-		Name: codesphere.Secrets["managedServiceSecrets"],
-		Fields: &SecretFields{
-			Password: "[]",
-		},
-	})
-}
-
-func (c *RootConfig) addRegistrySecrets(vault *InstallVault) {
-	if c.Registry.Server != "" {
-		vault.Secrets = append(vault.Secrets,
-			SecretEntry{
-				Name: codesphere.Secrets["registryUsername"],
-				Fields: &SecretFields{
-					Password: c.Registry.Username,
-				},
-			},
-			SecretEntry{
-				Name: codesphere.Secrets["registryPassword"],
-				Fields: &SecretFields{
-					Password: c.Registry.Password,
-				},
-			},
-		)
-	}
-}
-
-func (c *RootConfig) addKubeConfigSecret(vault *InstallVault) {
-	if c.Kubernetes.NeedsKubeConfig {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: codesphere.Secrets["kubeConfig"],
-			File: &SecretFile{
-				Name:    "kubeConfig",
-				Content: "# YOUR KUBECONFIG CONTENT HERE\n# Replace this with your actual kubeconfig for the external cluster\n",
-			},
-		})
-	}
-}
-
-func (c *RootConfig) addOpenBaoSecrets(vault *InstallVault) {
-	if c.Codesphere.OpenBao != nil && c.Codesphere.OpenBao.Password != "" {
-		vault.Secrets = append(vault.Secrets, SecretEntry{
-			Name: codesphere.Secrets["openBaoPassword"],
-			Fields: &SecretFields{
-				Password: c.Codesphere.OpenBao.Password,
-			},
-		})
-	}
 }
 
 func Capitalize(s string) string {

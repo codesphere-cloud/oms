@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -190,7 +191,11 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 			return err
 		}
 
-		if !newSa && b.Env.InstallConfig.Registry.Password != "" {
+		existingRegPwd := ""
+		if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
+			existingRegPwd = s.Fields.Password
+		}
+		if !newSa && existingRegPwd != "" {
 			return nil
 		}
 
@@ -206,8 +211,8 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 				continue
 			}
 
-			b.Env.InstallConfig.Registry.Password = string(privateKey)
-			b.Env.InstallConfig.Registry.Username = "_json_key_base64"
+			b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: string(privateKey)}})
+			b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "_json_key_base64"}})
 
 			break
 		}

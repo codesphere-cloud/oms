@@ -282,7 +282,6 @@ var _ = Describe("Installconfig & Secrets", func() {
 			It("loads existing secrets file", func() {
 				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
 				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
-				icg.EXPECT().MergeVaultIntoConfig().Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -308,22 +307,14 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err.Error()).To(ContainSubstring("failed to load vault file"))
 				Expect(err.Error()).To(ContainSubstring("load error"))
 			})
-
-			It("returns error when merge fails", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
-				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
-				icg.EXPECT().MergeVaultIntoConfig().Return(fmt.Errorf("merge error"))
-
-				err := bs.EnsureSecrets()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to merge vault into config"))
-				Expect(err.Error()).To(ContainSubstring("merge error"))
-			})
 		})
 	})
 
 	Describe("UpdateInstallConfig", func() {
+		var vault *files.InstallVault
 		BeforeEach(func() {
+			vault = &files.InstallVault{}
+			icg.EXPECT().GetVault().Return(vault)
 			csEnv.GitHubAppName = "fake-app-name"
 		})
 		Describe("Valid UpdateInstallConfig", func() {
@@ -450,8 +441,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.TokenEndpoint).To(Equal("https://gitlab.com/oauth/token"))
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.ClientAuthMethod).To(Equal("client_secret_post"))
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.RedirectURI).To(Equal("https://cs.example.com/ide/auth/gitlab/callback"))
-					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.ClientID).To(Equal("gitlab-app-client-id"))
-					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitLab.OAuth.ClientSecret).To(Equal("gitlab-app-client-secret"))
+					Expect(vault.GetSecret(files.SecretGitlabAppClientId).Fields.Password).To(Equal("gitlab-app-client-id"))
+					Expect(vault.GetSecret(files.SecretGitlabAppClientSecret).Fields.Password).To(Equal("gitlab-app-client-secret"))
 				})
 			})
 
@@ -492,8 +483,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.TokenEndpoint).To(Equal("https://bitbucket.org/site/oauth2/access_token"))
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.ClientAuthMethod).To(Equal("client_secret_post"))
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.RedirectURI).To(Equal("https://cs.example.com/ide/auth/bitbucket/callback"))
-					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.ClientID).To(Equal("bitbucket-app-client-id"))
-					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.Bitbucket.OAuth.ClientSecret).To(Equal("bitbucket-app-client-secret"))
+					Expect(vault.GetSecret(files.SecretBitbucketAppsClientId).Fields.Password).To(Equal("bitbucket-app-client-id"))
+					Expect(vault.GetSecret(files.SecretBitbucketAppsClientSecret).Fields.Password).To(Equal("bitbucket-app-client-secret"))
 				})
 			})
 
@@ -535,8 +526,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.ClientAuthMethod).To(Equal("client_secret_post"))
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.Scope).To(Equal("openid offline_access https://app.vssps.visualstudio.com/vso.code_full"))
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.RedirectURI).To(Equal("https://cs.example.com/ide/auth/azure-dev-ops/callback"))
-					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.ClientID).To(Equal("azure-devops-app-client-id"))
-					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.ClientSecret).To(Equal("azure-devops-app-client-secret"))
+					Expect(vault.GetSecret(files.SecretAzureDevOpsAppClientId).Fields.Password).To(Equal("azure-devops-app-client-id"))
+					Expect(vault.GetSecret(files.SecretAzureDevOpsAppClientSecret).Fields.Password).To(Equal("azure-devops-app-client-secret"))
 				})
 			})
 
@@ -577,8 +568,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Name).To(Equal("MyIDP"))
 					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.IssuerURL).To(Equal("https://dev-idp.example.com"))
 					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Scopes).To(Equal([]string{"openid", "profile", "email"}))
-					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.ClientID).To(Equal("oidc-client-id"))
-					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.ClientSecret).To(Equal("oidc-client-secret"))
+					Expect(vault.GetSecret(files.SecretOidcClientId).Fields.Password).To(Equal("oidc-client-id"))
+					Expect(vault.GetSecret(files.SecretOidcClientSecret).Fields.Password).To(Equal("oidc-client-secret"))
 				})
 			})
 
@@ -704,7 +695,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.Server).To(Equal("https://dv.acme-v02.api.pki.goog/directory"))
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.EABKeyID).To(Equal("fake-eab-key-id"))
-					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.EABMacKey).To(Equal("fake-eab-mac-key"))
+					Expect(vault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password).To(Equal("fake-eab-mac-key"))
 
 					issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
 					httpIssuer := issuers["letsEncryptHttp"].(map[string]interface{})
@@ -737,7 +728,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.URI).To(Equal("https://openbao.example.com"))
-					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.Password).To(Equal("fake-password"))
+					Expect(vault.GetSecret(files.SecretOpenBaoPassword).Fields.Password).To(Equal("fake-password"))
 					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.User).To(Equal("fake-username"))
 					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.Engine).To(Equal("fake-engine"))
 				})
@@ -979,16 +970,16 @@ var _ = Describe("Installconfig & Secrets", func() {
 					key, cert, err := secrets.GenerateServerCertificate(caKey, caCert, "postgres", []string{"10.0.0.1"})
 					Expect(err).NotTo(HaveOccurred())
 
-					csEnv.InstallConfig.Postgres.CaCertPrivateKey = caKey
+					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresCaKeyPem, File: &files.SecretFile{Name: "ca.key", Content: caKey}})
+					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPrimaryServerKeyPem, File: &files.SecretFile{Name: "primary.key", Content: key}})
 					csEnv.InstallConfig.Postgres.CACertPem = caCert
 					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.1"
 					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
-					csEnv.InstallConfig.Postgres.Primary.PrivateKey = key
 					csEnv.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem = cert
 				})
 
 				It("preserves existing cert/key without regeneration", func() {
-					origKey := csEnv.InstallConfig.Postgres.Primary.PrivateKey
+					origKey := vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem).File.Content
 					origCert := csEnv.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem
 
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
@@ -999,7 +990,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					icg.AssertNotCalled(GinkgoT(), "GenerateSecrets")
-					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).To(Equal(origKey))
+					Expect(vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem).File.Content).To(Equal(origKey))
 					Expect(bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem).To(Equal(origCert))
 				})
 			})
@@ -1012,16 +1003,16 @@ var _ = Describe("Installconfig & Secrets", func() {
 					key, cert, err := secrets.GenerateServerCertificate(caKey, caCert, "postgres", []string{"10.0.0.99"})
 					Expect(err).NotTo(HaveOccurred())
 
-					csEnv.InstallConfig.Postgres.CaCertPrivateKey = caKey
+					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresCaKeyPem, File: &files.SecretFile{Name: "ca.key", Content: caKey}})
+					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPrimaryServerKeyPem, File: &files.SecretFile{Name: "primary.key", Content: key}})
 					csEnv.InstallConfig.Postgres.CACertPem = caCert
 					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.99"
 					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
-					csEnv.InstallConfig.Postgres.Primary.PrivateKey = key
 					csEnv.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem = cert
 				})
 
 				It("regenerates cert/key for the new IP", func() {
-					origKey := csEnv.InstallConfig.Postgres.Primary.PrivateKey
+					origKey := vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem).File.Content
 
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -1032,13 +1023,14 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					// IP should be updated to the PostgreSQLNode's InternalIP ("10.0.0.1" from fakeNode)
 					Expect(bs.Env.InstallConfig.Postgres.Primary.IP).To(Equal("10.0.0.1"))
-					// Key should be regenerated
-					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).NotTo(Equal(origKey))
-					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).NotTo(BeEmpty())
+					// Key should be regenerated in vault
+					newKey := vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem).File.Content
+					Expect(newKey).NotTo(Equal(origKey))
+					Expect(newKey).NotTo(BeEmpty())
 					// New cert/key should match
 					err = secrets.ValidateCertKeyPair(
 						bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem,
-						bs.Env.InstallConfig.Postgres.Primary.PrivateKey,
+						newKey,
 					)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -1049,11 +1041,10 @@ var _ = Describe("Installconfig & Secrets", func() {
 					caKey, caCert, err := secrets.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
 					Expect(err).NotTo(HaveOccurred())
 
-					csEnv.InstallConfig.Postgres.CaCertPrivateKey = caKey
+					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresCaKeyPem, File: &files.SecretFile{Name: "ca.key", Content: caKey}})
 					csEnv.InstallConfig.Postgres.CACertPem = caCert
 					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.1"
 					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
-					csEnv.InstallConfig.Postgres.Primary.PrivateKey = ""
 				})
 
 				It("generates new cert/key pair", func() {
@@ -1064,11 +1055,13 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).NotTo(BeEmpty())
+					newKey := vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem)
+					Expect(newKey).NotTo(BeNil())
+					Expect(newKey.File.Content).NotTo(BeEmpty())
 					Expect(bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem).NotTo(BeEmpty())
 					err = secrets.ValidateCertKeyPair(
 						bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem,
-						bs.Env.InstallConfig.Postgres.Primary.PrivateKey,
+						newKey.File.Content,
 					)
 					Expect(err).NotTo(HaveOccurred())
 				})
@@ -1076,17 +1069,15 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 			Context("with missing CA cert (cert generation fails)", func() {
 				BeforeEach(func() {
-					csEnv.InstallConfig.Postgres.CaCertPrivateKey = ""
 					csEnv.InstallConfig.Postgres.CACertPem = ""
 					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.1"
 					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
-					csEnv.InstallConfig.Postgres.Primary.PrivateKey = ""
 				})
 
 				It("returns an error", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to generate primary server certificate"))
+					Expect(err.Error()).To(ContainSubstring("postgres CA key not found in vault"))
 				})
 			})
 		})

@@ -724,7 +724,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("loads existing secrets file", func() {
 				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
 				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
-				icg.EXPECT().MergeVaultIntoConfig().Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -749,17 +748,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to load vault file"))
 				Expect(err.Error()).To(ContainSubstring("load error"))
-			})
-
-			It("returns error when merge fails", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
-				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
-				icg.EXPECT().MergeVaultIntoConfig().Return(fmt.Errorf("merge error"))
-
-				err := bs.EnsureSecrets()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to merge vault into config"))
-				Expect(err.Error()).To(ContainSubstring("merge error"))
 			})
 		})
 	})
@@ -801,6 +789,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureLocalContainerRegistry", func() {
 		Describe("Valid EnsureLocalContainerRegistry", func() {
 			It("installs local registry", func() {
+				vault := &files.InstallVault{}
+				icg.EXPECT().GetVault().Return(vault)
+
 				// Setup mocked node
 				// Check if running - return error to simulate not running
 				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", mock.MatchedBy(func(cmd string) bool {
@@ -815,7 +806,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.EnsureLocalContainerRegistry()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(bs.Env.InstallConfig.Registry.Username).To(Equal("custom-registry"))
+				Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal("custom-registry"))
 			})
 		})
 
@@ -833,6 +824,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				}
 
 				icg = installer.NewMockInstallConfigManager(GinkgoT())
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 				gc = gcp.NewMockGCPClientManager(GinkgoT())
 				fw = util.NewMockFileIO(GinkgoT())
 			})
@@ -935,11 +927,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.RegistryUser = "custom-registry"
 		})
 		It("sets configuration options in installconfig", func() {
+			vault := &files.InstallVault{}
+			icg.EXPECT().GetVault().Return(vault)
+
 			err := bs.EnsureGitHubAccessConfigured()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
-			Expect(bs.Env.InstallConfig.Registry.Username).To(Equal(csEnv.RegistryUser))
-			Expect(bs.Env.InstallConfig.Registry.Password).To(Equal(csEnv.GitHubPAT))
+			Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal(csEnv.RegistryUser))
+			Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal(csEnv.GitHubPAT))
 			Expect(bs.Env.InstallConfig.Registry.LoadContainerImages).To(BeFalse())
 			Expect(bs.Env.InstallConfig.Registry.ReplaceImagesInBom).To(BeFalse())
 		})

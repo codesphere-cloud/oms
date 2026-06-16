@@ -77,7 +77,7 @@ var codesphereServiceUsers = []serviceUser{
 // and stores them in vault. Requires tokenPrivateKey to already be present (call EnsureAuthKeys
 // first). Idempotent: skips if authServiceUserToken already exists.
 func EnsureServiceAccountTokens(vault *files.InstallVault) error {
-	privKeyEntry := vault.GetSecret(codesphere.Secrets["tokenPrivateKey"])
+	privKeyEntry := vault.GetSecret(files.SecretTokenPrivateKey)
 	if privKeyEntry == nil || privKeyEntry.File == nil {
 		return fmt.Errorf("tokenPrivateKey not found in vault; call EnsureAuthKeys first")
 	}
@@ -116,22 +116,22 @@ func EnsureServiceAccountTokens(vault *files.InstallVault) error {
 // EnsureAuthKeys generates RSA-4096 token keys and EC P-256 domain-auth keys in
 // PKCS8/SPKI PEM format if not already present. Each key pair is checked independently.
 func EnsureAuthKeys(vault *files.InstallVault) error {
-	if vault.GetSecret(codesphere.Secrets["tokenPrivateKey"]) == nil {
+	if vault.GetSecret(files.SecretTokenPrivateKey) == nil {
 		tokenPriv, tokenPub, err := generateRSAPKCS8KeyPair(4096)
 		if err != nil {
 			return fmt.Errorf("generate token key pair: %w", err)
 		}
-		vault.SetSecret(files.SecretEntry{Name: codesphere.Secrets["tokenPrivateKey"], File: &files.SecretFile{Name: "key.pem", Content: tokenPriv}})
-		vault.SetSecret(files.SecretEntry{Name: codesphere.Secrets["tokenPublicKey"], File: &files.SecretFile{Name: "key.pub", Content: tokenPub}})
+		vault.SetSecret(files.SecretEntry{Name: files.SecretTokenPrivateKey, File: &files.SecretFile{Name: "key.pem", Content: tokenPriv}})
+		vault.SetSecret(files.SecretEntry{Name: files.SecretTokenPublicKey, File: &files.SecretFile{Name: "key.pub", Content: tokenPub}})
 	}
 
-	if vault.GetSecret(codesphere.Secrets["domainAuthPrivateKey"]) == nil {
+	if vault.GetSecret(files.SecretDomainAuthPrivateKey) == nil {
 		domainPriv, domainPub, err := GenerateECDSAKeyPair()
 		if err != nil {
 			return fmt.Errorf("generate domain auth key pair: %w", err)
 		}
-		vault.SetSecret(files.SecretEntry{Name: codesphere.Secrets["domainAuthPrivateKey"], File: &files.SecretFile{Name: "key.pem", Content: domainPriv}})
-		vault.SetSecret(files.SecretEntry{Name: codesphere.Secrets["domainAuthPublicKey"], File: &files.SecretFile{Name: "key.pub", Content: domainPub}})
+		vault.SetSecret(files.SecretEntry{Name: files.SecretDomainAuthPrivateKey, File: &files.SecretFile{Name: "key.pem", Content: domainPriv}})
+		vault.SetSecret(files.SecretEntry{Name: files.SecretDomainAuthPublicKey, File: &files.SecretFile{Name: "key.pub", Content: domainPub}})
 	}
 
 	return nil
@@ -140,14 +140,14 @@ func EnsureAuthKeys(vault *files.InstallVault) error {
 // EnsureMounterHmacSecret migrates the legacy 'hmac-secret' to 'mounterHmacSecret'
 // or creates a new 64-character hex secret if neither exists. Idempotent.
 func EnsureMounterHmacSecret(vault *files.InstallVault) error {
-	if vault.GetSecret(codesphere.Secrets["mounterHmacSecret"]) != nil {
+	if vault.GetSecret(files.SecretMounterHmacSecret) != nil {
 		return nil
 	}
 
 	// Migrate from legacy name if present.
 	if old := vault.GetSecret("hmac-secret"); old != nil && old.Fields != nil {
 		vault.SetSecret(files.SecretEntry{
-			Name:   codesphere.Secrets["mounterHmacSecret"],
+			Name:   files.SecretMounterHmacSecret,
 			Fields: &files.SecretFields{Password: old.Fields.Password},
 		})
 		return nil
@@ -158,7 +158,7 @@ func EnsureMounterHmacSecret(vault *files.InstallVault) error {
 		return fmt.Errorf("read random bytes: %w", err)
 	}
 	vault.SetSecret(files.SecretEntry{
-		Name:   codesphere.Secrets["mounterHmacSecret"],
+		Name:   files.SecretMounterHmacSecret,
 		Fields: &files.SecretFields{Password: hex.EncodeToString(b)},
 	})
 	return nil
@@ -167,7 +167,7 @@ func EnsureMounterHmacSecret(vault *files.InstallVault) error {
 // EnsureNixSigningKeys generates an Ed25519 signing key pair for nix-cache in the
 // format "host:hexKey" if not already present. Idempotent.
 func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
-	if vault.GetSecret(codesphere.Secrets["privNixSigningKey"]) != nil {
+	if vault.GetSecret(files.SecretPrivNixSigningKey) != nil {
 		return nil
 	}
 
@@ -176,11 +176,11 @@ func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
 		return fmt.Errorf("generate ed25519 key pair: %w", err)
 	}
 	vault.SetSecret(files.SecretEntry{
-		Name:   codesphere.Secrets["privNixSigningKey"],
+		Name:   files.SecretPrivNixSigningKey,
 		Fields: &files.SecretFields{Password: fmt.Sprintf("%s:%s", host, hex.EncodeToString(priv.Seed()))},
 	})
 	vault.SetSecret(files.SecretEntry{
-		Name:   codesphere.Secrets["pubNixSigningKey"],
+		Name:   files.SecretPubNixSigningKey,
 		Fields: &files.SecretFields{Password: fmt.Sprintf("%s:%s", host, hex.EncodeToString(pub))},
 	})
 	return nil
@@ -191,27 +191,27 @@ func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
 // set when absent.
 func EnsureDefaultSecrets(vault *files.InstallVault) error {
 	// Always overwrite — not used in private cloud but must not be empty.
-	setPassword(vault, codesphere.Secrets["digitalOceanApiToken"], "dummy")
+	setPassword(vault, files.SecretDigitalOceanApiToken, "dummy")
 
 	for _, name := range optionalPasswordSecrets {
 		setPasswordIfAbsent(vault, name, "dummy")
 	}
 
 	// Requires a valid AES key: base64(hex(16 random bytes)).
-	if vault.GetSecret(codesphere.Secrets["mongoDbPasswordEncryptionKey"]) == nil {
+	if vault.GetSecret(files.SecretMongoDbPasswordEncryptionKey) == nil {
 		b := make([]byte, 16)
 		if _, err := rand.Read(b); err != nil {
 			return fmt.Errorf("generate mongodb encryption key: %w", err)
 		}
-		setPassword(vault, codesphere.Secrets["mongoDbPasswordEncryptionKey"], base64.StdEncoding.EncodeToString([]byte(hex.EncodeToString(b))))
+		setPassword(vault, files.SecretMongoDbPasswordEncryptionKey, base64.StdEncoding.EncodeToString([]byte(hex.EncodeToString(b))))
 	}
 
 	// Requires a valid JSON array string.
-	setPasswordIfAbsent(vault, codesphere.Secrets["managedServiceSecrets"], "[]")
+	setPasswordIfAbsent(vault, files.SecretManagedServiceSecrets, "[]")
 
-	if vault.GetSecret(codesphere.Secrets["googleCloudAvatarPrivateKey"]) == nil {
+	if vault.GetSecret(files.SecretGoogleCloudAvatarPrivateKey) == nil {
 		vault.SetSecret(files.SecretEntry{
-			Name: codesphere.Secrets["googleCloudAvatarPrivateKey"],
+			Name: files.SecretGoogleCloudAvatarPrivateKey,
 			File: &files.SecretFile{Name: "dummy", Content: "dummy"},
 		})
 	}
@@ -222,37 +222,37 @@ func EnsureDefaultSecrets(vault *files.InstallVault) error {
 // optionalPasswordSecrets are set to "dummy" only when absent. They are not required for
 // private cloud but must be present for the Helm chart to render.
 var optionalPasswordSecrets = []string{
-	codesphere.Secrets["githubAppsClientId"],
-	codesphere.Secrets["githubAppsClientSecret"],
-	codesphere.Secrets["gitlabAppClientId"],
-	codesphere.Secrets["gitlabAppClientSecret"],
-	codesphere.Secrets["bitbucketAppsClientId"],
-	codesphere.Secrets["bitbucketAppsClientSecret"],
-	codesphere.Secrets["azureDevOpsAppClientId"],
-	codesphere.Secrets["azureDevOpsAppClientSecret"],
-	codesphere.Secrets["googleCloudVmImagesPrivateKey"],
-	codesphere.Secrets["googleClientId"],
-	codesphere.Secrets["googleClientSecret"],
-	codesphere.Secrets["googleCloudAvatarBucket"],
-	codesphere.Secrets["googleCloudAvatarClientEmail"],
-	codesphere.Secrets["googleCloudAvatarProjectId"],
-	codesphere.Secrets["gitHubClientId"],
-	codesphere.Secrets["gitHubClientSecret"],
-	codesphere.Secrets["gitlabClientId"],
-	codesphere.Secrets["gitlabClientSecret"],
-	codesphere.Secrets["bitbucketClientId"],
-	codesphere.Secrets["bitbucketClientSecret"],
-	codesphere.Secrets["recaptchaKey"],
-	codesphere.Secrets["recaptchaSecret"],
-	codesphere.Secrets["recaptchaKeyV3"],
-	codesphere.Secrets["recaptchaSecretV3"],
-	codesphere.Secrets["recaptchaClientEmailV3"],
-	codesphere.Secrets["recaptchaProjectIdV3"],
-	codesphere.Secrets["stripeWebhookEndpointSecret"],
-	codesphere.Secrets["stripePublishableKey"],
-	codesphere.Secrets["stripeSecretKey"],
-	codesphere.Secrets["sendGridApiKey"],
-	codesphere.Secrets["openBaoPassword"],
+	files.SecretGithubAppsClientId,
+	files.SecretGithubAppsClientSecret,
+	files.SecretGitlabAppClientId,
+	files.SecretGitlabAppClientSecret,
+	files.SecretBitbucketAppsClientId,
+	files.SecretBitbucketAppsClientSecret,
+	files.SecretAzureDevOpsAppClientId,
+	files.SecretAzureDevOpsAppClientSecret,
+	files.SecretGoogleCloudVmImagesPrivateKey,
+	files.SecretGoogleClientId,
+	files.SecretGoogleClientSecret,
+	files.SecretGoogleCloudAvatarBucket,
+	files.SecretGoogleCloudAvatarClientEmail,
+	files.SecretGoogleCloudAvatarProjectId,
+	files.SecretGitHubClientId,
+	files.SecretGitHubClientSecret,
+	files.SecretGitlabClientId,
+	files.SecretGitlabClientSecret,
+	files.SecretBitbucketClientId,
+	files.SecretBitbucketClientSecret,
+	files.SecretRecaptchaKey,
+	files.SecretRecaptchaSecret,
+	files.SecretRecaptchaKeyV3,
+	files.SecretRecaptchaSecretV3,
+	files.SecretRecaptchaClientEmailV3,
+	files.SecretRecaptchaProjectIdV3,
+	files.SecretStripeWebhookEndpointSecret,
+	files.SecretStripePublishableKey,
+	files.SecretStripeSecretKey,
+	files.SecretSendGridApiKey,
+	files.SecretOpenBaoPassword,
 }
 
 func setPassword(vault *files.InstallVault, name, password string) {
@@ -290,7 +290,7 @@ func generateRSAPKCS8KeyPair(bits int) (privatePEM, publicPEM string, err error)
 // EnsureIngressCA generates the cluster ingress CA if not already present in vault.
 // The CA private key is written to vault; the cert PEM is set on cluster.Certificates.CA.CertPem.
 func EnsureIngressCA(vault *files.InstallVault, cluster *files.ClusterConfig) error {
-	if vault.GetSecret(codesphere.Secrets["selfSignedCaKeyPem"]) != nil {
+	if vault.GetSecret(files.SecretSelfSignedCaKeyPem) != nil {
 		return nil
 	}
 	keyPEM, certPEM, err := GenerateCA("Cluster Ingress CA", "DE", "Karlsruhe", "Codesphere")
@@ -298,7 +298,7 @@ func EnsureIngressCA(vault *files.InstallVault, cluster *files.ClusterConfig) er
 		return fmt.Errorf("generate ingress CA: %w", err)
 	}
 	vault.SetSecret(files.SecretEntry{
-		Name: codesphere.Secrets["selfSignedCaKeyPem"],
+		Name: files.SecretSelfSignedCaKeyPem,
 		File: &files.SecretFile{Name: "key.pem", Content: keyPEM},
 	})
 	cluster.Certificates.CA.CertPem = certPEM
@@ -308,7 +308,7 @@ func EnsureIngressCA(vault *files.InstallVault, cluster *files.ClusterConfig) er
 // EnsureCephSSHKeys generates the Ceph SSH key pair if not already present in vault.
 // The private key is written to vault; the public key is set on ceph.CephAdmSSHKey.PublicKey.
 func EnsureCephSSHKeys(vault *files.InstallVault, ceph *files.CephConfig) error {
-	if vault.GetSecret(codesphere.Secrets["cephSshPrivateKey"]) != nil {
+	if vault.GetSecret(files.SecretCephSshPrivateKey) != nil {
 		return nil
 	}
 	privKey, pubKey, err := GenerateSSHKeyPair()
@@ -316,7 +316,7 @@ func EnsureCephSSHKeys(vault *files.InstallVault, ceph *files.CephConfig) error 
 		return fmt.Errorf("generate ceph SSH keys: %w", err)
 	}
 	vault.SetSecret(files.SecretEntry{
-		Name: codesphere.Secrets["cephSshPrivateKey"],
+		Name: files.SecretCephSshPrivateKey,
 		File: &files.SecretFile{Name: "id_rsa", Content: privKey},
 	})
 	ceph.CephAdmSSHKey.PublicKey = pubKey
@@ -327,7 +327,7 @@ func EnsureCephSSHKeys(vault *files.InstallVault, ceph *files.CephConfig) error 
 // in vault (sentinel: postgresPassword). Private keys and passwords are written to vault;
 // cert PEMs are set on the postgres config struct for inclusion in the config YAML.
 func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresConfig) error {
-	if vault.GetSecret(codesphere.Secrets["postgresPassword"]) != nil {
+	if vault.GetSecret(files.SecretPostgresPassword) != nil {
 		return nil
 	}
 
@@ -356,10 +356,10 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 	if err != nil {
 		return fmt.Errorf("generate postgres replica password: %w", err)
 	}
-	vault.SetSecret(files.SecretEntry{Name: codesphere.Secrets["postgresCaKeyPem"], File: &files.SecretFile{Name: "ca.key", Content: caKeyPEM}})
-	vault.SetSecret(files.SecretEntry{Name: codesphere.Secrets["postgresPassword"], Fields: &files.SecretFields{Password: adminPwd}})
-	vault.SetSecret(files.SecretEntry{Name: codesphere.Secrets["postgresReplicaPassword"], Fields: &files.SecretFields{Password: replicaPwd}})
-	vault.SetSecret(files.SecretEntry{Name: codesphere.Secrets["postgresPrimaryServerKeyPem"], File: &files.SecretFile{Name: "primary.key", Content: primaryKeyPEM}})
+	vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresCaKeyPem, File: &files.SecretFile{Name: "ca.key", Content: caKeyPEM}})
+	vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPassword, Fields: &files.SecretFields{Password: adminPwd}})
+	vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaPassword, Fields: &files.SecretFields{Password: replicaPwd}})
+	vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPrimaryServerKeyPem, File: &files.SecretFile{Name: "primary.key", Content: primaryKeyPEM}})
 
 	postgres.CACertPem = caCertPEM
 	postgres.Primary.SSLConfig.ServerCertPem = primaryCertPEM
@@ -376,7 +376,7 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 		if err := ValidateCertKeyPair(replicaCertPEM, replicaKeyPEM); err != nil {
 			return fmt.Errorf("validate postgres replica cert/key: %w", err)
 		}
-		vault.SetSecret(files.SecretEntry{Name: codesphere.Secrets["postgresReplicaServerKeyPem"], File: &files.SecretFile{Name: "replica.key", Content: replicaKeyPEM}})
+		vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaServerKeyPem, File: &files.SecretFile{Name: "replica.key", Content: replicaKeyPEM}})
 		postgres.Replica.SSLConfig.ServerCertPem = replicaCertPEM
 	}
 
