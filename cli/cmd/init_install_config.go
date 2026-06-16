@@ -117,10 +117,15 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 			Note: When --interactive=true (default), all other configuration flags are ignored 
 			and you will be prompted for all settings interactively.
 			
+			Note: When using ansible-inventory make sure the inventory follows our supported structure.
+			Supported YAML format (where 'hosts' is a dictionary of hostname keys):
+			- <k8s-cp|k8s-workers|ceph>.hosts.<hostname>.private_ip
+
 			Supports configuration profiles for common scenarios:
 			- dev: Single-node development setup
 			- production: HA multi-node setup
-			- minimal: Minimal testing setup`),
+			- minimal: Minimal testing setup
+			`),
 			Example: formatExamples("init install-config", []csio.Example{
 				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
 				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},

@@ -1,6 +1,8 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// package installer
+// This file provides functions to read an ansible inventory during config init to fetch host information.
 package installer
 
 import (
@@ -13,12 +15,14 @@ import (
 
 type ansibleInventory map[string]map[string]map[string]any
 
+// FetchFromAnsibleInventory parses the ansible inventory file and tries to fetch ceph and k8s host from it.
+// Host info are added to the current install config.
+// Returns an error if inventory file can't be red or is invalid.
 func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 	if g.Config == nil {
 		g.Config = &files.RootConfig{}
 	}
 
-	// Read Ansible inventory file
 	data, err := os.ReadFile(inventoryPath)
 	if err != nil {
 		return fmt.Errorf("failed to read Ansible inventory file: %w", err)
@@ -35,7 +39,7 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		return fmt.Errorf("empty Ansible inventory file")
 	}
 
-	cephHosts, err := fetchCephHostsFromInventory(inventory)
+	cephHosts, err := fetchCephHosts(inventory)
 	if err != nil {
 		return fmt.Errorf("failed to fetch ceph hosts from inventory: %w", err)
 	}
@@ -44,12 +48,12 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config.Ceph.Hosts = cephHosts
 	}
 
-	k8sCPHosts := fetchK8sControlPlaneHostsFromInventory(inventory)
+	k8sCPHosts := fetchK8sControlPlaneHosts(inventory)
 	if len(k8sCPHosts) > 0 {
 		g.Config.Kubernetes.ControlPlanes = k8sCPHosts
 	}
 
-	k8sWorkerHosts := fetchK8sWorkerHostsFromInventory(inventory)
+	k8sWorkerHosts := fetchK8sWorkerHosts(inventory)
 	if len(k8sWorkerHosts) > 0 {
 		g.Config.Kubernetes.Workers = k8sWorkerHosts
 	}
@@ -57,8 +61,17 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 	return nil
 }
 
-// fetchCephHostsFromInventory extracts Ceph host information from the Ansible inventory.
-func fetchCephHostsFromInventory(inventory ansibleInventory) ([]files.CephHost, error) {
+// fetchCephHosts extracts Ceph hosts from the ansible inventory.
+// The first ceph host parsed is considered as the master.
+// Supported YAML format:
+// ceph:
+//
+//	hosts:
+//	  host-name-1:
+//	    private_ip: "10.0.0.1"
+//	  host-name-2:
+//	    private_ip: "10.0.0.2"
+func fetchCephHosts(inventory ansibleInventory) ([]files.CephHost, error) {
 	hosts := []files.CephHost{}
 
 	// check if ceph exists in inventory
@@ -97,15 +110,30 @@ func fetchCephHostsFromInventory(inventory ansibleInventory) ([]files.CephHost, 
 	return hosts, nil
 }
 
-func fetchK8sControlPlaneHostsFromInventory(inventory ansibleInventory) []files.K8sNode {
-	return fetchKubernetesHostsFromInventory("k8s-cp", inventory)
+// fetchK8sControlPlaneHosts extracts K8s control plane hosts from the ansible inventory
+// Supported YAML format:
+// k8s-cp:
+//
+//	hosts:
+//	  - my-host-name:
+//	      private_ip: "10.0.0.1"
+func fetchK8sControlPlaneHosts(inventory ansibleInventory) []files.K8sNode {
+	return fetchKubernetesHosts("k8s-cp", inventory)
 }
 
-func fetchK8sWorkerHostsFromInventory(inventory ansibleInventory) []files.K8sNode {
-	return fetchKubernetesHostsFromInventory("k8s-workers", inventory)
+// fetchK8sWorkerHosts extracts K8s worker hosts from the ansible inventory
+// Supported YAML format:
+// k8s-workers:
+//
+//	hosts:
+//	  - my-host-name:
+//	      private_ip: "10.0.0.1"
+func fetchK8sWorkerHosts(inventory ansibleInventory) []files.K8sNode {
+	return fetchKubernetesHosts("k8s-workers", inventory)
 }
 
-func fetchKubernetesHostsFromInventory(parentTag string, inventory ansibleInventory) []files.K8sNode {
+// fetchKubernetesHosts extract hosts from the given parentTag
+func fetchKubernetesHosts(parentTag string, inventory ansibleInventory) []files.K8sNode {
 	hosts := []files.K8sNode{}
 
 	// check if parentTag exists in inventory

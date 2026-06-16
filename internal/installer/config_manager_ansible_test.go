@@ -12,13 +12,11 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	// . "github.com/codesphere-cloud/oms/internal/util/testing"
 )
 
 var _ = Describe("ConfigManagerAnsible", func() {
 	var (
-		manager installer.InstallConfigManager
-
+		manager           installer.InstallConfigManager
 		tempDir           string
 		inventoryFilePath string
 	)
