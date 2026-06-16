@@ -49,7 +49,11 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config.Ceph.Hosts = cephHosts
 	}
 
-	k8sCPHosts := fetchK8sControlPlaneHosts(inventory)
+	k8sCPHosts, err := fetchK8sControlPlaneHosts(inventory)
+	if err != nil {
+		return fmt.Errorf("failed to fetch k8s control plane hosts from inventory: %w", err)
+	}
+
 	if len(k8sCPHosts) > 0 {
 		if len(g.Config.Kubernetes.ControlPlanes) > 0 {
 			return fmt.Errorf("k8s control plane nodes are already set. Adjust flags or inventory")
@@ -57,8 +61,15 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config.Kubernetes.ControlPlanes = k8sCPHosts
 	}
 
-	k8sWorkerHosts := fetchK8sWorkerHosts(inventory)
+	k8sWorkerHosts, err := fetchK8sWorkerHosts(inventory)
+	if err != nil {
+		return fmt.Errorf("failed to fetch k8s worker node hosts from inventory: %w", err)
+	}
+
 	if len(k8sWorkerHosts) > 0 {
+		if len(g.Config.Kubernetes.Workers) > 0 {
+			return fmt.Errorf("k8s worker nodes are already set. Adjust flags or inventory")
+		}
 		g.Config.Kubernetes.Workers = k8sWorkerHosts
 	}
 
@@ -119,7 +130,7 @@ func fetchCephHosts(inventory ansibleInventory) ([]files.CephHost, error) {
 //	hosts:
 //	  my-host-name:
 //	    private_ip: "10.0.0.1"
-func fetchK8sControlPlaneHosts(inventory ansibleInventory) []files.K8sNode {
+func fetchK8sControlPlaneHosts(inventory ansibleInventory) ([]files.K8sNode, error) {
 	return fetchKubernetesHosts("k8s-cp", inventory)
 }
 
@@ -130,32 +141,30 @@ func fetchK8sControlPlaneHosts(inventory ansibleInventory) []files.K8sNode {
 //	hosts:
 //	  my-host-name:
 //	    private_ip: "10.0.0.1"
-func fetchK8sWorkerHosts(inventory ansibleInventory) []files.K8sNode {
+func fetchK8sWorkerHosts(inventory ansibleInventory) ([]files.K8sNode, error) {
 	return fetchKubernetesHosts("k8s-workers", inventory)
 }
 
 // fetchKubernetesHosts extract hosts from the given parentTag
-func fetchKubernetesHosts(parentTag string, inventory ansibleInventory) []files.K8sNode {
+func fetchKubernetesHosts(parentTag string, inventory ansibleInventory) ([]files.K8sNode, error) {
 	hosts := []files.K8sNode{}
 
 	// check if parentTag exists in inventory
 	k8sGroup, ok := inventory[parentTag]
 	if !ok {
-		return hosts
+		return hosts, nil
 	}
 
 	// check if hosts exists in inventory
 	hostsGroup, ok := k8sGroup["hosts"]
 	if !ok {
-		return hosts
+		return hosts, nil
 	}
 
 	for _, key := range getSortedHostsGroupKeys(hostsGroup) {
-		hostVars := hostsGroup[key]
-
-		privateIP := ""
-		if vars, ok := hostVars.(map[string]any); ok {
-			privateIP = vars["private_ip"].(string)
+		privateIP := fetchHostVarsValue("private_ip", hostsGroup[key])
+		if privateIP == "" {
+			return nil, fmt.Errorf("missing private_ip for k8s host '%s'", key)
 		}
 
 		host := files.K8sNode{
@@ -164,7 +173,7 @@ func fetchKubernetesHosts(parentTag string, inventory ansibleInventory) []files.
 		hosts = append(hosts, host)
 	}
 
-	return hosts
+	return hosts, nil
 }
 
 func getSortedHostsGroupKeys(group map[string]any) []string {
