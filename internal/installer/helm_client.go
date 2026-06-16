@@ -265,4 +265,3 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 
 	return nil
 }
-

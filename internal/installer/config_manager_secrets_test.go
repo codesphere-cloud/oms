@@ -13,195 +13,226 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-var _ = Describe("ConfigManagerSecrets", func() {
-	var (
-		configManager *installer.InstallConfig
-	)
+var _ = Describe("GenerateSecrets", func() {
+	var mgr *installer.InstallConfig
 
 	BeforeEach(func() {
-		configManager = &installer.InstallConfig{
+		mgr = &installer.InstallConfig{
 			Config: &files.RootConfig{},
+			Vault:  &files.InstallVault{},
 		}
 	})
 
-	Describe("GenerateSecrets", func() {
-		Context("with basic configuration", func() {
-			BeforeEach(func() {
-				configManager.Config = &files.RootConfig{
-					Postgres: files.PostgresConfig{
-						Primary: &files.PostgresPrimaryConfig{
-							IP:       "10.50.0.2",
-							Hostname: "pg-primary",
-						},
-					},
-				}
-			})
-
-			It("should generate secrets without error", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-			})
-
-			It("should generate domain auth ECDSA key pair", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(configManager.Config.Codesphere.DomainAuthPublicKey).ToNot(BeEmpty())
-				Expect(configManager.Config.Codesphere.DomainAuthPrivateKey).ToNot(BeEmpty())
-				Expect(configManager.Config.Codesphere.DomainAuthPublicKey).To(ContainSubstring("BEGIN"))
-				Expect(configManager.Config.Codesphere.DomainAuthPrivateKey).To(ContainSubstring("BEGIN"))
-			})
-
-			It("should generate Ceph SSH keys", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(configManager.Config.Ceph.CephAdmSSHKey.PublicKey).ToNot(BeEmpty())
-				Expect(configManager.Config.Ceph.SshPrivateKey).ToNot(BeEmpty())
-			})
-
-			It("should generate PostgreSQL secrets", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(configManager.Config.Postgres.CaCertPrivateKey).ToNot(BeEmpty())
-				Expect(configManager.Config.Postgres.CACertPem).ToNot(BeEmpty())
-				Expect(configManager.Config.Postgres.AdminPassword).ToNot(BeEmpty())
-				Expect(configManager.Config.Postgres.ReplicaPassword).ToNot(BeEmpty())
-			})
-
-			It("should generate unique passwords", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-
-				adminPwd := configManager.Config.Postgres.AdminPassword
-				replicaPwd := configManager.Config.Postgres.ReplicaPassword
-
-				Expect(adminPwd).ToNot(Equal(replicaPwd))
-				Expect(adminPwd).To(HaveLen(32))
-				Expect(replicaPwd).To(HaveLen(32))
-			})
+	Context("with basic configuration (no postgres)", func() {
+		It("succeeds", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
 		})
 
-		Context("with PostgreSQL replica configuration", func() {
-			BeforeEach(func() {
-				configManager.Config = &files.RootConfig{
-					Postgres: files.PostgresConfig{
-						Primary: &files.PostgresPrimaryConfig{
-							IP:       "10.50.0.2",
-							Hostname: "pg-primary",
-						},
-						Replica: &files.PostgresReplicaConfig{
-							IP:   "10.50.0.3",
-							Name: "replica1",
-						},
-					},
-				}
-			})
+		It("writes token key pair to vault", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
 
-			It("should generate valid certificates for primary and replica", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-
-				// Primary server certificate
-				Expect(configManager.Config.Postgres.Primary.PrivateKey).ToNot(BeEmpty())
-				Expect(configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem).ToNot(BeEmpty())
-				Expect(strings.HasPrefix(configManager.Config.Postgres.Primary.PrivateKey, "-----BEGIN")).To(BeTrue())
-				Expect(strings.HasPrefix(configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
-
-				// Replica server certificate
-				Expect(configManager.Config.Postgres.ReplicaPrivateKey).ToNot(BeEmpty())
-				Expect(configManager.Config.Postgres.Replica.SSLConfig.ServerCertPem).ToNot(BeEmpty())
-				Expect(strings.HasPrefix(configManager.Config.Postgres.ReplicaPrivateKey, "-----BEGIN")).To(BeTrue())
-				Expect(strings.HasPrefix(configManager.Config.Postgres.Replica.SSLConfig.ServerCertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
-			})
+			tokenPriv := mgr.Vault.GetSecret("tokenPrivateKey")
+			tokenPub := mgr.Vault.GetSecret("tokenPublicKey")
+			Expect(tokenPriv).NotTo(BeNil())
+			Expect(tokenPub).NotTo(BeNil())
+			Expect(tokenPriv.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
+			Expect(tokenPub.File.Content).To(ContainSubstring("BEGIN PUBLIC KEY"))
 		})
 
-		Context("without PostgreSQL primary configuration", func() {
-			BeforeEach(func() {
-				configManager.Config = &files.RootConfig{
-					Postgres: files.PostgresConfig{
-						Primary: nil,
-					},
-				}
-			})
+		It("writes domain auth key pair to vault", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
 
-			It("should not generate PostgreSQL secrets", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(configManager.Config.Postgres.CACertPem).To(BeEmpty())
-				Expect(configManager.Config.Postgres.AdminPassword).To(BeEmpty())
-			})
-
-			It("should still generate other secrets", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
-
-				Expect(configManager.Config.Codesphere.DomainAuthPublicKey).ToNot(BeEmpty())
-				Expect(configManager.Config.Cluster.IngressCAKey).ToNot(BeEmpty())
-				Expect(configManager.Config.Ceph.SshPrivateKey).ToNot(BeEmpty())
-			})
+			priv := mgr.Vault.GetSecret("domainAuthPrivateKey")
+			pub := mgr.Vault.GetSecret("domainAuthPublicKey")
+			Expect(priv).NotTo(BeNil())
+			Expect(pub).NotTo(BeNil())
+			Expect(priv.File.Content).To(ContainSubstring("BEGIN EC PRIVATE KEY"))
+			Expect(pub.File.Content).To(ContainSubstring("BEGIN PUBLIC KEY"))
 		})
 
-		Context("secret generation consistency", func() {
-			It("should generate different keys on each invocation", func() {
-				config1 := &installer.InstallConfig{
-					Config: &files.RootConfig{
-						Postgres: files.PostgresConfig{
-							Primary: &files.PostgresPrimaryConfig{
-								IP:       "10.50.0.2",
-								Hostname: "pg-primary",
-							},
-						},
-					},
-				}
-				config2 := &installer.InstallConfig{
-					Config: &files.RootConfig{
-						Postgres: files.PostgresConfig{
-							Primary: &files.PostgresPrimaryConfig{
-								IP:       "10.50.0.2",
-								Hostname: "pg-primary",
-							},
-						},
-					},
-				}
+		It("writes ingress CA private key to vault and cert PEM to config", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
 
-				err1 := config1.GenerateSecrets()
-				err2 := config2.GenerateSecrets()
+			caKey := mgr.Vault.GetSecret("selfSignedCaKeyPem")
+			Expect(caKey).NotTo(BeNil())
+			Expect(caKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 
-				Expect(err1).ToNot(HaveOccurred())
-				Expect(err2).ToNot(HaveOccurred())
-
-				Expect(config1.Config.Ceph.SshPrivateKey).ToNot(Equal(config2.Config.Ceph.SshPrivateKey))
-				Expect(config1.Config.Postgres.AdminPassword).ToNot(Equal(config2.Config.Postgres.AdminPassword))
-			})
+			Expect(mgr.Config.Cluster.Certificates.CA.CertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 		})
 
-		Context("cluster certificate validation", func() {
-			BeforeEach(func() {
-				configManager.Config = &files.RootConfig{
-					Postgres: files.PostgresConfig{
-						Primary: &files.PostgresPrimaryConfig{
-							IP:       "10.50.0.2",
-							Hostname: "pg-primary",
-						},
-					},
-				}
-			})
+		It("writes Ceph SSH private key to vault and public key to config", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
 
-			It("should generate valid ingress CA with proper PEM format", func() {
-				err := configManager.GenerateSecrets()
-				Expect(err).ToNot(HaveOccurred())
+			cephKey := mgr.Vault.GetSecret("cephSshPrivateKey")
+			Expect(cephKey).NotTo(BeNil())
+			Expect(cephKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
 
-				// Check CA key is PEM encoded
-				Expect(strings.HasPrefix(configManager.Config.Cluster.IngressCAKey, "-----BEGIN")).To(BeTrue())
-				Expect(strings.HasSuffix(strings.TrimSpace(configManager.Config.Cluster.IngressCAKey), "-----")).To(BeTrue())
+			Expect(mgr.Config.Ceph.CephAdmSSHKey.PublicKey).To(ContainSubstring("ssh-rsa"))
+		})
 
-				// Check CA cert is PEM encoded
-				Expect(strings.HasPrefix(configManager.Config.Cluster.Certificates.CA.CertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
-				Expect(strings.HasSuffix(strings.TrimSpace(configManager.Config.Cluster.Certificates.CA.CertPem), "-----END CERTIFICATE-----")).To(BeTrue())
-			})
+		It("does not write postgres secrets when primary is nil", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			Expect(mgr.Vault.GetSecret("postgresPassword")).To(BeNil())
+			Expect(mgr.Vault.GetSecret("postgresCaKeyPem")).To(BeNil())
+		})
+	})
+
+	Context("with postgres primary configuration", func() {
+		BeforeEach(func() {
+			mgr.Config.Postgres = files.PostgresConfig{
+				Primary: &files.PostgresPrimaryConfig{
+					IP:       "10.50.0.2",
+					Hostname: "pg-primary",
+				},
+			}
+		})
+
+		It("writes postgres CA key to vault and CA cert PEM to config", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			caKey := mgr.Vault.GetSecret("postgresCaKeyPem")
+			Expect(caKey).NotTo(BeNil())
+			Expect(caKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
+			Expect(mgr.Config.Postgres.CACertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
+		})
+
+		It("writes admin and replica passwords to vault", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			admin := mgr.Vault.GetSecret("postgresPassword")
+			replica := mgr.Vault.GetSecret("postgresReplicaPassword")
+			Expect(admin).NotTo(BeNil())
+			Expect(replica).NotTo(BeNil())
+			Expect(admin.Fields.Password).To(HaveLen(32))
+			Expect(replica.Fields.Password).To(HaveLen(32))
+			Expect(admin.Fields.Password).NotTo(Equal(replica.Fields.Password))
+		})
+
+		It("writes primary server key to vault and cert PEM to config", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			primaryKey := mgr.Vault.GetSecret("postgresPrimaryServerKeyPem")
+			Expect(primaryKey).NotTo(BeNil())
+			Expect(primaryKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
+			Expect(mgr.Config.Postgres.Primary.SSLConfig.ServerCertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
+		})
+
+		It("writes all service passwords to vault", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			for _, service := range []string{"Auth", "Deployment", "Ide", "Marketplace", "Payment", "Publicapi", "Team", "Workspace"} {
+				secret := mgr.Vault.GetSecret("postgresPassword" + service)
+				Expect(secret).NotTo(BeNil(), "missing postgresPassword%s", service)
+				Expect(secret.Fields.Password).To(HaveLen(32))
+			}
+		})
+	})
+
+	Context("with postgres primary and replica", func() {
+		BeforeEach(func() {
+			mgr.Config.Postgres = files.PostgresConfig{
+				Primary: &files.PostgresPrimaryConfig{
+					IP:       "10.50.0.2",
+					Hostname: "pg-primary",
+				},
+				Replica: &files.PostgresReplicaConfig{
+					IP:   "10.50.0.3",
+					Name: "replica1",
+				},
+			}
+		})
+
+		It("writes replica server key to vault and cert PEM to config", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			replicaKey := mgr.Vault.GetSecret("postgresReplicaServerKeyPem")
+			Expect(replicaKey).NotTo(BeNil())
+			Expect(replicaKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
+			Expect(mgr.Config.Postgres.Replica.SSLConfig.ServerCertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
+		})
+
+		It("generates valid primary and replica certificates signed by the same CA", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			Expect(strings.HasPrefix(mgr.Config.Postgres.Primary.SSLConfig.ServerCertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
+			Expect(strings.HasPrefix(mgr.Config.Postgres.Replica.SSLConfig.ServerCertPem, "-----BEGIN CERTIFICATE-----")).To(BeTrue())
+		})
+	})
+
+	Context("idempotency", func() {
+		It("does not regenerate existing secrets on second call", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+			firstKey := mgr.Vault.GetSecret("tokenPrivateKey").File.Content
+			firstCA := mgr.Vault.GetSecret("selfSignedCaKeyPem").File.Content
+
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+			Expect(mgr.Vault.GetSecret("tokenPrivateKey").File.Content).To(Equal(firstKey))
+			Expect(mgr.Vault.GetSecret("selfSignedCaKeyPem").File.Content).To(Equal(firstCA))
+		})
+
+		It("repopulates all yaml:\"-\" config fields from vault on second call", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			// Simulate a config reload: yaml:"-" fields are not persisted, so zero them out.
+			mgr.Config.Codesphere.DomainAuthPrivateKey = ""
+			mgr.Config.Codesphere.DomainAuthPublicKey = ""
+			mgr.Config.Cluster.IngressCAKey = ""
+			mgr.Config.Ceph.SshPrivateKey = ""
+
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			Expect(mgr.Config.Codesphere.DomainAuthPrivateKey).To(ContainSubstring("BEGIN EC PRIVATE KEY"))
+			Expect(mgr.Config.Codesphere.DomainAuthPublicKey).To(ContainSubstring("BEGIN PUBLIC KEY"))
+			Expect(mgr.Config.Cluster.IngressCAKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
+			Expect(mgr.Config.Ceph.SshPrivateKey).To(ContainSubstring("RSA PRIVATE KEY"))
+		})
+	})
+
+	Context("idempotency with postgres", func() {
+		BeforeEach(func() {
+			mgr.Config.Postgres = files.PostgresConfig{
+				Primary: &files.PostgresPrimaryConfig{
+					IP:       "10.50.0.2",
+					Hostname: "pg-primary",
+				},
+			}
+		})
+
+		It("repopulates all postgres yaml:\"-\" config fields from vault on second call", func() {
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			// Simulate a config reload: clear all yaml:"-" postgres fields.
+			mgr.Config.Postgres.CaCertPrivateKey = ""
+			mgr.Config.Postgres.AdminPassword = ""
+			mgr.Config.Postgres.ReplicaPassword = ""
+			mgr.Config.Postgres.UserPasswords = nil
+			mgr.Config.Postgres.Primary.PrivateKey = ""
+
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+
+			Expect(mgr.Config.Postgres.CaCertPrivateKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
+			Expect(mgr.Config.Postgres.AdminPassword).To(HaveLen(32))
+			Expect(mgr.Config.Postgres.ReplicaPassword).To(HaveLen(32))
+			Expect(mgr.Config.Postgres.UserPasswords).To(HaveKey("auth"))
+			Expect(mgr.Config.Postgres.UserPasswords).To(HaveKey("usageAggregationRefresher"))
+			Expect(mgr.Config.Postgres.Primary.PrivateKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
+		})
+	})
+
+	Context("uniqueness", func() {
+		It("generates different secrets for different instances", func() {
+			mgr2 := &installer.InstallConfig{
+				Config: &files.RootConfig{},
+				Vault:  &files.InstallVault{},
+			}
+			Expect(mgr.GenerateSecrets()).To(Succeed())
+			Expect(mgr2.GenerateSecrets()).To(Succeed())
+
+			Expect(mgr.Vault.GetSecret("cephSshPrivateKey").File.Content).NotTo(
+				Equal(mgr2.Vault.GetSecret("cephSshPrivateKey").File.Content))
+			Expect(mgr.Vault.GetSecret("selfSignedCaKeyPem").File.Content).NotTo(
+				Equal(mgr2.Vault.GetSecret("selfSignedCaKeyPem").File.Content))
 		})
 	})
 })

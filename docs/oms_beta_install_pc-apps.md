@@ -28,11 +28,15 @@ $ oms beta install pc-apps --version 1.0.0 -f base.yaml -f dc-overlay.yaml
 # Install into a custom namespace
 $ oms beta install pc-apps --version 1.0.0 --namespace custom-ns
 
+# Force SSA ownership conflicts during install or upgrade
+$ oms beta install pc-apps --version 1.0.0 --force-conflicts
+
 ```
 
 ### Options
 
 ```
+      --force-conflicts      Force field ownership conflicts during install or upgrade (sets server-side apply ForceConflicts)
   -h, --help                 help for pc-apps
       --namespace string     Target namespace for the Helm release (default "argocd")
   -f, --values stringArray   Path to values YAML file (can be specified multiple times, merged in order)

@@ -16,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -972,10 +973,10 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 			Context("with unchanged IP and existing key", func() {
 				BeforeEach(func() {
-					caKey, caCert, err := installer.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
+					caKey, caCert, err := secrets.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
 					Expect(err).NotTo(HaveOccurred())
 
-					key, cert, err := installer.GenerateServerCertificate(caKey, caCert, "postgres", []string{"10.0.0.1"})
+					key, cert, err := secrets.GenerateServerCertificate(caKey, caCert, "postgres", []string{"10.0.0.1"})
 					Expect(err).NotTo(HaveOccurred())
 
 					csEnv.InstallConfig.Postgres.CaCertPrivateKey = caKey
@@ -1005,10 +1006,10 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 			Context("with changed IP", func() {
 				BeforeEach(func() {
-					caKey, caCert, err := installer.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
+					caKey, caCert, err := secrets.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
 					Expect(err).NotTo(HaveOccurred())
 
-					key, cert, err := installer.GenerateServerCertificate(caKey, caCert, "postgres", []string{"10.0.0.99"})
+					key, cert, err := secrets.GenerateServerCertificate(caKey, caCert, "postgres", []string{"10.0.0.99"})
 					Expect(err).NotTo(HaveOccurred())
 
 					csEnv.InstallConfig.Postgres.CaCertPrivateKey = caKey
@@ -1035,7 +1036,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).NotTo(Equal(origKey))
 					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).NotTo(BeEmpty())
 					// New cert/key should match
-					err = installer.ValidateCertKeyPair(
+					err = secrets.ValidateCertKeyPair(
 						bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem,
 						bs.Env.InstallConfig.Postgres.Primary.PrivateKey,
 					)
@@ -1045,7 +1046,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 			Context("with empty PrivateKey (not loaded from vault)", func() {
 				BeforeEach(func() {
-					caKey, caCert, err := installer.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
+					caKey, caCert, err := secrets.GenerateCA("Test CA", "DE", "Berlin", "TestOrg")
 					Expect(err).NotTo(HaveOccurred())
 
 					csEnv.InstallConfig.Postgres.CaCertPrivateKey = caKey
@@ -1065,7 +1066,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					Expect(bs.Env.InstallConfig.Postgres.Primary.PrivateKey).NotTo(BeEmpty())
 					Expect(bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem).NotTo(BeEmpty())
-					err = installer.ValidateCertKeyPair(
+					err = secrets.ValidateCertKeyPair(
 						bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem,
 						bs.Env.InstallConfig.Postgres.Primary.PrivateKey,
 					)

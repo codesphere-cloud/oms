@@ -180,7 +180,7 @@ func (g *InstallConfig) ValidateVault() []string {
 	}
 
 	errors := []string{}
-	requiredSecrets := []string{"cephSshPrivateKey", "selfSignedCaKeyPem", "domainAuthPrivateKey", "domainAuthPublicKey"}
+	requiredSecrets := []string{"tokenPrivateKey", "tokenPublicKey", "cephSshPrivateKey", "selfSignedCaKeyPem", "domainAuthPrivateKey", "domainAuthPublicKey"}
 	foundSecrets := make(map[string]bool)
 
 	for _, secret := range g.Vault.Secrets {
@@ -341,7 +341,7 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 
 	// PostgreSQL user passwords
 	g.Config.Postgres.UserPasswords = make(map[string]string)
-	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace"}
+	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace", "usageAggregationRefresher", "usageAggregationReader"}
 	for _, service := range services {
 		secretName := fmt.Sprintf("postgresPassword%s", files.Capitalize(service))
 		if secret, ok := secretsMap[secretName]; ok && secret.Fields != nil {
@@ -377,11 +377,13 @@ func (g *InstallConfig) MergeVaultIntoConfig() error {
 	}
 
 	// GitHub secrets
-	if secret, ok := secretsMap["githubAppsClientId"]; ok && secret.Fields != nil {
-		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientID = secret.Fields.Password
-	}
-	if secret, ok := secretsMap["githubAppsClientSecret"]; ok && secret.Fields != nil {
-		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientSecret = secret.Fields.Password
+	if g.Config.Codesphere.GitProviders != nil && g.Config.Codesphere.GitProviders.GitHub != nil {
+		if secret, ok := secretsMap["githubAppsClientId"]; ok && secret.Fields != nil {
+			g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientID = secret.Fields.Password
+		}
+		if secret, ok := secretsMap["githubAppsClientSecret"]; ok && secret.Fields != nil {
+			g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientSecret = secret.Fields.Password
+		}
 	}
 
 	// ACME secrets

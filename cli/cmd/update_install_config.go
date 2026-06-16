@@ -11,6 +11,7 @@ import (
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -386,7 +387,7 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, tra
 		log.Println("  - Regenerating PostgreSQL primary server certificate...")
 
 		var err error
-		config.Postgres.Primary.PrivateKey, config.Postgres.Primary.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
+		config.Postgres.Primary.PrivateKey, config.Postgres.Primary.SSLConfig.ServerCertPem, err = secrets.GenerateServerCertificate(
 			config.Postgres.CaCertPrivateKey,
 			config.Postgres.CACertPem,
 			config.Postgres.Primary.Hostname,
@@ -401,7 +402,7 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, tra
 		log.Println("  - Regenerating PostgreSQL replica server certificate...")
 
 		var err error
-		config.Postgres.ReplicaPrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
+		config.Postgres.ReplicaPrivateKey, config.Postgres.Replica.SSLConfig.ServerCertPem, err = secrets.GenerateServerCertificate(
 			config.Postgres.CaCertPrivateKey,
 			config.Postgres.CACertPem,
 			config.Postgres.Replica.Name,
