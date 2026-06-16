@@ -226,6 +226,7 @@ func (b *LocalBootstrapper) Bootstrap() error {
 }
 
 func (b *LocalBootstrapper) BootstrapArgoCD() error {
+	// renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
 	install, err := argocd.NewInstaller(argocd.InstallerConfig{
 		Version:        "9.5.21",
 		OciPassword:    b.Env.RegistryPassword,

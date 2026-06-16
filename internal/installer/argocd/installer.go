@@ -143,6 +143,7 @@ func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) erro
 	return nil
 }
 
+// upgrade validates the version constraint and then performs a Helm upgrade.
 func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, existing *installer.ReleaseInfo) error {
 	log.Printf("Found existing ArgoCD release with chart version %s\n", existing.InstalledVersion)
 
