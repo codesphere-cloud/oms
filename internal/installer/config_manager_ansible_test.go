@@ -230,6 +230,91 @@ k8s-workers:
 				actualK8sWorkerHosts := manager.GetInstallConfig().Kubernetes.Workers
 				Expect(actualK8sWorkerHosts).To(Equal(expectedWorkerHosts))
 			})
+
+			It("returns an error if control plane nodes are already set", func() {
+				file, err := os.Create(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+				defer func() { _ = os.Remove(inventoryFilePath) }()
+
+				inputInventory := `k8s-cp:
+  hosts:
+    cs-k8s-cp-1:
+      private_ip: 1.2.3.4
+    cs-k8s-cp-2:
+      private_ip: 1.2.3.5
+    cs-k8s-cp-3:
+      private_ip: 1.2.3.6
+k8s-workers:
+  hosts:
+    cs-k8s-worker-1:
+      private_ip: 1.2.3.7
+    cs-k8s-worker-2:
+      private_ip: 1.2.3.8
+    cs-k8s-worker-3:
+      private_ip: 1.2.3.9`
+
+				_, err = file.Write([]byte(inputInventory))
+				Expect(err).ToNot(HaveOccurred())
+
+				manager.GetInstallConfig().Kubernetes.ControlPlanes = []files.K8sNode{
+					{
+						IPAddress: "1.1.1.1",
+					},
+				}
+
+				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("k8s control plane nodes are already set. Adjust flags or inventory"))
+			})
+
+			It("keeps pre-existing control plan config, if inventory has none", func() {
+				file, err := os.Create(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+				defer func() { _ = os.Remove(inventoryFilePath) }()
+
+				inputInventory := `k8s-workers:
+  hosts:
+    cs-k8s-worker-1:
+      private_ip: 1.2.3.7
+    cs-k8s-worker-2:
+      private_ip: 1.2.3.8
+    cs-k8s-worker-3:
+      private_ip: 1.2.3.9`
+
+				_, err = file.Write([]byte(inputInventory))
+				Expect(err).ToNot(HaveOccurred())
+
+				manager.GetInstallConfig().Kubernetes.ControlPlanes = []files.K8sNode{
+					{
+						IPAddress: "1.1.1.1",
+					},
+				}
+
+				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+
+				expectedCPHosts := []files.K8sNode{
+					{
+						IPAddress: "1.1.1.1",
+					},
+				}
+
+				expectedWorkerHosts := []files.K8sNode{
+					{
+						IPAddress: "1.2.3.7",
+					}, {
+						IPAddress: "1.2.3.8",
+					}, {
+						IPAddress: "1.2.3.9",
+					},
+				}
+
+				actualK8sCPHosts := manager.GetInstallConfig().Kubernetes.ControlPlanes
+				Expect(actualK8sCPHosts).To(Equal(expectedCPHosts))
+
+				actualK8sWorkerHosts := manager.GetInstallConfig().Kubernetes.Workers
+				Expect(actualK8sWorkerHosts).To(Equal(expectedWorkerHosts))
+			})
 		})
 	})
 })

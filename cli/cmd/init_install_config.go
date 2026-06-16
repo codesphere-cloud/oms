@@ -194,6 +194,14 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 
 	c.printWelcomeMessage()
 
+	// If Ansible inventory file is provided, import host information from it
+	if c.Opts.AnsibleInventoryFile != "" {
+		err = icg.FetchFromAnsibleInventory(c.Opts.AnsibleInventoryFile)
+		if err != nil {
+			return fmt.Errorf("failed to import from Ansible inventory: %w", err)
+		}
+	}
+
 	if c.Opts.Interactive {
 		err = icg.CollectInteractively()
 		if err != nil {
@@ -201,14 +209,6 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		}
 	} else {
 		c.updateConfigFromOpts(icg.GetInstallConfig())
-	}
-
-	// If Ansible inventory file is provided, import host information from it
-	if c.Opts.AnsibleInventoryFile != "" {
-		err = icg.FetchFromAnsibleInventory(c.Opts.AnsibleInventoryFile)
-		if err != nil {
-			return fmt.Errorf("failed to import from Ansible inventory: %w", err)
-		}
 	}
 
 	validationWarnings := icg.ValidateInstallConfig()

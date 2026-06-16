@@ -51,6 +51,9 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 
 	k8sCPHosts := fetchK8sControlPlaneHosts(inventory)
 	if len(k8sCPHosts) > 0 {
+		if len(g.Config.Kubernetes.ControlPlanes) > 0 {
+			return fmt.Errorf("k8s control plane nodes are already set. Adjust flags or inventory")
+		}
 		g.Config.Kubernetes.ControlPlanes = k8sCPHosts
 	}
 
