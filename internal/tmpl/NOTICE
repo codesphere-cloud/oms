@@ -262,6 +262,12 @@ License: ISC
 License URL: https://github.com/davecgh/go-spew/blob/d8f796af33cc/LICENSE
  
 ----------
+Module: github.com/distribution/reference
+Version: v0.6.0
+License: Apache-2.0
+License URL: https://github.com/distribution/reference/blob/v0.6.0/LICENSE
+ 
+----------
 Module: github.com/dylibso/observe-sdk/go
 Version: v0.0.0-20240828172851-9145d8ad07e1
 License: Apache-2.0

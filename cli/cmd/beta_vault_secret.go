@@ -46,7 +46,7 @@ func (c *BetaVaultSecretCmd) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	creator := installer.NewVaultSecretCreator(kubeClient)
-	return creator.CreateSecretFromVault(c.cmd.Context(), c.Opts.VaultFile, c.Opts.AgeKeyPath, c.Opts.Namespace, c.Opts.SecretName)
+	return creator.CreateSecretFromFile(c.cmd.Context(), c.Opts.VaultFile, c.Opts.AgeKeyPath, c.Opts.Namespace, c.Opts.SecretName)
 }
 
 func AddBetaVaultSecretCmd(parentCmd *cobra.Command, opts *GlobalOptions) {

@@ -14,6 +14,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
@@ -89,6 +90,9 @@ type CodesphereEnvironment struct {
 	K0s                bool                `json:"-"`
 	PodCIDR            string              `json:"pod_cidr"`
 	ServiceCIDR        string              `json:"service_cidr"`
+	// ArgoCD integration
+	UseArgoCD         bool   `json:"-"`
+	ArgoCDRegistryURL string `json:"-"`
 }
 
 func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, helm installer.HelmClient, env *CodesphereEnvironment) *LocalBootstrapper {
@@ -123,6 +127,13 @@ func (b *LocalBootstrapper) Bootstrap() error {
 	err = b.stlog.Step("Ensure namespaces", b.EnsureNamespaces)
 	if err != nil {
 		return fmt.Errorf("failed to ensure namespaces: %w", err)
+	}
+
+	if b.Env.UseArgoCD {
+		err = b.stlog.Step("Bootstrap ArgoCD", b.BootstrapArgoCD)
+		if err != nil {
+			return fmt.Errorf("failed to bootstrap ArgoCD: %w", err)
+		}
 	}
 
 	err = b.stlog.Step("Install Rook and test Ceph cluster", func() error {
@@ -211,6 +222,23 @@ func (b *LocalBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to run Codesphere installer: %w", err)
 	}
 
+	return nil
+}
+
+func (b *LocalBootstrapper) BootstrapArgoCD() error {
+	// renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
+	install, err := argocd.NewInstaller(argocd.InstallerConfig{
+		Version:        "9.5.21",
+		OciPassword:    b.Env.RegistryPassword,
+		OciRegistryURL: strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://"),
+		FullInstall:    true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
+	}
+	if err := install.Install(); err != nil {
+		return fmt.Errorf("failed to install chart ArgoCD: %w", err)
+	}
 	return nil
 }
 
@@ -627,6 +655,11 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	}
 	if err := installer.EncryptFileWithSOPS(b.Env.SecretsFilePath, filepath.Join(b.Env.InstallConfig.Secrets.BaseDir, "prod.vault.yaml"), b.ageRecipient); err != nil {
 		return fmt.Errorf("failed to encrypt vault file: %w", err)
+	}
+
+	creator := installer.NewVaultSecretCreator(b.kubeClient)
+	if err := creator.CreateSecretFromVault(b.ctx, b.icg.GetVault(), installer.VaultSecretNamespace, installer.VaultSecretName); err != nil {
+		return fmt.Errorf("failed to create vault secret: %w", err)
 	}
 
 	return nil

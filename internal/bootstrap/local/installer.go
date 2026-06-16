@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -425,6 +427,16 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 		log.Printf("Extracting deps.tar.gz → %s", depsDir)
 		if err := util.ExtractTarGz(b.fw, archivePath, depsDir); err != nil {
 			return fmt.Errorf("failed to extract deps.tar.gz: %w", err)
+		}
+	}
+
+	if b.Env.UseArgoCD {
+		pcApps, err := installer.NewPcAppsFromBom(b.kubeClient, filepath.Join(depsDir, "bom.json"), argocd.DefaultNamespace)
+		if err != nil {
+			return fmt.Errorf("failed to initialize pc-apps installer from BOM: %w", err)
+		}
+		if err := pcApps.Install(b.ctx); err != nil {
+			return fmt.Errorf("failed to install pc-apps: %w", err)
 		}
 	}
 
