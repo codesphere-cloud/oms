@@ -17,7 +17,7 @@ type ansibleInventory map[string]map[string]map[string]any
 
 // FetchFromAnsibleInventory parses the ansible inventory file and tries to fetch ceph and k8s host from it.
 // Host info are added to the current install config.
-// Returns an error if inventory file can't be red or is invalid.
+// Returns an error if inventory file can't be read or is invalid.
 func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 	if g.Config == nil {
 		g.Config = &files.RootConfig{}
@@ -30,7 +30,7 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 
 	var inventory ansibleInventory
 
-	err = yaml.Unmarshal([]byte(data), &inventory)
+	err = yaml.Unmarshal(data, &inventory)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal Ansible inventory file: %w", err)
 	}
