@@ -39,6 +39,9 @@ $ oms init install-config --profile dev -c config.yaml --vault prod.vault.yaml
 # Use production profile
 $ oms init install-config --profile production -c config.yaml --vault prod.vault.yaml
 
+# Use ansible inventory for host definitions
+$ oms init install-config --profile production -c config.yaml --ansible-inventory inventory.yaml
+
 # Validate existing configuration files
 $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
 
