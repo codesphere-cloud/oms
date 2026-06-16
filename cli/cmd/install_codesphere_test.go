@@ -70,7 +70,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 			} else {
 				// On Linux amd64, it should fail on package extraction since the package doesn't exist
-				Expect(err.Error()).To(ContainSubstring("failed to extract and install package"))
+				Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
 			}
 		})
 	})
