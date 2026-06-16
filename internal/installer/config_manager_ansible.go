@@ -8,6 +8,7 @@ package installer
 import (
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"gopkg.in/yaml.v3"
@@ -87,18 +88,16 @@ func fetchCephHosts(inventory ansibleInventory) ([]files.CephHost, error) {
 	}
 
 	count := 0
-	for hostName, hostVars := range hostsGroup {
-		privateIP := ""
-		if vars, ok := hostVars.(map[string]any); ok {
-			privateIP = vars["private_ip"].(string)
-		}
+	for _, key := range getSortedHostsGroupKeys(hostsGroup) {
+		hostVars := hostsGroup[key]
 
+		privateIP := fetchHostVarsValue("private_ip", hostVars)
 		if privateIP == "" {
-			return nil, fmt.Errorf("missing private_ip for ceph host '%s'", hostName)
+			return nil, fmt.Errorf("missing private_ip for ceph host '%s'", key)
 		}
 
 		host := files.CephHost{
-			Hostname:  hostName,
+			Hostname:  key,
 			IPAddress: privateIP,
 			IsMaster:  count == 0,
 		}
@@ -115,8 +114,8 @@ func fetchCephHosts(inventory ansibleInventory) ([]files.CephHost, error) {
 // k8s-cp:
 //
 //	hosts:
-//	  - my-host-name:
-//	      private_ip: "10.0.0.1"
+//	  my-host-name:
+//	    private_ip: "10.0.0.1"
 func fetchK8sControlPlaneHosts(inventory ansibleInventory) []files.K8sNode {
 	return fetchKubernetesHosts("k8s-cp", inventory)
 }
@@ -126,8 +125,8 @@ func fetchK8sControlPlaneHosts(inventory ansibleInventory) []files.K8sNode {
 // k8s-workers:
 //
 //	hosts:
-//	  - my-host-name:
-//	      private_ip: "10.0.0.1"
+//	  my-host-name:
+//	    private_ip: "10.0.0.1"
 func fetchK8sWorkerHosts(inventory ansibleInventory) []files.K8sNode {
 	return fetchKubernetesHosts("k8s-workers", inventory)
 }
@@ -148,7 +147,9 @@ func fetchKubernetesHosts(parentTag string, inventory ansibleInventory) []files.
 		return hosts
 	}
 
-	for _, hostVars := range hostsGroup {
+	for _, key := range getSortedHostsGroupKeys(hostsGroup) {
+		hostVars := hostsGroup[key]
+
 		privateIP := ""
 		if vars, ok := hostVars.(map[string]any); ok {
 			privateIP = vars["private_ip"].(string)
@@ -161,4 +162,28 @@ func fetchKubernetesHosts(parentTag string, inventory ansibleInventory) []files.
 	}
 
 	return hosts
+}
+
+func getSortedHostsGroupKeys(group map[string]any) []string {
+	keys := make([]string, 0, len(group))
+	for k := range group {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	return keys
+}
+
+func fetchHostVarsValue(key string, hostVars any) string {
+	value := ""
+
+	if vars, ok := hostVars.(map[string]any); ok {
+		anyValue, exists := vars[key]
+		if exists {
+			value = fmt.Sprintf("%v", anyValue)
+		}
+	}
+
+	return value
 }

@@ -68,14 +68,14 @@ var _ = Describe("ConfigManagerAnsible", func() {
 		})
 
 		Context("inventory has invalid ceph config", func() {
-			It("returns an error", func() {
+			It("returns an error for missing host variables", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `ceph:
 				hosts:
-					gt-cs-ceph-1:`
+					cs-ceph-1:`
 				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
 
 				_, err = file.Write([]byte(inputInventory))
@@ -84,7 +84,27 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to fetch ceph hosts from inventory"))
-				Expect(err.Error()).To(ContainSubstring("missing private_ip for ceph host 'gt-cs-ceph-1'"))
+				Expect(err.Error()).To(ContainSubstring("missing private_ip for ceph host 'cs-ceph-1'"))
+			})
+
+			It("returns an error for typo in private_ip", func() {
+				file, err := os.Create(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+				defer func() { _ = os.Remove(inventoryFilePath) }()
+
+				inputInventoryYaml := `ceph:
+				hosts:
+					cs-ceph-1:
+						private_up: 1`
+				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
+
+				_, err = file.Write([]byte(inputInventory))
+				Expect(err).ToNot(HaveOccurred())
+
+				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to fetch ceph hosts from inventory"))
+				Expect(err.Error()).To(ContainSubstring("missing private_ip for ceph host 'cs-ceph-1'"))
 			})
 		})
 
@@ -109,13 +129,49 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
 
+				expectedCephHosts := []files.CephHost{
+					{
+						Hostname:  "cs-ceph-1",
+						IPAddress: "1.2.3.4",
+						IsMaster:  true,
+					},
+					{
+						Hostname:  "cs-ceph-2",
+						IPAddress: "1.2.3.5",
+						IsMaster:  false,
+					},
+					{
+						Hostname:  "cs-ceph-3",
+						IPAddress: "1.2.3.6",
+						IsMaster:  false,
+					},
+				}
+
 				actualCephHosts := manager.GetInstallConfig().Ceph.Hosts
-				Expect(actualCephHosts).To(HaveLen(3))
+				Expect(actualCephHosts).To(Equal(expectedCephHosts))
 
 				actualK8sCPHosts := manager.GetInstallConfig().Kubernetes.ControlPlanes
 				Expect(actualK8sCPHosts).To(BeEmpty())
 				actualK8sWorkers := manager.GetInstallConfig().Kubernetes.Workers
 				Expect(actualK8sWorkers).To(BeEmpty())
+			})
+
+			It("converts any value into string", func() {
+				file, err := os.Create(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+				defer func() { _ = os.Remove(inventoryFilePath) }()
+
+				inputInventoryYaml := `ceph:
+				hosts:
+					cs-ceph-1:
+						private_ip: true`
+				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
+
+				_, err = file.Write([]byte(inputInventory))
+				Expect(err).ToNot(HaveOccurred())
+
+				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 
