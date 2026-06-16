@@ -253,20 +253,15 @@ var _ = Describe("IAM & Admin", func() {
 				})
 
 				It("creates both accounts", func() {
-					csEnv = &gcp.CodesphereEnvironment{
-						ProjectID:    "pid",
-						RegistryType: gcp.RegistryTypeArtifactRegistry,
-						InstallConfig: &files.RootConfig{
-							Registry: &files.RegistryConfig{},
-						},
-					}
+					vault := &files.InstallVault{}
+					icg.EXPECT().GetVault().Return(vault)
 
 					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "cloud-controller", "cloud-controller").Return("email@sa", false, nil)
 					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "artifact-registry-writer", "artifact-registry-writer").Return("writer@sa", true, nil)
 					gc.EXPECT().CreateServiceAccountKey(csEnv.ProjectID, "writer@sa").Return("key-content", nil)
 					err := bs.EnsureServiceAccounts()
 					Expect(err).NotTo(HaveOccurred())
-					Expect(bs.Env.InstallConfig.Registry.Password).To(Equal("key-content"))
+					Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal("key-content"))
 				})
 			})
 		})

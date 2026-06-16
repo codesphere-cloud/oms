@@ -481,10 +481,6 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 		if err != nil {
 			return fmt.Errorf("failed to load vault file: %w", err)
 		}
-		err = b.icg.MergeVaultIntoConfig()
-		if err != nil {
-			return fmt.Errorf("failed to merge vault into config: %w", err)
-		}
 	}
 
 	b.Env.Vault = b.icg.GetVault()
@@ -493,7 +489,7 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	recipient, keyPath, err := installer.ResolveAgeKey(filepath.Dir(b.Env.SecretsFilePath))
+	recipient, keyPath, err := installer.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
@@ -641,8 +637,8 @@ func (b *LocalBootstrapper) EnsureGitHubAccessConfigured() error {
 		return fmt.Errorf("registry password is not set")
 	}
 	b.Env.InstallConfig.Registry.Server = "ghcr.io"
-	b.Env.InstallConfig.Registry.Username = b.Env.RegistryUser
-	b.Env.InstallConfig.Registry.Password = b.Env.RegistryPassword
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.RegistryPassword}})
 	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
 	b.Env.InstallConfig.Registry.LoadContainerImages = false
 	return nil

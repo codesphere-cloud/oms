@@ -108,7 +108,7 @@ func GenerateCA(cn, country, locality, org string) (keyPEM, certPEM string, err 
 // The CA private key may be in either PKCS8 ("PRIVATE KEY") or PKCS1 ("RSA PRIVATE KEY") PEM
 // format to support legacy vaults that were created before the PKCS8 migration.
 func GenerateServerCertificate(caKeyPEM, caCertPEM, cn string, ipAddresses []string) (keyPEM, certPEM string, err error) {
-	caKey, err := parseRSAPrivateKey(caKeyPEM)
+	caKey, err := ParseRSAPrivateKey(caKeyPEM)
 	if err != nil {
 		return "", "", fmt.Errorf("parse CA key: %w", err)
 	}
@@ -196,9 +196,9 @@ func encodePEMKey(key interface{}, keyType string) (string, error) {
 	return string(pemBytes), nil
 }
 
-// parseRSAPrivateKey decodes a PEM block and parses an RSA private key in either
+// ParseRSAPrivateKey decodes a PEM block and parses an RSA private key in either
 // PKCS8 or legacy PKCS1 format.
-func parseRSAPrivateKey(keyPEM string) (*rsa.PrivateKey, error) {
+func ParseRSAPrivateKey(keyPEM string) (*rsa.PrivateKey, error) {
 	block, _ := pem.Decode([]byte(keyPEM))
 	if block == nil {
 		return nil, fmt.Errorf("empty PEM block")

@@ -253,10 +253,21 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 	hasEAB := prompter.Bool("Configure External Account Binding (required by some ACME CAs)", g.Config.Codesphere.CertIssuer.Acme.EABKeyID != "")
 
 	g.Config.Codesphere.CertIssuer.Acme.EABKeyID = ""
-	g.Config.Codesphere.CertIssuer.Acme.EABMacKey = ""
 	if hasEAB {
 		g.Config.Codesphere.CertIssuer.Acme.EABKeyID = g.collectString(prompter, "EAB Key ID", g.Config.Codesphere.CertIssuer.Acme.EABKeyID)
-		g.Config.Codesphere.CertIssuer.Acme.EABMacKey = g.collectString(prompter, "EAB MAC Key", g.Config.Codesphere.CertIssuer.Acme.EABMacKey)
+		existingEabKey := ""
+		if g.Vault != nil {
+			if s := g.Vault.GetSecret(files.SecretAcmeEabMacKey); s != nil && s.Fields != nil {
+				existingEabKey = s.Fields.Password
+			}
+		}
+		newEabKey := g.collectString(prompter, "EAB MAC Key", existingEabKey)
+		if newEabKey != "" {
+			if g.Vault == nil {
+				g.Vault = &files.InstallVault{}
+			}
+			g.Vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: newEabKey}})
+		}
 	}
 
 	// DNS-01 Challenge Configuration
@@ -367,5 +378,11 @@ func (g *InstallConfig) collectOpenBaoConfig(prompter *Prompter) {
 	g.Config.Codesphere.OpenBao.URI = g.collectString(prompter, "OpenBao URI (e.g., https://openbao.example.com)", "")
 	g.Config.Codesphere.OpenBao.Engine = g.collectString(prompter, "OpenBao engine name", "cs-secrets-engine")
 	g.Config.Codesphere.OpenBao.User = g.collectString(prompter, "OpenBao username", "admin")
-	g.Config.Codesphere.OpenBao.Password = g.collectString(prompter, "OpenBao password", "")
+	openBaoPassword := g.collectString(prompter, "OpenBao password", "")
+	if openBaoPassword != "" {
+		if g.Vault == nil {
+			g.Vault = &files.InstallVault{}
+		}
+		g.Vault.SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: openBaoPassword}})
+	}
 }
