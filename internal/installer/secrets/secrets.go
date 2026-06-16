@@ -75,6 +75,8 @@ var codesphereServiceUsers = []serviceUser{
 	{tokenName: "userDeletionCronJobUserToken", serviceID: "userdeletion-cronjob", email: "userDeletion.service@codesphere.com"},
 	{tokenName: "workspaceServiceUserToken", serviceID: "workspace-service", email: "workspace.service@codesphere.com"},
 	{tokenName: "workspaceProxyUserToken", serviceID: "workspace-proxy", email: "workspace.proxy@codesphere.com"},
+	{tokenName: "sshWorkspaceProxyUserToken", serviceID: "ssh-workspace-proxy", email: "ssh.workspace.proxy@codesphere.com"},
+	{tokenName: "workspaceServerUserToken", serviceID: "workspace-server", email: "workspace.server@codesphere.com"},
 	{tokenName: "ideServiceUserToken", serviceID: "ide-service", email: "ide.service@codesphere.com"},
 }
 
