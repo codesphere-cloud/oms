@@ -40,6 +40,9 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 			return fmt.Errorf("ensure postgres secrets: %w", err)
 		}
 	}
+	if err := EnsurePostgresUsers(vault); err != nil {
+		return fmt.Errorf("ensure postgres users: %w", err)
+	}
 	if err := EnsureMounterHmacSecret(vault); err != nil {
 		return fmt.Errorf("ensure hmac secret: %w", err)
 	}
@@ -380,15 +383,22 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 		}
 		vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaServerKeyPem, File: &files.SecretFile{Name: "replica.key", Content: replicaKeyPEM}})
 		postgres.Replica.SSLConfig.ServerCertPem = replicaCertPEM
+	} else {
+		// Still set a dummy value to satisfy the private cloud installer
+		vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaServerKeyPem, File: &files.SecretFile{Name: "replica.key", Content: "dummy"}})
 	}
 
+	return nil
+}
+
+func EnsurePostgresUsers(vault *files.InstallVault) error {
 	for _, svc := range codesphere.PostgresServices {
 		svcPwd, err := GeneratePassword(32)
 		if err != nil {
 			return fmt.Errorf("generate postgres password for %s: %w", svc.Name, err)
 		}
+		setPasswordIfAbsent(vault, fmt.Sprintf("postgresUser%s", files.Capitalize(svc.Name)), svc.DBUsername())
 		setPasswordIfAbsent(vault, fmt.Sprintf("postgresPassword%s", files.Capitalize(svc.Name)), svcPwd)
 	}
-
 	return nil
 }

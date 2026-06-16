@@ -329,20 +329,6 @@ var _ = Describe("EnsurePostgresSecrets", func() {
 		Expect(postgres.Primary.SSLConfig.ServerCertPem).To(ContainSubstring("BEGIN CERTIFICATE"))
 	})
 
-	It("writes all service passwords to vault", func() {
-		vault := newVault()
-		Expect(secrets.EnsurePostgresSecrets(vault, postgres)).To(Succeed())
-
-		for _, suffix := range []string{
-			"Auth", "Deployment", "Ide", "Marketplace", "Payment", "Publicapi", "Team", "Workspace",
-			"UsageAggregationRefresher", "UsageAggregationReader",
-		} {
-			s := vault.GetSecret("postgresPassword" + suffix)
-			Expect(s).NotTo(BeNil(), "missing postgresPassword%s", suffix)
-			Expect(s.Fields.Password).To(HaveLen(32))
-		}
-	})
-
 	It("is idempotent", func() {
 		vault := newVault()
 		Expect(secrets.EnsurePostgresSecrets(vault, postgres)).To(Succeed())
@@ -378,6 +364,35 @@ var _ = Describe("EnsurePostgresSecrets", func() {
 			replicaKey := vault.GetSecret("postgresReplicaServerKeyPem").File.Content
 			Expect(primaryKey).NotTo(Equal(replicaKey))
 		})
+	})
+})
+
+var _ = Describe("EnsurePostgresUsers", func() {
+	It("writes a user and password secret for every service", func() {
+		vault := newVault()
+		Expect(secrets.EnsurePostgresUsers(vault)).To(Succeed())
+
+		for _, suffix := range []string{
+			"Auth", "Deployment", "Ide", "Marketplace", "Payment", "Publicapi", "Team", "Workspace",
+			"UsageAggregationRefresher", "UsageAggregationReader",
+		} {
+			pwd := vault.GetSecret("postgresPassword" + suffix)
+			Expect(pwd).NotTo(BeNil(), "missing postgresPassword%s", suffix)
+			Expect(pwd.Fields.Password).To(HaveLen(32))
+
+			usr := vault.GetSecret("postgresUser" + suffix)
+			Expect(usr).NotTo(BeNil(), "missing postgresUser%s", suffix)
+			Expect(usr.Fields.Password).NotTo(BeEmpty())
+		}
+	})
+
+	It("is idempotent", func() {
+		vault := newVault()
+		Expect(secrets.EnsurePostgresUsers(vault)).To(Succeed())
+		origPwd := vault.GetSecret("postgresPasswordAuth").Fields.Password
+
+		Expect(secrets.EnsurePostgresUsers(vault)).To(Succeed())
+		Expect(vault.GetSecret("postgresPasswordAuth").Fields.Password).To(Equal(origPwd))
 	})
 })
 
