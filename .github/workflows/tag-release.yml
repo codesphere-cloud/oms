@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: tag-release
+  cancel-in-progress: false
+
 jobs:
   integration-tests:
     uses: ./.github/workflows/integration-test.yml

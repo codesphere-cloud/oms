@@ -27,9 +27,6 @@ jobs:
       - name: Build
         run: make build-cli
 
-      - name: Release Dry-run
-        run: make release-local
-
       - name: Slack Notification on Failure
         if: ${{ failure() && github.ref == 'refs/heads/main' }}
         run: |
