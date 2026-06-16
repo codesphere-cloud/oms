@@ -226,6 +226,9 @@ func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool)
 }
 
 func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
+	if g.Config == nil {
+		return fmt.Errorf("no configuration provided - config is nil")
+	}
 	if g.Vault == nil {
 		g.Vault = &files.InstallVault{}
 	}

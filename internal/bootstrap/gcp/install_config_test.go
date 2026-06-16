@@ -314,7 +314,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 		var vault *files.InstallVault
 		BeforeEach(func() {
 			vault = &files.InstallVault{}
-			icg.EXPECT().GetVault().Return(vault)
+			icg.EXPECT().GetVault().Return(vault).Maybe()
 			csEnv.GitHubAppName = "fake-app-name"
 		})
 		Describe("Valid UpdateInstallConfig", func() {
@@ -798,7 +798,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(rw.Url).To(Equal("https://prometheus.example.com/api/v1/write"))
 					Expect(rw.ClusterName).To(Equal(csEnv.DatacenterName))
 					Expect(rw.Username).To(Equal("prom-user"))
-					Expect(rw.Password).To(Equal("prom-password"))
+					Expect(vault.GetSecret("promRemoteWritePassword").Fields.Password).To(Equal("prom-password"))
 				})
 			})
 
