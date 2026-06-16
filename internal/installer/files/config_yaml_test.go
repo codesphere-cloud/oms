@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"go.yaml.in/yaml/v3"
 
+	"github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
@@ -279,7 +280,7 @@ codesphere:
 			vault := rootConfig.ExtractVault()
 
 			Expect(vault.Secrets).To(ContainElement(files.SecretEntry{
-				Name: files.LokiGatewayPasswordSecretName,
+				Name: codesphere.Secrets["lokiGatewayBasicAuthPassword"],
 				Fields: &files.SecretFields{
 					Password: "fake-loki-password",
 				},

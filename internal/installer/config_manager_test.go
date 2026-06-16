@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
@@ -495,6 +496,88 @@ var _ = Describe("ConfigManager", func() {
 			err := configManager.WriteVault("/tmp/vault.yaml", false)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no configuration provided"))
+		})
+	})
+
+	Describe("MergeVaultIntoConfig extra secrets", func() {
+		It("collects unknown vault secrets into Config.ExtraSecrets", func() {
+			configManager.Vault = &files.InstallVault{
+				Secrets: []files.SecretEntry{
+					{Name: "myCustomSecret", Fields: &files.SecretFields{Password: "custom-value"}},
+				},
+			}
+			err := configManager.MergeVaultIntoConfig()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(configManager.Config.ExtraSecrets).To(HaveLen(1))
+			Expect(configManager.Config.ExtraSecrets[0].Name).To(Equal("myCustomSecret"))
+			Expect(configManager.Config.ExtraSecrets[0].Fields.Password).To(Equal("custom-value"))
+		})
+
+		It("extra secrets survive MergeVaultIntoConfig → ExtractVault round-trip", func() {
+			cfg := files.NewRootConfig()
+			configManager.Config = &cfg
+			configManager.Vault = &files.InstallVault{
+				Secrets: []files.SecretEntry{
+					{Name: "myCustomSecret", Fields: &files.SecretFields{Password: "custom-value"}},
+				},
+			}
+			err := configManager.MergeVaultIntoConfig()
+			Expect(err).ToNot(HaveOccurred())
+
+			vault := configManager.Config.ExtractVault()
+			found := false
+			for _, s := range vault.Secrets {
+				if s.Name == "myCustomSecret" {
+					found = true
+					Expect(s.Fields).NotTo(BeNil())
+					Expect(s.Fields.Password).To(Equal("custom-value"))
+				}
+			}
+			Expect(found).To(BeTrue(), "myCustomSecret should be in extracted vault after round-trip")
+		})
+
+		It("known secrets are NOT placed in ExtraSecrets", func() {
+			configManager.Vault = &files.InstallVault{
+				Secrets: []files.SecretEntry{
+					{Name: "postgresCaKeyPem", File: &files.SecretFile{Name: "ca.key", Content: "ca-key-content"}},
+				},
+			}
+			err := configManager.MergeVaultIntoConfig()
+			Expect(err).ToNot(HaveOccurred())
+			for _, s := range configManager.Config.ExtraSecrets {
+				Expect(s.Name).NotTo(Equal("postgresCaKeyPem"), "known secret should not appear in ExtraSecrets")
+			}
+		})
+
+		It("postgres user passwords use codesphere.PostgresServices names", func() {
+			configManager.Vault = &files.InstallVault{
+				Secrets: []files.SecretEntry{
+					{Name: "postgresPasswordAuth", Fields: &files.SecretFields{Password: "auth-pass"}},
+				},
+			}
+			err := configManager.MergeVaultIntoConfig()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(configManager.Config.Postgres.UserPasswords["auth"]).To(Equal("auth-pass"))
+			// Postgres password secrets are known and must NOT appear in ExtraSecrets
+			for _, s := range configManager.Config.ExtraSecrets {
+				Expect(s.Name).NotTo(Equal("postgresPasswordAuth"))
+			}
+		})
+
+		It("all codesphere.PostgresServices names are recognized as known secrets", func() {
+			var vaultSecrets []files.SecretEntry
+			for _, svc := range codesphere.PostgresServices {
+				secretName := "postgresPassword" + files.Capitalize(svc.Name)
+				vaultSecrets = append(vaultSecrets, files.SecretEntry{
+					Name:   secretName,
+					Fields: &files.SecretFields{Password: svc.Name + "-pass"},
+				})
+			}
+			configManager.Vault = &files.InstallVault{Secrets: vaultSecrets}
+			err := configManager.MergeVaultIntoConfig()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(configManager.Config.ExtraSecrets).To(BeEmpty(),
+				"all postgres service password secrets should be recognized as known")
 		})
 	})
 

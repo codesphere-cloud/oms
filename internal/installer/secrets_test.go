@@ -263,6 +263,60 @@ var _ = Describe("ExtractVault", func() {
 		assertSecretPassword(vault, "oidcClientId", "oidc-client-id")
 		assertSecretPassword(vault, "oidcClientSecret", "oidc-client-secret")
 	})
+
+	It("includes extra secrets in extracted vault", func() {
+		config := files.NewRootConfig()
+		config.ExtraSecrets = []files.SecretEntry{
+			{
+				Name: "myCustomSecret",
+				Fields: &files.SecretFields{
+					Password: "secret-value",
+				},
+			},
+		}
+
+		vault := config.ExtractVault()
+
+		found := false
+		for _, s := range vault.Secrets {
+			if s.Name == "myCustomSecret" {
+				found = true
+				Expect(s.Fields).NotTo(BeNil())
+				Expect(s.Fields.Password).To(Equal("secret-value"))
+			}
+		}
+		Expect(found).To(BeTrue(), "myCustomSecret should be present in extracted vault")
+	})
+
+	It("extra secrets do not override known secrets", func() {
+		config := files.NewRootConfig()
+		config.Codesphere = files.CodesphereConfig{
+			DomainAuthPrivateKey: "real-private-key",
+			DomainAuthPublicKey:  "real-public-key",
+		}
+		// Add an ExtraSecrets entry with the same name as a known secret
+		config.ExtraSecrets = []files.SecretEntry{
+			{
+				Name: "domainAuthPrivateKey",
+				File: &files.SecretFile{
+					Name:    "key.pem",
+					Content: "extra-overriding-key",
+				},
+			},
+		}
+
+		vault := config.ExtractVault()
+
+		// The first occurrence of domainAuthPrivateKey should be from the config field
+		for _, s := range vault.Secrets {
+			if s.Name == "domainAuthPrivateKey" {
+				Expect(s.File).NotTo(BeNil())
+				Expect(s.File.Content).To(ContainSubstring("real-private-key"),
+					"config field value should win over ExtraSecrets entry")
+				break
+			}
+		}
+	})
 })
 
 func assertSecretPassword(vault *files.InstallVault, name string, expectedPassword string) {
