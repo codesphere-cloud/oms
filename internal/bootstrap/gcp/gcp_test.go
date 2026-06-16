@@ -1273,28 +1273,31 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
-	Describe("InstallCodesphere", func() {
+	Describe("Package, k0s and Codesphere install", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
 			csEnv.InstallHash = "abc1234567890"
 		})
-		Describe("Valid InstallCodesphere", func() {
+		Describe("Valid install sequence", func() {
 			Context("Direct GitHub access", func() {
 				BeforeEach(func() {
 					csEnv.GitHubPAT = "fake-pat"
 					csEnv.RegistryUser = "fake-user"
 					csEnv.RegistryType = "github"
 				})
-				It("downloads and installs lite package", func() {
+				It("downloads the package, installs k0s and installs the lite package", func() {
 					// Expect download package
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+					Expect(bs.EnsureCodespherePackage()).To(Succeed())
 
-					// Expect install codesphere
+					// Expect standalone k0s install before Codesphere
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install k0s --install-config /etc/codesphere/config.yaml --package v1.2.3-abc1234567890-installer-lite.tar.gz").Return(nil)
+					Expect(bs.InstallK0s()).To(Succeed())
+
+					// Expect install codesphere with the kubernetes step skipped
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer-lite.tar.gz -s load-container-images").Return(nil)
-
-					err := bs.InstallCodesphere()
-					Expect(err).NotTo(HaveOccurred())
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes,load-container-images").Return(nil)
+					Expect(bs.InstallCodesphere()).To(Succeed())
 				})
 			})
 
@@ -1303,24 +1306,27 @@ var _ = Describe("GCP Bootstrapper", func() {
 					// Simulate that ValidateInput has populated the hash
 					csEnv.InstallHash = "def9876543210"
 				})
-				It("downloads and installs codesphere", func() {
-					// Expect download package
+				It("downloads the package, installs k0s and installs codesphere", func() {
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H def9876543210 v1.2.3").Return(nil)
+					Expect(bs.EnsureCodespherePackage()).To(Succeed())
 
-					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install k0s --install-config /etc/codesphere/config.yaml --package v1.2.3-def9876543210-installer.tar.gz").Return(nil)
+					Expect(bs.InstallK0s()).To(Succeed())
 
-					err := bs.InstallCodesphere()
-					Expect(err).NotTo(HaveOccurred())
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-def9876543210-installer.tar.gz -s kubernetes").Return(nil)
+					Expect(bs.InstallCodesphere()).To(Succeed())
 				})
 			})
 
-			It("downloads and installs codesphere with hash", func() {
+			It("downloads, installs k0s and codesphere with hash", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
+				Expect(bs.EnsureCodespherePackage()).To(Succeed())
 
-				err := bs.InstallCodesphere()
-				Expect(err).NotTo(HaveOccurred())
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install k0s --install-config /etc/codesphere/config.yaml --package v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
+				Expect(bs.InstallK0s()).To(Succeed())
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz -s kubernetes").Return(nil)
+				Expect(bs.InstallCodesphere()).To(Succeed())
 			})
 
 			Context("with local package", func() {
@@ -1333,13 +1339,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 					BeforeEach(func() {
 						csEnv.RegistryType = gcp.RegistryTypeGitHub
 					})
-					It("installs codesphere from local package", func() {
+					It("installs k0s and codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer-lite.tar.gz").Return(nil)
-						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer-lite.tar.gz -s load-container-images").Return(nil)
+						Expect(bs.EnsureCodespherePackage()).To(Succeed())
 
-						err := bs.InstallCodesphere()
-						Expect(err).NotTo(HaveOccurred())
+						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install k0s --install-config /etc/codesphere/config.yaml --package local-installer-lite.tar.gz").Return(nil)
+						Expect(bs.InstallK0s()).To(Succeed())
+
+						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer-lite.tar.gz -s kubernetes,load-container-images").Return(nil)
+						Expect(bs.InstallCodesphere()).To(Succeed())
 					})
 				})
 				Context("using the local registry", func() {
@@ -1347,13 +1356,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 						csEnv.RegistryType = gcp.RegistryTypeLocalContainer
 						csEnv.InstallLocal = "fake-installer-lite.tar.gz"
 					})
-					It("installs codesphere from local package", func() {
+					It("installs k0s and codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer.tar.gz").Return(nil)
-						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer.tar.gz").Return(nil)
+						Expect(bs.EnsureCodespherePackage()).To(Succeed())
 
-						err := bs.InstallCodesphere()
-						Expect(err).NotTo(HaveOccurred())
+						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install k0s --install-config /etc/codesphere/config.yaml --package local-installer.tar.gz").Return(nil)
+						Expect(bs.InstallK0s()).To(Succeed())
+
+						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer.tar.gz -s kubernetes").Return(nil)
+						Expect(bs.InstallCodesphere()).To(Succeed())
 					})
 				})
 			})
@@ -1365,8 +1377,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					// Simulate that ValidateInput has not populated the hash
 					csEnv.InstallHash = ""
 				})
-				It("fails", func() {
-					err := bs.InstallCodesphere()
+				It("fails to ensure the package", func() {
+					err := bs.EnsureCodespherePackage()
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("install hash must be set when install version is set"))
 				})
@@ -1377,8 +1389,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					csEnv.InstallVersion = ""
 					csEnv.InstallHash = ""
 				})
-				It("fails", func() {
-					err := bs.InstallCodesphere()
+				It("fails to ensure the package", func() {
+					err := bs.EnsureCodespherePackage()
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("either install version or a local package must be specified"))
 				})
@@ -1387,14 +1399,27 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("fails when download package fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(fmt.Errorf("download error"))
 
-				err := bs.InstallCodesphere()
+				err := bs.EnsureCodespherePackage()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to download Codesphere package from jumpbox"))
 			})
 
+			It("fails when k0s install fails", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
+				Expect(bs.EnsureCodespherePackage()).To(Succeed())
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install k0s --install-config /etc/codesphere/config.yaml --package v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("k0s error")).Once()
+
+				err := bs.InstallK0s()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("k0s error"))
+			})
+
 			It("fails when install codesphere fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
+				Expect(bs.EnsureCodespherePackage()).To(Succeed())
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz -s kubernetes").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
