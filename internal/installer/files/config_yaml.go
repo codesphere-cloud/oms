@@ -159,8 +159,8 @@ type CephHost struct {
 type CephOSD struct {
 	SpecID      string          `yaml:"specId"`
 	Placement   CephPlacement   `yaml:"placement"`
-	DataDevices CephDataDevices `yaml:"dataDevices"`
-	DBDevices   CephDBDevices   `yaml:"dbDevices"`
+	DataDevices CephDataDevices `yaml:"data_devices"`
+	DBDevices   CephDBDevices   `yaml:"db_devices"`
 }
 
 type CephPlacement struct {
