@@ -12,7 +12,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
-	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -24,20 +23,24 @@ type InstallCodespherePlatformCmd struct {
 }
 
 func (c *InstallCodespherePlatformCmd) RunE(_ *cobra.Command, _ []string) error {
-	workdir := c.Env.GetOmsWorkdir()
-	pm := installer.NewPackage(workdir, c.Opts.Package)
+	return installCodespherePlatform(c.Opts, c.Env)
+}
+
+func installCodespherePlatform(opts *InstallCodesphereOpts, env env.Env) error {
+	workdir := env.GetOmsWorkdir()
+	pm := installer.NewPackage(workdir, opts.Package)
 	cm := installer.NewConfig()
 	im := system.NewImage(context.Background())
 
 	ci := &installer.CodesphereInstaller{
-		ConfigPath:       c.Opts.Config,
-		VaultPath:        c.Opts.Vault,
-		PrivKey:          c.Opts.PrivKey,
-		Force:            c.Opts.Force,
-		SkipSteps:        c.Opts.SkipSteps,
+		ConfigPath:       opts.Config,
+		VaultPath:        opts.Vault,
+		PrivKey:          opts.PrivKey,
+		Force:            opts.Force,
+		SkipSteps:        opts.SkipSteps,
 		AllowedSteps:     installer.PlatformSteps,
-		DirectConnection: c.Opts.DirectConnection,
-		AutoApprove:      c.Opts.AutoApprove,
+		DirectConnection: opts.DirectConnection,
+		AutoApprove:      opts.AutoApprove,
 	}
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
@@ -45,7 +48,7 @@ func (c *InstallCodespherePlatformCmd) RunE(_ *cobra.Command, _ []string) error 
 	return nil
 }
 
-func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *GlobalOptions) {
+func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCodesphereOpts) {
 	platform := InstallCodespherePlatformCmd{
 		cmd: &cobra.Command{
 			Use:   "platform",
@@ -60,21 +63,9 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *GlobalOpti
 				},
 			}),
 		},
-		Opts: &InstallCodesphereOpts{GlobalOptions: opts},
+		Opts: opts,
 		Env:  env.NewEnv(),
 	}
-	platform.cmd.Flags().StringVarP(&platform.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from")
-	platform.cmd.Flags().BoolVarP(&platform.Opts.Force, "force", "f", false, "Enforce package extraction")
-	platform.cmd.Flags().StringVarP(&platform.Opts.Config, "config", "c", "", "Path to the Codesphere Private Cloud configuration file (yaml)")
-	platform.cmd.Flags().StringVar(&platform.Opts.Vault, "vault", "prod.vault.yaml", "Path to the SOPS-encrypted prod.vault.yaml file used for config templating")
-	platform.cmd.Flags().StringVarP(&platform.Opts.PrivKey, "priv-key", "k", "", "Path to the private key to encrypt/decrypt secrets")
-	platform.cmd.Flags().StringSliceVarP(&platform.Opts.SkipSteps, "skip-steps", "s", []string{}, "Platform steps to skip. E.g. codesphere")
-	platform.cmd.Flags().BoolVar(&platform.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
-	platform.cmd.Flags().BoolVar(&platform.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
-
-	util.MarkFlagRequired(platform.cmd, "package")
-	util.MarkFlagRequired(platform.cmd, "config")
-	util.MarkFlagRequired(platform.cmd, "priv-key")
 
 	AddCmd(codesphere, platform.cmd)
 	platform.cmd.RunE = platform.RunE

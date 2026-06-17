@@ -32,20 +32,14 @@ type InstallCodesphereOpts struct {
 	AutoApprove      bool
 }
 
-func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, args []string) error {
-	phases := []interface {
-		RunE(*cobra.Command, []string) error
-	}{
-		&InstallCodesphereInfraCmd{Opts: c.Opts, Env: c.Env},
-		&InstallCodesphereDepenciesCmd{Opts: c.Opts, Env: c.Env},
-		&InstallCodespherePlatformCmd{Opts: c.Opts, Env: c.Env},
+func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
+	if err := installCodesphereInfra(c.Opts, c.Env); err != nil {
+		return err
 	}
-	for _, phase := range phases {
-		if err := phase.RunE(cmd, args); err != nil {
-			return err
-		}
+	if err := installCodesphereDepencies(c.Opts, c.Env); err != nil {
+		return err
 	}
-	return nil
+	return installCodespherePlatform(c.Opts, c.Env)
 }
 
 func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
@@ -69,27 +63,27 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 		Opts: &InstallCodesphereOpts{GlobalOptions: opts},
 		Env:  env.NewEnv(),
 	}
-	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from")
-	codesphere.cmd.Flags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
-	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.Config, "config", "c", "", "Path to the Codesphere Private Cloud configuration file (yaml)")
-	codesphere.cmd.Flags().StringVar(&codesphere.Opts.Vault, "vault", "prod.vault.yaml", "Path to the SOPS-encrypted prod.vault.yaml file used for config templating")
-	codesphere.cmd.Flags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Path to the private key to encrypt/decrypt secrets")
-	codesphere.cmd.Flags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, kubernetes")
+	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from")
+	codesphere.cmd.PersistentFlags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
+	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Config, "config", "c", "", "Path to the Codesphere Private Cloud configuration file (yaml)")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.Vault, "vault", "prod.vault.yaml", "Path to the SOPS-encrypted prod.vault.yaml file used for config templating")
+	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Path to the private key to encrypt/decrypt secrets")
+	codesphere.cmd.PersistentFlags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker")
+	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
+	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
-	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
-	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
 
-	util.MarkFlagRequired(codesphere.cmd, "package")
-	util.MarkFlagRequired(codesphere.cmd, "config")
-	util.MarkFlagRequired(codesphere.cmd, "priv-key")
+	util.MarkPersistentFlagRequired(codesphere.cmd, "package")
+	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
+	util.MarkPersistentFlagRequired(codesphere.cmd, "priv-key")
 
 	AddCmd(install, codesphere.cmd)
 
 	codesphere.cmd.RunE = codesphere.RunE
 
-	AddInstallCodesphereInfraCmd(codesphere.cmd, opts)
-	AddInstallCodesphereDepenciesCmd(codesphere.cmd, opts)
-	AddInstallCodespherePlatformCmd(codesphere.cmd, opts)
+	AddInstallCodesphereInfraCmd(codesphere.cmd, codesphere.Opts)
+	AddInstallCodesphereDepenciesCmd(codesphere.cmd, codesphere.Opts)
+	AddInstallCodespherePlatformCmd(codesphere.cmd, codesphere.Opts)
 }
 
 func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager, goos string, goarch string) error {
