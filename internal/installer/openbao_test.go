@@ -289,7 +289,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      fmt.Sprintf("openbao-%d", i),
 						Namespace: "vault",
-						Labels:    map[string]string{"vault_cr": "openbao"},
+						Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 					},
 					Status: corev1.PodStatus{
 						Phase: corev1.PodRunning,
@@ -317,6 +317,57 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		It("does not count the configurer pod toward the replica count", func() {
+			// Pre-create the namespace
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// One ready server pod (expected: 1).
+			serverPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openbao-0",
+					Namespace: "vault",
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
+				},
+				Status: corev1.PodStatus{
+					Phase:      corev1.PodRunning,
+					Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
+				},
+			}
+			// The configurer pod also carries vault_cr=openbao — it must be
+			// excluded, otherwise activePods (2) never equals expected (1).
+			configurerPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openbao-configurer-abc123",
+					Namespace: "vault",
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault-configurator"},
+				},
+				Status: corev1.PodStatus{
+					Phase:      corev1.PodRunning,
+					Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
+				},
+			}
+			_, err = clientset.CoreV1().Pods("vault").Create(ctx, serverPod, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			_, err = clientset.CoreV1().Pods("vault").Create(ctx, configurerPod, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace: "vault",
+					Replicas:  1,
+					Timeout:   5 * time.Second,
+				},
+			}
+			inst.SetCtx(ctx)
+
+			err = inst.WaitForPodsReady()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("times out when fewer pods than expected exist", func() {
 			// Pre-create the namespace
 			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
@@ -328,7 +379,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "openbao-0",
 					Namespace: "vault",
-					Labels:    map[string]string{"vault_cr": "openbao"},
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
@@ -369,7 +420,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "openbao-0",
 					Namespace: "vault",
-					Labels:    map[string]string{"vault_cr": "openbao"},
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
@@ -382,7 +433,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "openbao-1",
 					Namespace:         "vault",
-					Labels:            map[string]string{"vault_cr": "openbao"},
+					Labels:            map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 					DeletionTimestamp: &now,
 					Finalizers:        []string{"test-finalizer"}, // Required for DeletionTimestamp in fake
 				},
@@ -426,7 +477,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "openbao-0",
 					Namespace: "vault",
-					Labels:    map[string]string{"vault_cr": "openbao"},
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
@@ -1001,7 +1052,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "openbao-0",
 					Namespace: "vault",
-					Labels:    map[string]string{"vault_cr": "openbao"},
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 				},
 				Status: corev1.PodStatus{Phase: corev1.PodRunning},
 			}

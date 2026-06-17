@@ -47,10 +47,26 @@ const (
 	// bank-vaults operator for our "openbao" Vault CR.
 	vaultCRLabelKey   = "vault_cr"
 	vaultCRLabelValue = "openbao"
+
+	// appNameLabelKey/Value distinguish the OpenBao server pods from the
+	// operator's configurer pod — both carry vault_cr=openbao, but only the
+	// server pods are app.kubernetes.io/name=vault. Pod counting must exclude
+	// the configurer, otherwise readiness never matches the replica count.
+	appNameLabelKey        = "app.kubernetes.io/name"
+	appNameLabelValueVault = "vault"
 )
 
-// vaultCRLabelSelector selects all resources belonging to the "openbao" Vault CR.
+// vaultCRLabelSelector selects all resources belonging to the "openbao" Vault CR
+// (server pods, the configurer pod, and PVCs).
 var vaultCRLabelSelector = labels.SelectorFromSet(labels.Set{vaultCRLabelKey: vaultCRLabelValue}).String()
+
+// vaultPodLabelSelector selects only the OpenBao server pods, excluding the
+// configurer pod (which also carries vault_cr=openbao). Used for readiness and
+// termination checks that must count exactly the StatefulSet replicas.
+var vaultPodLabelSelector = labels.SelectorFromSet(labels.Set{
+	vaultCRLabelKey: vaultCRLabelValue,
+	appNameLabelKey: appNameLabelValueVault,
+}).String()
 
 // OpenBaoInstallerConfig holds all configurable parameters for the OpenBao bootstrap.
 type OpenBaoInstallerConfig struct {
@@ -516,7 +532,7 @@ func (o *OpenBaoInstaller) ensureUnsealSecret(secretsClient corev1client.SecretI
 // configured replica count) are in Running phase with all containers Ready.
 // This ensures scaling operations have fully completed before reporting success.
 func (o *OpenBaoInstaller) WaitForPodsReady() error {
-	selector := vaultCRLabelSelector
+	selector := vaultPodLabelSelector
 	expected := o.Config.Replicas
 
 	return o.pollUntil("waiting for all OpenBao pods to be ready", func() (bool, error) {
@@ -716,7 +732,7 @@ func (o *OpenBaoInstaller) hasExistingDeployment() (bool, error) {
 // waitForVaultPodsGone polls until no pods with label vault_cr=openbao remain
 // in the target namespace, or until the context deadline is exceeded.
 func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
-	selector := vaultCRLabelSelector
+	selector := vaultPodLabelSelector
 
 	return o.pollUntil("waiting for vault pods to terminate", func() (bool, error) {
 		list, err := o.Clientset.CoreV1().Pods(o.Config.Namespace).List(o.ctx, metav1.ListOptions{
