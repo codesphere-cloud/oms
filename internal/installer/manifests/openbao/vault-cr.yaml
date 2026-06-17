@@ -76,12 +76,6 @@ spec:
         valueFrom:
           fieldRef:
             fieldPath: metadata.name
-      # The bank-vaults operator exposes each pod via a per-pod ClusterIP
-      # service named after the pod ("openbao-<ordinal>"), so the resolvable
-      # address is "$(POD_NAME).<namespace>.svc.cluster.local". There is no
-      # StatefulSet headless service, so an extra ".openbao" label here never
-      # resolves — the Raft leader then can't heartbeat/replicate to peers and
-      # followers never receive the initialized barrier.
       - name: BAO_CLUSTER_ADDR
         value: "http://$(POD_NAME).{{ .Namespace }}.svc.cluster.local:8201"
       - name: BAO_API_ADDR

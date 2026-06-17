@@ -726,10 +726,6 @@ var _ = Describe("OpenBaoInstaller", func() {
 			}
 			Expect(envNames).To(ContainElements("POD_NAME", "BAO_CLUSTER_ADDR", "BAO_API_ADDR"))
 
-			// The peer/cluster addresses must target the per-pod service
-			// ("$(POD_NAME).<namespace>...") with no extra ".openbao" headless
-			// label, otherwise the Raft leader can't replicate to followers
-			// (regression guard).
 			Expect(envValues["BAO_CLUSTER_ADDR"]).To(Equal("http://$(POD_NAME).vault.svc.cluster.local:8201"))
 			Expect(envValues["BAO_API_ADDR"]).To(Equal("http://$(POD_NAME).vault.svc.cluster.local:8200"))
 		})
@@ -737,10 +733,6 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 	Describe("BuildRetryJoinAddrs", func() {
 		It("targets the per-pod ClusterIP service, not a headless service", func() {
-			// bank-vaults exposes each pod via a per-pod service "openbao-<i>",
-			// so the resolvable name is "openbao-<i>.<namespace>.svc.cluster.local".
-			// An extra ".openbao" headless-service label never resolves and
-			// deadlocks the Raft bootstrap (regression guard).
 			addrs := installer.BuildRetryJoinAddrs(3, "second")
 			Expect(addrs).To(Equal([]string{
 				"http://openbao-0.second.svc.cluster.local:8200",

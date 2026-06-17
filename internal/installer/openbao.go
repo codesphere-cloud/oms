@@ -370,16 +370,10 @@ type vaultCRTemplateData struct {
 	RetryJoinAddrs    []string
 }
 
-// buildRetryJoinAddrs builds the Raft retry_join addresses so each node can
-// autonomously find and join the cluster leader. For a single replica this
-// produces one self-referencing address, which is harmless and means scaling
-// up later only requires changing the replica count.
-//
-// The bank-vaults operator exposes each pod through its own per-pod ClusterIP
-// service named "openbao-<ordinal>" (it does NOT create a StatefulSet headless
-// service), so the resolvable address is "openbao-<i>.<namespace>.svc.cluster.local"
-// — not the "pod.headless-svc.namespace" pattern. Using the latter yields an
-// extra DNS label that never resolves, deadlocking the Raft bootstrap.
+// Build retry_join addresses for Raft so each node can autonomously
+// find and join the cluster leader. For a single replica this produces
+// one self-referencing address, which is harmless and means scaling up
+// later only requires changing the replica count.
 func buildRetryJoinAddrs(replicas int, namespace string) []string {
 	addrs := make([]string, 0, replicas)
 	for i := 0; i < replicas; i++ {
