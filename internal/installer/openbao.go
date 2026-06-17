@@ -43,6 +43,12 @@ const (
 	pollInterval            = 5 * time.Second
 	maxPollInterval         = 30 * time.Second
 
+	// defaultReadinessTimeoutPerReplica is added to the base timeout for each
+	// replica when waiting for all OpenBao pods to become ready. Pods come up
+	// sequentially and each must join Raft before the next, so the total wait
+	// scales with the deployment size.
+	defaultReadinessTimeoutPerReplica = 3 * time.Minute
+
 	// vaultCRLabelKey/Value identify resources (pods, PVCs) managed by the
 	// bank-vaults operator for our "openbao" Vault CR.
 	vaultCRLabelKey   = "vault_cr"
@@ -77,8 +83,11 @@ type OpenBaoInstallerConfig struct {
 	Replicas          int
 	StorageSize       string
 	Timeout           time.Duration
-	AgeRecipient      string
-	AgeKeyPath        string
+	// ReadinessTimeoutPerReplica is added to Timeout per replica when waiting
+	// for all pods to become ready. Defaulted in validateConfig when unset.
+	ReadinessTimeoutPerReplica time.Duration
+	AgeRecipient               string
+	AgeKeyPath                 string
 }
 
 // OpenBaoInstaller orchestrates the Day-0 bootstrap, configuration, and DR
@@ -145,6 +154,9 @@ func (o *OpenBaoInstaller) validateConfig() error {
 	}
 	if o.Config.Timeout <= 0 {
 		o.Config.Timeout = defaultTimeout
+	}
+	if o.Config.ReadinessTimeoutPerReplica <= 0 {
+		o.Config.ReadinessTimeoutPerReplica = defaultReadinessTimeoutPerReplica
 	}
 	return nil
 }
@@ -528,6 +540,14 @@ func (o *OpenBaoInstaller) ensureUnsealSecret(secretsClient corev1client.SecretI
 	return nil
 }
 
+// readinessTimeout returns how long to wait for all pods to become ready.
+// StatefulSet pods start sequentially and each Raft member must initialize and
+// join before the next comes up, so the wait grows with replica count: the
+// configured base timeout plus a per-replica allowance.
+func (o *OpenBaoInstaller) readinessTimeout() time.Duration {
+	return o.Config.Timeout + o.Config.ReadinessTimeoutPerReplica*time.Duration(o.Config.Replicas)
+}
+
 // WaitForPodsReady polls until the expected number of vault pods (matching the
 // configured replica count) are in Running phase with all containers Ready.
 // This ensures scaling operations have fully completed before reporting success.
@@ -535,7 +555,7 @@ func (o *OpenBaoInstaller) WaitForPodsReady() error {
 	selector := vaultPodLabelSelector
 	expected := o.Config.Replicas
 
-	return o.pollUntil("waiting for all OpenBao pods to be ready", func() (bool, error) {
+	return o.pollUntilTimeout(o.readinessTimeout(), "waiting for all OpenBao pods to be ready", func() (bool, error) {
 		list, err := o.Clientset.CoreV1().Pods(o.Config.Namespace).List(o.ctx, metav1.ListOptions{
 			LabelSelector: selector,
 		})
@@ -772,12 +792,19 @@ func (o *OpenBaoInstaller) waitForPVCsGone() error {
 // true or the configured timeout expires. timeoutMsg describes the operation
 // for the timeout error message.
 func (o *OpenBaoInstaller) pollUntil(timeoutMsg string, check func() (bool, error)) error {
-	deadline := time.Now().Add(o.Config.Timeout)
+	return o.pollUntilTimeout(o.Config.Timeout, timeoutMsg, check)
+}
+
+// pollUntilTimeout is pollUntil with an explicit timeout, used by steps (e.g.
+// readiness) whose duration scales with the deployment size rather than the
+// fixed per-step timeout.
+func (o *OpenBaoInstaller) pollUntilTimeout(timeout time.Duration, timeoutMsg string, check func() (bool, error)) error {
+	deadline := time.Now().Add(timeout)
 	interval := pollInterval
 
 	for {
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out %s (timeout: %s)", timeoutMsg, o.Config.Timeout)
+			return fmt.Errorf("timed out %s (timeout: %s)", timeoutMsg, timeout)
 		}
 
 		done, err := check()

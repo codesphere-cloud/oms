@@ -506,6 +506,30 @@ var _ = Describe("OpenBaoInstaller", func() {
 		})
 	})
 
+	Describe("readiness timeout scaling", func() {
+		It("adds the per-replica allowance to the base timeout (5m + 3m/replica by default)", func() {
+			inst := &installer.OpenBaoInstaller{
+				Config: installer.OpenBaoInstallerConfig{Replicas: 3, Timeout: 5 * time.Minute},
+			}
+			// Defaults (incl. ReadinessTimeoutPerReplica) are applied here.
+			Expect(inst.ValidateConfig()).To(Succeed())
+			// 5m + 3m*3 = 14m
+			Expect(inst.ReadinessTimeout()).To(Equal(14 * time.Minute))
+		})
+
+		It("honors an explicit per-replica allowance", func() {
+			inst := &installer.OpenBaoInstaller{
+				Config: installer.OpenBaoInstallerConfig{
+					Replicas:                   5,
+					Timeout:                    2 * time.Minute,
+					ReadinessTimeoutPerReplica: 1 * time.Minute,
+				},
+			}
+			// 2m + 1m*5 = 7m
+			Expect(inst.ReadinessTimeout()).To(Equal(7 * time.Minute))
+		})
+	})
+
 	Describe("ExtractAndEncrypt", func() {
 		It("creates an encrypted DR backup file with password and unseal keys", func() {
 			if !sopsAndAgeAvailable() {

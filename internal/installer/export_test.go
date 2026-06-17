@@ -5,6 +5,7 @@ package installer
 
 import (
 	"context"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -54,4 +55,12 @@ func (o *OpenBaoInstaller) OperatorInstalledClusterWide() (bool, error) {
 
 func BuildRetryJoinAddrs(replicas int, namespace string) []string {
 	return buildRetryJoinAddrs(replicas, namespace)
+}
+
+func (o *OpenBaoInstaller) ValidateConfig() error {
+	return o.validateConfig()
+}
+
+func (o *OpenBaoInstaller) ReadinessTimeout() time.Duration {
+	return o.readinessTimeout()
 }
