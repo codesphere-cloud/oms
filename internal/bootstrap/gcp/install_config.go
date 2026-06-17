@@ -385,6 +385,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			Username: b.Env.CentralOtelUsername,
 			Password: b.Env.CentralOtelPassword,
 		}
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretCentralOtelCreds, Fields: &files.SecretFields{Username: b.Env.CentralOtelUsername, Password: b.Env.CentralOtelPassword}})
 	}
 
 	if b.Env.OpenBaoURI != "" {

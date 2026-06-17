@@ -45,6 +45,7 @@ const (
 
 	// Monitoring
 	SecretLokiGatewayBasicAuthPassword = "lokiGatewayBasicAuthPassword"
+	SecretCentralOtelCreds             = "centralOtelCreds"
 
 	// Postgres
 	SecretPostgresCaKeyPem            = "postgresCaKeyPem"
