@@ -627,6 +627,21 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(centralOtel.Username).To(Equal("otel-user"))
 					Expect(centralOtel.Password).To(Equal("otel-password"))
 				})
+				It("stores CentralOtel username and password in the vault", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					secret := vault.GetSecret(files.SecretCentralOtelCreds)
+					Expect(secret).NotTo(BeNil())
+					Expect(secret.Fields).NotTo(BeNil())
+					Expect(secret.Fields.Username).To(Equal("otel-user"))
+					Expect(secret.Fields.Password).To(Equal("otel-password"))
+				})
 			})
 
 			Context("When only CentralOtel username is set", func() {
