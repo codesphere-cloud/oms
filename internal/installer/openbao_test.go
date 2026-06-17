@@ -289,7 +289,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      fmt.Sprintf("openbao-%d", i),
 						Namespace: "vault",
-						Labels:    map[string]string{"vault_cr": "openbao"},
+						Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 					},
 					Status: corev1.PodStatus{
 						Phase: corev1.PodRunning,
@@ -317,6 +317,57 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		It("does not count the configurer pod toward the replica count", func() {
+			// Pre-create the namespace
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// One ready server pod (expected: 1).
+			serverPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openbao-0",
+					Namespace: "vault",
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
+				},
+				Status: corev1.PodStatus{
+					Phase:      corev1.PodRunning,
+					Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
+				},
+			}
+			// The configurer pod also carries vault_cr=openbao — it must be
+			// excluded, otherwise activePods (2) never equals expected (1).
+			configurerPod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openbao-configurer-abc123",
+					Namespace: "vault",
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault-configurator"},
+				},
+				Status: corev1.PodStatus{
+					Phase:      corev1.PodRunning,
+					Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
+				},
+			}
+			_, err = clientset.CoreV1().Pods("vault").Create(ctx, serverPod, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			_, err = clientset.CoreV1().Pods("vault").Create(ctx, configurerPod, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace: "vault",
+					Replicas:  1,
+					Timeout:   5 * time.Second,
+				},
+			}
+			inst.SetCtx(ctx)
+
+			err = inst.WaitForPodsReady()
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("times out when fewer pods than expected exist", func() {
 			// Pre-create the namespace
 			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
@@ -328,7 +379,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "openbao-0",
 					Namespace: "vault",
-					Labels:    map[string]string{"vault_cr": "openbao"},
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
@@ -369,7 +420,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "openbao-0",
 					Namespace: "vault",
-					Labels:    map[string]string{"vault_cr": "openbao"},
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
@@ -382,7 +433,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:              "openbao-1",
 					Namespace:         "vault",
-					Labels:            map[string]string{"vault_cr": "openbao"},
+					Labels:            map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 					DeletionTimestamp: &now,
 					Finalizers:        []string{"test-finalizer"}, // Required for DeletionTimestamp in fake
 				},
@@ -426,7 +477,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "openbao-0",
 					Namespace: "vault",
-					Labels:    map[string]string{"vault_cr": "openbao"},
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 				},
 				Status: corev1.PodStatus{
 					Phase: corev1.PodRunning,
@@ -452,6 +503,30 @@ var _ = Describe("OpenBaoInstaller", func() {
 			err = inst.WaitForPodsReady()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("timed out"))
+		})
+	})
+
+	Describe("readiness timeout scaling", func() {
+		It("adds the per-replica allowance to the base timeout (5m + 3m/replica by default)", func() {
+			inst := &installer.OpenBaoInstaller{
+				Config: installer.OpenBaoInstallerConfig{Replicas: 3, Timeout: 5 * time.Minute},
+			}
+			// Defaults (incl. ReadinessTimeoutPerReplica) are applied here.
+			Expect(inst.ValidateConfig()).To(Succeed())
+			// 5m + 3m*3 = 14m
+			Expect(inst.ReadinessTimeout()).To(Equal(14 * time.Minute))
+		})
+
+		It("honors an explicit per-replica allowance", func() {
+			inst := &installer.OpenBaoInstaller{
+				Config: installer.OpenBaoInstallerConfig{
+					Replicas:                   5,
+					Timeout:                    2 * time.Minute,
+					ReadinessTimeoutPerReplica: 1 * time.Minute,
+				},
+			}
+			// 2m + 1m*5 = 7m
+			Expect(inst.ReadinessTimeout()).To(Equal(7 * time.Minute))
 		})
 	})
 
@@ -595,7 +670,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				BaoPassword:       "test-password",
 				Replicas:          1,
 				StorageSize:       "10Gi",
-				RetryJoinAddrs:    []string{"http://openbao-0.openbao.vault.svc.cluster.local:8200"},
+				RetryJoinAddrs:    []string{"http://openbao-0.vault.svc.cluster.local:8200"},
 			}
 
 			docs := renderTemplate(data)
@@ -662,9 +737,9 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 		It("renders valid YAML with raft storage, PVCs, and retry_join for replicas=3", func() {
 			retryJoinAddrs := []string{
-				"http://openbao-0.openbao.vault.svc.cluster.local:8200",
-				"http://openbao-1.openbao.vault.svc.cluster.local:8200",
-				"http://openbao-2.openbao.vault.svc.cluster.local:8200",
+				"http://openbao-0.vault.svc.cluster.local:8200",
+				"http://openbao-1.vault.svc.cluster.local:8200",
+				"http://openbao-2.vault.svc.cluster.local:8200",
 			}
 
 			data := templateData{
@@ -715,10 +790,36 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(containerSpec).To(HaveKey("env"))
 			envVars := containerSpec["env"].([]interface{})
 			envNames := make([]string, 0, len(envVars))
+			envValues := make(map[string]string, len(envVars))
 			for _, e := range envVars {
-				envNames = append(envNames, e.(map[string]interface{})["name"].(string))
+				m := e.(map[string]interface{})
+				name := m["name"].(string)
+				envNames = append(envNames, name)
+				if v, ok := m["value"].(string); ok {
+					envValues[name] = v
+				}
 			}
 			Expect(envNames).To(ContainElements("POD_NAME", "BAO_CLUSTER_ADDR", "BAO_API_ADDR"))
+
+			Expect(envValues["BAO_CLUSTER_ADDR"]).To(Equal("http://$(POD_NAME).vault.svc.cluster.local:8201"))
+			Expect(envValues["BAO_API_ADDR"]).To(Equal("http://$(POD_NAME).vault.svc.cluster.local:8200"))
+		})
+	})
+
+	Describe("BuildRetryJoinAddrs", func() {
+		It("targets the per-pod ClusterIP service, not a headless service", func() {
+			addrs := installer.BuildRetryJoinAddrs(3, "second")
+			Expect(addrs).To(Equal([]string{
+				"http://openbao-0.second.svc.cluster.local:8200",
+				"http://openbao-1.second.svc.cluster.local:8200",
+				"http://openbao-2.second.svc.cluster.local:8200",
+			}))
+		})
+
+		It("produces a single self-referencing address for one replica", func() {
+			Expect(installer.BuildRetryJoinAddrs(1, "vault")).To(Equal([]string{
+				"http://openbao-0.vault.svc.cluster.local:8200",
+			}))
 		})
 	})
 
@@ -975,7 +1076,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "openbao-0",
 					Namespace: "vault",
-					Labels:    map[string]string{"vault_cr": "openbao"},
+					Labels:    map[string]string{"vault_cr": "openbao", "app.kubernetes.io/name": "vault"},
 				},
 				Status: corev1.PodStatus{Phase: corev1.PodRunning},
 			}
