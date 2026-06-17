@@ -70,7 +70,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 			} else {
 				// On Linux amd64, it should fail on package extraction since the package doesn't exist
-				Expect(err.Error()).To(ContainSubstring("failed to extract and install package"))
+				Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
 			}
 		})
 	})
@@ -492,29 +492,29 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 		Expect(codesphereCmd.Long).To(ContainSubstring("Uses the private-cloud-installer.js script included in the package to perform the installation."))
 		Expect(codesphereCmd.RunE).NotTo(BeNil())
 
-		// Check flags
-		packageFlag := codesphereCmd.Flags().Lookup("package")
+		// Check flags (registered as PersistentFlags so subcommands inherit them)
+		packageFlag := codesphereCmd.PersistentFlags().Lookup("package")
 		Expect(packageFlag).NotTo(BeNil())
 		Expect(packageFlag.Shorthand).To(Equal("p"))
 
-		forceFlag := codesphereCmd.Flags().Lookup("force")
+		forceFlag := codesphereCmd.PersistentFlags().Lookup("force")
 		Expect(forceFlag).NotTo(BeNil())
 		Expect(forceFlag.Shorthand).To(Equal("f"))
 		Expect(forceFlag.DefValue).To(Equal("false"))
 
-		configFlag := codesphereCmd.Flags().Lookup("config")
+		configFlag := codesphereCmd.PersistentFlags().Lookup("config")
 		Expect(configFlag).NotTo(BeNil())
 		Expect(configFlag.Shorthand).To(Equal("c"))
 
-		privKeyFlag := codesphereCmd.Flags().Lookup("priv-key")
+		privKeyFlag := codesphereCmd.PersistentFlags().Lookup("priv-key")
 		Expect(privKeyFlag).NotTo(BeNil())
 		Expect(privKeyFlag.Shorthand).To(Equal("k"))
 
-		vaultFlag := codesphereCmd.Flags().Lookup("vault")
+		vaultFlag := codesphereCmd.PersistentFlags().Lookup("vault")
 		Expect(vaultFlag).NotTo(BeNil())
 		Expect(vaultFlag.DefValue).To(Equal("prod.vault.yaml"))
 
-		skipStepFlag := codesphereCmd.Flags().Lookup("skip-steps")
+		skipStepFlag := codesphereCmd.PersistentFlags().Lookup("skip-steps")
 		Expect(skipStepFlag).NotTo(BeNil())
 		Expect(skipStepFlag.Shorthand).To(Equal("s"))
 	})

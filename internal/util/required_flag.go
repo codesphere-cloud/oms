@@ -15,3 +15,10 @@ func MarkFlagRequired(cmd *cobra.Command, name string) {
 		panic(fmt.Errorf("failed to mark flag as required, please check existence: %w", err))
 	}
 }
+
+func MarkPersistentFlagRequired(cmd *cobra.Command, name string) {
+	err := cmd.MarkPersistentFlagRequired(name)
+	if err != nil {
+		panic(fmt.Errorf("failed to mark persistent flag as required, please check existence: %w", err))
+	}
+}
