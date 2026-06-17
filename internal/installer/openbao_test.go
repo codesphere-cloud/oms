@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -63,7 +64,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 			// FindRelease returns nil (no existing release in target namespace)
 			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
 
-			// No ClusterRole exists (fake clientset has nothing), so InstallChart is called
+			// No operator Deployment exists (fake clientset has nothing), so InstallChart is called
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.ReleaseName == "vault-operator" &&
 					cfg.ChartName == "oci://ghcr.io/bank-vaults/helm-charts/vault-operator" &&
@@ -86,7 +87,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 		It("performs fresh install when target namespace does not exist", func() {
 			// Namespace "new-ns" is NOT created — FindRelease must be skipped.
-			// No ClusterRole exists, so InstallChart is called directly.
+			// No operator Deployment exists, so InstallChart is called directly.
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.ReleaseName == "vault-operator" &&
 					cfg.Namespace == "new-ns" &&
@@ -143,11 +144,16 @@ var _ = Describe("OpenBaoInstaller", func() {
 			// FindRelease returns nil (not in target namespace)
 			helmMock.EXPECT().FindRelease("second", "vault-operator").Return(nil, nil)
 
-			// Pre-create the ClusterRole to simulate operator installed elsewhere
-			cr := &rbacv1.ClusterRole{
-				ObjectMeta: metav1.ObjectMeta{Name: "vault-operator"},
+			// A running operator Deployment in another namespace simulates the
+			// operator being installed elsewhere.
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "vault-operator",
+					Namespace: "other-ns",
+					Labels:    map[string]string{"app.kubernetes.io/name": "vault-operator"},
+				},
 			}
-			_, err = clientset.RbacV1().ClusterRoles().Create(ctx, cr, metav1.CreateOptions{})
+			_, err = clientset.AppsV1().Deployments("other-ns").Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
 
 			inst := &installer.OpenBaoInstaller{
@@ -161,6 +167,46 @@ var _ = Describe("OpenBaoInstaller", func() {
 			// Should not call InstallChart or UpgradeChart
 			err = inst.DeployBankVaultsOperator()
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("installs and cleans orphaned RBAC when the ClusterRole lingers but no operator runs", func() {
+			// Pre-create the namespace so FindRelease is reachable.
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
+
+			// Orphaned cluster-scoped RBAC from a torn-down install, but NO
+			// operator Deployment anywhere — the regression scenario.
+			cr := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "vault-operator"}}
+			_, err = clientset.RbacV1().ClusterRoles().Create(ctx, cr, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			crb := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "vault-operator"}}
+			_, err = clientset.RbacV1().ClusterRoleBindings().Create(ctx, crb, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			// Must perform a fresh install rather than skip.
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ReleaseName == "vault-operator" && cfg.Namespace == "vault"
+			}), mock.Anything).Return(nil)
+
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+			}
+			inst.SetCtx(ctx)
+
+			err = inst.DeployBankVaultsOperator()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Orphaned RBAC must have been removed before install.
+			_, err = clientset.RbacV1().ClusterRoles().Get(ctx, "vault-operator", metav1.GetOptions{})
+			Expect(err).To(HaveOccurred())
+			_, err = clientset.RbacV1().ClusterRoleBindings().Get(ctx, "vault-operator", metav1.GetOptions{})
+			Expect(err).To(HaveOccurred())
 		})
 
 		It("returns an error when Helm InstallChart fails", func() {
@@ -959,8 +1005,32 @@ var _ = Describe("OpenBaoInstaller", func() {
 		})
 	})
 
-	Describe("operatorInstalledClusterWide", func() {
-		It("returns true when the vault-operator ClusterRole exists", func() {
+	Describe("operatorRunningClusterWide", func() {
+		It("returns true when an operator Deployment runs in any namespace", func() {
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "vault-operator",
+					Namespace: "other-ns",
+					Labels:    map[string]string{"app.kubernetes.io/name": "vault-operator"},
+				},
+			}
+			_, err := clientset.AppsV1().Deployments("other-ns").Create(ctx, dep, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+			}
+			inst.SetCtx(ctx)
+
+			running, err := inst.OperatorRunningClusterWide()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(running).To(BeTrue())
+		})
+
+		It("returns false when only an orphaned ClusterRole exists (no Deployment)", func() {
+			// A lingering ClusterRole must NOT be mistaken for a running operator.
 			cr := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "vault-operator"}}
 			_, err := clientset.RbacV1().ClusterRoles().Create(ctx, cr, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
@@ -972,22 +1042,9 @@ var _ = Describe("OpenBaoInstaller", func() {
 			}
 			inst.SetCtx(ctx)
 
-			clusterWide, err := inst.OperatorInstalledClusterWide()
+			running, err := inst.OperatorRunningClusterWide()
 			Expect(err).ToNot(HaveOccurred())
-			Expect(clusterWide).To(BeTrue())
-		})
-
-		It("returns false when the ClusterRole does not exist", func() {
-			inst := &installer.OpenBaoInstaller{
-				Clientset: clientset,
-				Logger:    bootstrap.NewStepLogger(true),
-				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
-			}
-			inst.SetCtx(ctx)
-
-			clusterWide, err := inst.OperatorInstalledClusterWide()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(clusterWide).To(BeFalse())
+			Expect(running).To(BeFalse())
 		})
 	})
 

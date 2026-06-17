@@ -60,6 +60,10 @@ const (
 	// the configurer, otherwise readiness never matches the replica count.
 	appNameLabelKey        = "app.kubernetes.io/name"
 	appNameLabelValueVault = "vault"
+
+	// operatorName is the bank-vaults operator's Helm release name and the name
+	// of its cluster-scoped RBAC resources (ClusterRole/ClusterRoleBinding).
+	operatorName = "vault-operator"
 )
 
 // vaultCRLabelSelector selects all resources belonging to the "openbao" Vault CR
@@ -73,6 +77,10 @@ var vaultPodLabelSelector = labels.SelectorFromSet(labels.Set{
 	vaultCRLabelKey: vaultCRLabelValue,
 	appNameLabelKey: appNameLabelValueVault,
 }).String()
+
+// operatorLabelSelector selects the bank-vaults operator's Deployment/pods,
+// used to detect whether an operator is actually running anywhere in the cluster.
+var operatorLabelSelector = labels.SelectorFromSet(labels.Set{appNameLabelKey: operatorName}).String()
 
 // OpenBaoInstallerConfig holds all configurable parameters for the OpenBao bootstrap.
 type OpenBaoInstallerConfig struct {
@@ -317,7 +325,7 @@ func (o *OpenBaoInstaller) GeneratePassword() error {
 // is sufficient for the entire cluster.
 func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 	cfg := ChartConfig{
-		ReleaseName: "vault-operator",
+		ReleaseName: operatorName,
 		ChartName:   bankVaultsChartRepo + "/" + bankVaultsChartName,
 		Version:     bankVaultsChartVersion,
 		Namespace:   o.Config.Namespace,
@@ -336,19 +344,48 @@ func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 		return o.Helm.UpgradeChart(o.ctx, cfg, UpgradeChartOptions{})
 	}
 
-	// Release not found in target namespace. Skip when the operator is already
-	// deployed cluster-wide (in another namespace) — one instance suffices.
-	clusterWide, err := o.operatorInstalledClusterWide()
+	// Release not found in target namespace. Skip when an operator Deployment is
+	// already running cluster-wide (e.g. in another namespace) — one instance
+	// suffices for the entire cluster.
+	running, err := o.operatorRunningClusterWide()
 	if err != nil {
 		return err
 	}
-	if clusterWide {
-		o.Logger.Logf("Bank-Vaults Operator already installed in the cluster, skipping deployment")
+	if running {
+		o.Logger.Logf("Bank-Vaults Operator already running in the cluster, skipping deployment")
 		return nil
+	}
+
+	// No operator is running. A prior incomplete teardown (e.g. deleting the
+	// operator's namespace) may have left orphaned cluster-scoped RBAC, which
+	// would make the fresh Helm install conflict on the pre-existing, unowned
+	// ClusterRole/ClusterRoleBinding. Remove it before installing.
+	if err := o.cleanOrphanedOperatorRBAC(); err != nil {
+		return err
 	}
 
 	// Operator does not exist — perform fresh install.
 	return o.Helm.InstallChart(o.ctx, cfg, InstallChartOptions{})
+}
+
+// cleanOrphanedOperatorRBAC best-effort deletes the operator's cluster-scoped
+// ClusterRole and ClusterRoleBinding. These are not garbage-collected when the
+// operator's namespace is deleted, so they can linger after a teardown and make
+// a subsequent Helm install fail. NotFound is tolerated — there may be nothing
+// to clean on a genuinely fresh cluster.
+func (o *OpenBaoInstaller) cleanOrphanedOperatorRBAC() error {
+	crErr := o.Clientset.RbacV1().ClusterRoles().Delete(o.ctx, operatorName, metav1.DeleteOptions{})
+	if crErr != nil && !k8serrors.IsNotFound(crErr) {
+		return fmt.Errorf("deleting orphaned %s ClusterRole: %w", operatorName, crErr)
+	}
+	crbErr := o.Clientset.RbacV1().ClusterRoleBindings().Delete(o.ctx, operatorName, metav1.DeleteOptions{})
+	if crbErr != nil && !k8serrors.IsNotFound(crbErr) {
+		return fmt.Errorf("deleting orphaned %s ClusterRoleBinding: %w", operatorName, crbErr)
+	}
+	if crErr == nil || crbErr == nil {
+		o.Logger.Logf("Removed orphaned %s cluster-scoped RBAC left by a prior install", operatorName)
+	}
+	return nil
 }
 
 // releaseExistsInTargetNamespace reports whether the named Helm release exists
@@ -371,18 +408,21 @@ func (o *OpenBaoInstaller) releaseExistsInTargetNamespace(releaseName string) (b
 	return rel != nil, nil
 }
 
-// operatorInstalledClusterWide reports whether the bank-vaults operator is
-// already installed anywhere in the cluster, detected via its cluster-scoped
-// "vault-operator" ClusterRole.
-func (o *OpenBaoInstaller) operatorInstalledClusterWide() (bool, error) {
-	_, err := o.Clientset.RbacV1().ClusterRoles().Get(o.ctx, "vault-operator", metav1.GetOptions{})
-	if err == nil {
-		return true, nil
+// operatorRunningClusterWide reports whether a bank-vaults operator Deployment
+// is actually running anywhere in the cluster. Detection is by the operator's
+// Deployment (app.kubernetes.io/name=vault-operator), not its cluster-scoped
+// ClusterRole: a ClusterRole can be left orphaned after an incomplete teardown
+// (deleting a namespace does not remove cluster-scoped resources), and keying
+// the skip decision off it would wrongly suppress deploying an operator that no
+// longer exists — leaving the Vault CR unreconciled.
+func (o *OpenBaoInstaller) operatorRunningClusterWide() (bool, error) {
+	deps, err := o.Clientset.AppsV1().Deployments(metav1.NamespaceAll).List(o.ctx, metav1.ListOptions{
+		LabelSelector: operatorLabelSelector,
+	})
+	if err != nil {
+		return false, fmt.Errorf("listing %s deployments: %w", operatorName, err)
 	}
-	if !k8serrors.IsNotFound(err) {
-		return false, fmt.Errorf("checking for existing vault-operator ClusterRole: %w", err)
-	}
-	return false, nil
+	return len(deps.Items) > 0, nil
 }
 
 // vaultCRTemplateData holds the values injected into the Vault CR template.
