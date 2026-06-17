@@ -21,7 +21,13 @@ var (
 )
 
 // ResolveAgeKey resolves an existing age key or generates a new one.
-// It checks (in order):
+//
+// When explicitKeyFile is non-empty it takes priority over everything else: the
+// recipient is read directly from that file and it is returned as the key path.
+// This lets callers thread an explicit --age-key-file through without mutating
+// the process environment.
+//
+// Otherwise it checks (in order):
 //  1. SOPS_AGE_KEY environment variable (raw key content)
 //  2. SOPS_AGE_KEY_FILE environment variable (path to key file)
 //  3. Default location: ~/.config/sops/age/keys.txt
@@ -29,7 +35,16 @@ var (
 //
 // Returns the age public key (recipient) and the path to the key file (empty when
 // the key was supplied via SOPS_AGE_KEY).
-func ResolveAgeKey(fallbackDir string) (recipient string, keyPath string, err error) {
+func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
+	// 0. Explicit key file – supplied by the caller, takes priority.
+	if explicitKeyFile != "" {
+		recipient, err = readRecipientFromFile(explicitKeyFile)
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read age key from %s: %w", explicitKeyFile, err)
+		}
+		return recipient, explicitKeyFile, nil
+	}
+
 	// 1. SOPS_AGE_KEY env var – contains raw key content.
 	if raw := os.Getenv(sopsage.SopsAgeKeyEnv); raw != "" {
 		recipient, err = parseAgeRecipient(strings.NewReader(raw))

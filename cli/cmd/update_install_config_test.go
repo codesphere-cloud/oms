@@ -230,7 +230,7 @@ codesphere:
 			config := icg.GetInstallConfig()
 			Expect(config.Postgres.Primary.IP).To(Equal("10.10.0.4"))
 			Expect(config.Postgres.Primary.Hostname).To(Equal("new-postgres-primary"))
-			Expect(config.Postgres.Primary.PrivateKey).NotTo(BeEmpty())
+			Expect(icg.GetVault().GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
 			Expect(config.Postgres.Primary.SSLConfig.ServerCertPem).NotTo(BeEmpty())
 		})
 
@@ -245,7 +245,7 @@ codesphere:
 			config := icg.GetInstallConfig()
 			Expect(config.Postgres.Replica.IP).To(Equal("10.10.0.7"))
 			Expect(config.Postgres.Replica.Name).To(Equal("new_replica"))
-			Expect(config.Postgres.ReplicaPrivateKey).NotTo(BeEmpty())
+			Expect(icg.GetVault().GetSecret(files.SecretPostgresReplicaServerKeyPem)).NotTo(BeNil())
 			Expect(config.Postgres.Replica.SSLConfig.ServerCertPem).NotTo(BeEmpty())
 		})
 	})
@@ -269,8 +269,8 @@ codesphere:
 			Expect(config.Codesphere.PublicIP).To(Equal("203.0.113.100"))
 			Expect(config.Kubernetes.PodCIDR).To(Equal("10.244.0.0/16"))
 
-			Expect(config.Postgres.Primary.PrivateKey).NotTo(BeEmpty())
-			Expect(config.Postgres.ReplicaPrivateKey).NotTo(BeEmpty())
+			Expect(icg.GetVault().GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
+			Expect(icg.GetVault().GetSecret(files.SecretPostgresReplicaServerKeyPem)).NotTo(BeNil())
 		})
 	})
 

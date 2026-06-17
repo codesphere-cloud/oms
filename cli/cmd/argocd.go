@@ -8,7 +8,7 @@ import (
 	"os"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
-	"github.com/codesphere-cloud/oms/internal/installer"
+	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -42,7 +42,17 @@ func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
 		gitPassword = os.Getenv("OMS_GIT_PASSWORD")
 	}
 
-	install, err := installer.NewArgoCD(c.Opts.Version, c.Opts.DatacenterId, ociPassword, c.Opts.RegistryURL, gitPassword, c.Opts.FullInstall, c.Opts.ForceConflicts, c.Opts.RepoURL, c.Opts.ValueFiles)
+	install, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
+		Version:        c.Opts.Version,
+		DatacenterId:   c.Opts.DatacenterId,
+		OciPassword:    ociPassword,
+		OciRegistryURL: c.Opts.RegistryURL,
+		GitPassword:    gitPassword,
+		FullInstall:    c.Opts.FullInstall,
+		ForceConflicts: c.Opts.ForceConflicts,
+		RepoURL:        c.Opts.RepoURL,
+		ValueFiles:     c.Opts.ValueFiles,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 	}

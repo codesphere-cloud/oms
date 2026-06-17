@@ -208,7 +208,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 			return fmt.Errorf("failed to collect configuration interactively: %w", err)
 		}
 	} else {
-		c.updateConfigFromOpts(icg.GetInstallConfig())
+		c.updateConfigFromOpts(icg.GetInstallConfig(), icg.GetVault())
 	}
 
 	validationWarnings := icg.ValidateInstallConfig()
@@ -307,7 +307,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	return nil
 }
 
-func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *files.RootConfig {
+func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, vault *files.InstallVault) *files.RootConfig {
 	// Datacenter settings
 	if c.Opts.DatacenterID != 0 {
 		config.Datacenter.ID = c.Opts.DatacenterID
@@ -458,7 +458,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 			config.Codesphere.CertIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
 		}
 		if c.Opts.ACMEEABMacKey != "" {
-			config.Codesphere.CertIssuer.Acme.EABMacKey = c.Opts.ACMEEABMacKey
+			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMEEABMacKey}})
 		}
 
 		// Configure DNS-01 solver
@@ -502,7 +502,9 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoUri
 		config.Codesphere.OpenBao.Engine = c.Opts.CodesphereOpenBaoEngine
 		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser
-		config.Codesphere.OpenBao.Password = c.Opts.CodesphereOpenBaoPassword
+		if c.Opts.CodesphereOpenBaoPassword != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: c.Opts.CodesphereOpenBaoPassword}})
+		}
 	}
 
 	// Plans

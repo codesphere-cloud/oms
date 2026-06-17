@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+package argocd
 
 import (
 	"context"
@@ -46,16 +46,16 @@ func NewArgoCDResources(dataCenterId string, ociPassword string, ociRegistryURL 
 	}, nil
 }
 
-//go:embed manifests/argocd/app-projects.yaml
+//go:embed manifests/app-projects.yaml
 var appProjectsYAML []byte
 
-//go:embed manifests/argocd/cluster-local.yaml.tpl
+//go:embed manifests/cluster-local.yaml.tpl
 var localClusterTpl []byte
 
-//go:embed manifests/argocd/repo-helm-oci.yaml.tpl
+//go:embed manifests/repo-helm-oci.yaml.tpl
 var helmRegistryTpl []byte
 
-//go:embed manifests/argocd/repo-creds-git.yaml.tpl
+//go:embed manifests/repo-creds-git.yaml.tpl
 var gitRepoTpl []byte
 
 func (a *argoCDResources) ApplyAll(ctx context.Context) error {

@@ -37,13 +37,16 @@ $ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --timeout 10
 ### Options
 
 ```
+  -k, --age-key-file string     Path to age private key file for SOPS encryption/decryption (auto-detected if not set)
       --bao-user string         Username for the userpass auth method (ignored on restore, uses DR backup value) (default "admin")
       --dr-backup-path string   Path for SOPS-encrypted DR backup file (required)
   -h, --help                    help for openbao
+  -n, --namespace string        Kubernetes namespace for OpenBao deployment (default "vault")
       --replicas int            Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA) (default 1)
       --secrets-engine string   Name of the KV-v2 secrets engine to provision (default "cs-secrets-engine")
       --storage-size string     PVC storage size for each OpenBao replica (default "10Gi")
       --timeout duration        Timeout for waiting on initialization (default 5m0s)
+  -y, --yes                     Auto-approve re-initialization of an existing deployment when no DR backup is found
 ```
 
 ### SEE ALSO

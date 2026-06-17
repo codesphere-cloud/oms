@@ -171,22 +171,6 @@ var _ = Describe("GenerateSecrets", func() {
 			Expect(mgr.Vault.GetSecret("selfSignedCaKeyPem").File.Content).To(Equal(firstCA))
 		})
 
-		It("repopulates all yaml:\"-\" config fields from vault on second call", func() {
-			Expect(mgr.GenerateSecrets()).To(Succeed())
-
-			// Simulate a config reload: yaml:"-" fields are not persisted, so zero them out.
-			mgr.Config.Codesphere.DomainAuthPrivateKey = ""
-			mgr.Config.Codesphere.DomainAuthPublicKey = ""
-			mgr.Config.Cluster.IngressCAKey = ""
-			mgr.Config.Ceph.SshPrivateKey = ""
-
-			Expect(mgr.GenerateSecrets()).To(Succeed())
-
-			Expect(mgr.Config.Codesphere.DomainAuthPrivateKey).To(ContainSubstring("BEGIN EC PRIVATE KEY"))
-			Expect(mgr.Config.Codesphere.DomainAuthPublicKey).To(ContainSubstring("BEGIN PUBLIC KEY"))
-			Expect(mgr.Config.Cluster.IngressCAKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
-			Expect(mgr.Config.Ceph.SshPrivateKey).To(ContainSubstring("RSA PRIVATE KEY"))
-		})
 	})
 
 	Context("idempotency with postgres", func() {
@@ -199,25 +183,6 @@ var _ = Describe("GenerateSecrets", func() {
 			}
 		})
 
-		It("repopulates all postgres yaml:\"-\" config fields from vault on second call", func() {
-			Expect(mgr.GenerateSecrets()).To(Succeed())
-
-			// Simulate a config reload: clear all yaml:"-" postgres fields.
-			mgr.Config.Postgres.CaCertPrivateKey = ""
-			mgr.Config.Postgres.AdminPassword = ""
-			mgr.Config.Postgres.ReplicaPassword = ""
-			mgr.Config.Postgres.UserPasswords = nil
-			mgr.Config.Postgres.Primary.PrivateKey = ""
-
-			Expect(mgr.GenerateSecrets()).To(Succeed())
-
-			Expect(mgr.Config.Postgres.CaCertPrivateKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
-			Expect(mgr.Config.Postgres.AdminPassword).To(HaveLen(32))
-			Expect(mgr.Config.Postgres.ReplicaPassword).To(HaveLen(32))
-			Expect(mgr.Config.Postgres.UserPasswords).To(HaveKey("auth"))
-			Expect(mgr.Config.Postgres.UserPasswords).To(HaveKey("usageAggregationRefresher"))
-			Expect(mgr.Config.Postgres.Primary.PrivateKey).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
-		})
 	})
 
 	Context("uniqueness", func() {

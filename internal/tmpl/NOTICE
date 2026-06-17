@@ -262,6 +262,12 @@ License: ISC
 License URL: https://github.com/davecgh/go-spew/blob/d8f796af33cc/LICENSE
  
 ----------
+Module: github.com/distribution/reference
+Version: v0.6.0
+License: Apache-2.0
+License URL: https://github.com/distribution/reference/blob/v0.6.0/LICENSE
+ 
+----------
 Module: github.com/dylibso/observe-sdk/go
 Version: v0.0.0-20240828172851-9145d8ad07e1
 License: Apache-2.0
@@ -1127,9 +1133,9 @@ License URL: https://cs.opensource.google/go/x/mod/+/v0.37.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.55.0
+Version: v0.56.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.55.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.56.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
@@ -1175,15 +1181,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.284.0
+Version: v0.285.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.284.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.285.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.284.0
+Version: v0.285.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.284.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.285.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1199,9 +1205,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/3700d4141b60/googlea
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20260526163538-3dc84a4a5aaa
+Version: v0.0.0-20260610212136-7ab31c22f7ad
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/3dc84a4a5aaa/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/7ab31c22f7ad/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc
