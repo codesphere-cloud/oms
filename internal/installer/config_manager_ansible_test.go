@@ -68,6 +68,25 @@ var _ = Describe("ConfigManagerAnsible", func() {
 		})
 
 		Context("inventory has invalid ceph config", func() {
+			It("returns an error for missing hosts block", func() {
+				file, err := os.Create(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+				defer func() { _ = os.Remove(inventoryFilePath) }()
+
+				inputInventoryYaml := `ceph:
+				something-else: 1`
+				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
+
+				_, err = file.Write([]byte(inputInventory))
+				Expect(err).ToNot(HaveOccurred())
+
+				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
+				Expect(err).To(HaveOccurred())
+
+				Expect(err.Error()).To(ContainSubstring("failed to fetch ceph hosts from inventory"))
+				Expect(err.Error()).To(ContainSubstring("no hosts block defined"))
+			})
+
 			It("returns an error for missing host variables", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
@@ -396,6 +415,44 @@ k8s-workers:
 		})
 
 		Context("inventory has invalid k8s config", func() {
+			It("returns an error for missing hosts block", func() {
+				file, err := os.Create(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+				defer func() { _ = os.Remove(inventoryFilePath) }()
+
+				inputInventoryYaml := `k8s-cp:
+				something-else: 1`
+				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
+
+				_, err = file.Write([]byte(inputInventory))
+				Expect(err).ToNot(HaveOccurred())
+
+				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
+				Expect(err).To(HaveOccurred())
+
+				Expect(err.Error()).To(ContainSubstring("failed to fetch k8s control plane hosts from inventory"))
+				Expect(err.Error()).To(ContainSubstring("no hosts block defined"))
+			})
+
+			It("returns an error for missing hosts block", func() {
+				file, err := os.Create(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+				defer func() { _ = os.Remove(inventoryFilePath) }()
+
+				inputInventoryYaml := `k8s-workers:
+				something-else: 1`
+				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
+
+				_, err = file.Write([]byte(inputInventory))
+				Expect(err).ToNot(HaveOccurred())
+
+				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
+				Expect(err).To(HaveOccurred())
+
+				Expect(err.Error()).To(ContainSubstring("failed to fetch k8s worker node hosts from inventory"))
+				Expect(err.Error()).To(ContainSubstring("no hosts block defined"))
+			})
+
 			It("returns an error for missing host variables", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
@@ -424,6 +481,26 @@ k8s-workers:
 	hosts:
 	  cs-k8s-cp-1:
 	    private_up: 1`
+				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
+
+				_, err = file.Write([]byte(inputInventory))
+				Expect(err).ToNot(HaveOccurred())
+
+				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to fetch k8s control plane hosts from inventory"))
+				Expect(err.Error()).To(ContainSubstring("missing private_ip for k8s host 'cs-k8s-cp-1'"))
+			})
+
+			It("returns an error for empty private_ip entry", func() {
+				file, err := os.Create(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+				defer func() { _ = os.Remove(inventoryFilePath) }()
+
+				inputInventoryYaml := `k8s-cp:
+	hosts:
+	  cs-k8s-cp-1:
+	    private_ip:`
 				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
 
 				_, err = file.Write([]byte(inputInventory))

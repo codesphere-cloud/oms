@@ -14,7 +14,20 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type ansibleInventory map[string]map[string]map[string]any
+// ansibleInventory holds all supported yaml tags to be parsed
+type ansibleInventory struct {
+	Ceph       *group `yaml:"ceph,omitempty"`
+	K8sCP      *group `yaml:"k8s-cp,omitempty"`
+	K8sWorkers *group `yaml:"k8s-workers,omitempty"`
+}
+
+type group struct {
+	Hosts map[string]hostInfo `yaml:"hosts,omitempty"`
+}
+
+type hostInfo struct {
+	PrivateIP string `yaml:"private_ip"`
+}
 
 // FetchFromAnsibleInventory parses the ansible inventory file and tries to fetch ceph and k8s host from it.
 // Host info are added to the current install config.
@@ -29,7 +42,7 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		return fmt.Errorf("failed to read Ansible inventory file: %w", err)
 	}
 
-	var inventory ansibleInventory
+	var inventory *ansibleInventory
 
 	err = yaml.Unmarshal(data, &inventory)
 	if err != nil {
@@ -40,7 +53,7 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		return fmt.Errorf("empty Ansible inventory file")
 	}
 
-	cephHosts, err := fetchCephHosts(inventory)
+	cephHosts, err := inventory.fetchCephHosts()
 	if err != nil {
 		return fmt.Errorf("failed to fetch ceph hosts from inventory: %w", err)
 	}
@@ -49,7 +62,7 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config.Ceph.Hosts = cephHosts
 	}
 
-	k8sCPHosts, err := fetchK8sControlPlaneHosts(inventory)
+	k8sCPHosts, err := inventory.fetchK8sControlPlaneHosts()
 	if err != nil {
 		return fmt.Errorf("failed to fetch k8s control plane hosts from inventory: %w", err)
 	}
@@ -61,7 +74,7 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config.Kubernetes.ControlPlanes = k8sCPHosts
 	}
 
-	k8sWorkerHosts, err := fetchK8sWorkerHosts(inventory)
+	k8sWorkerHosts, err := inventory.fetchK8sWorkerHosts()
 	if err != nil {
 		return fmt.Errorf("failed to fetch k8s worker node hosts from inventory: %w", err)
 	}
@@ -77,42 +90,29 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 }
 
 // fetchCephHosts extracts Ceph hosts from the ansible inventory.
-// The first ceph host parsed is considered as the master.
-// Supported YAML format:
-// ceph:
-//
-//	hosts:
-//	  host-name-1:
-//	    private_ip: "10.0.0.1"
-//	  host-name-2:
-//	    private_ip: "10.0.0.2"
-func fetchCephHosts(inventory ansibleInventory) ([]files.CephHost, error) {
+// Hosts are sorted alphabetically; the first host in the list is designated as the master.
+func (i *ansibleInventory) fetchCephHosts() ([]files.CephHost, error) {
 	hosts := []files.CephHost{}
 
-	// check if ceph exists in inventory
-	cephGroup, ok := inventory["ceph"]
-	if !ok {
-		return hosts, nil // No ceph group, return empty host list
+	if i.Ceph == nil {
+		return hosts, nil
 	}
 
-	// check if ceph.hosts exists in inventory
-	hostsGroup, ok := cephGroup["hosts"]
-	if !ok {
-		return hosts, nil // No hosts under ceph group, return empty host list
+	if i.Ceph.Hosts == nil {
+		return hosts, fmt.Errorf("no hosts block defined")
 	}
 
 	count := 0
-	for _, key := range getSortedHostsGroupKeys(hostsGroup) {
-		hostVars := hostsGroup[key]
+	for _, key := range getSortedHostsGroupKeys(i.Ceph.Hosts) {
+		hostVars := i.Ceph.Hosts[key]
 
-		privateIP := fetchHostVarsValue("private_ip", hostVars)
-		if privateIP == "" {
+		if hostVars.PrivateIP == "" {
 			return nil, fmt.Errorf("missing private_ip for ceph host '%s'", key)
 		}
 
 		host := files.CephHost{
 			Hostname:  key,
-			IPAddress: privateIP,
+			IPAddress: hostVars.PrivateIP,
 			IsMaster:  count == 0,
 		}
 		hosts = append(hosts, host)
@@ -124,51 +124,44 @@ func fetchCephHosts(inventory ansibleInventory) ([]files.CephHost, error) {
 }
 
 // fetchK8sControlPlaneHosts extracts K8s control plane hosts from the ansible inventory
-// Supported YAML format:
-// k8s-cp:
-//
-//	hosts:
-//	  my-host-name:
-//	    private_ip: "10.0.0.1"
-func fetchK8sControlPlaneHosts(inventory ansibleInventory) ([]files.K8sNode, error) {
-	return fetchKubernetesHosts("k8s-cp", inventory)
+func (i *ansibleInventory) fetchK8sControlPlaneHosts() ([]files.K8sNode, error) {
+	if i.K8sCP == nil {
+		return []files.K8sNode{}, nil
+	}
+
+	if i.K8sCP.Hosts == nil {
+		return []files.K8sNode{}, fmt.Errorf("no hosts block defined")
+	}
+
+	return fetchKubernetesHosts("k8s-cp", i.K8sCP.Hosts)
 }
 
 // fetchK8sWorkerHosts extracts K8s worker hosts from the ansible inventory
-// Supported YAML format:
-// k8s-workers:
-//
-//	hosts:
-//	  my-host-name:
-//	    private_ip: "10.0.0.1"
-func fetchK8sWorkerHosts(inventory ansibleInventory) ([]files.K8sNode, error) {
-	return fetchKubernetesHosts("k8s-workers", inventory)
+func (i *ansibleInventory) fetchK8sWorkerHosts() ([]files.K8sNode, error) {
+	if i.K8sWorkers == nil {
+		return []files.K8sNode{}, nil
+	}
+
+	if i.K8sWorkers.Hosts == nil {
+		return []files.K8sNode{}, fmt.Errorf("no hosts block defined")
+	}
+
+	return fetchKubernetesHosts("k8s-workers", i.K8sWorkers.Hosts)
 }
 
 // fetchKubernetesHosts extract hosts from the given parentTag
-func fetchKubernetesHosts(parentTag string, inventory ansibleInventory) ([]files.K8sNode, error) {
+func fetchKubernetesHosts(parentTag string, inventoryHosts map[string]hostInfo) ([]files.K8sNode, error) {
 	hosts := []files.K8sNode{}
 
-	// check if parentTag exists in inventory
-	k8sGroup, ok := inventory[parentTag]
-	if !ok {
-		return hosts, nil
-	}
+	for _, key := range getSortedHostsGroupKeys(inventoryHosts) {
+		hostVars := inventoryHosts[key]
 
-	// check if hosts exists in inventory
-	hostsGroup, ok := k8sGroup["hosts"]
-	if !ok {
-		return hosts, nil
-	}
-
-	for _, key := range getSortedHostsGroupKeys(hostsGroup) {
-		privateIP := fetchHostVarsValue("private_ip", hostsGroup[key])
-		if privateIP == "" {
+		if hostVars.PrivateIP == "" {
 			return nil, fmt.Errorf("missing private_ip for k8s host '%s'", key)
 		}
 
 		host := files.K8sNode{
-			IPAddress: privateIP,
+			IPAddress: hostVars.PrivateIP,
 		}
 		hosts = append(hosts, host)
 	}
@@ -176,7 +169,7 @@ func fetchKubernetesHosts(parentTag string, inventory ansibleInventory) ([]files
 	return hosts, nil
 }
 
-func getSortedHostsGroupKeys(group map[string]any) []string {
+func getSortedHostsGroupKeys(group map[string]hostInfo) []string {
 	keys := make([]string, 0, len(group))
 	for k := range group {
 		keys = append(keys, k)
@@ -185,17 +178,4 @@ func getSortedHostsGroupKeys(group map[string]any) []string {
 	sort.Strings(keys)
 
 	return keys
-}
-
-func fetchHostVarsValue(key string, hostVars any) string {
-	value := ""
-
-	if vars, ok := hostVars.(map[string]any); ok {
-		anyValue, exists := vars[key]
-		if exists && anyValue != nil {
-			value = fmt.Sprintf("%v", anyValue)
-		}
-	}
-
-	return value
 }
