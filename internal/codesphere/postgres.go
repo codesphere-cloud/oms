@@ -14,7 +14,7 @@ type PostgresService struct {
 // DBUsername returns the postgres username for the service.
 func (s PostgresService) DBUsername() string {
 	if s.username != "" {
-		return s.username
+		return s.username + "_blue"
 	}
 	return s.Name + "_blue"
 }

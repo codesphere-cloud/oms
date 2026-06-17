@@ -23,12 +23,12 @@ func TestPostgresServiceDBUsername_Override(t *testing.T) {
 		{
 			name:     "usageAggregationRefresher has override",
 			svc:      PostgresService{Name: "usageAggregationRefresher", username: "usage_aggregation_refresher"},
-			expected: "usage_aggregation_refresher",
+			expected: "usage_aggregation_refresher_blue",
 		},
 		{
 			name:     "usageAggregationReader has override",
 			svc:      PostgresService{Name: "usageAggregationReader", username: "usage_aggregation_reader"},
-			expected: "usage_aggregation_reader",
+			expected: "usage_aggregation_reader_blue",
 		},
 	}
 	for _, tt := range tests {
@@ -61,8 +61,8 @@ func TestPostgresServices_AllNamesNonEmpty(t *testing.T) {
 
 func TestPostgresServices_UsageAggregationOverrides(t *testing.T) {
 	overrides := map[string]string{
-		"usageAggregationRefresher": "usage_aggregation_refresher",
-		"usageAggregationReader":    "usage_aggregation_reader",
+		"usageAggregationRefresher": "usage_aggregation_refresher_blue",
+		"usageAggregationReader":    "usage_aggregation_reader_blue",
 	}
 	for _, svc := range PostgresServices {
 		if expected, ok := overrides[svc.Name]; ok {
