@@ -1247,9 +1247,9 @@ License URL: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
  
 ----------
 Module: helm.sh/helm/v4
-Version: v4.2.1
+Version: v4.2.2
 License: Apache-2.0
-License URL: https://github.com/helm/helm/blob/v4.2.1/LICENSE
+License URL: https://github.com/helm/helm/blob/v4.2.2/LICENSE
  
 ----------
 Module: k8s.io/api
