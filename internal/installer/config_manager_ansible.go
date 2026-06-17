@@ -192,7 +192,7 @@ func fetchHostVarsValue(key string, hostVars any) string {
 
 	if vars, ok := hostVars.(map[string]any); ok {
 		anyValue, exists := vars[key]
-		if exists {
+		if exists && anyValue != nil {
 			value = fmt.Sprintf("%v", anyValue)
 		}
 	}

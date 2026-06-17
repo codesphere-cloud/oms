@@ -106,6 +106,26 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				Expect(err.Error()).To(ContainSubstring("failed to fetch ceph hosts from inventory"))
 				Expect(err.Error()).To(ContainSubstring("missing private_ip for ceph host 'cs-ceph-1'"))
 			})
+
+			It("returns an error for empty private_ip entry", func() {
+				file, err := os.Create(inventoryFilePath)
+				Expect(err).ToNot(HaveOccurred())
+				defer func() { _ = os.Remove(inventoryFilePath) }()
+
+				inputInventoryYaml := `ceph:
+				hosts:
+					cs-ceph-1:
+						private_ip:`
+				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
+
+				_, err = file.Write([]byte(inputInventory))
+				Expect(err).ToNot(HaveOccurred())
+
+				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to fetch ceph hosts from inventory"))
+				Expect(err.Error()).To(ContainSubstring("missing private_ip for ceph host 'cs-ceph-1'"))
+			})
 		})
 
 		Context("inventory has ceph config", func() {
