@@ -14,6 +14,7 @@ import (
 	"helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/kube"
 	"helm.sh/helm/v4/pkg/registry"
 	"helm.sh/helm/v4/pkg/release"
 	"helm.sh/helm/v4/pkg/storage/driver"
@@ -35,6 +36,7 @@ type ChartConfig struct {
 	Version         string // "" means latest
 	Values          map[string]interface{}
 	CreateNamespace bool
+	WaitStrategy    kube.WaitStrategy // "" defaults to kube.StatusWatcherStrategy
 }
 
 type InstallChartOptions struct {
@@ -44,6 +46,7 @@ type InstallChartOptions struct {
 type UpgradeChartOptions struct {
 	InstallIfNotExist bool
 	ForceConflicts    bool
+	TakeOwnership     bool
 }
 
 // HelmClient is the seam that makes the Helm SDK mockable.
@@ -145,6 +148,13 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 	return &helmEnv{actionConfig: actionConfig, settings: settings}, nil
 }
 
+func waitStrategy(s kube.WaitStrategy) kube.WaitStrategy {
+	if s == "" {
+		return kube.StatusWatcherStrategy
+	}
+	return s
+}
+
 func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, error) {
 	env, err := h.newHelmEnv(namespace)
 	if err != nil {
@@ -200,7 +210,7 @@ func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig, opts Ins
 	installClient.Namespace = cfg.Namespace
 	installClient.CreateNamespace = cfg.CreateNamespace
 	installClient.DryRunStrategy = "none"
-	installClient.WaitStrategy = "watcher"
+	installClient.WaitStrategy = waitStrategy(cfg.WaitStrategy)
 	installClient.Version = cfg.Version
 	installClient.RepoURL = cfg.RepoURL
 	installClient.Timeout = 5 * time.Minute
@@ -242,11 +252,12 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 
 	upgradeClient := action.NewUpgrade(env.actionConfig)
 	upgradeClient.Namespace = cfg.Namespace
-	upgradeClient.WaitStrategy = "watcher"
+	upgradeClient.WaitStrategy = waitStrategy(cfg.WaitStrategy)
 	upgradeClient.Version = cfg.Version
 	upgradeClient.RepoURL = cfg.RepoURL
 	upgradeClient.Timeout = 5 * time.Minute
 	upgradeClient.ForceConflicts = opts.ForceConflicts
+	upgradeClient.TakeOwnership = opts.TakeOwnership
 
 	chartPath, err := upgradeClient.LocateChart(cfg.ChartName, env.settings)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
@@ -152,8 +153,7 @@ func (p *Package) GetFullImageTag(baseimage string) (string, error) {
 		return "", fmt.Errorf("baseimage not specified")
 	}
 
-	bomJson := files.BomConfig{}
-	err := bomJson.ParseBomConfig(p.GetDependencyPath("bom.json"))
+	bomJson, err := bom.Parse(p.GetDependencyPath("bom.json"))
 	if err != nil {
 		return "", fmt.Errorf("failed to load bom.json: %w", err)
 	}
@@ -194,8 +194,7 @@ func (p *Package) GetBaseimagePath(baseimage string, force bool) (string, error)
 }
 
 func (p *Package) GetCodesphereVersion() (string, error) {
-	bomJson := files.BomConfig{}
-	err := bomJson.ParseBomConfig(p.GetDependencyPath("bom.json"))
+	bomJson, err := bom.Parse(p.GetDependencyPath("bom.json"))
 	if err != nil {
 		return "", fmt.Errorf("failed to load bom.json: %w", err)
 	}

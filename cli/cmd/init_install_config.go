@@ -133,6 +133,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
 				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
 				{Cmd: "--profile production -c config.yaml --vault prod.vault.yaml", Desc: "Use production profile"},
+				{Cmd: "--profile production -c config.yaml --ansible-inventory inventory.yaml", Desc: "Use ansible inventory for host definitions"},
 				{Cmd: "--validate -c config.yaml --vault prod.vault.yaml", Desc: "Validate existing configuration files"},
 			}),
 		},
@@ -211,21 +212,21 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 
 	c.printWelcomeMessage()
 
-	if c.Opts.Interactive {
-		err = icg.CollectInteractively()
-		if err != nil {
-			return fmt.Errorf("failed to collect configuration interactively: %w", err)
-		}
-	} else {
-		c.updateConfigFromOpts(icg.GetInstallConfig())
-	}
-
 	// If Ansible inventory file is provided, import host information from it
 	if c.Opts.AnsibleInventoryFile != "" {
 		err = icg.FetchFromAnsibleInventory(c.Opts.AnsibleInventoryFile)
 		if err != nil {
 			return fmt.Errorf("failed to import from Ansible inventory: %w", err)
 		}
+	}
+
+	if c.Opts.Interactive {
+		err = icg.CollectInteractively()
+		if err != nil {
+			return fmt.Errorf("failed to collect configuration interactively: %w", err)
+		}
+	} else {
+		c.updateConfigFromOpts(icg.GetInstallConfig(), icg.GetVault())
 	}
 
 	validationWarnings := icg.ValidateInstallConfig()
@@ -324,7 +325,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	return nil
 }
 
-func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *files.RootConfig {
+func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, vault *files.InstallVault) *files.RootConfig {
 	// Datacenter settings
 	if c.Opts.DatacenterID != 0 {
 		config.Datacenter.ID = c.Opts.DatacenterID
@@ -478,7 +479,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 			config.Codesphere.CertIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
 		}
 		if c.Opts.ACMEEABMacKey != "" {
-			config.Codesphere.CertIssuer.Acme.EABMacKey = c.Opts.ACMEEABMacKey
+			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMEEABMacKey}})
 		}
 
 		// Configure DNS-01 solver
@@ -522,7 +523,9 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoUri
 		config.Codesphere.OpenBao.Engine = c.Opts.CodesphereOpenBaoEngine
 		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser
-		config.Codesphere.OpenBao.Password = c.Opts.CodesphereOpenBaoPassword
+		if c.Opts.CodesphereOpenBaoPassword != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: c.Opts.CodesphereOpenBaoPassword}})
+		}
 	}
 
 	// Plans

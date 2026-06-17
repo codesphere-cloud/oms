@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/template"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 //go:embed manifests/openbao/vault-cr.yaml
@@ -31,7 +33,7 @@ var vaultCRTemplate []byte
 
 const (
 	openBaoUnsealSecretName = "openbao-unseal-keys"
-	openBaoNamespace        = "vault"
+	DefaultOpenBaoNamespace = "vault"
 	openBaoImage            = "quay.io/openbao/openbao:2.1.0"
 	bankVaultsImage         = "ghcr.io/bank-vaults/bank-vaults:v1.31.3"
 	bankVaultsChartRepo     = "oci://ghcr.io/bank-vaults/helm-charts"
@@ -40,18 +42,52 @@ const (
 	defaultPasswordLength   = 32
 	pollInterval            = 5 * time.Second
 	maxPollInterval         = 30 * time.Second
+
+	// defaultReadinessTimeoutPerReplica is added to the base timeout for each
+	// replica when waiting for all OpenBao pods to become ready. Pods come up
+	// sequentially and each must join Raft before the next, so the total wait
+	// scales with the deployment size.
+	defaultReadinessTimeoutPerReplica = 3 * time.Minute
+
+	// vaultCRLabelKey/Value identify resources (pods, PVCs) managed by the
+	// bank-vaults operator for our "openbao" Vault CR.
+	vaultCRLabelKey   = "vault_cr"
+	vaultCRLabelValue = "openbao"
+
+	// appNameLabelKey/Value distinguish the OpenBao server pods from the
+	// operator's configurer pod — both carry vault_cr=openbao, but only the
+	// server pods are app.kubernetes.io/name=vault. Pod counting must exclude
+	// the configurer, otherwise readiness never matches the replica count.
+	appNameLabelKey        = "app.kubernetes.io/name"
+	appNameLabelValueVault = "vault"
 )
+
+// vaultCRLabelSelector selects all resources belonging to the "openbao" Vault CR
+// (server pods, the configurer pod, and PVCs).
+var vaultCRLabelSelector = labels.SelectorFromSet(labels.Set{vaultCRLabelKey: vaultCRLabelValue}).String()
+
+// vaultPodLabelSelector selects only the OpenBao server pods, excluding the
+// configurer pod (which also carries vault_cr=openbao). Used for readiness and
+// termination checks that must count exactly the StatefulSet replicas.
+var vaultPodLabelSelector = labels.SelectorFromSet(labels.Set{
+	vaultCRLabelKey: vaultCRLabelValue,
+	appNameLabelKey: appNameLabelValueVault,
+}).String()
 
 // OpenBaoInstallerConfig holds all configurable parameters for the OpenBao bootstrap.
 type OpenBaoInstallerConfig struct {
+	Namespace         string
 	SecretsEngineName string
 	Username          string
 	DRBackupPath      string
 	Replicas          int
 	StorageSize       string
 	Timeout           time.Duration
-	AgeRecipient      string
-	AgeKeyPath        string
+	// ReadinessTimeoutPerReplica is added to Timeout per replica when waiting
+	// for all pods to become ready. Defaulted in validateConfig when unset.
+	ReadinessTimeoutPerReplica time.Duration
+	AgeRecipient               string
+	AgeKeyPath                 string
 }
 
 // OpenBaoInstaller orchestrates the Day-0 bootstrap, configuration, and DR
@@ -63,16 +99,28 @@ type OpenBaoInstaller struct {
 	Logger    *bootstrap.StepLogger
 	Config    OpenBaoInstallerConfig
 
+	// ConfirmFunc is called when the destructive fresh-install path is about
+	// to proceed (no DR backup found). If it returns an error the install is
+	// aborted. When nil the install proceeds without confirmation.
+	ConfirmFunc func() error
+
 	// Intermediate state populated during the install pipeline
-	ctx            context.Context
-	password       string
-	drBackupExists bool
-	unsealSecret   *corev1.Secret
+	ctx              context.Context
+	password         string
+	drBackupExists   bool
+	unsealSecret     *corev1.Secret
+	backupUnsealKeys map[string][]byte // unseal keys from DR backup, used during WaitForInitialization
 }
 
 // NewOpenBaoInstaller constructs an OpenBaoInstaller with real Kubernetes and Helm clients.
 func NewOpenBaoInstaller(cfg OpenBaoInstallerConfig) (*OpenBaoInstaller, error) {
-	helm, err := NewHelmClient(openBaoNamespace)
+	// Apply namespace default here so the Helm client is always initialised with
+	// the correct namespace, even when --namespace was not supplied by the caller.
+	if cfg.Namespace == "" {
+		cfg.Namespace = DefaultOpenBaoNamespace
+	}
+
+	helm, err := NewHelmClient(cfg.Namespace)
 	if err != nil {
 		return nil, fmt.Errorf("creating helm client: %w", err)
 	}
@@ -94,6 +142,9 @@ func NewOpenBaoInstaller(cfg OpenBaoInstallerConfig) (*OpenBaoInstaller, error) 
 const defaultTimeout = 5 * time.Minute
 
 func (o *OpenBaoInstaller) validateConfig() error {
+	if o.Config.Namespace == "" {
+		o.Config.Namespace = DefaultOpenBaoNamespace
+	}
 	r := o.Config.Replicas
 	if r < 1 {
 		return fmt.Errorf("--replicas must be >= 1, got %d", r)
@@ -103,6 +154,9 @@ func (o *OpenBaoInstaller) validateConfig() error {
 	}
 	if o.Config.Timeout <= 0 {
 		o.Config.Timeout = defaultTimeout
+	}
+	if o.Config.ReadinessTimeoutPerReplica <= 0 {
+		o.Config.ReadinessTimeoutPerReplica = defaultReadinessTimeoutPerReplica
 	}
 	return nil
 }
@@ -121,6 +175,21 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		return fmt.Errorf("pre-flight DR check failed: %w", err)
 	}
 
+	// Only warn when an existing deployment is detected but no DR backup was
+	// found — the user likely supplied the wrong backup path. A genuine first
+	// install (no existing deployment) proceeds without prompting.
+	if !o.drBackupExists && o.ConfirmFunc != nil {
+		exists, checkErr := o.hasExistingDeployment()
+		if checkErr != nil {
+			return fmt.Errorf("checking for existing deployment: %w", checkErr)
+		}
+		if exists {
+			if err := o.ConfirmFunc(); err != nil {
+				return err
+			}
+		}
+	}
+
 	// Only generate a new password for fresh installs; on DR restore the
 	// password was already extracted from the backup in PreFlightDRCheck.
 	if !o.drBackupExists {
@@ -128,6 +197,17 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to generate secure password: %w", err)
 		}
+	}
+
+	// Ensure the namespace exists before anything that writes into it (the Helm
+	// release metadata, the Vault CR, cleanup of stale resources). This is the
+	// single namespace-creation path — DeployBankVaultsOperator deploys with
+	// CreateNamespace:false and relies on the namespace already being present.
+	err = o.Logger.Step("Ensuring namespace exists", func() error {
+		return o.ensureNamespace(o.ctx)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to ensure namespace: %w", err)
 	}
 
 	err = o.Logger.Step("Deploying Bank-Vaults Operator", o.DeployBankVaultsOperator)
@@ -138,12 +218,11 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 	// If a previous install left behind an unseal-keys Secret (e.g. Raft storage
 	// was wiped or the cluster was rebuilt), those keys belong to the old master
 	// key and will cause bank-vaults to permanently fail unsealing the new instance.
-	// We delete the Vault CR first and wait for pods to exit, otherwise the old
-	// sidecar's retry loop re-creates the secret after we remove it.
+	// We clean the full prior install state: Vault CR, pods, PVCs, and the secret.
 	if !o.drBackupExists {
-		err = o.Logger.Step("Removing stale unseal keys", o.DeleteStaleUnsealKeys)
+		err = o.Logger.Step("Cleaning stale install state", o.CleanStaleInstallState)
 		if err != nil {
-			return fmt.Errorf("failed to remove stale unseal keys: %w", err)
+			return fmt.Errorf("failed to clean stale install state: %w", err)
 		}
 	}
 
@@ -157,6 +236,11 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		return fmt.Errorf("failed waiting for initialization: %w", err)
 	}
 
+	err = o.Logger.Step("Waiting for all OpenBao pods to be ready", o.WaitForPodsReady)
+	if err != nil {
+		return fmt.Errorf("failed waiting for pods to be ready: %w", err)
+	}
+
 	err = o.Logger.Step("Extracting and encrypting DR backup", o.ExtractAndEncrypt)
 	if err != nil {
 		return fmt.Errorf("failed to extract and encrypt DR backup: %w", err)
@@ -167,9 +251,10 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 }
 
 // PreFlightDRCheck checks if a SOPS-encrypted DR backup exists.
-// If it does, the backup is decrypted and the unseal keys Secret is pre-applied
-// so that Bank-Vaults can unseal an existing OpenBao instance.
-// Sets o.drBackupExists to true if a DR backup was found and restored.
+// If it does, the backup is decrypted and the unseal keys are stored in memory
+// (backupUnsealKeys) for later use by WaitForInitialization, which handles
+// creating/updating the Kubernetes Secret with retry logic.
+// Sets o.drBackupExists to true if a DR backup was found and processed.
 func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 	if o.Config.DRBackupPath == "" {
 		return fmt.Errorf("DRBackupPath must be set")
@@ -184,7 +269,7 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 		return fmt.Errorf("checking DR backup file %s: %w", o.Config.DRBackupPath, err)
 	}
 
-	o.Logger.Logf("Found existing DR backup at %s — restoring unseal keys", o.Config.DRBackupPath)
+	o.Logger.Logf("Found existing DR backup at %s", o.Config.DRBackupPath)
 
 	decrypted, err := DecryptFileWithSOPS(o.Config.DRBackupPath, o.Config.AgeKeyPath)
 	if err != nil {
@@ -196,39 +281,13 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 		return fmt.Errorf("parsing DR backup: %w", err)
 	}
 
-	secretData := make(map[string][]byte)
+	// Store backup unseal keys for later use in WaitForInitialization.
+	// We do NOT write them to Kubernetes yet — the operator may delete or
+	// recreate the secret during Vault CR reconciliation, so we defer
+	// secret creation to the initialization wait loop where we can retry.
+	o.backupUnsealKeys = make(map[string][]byte)
 	for k, v := range backup.UnsealKeys {
-		secretData[k] = []byte(v)
-	}
-
-	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      openBaoUnsealSecretName,
-			Namespace: openBaoNamespace,
-		},
-		Data: secretData,
-	}
-
-	if err := o.ensureNamespace(o.ctx); err != nil {
-		return err
-	}
-
-	secretsClient := o.Clientset.CoreV1().Secrets(openBaoNamespace)
-	existing, err := secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
-	if err != nil {
-		if !k8serrors.IsNotFound(err) {
-			return fmt.Errorf("checking for existing secret: %w", err)
-		}
-		_, err = secretsClient.Create(o.ctx, secret, metav1.CreateOptions{})
-		if err != nil {
-			return fmt.Errorf("creating unseal secret from DR backup: %w", err)
-		}
-	} else {
-		secret.ResourceVersion = existing.ResourceVersion
-		_, err = secretsClient.Update(o.ctx, secret, metav1.UpdateOptions{})
-		if err != nil {
-			return fmt.Errorf("updating unseal secret from DR backup: %w", err)
-		}
+		o.backupUnsealKeys[k] = []byte(v)
 	}
 
 	// Reuse the password and username from the DR backup so the Vault CR is
@@ -239,7 +298,6 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 	o.password = backup.Password
 	o.Config.Username = backup.Username
 
-	o.Logger.Logf("Unseal keys restored from DR backup successfully")
 	o.drBackupExists = true
 	return nil
 }
@@ -252,18 +310,79 @@ func (o *OpenBaoInstaller) GeneratePassword() error {
 }
 
 // DeployBankVaultsOperator installs or upgrades the Bank-Vaults Operator Helm chart.
-// This is idempotent via UpgradeChart with InstallIfNotExist.
+//
+// The operator is cluster-scoped (it creates ClusterRoles, ClusterRoleBindings)
+// and watches Vault CRs across all namespaces. If the operator is already
+// installed in a different namespace, we skip re-deployment — one instance
+// is sufficient for the entire cluster.
 func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 	cfg := ChartConfig{
-		ReleaseName:     "vault-operator",
-		ChartName:       bankVaultsChartRepo + "/" + bankVaultsChartName,
-		Version:         bankVaultsChartVersion,
-		Namespace:       openBaoNamespace,
-		CreateNamespace: true,
+		ReleaseName: "vault-operator",
+		ChartName:   bankVaultsChartRepo + "/" + bankVaultsChartName,
+		Version:     bankVaultsChartVersion,
+		Namespace:   o.Config.Namespace,
+		// Namespace creation is handled exclusively by ensureNamespace, which
+		// runs earlier in the install pipeline — keep a single creation path.
+		CreateNamespace: false,
 		Values:          map[string]interface{}{},
 	}
 
-	return o.Helm.UpgradeChart(o.ctx, cfg, UpgradeChartOptions{InstallIfNotExist: true})
+	// Upgrade in place when a release already exists in the target namespace.
+	exists, err := o.releaseExistsInTargetNamespace(cfg.ReleaseName)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return o.Helm.UpgradeChart(o.ctx, cfg, UpgradeChartOptions{})
+	}
+
+	// Release not found in target namespace. Skip when the operator is already
+	// deployed cluster-wide (in another namespace) — one instance suffices.
+	clusterWide, err := o.operatorInstalledClusterWide()
+	if err != nil {
+		return err
+	}
+	if clusterWide {
+		o.Logger.Logf("Bank-Vaults Operator already installed in the cluster, skipping deployment")
+		return nil
+	}
+
+	// Operator does not exist — perform fresh install.
+	return o.Helm.InstallChart(o.ctx, cfg, InstallChartOptions{})
+}
+
+// releaseExistsInTargetNamespace reports whether the named Helm release exists
+// in the configured namespace. If the namespace does not exist yet there can be
+// no release in it, so it returns false without querying Helm (which would fail
+// on a non-existent namespace).
+func (o *OpenBaoInstaller) releaseExistsInTargetNamespace(releaseName string) (bool, error) {
+	_, nsErr := o.Clientset.CoreV1().Namespaces().Get(o.ctx, o.Config.Namespace, metav1.GetOptions{})
+	if nsErr != nil {
+		if k8serrors.IsNotFound(nsErr) {
+			return false, nil
+		}
+		return false, fmt.Errorf("checking namespace %s: %w", o.Config.Namespace, nsErr)
+	}
+
+	rel, err := o.Helm.FindRelease(o.Config.Namespace, releaseName)
+	if err != nil {
+		return false, fmt.Errorf("finding release %s in namespace %s: %w", releaseName, o.Config.Namespace, err)
+	}
+	return rel != nil, nil
+}
+
+// operatorInstalledClusterWide reports whether the bank-vaults operator is
+// already installed anywhere in the cluster, detected via its cluster-scoped
+// "vault-operator" ClusterRole.
+func (o *OpenBaoInstaller) operatorInstalledClusterWide() (bool, error) {
+	_, err := o.Clientset.RbacV1().ClusterRoles().Get(o.ctx, "vault-operator", metav1.GetOptions{})
+	if err == nil {
+		return true, nil
+	}
+	if !k8serrors.IsNotFound(err) {
+		return false, fmt.Errorf("checking for existing vault-operator ClusterRole: %w", err)
+	}
+	return false, nil
 }
 
 // vaultCRTemplateData holds the values injected into the Vault CR template.
@@ -279,6 +398,18 @@ type vaultCRTemplateData struct {
 	RetryJoinAddrs    []string
 }
 
+// Build retry_join addresses for Raft so each node can autonomously
+// find and join the cluster leader. For a single replica this produces
+// one self-referencing address, which is harmless and means scaling up
+// later only requires changing the replica count.
+func buildRetryJoinAddrs(replicas int, namespace string) []string {
+	addrs := make([]string, 0, replicas)
+	for i := 0; i < replicas; i++ {
+		addrs = append(addrs, fmt.Sprintf("http://openbao-%d.%s.svc.cluster.local:8200", i, namespace))
+	}
+	return addrs
+}
+
 // ApplyVaultCR renders the Bank-Vaults Vault CR template and applies it to the cluster.
 func (o *OpenBaoInstaller) ApplyVaultCR() error {
 	tmpl, err := template.New("vault-cr").Parse(string(vaultCRTemplate))
@@ -286,18 +417,10 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 		return fmt.Errorf("parsing vault CR template: %w", err)
 	}
 
-	// Build retry_join addresses for Raft so each node can autonomously
-	// find and join the cluster leader. For a single replica this produces
-	// one self-referencing address, which is harmless and means scaling up
-	// later only requires changing the replica count.
-	var retryJoinAddrs []string
-	for i := 0; i < o.Config.Replicas; i++ {
-		addr := fmt.Sprintf("http://openbao-%d.%s.svc.cluster.local:8200", i, openBaoNamespace)
-		retryJoinAddrs = append(retryJoinAddrs, addr)
-	}
+	retryJoinAddrs := buildRetryJoinAddrs(o.Config.Replicas, o.Config.Namespace)
 
 	data := vaultCRTemplateData{
-		Namespace:         openBaoNamespace,
+		Namespace:         o.Config.Namespace,
 		OpenBaoImage:      openBaoImage,
 		BankVaultsImage:   bankVaultsImage,
 		SecretsEngineName: o.Config.SecretsEngineName,
@@ -333,28 +456,139 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 
 // WaitForInitialization polls the openbao-unseal-keys Secret until it contains
 // unseal key data, indicating that Bank-Vaults has completed initialization.
+//
+// When a DR backup was loaded (backupUnsealKeys is set), the function ensures
+// the secret exists with the backup's unseal keys on every poll iteration. This
+// handles the case where the bank-vaults operator deletes or recreates the
+// secret during Vault CR reconciliation — we simply re-apply it until the
+// operator settles and the sidecar can successfully unseal.
 func (o *OpenBaoInstaller) WaitForInitialization() error {
-	secretsClient := o.Clientset.CoreV1().Secrets(openBaoNamespace)
+	secretsClient := o.Clientset.CoreV1().Secrets(o.Config.Namespace)
 
 	return o.pollUntil("waiting for openbao-unseal-keys to be populated", func() (bool, error) {
 		secret, err := secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
 		if err != nil {
-			if k8serrors.IsNotFound(err) {
-				return false, nil // Secret doesn't exist yet — keep polling
+			if !k8serrors.IsNotFound(err) {
+				return false, fmt.Errorf("fetching unseal secret: %w", err)
 			}
-			return false, fmt.Errorf("fetching unseal secret: %w", err)
+			// Secret doesn't exist yet.
+			if o.backupUnsealKeys != nil {
+				// DR restore: create the secret from backup so the sidecar can unseal.
+				if createErr := o.ensureUnsealSecret(secretsClient); createErr != nil {
+					return false, createErr
+				}
+			}
+			return false, nil // Keep polling — sidecar hasn't confirmed unseal yet
 		}
 
 		// Check if the secret has meaningful data: at least one key must be
 		// present, indicating bank-vaults has completed initialization and
-		// written the unseal keys. Bank-vaults writes all keys atomically
-		// during Init(), so any data means init is done.
+		// written the unseal keys.
 		if len(secret.Data) > 0 {
 			o.unsealSecret = secret
 			return true, nil
 		}
+
+		// Secret exists but is empty — restore from backup if available.
+		if o.backupUnsealKeys != nil {
+			if updateErr := o.ensureUnsealSecret(secretsClient); updateErr != nil {
+				return false, updateErr
+			}
+		}
 		return false, nil
 	})
+}
+
+// ensureUnsealSecret creates or updates the unseal keys secret from the DR backup.
+// It preserves existing metadata (labels, annotations, ownerReferences) when updating.
+func (o *OpenBaoInstaller) ensureUnsealSecret(secretsClient corev1client.SecretInterface) error {
+	existing, err := secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("checking unseal secret: %w", err)
+		}
+		// Create new secret
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      openBaoUnsealSecretName,
+				Namespace: o.Config.Namespace,
+			},
+			Data: o.backupUnsealKeys,
+		}
+		_, err = secretsClient.Create(o.ctx, secret, metav1.CreateOptions{})
+		if err == nil {
+			return nil
+		}
+		if !k8serrors.IsAlreadyExists(err) {
+			return fmt.Errorf("creating unseal secret from backup: %w", err)
+		}
+		// Secret was created concurrently (e.g. by the operator) between our Get
+		// and Create. Re-fetch so we can update its data rather than leaving
+		// whatever (possibly empty/stale) data the racing writer set.
+		existing, err = secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("re-fetching unseal secret after create conflict: %w", err)
+		}
+	}
+
+	// Update existing secret — preserve metadata, only set Data
+	existing.Data = o.backupUnsealKeys
+	_, err = secretsClient.Update(o.ctx, existing, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("updating unseal secret from backup: %w", err)
+	}
+	return nil
+}
+
+// readinessTimeout returns how long to wait for all pods to become ready.
+// StatefulSet pods start sequentially and each Raft member must initialize and
+// join before the next comes up, so the wait grows with replica count: the
+// configured base timeout plus a per-replica allowance.
+func (o *OpenBaoInstaller) readinessTimeout() time.Duration {
+	return o.Config.Timeout + o.Config.ReadinessTimeoutPerReplica*time.Duration(o.Config.Replicas)
+}
+
+// WaitForPodsReady polls until the expected number of vault pods (matching the
+// configured replica count) are in Running phase with all containers Ready.
+// This ensures scaling operations have fully completed before reporting success.
+func (o *OpenBaoInstaller) WaitForPodsReady() error {
+	selector := vaultPodLabelSelector
+	expected := o.Config.Replicas
+
+	return o.pollUntilTimeout(o.readinessTimeout(), "waiting for all OpenBao pods to be ready", func() (bool, error) {
+		list, err := o.Clientset.CoreV1().Pods(o.Config.Namespace).List(o.ctx, metav1.ListOptions{
+			LabelSelector: selector,
+		})
+		if err != nil {
+			return false, fmt.Errorf("listing vault pods: %w", err)
+		}
+
+		var activePods int
+		var readyCount int
+		for i := range list.Items {
+			if list.Items[i].DeletionTimestamp != nil {
+				continue // Skip terminating pods
+			}
+			activePods++
+			if isPodReady(&list.Items[i]) {
+				readyCount++
+			}
+		}
+		return activePods == expected && readyCount == expected, nil
+	})
+}
+
+// isPodReady returns true if the pod is in Running phase and has the Ready condition.
+func isPodReady(pod *corev1.Pod) bool {
+	if pod.Status.Phase != corev1.PodRunning {
+		return false
+	}
+	for _, cond := range pod.Status.Conditions {
+		if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractAndEncrypt reads the unseal keys Secret, combines it with the generated
@@ -410,48 +644,118 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 	return nil
 }
 
-// DeleteStaleUnsealKeys removes unseal keys left by a prior installation whose
+// CleanStaleInstallState removes all state left by a prior installation whose
 // Raft storage no longer exists (e.g. cluster rebuild, PVC deletion). Without
-// removal, bank-vaults would attempt to unseal with the old master key's shares
+// cleanup, bank-vaults would attempt to unseal with the old master key's shares
 // and fail permanently — the new instance needs to run a fresh init.
 //
-// To prevent the old bank-vaults sidecar from re-creating the secret via its
-// retry loop, the Vault CR is deleted first and we wait for all pods to exit
-// before removing the secret.
-func (o *OpenBaoInstaller) DeleteStaleUnsealKeys() error {
+// The cleanup sequence is:
+//  1. Delete the Vault CR (stops the bank-vaults sidecar retry loop)
+//  2. Wait for vault pods to terminate (only when a Vault CR was deleted)
+//  3. Delete PVCs (removes stale Raft data that would confuse initialization)
+//  4. Delete the unseal-keys Secret
+func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	vaultGVR := k8s.VaultGVR()
+	var cleaned []string
 
 	// Tolerates NotFound — this may be a first-time install with no prior Vault CR.
-	delErr := o.DynClient.Resource(vaultGVR).Namespace(openBaoNamespace).Delete(
+	delErr := o.DynClient.Resource(vaultGVR).Namespace(o.Config.Namespace).Delete(
 		o.ctx, "openbao", metav1.DeleteOptions{},
 	)
 	if delErr != nil && !k8serrors.IsNotFound(delErr) {
 		return fmt.Errorf("deleting Vault CR: %w", delErr)
 	}
-
-	if err := o.waitForVaultPodsGone(); err != nil {
-		return err
+	if delErr == nil {
+		cleaned = append(cleaned, "Vault CR")
+		// Only wait for pods to terminate when we actually deleted a Vault CR —
+		// without a CR there are no operator-managed pods to wait on.
+		if err := o.waitForVaultPodsGone(); err != nil {
+			return err
+		}
 	}
 
-	// Now it is safe to delete the stale secret.
-	delErr = o.Clientset.CoreV1().Secrets(openBaoNamespace).Delete(
+	// Delete PVCs associated with the prior StatefulSet so that stale Raft
+	// data does not cause OpenBao to report as "initialized" on a fresh install.
+	pvcList, err := o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).List(
+		o.ctx, metav1.ListOptions{LabelSelector: vaultCRLabelSelector},
+	)
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("listing stale PVCs: %w", err)
+		}
+		// Namespace doesn't exist yet — no stale PVCs to clean.
+		pvcList = &corev1.PersistentVolumeClaimList{}
+	}
+	for i := range pvcList.Items {
+		delErr = o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).Delete(
+			o.ctx, pvcList.Items[i].Name, metav1.DeleteOptions{},
+		)
+		if delErr != nil && !k8serrors.IsNotFound(delErr) {
+			return fmt.Errorf("deleting PVC %s: %w", pvcList.Items[i].Name, delErr)
+		}
+	}
+	if len(pvcList.Items) > 0 {
+		cleaned = append(cleaned, fmt.Sprintf("%d PVC(s)", len(pvcList.Items)))
+		if err := o.waitForPVCsGone(); err != nil {
+			return err
+		}
+	}
+
+	// Delete the stale unseal secret.
+	delErr = o.Clientset.CoreV1().Secrets(o.Config.Namespace).Delete(
 		o.ctx, openBaoUnsealSecretName, metav1.DeleteOptions{},
 	)
 	if delErr != nil && !k8serrors.IsNotFound(delErr) {
 		return fmt.Errorf("deleting stale unseal secret: %w", delErr)
 	}
+	if delErr == nil {
+		cleaned = append(cleaned, "unseal secret")
+	}
 
-	o.Logger.Logf("Stale unseal keys removed (vault CR deleted, pods terminated)")
+	if len(cleaned) > 0 {
+		o.Logger.Logf("Cleaned stale resources: %s", strings.Join(cleaned, ", "))
+	} else {
+		o.Logger.Logf("No stale install state found in namespace %q", o.Config.Namespace)
+	}
 	return nil
 }
 
+// hasExistingDeployment checks whether an OpenBao deployment already exists
+// in the cluster by looking for the Vault CR or PVCs with vault_cr=openbao.
+// This is used to distinguish a genuine first install (nothing exists) from a
+// re-install where the user may have supplied the wrong DR backup path.
+func (o *OpenBaoInstaller) hasExistingDeployment() (bool, error) {
+	vaultGVR := k8s.VaultGVR()
+	_, err := o.DynClient.Resource(vaultGVR).Namespace(o.Config.Namespace).Get(
+		o.ctx, "openbao", metav1.GetOptions{},
+	)
+	if err == nil {
+		return true, nil
+	}
+	if !k8serrors.IsNotFound(err) {
+		return false, fmt.Errorf("checking Vault CR: %w", err)
+	}
+
+	// Vault CR gone but PVCs may linger (e.g. CR was manually deleted).
+	pvcList, err := o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).List(
+		o.ctx, metav1.ListOptions{LabelSelector: vaultCRLabelSelector},
+	)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return false, nil // Namespace doesn't exist — no prior deployment.
+		}
+		return false, fmt.Errorf("listing PVCs: %w", err)
+	}
+	return len(pvcList.Items) > 0, nil
+}
+
 // waitForVaultPodsGone polls until no pods with label vault_cr=openbao remain
-// in the vault namespace, or until the context deadline is exceeded.
+// in the target namespace, or until the context deadline is exceeded.
 func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
-	selector := labels.SelectorFromSet(labels.Set{"vault_cr": "openbao"}).String()
+	selector := vaultPodLabelSelector
 
 	return o.pollUntil("waiting for vault pods to terminate", func() (bool, error) {
-		list, err := o.Clientset.CoreV1().Pods(openBaoNamespace).List(o.ctx, metav1.ListOptions{
+		list, err := o.Clientset.CoreV1().Pods(o.Config.Namespace).List(o.ctx, metav1.ListOptions{
 			LabelSelector: selector,
 		})
 		if err != nil {
@@ -464,16 +768,43 @@ func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
 	})
 }
 
+// waitForPVCsGone polls until no PVCs with label vault_cr=openbao remain in the
+// target namespace. This ensures asynchronous PVC deletion has fully completed
+// before the install pipeline creates new resources, avoiding conflicts.
+func (o *OpenBaoInstaller) waitForPVCsGone() error {
+	selector := vaultCRLabelSelector
+
+	return o.pollUntil("waiting for stale PVCs to be deleted", func() (bool, error) {
+		list, err := o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).List(
+			o.ctx, metav1.ListOptions{LabelSelector: selector},
+		)
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, fmt.Errorf("listing PVCs: %w", err)
+		}
+		return len(list.Items) == 0, nil
+	})
+}
+
 // pollUntil runs check in a loop with exponential backoff until it returns
 // true or the configured timeout expires. timeoutMsg describes the operation
 // for the timeout error message.
 func (o *OpenBaoInstaller) pollUntil(timeoutMsg string, check func() (bool, error)) error {
-	deadline := time.Now().Add(o.Config.Timeout)
+	return o.pollUntilTimeout(o.Config.Timeout, timeoutMsg, check)
+}
+
+// pollUntilTimeout is pollUntil with an explicit timeout, used by steps (e.g.
+// readiness) whose duration scales with the deployment size rather than the
+// fixed per-step timeout.
+func (o *OpenBaoInstaller) pollUntilTimeout(timeout time.Duration, timeoutMsg string, check func() (bool, error)) error {
+	deadline := time.Now().Add(timeout)
 	interval := pollInterval
 
 	for {
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out %s (timeout: %s)", timeoutMsg, o.Config.Timeout)
+			return fmt.Errorf("timed out %s (timeout: %s)", timeoutMsg, timeout)
 		}
 
 		done, err := check()
@@ -498,18 +829,18 @@ func (o *OpenBaoInstaller) pollUntil(timeoutMsg string, check func() (bool, erro
 func (o *OpenBaoInstaller) ensureNamespace(ctx context.Context) error {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: openBaoNamespace,
+			Name: o.Config.Namespace,
 		},
 	}
 
-	_, err := o.Clientset.CoreV1().Namespaces().Get(ctx, openBaoNamespace, metav1.GetOptions{})
+	_, err := o.Clientset.CoreV1().Namespaces().Get(ctx, o.Config.Namespace, metav1.GetOptions{})
 	if err != nil {
 		if !k8serrors.IsNotFound(err) {
-			return fmt.Errorf("checking namespace %s: %w", openBaoNamespace, err)
+			return fmt.Errorf("checking namespace %s: %w", o.Config.Namespace, err)
 		}
 		_, err = o.Clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 		if err != nil && !k8serrors.IsAlreadyExists(err) {
-			return fmt.Errorf("creating namespace %s: %w", openBaoNamespace, err)
+			return fmt.Errorf("creating namespace %s: %w", o.Config.Namespace, err)
 		}
 	}
 	return nil
@@ -531,29 +862,4 @@ func GenerateSecurePassword(length int) (string, error) {
 		return "", fmt.Errorf("generating random bytes: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
-}
-
-// SetCtx is a test helper.
-func (o *OpenBaoInstaller) SetCtx(ctx context.Context) {
-	o.ctx = ctx
-}
-
-// SetUnsealSecret is a test helper.
-func (o *OpenBaoInstaller) SetUnsealSecret(secret *corev1.Secret) {
-	o.unsealSecret = secret
-}
-
-// SetPassword is a test helper.
-func (o *OpenBaoInstaller) SetPassword(password string) {
-	o.password = password
-}
-
-// GetDRBackupExists returns whether a DR backup was found during pre-flight check.
-func (o *OpenBaoInstaller) GetDRBackupExists() bool {
-	return o.drBackupExists
-}
-
-// GetUnsealSecret returns the unseal secret populated during initialization.
-func (o *OpenBaoInstaller) GetUnsealSecret() *corev1.Secret {
-	return o.unsealSecret
 }

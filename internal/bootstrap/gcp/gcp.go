@@ -366,10 +366,11 @@ func (b *GCPBootstrapper) createTestUser() error {
 	if b.Env.InstallConfig == nil {
 		return fmt.Errorf("install config not found in bootstrap environment")
 	}
-	pgPassword := b.Env.InstallConfig.Postgres.AdminPassword
-	if pgPassword == "" {
-		return fmt.Errorf("postgres admin password not found in install config")
+	pgPasswordSecret := b.icg.GetVault().GetSecret(files.SecretPostgresPassword)
+	if pgPasswordSecret == nil || pgPasswordSecret.Fields == nil {
+		return fmt.Errorf("postgres admin password not found in vault")
 	}
+	pgPassword := pgPasswordSecret.Fields.Password
 
 	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
 		Host:         pgHost,
@@ -840,20 +841,30 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	b.stlog.Logf("Checking if local container registry is already running on postgres node")
 	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
 	err := b.Env.PostgreSQLNode.RunSSHCommand("root", checkCommand)
+	registryUsername := ""
+	registryPassword := ""
+	if s := b.icg.GetVault().GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
+		registryUsername = s.Fields.Password
+	}
+	if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
+		registryPassword = s.Fields.Password
+	}
 	if err == nil && b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server == localRegistryServer &&
-		b.Env.InstallConfig.Registry.Username != "" && b.Env.InstallConfig.Registry.Password != "" {
+		registryUsername != "" && registryPassword != "" {
 		b.stlog.Logf("Local container registry already running on postgres node")
 		return nil
 	}
 
 	b.Env.InstallConfig.Registry.Server = localRegistryServer
-	b.Env.InstallConfig.Registry.Username = "custom-registry"
-	b.Env.InstallConfig.Registry.Password = shortuuid.New()
+	registryUsername = "custom-registry"
+	registryPassword = shortuuid.New()
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: registryUsername}})
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
 
 	commands := []string{
 		"apt-get update",
 		"apt-get install -y podman apache2-utils",
-		"htpasswd -bBc /root/registry.password " + b.Env.InstallConfig.Registry.Username + " " + b.Env.InstallConfig.Registry.Password,
+		"htpasswd -bBc /root/registry.password " + registryUsername + " " + registryPassword,
 		"openssl req -newkey rsa:4096 -nodes -sha256 -keyout /root/registry.key -x509 -days 365 -out /root/registry.crt -subj \"/C=DE/ST=BW/L=Karlsruhe/O=Codesphere/CN=" + b.Env.PostgreSQLNode.GetInternalIP() + "\" -addext \"subjectAltName = DNS:postgres,IP:" + b.Env.PostgreSQLNode.GetInternalIP() + "\"",
 		"podman rm -f registry || true",
 		`podman run -d \
@@ -904,8 +915,8 @@ func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 		return fmt.Errorf("GitHub PAT is not set")
 	}
 	b.Env.InstallConfig.Registry.Server = "ghcr.io"
-	b.Env.InstallConfig.Registry.Username = b.Env.RegistryUser
-	b.Env.InstallConfig.Registry.Password = b.Env.GitHubPAT
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
 	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
 	b.Env.InstallConfig.Registry.LoadContainerImages = false
 	return nil

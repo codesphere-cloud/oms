@@ -1,6 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["github>codesphere-cloud/renovate-config:go-config"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/internal/bootstrap/local/local\\.go/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=helm depName=(?<depName>[^\\s]+) registryUrl=(?<registryUrl>[^\\s]+)\\n\\s+install, err := argocd\\.NewInstaller\\(argocd\\.InstallerConfig\\{\\n\\s+Version:\\s+\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "helm"
+    }
+  ],
   "packageRules": [
     {
       "matchManagers": ["gomod"],
