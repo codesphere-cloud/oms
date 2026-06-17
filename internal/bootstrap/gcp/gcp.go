@@ -1020,8 +1020,8 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 
 func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere...")
-	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt -p %s%s",
-		b.Env.SecretsDir, packageFilename, b.generateSkipStepsArg())
+	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s%s",
+		b.Env.SecretsDir, b.icg.GetSecretFilePath(), packageFilename, b.generateSkipStepsArg())
 	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 }
 

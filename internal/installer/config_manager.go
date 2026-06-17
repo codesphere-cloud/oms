@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -32,6 +33,7 @@ type InstallConfigManager interface {
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
 	GetVault() *files.InstallVault
+	GetSecretFilePath() string
 	CollectInteractively() error
 
 	// Output
@@ -207,6 +209,10 @@ func (g *InstallConfig) GetInstallConfig() *files.RootConfig {
 
 func (g *InstallConfig) GetVault() *files.InstallVault {
 	return g.Vault
+}
+
+func (g *InstallConfig) GetSecretFilePath() string {
+	return filepath.Join(g.Config.Secrets.BaseDir, "prod.vault.yaml")
 }
 
 func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool) error {
