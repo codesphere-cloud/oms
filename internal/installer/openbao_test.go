@@ -595,7 +595,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 				BaoPassword:       "test-password",
 				Replicas:          1,
 				StorageSize:       "10Gi",
-				RetryJoinAddrs:    []string{"http://openbao-0.openbao.vault.svc.cluster.local:8200"},
+				RetryJoinAddrs:    []string{"http://openbao-0.vault.svc.cluster.local:8200"},
 			}
 
 			docs := renderTemplate(data)
@@ -662,9 +662,9 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 		It("renders valid YAML with raft storage, PVCs, and retry_join for replicas=3", func() {
 			retryJoinAddrs := []string{
-				"http://openbao-0.openbao.vault.svc.cluster.local:8200",
-				"http://openbao-1.openbao.vault.svc.cluster.local:8200",
-				"http://openbao-2.openbao.vault.svc.cluster.local:8200",
+				"http://openbao-0.vault.svc.cluster.local:8200",
+				"http://openbao-1.vault.svc.cluster.local:8200",
+				"http://openbao-2.vault.svc.cluster.local:8200",
 			}
 
 			data := templateData{
@@ -715,10 +715,44 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(containerSpec).To(HaveKey("env"))
 			envVars := containerSpec["env"].([]interface{})
 			envNames := make([]string, 0, len(envVars))
+			envValues := make(map[string]string, len(envVars))
 			for _, e := range envVars {
-				envNames = append(envNames, e.(map[string]interface{})["name"].(string))
+				m := e.(map[string]interface{})
+				name := m["name"].(string)
+				envNames = append(envNames, name)
+				if v, ok := m["value"].(string); ok {
+					envValues[name] = v
+				}
 			}
 			Expect(envNames).To(ContainElements("POD_NAME", "BAO_CLUSTER_ADDR", "BAO_API_ADDR"))
+
+			// The peer/cluster addresses must target the per-pod service
+			// ("$(POD_NAME).<namespace>...") with no extra ".openbao" headless
+			// label, otherwise the Raft leader can't replicate to followers
+			// (regression guard).
+			Expect(envValues["BAO_CLUSTER_ADDR"]).To(Equal("http://$(POD_NAME).vault.svc.cluster.local:8201"))
+			Expect(envValues["BAO_API_ADDR"]).To(Equal("http://$(POD_NAME).vault.svc.cluster.local:8200"))
+		})
+	})
+
+	Describe("BuildRetryJoinAddrs", func() {
+		It("targets the per-pod ClusterIP service, not a headless service", func() {
+			// bank-vaults exposes each pod via a per-pod service "openbao-<i>",
+			// so the resolvable name is "openbao-<i>.<namespace>.svc.cluster.local".
+			// An extra ".openbao" headless-service label never resolves and
+			// deadlocks the Raft bootstrap (regression guard).
+			addrs := installer.BuildRetryJoinAddrs(3, "second")
+			Expect(addrs).To(Equal([]string{
+				"http://openbao-0.second.svc.cluster.local:8200",
+				"http://openbao-1.second.svc.cluster.local:8200",
+				"http://openbao-2.second.svc.cluster.local:8200",
+			}))
+		})
+
+		It("produces a single self-referencing address for one replica", func() {
+			Expect(installer.BuildRetryJoinAddrs(1, "vault")).To(Equal([]string{
+				"http://openbao-0.vault.svc.cluster.local:8200",
+			}))
 		})
 	})
 

@@ -33,7 +33,6 @@ var vaultCRTemplate []byte
 
 const (
 	openBaoUnsealSecretName = "openbao-unseal-keys"
-	openBaoHeadlessService  = "openbao"
 	DefaultOpenBaoNamespace = "vault"
 	openBaoImage            = "quay.io/openbao/openbao:2.1.0"
 	bankVaultsImage         = "ghcr.io/bank-vaults/bank-vaults:v1.31.3"
@@ -371,6 +370,24 @@ type vaultCRTemplateData struct {
 	RetryJoinAddrs    []string
 }
 
+// buildRetryJoinAddrs builds the Raft retry_join addresses so each node can
+// autonomously find and join the cluster leader. For a single replica this
+// produces one self-referencing address, which is harmless and means scaling
+// up later only requires changing the replica count.
+//
+// The bank-vaults operator exposes each pod through its own per-pod ClusterIP
+// service named "openbao-<ordinal>" (it does NOT create a StatefulSet headless
+// service), so the resolvable address is "openbao-<i>.<namespace>.svc.cluster.local"
+// — not the "pod.headless-svc.namespace" pattern. Using the latter yields an
+// extra DNS label that never resolves, deadlocking the Raft bootstrap.
+func buildRetryJoinAddrs(replicas int, namespace string) []string {
+	addrs := make([]string, 0, replicas)
+	for i := 0; i < replicas; i++ {
+		addrs = append(addrs, fmt.Sprintf("http://openbao-%d.%s.svc.cluster.local:8200", i, namespace))
+	}
+	return addrs
+}
+
 // ApplyVaultCR renders the Bank-Vaults Vault CR template and applies it to the cluster.
 func (o *OpenBaoInstaller) ApplyVaultCR() error {
 	tmpl, err := template.New("vault-cr").Parse(string(vaultCRTemplate))
@@ -378,15 +395,7 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 		return fmt.Errorf("parsing vault CR template: %w", err)
 	}
 
-	// Build retry_join addresses for Raft so each node can autonomously
-	// find and join the cluster leader. For a single replica this produces
-	// one self-referencing address, which is harmless and means scaling up
-	// later only requires changing the replica count.
-	var retryJoinAddrs []string
-	for i := 0; i < o.Config.Replicas; i++ {
-		addr := fmt.Sprintf("http://openbao-%d.%s.%s.svc.cluster.local:8200", i, openBaoHeadlessService, o.Config.Namespace)
-		retryJoinAddrs = append(retryJoinAddrs, addr)
-	}
+	retryJoinAddrs := buildRetryJoinAddrs(o.Config.Replicas, o.Config.Namespace)
 
 	data := vaultCRTemplateData{
 		Namespace:         o.Config.Namespace,
