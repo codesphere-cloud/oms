@@ -409,12 +409,17 @@ func (o *OpenBaoInstaller) releaseExistsInTargetNamespace(releaseName string) (b
 }
 
 // operatorRunningClusterWide reports whether a bank-vaults operator Deployment
-// is actually running anywhere in the cluster. Detection is by the operator's
-// Deployment (app.kubernetes.io/name=vault-operator), not its cluster-scoped
-// ClusterRole: a ClusterRole can be left orphaned after an incomplete teardown
-// (deleting a namespace does not remove cluster-scoped resources), and keying
-// the skip decision off it would wrongly suppress deploying an operator that no
-// longer exists — leaving the Vault CR unreconciled.
+// is actually running (has at least one available replica) anywhere in the
+// cluster. Detection is by the operator's Deployment
+// (app.kubernetes.io/name=vault-operator), not its cluster-scoped ClusterRole: a
+// ClusterRole can be left orphaned after an incomplete teardown (deleting a
+// namespace does not remove cluster-scoped resources), and keying the skip
+// decision off it would wrongly suppress deploying an operator that no longer
+// exists — leaving the Vault CR unreconciled.
+//
+// Availability (not mere existence) is required: a Deployment scaled to zero or
+// stuck with no ready pods cannot reconcile the Vault CR, so it must not
+// suppress a (re)deploy.
 func (o *OpenBaoInstaller) operatorRunningClusterWide() (bool, error) {
 	deps, err := o.Clientset.AppsV1().Deployments(metav1.NamespaceAll).List(o.ctx, metav1.ListOptions{
 		LabelSelector: operatorLabelSelector,
@@ -422,7 +427,12 @@ func (o *OpenBaoInstaller) operatorRunningClusterWide() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("listing %s deployments: %w", operatorName, err)
 	}
-	return len(deps.Items) > 0, nil
+	for i := range deps.Items {
+		if deps.Items[i].Status.AvailableReplicas > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // vaultCRTemplateData holds the values injected into the Vault CR template.

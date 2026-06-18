@@ -152,6 +152,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 					Namespace: "other-ns",
 					Labels:    map[string]string{"app.kubernetes.io/name": "vault-operator"},
 				},
+				Status: appsv1.DeploymentStatus{AvailableReplicas: 1},
 			}
 			_, err = clientset.AppsV1().Deployments("other-ns").Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
@@ -1006,13 +1007,14 @@ var _ = Describe("OpenBaoInstaller", func() {
 	})
 
 	Describe("operatorRunningClusterWide", func() {
-		It("returns true when an operator Deployment runs in any namespace", func() {
+		It("returns true when an available operator Deployment runs in any namespace", func() {
 			dep := &appsv1.Deployment{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "vault-operator",
 					Namespace: "other-ns",
 					Labels:    map[string]string{"app.kubernetes.io/name": "vault-operator"},
 				},
+				Status: appsv1.DeploymentStatus{AvailableReplicas: 1},
 			}
 			_, err := clientset.AppsV1().Deployments("other-ns").Create(ctx, dep, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
@@ -1027,6 +1029,32 @@ var _ = Describe("OpenBaoInstaller", func() {
 			running, err := inst.OperatorRunningClusterWide()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(running).To(BeTrue())
+		})
+
+		It("returns false when the operator Deployment has no available replicas", func() {
+			// A Deployment that exists but is scaled to zero / has no ready pods
+			// cannot reconcile the Vault CR, so it must not suppress a (re)deploy.
+			dep := &appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "vault-operator",
+					Namespace: "other-ns",
+					Labels:    map[string]string{"app.kubernetes.io/name": "vault-operator"},
+				},
+				Status: appsv1.DeploymentStatus{AvailableReplicas: 0},
+			}
+			_, err := clientset.AppsV1().Deployments("other-ns").Create(ctx, dep, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+			}
+			inst.SetCtx(ctx)
+
+			running, err := inst.OperatorRunningClusterWide()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(running).To(BeFalse())
 		})
 
 		It("returns false when only an orphaned ClusterRole exists (no Deployment)", func() {
