@@ -33,6 +33,9 @@ type InstallCodesphereOpts struct {
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
+	if c.Opts.CodesphereOnly {
+		return installCodespherePlatform(c.Opts, c.Env)
+	}
 	if err := installCodesphereInfra(c.Opts, c.Env); err != nil {
 		return err
 	}
@@ -96,6 +99,11 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 		{steps: installer.DependenciesSteps, skipImageBuilding: true},
 		{steps: installer.PlatformSteps, skipImageBuilding: true},
 	}
+	if c.Opts.CodesphereOnly {
+		phases = []phaseConfig{
+			{steps: installer.PlatformSteps, skipImageBuilding: true},
+		}
+	}
 	for _, phase := range phases {
 		ci := &installer.CodesphereInstaller{
 			ConfigPath:        c.Opts.Config,
@@ -105,6 +113,7 @@ func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm
 			SkipSteps:         c.Opts.SkipSteps,
 			AllowedSteps:      phase.steps,
 			SkipImageBuilding: phase.skipImageBuilding,
+			CodesphereOnly:    c.Opts.CodesphereOnly,
 			DirectConnection:  c.Opts.DirectConnection,
 			AutoApprove:       c.Opts.AutoApprove,
 		}

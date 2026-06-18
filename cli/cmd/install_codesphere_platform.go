@@ -39,6 +39,7 @@ func installCodespherePlatform(opts *InstallCodesphereOpts, env env.Env) error {
 		Force:            opts.Force,
 		SkipSteps:        opts.SkipSteps,
 		AllowedSteps:     installer.PlatformSteps,
+		CodesphereOnly:   opts.CodesphereOnly,
 		DirectConnection: opts.DirectConnection,
 		AutoApprove:      opts.AutoApprove,
 	}
