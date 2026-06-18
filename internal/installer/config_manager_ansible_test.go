@@ -341,7 +341,7 @@ k8s-workers:
 				Expect(actualK8sWorkerHosts).To(Equal(expectedWorkerHosts))
 			})
 
-			It("overwrites previously set control plane nodes (profiles) with inventory values", func() {
+			It("overwrites previously set kubernetes nodes (from profiles) with inventory values", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
 				defer func() { _ = os.Remove(inventoryFilePath) }()
