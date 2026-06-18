@@ -15,13 +15,12 @@ import (
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
+	"k8s.io/client-go/rest"
 )
 
 const (
-	defaultRepoURL         = "https://argoproj.github.io/argo-helm"
-	DefaultNamespace       = "argocd"
-	DefaultVaultNamespace  = "codesphere-system"
-	DefaultVaultSecretName = "vault"
+	DefaultRepoURL   = "https://argoproj.github.io/argo-helm"
+	DefaultNamespace = "argocd"
 )
 
 // InstallerConfig holds all user-facing parameters for an ArgoCD install/upgrade.
@@ -35,6 +34,7 @@ type InstallerConfig struct {
 	ForceConflicts bool
 	RepoURL        string
 	ValueFiles     []string
+	RESTConfig     *rest.Config
 }
 
 // Installer holds the resolved configuration and initialized clients.
@@ -45,12 +45,12 @@ type Installer struct {
 }
 
 func NewInstaller(cfg InstallerConfig) (*Installer, error) {
-	helm, err := installer.NewHelmClient("argocd")
+	helm, err := installer.NewHelmClientWithRESTConfig("argocd", cfg.RESTConfig)
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
 
-	resources, err := NewArgoCDResources(cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+	resources, err := NewArgoCDResourcesWithRESTConfig(cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword, cfg.RESTConfig)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}
@@ -195,7 +195,7 @@ func (a *Installer) validateRepoURL() error {
 func (a *Installer) resolveChartRef(chartName string) (string, string) {
 	repoURL := a.RepoURL
 	if repoURL == "" {
-		repoURL = defaultRepoURL
+		repoURL = DefaultRepoURL
 	}
 	if strings.HasPrefix(repoURL, "oci://") {
 		return strings.TrimRight(repoURL, "/") + "/" + chartName, ""

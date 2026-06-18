@@ -119,7 +119,7 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 
 		vaultFlag := codesphereCmd.PersistentFlags().Lookup("vault")
 		Expect(vaultFlag).NotTo(BeNil())
-		Expect(vaultFlag.DefValue).To(Equal("prod.vault.yaml"))
+		Expect(vaultFlag.DefValue).To(Equal(""))
 
 		skipStepFlag := codesphereCmd.PersistentFlags().Lookup("skip-steps")
 		Expect(skipStepFlag).NotTo(BeNil())
