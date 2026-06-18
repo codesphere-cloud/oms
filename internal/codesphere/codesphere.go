@@ -21,6 +21,7 @@ type Client interface {
 	ExecuteCommand(workspaceID int, command string) error
 	SyncLandscape(workspaceID int, profile string) error
 	StartPipeline(workspaceID int, profile, stage string) error
+	GetPipelineState(workspaceID int, stage string) ([]api.PipelineStatus, error)
 	DeleteWorkspace(workspaceID int) error
 	ListWorkspacePlans() ([]api.WorkspacePlan, error)
 	ListTeams() ([]api.Team, error)
@@ -106,6 +107,15 @@ func (c *APIClient) StartPipeline(workspaceID int, profile, stage string) error 
 		return fmt.Errorf("failed to start pipeline: %w", err)
 	}
 	return nil
+}
+
+// GetPipelineState returns the current state of a pipeline stage
+func (c *APIClient) GetPipelineState(workspaceID int, stage string) ([]api.PipelineStatus, error) {
+	states, err := c.client.GetPipelineState(workspaceID, stage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pipeline state: %w", err)
+	}
+	return states, nil
 }
 
 // DeleteWorkspace deletes a workspace
