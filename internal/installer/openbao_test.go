@@ -767,6 +767,17 @@ var _ = Describe("OpenBaoInstaller", func() {
 			secretEntry := secrets[0].(map[string]interface{})
 			Expect(secretEntry["path"]).To(Equal("cs-secrets-engine"))
 
+			// Verify the rw policy grants KV access plus the password-policy
+			// management the `generate` secret flow needs.
+			policies := externalConfig["policies"].([]interface{})
+			Expect(policies).To(HaveLen(1))
+			policy := policies[0].(map[string]interface{})
+			Expect(policy["name"]).To(Equal("cs-secrets-engine-rw"))
+			rules := policy["rules"].(string)
+			Expect(rules).To(ContainSubstring(`path "cs-secrets-engine/data/*"`))
+			Expect(rules).To(ContainSubstring(`path "cs-secrets-engine/metadata/*"`))
+			Expect(rules).To(ContainSubstring(`path "sys/policies/password/*"`))
+
 			// Verify auth config
 			auth := externalConfig["auth"].([]interface{})
 			Expect(auth).To(HaveLen(1))
