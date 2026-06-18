@@ -68,9 +68,6 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 	}
 
 	if len(k8sCPHosts) > 0 {
-		if len(g.Config.Kubernetes.ControlPlanes) > 0 {
-			return fmt.Errorf("k8s control plane nodes are already set. Adjust flags or inventory")
-		}
 		g.Config.Kubernetes.ControlPlanes = k8sCPHosts
 	}
 
@@ -80,9 +77,6 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 	}
 
 	if len(k8sWorkerHosts) > 0 {
-		if len(g.Config.Kubernetes.Workers) > 0 {
-			return fmt.Errorf("k8s worker nodes are already set. Adjust flags or inventory")
-		}
 		g.Config.Kubernetes.Workers = k8sWorkerHosts
 	}
 
