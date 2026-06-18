@@ -339,6 +339,73 @@ var _ = Describe("InstallCodesphereCmd", func() {
 				Expect(err).To(BeNil())
 			})
 
+			It("runs only the codesphere step when CodesphereOnly is set", func() {
+				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
+				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
+				mockImageManager := system.NewMockImageManager(GinkgoT())
+				mockFileIO := util.NewMockFileIO(GinkgoT())
+
+				c.Opts.Config = "valid-config.yaml"
+				c.Opts.PrivKey = "test-key.pem"
+				c.Opts.CodesphereOnly = true
+
+				config := files.RootConfig{
+					Registry: &files.RegistryConfig{
+						Server: "https://my-registry.com",
+					},
+					Codesphere: files.CodesphereConfig{
+						DeployConfig: files.DeployConfig{
+							Images: map[string]files.ImageConfig{
+								"ubuntu-24.04": {
+									Flavors: map[string]files.FlavorConfig{
+										"default": {
+											Image: files.ImageRef{
+												BomRef:     "docker.io/library/ubuntu:24.04",
+												Dockerfile: "workspace.Dockerfile",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				mockConfigManager.EXPECT().ParseConfigYaml("valid-config.yaml").Return(config, nil)
+
+				tempDir, err := os.MkdirTemp("", "test-install")
+				Expect(err).To(BeNil())
+				defer func() {
+					_ = os.RemoveAll(tempDir)
+				}()
+
+				argsFile := filepath.Join(tempDir, "installer-args.txt")
+				nodeFile := filepath.Join(tempDir, "node")
+				err = os.WriteFile(nodeFile, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\" > "+argsFile+"\n"), 0755)
+				Expect(err).To(BeNil())
+
+				mockPackageManager.EXPECT().Extract(false).Return(nil)
+				mockPackageManager.EXPECT().GetWorkDir().Return(tempDir).Maybe()
+				mockPackageManager.EXPECT().FileIO().Return(mockFileIO)
+				mockFileIO.EXPECT().Exists(tempDir).Return(true)
+				mockFileIO.EXPECT().ReadDir(tempDir).Return([]os.DirEntry{
+					&MockDirEntry{name: "deps.tar.gz", isDir: false},
+					&MockDirEntry{name: "node", isDir: false},
+					&MockDirEntry{name: "private-cloud-installer.js", isDir: false},
+					&MockDirEntry{name: "kubectl", isDir: false},
+				}, nil)
+				mockPackageManager.EXPECT().ExtractDependency("bom.json", false).Return(nil)
+
+				err = c.ExtractAndInstall(mockPackageManager, mockConfigManager, mockImageManager, "linux", "amd64")
+				Expect(err).To(BeNil())
+
+				args, err := os.ReadFile(argsFile)
+				Expect(err).To(BeNil())
+				Expect(string(args)).To(ContainSubstring("--codesphereOnly\n"))
+				Expect(string(args)).To(ContainSubstring("--skipStep\ncopy-dependencies\n"))
+				Expect(string(args)).To(ContainSubstring("--skipStep\nms-backends\n"))
+				Expect(string(args)).NotTo(ContainSubstring("--skipStep\ncodesphere\n"))
+			})
+
 			It("fails when image tag in bom.json is missing version", func() {
 				mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 				mockConfigManager := installer.NewMockConfigManager(GinkgoT())
