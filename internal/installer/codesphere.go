@@ -116,9 +116,22 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 		return fmt.Errorf("failed to extract package to workdir: %w", err)
 	}
 
-	foundFiles, err := ListPackageContents(pm)
+	packageDir := pm.GetWorkDir()
+	if !pm.FileIO().Exists(packageDir) {
+		return fmt.Errorf("failed to list available files: work dir not found: %s", packageDir)
+	}
+
+	entries, err := pm.FileIO().ReadDir(packageDir)
 	if err != nil {
-		return fmt.Errorf("failed to list available files: %w", err)
+		return fmt.Errorf("failed to list available files: failed to read directory contents: %w", err)
+	}
+
+	log.Printf("Listing contents of %s", packageDir)
+	foundFiles := []string{}
+	for _, entry := range entries {
+		filename := entry.Name()
+		log.Printf("- %s", filename)
+		foundFiles = append(foundFiles, filename)
 	}
 
 	if !slices.Contains(foundFiles, "deps.tar.gz") {
@@ -315,27 +328,4 @@ func (ci *CodesphereInstaller) warnIfVaultDirDiffersFromSecretsDir(config files.
 	if vaultDir != secretsDir {
 		log.Printf("Warning: config secrets.baseDir (%s) does not match the directory of --vault (%s)", secretsDir, vaultDir)
 	}
-}
-
-// ListPackageContents returns the filenames present in the extracted package work directory.
-func ListPackageContents(pm PackageManager) ([]string, error) {
-	packageDir := pm.GetWorkDir()
-	if !pm.FileIO().Exists(packageDir) {
-		return nil, fmt.Errorf("work dir not found: %s", packageDir)
-	}
-
-	entries, err := pm.FileIO().ReadDir(packageDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read directory contents: %w", err)
-	}
-
-	log.Printf("Listing contents of %s", packageDir)
-	var foundFiles []string
-	for _, entry := range entries {
-		filename := entry.Name()
-		log.Printf("- %s", filename)
-		foundFiles = append(foundFiles, filename)
-	}
-
-	return foundFiles, nil
 }

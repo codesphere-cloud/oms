@@ -6,8 +6,6 @@ package cmd
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/env"
-	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -87,43 +85,4 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	AddInstallCodesphereInfraCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodesphereDepenciesCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodespherePlatformCmd(codesphere.cmd, codesphere.Opts)
-}
-
-func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager, goos string, goarch string) error {
-	type phaseConfig struct {
-		steps             []string
-		skipImageBuilding bool
-	}
-	phases := []phaseConfig{
-		{steps: installer.InfraSteps, skipImageBuilding: false},
-		{steps: installer.DependenciesSteps, skipImageBuilding: true},
-		{steps: installer.PlatformSteps, skipImageBuilding: true},
-	}
-	if c.Opts.CodesphereOnly {
-		phases = []phaseConfig{
-			{steps: installer.PlatformSteps, skipImageBuilding: true},
-		}
-	}
-	for _, phase := range phases {
-		ci := &installer.CodesphereInstaller{
-			ConfigPath:        c.Opts.Config,
-			VaultPath:         c.Opts.Vault,
-			PrivKey:           c.Opts.PrivKey,
-			Force:             c.Opts.Force,
-			SkipSteps:         c.Opts.SkipSteps,
-			AllowedSteps:      phase.steps,
-			SkipImageBuilding: phase.skipImageBuilding,
-			CodesphereOnly:    c.Opts.CodesphereOnly,
-			DirectConnection:  c.Opts.DirectConnection,
-			AutoApprove:       c.Opts.AutoApprove,
-		}
-		if err := ci.Install(pm, cm, im, goos, goarch); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *InstallCodesphereCmd) ListPackageContents(pm installer.PackageManager) ([]string, error) {
-	return installer.ListPackageContents(pm)
 }
