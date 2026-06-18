@@ -1147,11 +1147,18 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when ConfigureMemoryMap fails", func() {
 				mock.InOrder(
-					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(1),                // hasSysctlLine (grep exists)
-					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(1),                // isSysctlActive (grep exists) -> properly configured!
-					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch")).Times(1), // hasSysctlLine (grep doesn't exist)
-					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch")).Times(1), // hasSysctlLine grep
-					nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch")).Times(1), // tee command fails
+					// HasInotifyWatchesConfigured: all 4 checks pass → skip ConfigureInotifyWatches
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1").Return(nil).Once(),
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo sysctl -n fs.inotify.max_user_watches | grep -q '^1048576$'").Return(nil).Once(),
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo grep -E '^fs.inotify.max_user_instances=8192' /etc/sysctl.conf >/dev/null 2>&1").Return(nil).Once(),
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo sysctl -n fs.inotify.max_user_instances | grep -q '^8192$'").Return(nil).Once(),
+
+					// HasMemoryMapConfigured: line not found → returns false → call ConfigureMemoryMap
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo grep -E '^vm.max_map_count=262144' /etc/sysctl.conf >/dev/null 2>&1").Return(fmt.Errorf("not found")).Once(),
+
+					// ConfigureMemoryMap → configureSysctlLine: line not found → tee fails
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo grep -E '^vm.max_map_count=262144' /etc/sysctl.conf >/dev/null 2>&1").Return(fmt.Errorf("not found")).Once(),
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "echo 'vm.max_map_count=262144' | sudo tee -a /etc/sysctl.conf").Return(fmt.Errorf("ouch")).Once(),
 				)
 
 				err := bs.EnsureHostsConfigured()
@@ -1272,6 +1279,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
 			csEnv.InstallHash = "abc1234567890"
+			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
 		})
 		Describe("Valid InstallCodesphere", func() {
 			Context("Direct GitHub access", func() {
@@ -1286,7 +1294,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 					// Expect install codesphere
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer-lite.tar.gz -s load-container-images").Return(nil)
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s load-container-images").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1303,7 +1311,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H def9876543210 v1.2.3").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1312,7 +1320,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("downloads and installs codesphere with hash", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1331,7 +1339,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer-lite.tar.gz").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer-lite.tar.gz -s load-container-images").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz -s load-container-images").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -1345,7 +1353,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer.tar.gz").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p local-installer.tar.gz").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer.tar.gz").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -1389,7 +1397,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when install codesphere fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())

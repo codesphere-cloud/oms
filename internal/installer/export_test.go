@@ -49,8 +49,8 @@ func (o *OpenBaoInstaller) ReleaseExistsInTargetNamespace(releaseName string) (b
 	return o.releaseExistsInTargetNamespace(releaseName)
 }
 
-func (o *OpenBaoInstaller) OperatorInstalledClusterWide() (bool, error) {
-	return o.operatorInstalledClusterWide()
+func (o *OpenBaoInstaller) OperatorRunningClusterWide() (bool, error) {
+	return o.operatorRunningClusterWide()
 }
 
 func BuildRetryJoinAddrs(replicas int, namespace string) []string {

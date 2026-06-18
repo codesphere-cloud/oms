@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -21,6 +22,10 @@ func IsValidIP(ip string) bool {
 type InstallConfigManager interface {
 	// Profile management
 	ApplyProfile(profile string) error
+
+	// Imports
+	FetchFromAnsibleInventory(inventoryPath string) error
+
 	// Configuration management
 	LoadInstallConfigFromFile(configPath string) error
 	LoadVaultFromFile(vaultPath string) error
@@ -28,7 +33,9 @@ type InstallConfigManager interface {
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
 	GetVault() *files.InstallVault
+	GetSecretFilePath() string
 	CollectInteractively() error
+
 	// Output
 	GenerateSecrets() error
 	WriteInstallConfig(configPath string, withComments bool) error
@@ -202,6 +209,10 @@ func (g *InstallConfig) GetInstallConfig() *files.RootConfig {
 
 func (g *InstallConfig) GetVault() *files.InstallVault {
 	return g.Vault
+}
+
+func (g *InstallConfig) GetSecretFilePath() string {
+	return filepath.Join(g.Config.Secrets.BaseDir, "prod.vault.yaml")
 }
 
 func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool) error {

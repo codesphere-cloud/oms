@@ -6,8 +6,7 @@ package cmd
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/env"
-	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/system"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -30,9 +29,18 @@ type InstallCodesphereOpts struct {
 	CodesphereOnly   bool
 	DirectConnection bool
 	AutoApprove      bool
+	// ArgoCD deployment (pre-step in Phase 2)
+	ArgoCDVersion        string
+	ArgoCDRegistryURL    string
+	ArgoCDForceConflicts bool
+	ArgoCDRepoURL        string
+	ArgoCDValues         []string
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
+	if c.Opts.CodesphereOnly {
+		return installCodespherePlatform(c.Opts, c.Env)
+	}
 	if err := installCodesphereInfra(c.Opts, c.Env); err != nil {
 		return err
 	}
@@ -66,12 +74,17 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from")
 	codesphere.cmd.PersistentFlags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
 	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Config, "config", "c", "", "Path to the Codesphere Private Cloud configuration file (yaml)")
-	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.Vault, "vault", "prod.vault.yaml", "Path to the SOPS-encrypted prod.vault.yaml file used for config templating")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.Vault, "vault", "", "Path to the SOPS-encrypted prod.vault.yaml file used for config templating")
 	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Path to the private key to encrypt/decrypt secrets")
-	codesphere.cmd.PersistentFlags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker")
+	codesphere.cmd.PersistentFlags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDVersion, "argo-version", "", "ArgoCD Helm chart version to install")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryURL, "argo-registry-url", "", "OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)")
+	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.ArgoCDForceConflicts, "argo-force-conflicts", false, "Force SSA ownership conflicts during ArgoCD install")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRepoURL, "argo-repo", argocd.DefaultRepoURL, "ArgoCD Helm chart repository URL")
+	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
 
 	util.MarkPersistentFlagRequired(codesphere.cmd, "package")
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
@@ -84,37 +97,4 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	AddInstallCodesphereInfraCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodesphereDepenciesCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodespherePlatformCmd(codesphere.cmd, codesphere.Opts)
-}
-
-func (c *InstallCodesphereCmd) ExtractAndInstall(pm installer.PackageManager, cm installer.ConfigManager, im system.ImageManager, goos string, goarch string) error {
-	type phaseConfig struct {
-		steps             []string
-		skipImageBuilding bool
-	}
-	phases := []phaseConfig{
-		{steps: installer.InfraSteps, skipImageBuilding: false},
-		{steps: installer.DependenciesSteps, skipImageBuilding: true},
-		{steps: installer.PlatformSteps, skipImageBuilding: true},
-	}
-	for _, phase := range phases {
-		ci := &installer.CodesphereInstaller{
-			ConfigPath:        c.Opts.Config,
-			VaultPath:         c.Opts.Vault,
-			PrivKey:           c.Opts.PrivKey,
-			Force:             c.Opts.Force,
-			SkipSteps:         c.Opts.SkipSteps,
-			AllowedSteps:      phase.steps,
-			SkipImageBuilding: phase.skipImageBuilding,
-			DirectConnection:  c.Opts.DirectConnection,
-			AutoApprove:       c.Opts.AutoApprove,
-		}
-		if err := ci.Install(pm, cm, im, goos, goarch); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (c *InstallCodesphereCmd) ListPackageContents(pm installer.PackageManager) ([]string, error) {
-	return installer.ListPackageContents(pm)
 }

@@ -13,9 +13,7 @@ import (
 )
 
 var _ = Describe("ConfigManagerProfile", func() {
-	var (
-		manager installer.InstallConfigManager
-	)
+	var manager installer.InstallConfigManager
 
 	BeforeEach(func() {
 		manager = installer.NewInstallConfigManager()
@@ -208,7 +206,6 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(prodManager.GetInstallConfig().Cluster.Monitoring.Grafana.Enabled).To(BeTrue())
 				Expect(prodManager.GetInstallConfig().Cluster.Monitoring.GrafanaAlloy.Enabled).To(BeTrue())
 				Expect(prodManager.GetInstallConfig().Codesphere.Override).To(BeNil())
-
 			})
 		})
 	})

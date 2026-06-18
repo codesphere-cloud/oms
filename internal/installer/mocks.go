@@ -220,6 +220,57 @@ func (_c *MockInstallConfigManager_CollectInteractively_Call) RunAndReturn(run f
 	return _c
 }
 
+// FetchFromAnsibleInventory provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) FetchFromAnsibleInventory(inventoryPath string) error {
+	ret := _mock.Called(inventoryPath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FetchFromAnsibleInventory")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(inventoryPath)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInstallConfigManager_FetchFromAnsibleInventory_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FetchFromAnsibleInventory'
+type MockInstallConfigManager_FetchFromAnsibleInventory_Call struct {
+	*mock.Call
+}
+
+// FetchFromAnsibleInventory is a helper method to define mock.On call
+//   - inventoryPath string
+func (_e *MockInstallConfigManager_Expecter) FetchFromAnsibleInventory(inventoryPath any) *MockInstallConfigManager_FetchFromAnsibleInventory_Call {
+	return &MockInstallConfigManager_FetchFromAnsibleInventory_Call{Call: _e.mock.On("FetchFromAnsibleInventory", inventoryPath)}
+}
+
+func (_c *MockInstallConfigManager_FetchFromAnsibleInventory_Call) Run(run func(inventoryPath string)) *MockInstallConfigManager_FetchFromAnsibleInventory_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_FetchFromAnsibleInventory_Call) Return(err error) *MockInstallConfigManager_FetchFromAnsibleInventory_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInstallConfigManager_FetchFromAnsibleInventory_Call) RunAndReturn(run func(inventoryPath string) error) *MockInstallConfigManager_FetchFromAnsibleInventory_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GenerateSecrets provides a mock function for the type MockInstallConfigManager
 func (_mock *MockInstallConfigManager) GenerateSecrets() error {
 	ret := _mock.Called()
@@ -306,6 +357,50 @@ func (_c *MockInstallConfigManager_GetInstallConfig_Call) Return(rootConfig *fil
 }
 
 func (_c *MockInstallConfigManager_GetInstallConfig_Call) RunAndReturn(run func() *files.RootConfig) *MockInstallConfigManager_GetInstallConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetSecretFilePath provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) GetSecretFilePath() string {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSecretFilePath")
+	}
+
+	var r0 string
+	if returnFunc, ok := ret.Get(0).(func() string); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	return r0
+}
+
+// MockInstallConfigManager_GetSecretFilePath_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSecretFilePath'
+type MockInstallConfigManager_GetSecretFilePath_Call struct {
+	*mock.Call
+}
+
+// GetSecretFilePath is a helper method to define mock.On call
+func (_e *MockInstallConfigManager_Expecter) GetSecretFilePath() *MockInstallConfigManager_GetSecretFilePath_Call {
+	return &MockInstallConfigManager_GetSecretFilePath_Call{Call: _e.mock.On("GetSecretFilePath")}
+}
+
+func (_c *MockInstallConfigManager_GetSecretFilePath_Call) Run(run func()) *MockInstallConfigManager_GetSecretFilePath_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_GetSecretFilePath_Call) Return(s string) *MockInstallConfigManager_GetSecretFilePath_Call {
+	_c.Call.Return(s)
+	return _c
+}
+
+func (_c *MockInstallConfigManager_GetSecretFilePath_Call) RunAndReturn(run func() string) *MockInstallConfigManager_GetSecretFilePath_Call {
 	_c.Call.Return(run)
 	return _c
 }

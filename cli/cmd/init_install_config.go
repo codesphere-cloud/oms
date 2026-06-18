@@ -27,7 +27,9 @@ type InitInstallConfigOpts struct {
 	ConfigFile string
 	VaultFile  string
 
-	Profile        string
+	Profile              string
+	AnsibleInventoryFile string
+
 	ValidateOnly   bool
 	WithComments   bool
 	Interactive    bool
@@ -115,14 +117,20 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 			Note: When --interactive=true (default), all other configuration flags are ignored 
 			and you will be prompted for all settings interactively.
 			
+			Note: When using ansible-inventory make sure the inventory follows our supported structure.
+			Supported YAML format (where 'hosts' is a dictionary of hostname keys):
+			- <k8s-cp|k8s-workers|ceph>.hosts.<hostname>.private_ip
+
 			Supports configuration profiles for common scenarios:
 			- dev: Single-node development setup
 			- production: HA multi-node setup
-			- minimal: Minimal testing setup`),
+			- minimal: Minimal testing setup
+			`),
 			Example: formatExamples("init install-config", []csio.Example{
 				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
 				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
 				{Cmd: "--profile production -c config.yaml --vault prod.vault.yaml", Desc: "Use production profile"},
+				{Cmd: "--profile production -c config.yaml --ansible-inventory inventory.yaml", Desc: "Use ansible inventory for host definitions"},
 				{Cmd: "--validate -c config.yaml --vault prod.vault.yaml", Desc: "Validate existing configuration files"},
 			}),
 		},
@@ -134,6 +142,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
+	c.cmd.Flags().StringVar(&c.Opts.AnsibleInventoryFile, "ansible-inventory", "", "Path to Ansible inventory file to import host information from")
+
 	c.cmd.Flags().BoolVar(&c.Opts.ValidateOnly, "validate", false, "Validate existing config files instead of creating new ones")
 	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
 	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (when true, other config flags are ignored)")
@@ -183,6 +193,14 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 	}
 
 	c.printWelcomeMessage()
+
+	// If Ansible inventory file is provided, import host information from it
+	if c.Opts.AnsibleInventoryFile != "" {
+		err = icg.FetchFromAnsibleInventory(c.Opts.AnsibleInventoryFile)
+		if err != nil {
+			return fmt.Errorf("failed to import from Ansible inventory: %w", err)
+		}
+	}
 
 	if c.Opts.Interactive {
 		err = icg.CollectInteractively()
