@@ -98,7 +98,7 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 		return err
 	}
 
-	if err := ci.extractAndValidatePackage(pm); err != nil {
+	if err := ci.ExtractAndValidatePackage(pm); err != nil {
 		return err
 	}
 
@@ -191,7 +191,7 @@ func (ci *CodesphereInstaller) warnIfVaultDirDiffersFromSecretsDir(config files.
 	}
 }
 
-func (ci *CodesphereInstaller) extractAndValidatePackage(pm PackageManager) error {
+func (ci *CodesphereInstaller) ExtractAndValidatePackage(pm PackageManager) error {
 	if err := pm.Extract(ci.Force); err != nil {
 		return fmt.Errorf("failed to extract package to workdir: %w", err)
 	}

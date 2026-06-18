@@ -13,7 +13,6 @@ import (
 	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 //mockery:generate: true
@@ -31,12 +30,7 @@ type argoCDResources struct {
 	GitPassword    string
 }
 
-func NewArgoCDResourcesWithRESTConfig(dataCenterId string, ociPassword string, ociRegistryURL string, gitPassword string, restConfig *rest.Config) (ArgoCDResources, error) {
-	clientset, dynClient, err := k8s.NewClientsFromRESTConfig(restConfig)
-	if err != nil {
-		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
-	}
-
+func NewArgoCDResources(clientset kubernetes.Interface, dynClient dynamic.Interface, dataCenterId string, ociPassword string, ociRegistryURL string, gitPassword string) (ArgoCDResources, error) {
 	return &argoCDResources{
 		clientset:      clientset,
 		dynClient:      dynClient,
