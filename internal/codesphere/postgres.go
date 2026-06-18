@@ -3,6 +3,8 @@
 
 package codesphere
 
+const blueUserSuffix = "_blue"
+
 // PostgresService describes a Codesphere service that owns a dedicated postgres user.
 type PostgresService struct {
 	// Name is the service key used to derive vault secret names (e.g. "auth" → "postgresUserAuth").
@@ -14,9 +16,9 @@ type PostgresService struct {
 // DBUsername returns the postgres username for the service.
 func (s PostgresService) DBUsername() string {
 	if s.username != "" {
-		return s.username + "_blue"
+		return s.username + blueUserSuffix
 	}
-	return s.Name + "_blue"
+	return s.Name + blueUserSuffix
 }
 
 // PostgresServices is the canonical list of Codesphere services that each get a dedicated

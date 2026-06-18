@@ -258,7 +258,7 @@ type MockClient_GetPipelineState_Call struct {
 // GetPipelineState is a helper method to define mock.On call
 //   - workspaceID int
 //   - stage string
-func (_e *MockClient_Expecter) GetPipelineState(workspaceID interface{}, stage interface{}) *MockClient_GetPipelineState_Call {
+func (_e *MockClient_Expecter) GetPipelineState(workspaceID any, stage any) *MockClient_GetPipelineState_Call {
 	return &MockClient_GetPipelineState_Call{Call: _e.mock.On("GetPipelineState", workspaceID, stage)}
 }
 
