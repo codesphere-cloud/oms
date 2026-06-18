@@ -48,3 +48,4 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
 * [oms install codesphere dependencies](oms_install_codesphere_dependencies.md)	 - Install Codesphere cluster dependencies (Phase 2)
 * [oms install codesphere infra](oms_install_codesphere_infra.md)	 - Install Codesphere infrastructure (Phase 1)
 * [oms install codesphere platform](oms_install_codesphere_platform.md)	 - Install the Codesphere platform (Phase 3)
+
