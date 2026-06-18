@@ -35,6 +35,9 @@ var KnownInstallerSteps = []string{
 	"ms-backends",
 }
 
+// ArgoCDStep is the skip-step name for the dependency-phase ArgoCD pre-step.
+const ArgoCDStep = "argocd"
+
 // InfraSteps are run in Phase 1 (before ArgoCD) when --argocd is active.
 var InfraSteps = []string{
 	"copy-dependencies",
@@ -133,6 +136,37 @@ func (ci *CodesphereInstaller) prepareConfig(cm ConfigManager) (files.RootConfig
 
 	ci.warnIfVaultDirDiffersFromSecretsDir(config)
 	return config, cleanup, nil
+}
+
+// IsStepSkipped reports whether step is present in persisted or CLI skip steps.
+func IsStepSkipped(config files.RootConfig, skipSteps []string, step string) bool {
+	skippedSteps := map[string]bool{}
+	if config.Operations != nil {
+		for _, skippedStep := range config.Operations.Skip {
+			skippedSteps[skippedStep] = true
+		}
+	}
+	for _, skippedStep := range skipSteps {
+		skippedSteps[skippedStep] = true
+	}
+	return skippedSteps[step]
+}
+
+// ApplySkippedSteps marks known executable steps as skipped from persisted or CLI skip steps.
+func ApplySkippedSteps(executableSteps map[string]bool, config files.RootConfig, skipSteps []string) {
+	if config.Operations != nil {
+		for _, step := range config.Operations.Skip {
+			if _, ok := executableSteps[step]; ok {
+				executableSteps[step] = false
+			}
+		}
+	}
+
+	for _, step := range skipSteps {
+		if _, ok := executableSteps[step]; ok {
+			executableSteps[step] = false
+		}
+	}
 }
 
 func (ci *CodesphereInstaller) warnIfVaultDirDiffersFromSecretsDir(config files.RootConfig) {
@@ -406,15 +440,7 @@ func (ci *CodesphereInstaller) executableInstallerSteps(config files.RootConfig)
 		executableSteps[step] = true
 	}
 
-	if config.Operations != nil {
-		for _, step := range config.Operations.Skip {
-			executableSteps[step] = false
-		}
-	}
-
-	for _, step := range ci.SkipSteps {
-		executableSteps[step] = false
-	}
+	ApplySkippedSteps(executableSteps, config, ci.SkipSteps)
 
 	return executableSteps
 }

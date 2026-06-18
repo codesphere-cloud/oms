@@ -7,7 +7,7 @@ Install Codesphere cluster dependencies (Phase 2)
 Install cluster dependencies for a Codesphere instance (Phase 2).
 Runs ArgoCD install, vault secret sync, and pc-apps deployment first, then steps: set-up-cluster, ms-backends.
 Requires the infrastructure phase to have completed successfully.
-Pass --skip-argo to skip the ArgoCD pre-step.
+Pass --skip-steps argocd or add argocd to operations.skip to skip the ArgoCD pre-step.
 
 ```
 oms install codesphere dependencies [flags]
@@ -20,7 +20,7 @@ oms install codesphere dependencies [flags]
 $ oms install codesphere dependencies -p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml
 
 # Install cluster dependencies without the ArgoCD pre-step
-$ oms install codesphere dependencies -p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml --skip-argo
+$ oms install codesphere dependencies -p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml -s argocd
 
 ```
 
@@ -44,12 +44,10 @@ $ oms install codesphere dependencies -p codesphere-v1.2.3-installer.tar.gz -k <
   -f, --force                      Enforce package extraction
   -p, --package string             Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from
   -k, --priv-key string            Path to the private key to encrypt/decrypt secrets
-      --skip-argo                  Skip ArgoCD, vault secret sync, and pc-apps deployment
-  -s, --skip-steps strings         Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker
+  -s, --skip-steps strings         Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd
       --vault string               Path to the SOPS-encrypted prod.vault.yaml file used for config templating
 ```
 
 ### SEE ALSO
 
 * [oms install codesphere](oms_install_codesphere.md)	 - Install a Codesphere instance
-

@@ -12,6 +12,7 @@ import (
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
@@ -38,15 +39,21 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error 
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
 	stlog := bootstrap.NewStepLogger(false)
+	cm := installer.NewConfig()
 
-	if !opts.SkipArgo {
+	cfg, cleanup, err := parseInstallConfig(opts, cm)
+	if err != nil {
+		return fmt.Errorf("failed to extract config.yaml: %w", err)
+	}
+	defer cleanup()
+
+	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.ArgoCDStep) {
 		if err := stlog.Step("Install ArgoCD pre-step", func() error {
 			return installArgoCDAndApps(opts, pm, stlog)
 		}); err != nil {
 			return err
 		}
 	}
-	cm := installer.NewConfig()
 	im := system.NewImage(context.Background())
 
 	ci := &installer.CodesphereInstaller{
@@ -63,6 +70,23 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error 
 		return fmt.Errorf("failed to install dependencies: %w", err)
 	}
 	return nil
+}
+
+func parseInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManager) (files.RootConfig, func(), error) {
+	configPath := opts.Config
+	cleanup := func() {}
+	if opts.Vault != "" {
+		store := installer.NewLazyVaultTemplatingSecretStore(opts.Vault, opts.PrivKey)
+		renderedConfig, renderCleanup, err := configtemplating.RenderConfigFileToTemp(opts.Config, store)
+		if err != nil {
+			return files.RootConfig{}, cleanup, err
+		}
+		configPath = renderedConfig
+		cleanup = renderCleanup
+	}
+
+	cfg, err := cm.ParseConfigYaml(configPath)
+	return cfg, cleanup, err
 }
 
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
@@ -200,14 +224,14 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 			Long: io.Long(`Install cluster dependencies for a Codesphere instance (Phase 2).
 			Runs ArgoCD install, vault secret sync, and pc-apps deployment first, then steps: set-up-cluster, ms-backends.
 			Requires the infrastructure phase to have completed successfully.
-			Pass --skip-argo to skip the ArgoCD pre-step.`),
+			Pass --skip-steps argocd or add argocd to operations.skip to skip the ArgoCD pre-step.`),
 			Example: formatExamples("install codesphere dependencies", []io.Example{
 				{
 					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml",
 					Desc: "Install cluster dependencies (including ArgoCD)",
 				},
 				{
-					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml --skip-argo",
+					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml -s argocd",
 					Desc: "Install cluster dependencies without the ArgoCD pre-step",
 				},
 			}),
