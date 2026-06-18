@@ -68,102 +68,116 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error 
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
 // before the main dependency steps.
 func installArgoCDAndApps(opts *InstallCodesphereOpts, pm installer.PackageManager, stlog *bootstrap.StepLogger) error {
-	ctx := context.Background()
+	install := &argoCDAndAppsInstall{
+		ctx:  context.Background(),
+		opts: opts,
+		pm:   pm,
+	}
 
-	var (
-		ociPassword    string
-		ociRegistryURL string
-		argoInstall    *argocdinstaller.Installer
-		kubeClient     ctrlclient.Client
-		vault          *files.InstallVault
-		kubeConfig     *rest.Config
-	)
-
-	if err := stlog.Substep("Load vault data", func() error {
-		var err error
-		vault, err = installer.LoadVaultData(opts.Vault, opts.PrivKey)
-		if err != nil {
-			return fmt.Errorf("failed to load vault: %w", err)
-		}
-		if s := vault.GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
-			ociPassword = s.Fields.Password
-		}
-		if ociPassword == "" {
-			return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
-		}
-		kubeConfigContent, err := kubeConfigContentFromVault(vault)
-		if err != nil {
-			return err
-		}
-
-		kubeConfig, err = clientcmd.RESTConfigFromKubeConfig([]byte(kubeConfigContent))
-		if err != nil {
-			return fmt.Errorf("failed to load kubernetes config from vault: %w", err)
-		}
-		kubeClient, err = ctrlclient.New(kubeConfig, ctrlclient.Options{})
-		if err != nil {
-			return fmt.Errorf("failed to create kubernetes client: %w", err)
-		}
-		return nil
-	}); err != nil {
+	if err := stlog.Substep("Load vault data", install.loadVaultData); err != nil {
+		return err
+	}
+	if err := stlog.Substep("Install ArgoCD", install.installArgoCD); err != nil {
+		return err
+	}
+	if err := stlog.Substep("Sync vault secret", install.syncVaultSecret); err != nil {
+		return err
+	}
+	if err := stlog.Substep("Install pc-apps", install.installPcApps); err != nil {
 		return err
 	}
 
-	if err := stlog.Substep("Install ArgoCD", func() error {
-		cfg, err := installer.NewConfig().ParseConfigYaml(opts.Config)
-		if err != nil {
-			return fmt.Errorf("failed to parse config.yaml: %w", err)
-		}
-		ociRegistryURL = opts.ArgoCDRegistryURL
-		if ociRegistryURL == "" && cfg.Registry != nil {
-			ociRegistryURL = cfg.Registry.Server
-		}
-		argoInstall, err = argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
-			Version:        opts.ArgoCDVersion,
-			DatacenterId:   fmt.Sprintf("%d", cfg.Datacenter.ID),
-			OciPassword:    ociPassword,
-			OciRegistryURL: ociRegistryURL,
-			GitPassword:    os.Getenv("OMS_GIT_PASSWORD"),
-			FullInstall:    true,
-			ForceConflicts: opts.ArgoCDForceConflicts,
-			RepoURL:        opts.ArgoCDRepoURL,
-			ValueFiles:     opts.ArgoCDValues,
-			RESTConfig:     kubeConfig,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
-		}
-		if err := argoInstall.Install(); err != nil {
-			return fmt.Errorf("failed to install ArgoCD: %w", err)
-		}
-		return nil
-	}); err != nil {
+	return nil
+}
+
+type argoCDAndAppsInstall struct {
+	ctx context.Context
+
+	opts *InstallCodesphereOpts
+	pm   installer.PackageManager
+
+	ociPassword    string
+	ociRegistryURL string
+	argoInstall    *argocdinstaller.Installer
+	kubeClient     ctrlclient.Client
+	vault          *files.InstallVault
+	kubeConfig     *rest.Config
+}
+
+func (i *argoCDAndAppsInstall) loadVaultData() error {
+	var err error
+	i.vault, err = installer.LoadVaultData(i.opts.Vault, i.opts.PrivKey)
+	if err != nil {
+		return fmt.Errorf("failed to load vault: %w", err)
+	}
+	if s := i.vault.GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
+		i.ociPassword = s.Fields.Password
+	}
+	if i.ociPassword == "" {
+		return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
+	}
+	kubeConfigContent, err := kubeConfigContentFromVault(i.vault)
+	if err != nil {
 		return err
 	}
 
-	if err := stlog.Substep("Sync vault secret", func() error {
-		creator := installer.NewVaultSecretCreator(kubeClient)
-		if err := creator.CreateSecretFromVault(ctx, vault, installer.VaultSecretNamespace, installer.VaultSecretName); err != nil {
-			return fmt.Errorf("failed to sync vault secret: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return err
+	i.kubeConfig, err = clientcmd.RESTConfigFromKubeConfig([]byte(kubeConfigContent))
+	if err != nil {
+		return fmt.Errorf("failed to load kubernetes config from vault: %w", err)
 	}
-
-	if err := stlog.Substep("Install pc-apps", func() error {
-		pcApps, err := installer.NewPcAppsFromBom(kubeClient, pm.GetDependencyPath("bom.json"), argocdinstaller.DefaultNamespace)
-		if err != nil {
-			return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
-		}
-		if err := pcApps.Install(ctx); err != nil {
-			return fmt.Errorf("failed to install pc-apps: %w", err)
-		}
-		return nil
-	}); err != nil {
-		return err
+	i.kubeClient, err = ctrlclient.New(i.kubeConfig, ctrlclient.Options{})
+	if err != nil {
+		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
+	return nil
+}
 
+func (i *argoCDAndAppsInstall) installArgoCD() error {
+	cfg, err := installer.NewConfig().ParseConfigYaml(i.opts.Config)
+	if err != nil {
+		return fmt.Errorf("failed to parse config.yaml: %w", err)
+	}
+	i.ociRegistryURL = i.opts.ArgoCDRegistryURL
+	if i.ociRegistryURL == "" && cfg.Registry != nil {
+		i.ociRegistryURL = cfg.Registry.Server
+	}
+	i.argoInstall, err = argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
+		Version:        i.opts.ArgoCDVersion,
+		DatacenterId:   fmt.Sprintf("%d", cfg.Datacenter.ID),
+		OciPassword:    i.ociPassword,
+		OciRegistryURL: i.ociRegistryURL,
+		GitPassword:    os.Getenv("OMS_GIT_PASSWORD"),
+		FullInstall:    true,
+		ForceConflicts: i.opts.ArgoCDForceConflicts,
+		RepoURL:        i.opts.ArgoCDRepoURL,
+		ValueFiles:     i.opts.ArgoCDValues,
+		RESTConfig:     i.kubeConfig,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
+	}
+	if err := i.argoInstall.Install(); err != nil {
+		return fmt.Errorf("failed to install ArgoCD: %w", err)
+	}
+	return nil
+}
+
+func (i *argoCDAndAppsInstall) syncVaultSecret() error {
+	creator := installer.NewVaultSecretCreator(i.kubeClient)
+	if err := creator.CreateSecretFromVault(i.ctx, i.vault, installer.VaultSecretNamespace, installer.VaultSecretName); err != nil {
+		return fmt.Errorf("failed to sync vault secret: %w", err)
+	}
+	return nil
+}
+
+func (i *argoCDAndAppsInstall) installPcApps() error {
+	pcApps, err := installer.NewPcAppsFromBom(i.kubeClient, i.pm.GetDependencyPath("bom.json"), argocdinstaller.DefaultNamespace)
+	if err != nil {
+		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
+	}
+	if err := pcApps.Install(i.ctx); err != nil {
+		return fmt.Errorf("failed to install pc-apps: %w", err)
+	}
 	return nil
 }
 
