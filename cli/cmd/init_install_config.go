@@ -52,11 +52,9 @@ type InitInstallConfigOpts struct {
 	PostgresReplicaName     string
 	PostgresServerAddress   string
 
-	CephCsiKubeletDir      string
-	CephNodesSubnet        string
-	CephHosts              []files.CephHostConfig
-	CephOSDDataDevicesSize string
-	CephOSDDBDevicesSize   string
+	CephCsiKubeletDir string
+	CephNodesSubnet   string
+	CephHosts         []files.CephHostConfig
 
 	KubernetesManagedByCodesphere bool
 	KubernetesAPIServerHost       string
