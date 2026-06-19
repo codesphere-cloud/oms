@@ -431,7 +431,7 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 	}
 
 	if b.Env.UseArgoCD {
-		pcApps, err := installer.NewPcAppsFromBom(b.kubeClient, filepath.Join(depsDir, "bom.json"), argocd.DefaultNamespace)
+		pcApps, err := installer.NewPcAppsFromBom(b.kubeClient, b.restConfig, filepath.Join(depsDir, "bom.json"), argocd.DefaultNamespace)
 		if err != nil {
 			return fmt.Errorf("failed to initialize pc-apps installer from BOM: %w", err)
 		}
