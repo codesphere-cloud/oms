@@ -59,9 +59,6 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	if c.Opts.CodesphereOnly {
-		if len(platformInstaller.ExecutableSteps(cfg)) == 0 {
-			return nil
-		}
 		return installCodespherePlatform(c.Opts, c.Env)
 	}
 
