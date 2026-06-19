@@ -274,11 +274,18 @@ func (n *Node) EnableRootLogin() error {
 }
 
 func (n *Node) HasInotifyWatchesConfigured() bool {
-	return n.hasSysctlLine("fs.inotify.max_user_watches=1048576") && n.isSysctlActive("fs.inotify.max_user_watches", "1048576")
+	return n.hasSysctlLine("fs.inotify.max_user_watches=1048576") &&
+		n.isSysctlActive("fs.inotify.max_user_watches", "1048576") &&
+		n.hasSysctlLine("fs.inotify.max_user_instances=8192") &&
+		n.isSysctlActive("fs.inotify.max_user_instances", "8192")
 }
 
 func (n *Node) ConfigureInotifyWatches() error {
-	return n.configureSysctlLine("fs.inotify.max_user_watches=1048576")
+	lines := []string{
+		"fs.inotify.max_user_watches=1048576",
+		"fs.inotify.max_user_instances=8192",
+	}
+	return n.configureSysctlLines(lines)
 }
 
 func (n *Node) HasMemoryMapConfigured() bool {
@@ -286,7 +293,7 @@ func (n *Node) HasMemoryMapConfigured() bool {
 }
 
 func (n *Node) ConfigureMemoryMap() error {
-	return n.configureSysctlLine("vm.max_map_count=262144")
+	return n.configureSysctlLines([]string{"vm.max_map_count=262144"})
 }
 
 // HasFile checks if a file exists on the remote node via SSH
@@ -349,11 +356,13 @@ func (n *Node) isSysctlActive(key, expected string) bool {
 }
 
 // configureSysctlLine appends a specific line to /etc/sysctl.conf and applies the settings on the remote node via SSH
-func (n *Node) configureSysctlLine(line string) error {
-	if !n.hasSysctlLine(line) {
-		cmd := fmt.Sprintf("echo '%s' | sudo tee -a /etc/sysctl.conf", line)
-		if err := n.RunSSHCommand("root", cmd); err != nil {
-			return fmt.Errorf("failed to append to sysctl.conf: %w", err)
+func (n *Node) configureSysctlLines(lines []string) error {
+	for _, line := range lines {
+		if !n.hasSysctlLine(line) {
+			cmd := fmt.Sprintf("echo '%s' | sudo tee -a /etc/sysctl.conf", line)
+			if err := n.RunSSHCommand("root", cmd); err != nil {
+				return fmt.Errorf("failed to append to sysctl.conf: %w", err)
+			}
 		}
 	}
 

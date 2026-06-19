@@ -35,6 +35,9 @@ var KnownInstallerSteps = []string{
 	"ms-backends",
 }
 
+// ArgoCDStep is the skip-step name for the dependency-phase ArgoCD pre-step.
+const ArgoCDStep = "argocd"
+
 // InfraSteps are run in Phase 1 (before ArgoCD) when --argocd is active.
 var InfraSteps = []string{
 	"copy-dependencies",
@@ -89,210 +92,81 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", goos, goarch)
 	}
 
+	config, cleanup, err := ci.prepareConfig(cm)
+	defer cleanup()
+	if err != nil {
+		return err
+	}
+
+	if err := ci.ExtractAndValidatePackage(pm); err != nil {
+		return err
+	}
+
+	if err := ci.buildWorkspaceImages(pm, im, config); err != nil {
+		return err
+	}
+
+	return ci.runInstaller(pm, config)
+}
+
+func (ci *CodesphereInstaller) prepareConfig(cm ConfigManager) (files.RootConfig, func(), error) {
 	originalConfig := ci.ConfigPath
-	cleanup := func() {}
+	cleanup := func() {
+		ci.ConfigPath = originalConfig
+	}
+
 	if ci.VaultPath != "" {
 		store := NewLazyVaultTemplatingSecretStore(ci.VaultPath, ci.PrivKey)
 		renderedConfig, renderCleanup, err := configtemplating.RenderConfigFileToTemp(ci.ConfigPath, store)
 		if err != nil {
-			return fmt.Errorf("failed to render config template: %w", err)
+			return files.RootConfig{}, cleanup, fmt.Errorf("failed to render config template: %w", err)
 		}
-		cleanup = renderCleanup
+
+		cleanup = func() {
+			ci.ConfigPath = originalConfig
+			renderCleanup()
+		}
 		ci.ConfigPath = renderedConfig
 	}
-	defer cleanup()
-	defer func() {
-		ci.ConfigPath = originalConfig
-	}()
 
 	config, err := cm.ParseConfigYaml(ci.ConfigPath)
 	if err != nil {
-		return fmt.Errorf("failed to extract config.yaml: %w", err)
+		return files.RootConfig{}, cleanup, fmt.Errorf("failed to extract config.yaml: %w", err)
 	}
+
 	ci.warnIfVaultDirDiffersFromSecretsDir(config)
+	return config, cleanup, nil
+}
 
-	err = pm.Extract(ci.Force)
-	if err != nil {
-		return fmt.Errorf("failed to extract package to workdir: %w", err)
+// IsStepSkipped reports whether step is present in persisted or CLI skip steps.
+func IsStepSkipped(config files.RootConfig, skipSteps []string, step string) bool {
+	skippedSteps := map[string]bool{}
+	if config.Operations != nil {
+		for _, skippedStep := range config.Operations.Skip {
+			skippedSteps[skippedStep] = true
+		}
 	}
-
-	foundFiles, err := ListPackageContents(pm)
-	if err != nil {
-		return fmt.Errorf("failed to list available files: %w", err)
+	for _, skippedStep := range skipSteps {
+		skippedSteps[skippedStep] = true
 	}
+	return skippedSteps[step]
+}
 
-	if !slices.Contains(foundFiles, "deps.tar.gz") {
-		return fmt.Errorf("deps.tar.gz not found in package")
-	}
-	if !slices.Contains(foundFiles, "private-cloud-installer.js") {
-		return fmt.Errorf("private-cloud-installer.js not found in package")
-	}
-	if !slices.Contains(foundFiles, "node") {
-		return fmt.Errorf("node executable not found in package")
-	}
-
-	err = pm.ExtractDependency("bom.json", ci.Force)
-	if err != nil {
-		return fmt.Errorf("failed to extract package to workdir: %w", err)
-	}
-
-	// If workspace image is extended extract bom.json and load workspace image
-	if !ci.SkipImageBuilding {
-		for imageKey, imageConfig := range config.Codesphere.DeployConfig.Images {
-			for flavorKey, flavor := range imageConfig.Flavors {
-				if flavor.Image.Dockerfile != "" && config.Registry != nil && config.Registry.Server != "" {
-					bomRef := flavor.Image.BomRef
-					dockerfile := flavor.Image.Dockerfile
-
-					fullImageTag, err := pm.GetFullImageTag(bomRef)
-					if err != nil {
-						return fmt.Errorf("failed to get full image tag for %s: %w", bomRef, err)
-					}
-
-					// Extract root image name from full tag (e.g. repo/image:tag -> image)
-					parts := strings.Split(fullImageTag, ":")
-					if len(parts) < 2 {
-						return fmt.Errorf("invalid image tag format: %s", fullImageTag)
-					}
-					imageNameAndPath := parts[0]
-					version := parts[1]
-					rootImageName := path.Base(imageNameAndPath)
-
-					// Extract and load root image
-					imagePath := filepath.Join("codesphere", "images", fmt.Sprintf("%s.tar", rootImageName))
-					err = pm.ExtractDependency(imagePath, ci.Force)
-					if err != nil {
-						return fmt.Errorf("failed to extract root image %s: %w", imagePath, err)
-					}
-
-					extractedImagePath := pm.GetDependencyPath(imagePath)
-					err = im.LoadImage(extractedImagePath)
-					if err != nil {
-						return fmt.Errorf("failed to load workspace image from Dockerfile %s: %w", dockerfile, err)
-					}
-					log.Printf("Loaded root image '%s'", extractedImagePath)
-
-					// TODO: This is duplicated from update_dockerfile.go, refactor into shared function
-					dockerfileFile, err := pm.FileIO().Open(dockerfile)
-					if err != nil {
-						return fmt.Errorf("failed to open dockerfile %s: %w", dockerfile, err)
-					}
-					defer util.CloseFileIgnoreError(dockerfileFile)
-
-					dockerfileManager := util.NewDockerfileManager()
-					updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, fullImageTag)
-					if err != nil {
-						return fmt.Errorf("failed to update FROM statement: %w", err)
-					}
-
-					err = pm.FileIO().WriteFile(dockerfile, []byte(updatedContent), 0644)
-					if err != nil {
-						return fmt.Errorf("failed to write updated dockerfile: %w", err)
-					}
-
-					log.Printf("Successfully updated FROM statement in %s to use %s", dockerfile, fullImageTag)
-					// TODO: End duplicated code
-
-					dockerfileName := filepath.Base(dockerfile)
-					dockerfileDir := filepath.Dir(dockerfile)
-
-					// Determine image tag for build and push
-					registryUrl := strings.TrimRight(config.Registry.Server, "/")
-					buildTag := fmt.Sprintf("%s/%s-%s:%s", registryUrl, imageKey, flavorKey, version)
-
-					err = im.BuildImage(dockerfileName, buildTag, dockerfileDir)
-					if err != nil {
-						return fmt.Errorf("failed to build workspace image from Dockerfile %s: %w", dockerfile, err)
-					}
-
-					log.Printf("Pushing image to %s", buildTag)
-					err = im.PushImage(buildTag)
-					if err != nil {
-						return fmt.Errorf("failed to push image %s: %w", buildTag, err)
-					}
-				}
+// ApplySkippedSteps marks known executable steps as skipped from persisted or CLI skip steps.
+func ApplySkippedSteps(executableSteps map[string]bool, config files.RootConfig, skipSteps []string) {
+	if config.Operations != nil {
+		for _, step := range config.Operations.Skip {
+			if _, ok := executableSteps[step]; ok {
+				executableSteps[step] = false
 			}
 		}
 	}
 
-	// Install codesphere with node
-	nodePath := filepath.Join(pm.GetWorkDir(), "node")
-	err = os.Chmod(nodePath, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to make node executable: %w", err)
-	}
-
-	log.Printf("Using Node.js executable: %s", nodePath)
-	log.Println("Starting private cloud installer script...")
-	installerPath := filepath.Join(pm.GetWorkDir(), "private-cloud-installer.js")
-	archivePath := filepath.Join(pm.GetWorkDir(), "deps.tar.gz")
-
-	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", ci.ConfigPath, "--privKey", ci.PrivKey}
-
-	baseSteps := KnownInstallerSteps
-	if len(ci.AllowedSteps) > 0 {
-		baseSteps = ci.AllowedSteps
-	}
-
-	executableSteps := map[string]bool{}
-	for _, step := range baseSteps {
-		executableSteps[step] = true
-	}
-
-	// Steps not in baseSteps are skipped implicitly; add them to cmdArgs
-	for _, step := range KnownInstallerSteps {
-		if _, ok := executableSteps[step]; !ok {
-			cmdArgs = append(cmdArgs, "--skipStep", step)
-		}
-	}
-
-	if config.Operations != nil {
-		for _, step := range config.Operations.Skip {
+	for _, step := range skipSteps {
+		if _, ok := executableSteps[step]; ok {
 			executableSteps[step] = false
 		}
 	}
-
-	for _, step := range ci.SkipSteps {
-		executableSteps[step] = false
-	}
-
-	executedSteps := []string{}
-	for step, executed := range executableSteps {
-		if !executed {
-			cmdArgs = append(cmdArgs, "--skipStep", step)
-		} else {
-			executedSteps = append(executedSteps, step)
-		}
-	}
-
-	sort.Strings(executedSteps)
-
-	prompt := NewPrompter(!ci.AutoApprove)
-	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
-	if prompt.String(msg, "yes") != "yes" {
-		return fmt.Errorf("installation aborted")
-	}
-
-	if ci.CodesphereOnly {
-		cmdArgs = append(cmdArgs, "--codesphereOnly")
-	}
-
-	if ci.DirectConnection {
-		cmdArgs = append(cmdArgs, "--directConnection")
-	}
-
-	cmd := exec.Command(nodePath, cmdArgs...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-
-	err = cmd.Run()
-	if err != nil {
-		return fmt.Errorf("failed to run installer script: %w", err)
-	}
-	log.Println("Private cloud installer script finished.")
-
-	return nil
 }
 
 func (ci *CodesphereInstaller) warnIfVaultDirDiffersFromSecretsDir(config files.RootConfig) {
@@ -317,20 +191,46 @@ func (ci *CodesphereInstaller) warnIfVaultDirDiffersFromSecretsDir(config files.
 	}
 }
 
-// ListPackageContents returns the filenames present in the extracted package work directory.
-func ListPackageContents(pm PackageManager) ([]string, error) {
+func (ci *CodesphereInstaller) ExtractAndValidatePackage(pm PackageManager) error {
+	if err := pm.Extract(ci.Force); err != nil {
+		return fmt.Errorf("failed to extract package to workdir: %w", err)
+	}
+
+	foundFiles, err := ci.listPackageFiles(pm)
+	if err != nil {
+		return err
+	}
+
+	if !slices.Contains(foundFiles, "deps.tar.gz") {
+		return fmt.Errorf("deps.tar.gz not found in package")
+	}
+	if !slices.Contains(foundFiles, "private-cloud-installer.js") {
+		return fmt.Errorf("private-cloud-installer.js not found in package")
+	}
+	if !slices.Contains(foundFiles, "node") {
+		return fmt.Errorf("node executable not found in package")
+	}
+
+	if err := pm.ExtractDependency("bom.json", ci.Force); err != nil {
+		return fmt.Errorf("failed to extract package to workdir: %w", err)
+	}
+
+	return nil
+}
+
+func (ci *CodesphereInstaller) listPackageFiles(pm PackageManager) ([]string, error) {
 	packageDir := pm.GetWorkDir()
 	if !pm.FileIO().Exists(packageDir) {
-		return nil, fmt.Errorf("work dir not found: %s", packageDir)
+		return nil, fmt.Errorf("failed to list available files: work dir not found: %s", packageDir)
 	}
 
 	entries, err := pm.FileIO().ReadDir(packageDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read directory contents: %w", err)
+		return nil, fmt.Errorf("failed to list available files: failed to read directory contents: %w", err)
 	}
 
 	log.Printf("Listing contents of %s", packageDir)
-	var foundFiles []string
+	foundFiles := []string{}
 	for _, entry := range entries {
 		filename := entry.Name()
 		log.Printf("- %s", filename)
@@ -338,4 +238,209 @@ func ListPackageContents(pm PackageManager) ([]string, error) {
 	}
 
 	return foundFiles, nil
+}
+
+func (ci *CodesphereInstaller) buildWorkspaceImages(pm PackageManager, im system.ImageManager, config files.RootConfig) error {
+	if ci.SkipImageBuilding {
+		return nil
+	}
+
+	for imageKey, imageConfig := range config.Codesphere.DeployConfig.Images {
+		for flavorKey, flavor := range imageConfig.Flavors {
+			if !shouldBuildWorkspaceImage(config, flavor) {
+				continue
+			}
+
+			if err := ci.buildWorkspaceImage(pm, im, config, imageKey, flavorKey, flavor); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func shouldBuildWorkspaceImage(config files.RootConfig, flavor files.FlavorConfig) bool {
+	return flavor.Image.Dockerfile != "" && config.Registry != nil && config.Registry.Server != ""
+}
+
+func (ci *CodesphereInstaller) buildWorkspaceImage(
+	pm PackageManager,
+	im system.ImageManager,
+	config files.RootConfig,
+	imageKey string,
+	flavorKey string,
+	flavor files.FlavorConfig,
+) error {
+	bomRef := flavor.Image.BomRef
+	dockerfile := flavor.Image.Dockerfile
+
+	fullImageTag, err := pm.GetFullImageTag(bomRef)
+	if err != nil {
+		return fmt.Errorf("failed to get full image tag for %s: %w", bomRef, err)
+	}
+
+	rootImageName, version, err := splitImageTag(fullImageTag)
+	if err != nil {
+		return err
+	}
+
+	if err := ci.extractAndLoadRootImage(pm, im, rootImageName, dockerfile); err != nil {
+		return err
+	}
+
+	if err := updateDockerfileFromStatement(pm, dockerfile, fullImageTag); err != nil {
+		return err
+	}
+
+	buildTag := workspaceImageBuildTag(config.Registry.Server, imageKey, flavorKey, version)
+	dockerfileName := filepath.Base(dockerfile)
+	dockerfileDir := filepath.Dir(dockerfile)
+
+	if err := im.BuildImage(dockerfileName, buildTag, dockerfileDir); err != nil {
+		return fmt.Errorf("failed to build workspace image from Dockerfile %s: %w", dockerfile, err)
+	}
+
+	log.Printf("Pushing image to %s", buildTag)
+	if err := im.PushImage(buildTag); err != nil {
+		return fmt.Errorf("failed to push image %s: %w", buildTag, err)
+	}
+
+	return nil
+}
+
+func splitImageTag(fullImageTag string) (string, string, error) {
+	parts := strings.Split(fullImageTag, ":")
+	if len(parts) < 2 {
+		return "", "", fmt.Errorf("invalid image tag format: %s", fullImageTag)
+	}
+
+	imageNameAndPath := parts[0]
+	version := parts[1]
+	return path.Base(imageNameAndPath), version, nil
+}
+
+func (ci *CodesphereInstaller) extractAndLoadRootImage(pm PackageManager, im system.ImageManager, rootImageName, dockerfile string) error {
+	imagePath := filepath.Join("codesphere", "images", fmt.Sprintf("%s.tar", rootImageName))
+	if err := pm.ExtractDependency(imagePath, ci.Force); err != nil {
+		return fmt.Errorf("failed to extract root image %s: %w", imagePath, err)
+	}
+
+	extractedImagePath := pm.GetDependencyPath(imagePath)
+	if err := im.LoadImage(extractedImagePath); err != nil {
+		return fmt.Errorf("failed to load workspace image from Dockerfile %s: %w", dockerfile, err)
+	}
+
+	log.Printf("Loaded root image '%s'", extractedImagePath)
+	return nil
+}
+
+func updateDockerfileFromStatement(pm PackageManager, dockerfile, fullImageTag string) error {
+	dockerfileFile, err := pm.FileIO().Open(dockerfile)
+	if err != nil {
+		return fmt.Errorf("failed to open dockerfile %s: %w", dockerfile, err)
+	}
+	defer util.CloseFileIgnoreError(dockerfileFile)
+
+	dockerfileManager := util.NewDockerfileManager()
+	updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, fullImageTag)
+	if err != nil {
+		return fmt.Errorf("failed to update FROM statement: %w", err)
+	}
+
+	if err := pm.FileIO().WriteFile(dockerfile, []byte(updatedContent), 0644); err != nil {
+		return fmt.Errorf("failed to write updated dockerfile: %w", err)
+	}
+
+	log.Printf("Successfully updated FROM statement in %s to use %s", dockerfile, fullImageTag)
+	return nil
+}
+
+func workspaceImageBuildTag(registryServer, imageKey, flavorKey, version string) string {
+	registryURL := strings.TrimRight(registryServer, "/")
+	return fmt.Sprintf("%s/%s-%s:%s", registryURL, imageKey, flavorKey, version)
+}
+
+func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.RootConfig) error {
+	nodePath := filepath.Join(pm.GetWorkDir(), "node")
+	if err := os.Chmod(nodePath, 0755); err != nil {
+		return fmt.Errorf("failed to make node executable: %w", err)
+	}
+
+	log.Printf("Using Node.js executable: %s", nodePath)
+	log.Println("Starting private cloud installer script...")
+
+	cmdArgs, err := ci.installerCommandArgs(pm, config)
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(nodePath, cmdArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run installer script: %w", err)
+	}
+
+	log.Println("Private cloud installer script finished.")
+	return nil
+}
+
+func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config files.RootConfig) ([]string, error) {
+	installerPath := filepath.Join(pm.GetWorkDir(), "private-cloud-installer.js")
+	archivePath := filepath.Join(pm.GetWorkDir(), "deps.tar.gz")
+	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", ci.ConfigPath, "--privKey", ci.PrivKey}
+
+	executableSteps := ci.executableInstallerSteps(config)
+
+	for _, step := range KnownInstallerSteps {
+		if _, ok := executableSteps[step]; !ok {
+			cmdArgs = append(cmdArgs, "--skipStep", step)
+		}
+	}
+
+	executedSteps := []string{}
+	for step, executed := range executableSteps {
+		if !executed {
+			cmdArgs = append(cmdArgs, "--skipStep", step)
+		} else {
+			executedSteps = append(executedSteps, step)
+		}
+	}
+
+	sort.Strings(executedSteps)
+
+	prompt := NewPrompter(!ci.AutoApprove)
+	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
+	if prompt.String(msg, "yes") != "yes" {
+		return nil, fmt.Errorf("installation aborted")
+	}
+
+	if ci.CodesphereOnly {
+		cmdArgs = append(cmdArgs, "--codesphereOnly")
+	}
+
+	if ci.DirectConnection {
+		cmdArgs = append(cmdArgs, "--directConnection")
+	}
+
+	return cmdArgs, nil
+}
+
+func (ci *CodesphereInstaller) executableInstallerSteps(config files.RootConfig) map[string]bool {
+	baseSteps := KnownInstallerSteps
+	if len(ci.AllowedSteps) > 0 {
+		baseSteps = ci.AllowedSteps
+	}
+
+	executableSteps := map[string]bool{}
+	for _, step := range baseSteps {
+		executableSteps[step] = true
+	}
+
+	ApplySkippedSteps(executableSteps, config, ci.SkipSteps)
+
+	return executableSteps
 }

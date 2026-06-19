@@ -11,17 +11,17 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"helm.sh/helm/v4/pkg/chart/common/util"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
+	"k8s.io/client-go/rest"
 )
 
 const (
-	defaultRepoURL         = "https://argoproj.github.io/argo-helm"
-	DefaultNamespace       = "argocd"
-	DefaultVaultNamespace  = "codesphere-system"
-	DefaultVaultSecretName = "vault"
+	DefaultRepoURL   = "https://argoproj.github.io/argo-helm"
+	DefaultNamespace = "argocd"
 )
 
 // InstallerConfig holds all user-facing parameters for an ArgoCD install/upgrade.
@@ -35,6 +35,7 @@ type InstallerConfig struct {
 	ForceConflicts bool
 	RepoURL        string
 	ValueFiles     []string
+	RESTConfig     *rest.Config
 }
 
 // Installer holds the resolved configuration and initialized clients.
@@ -45,12 +46,35 @@ type Installer struct {
 }
 
 func NewInstaller(cfg InstallerConfig) (*Installer, error) {
-	helm, err := installer.NewHelmClient("argocd")
+	if cfg.RESTConfig != nil {
+		helm, err := installer.NewHelmClientWithRESTConfig(DefaultNamespace, cfg.RESTConfig)
+		if err != nil {
+			return nil, fmt.Errorf("init helm client failed: %w", err)
+		}
+
+		clientset, dynClient, err := k8s.NewClientsFromRESTConfig(cfg.RESTConfig)
+		if err != nil {
+			return nil, fmt.Errorf("creating kubernetes clients: %w", err)
+		}
+		resources, err := NewArgoCDResources(clientset, dynClient, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+		if err != nil {
+			return nil, fmt.Errorf("init argocd resources client failed: %w", err)
+		}
+		return &Installer{
+			InstallerConfig: cfg,
+			Helm:            helm,
+			Resources:       resources,
+		}, nil
+	}
+	helm, err := installer.NewHelmClient(DefaultNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
-
-	resources, err := NewArgoCDResources(cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+	clientset, dynClient, err := k8s.NewClients()
+	if err != nil {
+		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
+	}
+	resources, err := NewArgoCDResources(clientset, dynClient, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}
@@ -195,7 +219,7 @@ func (a *Installer) validateRepoURL() error {
 func (a *Installer) resolveChartRef(chartName string) (string, string) {
 	repoURL := a.RepoURL
 	if repoURL == "" {
-		repoURL = defaultRepoURL
+		repoURL = DefaultRepoURL
 	}
 	if strings.HasPrefix(repoURL, "oci://") {
 		return strings.TrimRight(repoURL, "/") + "/" + chartName, ""

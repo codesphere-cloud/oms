@@ -30,12 +30,7 @@ type argoCDResources struct {
 	GitPassword    string
 }
 
-func NewArgoCDResources(dataCenterId string, ociPassword string, ociRegistryURL string, gitPassword string) (ArgoCDResources, error) {
-	clientset, dynClient, err := k8s.NewClients()
-	if err != nil {
-		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
-	}
-
+func NewArgoCDResources(clientset kubernetes.Interface, dynClient dynamic.Interface, dataCenterId string, ociPassword string, ociRegistryURL string, gitPassword string) (ArgoCDResources, error) {
 	return &argoCDResources{
 		clientset:      clientset,
 		dynClient:      dynClient,

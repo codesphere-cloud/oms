@@ -222,6 +222,74 @@ func (_c *MockClient_ExecuteCommand_Call) RunAndReturn(run func(workspaceID int,
 	return _c
 }
 
+// GetPipelineState provides a mock function for the type MockClient
+func (_mock *MockClient) GetPipelineState(workspaceID int, stage string) ([]api.PipelineStatus, error) {
+	ret := _mock.Called(workspaceID, stage)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetPipelineState")
+	}
+
+	var r0 []api.PipelineStatus
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, string) ([]api.PipelineStatus, error)); ok {
+		return returnFunc(workspaceID, stage)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, string) []api.PipelineStatus); ok {
+		r0 = returnFunc(workspaceID, stage)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]api.PipelineStatus)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, string) error); ok {
+		r1 = returnFunc(workspaceID, stage)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_GetPipelineState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPipelineState'
+type MockClient_GetPipelineState_Call struct {
+	*mock.Call
+}
+
+// GetPipelineState is a helper method to define mock.On call
+//   - workspaceID int
+//   - stage string
+func (_e *MockClient_Expecter) GetPipelineState(workspaceID any, stage any) *MockClient_GetPipelineState_Call {
+	return &MockClient_GetPipelineState_Call{Call: _e.mock.On("GetPipelineState", workspaceID, stage)}
+}
+
+func (_c *MockClient_GetPipelineState_Call) Run(run func(workspaceID int, stage string)) *MockClient_GetPipelineState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_GetPipelineState_Call) Return(vs []api.PipelineStatus, err error) *MockClient_GetPipelineState_Call {
+	_c.Call.Return(vs, err)
+	return _c
+}
+
+func (_c *MockClient_GetPipelineState_Call) RunAndReturn(run func(workspaceID int, stage string) ([]api.PipelineStatus, error)) *MockClient_GetPipelineState_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListTeams provides a mock function for the type MockClient
 func (_mock *MockClient) ListTeams() ([]api.Team, error) {
 	ret := _mock.Called()
