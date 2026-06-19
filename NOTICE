@@ -905,9 +905,9 @@ License URL: https://github.com/prometheus/procfs/blob/v0.20.1/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260527112405-9427551c313e
+Version: v0.0.0-20260617185424-dc50bce4e628
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/9427551c313e/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/dc50bce4e628/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
