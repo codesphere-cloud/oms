@@ -12,6 +12,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"helm.sh/helm/v4/pkg/cli"
@@ -68,7 +69,7 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 	}, nil
 }
 
-func NewPcAppsFromBom(c client.Client, bomPath string, namespace string) (*PCApps, error) {
+func NewPcAppsFromBom(c client.Client, restConfig *rest.Config, bomPath string, namespace string) (*PCApps, error) {
 	bomCfg, err := bom.Parse(bomPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse bom.json: %w", err)
@@ -79,7 +80,7 @@ func NewPcAppsFromBom(c client.Client, bomPath string, namespace string) (*PCApp
 		return nil, fmt.Errorf("pc-applications component not found in BOM")
 	}
 
-	helm, err := NewHelmClient(namespace)
+	helm, err := NewHelmClientWithRESTConfig(namespace, restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("creating helm client: %w", err)
 	}

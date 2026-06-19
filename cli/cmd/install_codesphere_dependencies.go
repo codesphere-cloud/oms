@@ -199,7 +199,7 @@ func (i *argoCDAndAppsInstall) syncVaultSecret() error {
 }
 
 func (i *argoCDAndAppsInstall) installPcApps() error {
-	pcApps, err := installer.NewPcAppsFromBom(i.kubeClient, i.pm.GetDependencyPath("bom.json"), argocdinstaller.DefaultNamespace)
+	pcApps, err := installer.NewPcAppsFromBom(i.kubeClient, i.kubeConfig, i.pm.GetDependencyPath("bom.json"), argocdinstaller.DefaultNamespace)
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
 	}
