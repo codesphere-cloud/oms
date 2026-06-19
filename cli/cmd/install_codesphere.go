@@ -62,19 +62,19 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
 		return installCodespherePlatform(c.Opts, c.Env)
 	}
 
-	if len(infraInstaller.ExecutableSteps(cfg)) > 0 {
+	if infraInstaller.HasExecutableSteps(cfg) {
 		if err := installCodesphereInfra(c.Opts, c.Env); err != nil {
 			return err
 		}
 	}
 
-	if len(dependenciesInstaller.ExecutableSteps(cfg)) > 0 || !installer.IsStepSkipped(cfg, c.Opts.SkipSteps, installer.ArgoCDStep) {
+	if dependenciesInstaller.HasExecutableSteps(cfg) || !installer.IsStepSkipped(cfg, c.Opts.SkipSteps, installer.ArgoCDStep) {
 		if err := installCodesphereDepencies(c.Opts, c.Env); err != nil {
 			return err
 		}
 	}
 
-	if len(platformInstaller.ExecutableSteps(cfg)) == 0 {
+	if !platformInstaller.HasExecutableSteps(cfg) {
 		return nil
 	}
 
