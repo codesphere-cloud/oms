@@ -26,7 +26,7 @@ type group struct {
 }
 
 type hostInfo struct {
-	PrivateIP string `yaml:"private_ip"`
+	PrivateIP string `yaml:"internal_ip"`
 }
 
 // FetchFromAnsibleInventory parses the ansible inventory file and tries to fetch ceph and k8s host from it.

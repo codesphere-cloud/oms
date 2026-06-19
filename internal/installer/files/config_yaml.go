@@ -153,12 +153,12 @@ type CephPlacement struct {
 
 type CephDataDevices struct {
 	Size  string `yaml:"size"`
-	Limit int    `yaml:"limit"`
+	Limit int    `yaml:"limit,omitempty"`
 }
 
 type CephDBDevices struct {
 	Size  string `yaml:"size"`
-	Limit int    `yaml:"limit"`
+	Limit int    `yaml:"limit,omitempty"`
 }
 
 type KubernetesConfig struct {
