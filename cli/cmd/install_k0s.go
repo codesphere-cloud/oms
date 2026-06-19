@@ -99,6 +99,10 @@ const (
 )
 
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
+	if err := c.FileWriter.MkdirAll(c.Env.GetOmsWorkdir(), 0755); err != nil {
+		return fmt.Errorf("failed to create oms workdir: %w", err)
+	}
+
 	config, err := c.loadInstallConfig()
 	if err != nil {
 		return err
