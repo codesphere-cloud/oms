@@ -394,7 +394,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(tmpPath).NotTo(BeAnExistingFile())
 			})
 
-			It("leaves the vault untouched when re-encryption fails", func() {
+			It("leaves the vault untouched when vault decryption fails with invalid key", func() {
 				if !sopsAndAgeAvailable() {
 					Skip("sops and age-keygen not available")
 				}
@@ -439,7 +439,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.Opts.Package = "test-package.tar.gz"
 				c.Opts.Version = "v1.30.0+k0s.0"
 				c.Opts.Vault = vaultPath
-				// Provide a non-existent key file so ResolveAgeKey fails.
+				// Use a non-existent key file so LoadVaultData fails to decrypt the vault.
 				c.Opts.VaultPrivKey = filepath.Join(tempDir, "missing_key.txt")
 
 				mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
@@ -457,7 +457,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				currentData, err := os.ReadFile(vaultPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(currentData)).To(Equal(string(origData)),
-					"vault should be untouched when re-encryption fails")
+					"vault should be untouched when decryption fails")
 
 				// Verify no tmp file is left behind.
 				tmpPath := vaultPath + ".tmp"

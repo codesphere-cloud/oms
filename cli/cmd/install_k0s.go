@@ -259,32 +259,9 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	}
 
 	if wasEncrypted {
-		tmpPath := c.Opts.Vault + ".tmp"
-
-		if err := c.FileWriter.WriteFile(tmpPath, vaultYAML, 0600); err != nil {
-			return fmt.Errorf("failed to write temporary vault file: %w", err)
+		if err := c.writeEncryptedVault(vaultYAML); err != nil {
+			return err
 		}
-
-		recipient, _, err := installer.ResolveAgeKey(c.Opts.VaultPrivKey, "")
-		if err != nil {
-			_ = c.FileWriter.Remove(tmpPath)
-			return fmt.Errorf("failed to resolve age key for vault re-encryption: %w", err)
-		}
-		if err := installer.EncryptFileWithSOPS(tmpPath, tmpPath, recipient); err != nil {
-			_ = c.FileWriter.Remove(tmpPath)
-			return fmt.Errorf("failed to re-encrypt vault file: %w", err)
-		}
-
-		encryptedData, err := c.FileWriter.ReadFile(tmpPath)
-		if err != nil {
-			_ = c.FileWriter.Remove(tmpPath)
-			return fmt.Errorf("failed to read encrypted vault: %w", err)
-		}
-		if err := c.FileWriter.WriteFile(c.Opts.Vault, encryptedData, 0600); err != nil {
-			_ = c.FileWriter.Remove(tmpPath)
-			return fmt.Errorf("failed to write encrypted vault file: %w", err)
-		}
-		_ = c.FileWriter.Remove(tmpPath)
 	} else {
 		if err := c.FileWriter.WriteFile(c.Opts.Vault, vaultYAML, 0600); err != nil {
 			return fmt.Errorf("failed to write vault file: %w", err)
@@ -292,6 +269,30 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	}
 
 	log.Printf("Saved kubeconfig to %s", c.Opts.Vault)
+	return nil
+}
+
+// writeEncryptedVault writes vaultYAML to the vault path, re-encrypting it with SOPS.
+// Uses a temporary file so the original vault is left untouched on failure.
+func (c *InstallK0sCmd) writeEncryptedVault(vaultYAML []byte) error {
+	tmpPath := c.Opts.Vault + ".tmp"
+
+	if err := c.FileWriter.WriteFile(tmpPath, vaultYAML, 0600); err != nil {
+		return fmt.Errorf("failed to write temporary vault file: %w", err)
+	}
+
+	recipient, _, err := installer.ResolveAgeKey(c.Opts.VaultPrivKey, "")
+	if err != nil {
+		_ = c.FileWriter.Remove(tmpPath)
+		return fmt.Errorf("failed to resolve age key for vault re-encryption: %w", err)
+	}
+
+	if err := installer.EncryptFileWithSOPS(tmpPath, c.Opts.Vault, recipient); err != nil {
+		_ = c.FileWriter.Remove(tmpPath)
+		return fmt.Errorf("failed to re-encrypt vault file: %w", err)
+	}
+
+	_ = c.FileWriter.Remove(tmpPath)
 	return nil
 }
 
