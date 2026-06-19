@@ -332,16 +332,16 @@ var _ = Describe("InstallK0sCmd", func() {
 					Skip("sops and age-keygen not available")
 				}
 
+				c.FileWriter = util.NewFilesystemWriter()
+
 				ageKeyPath := filepath.Join(tempDir, "age_key.txt")
 				out, err := execCmd("age-keygen", "-o", ageKeyPath)
 				Expect(err).NotTo(HaveOccurred(), string(out))
 
-				// Derive the age recipient (public key).
 				recipientOut, err := execCmd("age-keygen", "-y", ageKeyPath)
 				Expect(err).NotTo(HaveOccurred(), string(recipientOut))
 				recipient := strings.TrimSpace(string(recipientOut))
 
-				// Create a vault file with some existing secrets.
 				vaultPath := filepath.Join(tempDir, "prod.vault.yaml")
 				existingVault := &files.InstallVault{
 					Secrets: []files.SecretEntry{
@@ -360,12 +360,10 @@ var _ = Describe("InstallK0sCmd", func() {
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())
 
-				// Encrypt the vault with SOPS+age.
 				encryptOut, err := execCmd("sops", "--encrypt", "--age", recipient, "--output", vaultPath, plainPath)
 				Expect(err).NotTo(HaveOccurred(), string(encryptOut))
 				Expect(os.Remove(plainPath)).To(Succeed())
 
-				// Verify the vault is encrypted.
 				encrypted, err := installer.IsSOPSEncryptedFile(vaultPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(encrypted).To(BeTrue())
@@ -376,10 +374,12 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.Opts.Vault = vaultPath
 				c.Opts.VaultPrivKey = ageKeyPath
 
-				setupCommonMocks()
+				mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+				mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false).Return(nil)
+				mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
+				mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+				mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
-				mockFileWriter.EXPECT().Exists(c.Opts.Vault).Return(true)
-				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.Anything, os.FileMode(0600)).Return(nil)
 
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
@@ -388,6 +388,80 @@ var _ = Describe("InstallK0sCmd", func() {
 				encrypted, err = installer.IsSOPSEncryptedFile(vaultPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(encrypted).To(BeTrue(), "vault should be re-encrypted after saving kubeconfig")
+
+				// Verify the temporary file was cleaned up.
+				tmpPath := vaultPath + ".tmp"
+				Expect(tmpPath).NotTo(BeAnExistingFile())
+			})
+
+			It("leaves the vault untouched when re-encryption fails", func() {
+				if !sopsAndAgeAvailable() {
+					Skip("sops and age-keygen not available")
+				}
+
+				c.FileWriter = util.NewFilesystemWriter()
+
+				ageKeyPath := filepath.Join(tempDir, "age_key.txt")
+				out, err := execCmd("age-keygen", "-o", ageKeyPath)
+				Expect(err).NotTo(HaveOccurred(), string(out))
+
+				recipientOut, err := execCmd("age-keygen", "-y", ageKeyPath)
+				Expect(err).NotTo(HaveOccurred(), string(recipientOut))
+				recipient := strings.TrimSpace(string(recipientOut))
+
+				vaultPath := filepath.Join(tempDir, "prod.vault.yaml")
+				existingVault := &files.InstallVault{
+					Secrets: []files.SecretEntry{
+						{
+							Name: "domainAuthPrivateKey",
+							File: &files.SecretFile{
+								Name:    "key.pem",
+								Content: "existing-key-content",
+							},
+						},
+					},
+				}
+				vaultYAML, err := existingVault.Marshal()
+				Expect(err).NotTo(HaveOccurred())
+				plainPath := vaultPath + ".plain"
+				err = os.WriteFile(plainPath, vaultYAML, 0600)
+				Expect(err).NotTo(HaveOccurred())
+
+				encryptOut, err := execCmd("sops", "--encrypt", "--age", recipient, "--output", vaultPath, plainPath)
+				Expect(err).NotTo(HaveOccurred(), string(encryptOut))
+				Expect(os.Remove(plainPath)).To(Succeed())
+
+				// Remember the original encrypted vault content.
+				origData, err := os.ReadFile(vaultPath)
+				Expect(err).NotTo(HaveOccurred())
+
+				c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+				c.Opts.Package = "test-package.tar.gz"
+				c.Opts.Version = "v1.30.0+k0s.0"
+				c.Opts.Vault = vaultPath
+				// Provide a non-existent key file so ResolveAgeKey fails.
+				c.Opts.VaultPrivKey = filepath.Join(tempDir, "missing_key.txt")
+
+				mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+				mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false).Return(nil)
+				mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
+				mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+				mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+
+				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to load vault"))
+
+				// Verify the vault file is unchanged.
+				currentData, err := os.ReadFile(vaultPath)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(currentData)).To(Equal(string(origData)),
+					"vault should be untouched when re-encryption fails")
+
+				// Verify no tmp file is left behind.
+				tmpPath := vaultPath + ".tmp"
+				Expect(tmpPath).NotTo(BeAnExistingFile())
 			})
 		})
 	})
