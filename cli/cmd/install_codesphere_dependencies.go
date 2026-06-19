@@ -167,7 +167,7 @@ func (i *argoCDAndAppsInstall) installArgoCD() error {
 	}
 	i.ociRegistryURL = i.opts.ArgoCDRegistryURL
 	if i.ociRegistryURL == "" && cfg.Registry != nil {
-		i.ociRegistryURL = cfg.Registry.Server
+		i.ociRegistryURL = cfg.Registry.Server + "/codesphere-cloud/charts"
 	}
 	i.argoInstall, err = argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
 		Version:        i.opts.ArgoCDVersion,
