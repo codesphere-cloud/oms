@@ -118,6 +118,12 @@ spec:
           path "{{ .SecretsEngineName }}/metadata/*" {
             capabilities = ["list", "read", "delete"]
           }
+          # Required by the `generate` secret flow, which manages OpenBao
+          # password policies under sys/policies/password/<name> and reads
+          # generated values from sys/policies/password/<name>/generate.
+          path "sys/policies/password/*" {
+            capabilities = ["create", "read", "update", "delete"]
+          }
     auth:
       - type: userpass
         users:
