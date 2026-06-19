@@ -43,4 +43,56 @@ var _ = Describe("Codesphere skip steps", func() {
 		Expect(executableSteps).NotTo(HaveKey(installer.ArgoCDStep))
 		Expect(executableSteps).NotTo(HaveKey("unknown-step"))
 	})
+
+	It("detects when an allowed step set has no executable steps left", func() {
+		config := files.RootConfig{
+			Operations: &files.OperationsConfig{
+				Skip: []string{"set-up-cluster"},
+			},
+		}
+
+		ci := &installer.CodesphereInstaller{
+			AllowedSteps: installer.DependenciesSteps,
+			SkipSteps:    []string{"ms-backends"},
+		}
+
+		Expect(ci.HasExecutableSteps(config)).To(BeFalse())
+	})
+
+	It("returns executable steps from known steps filtered by allowed and skipped steps", func() {
+		config := files.RootConfig{
+			Operations: &files.OperationsConfig{
+				Skip: []string{"extract-dependencies", "unknown-step"},
+			},
+		}
+
+		ci := &installer.CodesphereInstaller{
+			AllowedSteps: installer.InfraSteps,
+			SkipSteps:    []string{"docker", installer.ArgoCDStep},
+		}
+
+		Expect(ci.ExecutableSteps(config)).To(Equal([]string{
+			"copy-dependencies",
+			"load-container-images",
+			"sops",
+			"postgres",
+			"ceph",
+			"kubernetes",
+		}))
+	})
+
+	It("returns no executable steps when all known allowed steps are skipped", func() {
+		config := files.RootConfig{
+			Operations: &files.OperationsConfig{
+				Skip: []string{"set-up-cluster"},
+			},
+		}
+
+		ci := &installer.CodesphereInstaller{
+			AllowedSteps: installer.DependenciesSteps,
+			SkipSteps:    []string{"ms-backends", installer.ArgoCDStep},
+		}
+
+		Expect(ci.ExecutableSteps(config)).To(BeEmpty())
+	})
 })

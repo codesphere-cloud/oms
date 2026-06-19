@@ -6,6 +6,7 @@ package cmd
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
@@ -38,15 +39,48 @@ type InstallCodesphereOpts struct {
 }
 
 func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
+	cfg, cleanup, err := parseInstallConfig(c.Opts, installer.NewConfig())
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	infraInstaller := &installer.CodesphereInstaller{
+		SkipSteps:    c.Opts.SkipSteps,
+		AllowedSteps: installer.InfraSteps,
+	}
+	dependenciesInstaller := &installer.CodesphereInstaller{
+		SkipSteps:    c.Opts.SkipSteps,
+		AllowedSteps: installer.DependenciesSteps,
+	}
+	platformInstaller := &installer.CodesphereInstaller{
+		SkipSteps:    c.Opts.SkipSteps,
+		AllowedSteps: installer.PlatformSteps,
+	}
+
 	if c.Opts.CodesphereOnly {
+		if len(platformInstaller.ExecutableSteps(cfg)) == 0 {
+			return nil
+		}
 		return installCodespherePlatform(c.Opts, c.Env)
 	}
-	if err := installCodesphereInfra(c.Opts, c.Env); err != nil {
-		return err
+
+	if len(infraInstaller.ExecutableSteps(cfg)) > 0 {
+		if err := installCodesphereInfra(c.Opts, c.Env); err != nil {
+			return err
+		}
 	}
-	if err := installCodesphereDepencies(c.Opts, c.Env); err != nil {
-		return err
+
+	if len(dependenciesInstaller.ExecutableSteps(cfg)) > 0 || !installer.IsStepSkipped(cfg, c.Opts.SkipSteps, installer.ArgoCDStep) {
+		if err := installCodesphereDepencies(c.Opts, c.Env); err != nil {
+			return err
+		}
 	}
+
+	if len(platformInstaller.ExecutableSteps(cfg)) == 0 {
+		return nil
+	}
+
 	return installCodespherePlatform(c.Opts, c.Env)
 }
 
