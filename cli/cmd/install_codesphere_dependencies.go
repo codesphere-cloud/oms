@@ -40,21 +40,13 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error 
 	pm := installer.NewPackage(workdir, opts.Package)
 	stlog := bootstrap.NewStepLogger(false)
 	cm := installer.NewConfig()
+	im := system.NewImage(context.Background())
 
 	cfg, cleanup, err := parseInstallConfig(opts, cm)
 	if err != nil {
 		return fmt.Errorf("failed to extract config.yaml: %w", err)
 	}
 	defer cleanup()
-
-	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.ArgoCDStep) {
-		if err := stlog.Step("Install ArgoCD pre-step", func() error {
-			return installArgoCDAndApps(opts, pm, stlog)
-		}); err != nil {
-			return err
-		}
-	}
-	im := system.NewImage(context.Background())
 
 	ci := &installer.CodesphereInstaller{
 		ConfigPath:       opts.Config,
@@ -66,6 +58,18 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error 
 		DirectConnection: opts.DirectConnection,
 		AutoApprove:      opts.AutoApprove,
 	}
+
+	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.ArgoCDStep) {
+		if err := ci.ExtractAndValidatePackage(pm); err != nil {
+			return fmt.Errorf("failed to extract and validate package: %w", err)
+		}
+		if err := stlog.Step("Install ArgoCD pre-step", func() error {
+			return installArgoCDAndApps(opts, pm, stlog)
+		}); err != nil {
+			return err
+		}
+	}
+
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install dependencies: %w", err)
 	}

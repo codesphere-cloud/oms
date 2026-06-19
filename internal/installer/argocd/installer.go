@@ -11,6 +11,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"helm.sh/helm/v4/pkg/chart/common/util"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
@@ -45,12 +46,35 @@ type Installer struct {
 }
 
 func NewInstaller(cfg InstallerConfig) (*Installer, error) {
-	helm, err := installer.NewHelmClientWithRESTConfig("argocd", cfg.RESTConfig)
+	if cfg.RESTConfig != nil {
+		helm, err := installer.NewHelmClientWithRESTConfig(DefaultNamespace, cfg.RESTConfig)
+		if err != nil {
+			return nil, fmt.Errorf("init helm client failed: %w", err)
+		}
+
+		clientset, dynClient, err := k8s.NewClientsFromRESTConfig(cfg.RESTConfig)
+		if err != nil {
+			return nil, fmt.Errorf("creating kubernetes clients: %w", err)
+		}
+		resources, err := NewArgoCDResources(clientset, dynClient, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+		if err != nil {
+			return nil, fmt.Errorf("init argocd resources client failed: %w", err)
+		}
+		return &Installer{
+			InstallerConfig: cfg,
+			Helm:            helm,
+			Resources:       resources,
+		}, nil
+	}
+	helm, err := installer.NewHelmClient(DefaultNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
-
-	resources, err := NewArgoCDResourcesWithRESTConfig(cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword, cfg.RESTConfig)
+	clientset, dynClient, err := k8s.NewClients()
+	if err != nil {
+		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
+	}
+	resources, err := NewArgoCDResources(clientset, dynClient, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}
