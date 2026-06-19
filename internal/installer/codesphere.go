@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
@@ -96,6 +97,10 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 	defer cleanup()
 	if err != nil {
 		return err
+	}
+	if !ci.HasExecutableSteps(config) {
+		log.Println("No executable installer steps remain after applying skip configuration. Skipping installer run.")
+		return nil
 	}
 
 	if err := ci.ExtractAndValidatePackage(pm); err != nil {
@@ -380,6 +385,8 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
 
+	log.Printf("Running private cloud installer command: %s", shellQuotedCommand(append([]string{nodePath}, cmdArgs...)...))
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to run installer script: %w", err)
 	}
@@ -430,17 +437,45 @@ func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config fi
 }
 
 func (ci *CodesphereInstaller) executableInstallerSteps(config files.RootConfig) map[string]bool {
-	baseSteps := KnownInstallerSteps
-	if len(ci.AllowedSteps) > 0 {
-		baseSteps = ci.AllowedSteps
+	executableSteps := map[string]bool{}
+	for _, step := range KnownInstallerSteps {
+		executableSteps[step] = len(ci.AllowedSteps) == 0
 	}
 
-	executableSteps := map[string]bool{}
-	for _, step := range baseSteps {
-		executableSteps[step] = true
+	if len(ci.AllowedSteps) > 0 {
+		for _, step := range ci.AllowedSteps {
+			executableSteps[step] = true
+		}
 	}
 
 	ApplySkippedSteps(executableSteps, config, ci.SkipSteps)
 
 	return executableSteps
+}
+
+// ExecutableSteps returns the sorted installer steps that remain after allowlist and skip filtering.
+func (ci *CodesphereInstaller) ExecutableSteps(config files.RootConfig) []string {
+	executableSteps := ci.executableInstallerSteps(config)
+	steps := make([]string, 0, len(executableSteps))
+	for _, step := range KnownInstallerSteps {
+		if executableSteps[step] {
+			steps = append(steps, step)
+		}
+	}
+
+	return steps
+}
+
+// HasExecutableSteps reports whether at least one installer step remains after applying skips.
+func (ci *CodesphereInstaller) HasExecutableSteps(config files.RootConfig) bool {
+	return len(ci.ExecutableSteps(config)) > 0
+}
+
+func shellQuotedCommand(args ...string) string {
+	quotedArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		quotedArgs = append(quotedArgs, strconv.Quote(arg))
+	}
+
+	return strings.Join(quotedArgs, " ")
 }
