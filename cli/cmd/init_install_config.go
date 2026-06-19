@@ -52,8 +52,9 @@ type InitInstallConfigOpts struct {
 	PostgresReplicaName     string
 	PostgresServerAddress   string
 
-	CephNodesSubnet string
-	CephHosts       []files.CephHostConfig
+	CephCsiKubeletDir string
+	CephNodesSubnet   string
+	CephHosts         []files.CephHostConfig
 
 	KubernetesManagedByCodesphere bool
 	KubernetesAPIServerHost       string
@@ -150,15 +151,29 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().BoolVar(&c.Opts.GenerateKeys, "generate-keys", true, "Generate SSH keys and certificates")
 	c.cmd.Flags().StringVar(&c.Opts.SecretsBaseDir, "secrets-dir", "/root/secrets", "Secrets base directory")
 
+	// Datacenter
 	c.cmd.Flags().IntVar(&c.Opts.DatacenterID, "dc-id", 0, "Datacenter ID")
 	c.cmd.Flags().StringVar(&c.Opts.DatacenterName, "dc-name", "", "Datacenter name")
+	c.cmd.Flags().StringVar(&c.Opts.DatacenterCity, "dc-city", "", "Datacenter city")
+	c.cmd.Flags().StringVar(&c.Opts.DatacenterCountryCode, "dc-country-code", "", "Datacenter country code")
 
+	// Registry
+	c.cmd.Flags().StringVar(&c.Opts.RegistryServer, "registry-server", "", "Server for container registry")
+
+	// Postgres
 	c.cmd.Flags().StringVar(&c.Opts.PostgresMode, "postgres-mode", "", "PostgreSQL setup mode (install/external)")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server address. Required when using external mode.")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
 
+	// K8s
 	c.cmd.Flags().BoolVar(&c.Opts.KubernetesManagedByCodesphere, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
 	c.cmd.Flags().StringSliceVar(&c.Opts.KubernetesControlPlanes, "k8s-control-plane", []string{}, "K8s control plane IPs (comma-separated)")
 
+	// Ceph
+	c.cmd.Flags().StringVar(&c.Opts.CephCsiKubeletDir, "ceph-csi-kubelet-dir", "", "Directory of kubelet for ceph csi. Required for some cloud providers")
+	c.cmd.Flags().StringVar(&c.Opts.CephNodesSubnet, "ceph-nodes-subnet", "", "CIDR subnet for ceph nodes")
+
+	// ACME
 	c.cmd.Flags().BoolVar(&c.Opts.ACMEEnabled, "acme-enabled", false, "Enable ACME certificate issuer")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEIssuerName, "acme-issuer-name", "acme-issuer", "Name for the ACME ClusterIssuer")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEEmail, "acme-email", "", "Email address for ACME account registration")
@@ -169,6 +184,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
 
+	// OpenBao
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUri, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoEngine, "openbao-engine", "cs-secrets-engine", "Engine for OpenBao")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUser, "openbao-user", "admin", "Username for OpenBao authentication")
@@ -363,6 +379,9 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	}
 
 	// Ceph settings
+	if c.Opts.CephCsiKubeletDir != "" {
+		config.Ceph.CsiKubeletDir = c.Opts.CephCsiKubeletDir
+	}
 	if c.Opts.CephNodesSubnet != "" {
 		config.Ceph.NodesSubnet = c.Opts.CephNodesSubnet
 	}
