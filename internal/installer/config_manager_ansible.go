@@ -69,6 +69,7 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 
 	if len(k8sCPHosts) > 0 {
 		g.Config.Kubernetes.ControlPlanes = k8sCPHosts
+		g.Config.Kubernetes.APIServerHost = k8sCPHosts[0].IPAddress
 	}
 
 	k8sWorkerHosts, err := inventory.fetchK8sWorkerHosts()
@@ -101,7 +102,7 @@ func (i *ansibleInventory) fetchCephHosts() ([]files.CephHost, error) {
 		hostVars := i.Ceph.Hosts[key]
 
 		if hostVars.PrivateIP == "" {
-			return nil, fmt.Errorf("missing private_ip for ceph host '%s'", key)
+			return nil, fmt.Errorf("missing internal_ip for ceph host '%s'", key)
 		}
 
 		host := files.CephHost{
@@ -127,7 +128,7 @@ func (i *ansibleInventory) fetchK8sControlPlaneHosts() ([]files.K8sNode, error) 
 		return []files.K8sNode{}, fmt.Errorf("no hosts block defined")
 	}
 
-	return fetchKubernetesHosts("k8s-cp", i.K8sCP.Hosts)
+	return fetchKubernetesHosts(i.K8sCP.Hosts)
 }
 
 // fetchK8sWorkerHosts extracts K8s worker hosts from the ansible inventory
@@ -140,18 +141,18 @@ func (i *ansibleInventory) fetchK8sWorkerHosts() ([]files.K8sNode, error) {
 		return []files.K8sNode{}, fmt.Errorf("no hosts block defined")
 	}
 
-	return fetchKubernetesHosts("k8s-workers", i.K8sWorkers.Hosts)
+	return fetchKubernetesHosts(i.K8sWorkers.Hosts)
 }
 
 // fetchKubernetesHosts extract hosts from the given parentTag
-func fetchKubernetesHosts(parentTag string, inventoryHosts map[string]hostInfo) ([]files.K8sNode, error) {
+func fetchKubernetesHosts(inventoryHosts map[string]hostInfo) ([]files.K8sNode, error) {
 	hosts := []files.K8sNode{}
 
 	for _, key := range getSortedHostsGroupKeys(inventoryHosts) {
 		hostVars := inventoryHosts[key]
 
 		if hostVars.PrivateIP == "" {
-			return nil, fmt.Errorf("missing private_ip for k8s host '%s'", key)
+			return nil, fmt.Errorf("missing internal_ip for k8s host '%s'", key)
 		}
 
 		host := files.K8sNode{

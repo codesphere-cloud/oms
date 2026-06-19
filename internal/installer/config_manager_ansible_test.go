@@ -103,10 +103,10 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to fetch ceph hosts from inventory"))
-				Expect(err.Error()).To(ContainSubstring("missing private_ip for ceph host 'cs-ceph-1'"))
+				Expect(err.Error()).To(ContainSubstring("missing internal_ip for ceph host 'cs-ceph-1'"))
 			})
 
-			It("returns an error for typo in private_ip", func() {
+			It("returns an error for typo in internal_ip", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
 				defer func() { _ = os.Remove(inventoryFilePath) }()
@@ -123,10 +123,10 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to fetch ceph hosts from inventory"))
-				Expect(err.Error()).To(ContainSubstring("missing private_ip for ceph host 'cs-ceph-1'"))
+				Expect(err.Error()).To(ContainSubstring("missing internal_ip for ceph host 'cs-ceph-1'"))
 			})
 
-			It("returns an error for empty private_ip entry", func() {
+			It("returns an error for empty internal_ip entry", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
 				defer func() { _ = os.Remove(inventoryFilePath) }()
@@ -134,7 +134,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				inputInventoryYaml := `ceph:
 				hosts:
 					cs-ceph-1:
-						private_ip:`
+						internal_ip:`
 				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
 
 				_, err = file.Write([]byte(inputInventory))
@@ -143,7 +143,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to fetch ceph hosts from inventory"))
-				Expect(err.Error()).To(ContainSubstring("missing private_ip for ceph host 'cs-ceph-1'"))
+				Expect(err.Error()).To(ContainSubstring("missing internal_ip for ceph host 'cs-ceph-1'"))
 			})
 		})
 
@@ -156,11 +156,11 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				inputInventory := `ceph:
   hosts:
     cs-ceph-1:
-      private_ip: 1.2.3.4
+      internal_ip: 1.2.3.4
     cs-ceph-2:
-      private_ip: 1.2.3.5
+      internal_ip: 1.2.3.5
     cs-ceph-3:
-      private_ip: 1.2.3.6`
+      internal_ip: 1.2.3.6`
 
 				_, err = file.Write([]byte(inputInventory))
 				Expect(err).ToNot(HaveOccurred())
@@ -203,7 +203,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				inputInventoryYaml := `ceph:
 				hosts:
 					cs-ceph-1:
-						private_ip: true`
+						internal_ip: true`
 				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
 
 				_, err = file.Write([]byte(inputInventory))
@@ -221,11 +221,11 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				inputInventory := `ceph:
   hosts:
     cs-ceph-1:
-      private_ip: 1.2.3.4
+      internal_ip: 1.2.3.4
     cs-ceph-2:
-      private_ip: 1.2.3.5
+      internal_ip: 1.2.3.5
     cs-ceph-3:
-      private_ip: 1.2.3.6`
+      internal_ip: 1.2.3.6`
 
 				_, err = file.Write([]byte(inputInventory))
 				Expect(err).ToNot(HaveOccurred())
@@ -294,19 +294,19 @@ var _ = Describe("ConfigManagerAnsible", func() {
 				inputInventory := `k8s-cp:
   hosts:
     cs-k8s-cp-1:
-      private_ip: 1.2.3.4
+      internal_ip: 1.2.3.4
     cs-k8s-cp-2:
-      private_ip: 1.2.3.5
+      internal_ip: 1.2.3.5
     cs-k8s-cp-3:
-      private_ip: 1.2.3.6
+      internal_ip: 1.2.3.6
 k8s-workers:
   hosts:
     cs-k8s-worker-1:
-      private_ip: 1.2.3.7
+      internal_ip: 1.2.3.7
     cs-k8s-worker-2:
-      private_ip: 1.2.3.8
+      internal_ip: 1.2.3.8
     cs-k8s-worker-3:
-      private_ip: 1.2.3.9`
+      internal_ip: 1.2.3.9`
 
 				_, err = file.Write([]byte(inputInventory))
 				Expect(err).ToNot(HaveOccurred())
@@ -337,6 +337,9 @@ k8s-workers:
 				actualK8sCPHosts := manager.GetInstallConfig().Kubernetes.ControlPlanes
 				Expect(actualK8sCPHosts).To(Equal(expectedCPHosts))
 
+				actualK8sAPIHost := manager.GetInstallConfig().Kubernetes.APIServerHost
+				Expect(actualK8sAPIHost).To(Equal("1.2.3.4"))
+
 				actualK8sWorkerHosts := manager.GetInstallConfig().Kubernetes.Workers
 				Expect(actualK8sWorkerHosts).To(Equal(expectedWorkerHosts))
 			})
@@ -349,19 +352,19 @@ k8s-workers:
 				inputInventory := `k8s-cp:
   hosts:
     cs-k8s-cp-1:
-      private_ip: 1.2.3.4
+      internal_ip: 1.2.3.4
     cs-k8s-cp-2:
-      private_ip: 1.2.3.5
+      internal_ip: 1.2.3.5
     cs-k8s-cp-3:
-      private_ip: 1.2.3.6
+      internal_ip: 1.2.3.6
 k8s-workers:
   hosts:
     cs-k8s-worker-1:
-      private_ip: 1.2.3.7
+      internal_ip: 1.2.3.7
     cs-k8s-worker-2:
-      private_ip: 1.2.3.8
+      internal_ip: 1.2.3.8
     cs-k8s-worker-3:
-      private_ip: 1.2.3.9`
+      internal_ip: 1.2.3.9`
 
 				_, err = file.Write([]byte(inputInventory))
 				Expect(err).ToNot(HaveOccurred())
@@ -464,10 +467,10 @@ k8s-workers:
 				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to fetch k8s control plane hosts from inventory"))
-				Expect(err.Error()).To(ContainSubstring("missing private_ip for k8s host 'cs-k8s-cp-1'"))
+				Expect(err.Error()).To(ContainSubstring("missing internal_ip for k8s host 'cs-k8s-cp-1'"))
 			})
 
-			It("returns an error for typo in private_ip", func() {
+			It("returns an error for typo in internal_ip", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
 				defer func() { _ = os.Remove(inventoryFilePath) }()
@@ -484,10 +487,10 @@ k8s-workers:
 				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to fetch k8s control plane hosts from inventory"))
-				Expect(err.Error()).To(ContainSubstring("missing private_ip for k8s host 'cs-k8s-cp-1'"))
+				Expect(err.Error()).To(ContainSubstring("missing internal_ip for k8s host 'cs-k8s-cp-1'"))
 			})
 
-			It("returns an error for empty private_ip entry", func() {
+			It("returns an error for empty internal_ip entry", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
 				defer func() { _ = os.Remove(inventoryFilePath) }()
@@ -495,7 +498,7 @@ k8s-workers:
 				inputInventoryYaml := `k8s-cp:
 	hosts:
 	  cs-k8s-cp-1:
-	    private_ip:`
+	    internal_ip:`
 				inputInventory := strings.ReplaceAll(inputInventoryYaml, "\t", "  ")
 
 				_, err = file.Write([]byte(inputInventory))
@@ -504,7 +507,7 @@ k8s-workers:
 				err = manager.FetchFromAnsibleInventory(inventoryFilePath)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to fetch k8s control plane hosts from inventory"))
-				Expect(err.Error()).To(ContainSubstring("missing private_ip for k8s host 'cs-k8s-cp-1'"))
+				Expect(err.Error()).To(ContainSubstring("missing internal_ip for k8s host 'cs-k8s-cp-1'"))
 			})
 		})
 	})
