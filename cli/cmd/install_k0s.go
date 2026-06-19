@@ -233,7 +233,7 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 		return fmt.Errorf("failed to retrieve kubeconfig from k0sctl: %w", err)
 	}
 
-	vault, err := c.loadOrCreateVault()
+	vault, wasEncrypted, err := c.loadOrCreateVault()
 	if err != nil {
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
@@ -262,18 +262,33 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
+	if wasEncrypted {
+		recipient, _, err := installer.ResolveAgeKey(c.Opts.VaultPrivKey, "")
+		if err != nil {
+			return fmt.Errorf("failed to resolve age key for vault re-encryption: %w", err)
+		}
+		if err := installer.EncryptFileWithSOPS(c.Opts.Vault, c.Opts.Vault, recipient); err != nil {
+			return fmt.Errorf("failed to re-encrypt vault file: %w", err)
+		}
+	}
+
 	log.Printf("Saved kubeconfig to %s", c.Opts.Vault)
 	return nil
 }
 
-func (c *InstallK0sCmd) loadOrCreateVault() (*files.InstallVault, error) {
+func (c *InstallK0sCmd) loadOrCreateVault() (*files.InstallVault, bool, error) {
 	if !c.FileWriter.Exists(c.Opts.Vault) {
-		return &files.InstallVault{}, nil
+		return &files.InstallVault{}, false, nil
+	}
+
+	wasEncrypted, err := installer.IsSOPSEncryptedFile(c.Opts.Vault)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to check if vault is encrypted: %w", err)
 	}
 
 	vault, err := installer.LoadVaultData(c.Opts.Vault, c.Opts.VaultPrivKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load vault: %w", err)
+		return nil, false, fmt.Errorf("failed to load vault: %w", err)
 	}
-	return vault, nil
+	return vault, wasEncrypted, nil
 }
