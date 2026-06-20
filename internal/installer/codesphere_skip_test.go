@@ -47,13 +47,13 @@ var _ = Describe("Codesphere skip steps", func() {
 	It("detects when an allowed step set has no executable steps left", func() {
 		config := files.RootConfig{
 			Operations: &files.OperationsConfig{
-				Skip: []string{"set-up-cluster"},
+				Skip: []string{"copy-dependencies", "set-up-cluster"},
 			},
 		}
 
 		ci := &installer.CodesphereInstaller{
 			AllowedSteps: installer.DependenciesSteps,
-			SkipSteps:    []string{"ms-backends"},
+			SkipSteps:    []string{"extract-dependencies", "ms-backends"},
 		}
 
 		Expect(ci.HasExecutableSteps(config)).To(BeFalse())
@@ -84,13 +84,13 @@ var _ = Describe("Codesphere skip steps", func() {
 	It("returns no executable steps when all known allowed steps are skipped", func() {
 		config := files.RootConfig{
 			Operations: &files.OperationsConfig{
-				Skip: []string{"set-up-cluster"},
+				Skip: []string{"copy-dependencies", "set-up-cluster"},
 			},
 		}
 
 		ci := &installer.CodesphereInstaller{
 			AllowedSteps: installer.DependenciesSteps,
-			SkipSteps:    []string{"ms-backends", installer.ArgoCDStep},
+			SkipSteps:    []string{"extract-dependencies", "ms-backends", installer.ArgoCDStep},
 		}
 
 		Expect(ci.ExecutableSteps(config)).To(BeEmpty())
