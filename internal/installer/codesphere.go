@@ -52,10 +52,10 @@ var InfraSteps = []string{
 }
 
 // DependenciesSteps run in Phase 2 after infrastructure is ready.
-var DependenciesSteps = []string{"set-up-cluster", "ms-backends"}
+var DependenciesSteps = []string{"copy-dependencies", "extract-dependencies", "set-up-cluster", "ms-backends"}
 
 // PlatformSteps run in Phase 3 and install the Codesphere platform only.
-var PlatformSteps = []string{"codesphere"}
+var PlatformSteps = []string{"copy-dependencies", "extract-dependencies", "codesphere"}
 
 // CodesphereInstaller encapsulates the logic for running the private-cloud-installer.js script.
 type CodesphereInstaller struct {
