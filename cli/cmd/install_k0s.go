@@ -272,7 +272,7 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	return nil
 }
 
-// writeEncryptedVault writes vaultYAML to the vault path, re-encrypting it with SOPS.
+// writeEncryptedVault writes vaultYAML to the vault path, encrypting it with SOPS.
 // Uses a temporary file so the original vault is left untouched on failure.
 func (c *InstallK0sCmd) writeEncryptedVault(vaultYAML []byte) error {
 	tmpPath := c.Opts.Vault + ".tmp"
@@ -284,12 +284,12 @@ func (c *InstallK0sCmd) writeEncryptedVault(vaultYAML []byte) error {
 	recipient, _, err := installer.ResolveAgeKey(c.Opts.VaultPrivKey, "")
 	if err != nil {
 		_ = c.FileWriter.Remove(tmpPath)
-		return fmt.Errorf("failed to resolve age key for vault re-encryption: %w", err)
+		return fmt.Errorf("failed to resolve age key for vault rencryption: %w", err)
 	}
 
 	if err := installer.EncryptFileWithSOPS(tmpPath, c.Opts.Vault, recipient); err != nil {
 		_ = c.FileWriter.Remove(tmpPath)
-		return fmt.Errorf("failed to re-encrypt vault file: %w", err)
+		return fmt.Errorf("failed to encrypt vault file: %w", err)
 	}
 
 	_ = c.FileWriter.Remove(tmpPath)
