@@ -160,6 +160,53 @@ var _ = Describe("VaultEncryption", func() {
 			})
 		})
 	})
+
+	Describe("IsSOPSEncryptedFile", func() {
+		var tmpDir string
+
+		BeforeEach(func() {
+			var err error
+			tmpDir, err = os.MkdirTemp("", "sops-detect-test-*")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			Expect(os.RemoveAll(tmpDir)).To(Succeed())
+		})
+
+		It("returns false for a file without sops metadata", func() {
+			path := filepath.Join(tmpDir, "plain.yaml")
+			Expect(os.WriteFile(path, []byte("key: value\n"), 0644)).To(Succeed())
+
+			encrypted, err := installer.IsSOPSEncryptedFile(path)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(encrypted).To(BeFalse())
+		})
+
+		It("returns true for a file with sops top-level key", func() {
+			path := filepath.Join(tmpDir, "sops.yaml")
+			Expect(os.WriteFile(path, []byte("sops:\n  age: age1abc\n"), 0644)).To(Succeed())
+
+			encrypted, err := installer.IsSOPSEncryptedFile(path)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(encrypted).To(BeTrue())
+		})
+
+		It("returns false for an empty file", func() {
+			path := filepath.Join(tmpDir, "empty.yaml")
+			Expect(os.WriteFile(path, []byte{}, 0644)).To(Succeed())
+
+			encrypted, err := installer.IsSOPSEncryptedFile(path)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(encrypted).To(BeFalse())
+		})
+
+		It("returns an error for a non-existent file", func() {
+			path := filepath.Join(tmpDir, "missing.yaml")
+			_, err := installer.IsSOPSEncryptedFile(path)
+			Expect(err).To(HaveOccurred())
+		})
+	})
 })
 
 func splitLines(s string) []string {
