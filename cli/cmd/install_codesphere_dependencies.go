@@ -17,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/rest"
@@ -191,6 +192,10 @@ func (i *argoCDAndAppsInstall) installArgoCD() error {
 }
 
 func (i *argoCDAndAppsInstall) syncVaultSecret() error {
+	// Always create new service accounts tokens during creation to ensure they are always valid and updated.
+	if err := secrets.EnsureServiceAccountTokens(i.vault); err != nil {
+		return fmt.Errorf("failed to ensure service account tokens: %w", err)
+	}
 	creator := installer.NewVaultSecretCreator(i.kubeClient)
 	if err := creator.CreateSecretFromVault(i.ctx, i.vault, installer.VaultSecretNamespace, installer.VaultSecretName); err != nil {
 		return fmt.Errorf("failed to sync vault secret: %w", err)
