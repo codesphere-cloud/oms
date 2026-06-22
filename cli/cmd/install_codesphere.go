@@ -50,11 +50,11 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
 		AllowedSteps: installer.InfraSteps,
 	}
 	dependenciesInstaller := &installer.CodesphereInstaller{
-		SkipSteps:    c.Opts.SkipSteps,
+		SkipSteps:    append(sharedInstallCodesphereSteps(), c.Opts.SkipSteps...),
 		AllowedSteps: installer.DependenciesSteps,
 	}
 	platformInstaller := &installer.CodesphereInstaller{
-		SkipSteps:    c.Opts.SkipSteps,
+		SkipSteps:    append(sharedInstallCodesphereSteps(), c.Opts.SkipSteps...),
 		AllowedSteps: installer.PlatformSteps,
 	}
 
@@ -128,4 +128,8 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	AddInstallCodesphereInfraCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodesphereDepenciesCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodespherePlatformCmd(codesphere.cmd, codesphere.Opts)
+}
+
+func sharedInstallCodesphereSteps() []string {
+	return []string{"copy-dependencies", "extract-dependencies"}
 }

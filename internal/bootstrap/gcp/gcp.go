@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -1021,7 +1022,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere...")
 	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s%s",
-		b.Env.SecretsDir, b.icg.GetSecretFilePath(), packageFilename, b.generateSkipStepsArg())
+		b.Env.SecretsDir, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), packageFilename, b.generateSkipStepsArg())
 	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 }
 
