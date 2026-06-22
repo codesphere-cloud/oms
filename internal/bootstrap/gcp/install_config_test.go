@@ -745,7 +745,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			Context("When install version is codesphere-lts-v1.77.2", func() {
 				BeforeEach(func() {
 					csEnv.InstallVersion = "codesphere-lts-v1.77.2"
-					csEnv.Experiments = gcp.DefaultExperiments
+					csEnv.Experiments = []string{"managed-services", "custom-service-image", "ms-in-ls"}
 					csEnv.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
 						{
 							Name:        "postgres",
@@ -782,11 +782,11 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					// In-memory config must be preserved (compat is applied only to jumpbox files)
-					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ContainElement("secret-management"))
-					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ContainElement("sub-path-mount"))
+					// In-memory config must be filtered to only LTS-compatible experiments
+					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ConsistOf("managed-services", "custom-service-image", "ms-in-ls"))
 					Expect(bs.Env.InstallConfig.CodesphereConfigPath).To(BeEmpty())
 
+					// Managed services are preserved for LTS 1.77.2 (full provider definitions from the profile)
 					services := bs.Env.InstallConfig.Codesphere.ManagedServices
 					Expect(services[0].Author).To(Equal("Codesphere"))
 					Expect(services[0].DisplayName).To(Equal("PostgreSQL"))

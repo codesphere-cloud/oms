@@ -370,6 +370,15 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
+
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil {
+		if UserSpecifiedExperiments(b.Env.InstallConfig.Codesphere.Experiments) {
+			if err := ValidateExperiments(b.Env.InstallConfig.Codesphere.Experiments, ltsSpec.Experiments); err != nil {
+				return fmt.Errorf("unsupported experiments for %s: %w", b.Env.InstallVersion, err)
+			}
+		}
+		b.Env.InstallConfig.Codesphere.Experiments = FilterExperiments(b.Env.InstallConfig.Codesphere.Experiments, ltsSpec.Experiments)
+	}
 	b.applyExternalLokiConfig()
 	b.applyPrometheusRemoteWriteConfig()
 
@@ -412,7 +421,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	jumpboxConfigLocalPath := b.Env.InstallConfigPath
 	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil && ltsSpec.RequiresJumpboxFiles {
-		// Old LTS installers: inline compat-stripped codesphere in jumpbox config.
 		var err error
 		jumpboxConfigLocalPath, err = b.writeLTSJumpboxFiles(ltsSpec)
 		if err != nil {

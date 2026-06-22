@@ -972,8 +972,10 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 				return fmt.Errorf("failed to update OMS binary on jumpbox for %s: %w", b.Env.InstallVersion, err)
 			}
 		}
-		b.startLTSCephMasterWatcher()
-		defer b.stopLTSCephMasterWatcher()
+		if ltsSpec.RequiresCephMasterWatcher {
+			b.startLTSCephMasterWatcher()
+			defer b.stopLTSCephMasterWatcher()
+		}
 	}
 
 	err = b.runInstallCommand(fullPackageFilename)

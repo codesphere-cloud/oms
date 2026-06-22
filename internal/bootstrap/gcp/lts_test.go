@@ -19,6 +19,7 @@ var _ = Describe("LTS Compatibility", func() {
 			Expect(spec.RequiresJumpboxFiles).To(BeTrue())
 			Expect(spec.RequiresOmsBinaryUpdate).To(BeTrue())
 			Expect(spec.ClearManagedServices).To(BeTrue())
+			Expect(spec.RequiresCephMasterWatcher).To(BeTrue())
 		})
 
 		It("returns nil for another LTS version", func() {
@@ -64,6 +65,39 @@ var _ = Describe("LTS Compatibility", func() {
 		})
 	})
 
+	Describe("ValidateExperiments", func() {
+		It("returns nil when all experiments are allowed", func() {
+			err := gcp.ValidateExperiments(
+				[]string{"managed-services", "custom-service-image"},
+				[]string{"managed-services", "custom-service-image", "ms-in-ls"},
+			)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("returns error for unsupported experiments", func() {
+			err := gcp.ValidateExperiments(
+				[]string{"managed-services", "secret-management", "sub-path-mount"},
+				[]string{"managed-services", "custom-service-image", "ms-in-ls"},
+			)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unsupported experiments"))
+			Expect(err.Error()).To(ContainSubstring("secret-management"))
+			Expect(err.Error()).To(ContainSubstring("sub-path-mount"))
+		})
+
+		It("returns nil for empty experiments", func() {
+			Expect(gcp.ValidateExperiments([]string{}, []string{"managed-services"})).NotTo(HaveOccurred())
+		})
+
+		It("returns error when all experiments are unsupported", func() {
+			err := gcp.ValidateExperiments(
+				[]string{"secret-management", "sub-path-mount"},
+				[]string{"managed-services"},
+			)
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
 	Describe("ApplyLTSCompat", func() {
 		var spec *gcp.LTSSpec
 
@@ -76,14 +110,25 @@ var _ = Describe("LTS Compatibility", func() {
 			cfg := &files.CodesphereConfig{
 				Experiments: []string{"managed-services", "custom-service-image", "secret-management", "ms-in-ls", "sub-path-mount"},
 			}
-			gcp.ApplyLTSCompat(cfg, spec)
-			Expect(cfg.Experiments).To(ConsistOf("managed-services", "custom-service-image", "ms-in-ls"))
-			Expect(cfg.Experiments).NotTo(ContainElement("secret-management"))
-			Expect(cfg.Experiments).NotTo(ContainElement("sub-path-mount"))
+			err := gcp.ApplyLTSCompat(cfg, spec)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unsupported experiments"))
+			Expect(err.Error()).To(ContainSubstring("secret-management"))
+			Expect(err.Error()).To(ContainSubstring("sub-path-mount"))
 		})
 
-		It("clears managed services (LTS 1.77.2 schema requires full provider definitions)", func() {
+		It("succeeds when all experiments are supported", func() {
 			cfg := &files.CodesphereConfig{
+				Experiments: []string{"managed-services", "custom-service-image", "ms-in-ls"},
+			}
+			err := gcp.ApplyLTSCompat(cfg, spec)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.Experiments).To(ConsistOf("managed-services", "custom-service-image", "ms-in-ls"))
+		})
+
+		It("clears managed services (LTS schema expects provider definitions in a different format)", func() {
+			cfg := &files.CodesphereConfig{
+				Experiments: []string{"managed-services"},
 				ManagedServices: []files.ManagedServiceConfig{
 					{
 						Name:        "postgres",
@@ -116,7 +161,8 @@ var _ = Describe("LTS Compatibility", func() {
 				},
 			}
 
-			gcp.ApplyLTSCompat(cfg, spec)
+			err := gcp.ApplyLTSCompat(cfg, spec)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(cfg.ManagedServices).To(BeNil())
 		})
@@ -126,7 +172,8 @@ var _ = Describe("LTS Compatibility", func() {
 				ManagedServices: nil,
 				Experiments:     []string{"custom-service-image"},
 			}
-			Expect(func() { gcp.ApplyLTSCompat(cfg, spec) }).NotTo(Panic())
+			err := gcp.ApplyLTSCompat(cfg, spec)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.ManagedServices).To(BeEmpty())
 		})
 
@@ -134,7 +181,8 @@ var _ = Describe("LTS Compatibility", func() {
 			cfg := &files.CodesphereConfig{
 				Experiments: []string{},
 			}
-			gcp.ApplyLTSCompat(cfg, spec)
+			err := gcp.ApplyLTSCompat(cfg, spec)
+			Expect(err).NotTo(HaveOccurred())
 			Expect(cfg.Experiments).To(BeEmpty())
 		})
 	})
@@ -151,7 +199,7 @@ var _ = Describe("LTS Compatibility", func() {
 
 			root = &files.RootConfig{
 				Codesphere: files.CodesphereConfig{
-					Experiments: []string{"managed-services", "custom-service-image", "secret-management", "ms-in-ls", "sub-path-mount"},
+					Experiments: []string{"managed-services", "custom-service-image", "ms-in-ls"},
 					ManagedServices: []files.ManagedServiceConfig{
 						{Name: "postgres", Version: "v1", Author: "Codesphere"},
 						{Name: "s3", Version: "v1"},
@@ -163,7 +211,7 @@ var _ = Describe("LTS Compatibility", func() {
 		It("does not modify the original root config", func() {
 			_, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(root.Codesphere.Experiments).To(ContainElement("secret-management"))
+			Expect(root.Codesphere.Experiments).To(ConsistOf("managed-services", "custom-service-image", "ms-in-ls"))
 			Expect(root.Codesphere.ManagedServices[0].Author).To(Equal("Codesphere"))
 			Expect(root.CodesphereConfigPath).To(BeEmpty())
 		})
@@ -177,26 +225,28 @@ var _ = Describe("LTS Compatibility", func() {
 			Expect(root.GeneratedForVersion).To(Equal("codesphere-lts-v1.77.2"))
 		})
 
-		It("returns codesphere bytes with compat applied", func() {
+		It("returns codesphere bytes with compat applied (managed services stripped, experiments filtered)", func() {
 			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(jumpboxBytes).NotTo(BeEmpty())
 			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("managedServices"))
-			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("secret-management"))
+			Expect(string(jumpboxBytes)).To(ContainSubstring("managed-services"))
+			Expect(string(jumpboxBytes)).To(ContainSubstring("custom-service-image"))
 		})
 
-		It("returns jumpbox config bytes with inline compat-stripped codesphere", func() {
+		It("jumpbox config has inline codesphere (not a path reference)", func() {
 			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(jumpboxBytes).NotTo(BeEmpty())
-			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("/etc/codesphere/codesphere.yaml"))
-			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("managedServices"))
+			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("/etc/codesphere/codesphere"))
 		})
 
-		It("jumpbox config bytes do not contain unsupported experiment", func() {
-			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("secret-management"))
+		It("errors when unsupported experiments are in the root config", func() {
+			root.Codesphere.Experiments = []string{"managed-services", "unsupported-exp"}
+			_, err := gcp.GenerateLTSJumpboxFiles(root, spec)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("unsupported experiments"))
+			Expect(err.Error()).To(ContainSubstring("unsupported-exp"))
 		})
 	})
 
