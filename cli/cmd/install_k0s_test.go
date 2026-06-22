@@ -54,7 +54,8 @@ var _ = Describe("InstallK0sCmd", func() {
 	Context("RunE method", func() {
 		It("fails when install-config is not provided", func() {
 			c.Opts.InstallConfig = ""
-			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
+			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir").Times(2)
+			mockFileWriter.EXPECT().MkdirAll("/test/workdir", os.FileMode(0755)).Return(nil)
 
 			err := c.RunE(nil, nil)
 			Expect(err).To(HaveOccurred())
@@ -129,6 +130,9 @@ var _ = Describe("InstallK0sCmd", func() {
 		It("fails when install-config file does not exist", func() {
 			c.Opts.InstallConfig = "/nonexistent/install-config.yaml"
 
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load install-config"))
@@ -136,6 +140,9 @@ var _ = Describe("InstallK0sCmd", func() {
 
 		It("fails when install-config specifies external Kubernetes", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(false))
+
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
@@ -149,6 +156,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Force = true
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", true).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0sctl.EXPECT().Download("", true, false).Return("/tmp/k0sctl", nil)
@@ -165,6 +173,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Version = "v1.29.0+k0s.0"
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockK0s.EXPECT().Download("v1.29.0+k0s.0", false, false).Return("/downloaded/k0s", nil)
 			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
@@ -178,6 +187,8 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = ""
 
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockK0s.EXPECT().GetLatestVersion().Return("v1.30.0+k0s.0", nil)
 			mockK0s.EXPECT().Download("v1.30.0+k0s.0", false, false).Return("", os.ErrNotExist)
 
@@ -191,6 +202,8 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Package = "test-package.tar.gz"
 			c.Opts.Version = "v1.30.0+k0s.0"
 
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0sctl.EXPECT().Download("", false, false).Return("", os.ErrPermission)
@@ -206,6 +219,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Version = "v1.30.0+k0s.0"
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
@@ -219,6 +233,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 		setupCommonMocks := func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
