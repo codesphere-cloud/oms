@@ -70,6 +70,7 @@ type RootConfig struct {
 	Cluster                ClusterConfig                 `yaml:"cluster"`
 	MetalLB                *MetalLBConfig                `yaml:"metallb,omitempty"`
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
+	PcApps                 ChartOverride                 `yaml:"pcApps,omitempty"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
 	Operations             *OperationsConfig             `yaml:"operations,omitempty"`
 }
@@ -637,6 +638,7 @@ func NewRootConfig() RootConfig {
 	return RootConfig{
 		Registry:               &RegistryConfig{},
 		MetalLB:                &MetalLBConfig{},
+		PcApps:                 ChartOverride{},
 		ManagedServiceBackends: &ManagedServiceBackendsConfig{},
 	}
 }

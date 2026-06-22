@@ -44,6 +44,7 @@ func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
 		c.Opts.Version,
 		c.Opts.Namespace,
 		c.Opts.ValuesFiles,
+		nil,
 		c.Opts.ForceConflicts,
 	)
 	if err != nil {

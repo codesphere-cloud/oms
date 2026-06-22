@@ -11,6 +11,7 @@ import (
 	"net/url"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
+	"github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,6 +39,7 @@ type PCApps struct {
 	version        string   // chart version (required)
 	namespace      string   // target namespace for the Helm release
 	valuesFiles    []string // paths to values YAML files, merged in order
+	valuesOverride map[string]interface{}
 	forceConflicts bool
 	helm           HelmClient
 	client         client.Client
@@ -46,7 +48,7 @@ type PCApps struct {
 // NewPCApps creates a new PCApps installer. It validates that required fields
 // are non-empty but does not apply defaults — defaults live on the CLI flag
 // declarations only.
-func NewPCApps(c client.Client, version, namespace string, valuesFiles []string, forceConflicts bool) (*PCApps, error) {
+func NewPCApps(c client.Client, version, namespace string, valuesFiles []string, valuesOverride map[string]interface{}, forceConflicts bool) (*PCApps, error) {
 	if version == "" {
 		return nil, errors.New("version is required")
 	}
@@ -63,13 +65,14 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 		version:        version,
 		namespace:      namespace,
 		valuesFiles:    valuesFiles,
+		valuesOverride: valuesOverride,
 		forceConflicts: forceConflicts,
 		helm:           helm,
 		client:         c,
 	}, nil
 }
 
-func NewPcAppsFromBom(c client.Client, restConfig *rest.Config, bomPath string, namespace string) (*PCApps, error) {
+func NewPcAppsFromBom(c client.Client, restConfig *rest.Config, bomPath string, namespace string, valuesFiles []string, valuesOverride map[string]interface{}) (*PCApps, error) {
 	bomCfg, err := bom.Parse(bomPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse bom.json: %w", err)
@@ -86,11 +89,12 @@ func NewPcAppsFromBom(c client.Client, restConfig *rest.Config, bomPath string, 
 	}
 
 	return &PCApps{
-		version:     pcApps.Tag(),
-		namespace:   namespace,
-		valuesFiles: []string{},
-		helm:        helm,
-		client:      c,
+		version:        pcApps.Tag(),
+		namespace:      namespace,
+		valuesFiles:    valuesFiles,
+		valuesOverride: valuesOverride,
+		helm:           helm,
+		client:         c,
 	}, nil
 }
 
@@ -133,10 +137,12 @@ func (p *PCApps) resolveFromSecret(ctx context.Context) (chartURL, username, pas
 func (p *PCApps) Install(ctx context.Context) error {
 	// Validate values files before any network calls so local errors fail fast.
 	valueOpts := values.Options{ValueFiles: p.valuesFiles}
-	vals, err := valueOpts.MergeValues(getter.All(cli.New()))
+	fileVals, err := valueOpts.MergeValues(getter.All(cli.New()))
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
 	}
+	vals := util.DeepMergeMaps(map[string]any{}, p.valuesOverride)
+	vals = util.DeepMergeMaps(vals, fileVals)
 
 	chartURL, username, password, err := p.resolveFromSecret(ctx)
 	if err != nil {
@@ -179,11 +185,12 @@ func (p *PCApps) Install(ctx context.Context) error {
 
 // NewPCAppsForTesting creates a PCApps instance with injected dependencies for
 // use in tests. This avoids exporting struct fields solely for test access.
-func NewPCAppsForTesting(helm HelmClient, c client.Client, version, namespace string, valuesFiles []string, forceConflicts bool) *PCApps {
+func NewPCAppsForTesting(helm HelmClient, c client.Client, version, namespace string, valuesFiles []string, valuesOverride map[string]interface{}, forceConflicts bool) *PCApps {
 	return &PCApps{
 		version:        version,
 		namespace:      namespace,
 		valuesFiles:    valuesFiles,
+		valuesOverride: valuesOverride,
 		forceConflicts: forceConflicts,
 		helm:           helm,
 		client:         c,

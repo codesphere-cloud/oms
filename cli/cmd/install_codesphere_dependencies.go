@@ -12,7 +12,6 @@ import (
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
-	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
@@ -33,7 +32,13 @@ type InstallCodesphereDepenciesCmd struct {
 }
 
 func (c *InstallCodesphereDepenciesCmd) RunE(_ *cobra.Command, _ []string) error {
-	return installCodesphereDepencies(c.Opts, c.Env)
+	effectiveOpts, _, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	return installCodesphereDepencies(effectiveOpts, c.Env)
 }
 
 func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error {
@@ -43,11 +48,10 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error 
 	cm := installer.NewConfig()
 	im := system.NewImage(context.Background())
 
-	cfg, cleanup, err := parseInstallConfig(opts, cm)
+	cfg, err := cm.ParseConfigYaml(opts.Config)
 	if err != nil {
 		return fmt.Errorf("failed to extract config.yaml: %w", err)
 	}
-	defer cleanup()
 
 	ci := &installer.CodesphereInstaller{
 		ConfigPath:       opts.Config,
@@ -75,23 +79,6 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error 
 		return fmt.Errorf("failed to install dependencies: %w", err)
 	}
 	return nil
-}
-
-func parseInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManager) (files.RootConfig, func(), error) {
-	configPath := opts.Config
-	cleanup := func() {}
-	if opts.Vault != "" {
-		store := installer.NewLazyVaultTemplatingSecretStore(opts.Vault, opts.PrivKey)
-		renderedConfig, renderCleanup, err := configtemplating.RenderConfigFileToTemp(opts.Config, store)
-		if err != nil {
-			return files.RootConfig{}, cleanup, err
-		}
-		configPath = renderedConfig
-		cleanup = renderCleanup
-	}
-
-	cfg, err := cm.ParseConfigYaml(configPath)
-	return cfg, cleanup, err
 }
 
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
@@ -131,6 +118,7 @@ type argoCDAndAppsInstall struct {
 	kubeClient     ctrlclient.Client
 	vault          *files.InstallVault
 	kubeConfig     *rest.Config
+	config         files.RootConfig
 }
 
 func (i *argoCDAndAppsInstall) loadVaultData() error {
@@ -166,6 +154,7 @@ func (i *argoCDAndAppsInstall) installArgoCD() error {
 	if err != nil {
 		return fmt.Errorf("failed to parse config.yaml: %w", err)
 	}
+	i.config = cfg
 	i.ociRegistryURL = i.opts.ArgoCDRegistryURL
 	if i.ociRegistryURL == "" && cfg.Registry != nil {
 		i.ociRegistryURL = cfg.Registry.Server + "/codesphere-cloud/charts"
@@ -204,7 +193,14 @@ func (i *argoCDAndAppsInstall) syncVaultSecret() error {
 }
 
 func (i *argoCDAndAppsInstall) installPcApps() error {
-	pcApps, err := installer.NewPcAppsFromBom(i.kubeClient, i.kubeConfig, i.pm.GetDependencyPath("bom.json"), argocdinstaller.DefaultNamespace)
+	pcApps, err := installer.NewPcAppsFromBom(
+		i.kubeClient,
+		i.kubeConfig,
+		i.pm.GetDependencyPath("bom.json"),
+		argocdinstaller.DefaultNamespace,
+		i.opts.PCAppsValues,
+		i.config.PcApps,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
 	}
@@ -242,6 +238,10 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 				{
 					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml -s argocd",
 					Desc: "Install cluster dependencies without the ArgoCD pre-step",
+				},
+				{
+					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml --pc-apps-values base.yaml --pc-apps-values dc-overlay.yaml",
+					Desc: "Install cluster dependencies with custom pc-apps values files",
 				},
 			}),
 		},
