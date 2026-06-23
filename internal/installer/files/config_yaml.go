@@ -646,9 +646,17 @@ type S3ManagedServiceConfig struct {
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
+// OmitCodesphereSentinel is a special CodesphereConfigPath value that instructs
+// Marshal to remove the codesphere key from the YAML output entirely.
+// Used for LTS releases whose installer rejects any codesphere value.
+const OmitCodesphereSentinel = "-"
+
 // Marshal serializes the RootConfig to YAML.
-// When CodesphereConfigPath is set, the codesphere section is written as a file-path
+// When CodesphereConfigPath is set to a non-empty value (other than the
+// OmitCodesphereSentinel), the codesphere section is written as a file-path
 // reference string instead of an inline object.
+// When CodesphereConfigPath equals OmitCodesphereSentinel, the codesphere key
+// is removed from the output entirely.
 func (c *RootConfig) Marshal() ([]byte, error) {
 	c.buildACMEOverride()
 	if c.CodesphereConfigPath == "" {
@@ -662,14 +670,20 @@ func (c *RootConfig) Marshal() ([]byte, error) {
 		return nil, err
 	}
 
-	// Parse into a node tree so we can swap out the codesphere value.
+	// Parse into a node tree so we can manipulate the codesphere value.
 	var root yaml.Node
 	if err := yaml.Unmarshal(data, &root); err != nil {
 		return nil, err
 	}
 
-	if err := replaceYAMLMappingValue(&root, "codesphere", c.CodesphereConfigPath); err != nil {
-		return nil, fmt.Errorf("failed to set codesphere path reference: %w", err)
+	if c.CodesphereConfigPath == OmitCodesphereSentinel {
+		if err := removeYAMLMappingKey(&root, "codesphere"); err != nil {
+			return nil, fmt.Errorf("failed to remove codesphere key: %w", err)
+		}
+	} else {
+		if err := replaceYAMLMappingValue(&root, "codesphere", c.CodesphereConfigPath); err != nil {
+			return nil, fmt.Errorf("failed to set codesphere path reference: %w", err)
+		}
 	}
 
 	return yaml.Marshal(&root)
@@ -691,6 +705,24 @@ func replaceYAMLMappingValue(root *yaml.Node, key, value string) error {
 				Tag:   "!!str",
 				Value: value,
 			}
+			return nil
+		}
+	}
+	return fmt.Errorf("key %q not found in YAML mapping", key)
+}
+
+// removeYAMLMappingKey removes a top-level key-value pair from a YAML mapping node.
+func removeYAMLMappingKey(root *yaml.Node, key string) error {
+	mapping := root
+	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
+		mapping = root.Content[0]
+	}
+	if mapping.Kind != yaml.MappingNode {
+		return fmt.Errorf("expected a YAML mapping node, got kind %d", mapping.Kind)
+	}
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			mapping.Content = append(mapping.Content[:i], mapping.Content[i+2:]...)
 			return nil
 		}
 	}

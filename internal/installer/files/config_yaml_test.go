@@ -355,6 +355,18 @@ codesphere:
 			Expect(certs["override"]).To(Equal(expectedOverride))
 		})
 
+		It("omits the codesphere key when CodesphereConfigPath is set to OmitCodesphereSentinel", func() {
+			rootConfig.CodesphereConfigPath = files.OmitCodesphereSentinel
+			data, err := rootConfig.Marshal()
+			Expect(err).NotTo(HaveOccurred())
+
+			var raw map[string]interface{}
+			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
+
+			_, hasCodesphere := raw["codesphere"]
+			Expect(hasCodesphere).To(BeFalse(), "codesphere key must be absent when using OmitCodesphereSentinel")
+		})
+
 		It("should unmarshal ACME config from upstream docs format and populate Solver", func() {
 			acmeYaml := `codesphere:
   certIssuer:

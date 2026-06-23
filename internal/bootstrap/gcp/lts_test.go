@@ -18,7 +18,7 @@ var _ = Describe("LTS Compatibility", func() {
 			Expect(spec.InstallVersion).To(Equal("codesphere-lts-v1.77.2"))
 			Expect(spec.RequiresJumpboxFiles).To(BeTrue())
 			Expect(spec.RequiresOmsBinaryUpdate).To(BeTrue())
-			Expect(spec.ClearManagedServices).To(BeTrue())
+			Expect(spec.ClearManagedServices).To(BeFalse())
 			Expect(spec.RequiresCephMasterWatcher).To(BeTrue())
 		})
 
@@ -126,7 +126,7 @@ var _ = Describe("LTS Compatibility", func() {
 			Expect(cfg.Experiments).To(ConsistOf("managed-services", "custom-service-image", "ms-in-ls"))
 		})
 
-		It("clears managed services (LTS schema expects provider definitions in a different format)", func() {
+		It("preserves managed services (LTS 1.77.2 keeps them in separate codesphere config)", func() {
 			cfg := &files.CodesphereConfig{
 				Experiments: []string{"managed-services"},
 				ManagedServices: []files.ManagedServiceConfig{
@@ -164,7 +164,9 @@ var _ = Describe("LTS Compatibility", func() {
 			err := gcp.ApplyLTSCompat(cfg, spec)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cfg.ManagedServices).To(BeNil())
+			Expect(cfg.ManagedServices).To(HaveLen(2))
+			Expect(cfg.ManagedServices[0].Name).To(Equal("postgres"))
+			Expect(cfg.ManagedServices[0].Author).To(Equal("Codesphere"))
 		})
 
 		It("handles nil managed services slice", func() {
@@ -224,13 +226,15 @@ var _ = Describe("LTS Compatibility", func() {
 			Expect(root.GeneratedForVersion).To(Equal("codesphere-lts-v1.77.2"))
 		})
 
-		It("returns inline codesphere with experiments filtered and managed services cleared", func() {
+		It("omits the codesphere key entirely from the LTS config", func() {
 			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(jumpboxBytes).NotTo(BeEmpty())
+			// LTS 1.77.2 installer rejects both inline objects and string-path refs;
+			// only the absent key is accepted.
+			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("codesphere:"))
 			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("managedServices"))
-			Expect(string(jumpboxBytes)).To(ContainSubstring("managed-services"))
-			Expect(string(jumpboxBytes)).To(ContainSubstring("custom-service-image"))
+			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("managed-services"))
 		})
 
 		It("errors when unsupported experiments are in the root config", func() {

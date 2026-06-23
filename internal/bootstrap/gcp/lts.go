@@ -52,7 +52,7 @@ var ltsRegistry = []LTSSpec{
 			"custom-service-image",
 			"ms-in-ls",
 		},
-		ClearManagedServices:      true,
+		ClearManagedServices:      false,
 		RequiresJumpboxFiles:      true,
 		RequiresOmsBinaryUpdate:   true,
 		RequiresCephMasterWatcher: true,
@@ -88,7 +88,9 @@ func LocalLTSConfigPath(configPath string, spec *LTSSpec) string {
 
 // GenerateLTSJumpboxFiles generates the LTS-versioned config file needed on the jumpbox
 // without modifying the original root config. It returns the bytes for
-// config-lts-<version>.yaml with compat applied (experiments filtered, managed services cleared).
+// config-lts-<version>.yaml with compat applied (experiments filtered).
+// The codesphere key is omitted from the output — the LTS 1.77.2 installer rejects
+// both inline objects and file-path references; only the absent key is accepted.
 func GenerateLTSJumpboxFiles(root *files.RootConfig, spec *LTSSpec) (jumpboxConfigBytes []byte, err error) {
 	csCopy := root.Codesphere
 	if err := ApplyLTSCompat(&csCopy, spec); err != nil {
@@ -97,6 +99,7 @@ func GenerateLTSJumpboxFiles(root *files.RootConfig, spec *LTSSpec) (jumpboxConf
 
 	rootCopy := *root
 	rootCopy.Codesphere = csCopy
+	rootCopy.CodesphereConfigPath = files.OmitCodesphereSentinel
 	rootCopy.GeneratedForVersion = ""
 
 	jumpboxConfigBytes, err = rootCopy.Marshal()

@@ -793,7 +793,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ConsistOf("managed-services", "custom-service-image", "ms-in-ls"))
 					Expect(bs.Env.InstallConfig.CodesphereConfigPath).To(BeEmpty())
 
-					// Managed services are preserved for LTS 1.77.2 (full provider definitions from the profile)
+					// Managed services are preserved for LTS 1.77.2 (they remain in the profile config)
 					services := bs.Env.InstallConfig.Codesphere.ManagedServices
 					Expect(services[0].Author).To(Equal("Codesphere"))
 					Expect(services[0].DisplayName).To(Equal("PostgreSQL"))
