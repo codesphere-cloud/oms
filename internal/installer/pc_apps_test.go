@@ -69,7 +69,7 @@ var _ = Describe("PCApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(newSecret()).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, false)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, false)
 		})
 
 		It("reads credentials from K8s secret and calls UpgradeChart with InstallIfNotExist", func() {
@@ -112,7 +112,7 @@ var _ = Describe("PCApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(newSecret()).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, false)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, false)
 		})
 
 		It("returns an error without attempting install", func() {
@@ -131,7 +131,7 @@ var _ = Describe("PCApps.Install", func() {
 			fakeClient = fake.NewClientBuilder().
 				WithScheme(scheme).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, false)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, false)
 		})
 
 		It("returns a clear error", func() {
@@ -159,7 +159,7 @@ var _ = Describe("PCApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(secret).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, false)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, false)
 		})
 
 		It("returns an error about missing fields", func() {
@@ -194,7 +194,7 @@ var _ = Describe("PCApps.Install", func() {
 			overlay := filepath.Join(tmpDir, "overlay.yaml")
 			Expect(os.WriteFile(overlay, []byte("foo: overridden\nnested:\n  b: 99\n  c: 3\n"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{base, overlay}, false)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{base, overlay}, nil, false)
 
 			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
@@ -213,7 +213,7 @@ var _ = Describe("PCApps.Install", func() {
 		})
 
 		It("returns an error for non-existent values file", func() {
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{"/nonexistent/values.yaml"}, false)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{"/nonexistent/values.yaml"}, nil, false)
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
@@ -224,11 +224,40 @@ var _ = Describe("PCApps.Install", func() {
 			badFile := filepath.Join(tmpDir, "bad.yaml")
 			Expect(os.WriteFile(badFile, []byte("{{invalid yaml"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{badFile}, false)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{badFile}, nil, false)
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("loading values files"))
+		})
+
+		It("merges inline config overrides before values files", func() {
+			override := map[string]interface{}{
+				"foo": "from-config",
+				"nested": map[string]interface{}{
+					"configOnly": true,
+					"shared":     "from-config",
+				},
+			}
+			fileValues := filepath.Join(tmpDir, "values.yaml")
+			Expect(os.WriteFile(fileValues, []byte("foo: from-file\nnested:\n  shared: from-file\n  fileOnly: true\n"), 0644)).To(Succeed())
+
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{fileValues}, override, false)
+
+			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				nested, ok := cfg.Values["nested"].(map[string]any)
+				if !ok {
+					return false
+				}
+				return cfg.Values["foo"] == "from-file" &&
+					nested["configOnly"] == true &&
+					nested["shared"] == "from-file" &&
+					nested["fileOnly"] == true
+			}), installer.UpgradeChartOptions{InstallIfNotExist: true}).Return(nil)
+
+			err := pcApps.Install(context.Background())
+			Expect(err).ToNot(HaveOccurred())
 		})
 	})
 
@@ -241,7 +270,7 @@ var _ = Describe("PCApps.Install", func() {
 		})
 
 		It("passes ForceConflicts=true to UpgradeChart", func() {
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, true)
+			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, true)
 
 			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.MatchedBy(func(opts installer.UpgradeChartOptions) bool {
