@@ -40,6 +40,10 @@ type LTSSpec struct {
 	// host inventory. This works around a bug in the LTS installer's configureHosts step
 	// that removes the master from inventory when applying a declarative host spec.
 	RequiresCephMasterWatcher bool
+	// SkipPcApps instructs the bootstrap to add "argocd" to the install skip-steps,
+	// skipping the ArgoCD+pc-apps pre-step. This is needed for LTS releases whose
+	// bom.json predates the pc-applications component (introduced after the LTS was cut).
+	SkipPcApps bool
 }
 
 // ltsRegistry is the single source of truth for all known LTS versions and their quirks.
@@ -56,6 +60,7 @@ var ltsRegistry = []LTSSpec{
 		RequiresJumpboxFiles:      true,
 		RequiresOmsBinaryUpdate:   true,
 		RequiresCephMasterWatcher: true,
+		SkipPcApps:                true,
 	},
 }
 

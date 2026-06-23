@@ -1088,6 +1088,13 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 
 func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere...")
+
+	// LTS packages whose bom.json predates the pc-applications component
+	// need the ArgoCD+pc-apps pre-step skipped to avoid a missing-BOM error.
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil && ltsSpec.SkipPcApps {
+		b.Env.InstallSkipSteps = append(b.Env.InstallSkipSteps, "argocd")
+	}
+
 	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s%s",
 		b.Env.SecretsDir, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), packageFilename, b.generateSkipStepsArg())
 	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)

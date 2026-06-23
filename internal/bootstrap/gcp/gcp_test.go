@@ -1346,7 +1346,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 						"chmod +x /tmp/oms-new && mv /tmp/oms-new /usr/local/bin/oms").Return(nil)
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p codesphere-lts-v1.77.2-abc1234567890-installer.tar.gz").Return(nil)
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p codesphere-lts-v1.77.2-abc1234567890-installer.tar.gz -s argocd").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
