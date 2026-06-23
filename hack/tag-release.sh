@@ -43,13 +43,19 @@ elif [[ $FIX -eq 0 ]]; then
 fi
 
 if [[ $NEWTAG == $TAG ]]; then
-  echo "Nothing to tag."
-  exit 0
+  # Check if TAG already points to current HEAD (retry of a previously failed release)
+  TAG_COMMIT=$(git rev-list -n 1 "$TAG" 2>/dev/null || echo "")
+  HEAD_COMMIT=$(git rev-parse HEAD)
+  if [[ "$TAG_COMMIT" != "$HEAD_COMMIT" ]]; then
+    echo "Nothing to tag."
+    exit 0
+  fi
+  echo "Tag $NEWTAG already exists at HEAD, retrying release."
+else
+  echo "Tagging $NEWTAG"
+  git tag "$NEWTAG"
+  git push origin "$NEWTAG"
 fi
-
-echo "Tagging $NEWTAG"
-git tag "$NEWTAG"
-git push origin "$NEWTAG"
 
 echo "Triggering release of version $NEWTAG"
 make install-build-deps

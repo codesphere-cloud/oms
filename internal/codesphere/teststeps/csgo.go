@@ -6,6 +6,7 @@ package teststeps
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 )
@@ -19,8 +20,14 @@ const (
 	stepNameSetEnvVar       = "setEnvVar"
 	stepNameCreateFiles     = "createFiles"
 	stepNameSyncLandscape   = "syncLandscape"
-	stepNameStartPipeline   = "startPipeline"
+	stepNameExecuteRunStage = "executeRunStage"
 	stepNameDeleteWorkspace = "deleteWorkspace"
+
+	ideServer              = "codesphere-ide"
+	pipelineStateRunning   = "running"
+	pipelineStateFailure   = "failure"
+	pipelineStateAborted   = "aborted"
+	pipelineStatePollDelay = 5 * time.Second
 
 	ciYmlContent = `schemaVersion: v0.2
 prepare:
@@ -172,18 +179,72 @@ func (s *SyncLandscapeStep) Run(ctx context.Context, c *SmoketestCodesphereOpts,
 	return nil
 }
 
-type StartPipelineStep struct{}
+type ExecuteRunStageStep struct{}
 
-func (s *StartPipelineStep) Name() string { return stepNameStartPipeline }
+func (s *ExecuteRunStageStep) Name() string { return stepNameExecuteRunStage }
 
-func (s *StartPipelineStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
-	c.logStep(fmt.Sprintf("Starting '%s' pipeline stage", smoketestPipelineStage))
+func (s *ExecuteRunStageStep) Run(ctx context.Context, c *SmoketestCodesphereOpts, workspaceID *int) error {
+	c.logStep(fmt.Sprintf("Executing '%s' pipeline stage", smoketestPipelineStage))
 	if err := c.Client.StartPipeline(*workspaceID, c.Profile, smoketestPipelineStage); err != nil {
 		c.logFailure()
 		return fmt.Errorf("failed to start pipeline: %w", err)
 	}
-	c.logSuccess()
-	return nil
+	var lastErr error
+	for {
+		select {
+		case <-ctx.Done():
+			c.logFailure()
+			if lastErr != nil {
+				return fmt.Errorf("timed out waiting for workspace to be running: %w", lastErr)
+			}
+			return fmt.Errorf("timed out waiting for workspace to be running")
+		default:
+		}
+
+		states, err := c.Client.GetPipelineState(*workspaceID, smoketestPipelineStage)
+		if err != nil {
+			lastErr = err
+			log.Printf("failed to get pipeline state, retrying: %s", err)
+			select {
+			case <-ctx.Done():
+				c.logFailure()
+				return fmt.Errorf("timed out waiting for workspace to be running: %w", lastErr)
+			case <-time.After(pipelineStatePollDelay):
+				continue
+			}
+		}
+
+		for _, st := range states {
+			if st.State == pipelineStateFailure || st.State == pipelineStateAborted {
+				c.logFailure()
+				return fmt.Errorf("workspace run stage reached unexpected state: %s (server: %s, replica: %s)", st.State, st.Server, st.Replica)
+			}
+		}
+
+		hasNonIdeServer := false
+		allNonIdeRunning := true
+		for _, st := range states {
+			if st.Server == ideServer {
+				continue
+			}
+			hasNonIdeServer = true
+			if st.State != pipelineStateRunning {
+				allNonIdeRunning = false
+				break
+			}
+		}
+		if hasNonIdeServer && allNonIdeRunning {
+			c.logSuccess()
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			c.logFailure()
+			return fmt.Errorf("timed out waiting for workspace to be running")
+		case <-time.After(pipelineStatePollDelay):
+		}
+	}
 }
 
 type DeleteWorkspaceStep struct{}

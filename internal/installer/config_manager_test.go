@@ -12,6 +12,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 )
 
 type MockFileIO struct {
@@ -405,6 +406,8 @@ var _ = Describe("ConfigManager", func() {
 			BeforeEach(func() {
 				configManager.Vault = &files.InstallVault{
 					Secrets: []files.SecretEntry{
+						{Name: "tokenPrivateKey"},
+						{Name: "tokenPublicKey"},
 						{Name: "cephSshPrivateKey"},
 						{Name: "selfSignedCaKeyPem"},
 						{Name: "domainAuthPrivateKey"},
@@ -428,7 +431,7 @@ var _ = Describe("ConfigManager", func() {
 					},
 				}
 				errors := configManager.ValidateVault()
-				Expect(errors).To(HaveLen(2))
+				Expect(errors).To(HaveLen(4))
 				Expect(errors).To(ContainElement(ContainSubstring("domainAuthPrivateKey")))
 				Expect(errors).To(ContainElement(ContainSubstring("domainAuthPublicKey")))
 			})
@@ -516,9 +519,6 @@ var _ = Describe("ConfigManager", func() {
 				err = configManager.GenerateSecrets()
 				Expect(err).ToNot(HaveOccurred())
 
-				vault := configManager.Config.ExtractVault()
-				configManager.Vault = vault
-
 				errors := configManager.ValidateVault()
 				Expect(errors).To(BeEmpty())
 			})
@@ -571,15 +571,17 @@ var _ = Describe("ConfigManager", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify cert/key pair matches after initial generation
-				err = installer.ValidateCertKeyPair(
+				primaryKeySecret := configManager.Vault.GetSecret("postgresPrimaryServerKeyPem")
+				Expect(primaryKeySecret).ToNot(BeNil())
+				err = secrets.ValidateCertKeyPair(
 					configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem,
-					configManager.Config.Postgres.Primary.PrivateKey,
+					primaryKeySecret.File.Content,
 				)
 				Expect(err).ToNot(HaveOccurred(), "cert/key should match after initial generation")
 
 				// Save the original cert and key for later comparison
 				origCert := configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem
-				origKey := configManager.Config.Postgres.Primary.PrivateKey
+				origKey := primaryKeySecret.File.Content
 				Expect(origCert).ToNot(BeEmpty())
 				Expect(origKey).ToNot(BeEmpty())
 
@@ -601,8 +603,6 @@ var _ = Describe("ConfigManager", func() {
 				Expect(err).ToNot(HaveOccurred())
 				configManager2.Config = &config2
 
-				Expect(configManager2.Config.Postgres.Primary.PrivateKey).To(BeEmpty(),
-					"private key should NOT be in config.yaml (it has yaml:\"-\" tag)")
 				Expect(configManager2.Config.Postgres.Primary.SSLConfig.ServerCertPem).To(Equal(origCert),
 					"cert should be in config.yaml")
 
@@ -614,20 +614,18 @@ var _ = Describe("ConfigManager", func() {
 				Expect(err).ToNot(HaveOccurred())
 				configManager2.Vault = vault2
 
-				// Merge vault into config
-				err = configManager2.MergeVaultIntoConfig()
-				Expect(err).ToNot(HaveOccurred())
-
-				// After merge, the private key should be restored from vault
-				Expect(configManager2.Config.Postgres.Primary.PrivateKey).To(Equal(origKey),
-					"private key should be restored from vault after merge")
+				// Private key lives in vault, not config
+				primaryKey2 := configManager2.Vault.GetSecret("postgresPrimaryServerKeyPem")
+				Expect(primaryKey2).ToNot(BeNil())
+				Expect(primaryKey2.File.Content).To(Equal(origKey),
+					"private key should be preserved in vault after reload")
 
 				// Cert/key should still match
-				err = installer.ValidateCertKeyPair(
+				err = secrets.ValidateCertKeyPair(
 					configManager2.Config.Postgres.Primary.SSLConfig.ServerCertPem,
-					configManager2.Config.Postgres.Primary.PrivateKey,
+					primaryKey2.File.Content,
 				)
-				Expect(err).ToNot(HaveOccurred(), "cert/key should match after load + merge")
+				Expect(err).ToNot(HaveOccurred(), "cert/key should match after load from vault")
 
 				// Write vault again
 				err = configManager2.WriteVault("/tmp/vault2.yaml", false)
@@ -656,7 +654,7 @@ var _ = Describe("ConfigManager", func() {
 				}
 				Expect(rewrittenKey).To(Equal(origKey),
 					"re-written vault should contain the same key")
-				err = installer.ValidateCertKeyPair(
+				err = secrets.ValidateCertKeyPair(
 					configManager2.Config.Postgres.Primary.SSLConfig.ServerCertPem,
 					rewrittenKey,
 				)

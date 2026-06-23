@@ -4,12 +4,17 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,12 +34,15 @@ type InstallOpenBaoCmd struct {
 // InstallOpenBaoOpts holds the CLI flags for the OpenBao installer.
 type InstallOpenBaoOpts struct {
 	*GlobalOptions
+	Namespace         string
 	SecretsEngineName string
 	BaoUsername       string
 	DRBackupPath      string
 	Replicas          int
 	StorageSize       string
 	Timeout           time.Duration
+	AgeKeyFile        string
+	Yes               bool
 }
 
 func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
@@ -48,12 +56,16 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	}
 	fallbackDir := filepath.Join(configDir, "sops", "age")
 
-	recipient, keyPath, err := installer.ResolveAgeKey(fallbackDir)
+	// Pass --age-key-file explicitly so ResolveAgeKey prefers it without
+	// mutating the process environment. When empty, the normal
+	// auto-discovery chain (env vars, default location, generation) applies.
+	recipient, keyPath, err := installer.ResolveAgeKey(c.Opts.AgeKeyFile, fallbackDir)
 	if err != nil {
 		return fmt.Errorf("resolving age key: %w", err)
 	}
 
 	cfg := installer.OpenBaoInstallerConfig{
+		Namespace:         c.Opts.Namespace,
 		SecretsEngineName: c.Opts.SecretsEngineName,
 		Username:          c.Opts.BaoUsername,
 		DRBackupPath:      c.Opts.DRBackupPath,
@@ -67,6 +79,31 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	inst, err := installer.NewOpenBaoInstaller(cfg)
 	if err != nil {
 		return fmt.Errorf("initializing openbao installer: %w", err)
+	}
+
+	inst.ConfirmFunc = func() error {
+		if c.Opts.Yes {
+			return nil
+		}
+
+		log.Printf("\nWARNING: No DR backup found at: %s", c.Opts.DRBackupPath)
+		log.Println("This will perform a FRESH OpenBao initialization:")
+		log.Println("  - Existing Vault CR will be deleted")
+		log.Println("  - All OpenBao pods will be terminated")
+		log.Println("  - Persistent volume claims (data) will be deleted")
+		log.Println("  - Existing unseal keys will be removed")
+		log.Println("If you intended to restore from a backup, verify --dr-backup-path is correct.")
+		log.Print("Type 'yes' to continue: ")
+
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return fmt.Errorf("failed to read confirmation: %w", err)
+		}
+		if strings.TrimSpace(strings.ToLower(input)) != "yes" {
+			return fmt.Errorf("installation cancelled: confirmation not given (type 'yes' or pass --yes to proceed)")
+		}
+		return nil
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -100,12 +137,15 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 		},
 		Opts: &InstallOpenBaoOpts{GlobalOptions: opts},
 	}
+	openbao.cmd.Flags().StringVarP(&openbao.Opts.Namespace, "namespace", "n", installer.DefaultOpenBaoNamespace, "Kubernetes namespace for OpenBao deployment")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.SecretsEngineName, "secrets-engine", "cs-secrets-engine", "Name of the KV-v2 secrets engine to provision")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.BaoUsername, "bao-user", "admin", "Username for the userpass auth method (ignored on restore, uses DR backup value)")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.DRBackupPath, "dr-backup-path", "", "Path for SOPS-encrypted DR backup file (required)")
-	openbao.cmd.Flags().IntVar(&openbao.Opts.Replicas, "replicas", 1, "Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA)")
+	openbao.cmd.Flags().IntVar(&openbao.Opts.Replicas, "replicas", 3, "Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA)")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.StorageSize, "storage-size", "10Gi", "PVC storage size for each OpenBao replica")
 	openbao.cmd.Flags().DurationVar(&openbao.Opts.Timeout, "timeout", 5*time.Minute, "Timeout for waiting on initialization")
+	openbao.cmd.Flags().StringVarP(&openbao.Opts.AgeKeyFile, "age-key-file", "k", "", "Path to age private key file for SOPS encryption/decryption (auto-detected if not set)")
+	openbao.cmd.Flags().BoolVarP(&openbao.Opts.Yes, "yes", "y", false, "Auto-approve re-initialization of an existing deployment when no DR backup is found")
 
 	util.MarkFlagRequired(openbao.cmd, "dr-backup-path")
 

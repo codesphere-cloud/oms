@@ -22,6 +22,16 @@ func (g *InstallConfig) applyCommonProperties() {
 		g.Config = &files.RootConfig{}
 	}
 
+	if g.Config.Datacenter.ID == 0 {
+		g.Config.Datacenter.ID = 1
+	}
+	if g.Config.Datacenter.City == "" {
+		g.Config.Datacenter.City = "Karlsruhe"
+	}
+	if g.Config.Datacenter.CountryCode == "" {
+		g.Config.Datacenter.CountryCode = "DE"
+	}
+
 	if g.Config.Ceph.NodesSubnet == "" {
 		g.Config.Ceph.NodesSubnet = "127.0.0.1/32"
 	}
@@ -45,16 +55,6 @@ func (g *InstallConfig) applyCommonProperties() {
 				},
 			},
 		}
-	}
-
-	if g.Config.Datacenter.ID == 0 {
-		g.Config.Datacenter.ID = 1
-	}
-	if g.Config.Datacenter.City == "" {
-		g.Config.Datacenter.City = "Karlsruhe"
-	}
-	if g.Config.Datacenter.CountryCode == "" {
-		g.Config.Datacenter.CountryCode = "DE"
 	}
 
 	if g.Config.Postgres.Mode == "" {

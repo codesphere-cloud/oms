@@ -10,7 +10,9 @@ import (
 	"log"
 	"net/url"
 
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"helm.sh/helm/v4/pkg/cli"
@@ -33,17 +35,18 @@ const (
 // PCApps holds the configuration for installing the pc-applications Helm chart
 // from a private OCI registry.
 type PCApps struct {
-	version     string   // chart version (required)
-	namespace   string   // target namespace for the Helm release
-	valuesFiles []string // paths to values YAML files, merged in order
-	helm        HelmClient
-	client      client.Client
+	version        string   // chart version (required)
+	namespace      string   // target namespace for the Helm release
+	valuesFiles    []string // paths to values YAML files, merged in order
+	forceConflicts bool
+	helm           HelmClient
+	client         client.Client
 }
 
 // NewPCApps creates a new PCApps installer. It validates that required fields
 // are non-empty but does not apply defaults — defaults live on the CLI flag
 // declarations only.
-func NewPCApps(c client.Client, version, namespace string, valuesFiles []string) (*PCApps, error) {
+func NewPCApps(c client.Client, version, namespace string, valuesFiles []string, forceConflicts bool) (*PCApps, error) {
 	if version == "" {
 		return nil, errors.New("version is required")
 	}
@@ -57,9 +60,35 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string)
 	}
 
 	return &PCApps{
-		version:     version,
+		version:        version,
+		namespace:      namespace,
+		valuesFiles:    valuesFiles,
+		forceConflicts: forceConflicts,
+		helm:           helm,
+		client:         c,
+	}, nil
+}
+
+func NewPcAppsFromBom(c client.Client, restConfig *rest.Config, bomPath string, namespace string) (*PCApps, error) {
+	bomCfg, err := bom.Parse(bomPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse bom.json: %w", err)
+	}
+
+	pcApps, ok := bomCfg.GetPCApps()
+	if !ok {
+		return nil, fmt.Errorf("pc-applications component not found in BOM")
+	}
+
+	helm, err := NewHelmClientWithRESTConfig(namespace, restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("creating helm client: %w", err)
+	}
+
+	return &PCApps{
+		version:     pcApps.Tag(),
 		namespace:   namespace,
-		valuesFiles: valuesFiles,
+		valuesFiles: []string{},
 		helm:        helm,
 		client:      c,
 	}, nil
@@ -137,7 +166,10 @@ func (p *PCApps) Install(ctx context.Context) error {
 	}
 
 	log.Printf("Installing/Upgrading %s (version %s) into namespace %s\n", pcAppsReleaseName, p.version, p.namespace)
-	if err := p.helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{InstallIfNotExist: true}); err != nil {
+	if err := p.helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{
+		InstallIfNotExist: true,
+		ForceConflicts:    p.forceConflicts,
+	}); err != nil {
 		return fmt.Errorf("install/upgrade failed: %w", err)
 	}
 
@@ -147,12 +179,13 @@ func (p *PCApps) Install(ctx context.Context) error {
 
 // NewPCAppsForTesting creates a PCApps instance with injected dependencies for
 // use in tests. This avoids exporting struct fields solely for test access.
-func NewPCAppsForTesting(helm HelmClient, c client.Client, version, namespace string, valuesFiles []string) *PCApps {
+func NewPCAppsForTesting(helm HelmClient, c client.Client, version, namespace string, valuesFiles []string, forceConflicts bool) *PCApps {
 	return &PCApps{
-		version:     version,
-		namespace:   namespace,
-		valuesFiles: valuesFiles,
-		helm:        helm,
-		client:      c,
+		version:        version,
+		namespace:      namespace,
+		valuesFiles:    valuesFiles,
+		forceConflicts: forceConflicts,
+		helm:           helm,
+		client:         c,
 	}
 }

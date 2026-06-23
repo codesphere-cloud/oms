@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -21,15 +22,20 @@ func IsValidIP(ip string) bool {
 type InstallConfigManager interface {
 	// Profile management
 	ApplyProfile(profile string) error
+
+	// Imports
+	FetchFromAnsibleInventory(inventoryPath string) error
+
 	// Configuration management
 	LoadInstallConfigFromFile(configPath string) error
 	LoadVaultFromFile(vaultPath string) error
-	MergeVaultIntoConfig() error
 	ValidateInstallConfig() []string
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
 	GetVault() *files.InstallVault
+	GetSecretFilePath() string
 	CollectInteractively() error
+
 	// Output
 	GenerateSecrets() error
 	WriteInstallConfig(configPath string, withComments bool) error
@@ -175,7 +181,7 @@ func (g *InstallConfig) ValidateVault() []string {
 	}
 
 	errors := []string{}
-	requiredSecrets := []string{"cephSshPrivateKey", "selfSignedCaKeyPem", "domainAuthPrivateKey", "domainAuthPublicKey"}
+	requiredSecrets := []string{files.SecretTokenPrivateKey, files.SecretTokenPublicKey, files.SecretCephSshPrivateKey, files.SecretSelfSignedCaKeyPem, files.SecretDomainAuthPrivateKey, files.SecretDomainAuthPublicKey}
 	foundSecrets := make(map[string]bool)
 
 	for _, secret := range g.Vault.Secrets {
@@ -189,7 +195,7 @@ func (g *InstallConfig) ValidateVault() []string {
 	}
 
 	if g.Config.Codesphere.OpenBao != nil {
-		if !foundSecrets["openBaoPassword"] {
+		if !foundSecrets[files.SecretOpenBaoPassword] {
 			errors = append(errors, "required OpenBao secret missing: openBaoPassword")
 		}
 	}
@@ -203,6 +209,10 @@ func (g *InstallConfig) GetInstallConfig() *files.RootConfig {
 
 func (g *InstallConfig) GetVault() *files.InstallVault {
 	return g.Vault
+}
+
+func (g *InstallConfig) GetSecretFilePath() string {
+	return filepath.Join(g.Config.Secrets.BaseDir, "prod.vault.yaml")
 }
 
 func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool) error {
@@ -230,23 +240,11 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	if g.Config == nil {
 		return fmt.Errorf("no configuration provided - config is nil")
 	}
-
-	vault := g.Config.ExtractVault()
-
-	// Preserve vault-only secrets that were added directly via SetSecret and aren't on the config struct.
-	if g.Vault != nil {
-		configSecretNames := make(map[string]bool)
-		for _, s := range vault.Secrets {
-			configSecretNames[s.Name] = true
-		}
-		for _, s := range g.Vault.Secrets {
-			if !configSecretNames[s.Name] {
-				vault.Secrets = append(vault.Secrets, s)
-			}
-		}
+	if g.Vault == nil {
+		g.Vault = &files.InstallVault{}
 	}
 
-	vaultYAML, err := vault.Marshal()
+	vaultYAML, err := g.Vault.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
 	}
@@ -296,125 +294,6 @@ func AddVaultComments(yamlData []byte) []byte {
 
 `
 	return append([]byte(header), yamlData...)
-}
-
-func (g *InstallConfig) MergeVaultIntoConfig() error {
-	if g.Vault == nil {
-		return fmt.Errorf("vault not loaded")
-	}
-	if g.Config == nil {
-		return fmt.Errorf("config not loaded")
-	}
-
-	secretsMap := make(map[string]files.SecretEntry)
-	for _, secret := range g.Vault.Secrets {
-		secretsMap[secret.Name] = secret
-	}
-
-	// PostgreSQL secrets
-	if secret, ok := secretsMap["postgresCaKeyPem"]; ok && secret.File != nil {
-		g.Config.Postgres.CaCertPrivateKey = secret.File.Content
-	}
-
-	if secret, ok := secretsMap["postgresPassword"]; ok && secret.Fields != nil {
-		g.Config.Postgres.AdminPassword = secret.Fields.Password
-	}
-
-	if secret, ok := secretsMap["postgresPrimaryServerKeyPem"]; ok && secret.File != nil {
-		if g.Config.Postgres.Primary != nil {
-			g.Config.Postgres.Primary.PrivateKey = secret.File.Content
-		}
-	}
-
-	if secret, ok := secretsMap["postgresReplicaPassword"]; ok && secret.Fields != nil {
-		g.Config.Postgres.ReplicaPassword = secret.Fields.Password
-	}
-
-	if secret, ok := secretsMap["postgresReplicaServerKeyPem"]; ok && secret.File != nil {
-		g.Config.Postgres.ReplicaPrivateKey = secret.File.Content
-	}
-
-	// PostgreSQL user passwords
-	g.Config.Postgres.UserPasswords = make(map[string]string)
-	services := []string{"auth", "deployment", "ide", "marketplace", "payment", "public_api", "team", "workspace"}
-	for _, service := range services {
-		secretName := fmt.Sprintf("postgresPassword%s", files.Capitalize(service))
-		if secret, ok := secretsMap[secretName]; ok && secret.Fields != nil {
-			g.Config.Postgres.UserPasswords[service] = secret.Fields.Password
-		}
-	}
-
-	// Ceph secrets
-	if secret, ok := secretsMap["cephSshPrivateKey"]; ok && secret.File != nil {
-		g.Config.Ceph.SshPrivateKey = secret.File.Content
-	}
-
-	// Cluster secrets
-	if secret, ok := secretsMap["selfSignedCaKeyPem"]; ok && secret.File != nil {
-		g.Config.Cluster.IngressCAKey = secret.File.Content
-	}
-
-	// Codesphere secrets
-	if secret, ok := secretsMap["domainAuthPrivateKey"]; ok && secret.File != nil {
-		g.Config.Codesphere.DomainAuthPrivateKey = secret.File.Content
-	}
-
-	if secret, ok := secretsMap["domainAuthPublicKey"]; ok && secret.File != nil {
-		g.Config.Codesphere.DomainAuthPublicKey = secret.File.Content
-	}
-
-	if secret, ok := secretsMap["registryUsername"]; ok && secret.Fields != nil {
-		g.Config.Registry.Username = secret.Fields.Password
-	}
-
-	if secret, ok := secretsMap["registryPassword"]; ok && secret.Fields != nil {
-		g.Config.Registry.Password = secret.Fields.Password
-	}
-
-	// GitHub secrets
-	if secret, ok := secretsMap["githubAppsClientId"]; ok && secret.Fields != nil {
-		if g.Config.Codesphere.GitProviders == nil {
-			g.Config.Codesphere.GitProviders = &files.GitProvidersConfig{}
-		}
-		if g.Config.Codesphere.GitProviders.GitHub == nil {
-			g.Config.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{}
-		}
-		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientID = secret.Fields.Password
-	}
-	if secret, ok := secretsMap["githubAppsClientSecret"]; ok && secret.Fields != nil {
-		if g.Config.Codesphere.GitProviders == nil {
-			g.Config.Codesphere.GitProviders = &files.GitProvidersConfig{}
-		}
-		if g.Config.Codesphere.GitProviders.GitHub == nil {
-			g.Config.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{}
-		}
-		g.Config.Codesphere.GitProviders.GitHub.OAuth.ClientSecret = secret.Fields.Password
-	}
-
-	// ACME secrets
-	if g.Config.Codesphere.CertIssuer.Acme != nil {
-		if secret, ok := secretsMap["acmeEabMacKey"]; ok && secret.Fields != nil {
-			g.Config.Codesphere.CertIssuer.Acme.EABMacKey = secret.Fields.Password
-		}
-	}
-
-	// OpenBao secrets
-	if g.Config.Codesphere.OpenBao != nil {
-		if secret, ok := secretsMap["openBaoPassword"]; ok && secret.Fields != nil {
-			g.Config.Codesphere.OpenBao.Password = secret.Fields.Password
-		}
-	}
-
-	// Monitoring secrets
-	if g.Config.Cluster.Monitoring != nil &&
-		g.Config.Cluster.Monitoring.GrafanaAlloy != nil &&
-		g.Config.Cluster.Monitoring.GrafanaAlloy.Loki != nil {
-		if secret, ok := secretsMap[files.LokiGatewayPasswordSecretName]; ok && secret.Fields != nil {
-			g.Config.Cluster.Monitoring.GrafanaAlloy.Loki.Password = secret.Fields.Password
-		}
-	}
-
-	return nil
 }
 
 func (g *InstallConfig) ApplyProfile(profile string) error {

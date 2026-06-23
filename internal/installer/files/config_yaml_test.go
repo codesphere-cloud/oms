@@ -283,72 +283,6 @@ codesphere:
 		})
 	})
 
-	Describe("ExtractVault", func() {
-		It("extracts external Loki password into the configured vault secret", func() {
-			rootConfig.Cluster.Monitoring = &files.MonitoringConfig{
-				GrafanaAlloy: &files.GrafanaAlloyConfig{
-					Loki: &files.LokiConnectionConfig{
-						Endpoint: "https://loki.example.com/loki/api/v1/push",
-						Password: "fake-loki-password",
-						User:     "fake-loki-user",
-					},
-				},
-			}
-
-			vault := rootConfig.ExtractVault()
-
-			Expect(vault.Secrets).To(ContainElement(files.SecretEntry{
-				Name: files.LokiGatewayPasswordSecretName,
-				Fields: &files.SecretFields{
-					Password: "fake-loki-password",
-				},
-			}))
-		})
-
-		It("extracts Prometheus remote write credentials into vault secrets", func() {
-			rootConfig.Cluster.Monitoring = &files.MonitoringConfig{
-				Prometheus: &files.PrometheusConfig{
-					RemoteWrite: &files.RemoteWriteConfig{
-						Enabled:     true,
-						Url:         "https://prometheus.example.com/api/v1/write",
-						ClusterName: "test-cluster",
-						Username:    "prom-user",
-						Password:    "prom-password",
-					},
-				},
-			}
-
-			vault := rootConfig.ExtractVault()
-
-			Expect(vault.Secrets).To(ContainElement(files.SecretEntry{
-				Name:   "promRemoteWriteUser",
-				Fields: &files.SecretFields{Password: "prom-user"},
-			}))
-			Expect(vault.Secrets).To(ContainElement(files.SecretEntry{
-				Name:   "promRemoteWritePassword",
-				Fields: &files.SecretFields{Password: "prom-password"},
-			}))
-		})
-
-		It("skips Prometheus remote write secrets when credentials are missing", func() {
-			rootConfig.Cluster.Monitoring = &files.MonitoringConfig{
-				Prometheus: &files.PrometheusConfig{
-					RemoteWrite: &files.RemoteWriteConfig{
-						Enabled: true,
-						Url:     "https://prometheus.example.com/api/v1/write",
-					},
-				},
-			}
-
-			vault := rootConfig.ExtractVault()
-
-			for _, s := range vault.Secrets {
-				Expect(s.Name).NotTo(Equal("promRemoteWriteUser"))
-				Expect(s.Name).NotTo(Equal("promRemoteWritePassword"))
-			}
-		})
-	})
-
 	Describe("ACME config structure", func() {
 		// Verifies the marshaled YAML matches the structure documented at:
 		// https://docs.codesphere.com/private-cloud/cluster-ingress-ca-options
@@ -356,11 +290,10 @@ codesphere:
 			rootConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
 				Type: files.CertIssuerTypeACME,
 				Acme: &files.ACMEConfig{
-					Enabled:   true,
-					Server:    "https://acme-v02.api.letsencrypt.org/directory",
-					Email:     "admin@example.com",
-					EABKeyID:  "my-eab-key-id",
-					EABMacKey: "my-eab-mac-key",
+					Enabled:  true,
+					Server:   "https://acme-v02.api.letsencrypt.org/directory",
+					Email:    "admin@example.com",
+					EABKeyID: "my-eab-key-id",
 					Solver: files.ACMESolver{
 						DNS01: &files.ACMEDNS01Solver{
 							Provider: "cloudflare",
@@ -461,53 +394,5 @@ cluster:
 			Expect(parsed.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider).To(Equal("cloudflare"))
 		})
 
-		It("should marshal vault secrets to the expected ACME structure", func() {
-			rootConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
-				Type: files.CertIssuerTypeACME,
-				Acme: &files.ACMEConfig{
-					Enabled:   true,
-					Server:    "https://acme-v02.api.letsencrypt.org/directory",
-					Email:     "admin@example.com",
-					EABKeyID:  "my-eab-key-id",
-					EABMacKey: "my-eab-mac-key",
-					Solver: files.ACMESolver{
-						DNS01: &files.ACMEDNS01Solver{
-							Provider: "cloudflare",
-							Secrets: map[string]string{
-								"api-token": "fake-cloudflare-token",
-							},
-						},
-					},
-				},
-			}
-
-			vault := rootConfig.ExtractVault()
-			vaultData, err := vault.Marshal()
-			Expect(err).NotTo(HaveOccurred())
-
-			var raw map[string]interface{}
-			Expect(yaml.Unmarshal(vaultData, &raw)).NotTo(HaveOccurred())
-
-			// Expected vault structure per upstream docs
-			expectedSecrets := []interface{}{
-				map[string]interface{}{
-					"name": "acmeEabMacKey",
-					"fields": map[string]interface{}{
-						"password": "my-eab-mac-key",
-					},
-				},
-				map[string]interface{}{
-					"name": "acmeDNS01Api-token",
-					"fields": map[string]interface{}{
-						"password": "fake-cloudflare-token",
-					},
-				},
-			}
-
-			secrets := raw["secrets"].([]interface{})
-			for _, expected := range expectedSecrets {
-				Expect(secrets).To(ContainElement(expected))
-			}
-		})
 	})
 })

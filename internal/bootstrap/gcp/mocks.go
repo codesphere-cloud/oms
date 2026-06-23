@@ -67,7 +67,7 @@ type MockGCPClientManager_AssignIAMRole_Call struct {
 //   - saEmail string
 //   - saProjectID string
 //   - roles []string
-func (_e *MockGCPClientManager_Expecter) AssignIAMRole(projectID interface{}, saEmail interface{}, saProjectID interface{}, roles interface{}) *MockGCPClientManager_AssignIAMRole_Call {
+func (_e *MockGCPClientManager_Expecter) AssignIAMRole(projectID any, saEmail any, saProjectID any, roles any) *MockGCPClientManager_AssignIAMRole_Call {
 	return &MockGCPClientManager_AssignIAMRole_Call{Call: _e.mock.On("AssignIAMRole", projectID, saEmail, saProjectID, roles)}
 }
 
@@ -144,7 +144,7 @@ type MockGCPClientManager_CreateAddress_Call struct {
 //   - projectID string
 //   - region string
 //   - address *computepb.Address
-func (_e *MockGCPClientManager_Expecter) CreateAddress(projectID interface{}, region interface{}, address interface{}) *MockGCPClientManager_CreateAddress_Call {
+func (_e *MockGCPClientManager_Expecter) CreateAddress(projectID any, region any, address any) *MockGCPClientManager_CreateAddress_Call {
 	return &MockGCPClientManager_CreateAddress_Call{Call: _e.mock.On("CreateAddress", projectID, region, address)}
 }
 
@@ -218,7 +218,7 @@ type MockGCPClientManager_CreateArtifactRegistry_Call struct {
 //   - projectID string
 //   - region string
 //   - repoName string
-func (_e *MockGCPClientManager_Expecter) CreateArtifactRegistry(projectID interface{}, region interface{}, repoName interface{}) *MockGCPClientManager_CreateArtifactRegistry_Call {
+func (_e *MockGCPClientManager_Expecter) CreateArtifactRegistry(projectID any, region any, repoName any) *MockGCPClientManager_CreateArtifactRegistry_Call {
 	return &MockGCPClientManager_CreateArtifactRegistry_Call{Call: _e.mock.On("CreateArtifactRegistry", projectID, region, repoName)}
 }
 
@@ -280,7 +280,7 @@ type MockGCPClientManager_CreateFirewallRule_Call struct {
 // CreateFirewallRule is a helper method to define mock.On call
 //   - projectID string
 //   - rule *computepb.Firewall
-func (_e *MockGCPClientManager_Expecter) CreateFirewallRule(projectID interface{}, rule interface{}) *MockGCPClientManager_CreateFirewallRule_Call {
+func (_e *MockGCPClientManager_Expecter) CreateFirewallRule(projectID any, rule any) *MockGCPClientManager_CreateFirewallRule_Call {
 	return &MockGCPClientManager_CreateFirewallRule_Call{Call: _e.mock.On("CreateFirewallRule", projectID, rule)}
 }
 
@@ -338,7 +338,7 @@ type MockGCPClientManager_CreateInstance_Call struct {
 //   - projectID string
 //   - zone string
 //   - instance *computepb.Instance
-func (_e *MockGCPClientManager_Expecter) CreateInstance(projectID interface{}, zone interface{}, instance interface{}) *MockGCPClientManager_CreateInstance_Call {
+func (_e *MockGCPClientManager_Expecter) CreateInstance(projectID any, zone any, instance any) *MockGCPClientManager_CreateInstance_Call {
 	return &MockGCPClientManager_CreateInstance_Call{Call: _e.mock.On("CreateInstance", projectID, zone, instance)}
 }
 
@@ -411,7 +411,7 @@ type MockGCPClientManager_CreateProject_Call struct {
 //   - projectName string
 //   - displayName string
 //   - labels map[string]string
-func (_e *MockGCPClientManager_Expecter) CreateProject(parent interface{}, projectName interface{}, displayName interface{}, labels interface{}) *MockGCPClientManager_CreateProject_Call {
+func (_e *MockGCPClientManager_Expecter) CreateProject(parent any, projectName any, displayName any, labels any) *MockGCPClientManager_CreateProject_Call {
 	return &MockGCPClientManager_CreateProject_Call{Call: _e.mock.On("CreateProject", parent, projectName, displayName, labels)}
 }
 
@@ -477,7 +477,7 @@ type MockGCPClientManager_CreateProjectID_Call struct {
 
 // CreateProjectID is a helper method to define mock.On call
 //   - projectName string
-func (_e *MockGCPClientManager_Expecter) CreateProjectID(projectName interface{}) *MockGCPClientManager_CreateProjectID_Call {
+func (_e *MockGCPClientManager_Expecter) CreateProjectID(projectName any) *MockGCPClientManager_CreateProjectID_Call {
 	return &MockGCPClientManager_CreateProjectID_Call{Call: _e.mock.On("CreateProjectID", projectName)}
 }
 
@@ -543,7 +543,7 @@ type MockGCPClientManager_CreatePublicCAExternalAccountKey_Call struct {
 
 // CreatePublicCAExternalAccountKey is a helper method to define mock.On call
 //   - projectID string
-func (_e *MockGCPClientManager_Expecter) CreatePublicCAExternalAccountKey(projectID interface{}) *MockGCPClientManager_CreatePublicCAExternalAccountKey_Call {
+func (_e *MockGCPClientManager_Expecter) CreatePublicCAExternalAccountKey(projectID any) *MockGCPClientManager_CreatePublicCAExternalAccountKey_Call {
 	return &MockGCPClientManager_CreatePublicCAExternalAccountKey_Call{Call: _e.mock.On("CreatePublicCAExternalAccountKey", projectID)}
 }
 
@@ -611,7 +611,7 @@ type MockGCPClientManager_CreateServiceAccount_Call struct {
 //   - projectID string
 //   - name string
 //   - displayName string
-func (_e *MockGCPClientManager_Expecter) CreateServiceAccount(projectID interface{}, name interface{}, displayName interface{}) *MockGCPClientManager_CreateServiceAccount_Call {
+func (_e *MockGCPClientManager_Expecter) CreateServiceAccount(projectID any, name any, displayName any) *MockGCPClientManager_CreateServiceAccount_Call {
 	return &MockGCPClientManager_CreateServiceAccount_Call{Call: _e.mock.On("CreateServiceAccount", projectID, name, displayName)}
 }
 
@@ -682,7 +682,7 @@ type MockGCPClientManager_CreateServiceAccountKey_Call struct {
 // CreateServiceAccountKey is a helper method to define mock.On call
 //   - projectID string
 //   - saEmail string
-func (_e *MockGCPClientManager_Expecter) CreateServiceAccountKey(projectID interface{}, saEmail interface{}) *MockGCPClientManager_CreateServiceAccountKey_Call {
+func (_e *MockGCPClientManager_Expecter) CreateServiceAccountKey(projectID any, saEmail any) *MockGCPClientManager_CreateServiceAccountKey_Call {
 	return &MockGCPClientManager_CreateServiceAccountKey_Call{Call: _e.mock.On("CreateServiceAccountKey", projectID, saEmail)}
 }
 
@@ -743,7 +743,7 @@ type MockGCPClientManager_CreateVPC_Call struct {
 //   - subnetName string
 //   - routerName string
 //   - natName string
-func (_e *MockGCPClientManager_Expecter) CreateVPC(projectID interface{}, region interface{}, networkName interface{}, subnetName interface{}, routerName interface{}, natName interface{}) *MockGCPClientManager_CreateVPC_Call {
+func (_e *MockGCPClientManager_Expecter) CreateVPC(projectID any, region any, networkName any, subnetName any, routerName any, natName any) *MockGCPClientManager_CreateVPC_Call {
 	return &MockGCPClientManager_CreateVPC_Call{Call: _e.mock.On("CreateVPC", projectID, region, networkName, subnetName, routerName, natName)}
 }
 
@@ -821,7 +821,7 @@ type MockGCPClientManager_DeleteDNSRecordSets_Call struct {
 //   - projectID string
 //   - zoneName string
 //   - baseDomain string
-func (_e *MockGCPClientManager_Expecter) DeleteDNSRecordSets(projectID interface{}, zoneName interface{}, baseDomain interface{}) *MockGCPClientManager_DeleteDNSRecordSets_Call {
+func (_e *MockGCPClientManager_Expecter) DeleteDNSRecordSets(projectID any, zoneName any, baseDomain any) *MockGCPClientManager_DeleteDNSRecordSets_Call {
 	return &MockGCPClientManager_DeleteDNSRecordSets_Call{Call: _e.mock.On("DeleteDNSRecordSets", projectID, zoneName, baseDomain)}
 }
 
@@ -882,7 +882,7 @@ type MockGCPClientManager_DeleteProject_Call struct {
 
 // DeleteProject is a helper method to define mock.On call
 //   - projectID string
-func (_e *MockGCPClientManager_Expecter) DeleteProject(projectID interface{}) *MockGCPClientManager_DeleteProject_Call {
+func (_e *MockGCPClientManager_Expecter) DeleteProject(projectID any) *MockGCPClientManager_DeleteProject_Call {
 	return &MockGCPClientManager_DeleteProject_Call{Call: _e.mock.On("DeleteProject", projectID)}
 }
 
@@ -934,7 +934,7 @@ type MockGCPClientManager_EnableAPIs_Call struct {
 // EnableAPIs is a helper method to define mock.On call
 //   - projectID string
 //   - apis []string
-func (_e *MockGCPClientManager_Expecter) EnableAPIs(projectID interface{}, apis interface{}) *MockGCPClientManager_EnableAPIs_Call {
+func (_e *MockGCPClientManager_Expecter) EnableAPIs(projectID any, apis any) *MockGCPClientManager_EnableAPIs_Call {
 	return &MockGCPClientManager_EnableAPIs_Call{Call: _e.mock.On("EnableAPIs", projectID, apis)}
 }
 
@@ -991,7 +991,7 @@ type MockGCPClientManager_EnableBilling_Call struct {
 // EnableBilling is a helper method to define mock.On call
 //   - projectID string
 //   - billingAccount string
-func (_e *MockGCPClientManager_Expecter) EnableBilling(projectID interface{}, billingAccount interface{}) *MockGCPClientManager_EnableBilling_Call {
+func (_e *MockGCPClientManager_Expecter) EnableBilling(projectID any, billingAccount any) *MockGCPClientManager_EnableBilling_Call {
 	return &MockGCPClientManager_EnableBilling_Call{Call: _e.mock.On("EnableBilling", projectID, billingAccount)}
 }
 
@@ -1050,7 +1050,7 @@ type MockGCPClientManager_EnsureDNSManagedZone_Call struct {
 //   - zoneName string
 //   - dnsName string
 //   - description string
-func (_e *MockGCPClientManager_Expecter) EnsureDNSManagedZone(projectID interface{}, zoneName interface{}, dnsName interface{}, description interface{}) *MockGCPClientManager_EnsureDNSManagedZone_Call {
+func (_e *MockGCPClientManager_Expecter) EnsureDNSManagedZone(projectID any, zoneName any, dnsName any, description any) *MockGCPClientManager_EnsureDNSManagedZone_Call {
 	return &MockGCPClientManager_EnsureDNSManagedZone_Call{Call: _e.mock.On("EnsureDNSManagedZone", projectID, zoneName, dnsName, description)}
 }
 
@@ -1118,7 +1118,7 @@ type MockGCPClientManager_EnsureDNSRecordSets_Call struct {
 //   - projectID string
 //   - zoneName string
 //   - records []*dns.ResourceRecordSet
-func (_e *MockGCPClientManager_Expecter) EnsureDNSRecordSets(projectID interface{}, zoneName interface{}, records interface{}) *MockGCPClientManager_EnsureDNSRecordSets_Call {
+func (_e *MockGCPClientManager_Expecter) EnsureDNSRecordSets(projectID any, zoneName any, records any) *MockGCPClientManager_EnsureDNSRecordSets_Call {
 	return &MockGCPClientManager_EnsureDNSRecordSets_Call{Call: _e.mock.On("EnsureDNSRecordSets", projectID, zoneName, records)}
 }
 
@@ -1192,7 +1192,7 @@ type MockGCPClientManager_GetAddress_Call struct {
 //   - projectID string
 //   - region string
 //   - addressName string
-func (_e *MockGCPClientManager_Expecter) GetAddress(projectID interface{}, region interface{}, addressName interface{}) *MockGCPClientManager_GetAddress_Call {
+func (_e *MockGCPClientManager_Expecter) GetAddress(projectID any, region any, addressName any) *MockGCPClientManager_GetAddress_Call {
 	return &MockGCPClientManager_GetAddress_Call{Call: _e.mock.On("GetAddress", projectID, region, addressName)}
 }
 
@@ -1266,7 +1266,7 @@ type MockGCPClientManager_GetArtifactRegistry_Call struct {
 //   - projectID string
 //   - region string
 //   - repoName string
-func (_e *MockGCPClientManager_Expecter) GetArtifactRegistry(projectID interface{}, region interface{}, repoName interface{}) *MockGCPClientManager_GetArtifactRegistry_Call {
+func (_e *MockGCPClientManager_Expecter) GetArtifactRegistry(projectID any, region any, repoName any) *MockGCPClientManager_GetArtifactRegistry_Call {
 	return &MockGCPClientManager_GetArtifactRegistry_Call{Call: _e.mock.On("GetArtifactRegistry", projectID, region, repoName)}
 }
 
@@ -1338,7 +1338,7 @@ type MockGCPClientManager_GetBillingInfo_Call struct {
 
 // GetBillingInfo is a helper method to define mock.On call
 //   - projectID string
-func (_e *MockGCPClientManager_Expecter) GetBillingInfo(projectID interface{}) *MockGCPClientManager_GetBillingInfo_Call {
+func (_e *MockGCPClientManager_Expecter) GetBillingInfo(projectID any) *MockGCPClientManager_GetBillingInfo_Call {
 	return &MockGCPClientManager_GetBillingInfo_Call{Call: _e.mock.On("GetBillingInfo", projectID)}
 }
 
@@ -1402,7 +1402,7 @@ type MockGCPClientManager_GetInstance_Call struct {
 //   - projectID string
 //   - zone string
 //   - instanceName string
-func (_e *MockGCPClientManager_Expecter) GetInstance(projectID interface{}, zone interface{}, instanceName interface{}) *MockGCPClientManager_GetInstance_Call {
+func (_e *MockGCPClientManager_Expecter) GetInstance(projectID any, zone any, instanceName any) *MockGCPClientManager_GetInstance_Call {
 	return &MockGCPClientManager_GetInstance_Call{Call: _e.mock.On("GetInstance", projectID, zone, instanceName)}
 }
 
@@ -1475,7 +1475,7 @@ type MockGCPClientManager_GetProjectByName_Call struct {
 // GetProjectByName is a helper method to define mock.On call
 //   - folderID string
 //   - displayName string
-func (_e *MockGCPClientManager_Expecter) GetProjectByName(folderID interface{}, displayName interface{}) *MockGCPClientManager_GetProjectByName_Call {
+func (_e *MockGCPClientManager_Expecter) GetProjectByName(folderID any, displayName any) *MockGCPClientManager_GetProjectByName_Call {
 	return &MockGCPClientManager_GetProjectByName_Call{Call: _e.mock.On("GetProjectByName", folderID, displayName)}
 }
 
@@ -1540,7 +1540,7 @@ type MockGCPClientManager_IsOMSManagedProject_Call struct {
 
 // IsOMSManagedProject is a helper method to define mock.On call
 //   - projectID string
-func (_e *MockGCPClientManager_Expecter) IsOMSManagedProject(projectID interface{}) *MockGCPClientManager_IsOMSManagedProject_Call {
+func (_e *MockGCPClientManager_Expecter) IsOMSManagedProject(projectID any) *MockGCPClientManager_IsOMSManagedProject_Call {
 	return &MockGCPClientManager_IsOMSManagedProject_Call{Call: _e.mock.On("IsOMSManagedProject", projectID)}
 }
 
@@ -1594,7 +1594,7 @@ type MockGCPClientManager_RemoveIAMRoleBinding_Call struct {
 //   - saName string
 //   - saProjectID string
 //   - roles []string
-func (_e *MockGCPClientManager_Expecter) RemoveIAMRoleBinding(projectID interface{}, saName interface{}, saProjectID interface{}, roles interface{}) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
+func (_e *MockGCPClientManager_Expecter) RemoveIAMRoleBinding(projectID any, saName any, saProjectID any, roles any) *MockGCPClientManager_RemoveIAMRoleBinding_Call {
 	return &MockGCPClientManager_RemoveIAMRoleBinding_Call{Call: _e.mock.On("RemoveIAMRoleBinding", projectID, saName, saProjectID, roles)}
 }
 
@@ -1662,7 +1662,7 @@ type MockGCPClientManager_StartInstance_Call struct {
 //   - projectID string
 //   - zone string
 //   - instanceName string
-func (_e *MockGCPClientManager_Expecter) StartInstance(projectID interface{}, zone interface{}, instanceName interface{}) *MockGCPClientManager_StartInstance_Call {
+func (_e *MockGCPClientManager_Expecter) StartInstance(projectID any, zone any, instanceName any) *MockGCPClientManager_StartInstance_Call {
 	return &MockGCPClientManager_StartInstance_Call{Call: _e.mock.On("StartInstance", projectID, zone, instanceName)}
 }
 
@@ -1724,7 +1724,7 @@ type MockGCPClientManager_UpdateProject_Call struct {
 // UpdateProject is a helper method to define mock.On call
 //   - projectID string
 //   - labels map[string]string
-func (_e *MockGCPClientManager_Expecter) UpdateProject(projectID interface{}, labels interface{}) *MockGCPClientManager_UpdateProject_Call {
+func (_e *MockGCPClientManager_Expecter) UpdateProject(projectID any, labels any) *MockGCPClientManager_UpdateProject_Call {
 	return &MockGCPClientManager_UpdateProject_Call{Call: _e.mock.On("UpdateProject", projectID, labels)}
 }
 

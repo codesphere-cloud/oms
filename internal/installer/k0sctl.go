@@ -21,6 +21,7 @@ type K0sctlManager interface {
 	Download(version string, force bool, quiet bool) (string, error)
 	Apply(configPath string, k0sctlPath string, force bool) error
 	Reset(configPath string, k0sctlPath string) error
+	GetKubeconfig(configPath string, k0sctlPath string) (string, error)
 }
 
 type K0sctl struct {
@@ -88,7 +89,12 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 		log.Printf("Downloading k0sctl %s from %s", version, downloadURL)
 	}
 
-	path, err := downloadBinary(k.FileWriter, k.Http, k.Env.GetOmsWorkdir(), "k0sctl", downloadURL, force, quiet)
+	cacheDir, err := k.Env.GetOmsCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine cache directory: %w", err)
+	}
+
+	path, err := downloadBinary(k.FileWriter, k.Http, cacheDir, "k0sctl", downloadURL, force, quiet)
 	if err != nil {
 		return "", err
 	}
@@ -100,13 +106,21 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 	return path, nil
 }
 
-func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
+// requireBinaryAndConfig checks that both the k0sctl binary and config exist,
+// returning an error if either is missing.
+func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
 	}
-
 	if !k.FileWriter.Exists(configPath) {
 		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
+	}
+	return nil
+}
+
+func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
+	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
+		return err
 	}
 
 	args := []string{"apply", "--config", configPath}
@@ -133,9 +147,8 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return nil
 	}
-
-	if !k.FileWriter.Exists(configPath) {
-		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
+	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
+		return err
 	}
 
 	log.Println("Resetting k0s cluster using k0sctl...")
@@ -149,4 +162,20 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 
 	log.Println("k0sctl reset completed successfully")
 	return nil
+}
+
+func (k *K0sctl) GetKubeconfig(configPath string, k0sctlPath string) (string, error) {
+	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
+		return "", err
+	}
+
+	args := []string{"kubeconfig", "--config", configPath}
+
+	log.Println("Retrieving kubeconfig from k0sctl...")
+	output, err := util.RunCommandWithOutput(k0sctlPath, args, "")
+	if err != nil {
+		return "", fmt.Errorf("k0sctl kubeconfig failed: %w", err)
+	}
+
+	return output, nil
 }

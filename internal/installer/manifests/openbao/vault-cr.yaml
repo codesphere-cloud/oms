@@ -82,7 +82,7 @@ spec:
         value: "http://$(POD_NAME).{{ .Namespace }}.svc.cluster.local:8200"
   unsealConfig:
     options:
-      preFlightChecks: false
+      preFlightChecks: true
       storeRootToken: false
     kubernetes:
       secretNamespace: {{ .Namespace }}
@@ -117,6 +117,12 @@ spec:
           }
           path "{{ .SecretsEngineName }}/metadata/*" {
             capabilities = ["list", "read", "delete"]
+          }
+          # Required by the `generate` secret flow, which manages OpenBao
+          # password policies under sys/policies/password/<name> and reads
+          # generated values from sys/policies/password/<name>/generate.
+          path "sys/policies/password/*" {
+            capabilities = ["create", "read", "update", "delete"]
           }
     auth:
       - type: userpass

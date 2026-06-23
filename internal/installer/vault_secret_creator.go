@@ -9,10 +9,16 @@ import (
 	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+)
+
+const (
+	VaultSecretNamespace = "codesphere"
+	VaultSecretName      = "cs-vault"
 )
 
 type VaultSecretCreator struct {
@@ -23,13 +29,13 @@ func NewVaultSecretCreator(c client.Client) *VaultSecretCreator {
 	return &VaultSecretCreator{client: c}
 }
 
-// CreateSecretFromVault decrypts a SOPS-encrypted vault file and creates or
+// CreateSecretFromFile decrypts a SOPS-encrypted vault file and creates or
 // updates a Kubernetes secret with its contents in the target cluster.
 //
 // Each vault entry is mapped to one or more secret keys:
 //   - File entries produce a single key equal to the entry name.
 //   - Field entries produce "entryName.password" and, when present, "entryName.username".
-func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vaultFile, ageKeyPath, namespace, secretName string) error {
+func (v *VaultSecretCreator) CreateSecretFromFile(ctx context.Context, vaultFile, ageKeyPath, namespace, secretName string) error {
 	decrypted, err := DecryptFileWithSOPS(vaultFile, ageKeyPath)
 	if err != nil {
 		return fmt.Errorf("failed to decrypt vault file: %w", err)
@@ -40,6 +46,20 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vaultFil
 		return fmt.Errorf("failed to parse vault file: %w", err)
 	}
 
+	// Always create new service accounts tokens during creation to ensure they are always valid and updated.
+	if err := secrets.EnsureServiceAccountTokens(vault); err != nil {
+		return fmt.Errorf("failed to ensure service account tokens: %w", err)
+	}
+
+	return v.CreateSecretFromVault(ctx, vault, namespace, secretName)
+}
+
+// CreateSecretFromVault creates or updates a Kubernetes secret with the contents of a Vault in the target cluster.
+//
+// Each vault entry is mapped to one or more secret keys:
+//   - File entries produce a single key equal to the entry name.
+//   - Field entries produce "entryName.password" and, when present, "entryName.username".
+func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *files.InstallVault, namespace, secretName string) error {
 	secretData, err := vaultToSecretData(vault)
 	if err != nil {
 		return err

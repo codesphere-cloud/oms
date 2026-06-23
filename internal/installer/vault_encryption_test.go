@@ -61,6 +61,31 @@ var _ = Describe("VaultEncryption", func() {
 			}
 		})
 
+		Context("with an explicit key file argument", func() {
+			It("reads the recipient from the explicit file and returns it as the key path", func() {
+				if !sopsAndAgeAvailable() {
+					Skip("age-keygen not available")
+				}
+				keyFile := filepath.Join(tmpDir, "explicit.txt")
+				out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
+				Expect(err).ToNot(HaveOccurred(), string(out))
+
+				// Set conflicting env vars to prove the explicit file takes priority.
+				Expect(os.Setenv("SOPS_AGE_KEY_FILE", filepath.Join(tmpDir, "ignored.txt"))).To(Succeed())
+
+				recipient, keyPath, err := installer.ResolveAgeKey(keyFile, tmpDir)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(recipient).To(HavePrefix("age1"))
+				Expect(keyPath).To(Equal(keyFile))
+			})
+
+			It("returns an error if the explicit file does not exist", func() {
+				_, _, err := installer.ResolveAgeKey(filepath.Join(tmpDir, "missing.txt"), tmpDir)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to read age key"))
+			})
+		})
+
 		Context("with SOPS_AGE_KEY env var containing only a private key (no comment)", func() {
 			It("should fall back to age-keygen -y to derive the recipient", func() {
 				if !sopsAndAgeAvailable() {
@@ -86,7 +111,7 @@ var _ = Describe("VaultEncryption", func() {
 
 				Expect(os.Setenv("SOPS_AGE_KEY", privKeyLine)).To(Succeed())
 
-				recipient, keyPath, err := installer.ResolveAgeKey(tmpDir)
+				recipient, keyPath, err := installer.ResolveAgeKey("", tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(BeEmpty())
@@ -104,7 +129,7 @@ var _ = Describe("VaultEncryption", func() {
 
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", keyFile)).To(Succeed())
 
-				recipient, keyPath, err := installer.ResolveAgeKey(tmpDir)
+				recipient, keyPath, err := installer.ResolveAgeKey("", tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(Equal(keyFile))
@@ -113,7 +138,7 @@ var _ = Describe("VaultEncryption", func() {
 			It("should return error if the file does not exist", func() {
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", filepath.Join(tmpDir, "nonexistent.txt"))).To(Succeed())
 
-				_, _, err := installer.ResolveAgeKey(tmpDir)
+				_, _, err := installer.ResolveAgeKey("", tmpDir)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to read age key"))
 			})
@@ -125,7 +150,7 @@ var _ = Describe("VaultEncryption", func() {
 					Skip("age-keygen not available")
 				}
 
-				recipient, keyPath, err := installer.ResolveAgeKey(tmpDir)
+				recipient, keyPath, err := installer.ResolveAgeKey("", tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(Equal(filepath.Join(tmpDir, "age_key.txt")))
@@ -133,6 +158,53 @@ var _ = Describe("VaultEncryption", func() {
 				// Verify the key file was created.
 				Expect(keyPath).To(BeAnExistingFile())
 			})
+		})
+	})
+
+	Describe("IsSOPSEncryptedFile", func() {
+		var tmpDir string
+
+		BeforeEach(func() {
+			var err error
+			tmpDir, err = os.MkdirTemp("", "sops-detect-test-*")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			Expect(os.RemoveAll(tmpDir)).To(Succeed())
+		})
+
+		It("returns false for a file without sops metadata", func() {
+			path := filepath.Join(tmpDir, "plain.yaml")
+			Expect(os.WriteFile(path, []byte("key: value\n"), 0644)).To(Succeed())
+
+			encrypted, err := installer.IsSOPSEncryptedFile(path)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(encrypted).To(BeFalse())
+		})
+
+		It("returns true for a file with sops top-level key", func() {
+			path := filepath.Join(tmpDir, "sops.yaml")
+			Expect(os.WriteFile(path, []byte("sops:\n  age: age1abc\n"), 0644)).To(Succeed())
+
+			encrypted, err := installer.IsSOPSEncryptedFile(path)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(encrypted).To(BeTrue())
+		})
+
+		It("returns false for an empty file", func() {
+			path := filepath.Join(tmpDir, "empty.yaml")
+			Expect(os.WriteFile(path, []byte{}, 0644)).To(Succeed())
+
+			encrypted, err := installer.IsSOPSEncryptedFile(path)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(encrypted).To(BeFalse())
+		})
+
+		It("returns an error for a non-existent file", func() {
+			path := filepath.Join(tmpDir, "missing.yaml")
+			_, err := installer.IsSOPSEncryptedFile(path)
+			Expect(err).To(HaveOccurred())
 		})
 	})
 })

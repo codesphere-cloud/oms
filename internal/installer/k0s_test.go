@@ -137,7 +137,7 @@ var _ = Describe("K0s", func() {
 			})
 
 			It("should handle version parameter correctly", func() {
-				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
+				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 
@@ -164,7 +164,7 @@ var _ = Describe("K0s", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
-				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
+				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 			})
 
@@ -203,7 +203,7 @@ var _ = Describe("K0s", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
-				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
+				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 			})
@@ -257,7 +257,7 @@ var _ = Describe("K0s", func() {
 		Context("URL construction", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
-				mockEnv.EXPECT().GetOmsWorkdir().Return(workDir)
+				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 			})
 

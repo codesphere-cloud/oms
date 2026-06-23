@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 )
 
 const (
@@ -247,7 +247,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 		acmeConfig.Server = "https://dv.acme-v02.api.pki.goog/directory"
 		acmeConfig.EABKeyID = keyID
-		acmeConfig.EABMacKey = b64MacKey
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: b64MacKey}})
 	}
 	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
 		Type: "acme",
@@ -279,11 +279,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				ClientAuthMethod:      "client_secret_post",
 				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/github/callback",
 				InstallationURI:       "https://github.com/apps/" + b.Env.GitHubAppName + "/installations/new",
-
-				ClientID:     b.Env.GitHubAppClientID,
-				ClientSecret: b.Env.GitHubAppClientSecret,
 			},
 		}
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGithubAppsClientId, Fields: &files.SecretFields{Password: b.Env.GitHubAppClientID}})
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGithubAppsClientSecret, Fields: &files.SecretFields{Password: b.Env.GitHubAppClientSecret}})
 	}
 	if b.Env.GitLabAppClientID != "" && b.Env.GitLabAppClientSecret != "" {
 		b.Env.InstallConfig.Codesphere.GitProviders.GitLab = &files.GitProviderConfig{
@@ -298,10 +297,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				TokenEndpoint:         "https://gitlab.com/oauth/token",
 				ClientAuthMethod:      "client_secret_post",
 				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/gitlab/callback",
-				ClientID:              b.Env.GitLabAppClientID,
-				ClientSecret:          b.Env.GitLabAppClientSecret,
 			},
 		}
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGitlabAppClientId, Fields: &files.SecretFields{Password: b.Env.GitLabAppClientID}})
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGitlabAppClientSecret, Fields: &files.SecretFields{Password: b.Env.GitLabAppClientSecret}})
 	}
 	if b.Env.BitbucketAppClientID != "" && b.Env.BitbucketAppClientSecret != "" {
 		b.Env.InstallConfig.Codesphere.GitProviders.Bitbucket = &files.GitProviderConfig{
@@ -316,10 +315,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				TokenEndpoint:         "https://bitbucket.org/site/oauth2/access_token",
 				ClientAuthMethod:      "client_secret_post",
 				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/bitbucket/callback",
-				ClientID:              b.Env.BitbucketAppClientID,
-				ClientSecret:          b.Env.BitbucketAppClientSecret,
 			},
 		}
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretBitbucketAppsClientId, Fields: &files.SecretFields{Password: b.Env.BitbucketAppClientID}})
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretBitbucketAppsClientSecret, Fields: &files.SecretFields{Password: b.Env.BitbucketAppClientSecret}})
 	}
 	if b.Env.AzureDevOpsAppClientID != "" && b.Env.AzureDevOpsAppClientSecret != "" {
 		b.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps = &files.GitProviderConfig{
@@ -335,10 +334,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				ClientAuthMethod:      "client_secret_post",
 				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/azure-dev-ops/callback",
 				Scope:                 "openid offline_access https://app.vssps.visualstudio.com/vso.code_full",
-				ClientID:              b.Env.AzureDevOpsAppClientID,
-				ClientSecret:          b.Env.AzureDevOpsAppClientSecret,
 			},
 		}
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAzureDevOpsAppClientId, Fields: &files.SecretFields{Password: b.Env.AzureDevOpsAppClientID}})
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAzureDevOpsAppClientSecret, Fields: &files.SecretFields{Password: b.Env.AzureDevOpsAppClientSecret}})
 	}
 	if b.Env.OidcIssuerURL != "" && b.Env.OidcClientID != "" && b.Env.OidcClientSecret != "" {
 		name := b.Env.OidcProviderName
@@ -347,15 +346,15 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 		b.Env.InstallConfig.Codesphere.OAuth = &files.OAuthProvidersConfig{
 			Oidc: &files.OidcOAuthProvider{
-				Type:         "oidc",
-				Enabled:      true,
-				Name:         name,
-				IssuerURL:    b.Env.OidcIssuerURL,
-				Scopes:       []string{"openid", "profile", "email"},
-				ClientID:     b.Env.OidcClientID,
-				ClientSecret: b.Env.OidcClientSecret,
+				Type:      "oidc",
+				Enabled:   true,
+				Name:      name,
+				IssuerURL: b.Env.OidcIssuerURL,
+				Scopes:    []string{"openid", "profile", "email"},
 			},
 		}
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOidcClientId, Fields: &files.SecretFields{Password: b.Env.OidcClientID}})
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOidcClientSecret, Fields: &files.SecretFields{Password: b.Env.OidcClientSecret}})
 	}
 
 	if b.Env.CentralOtelPassword != "" || b.Env.LocalTraceEndpoint != "" {
@@ -404,15 +403,16 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			Username: b.Env.CentralOtelUsername,
 			Password: b.Env.CentralOtelPassword,
 		}
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretCentralOtelCreds, Fields: &files.SecretFields{Username: b.Env.CentralOtelUsername, Password: b.Env.CentralOtelPassword}})
 	}
 
 	if b.Env.OpenBaoURI != "" {
 		b.Env.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
-			Engine:   b.Env.OpenBaoEngine,
-			URI:      b.Env.OpenBaoURI,
-			User:     b.Env.OpenBaoUser,
-			Password: b.Env.OpenBaoPassword,
+			Engine: b.Env.OpenBaoEngine,
+			URI:    b.Env.OpenBaoURI,
+			User:   b.Env.OpenBaoUser,
 		}
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: b.Env.OpenBaoPassword}})
 	}
 
 	if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
@@ -464,6 +464,7 @@ func (b *GCPBootstrapper) applyExternalLokiConfig() {
 
 	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled = true
 	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki = loki
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretLokiGatewayBasicAuthPassword, Fields: &files.SecretFields{Password: b.Env.ExternalLokiSecret}})
 }
 
 func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig() {
@@ -485,45 +486,58 @@ func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig() {
 	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Url = b.Env.PrometheusRemoteWriteURL
 	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.ClusterName = b.Env.DatacenterName
 	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Username = b.Env.PrometheusRemoteWriteUser
-	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Password = b.Env.PrometheusRemoteWritePassword
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: "promRemoteWritePassword", Fields: &files.SecretFields{Password: b.Env.PrometheusRemoteWritePassword}})
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: "promRemoteWriteUser", Fields: &files.SecretFields{Password: b.Env.PrometheusRemoteWriteUser}})
 }
 
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname
 // changed or no private key was loaded from the vault.
 func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname string) error {
-	// Only regenerate postgres certificates if the IP or hostname changed,
-	// or if the private key was not loaded from the vault.
-	primaryNeedsRegen := b.Env.InstallConfig.Postgres.Primary.PrivateKey == "" ||
+	vault := b.icg.GetVault()
+	primaryKeySecret := vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem)
+	primaryNeedsRegen := primaryKeySecret == nil || primaryKeySecret.File == nil ||
 		previousPrimaryIP != b.Env.InstallConfig.Postgres.Primary.IP ||
 		previousPrimaryHostname != b.Env.InstallConfig.Postgres.Primary.Hostname
 
 	if primaryNeedsRegen {
-		var err error
-		b.Env.InstallConfig.Postgres.Primary.PrivateKey, b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
-			b.Env.InstallConfig.Postgres.CaCertPrivateKey,
+		caSecret := vault.GetSecret(files.SecretPostgresCaKeyPem)
+		if caSecret == nil || caSecret.File == nil {
+			return fmt.Errorf("postgres CA key not found in vault")
+		}
+		primaryKeyPEM, primaryCertPEM, err := secrets.GenerateServerCertificate(
+			caSecret.File.Content,
 			b.Env.InstallConfig.Postgres.CACertPem,
 			b.Env.InstallConfig.Postgres.Primary.Hostname,
 			[]string{b.Env.InstallConfig.Postgres.Primary.IP})
 		if err != nil {
 			return fmt.Errorf("failed to generate primary server certificate: %w", err)
 		}
-		if err := installer.ValidateCertKeyPair(b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem, b.Env.InstallConfig.Postgres.Primary.PrivateKey); err != nil {
+		if err := secrets.ValidateCertKeyPair(primaryCertPEM, primaryKeyPEM); err != nil {
 			return fmt.Errorf("primary PostgreSQL cert/key validation failed: %w", err)
 		}
+		vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPrimaryServerKeyPem, File: &files.SecretFile{Name: "primary.key", Content: primaryKeyPEM}})
+		b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem = primaryCertPEM
 	}
-	// Replica certificates only regenerate if the key is missing from the vault.
-	if b.Env.InstallConfig.Postgres.Replica != nil && (b.Env.InstallConfig.Postgres.ReplicaPrivateKey == "") {
-		var err error
-		b.Env.InstallConfig.Postgres.ReplicaPrivateKey, b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem, err = installer.GenerateServerCertificate(
-			b.Env.InstallConfig.Postgres.CaCertPrivateKey,
-			b.Env.InstallConfig.Postgres.CACertPem,
-			b.Env.InstallConfig.Postgres.Replica.Name,
-			[]string{b.Env.InstallConfig.Postgres.Replica.IP})
-		if err != nil {
-			return fmt.Errorf("failed to generate replica server certificate: %w", err)
-		}
-		if err := installer.ValidateCertKeyPair(b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem, b.Env.InstallConfig.Postgres.ReplicaPrivateKey); err != nil {
-			return fmt.Errorf("replica PostgreSQL cert/key validation failed: %w", err)
+	if b.Env.InstallConfig.Postgres.Replica != nil {
+		replicaKeySecret := vault.GetSecret(files.SecretPostgresReplicaServerKeyPem)
+		if replicaKeySecret == nil || replicaKeySecret.File == nil {
+			caSecret := vault.GetSecret(files.SecretPostgresCaKeyPem)
+			if caSecret == nil || caSecret.File == nil {
+				return fmt.Errorf("postgres CA key not found in vault")
+			}
+			replicaKeyPEM, replicaCertPEM, err := secrets.GenerateServerCertificate(
+				caSecret.File.Content,
+				b.Env.InstallConfig.Postgres.CACertPem,
+				b.Env.InstallConfig.Postgres.Replica.Name,
+				[]string{b.Env.InstallConfig.Postgres.Replica.IP})
+			if err != nil {
+				return fmt.Errorf("failed to generate replica server certificate: %w", err)
+			}
+			if err := secrets.ValidateCertKeyPair(replicaCertPEM, replicaKeyPEM); err != nil {
+				return fmt.Errorf("replica PostgreSQL cert/key validation failed: %w", err)
+			}
+			vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaServerKeyPem, File: &files.SecretFile{Name: "replica.key", Content: replicaKeyPEM}})
+			b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem = replicaCertPEM
 		}
 	}
 	return nil
@@ -549,14 +563,8 @@ func (b *GCPBootstrapper) EnsureSecrets() error {
 		if err != nil {
 			return fmt.Errorf("failed to load vault file: %w", err)
 		}
-		err = b.icg.MergeVaultIntoConfig()
-		if err != nil {
-			return fmt.Errorf("failed to merge vault into config: %w", err)
-		}
 	}
-
 	b.Env.Secrets = b.icg.GetVault()
-
 	return nil
 }
 

@@ -28,7 +28,8 @@ const (
 	rookReleaseName         = "rook-ceph"
 	rookNamespace           = "rook-ceph"
 	rookClusterName         = "rook-ceph"
-	rookCephImage           = "quay.io/ceph/ceph:v19.2.3"
+	rookVersion             = "v1.19.6"
+	rookCephImage           = "quay.io/ceph/ceph:v19.2.4"
 	rookCephDataDirHostPath = "/var/lib/rook"
 	rookReadyTimeout        = 30 * time.Minute
 	rookReadyPollInterval   = 5 * time.Second
@@ -142,6 +143,7 @@ func (b *LocalBootstrapper) InstallRookHelmChart() error {
 		ReleaseName:     rookReleaseName,
 		ChartName:       "rook-ceph",
 		RepoURL:         rookRepoURL,
+		Version:         rookVersion,
 		Namespace:       rookNamespace,
 		CreateNamespace: true,
 		Values:          helmValues,

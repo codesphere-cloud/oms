@@ -27,7 +27,9 @@ type InitInstallConfigOpts struct {
 	ConfigFile string
 	VaultFile  string
 
-	Profile        string
+	Profile              string
+	AnsibleInventoryFile string
+
 	ValidateOnly   bool
 	WithComments   bool
 	Interactive    bool
@@ -50,8 +52,9 @@ type InitInstallConfigOpts struct {
 	PostgresReplicaName     string
 	PostgresServerAddress   string
 
-	CephNodesSubnet string
-	CephHosts       []files.CephHostConfig
+	CephCsiKubeletDir string
+	CephNodesSubnet   string
+	CephHosts         []files.CephHostConfig
 
 	KubernetesManagedByCodesphere bool
 	KubernetesAPIServerHost       string
@@ -115,14 +118,20 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 			Note: When --interactive=true (default), all other configuration flags are ignored 
 			and you will be prompted for all settings interactively.
 			
+			Note: When using ansible-inventory make sure the inventory follows our supported structure.
+			Supported YAML format (where 'hosts' is a dictionary of hostname keys):
+			- <k8s-cp|k8s-workers|ceph>.hosts.<hostname>.private_ip
+
 			Supports configuration profiles for common scenarios:
 			- dev: Single-node development setup
 			- production: HA multi-node setup
-			- minimal: Minimal testing setup`),
+			- minimal: Minimal testing setup
+			`),
 			Example: formatExamples("init install-config", []csio.Example{
 				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
 				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
 				{Cmd: "--profile production -c config.yaml --vault prod.vault.yaml", Desc: "Use production profile"},
+				{Cmd: "--profile production -c config.yaml --ansible-inventory inventory.yaml", Desc: "Use ansible inventory for host definitions"},
 				{Cmd: "--validate -c config.yaml --vault prod.vault.yaml", Desc: "Validate existing configuration files"},
 			}),
 		},
@@ -134,21 +143,37 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
+	c.cmd.Flags().StringVar(&c.Opts.AnsibleInventoryFile, "ansible-inventory", "", "Path to Ansible inventory file to import host information from")
+
 	c.cmd.Flags().BoolVar(&c.Opts.ValidateOnly, "validate", false, "Validate existing config files instead of creating new ones")
 	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
 	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (when true, other config flags are ignored)")
 	c.cmd.Flags().BoolVar(&c.Opts.GenerateKeys, "generate-keys", true, "Generate SSH keys and certificates")
 	c.cmd.Flags().StringVar(&c.Opts.SecretsBaseDir, "secrets-dir", "/root/secrets", "Secrets base directory")
 
+	// Datacenter
 	c.cmd.Flags().IntVar(&c.Opts.DatacenterID, "dc-id", 0, "Datacenter ID")
 	c.cmd.Flags().StringVar(&c.Opts.DatacenterName, "dc-name", "", "Datacenter name")
+	c.cmd.Flags().StringVar(&c.Opts.DatacenterCity, "dc-city", "", "Datacenter city")
+	c.cmd.Flags().StringVar(&c.Opts.DatacenterCountryCode, "dc-country-code", "", "Datacenter country code")
 
+	// Registry
+	c.cmd.Flags().StringVar(&c.Opts.RegistryServer, "registry-server", "", "Server for container registry")
+
+	// Postgres
 	c.cmd.Flags().StringVar(&c.Opts.PostgresMode, "postgres-mode", "", "PostgreSQL setup mode (install/external)")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server address. Required when using external mode.")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
 
+	// K8s
 	c.cmd.Flags().BoolVar(&c.Opts.KubernetesManagedByCodesphere, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
 	c.cmd.Flags().StringSliceVar(&c.Opts.KubernetesControlPlanes, "k8s-control-plane", []string{}, "K8s control plane IPs (comma-separated)")
 
+	// Ceph
+	c.cmd.Flags().StringVar(&c.Opts.CephCsiKubeletDir, "ceph-csi-kubelet-dir", "", "Directory of kubelet for ceph csi. Required for some cloud providers")
+	c.cmd.Flags().StringVar(&c.Opts.CephNodesSubnet, "ceph-nodes-subnet", "", "CIDR subnet for ceph nodes")
+
+	// ACME
 	c.cmd.Flags().BoolVar(&c.Opts.ACMEEnabled, "acme-enabled", false, "Enable ACME certificate issuer")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEIssuerName, "acme-issuer-name", "acme-issuer", "Name for the ACME ClusterIssuer")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEEmail, "acme-email", "", "Email address for ACME account registration")
@@ -159,6 +184,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
 
+	// OpenBao
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUri, "openbao-uri", "", "URI for OpenBao (e.g., https://openbao.example.com)")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoEngine, "openbao-engine", "cs-secrets-engine", "Engine for OpenBao")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUser, "openbao-user", "admin", "Username for OpenBao authentication")
@@ -184,13 +210,21 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 
 	c.printWelcomeMessage()
 
+	// If Ansible inventory file is provided, import host information from it
+	if c.Opts.AnsibleInventoryFile != "" {
+		err = icg.FetchFromAnsibleInventory(c.Opts.AnsibleInventoryFile)
+		if err != nil {
+			return fmt.Errorf("failed to import from Ansible inventory: %w", err)
+		}
+	}
+
 	if c.Opts.Interactive {
 		err = icg.CollectInteractively()
 		if err != nil {
 			return fmt.Errorf("failed to collect configuration interactively: %w", err)
 		}
 	} else {
-		c.updateConfigFromOpts(icg.GetInstallConfig())
+		c.updateConfigFromOpts(icg.GetInstallConfig(), icg.GetVault())
 	}
 
 	validationWarnings := icg.ValidateInstallConfig()
@@ -289,7 +323,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	return nil
 }
 
-func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *files.RootConfig {
+func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, vault *files.InstallVault) *files.RootConfig {
 	// Datacenter settings
 	if c.Opts.DatacenterID != 0 {
 		config.Datacenter.ID = c.Opts.DatacenterID
@@ -345,6 +379,9 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 	}
 
 	// Ceph settings
+	if c.Opts.CephCsiKubeletDir != "" {
+		config.Ceph.CsiKubeletDir = c.Opts.CephCsiKubeletDir
+	}
 	if c.Opts.CephNodesSubnet != "" {
 		config.Ceph.NodesSubnet = c.Opts.CephNodesSubnet
 	}
@@ -444,7 +481,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 			config.Codesphere.CertIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
 		}
 		if c.Opts.ACMEEABMacKey != "" {
-			config.Codesphere.CertIssuer.Acme.EABMacKey = c.Opts.ACMEEABMacKey
+			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMEEABMacKey}})
 		}
 
 		// Configure DNS-01 solver
@@ -488,7 +525,9 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig) *f
 		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoUri
 		config.Codesphere.OpenBao.Engine = c.Opts.CodesphereOpenBaoEngine
 		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser
-		config.Codesphere.OpenBao.Password = c.Opts.CodesphereOpenBaoPassword
+		if c.Opts.CodesphereOpenBaoPassword != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: c.Opts.CodesphereOpenBaoPassword}})
+		}
 	}
 
 	// Plans

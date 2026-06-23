@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+package argocd
 
 import (
 	"context"
@@ -10,16 +10,22 @@ import (
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/codesphere-cloud/oms/internal/installer"
+	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"helm.sh/helm/v4/pkg/chart/common/util"
-	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
+	"helm.sh/helm/v4/pkg/kube"
+	"k8s.io/client-go/rest"
 )
 
-const argoCDDefaultRepoURL = "https://argoproj.github.io/argo-helm"
+const (
+	DefaultRepoURL   = "https://argoproj.github.io/argo-helm"
+	DefaultNamespace = "argocd"
+)
 
-// ArgoCD holds the user-facing configuration for the install/upgrade command.
-type ArgoCD struct {
+// InstallerConfig holds all user-facing parameters for an ArgoCD install/upgrade.
+type InstallerConfig struct {
 	Version        string
 	DatacenterId   string
 	OciPassword    string
@@ -27,40 +33,62 @@ type ArgoCD struct {
 	GitPassword    string
 	FullInstall    bool
 	ForceConflicts bool
-	RepoURL        string // defaults to argoCDDefaultRepoURL if empty
+	RepoURL        string
 	ValueFiles     []string
-	Helm           HelmClient // inject a real or mock client
-	Resources      ArgoCDResources
+	RESTConfig     *rest.Config
 }
 
-func NewArgoCD(version string, dcId string, passwordOCI string, ociRegistryURL string, passwordGit string, fullInstall bool, forceConflicts bool, repoURL string, valueFiles []string) (*ArgoCD, error) {
-	helm, err := NewHelmClient("argocd")
+// Installer holds the resolved configuration and initialized clients.
+type Installer struct {
+	InstallerConfig
+	Helm      installer.HelmClient
+	Resources ArgoCDResources
+}
+
+func NewInstaller(cfg InstallerConfig) (*Installer, error) {
+	if cfg.RESTConfig != nil {
+		helm, err := installer.NewHelmClientWithRESTConfig(DefaultNamespace, cfg.RESTConfig)
+		if err != nil {
+			return nil, fmt.Errorf("init helm client failed: %w", err)
+		}
+
+		clientset, dynClient, err := k8s.NewClientsFromRESTConfig(cfg.RESTConfig)
+		if err != nil {
+			return nil, fmt.Errorf("creating kubernetes clients: %w", err)
+		}
+		resources, err := NewArgoCDResources(clientset, dynClient, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+		if err != nil {
+			return nil, fmt.Errorf("init argocd resources client failed: %w", err)
+		}
+		return &Installer{
+			InstallerConfig: cfg,
+			Helm:            helm,
+			Resources:       resources,
+		}, nil
+	}
+	helm, err := installer.NewHelmClient(DefaultNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
-
-	resources, err := NewArgoCDResources(dcId, passwordOCI, ociRegistryURL, passwordGit)
+	clientset, dynClient, err := k8s.NewClients()
+	if err != nil {
+		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
+	}
+	resources, err := NewArgoCDResources(clientset, dynClient, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}
-	return &ArgoCD{
-		Version:        version,
-		DatacenterId:   dcId,
-		OciPassword:    passwordOCI,
-		OciRegistryURL: ociRegistryURL,
-		GitPassword:    passwordGit,
-		FullInstall:    fullInstall,
-		ForceConflicts: forceConflicts,
-		RepoURL:        repoURL,
-		ValueFiles:     valueFiles,
-		Helm:           helm,
-		Resources:      resources,
+
+	return &Installer{
+		InstallerConfig: cfg,
+		Helm:            helm,
+		Resources:       resources,
 	}, nil
 }
 
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
-func (a *ArgoCD) Install() error {
+func (a *Installer) Install() error {
 	if err := a.validateRepoURL(); err != nil {
 		return err
 	}
@@ -75,27 +103,26 @@ func (a *ArgoCD) Install() error {
 
 	vals, err := (&values.Options{
 		ValueFiles: a.ValueFiles,
-	}).MergeValues(getter.All(cli.New()))
+	}).MergeValues(getter.Getters())
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
 	}
 
-	// Apply our defaults underneath the user-provided values so value files can
-	// override them. MergeTables gives precedence to dst (the user values).
 	defaults := map[string]any{
 		"dex": map[string]any{"enabled": false},
 	}
 	vals = util.MergeTables(vals, defaults)
 
 	chartName, repoURL := a.resolveChartRef("argo-cd")
-	cfg := ChartConfig{
+	cfg := installer.ChartConfig{
 		ReleaseName:     "argocd",
 		ChartName:       chartName,
 		RepoURL:         repoURL,
-		Namespace:       "argocd",
+		Namespace:       DefaultNamespace,
 		Version:         a.Version,
 		CreateNamespace: true,
 		Values:          vals,
+		WaitStrategy:    kube.LegacyStrategy, // StatusWatcherStrategy causes issues with ArgoCD's post-install hooks
 	}
 
 	existing, err := a.Helm.FindRelease(cfg.Namespace, cfg.ReleaseName)
@@ -125,11 +152,10 @@ func (a *ArgoCD) Install() error {
 	return nil
 }
 
-// install performs a fresh Helm install.
-func (a *ArgoCD) install(ctx context.Context, cfg ChartConfig) error {
+func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) error {
 	log.Println("No existing ArgoCD release found, performing fresh install")
 
-	if err := a.Helm.InstallChart(ctx, cfg, InstallChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
+	if err := a.Helm.InstallChart(ctx, cfg, installer.InstallChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
 		return err
 	}
 
@@ -142,10 +168,9 @@ func (a *ArgoCD) install(ctx context.Context, cfg ChartConfig) error {
 }
 
 // upgrade validates the version constraint and then performs a Helm upgrade.
-func (a *ArgoCD) upgrade(ctx context.Context, cfg ChartConfig, existing *ReleaseInfo) error {
+func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, existing *installer.ReleaseInfo) error {
 	log.Printf("Found existing ArgoCD release with chart version %s\n", existing.InstalledVersion)
 
-	// Prevent downgrades when a specific version is requested
 	if a.Version != "" {
 		installedSemver, err := semver.NewVersion(existing.InstalledVersion)
 		if err != nil {
@@ -167,7 +192,7 @@ func (a *ArgoCD) upgrade(ctx context.Context, cfg ChartConfig, existing *Release
 		log.Printf("Upgrading ArgoCD from %s to latest\n", existing.InstalledVersion)
 	}
 
-	if err := a.Helm.UpgradeChart(ctx, cfg, UpgradeChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
+	if err := a.Helm.UpgradeChart(ctx, cfg, installer.UpgradeChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
 		return err
 	}
 
@@ -179,8 +204,7 @@ func (a *ArgoCD) upgrade(ctx context.Context, cfg ChartConfig, existing *Release
 	return nil
 }
 
-// validateRepoURL ensures a non-empty RepoURL uses a supported scheme.
-func (a *ArgoCD) validateRepoURL() error {
+func (a *Installer) validateRepoURL() error {
 	if a.RepoURL == "" {
 		return nil
 	}
@@ -192,14 +216,10 @@ func (a *ArgoCD) validateRepoURL() error {
 	return fmt.Errorf("invalid repo URL %q: must start with http://, https://, or oci://", a.RepoURL)
 }
 
-// resolveChartRef returns the (chartName, repoURL) pair to use in ChartConfig.
-// For OCI repos the full reference is passed as chartName and repoURL is empty,
-// because helm's LocateChart expects "oci://<registry>/<repo>/<chart>" as the
-// chart name with no separate RepoURL.
-func (a *ArgoCD) resolveChartRef(chartName string) (string, string) {
+func (a *Installer) resolveChartRef(chartName string) (string, string) {
 	repoURL := a.RepoURL
 	if repoURL == "" {
-		repoURL = argoCDDefaultRepoURL
+		repoURL = DefaultRepoURL
 	}
 	if strings.HasPrefix(repoURL, "oci://") {
 		return strings.TrimRight(repoURL, "/") + "/" + chartName, ""
@@ -207,7 +227,7 @@ func (a *ArgoCD) resolveChartRef(chartName string) (string, string) {
 	return chartName, repoURL
 }
 
-func (a *ArgoCD) showPostInstallHints() {
+func (a *Installer) showPostInstallHints() {
 	log.Println(`To get ArgoCD admin password:`)
 	log.Println(`  kubectl get secrets/argocd-initial-admin-secret -nargocd -ojson | jq -r ".data.password" | base64 -d`)
 	log.Println(`To port-forward ArgoCD UI to localhost:8080:`)

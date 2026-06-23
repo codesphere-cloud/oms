@@ -52,7 +52,7 @@ func (k *K0s) GetLatestVersion() (string, error) {
 	return version, nil
 }
 
-// Download downloads the k0s binary for the specified version and saves it to the OMS workdir.
+// Download downloads the k0s binary for the specified version and saves it to the OMS cache dir.
 func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	if k.Goos != "linux" || k.Goarch != "amd64" {
 		return "", fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
@@ -60,8 +60,13 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 
 	log.Printf("Downloading k0s version %s", version)
 
+	cacheDir, err := k.Env.GetOmsCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine cache directory: %w", err)
+	}
+
 	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0s/releases/download/%s/k0s-%s-%s", version, version, k.Goarch)
-	path, err := downloadBinary(k.FileWriter, k.Http, k.Env.GetOmsWorkdir(), "k0s", downloadURL, force, quiet)
+	path, err := downloadBinary(k.FileWriter, k.Http, cacheDir, "k0s", downloadURL, force, quiet)
 	if err != nil {
 		return "", err
 	}

@@ -72,7 +72,7 @@ type MockClient_CreateWorkspace_Call struct {
 //   - planID int
 //   - name string
 //   - repoURL *string
-func (_e *MockClient_Expecter) CreateWorkspace(teamID interface{}, planID interface{}, name interface{}, repoURL interface{}) *MockClient_CreateWorkspace_Call {
+func (_e *MockClient_Expecter) CreateWorkspace(teamID any, planID any, name any, repoURL any) *MockClient_CreateWorkspace_Call {
 	return &MockClient_CreateWorkspace_Call{Call: _e.mock.On("CreateWorkspace", teamID, planID, name, repoURL)}
 }
 
@@ -138,7 +138,7 @@ type MockClient_DeleteWorkspace_Call struct {
 
 // DeleteWorkspace is a helper method to define mock.On call
 //   - workspaceID int
-func (_e *MockClient_Expecter) DeleteWorkspace(workspaceID interface{}) *MockClient_DeleteWorkspace_Call {
+func (_e *MockClient_Expecter) DeleteWorkspace(workspaceID any) *MockClient_DeleteWorkspace_Call {
 	return &MockClient_DeleteWorkspace_Call{Call: _e.mock.On("DeleteWorkspace", workspaceID)}
 }
 
@@ -190,7 +190,7 @@ type MockClient_ExecuteCommand_Call struct {
 // ExecuteCommand is a helper method to define mock.On call
 //   - workspaceID int
 //   - command string
-func (_e *MockClient_Expecter) ExecuteCommand(workspaceID interface{}, command interface{}) *MockClient_ExecuteCommand_Call {
+func (_e *MockClient_Expecter) ExecuteCommand(workspaceID any, command any) *MockClient_ExecuteCommand_Call {
 	return &MockClient_ExecuteCommand_Call{Call: _e.mock.On("ExecuteCommand", workspaceID, command)}
 }
 
@@ -218,6 +218,74 @@ func (_c *MockClient_ExecuteCommand_Call) Return(err error) *MockClient_ExecuteC
 }
 
 func (_c *MockClient_ExecuteCommand_Call) RunAndReturn(run func(workspaceID int, command string) error) *MockClient_ExecuteCommand_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetPipelineState provides a mock function for the type MockClient
+func (_mock *MockClient) GetPipelineState(workspaceID int, stage string) ([]api.PipelineStatus, error) {
+	ret := _mock.Called(workspaceID, stage)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetPipelineState")
+	}
+
+	var r0 []api.PipelineStatus
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(int, string) ([]api.PipelineStatus, error)); ok {
+		return returnFunc(workspaceID, stage)
+	}
+	if returnFunc, ok := ret.Get(0).(func(int, string) []api.PipelineStatus); ok {
+		r0 = returnFunc(workspaceID, stage)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]api.PipelineStatus)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(int, string) error); ok {
+		r1 = returnFunc(workspaceID, stage)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockClient_GetPipelineState_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetPipelineState'
+type MockClient_GetPipelineState_Call struct {
+	*mock.Call
+}
+
+// GetPipelineState is a helper method to define mock.On call
+//   - workspaceID int
+//   - stage string
+func (_e *MockClient_Expecter) GetPipelineState(workspaceID any, stage any) *MockClient_GetPipelineState_Call {
+	return &MockClient_GetPipelineState_Call{Call: _e.mock.On("GetPipelineState", workspaceID, stage)}
+}
+
+func (_c *MockClient_GetPipelineState_Call) Run(run func(workspaceID int, stage string)) *MockClient_GetPipelineState_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 int
+		if args[0] != nil {
+			arg0 = args[0].(int)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockClient_GetPipelineState_Call) Return(vs []api.PipelineStatus, err error) *MockClient_GetPipelineState_Call {
+	_c.Call.Return(vs, err)
+	return _c
+}
+
+func (_c *MockClient_GetPipelineState_Call) RunAndReturn(run func(workspaceID int, stage string) ([]api.PipelineStatus, error)) *MockClient_GetPipelineState_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -358,7 +426,7 @@ type MockClient_SetEnvVar_Call struct {
 //   - workspaceID int
 //   - key string
 //   - value string
-func (_e *MockClient_Expecter) SetEnvVar(workspaceID interface{}, key interface{}, value interface{}) *MockClient_SetEnvVar_Call {
+func (_e *MockClient_Expecter) SetEnvVar(workspaceID any, key any, value any) *MockClient_SetEnvVar_Call {
 	return &MockClient_SetEnvVar_Call{Call: _e.mock.On("SetEnvVar", workspaceID, key, value)}
 }
 
@@ -421,7 +489,7 @@ type MockClient_StartPipeline_Call struct {
 //   - workspaceID int
 //   - profile string
 //   - stage string
-func (_e *MockClient_Expecter) StartPipeline(workspaceID interface{}, profile interface{}, stage interface{}) *MockClient_StartPipeline_Call {
+func (_e *MockClient_Expecter) StartPipeline(workspaceID any, profile any, stage any) *MockClient_StartPipeline_Call {
 	return &MockClient_StartPipeline_Call{Call: _e.mock.On("StartPipeline", workspaceID, profile, stage)}
 }
 
@@ -483,7 +551,7 @@ type MockClient_SyncLandscape_Call struct {
 // SyncLandscape is a helper method to define mock.On call
 //   - workspaceID int
 //   - profile string
-func (_e *MockClient_Expecter) SyncLandscape(workspaceID interface{}, profile interface{}) *MockClient_SyncLandscape_Call {
+func (_e *MockClient_Expecter) SyncLandscape(workspaceID any, profile any) *MockClient_SyncLandscape_Call {
 	return &MockClient_SyncLandscape_Call{Call: _e.mock.On("SyncLandscape", workspaceID, profile)}
 }
 

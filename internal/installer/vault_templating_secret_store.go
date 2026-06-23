@@ -141,6 +141,15 @@ func LoadVaultData(vaultPath, ageKeyPath string) (*files.InstallVault, error) {
 	return vault, nil
 }
 
+// IsSOPSEncryptedFile checks whether the file at path is a SOPS-encrypted YAML document.
+func IsSOPSEncryptedFile(path string) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	return isSOPSEncryptedYAML(data)
+}
+
 // isSOPSEncryptedYAML checks whether the YAML document contains SOPS metadata.
 // SOPS-encrypted YAML files have a top-level "sops" mapping that stores
 // encryption metadata such as age recipients, encrypted data keys, and MACs.

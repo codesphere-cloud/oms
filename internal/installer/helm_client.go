@@ -14,9 +14,18 @@ import (
 	"helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/kube"
 	"helm.sh/helm/v4/pkg/registry"
 	"helm.sh/helm/v4/pkg/release"
 	"helm.sh/helm/v4/pkg/storage/driver"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/client-go/discovery"
+	"k8s.io/client-go/discovery/cached/memory"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/restmapper"
+	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 // ReleaseInfo holds the details of an existing Helm release that the rest of
@@ -35,6 +44,7 @@ type ChartConfig struct {
 	Version         string // "" means latest
 	Values          map[string]interface{}
 	CreateNamespace bool
+	WaitStrategy    kube.WaitStrategy // "" defaults to kube.StatusWatcherStrategy
 }
 
 type InstallChartOptions struct {
@@ -44,6 +54,7 @@ type InstallChartOptions struct {
 type UpgradeChartOptions struct {
 	InstallIfNotExist bool
 	ForceConflicts    bool
+	TakeOwnership     bool
 }
 
 // HelmClient is the seam that makes the Helm SDK mockable.
@@ -72,6 +83,7 @@ type HelmClient interface {
 type helmClient struct {
 	defaultNamespace string
 	driver           string
+	restConfig       *rest.Config
 	registryClient   *registry.Client
 }
 
@@ -79,6 +91,18 @@ func NewHelmClient(namespace string) (HelmClient, error) {
 	return &helmClient{
 		defaultNamespace: namespace,
 		driver:           os.Getenv("HELM_DRIVER"),
+	}, nil
+}
+
+func NewHelmClientWithRESTConfig(namespace string, restConfig *rest.Config) (HelmClient, error) {
+	if restConfig == nil {
+		return nil, fmt.Errorf("rest config is required")
+	}
+
+	return &helmClient{
+		defaultNamespace: namespace,
+		driver:           os.Getenv("HELM_DRIVER"),
+		restConfig:       rest.CopyConfig(restConfig),
 	}, nil
 }
 
@@ -122,9 +146,14 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 	settings := cli.New()
 	settings.SetNamespace(namespace)
 
+	restClientGetter := settings.RESTClientGetter()
+	if h.restConfig != nil {
+		restClientGetter = newRESTConfigGetter(h.restConfig, namespace)
+	}
+
 	actionConfig := new(action.Configuration)
 	if err := actionConfig.Init(
-		settings.RESTClientGetter(),
+		restClientGetter,
 		namespace,
 		h.driver,
 	); err != nil {
@@ -143,6 +172,64 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 	}
 
 	return &helmEnv{actionConfig: actionConfig, settings: settings}, nil
+}
+
+type restConfigGetter struct {
+	config    *rest.Config
+	namespace string
+}
+
+// restConfigGetter adapts an in-memory rest.Config to Helm's expected
+// RESTClientGetter interface. Helm cannot use rest.Config directly because the
+// SDK also asks the getter for discovery, REST mapping, and namespace
+// resolution while installing/upgrading resources. Providing those wrappers
+// lets callers reuse a parsed kubeconfig without writing it to disk just so
+// Helm's default EnvSettings can read it back.
+func newRESTConfigGetter(config *rest.Config, namespace string) *restConfigGetter {
+	return &restConfigGetter{
+		config:    rest.CopyConfig(config),
+		namespace: namespace,
+	}
+}
+
+func (g *restConfigGetter) ToRESTConfig() (*rest.Config, error) {
+	return rest.CopyConfig(g.config), nil
+}
+
+func (g *restConfigGetter) ToDiscoveryClient() (discovery.CachedDiscoveryInterface, error) {
+	clientset, err := kubernetes.NewForConfig(rest.CopyConfig(g.config))
+	if err != nil {
+		return nil, err
+	}
+	return memory.NewMemCacheClient(clientset.Discovery()), nil
+}
+
+func (g *restConfigGetter) ToRESTMapper() (meta.RESTMapper, error) {
+	discoveryClient, err := g.ToDiscoveryClient()
+	if err != nil {
+		return nil, err
+	}
+	return restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient), nil
+}
+
+func (g *restConfigGetter) ToRawKubeConfigLoader() clientcmd.ClientConfig {
+	config := clientcmdapi.NewConfig()
+	config.CurrentContext = "in-memory"
+	config.Contexts[config.CurrentContext] = &clientcmdapi.Context{
+		Cluster:   "in-memory",
+		AuthInfo:  "in-memory",
+		Namespace: g.namespace,
+	}
+	config.Clusters["in-memory"] = &clientcmdapi.Cluster{Server: g.config.Host}
+	config.AuthInfos["in-memory"] = &clientcmdapi.AuthInfo{}
+	return clientcmd.NewDefaultClientConfig(*config, &clientcmd.ConfigOverrides{})
+}
+
+func waitStrategy(s kube.WaitStrategy) kube.WaitStrategy {
+	if s == "" {
+		return kube.StatusWatcherStrategy
+	}
+	return s
 }
 
 func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, error) {
@@ -200,7 +287,7 @@ func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig, opts Ins
 	installClient.Namespace = cfg.Namespace
 	installClient.CreateNamespace = cfg.CreateNamespace
 	installClient.DryRunStrategy = "none"
-	installClient.WaitStrategy = "watcher"
+	installClient.WaitStrategy = waitStrategy(cfg.WaitStrategy)
 	installClient.Version = cfg.Version
 	installClient.RepoURL = cfg.RepoURL
 	installClient.Timeout = 5 * time.Minute
@@ -242,11 +329,12 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 
 	upgradeClient := action.NewUpgrade(env.actionConfig)
 	upgradeClient.Namespace = cfg.Namespace
-	upgradeClient.WaitStrategy = "watcher"
+	upgradeClient.WaitStrategy = waitStrategy(cfg.WaitStrategy)
 	upgradeClient.Version = cfg.Version
 	upgradeClient.RepoURL = cfg.RepoURL
 	upgradeClient.Timeout = 5 * time.Minute
 	upgradeClient.ForceConflicts = opts.ForceConflicts
+	upgradeClient.TakeOwnership = opts.TakeOwnership
 
 	chartPath, err := upgradeClient.LocateChart(cfg.ChartName, env.settings)
 	if err != nil {
@@ -265,4 +353,3 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 
 	return nil
 }
-
