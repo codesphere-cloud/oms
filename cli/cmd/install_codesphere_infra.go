@@ -23,7 +23,13 @@ type InstallCodesphereInfraCmd struct {
 }
 
 func (c *InstallCodesphereInfraCmd) RunE(_ *cobra.Command, _ []string) error {
-	return installCodesphereInfra(c.Opts, c.Env)
+	effectiveOpts, _, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	return installCodesphereInfra(effectiveOpts, c.Env)
 }
 
 func installCodesphereInfra(opts *InstallCodesphereOpts, env env.Env) error {
@@ -33,7 +39,7 @@ func installCodesphereInfra(opts *InstallCodesphereOpts, env env.Env) error {
 	im := system.NewImage(context.Background())
 
 	ci := &installer.CodesphereInstaller{
-		ConfigPath:       opts.Config,
+		ConfigPath:       opts.ConfigPath,
 		VaultPath:        opts.Vault,
 		PrivKey:          opts.PrivKey,
 		Force:            opts.Force,

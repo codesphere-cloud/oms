@@ -72,6 +72,7 @@ type RootConfig struct {
 	Cluster                ClusterConfig                 `yaml:"cluster"`
 	MetalLB                *MetalLBConfig                `yaml:"metallb,omitempty"`
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
+	PcApps                 ChartValues                   `yaml:"pcApps,omitempty"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
 
 	CodesphereConfigPath string            `yaml:"-"`
@@ -411,6 +412,7 @@ type TelemetryExport struct {
 }
 
 type ChartOverride = map[string]interface{}
+type ChartValues = map[string]interface{}
 
 type ImageRef struct {
 	BomRef     string `yaml:"bomRef,omitempty"`
@@ -759,6 +761,7 @@ func NewRootConfig() RootConfig {
 	return RootConfig{
 		Registry:               &RegistryConfig{},
 		MetalLB:                &MetalLBConfig{},
+		PcApps:                 ChartValues{},
 		ManagedServiceBackends: &ManagedServiceBackendsConfig{},
 	}
 }

@@ -53,7 +53,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 			Expect(err).To(BeNil())
 			_ = tempConfigFile.Close()
 
-			c.Opts.Config = tempConfigFile.Name()
+			c.Opts.Configs = []string{tempConfigFile.Name()}
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
 			err = c.RunE(nil, []string{})

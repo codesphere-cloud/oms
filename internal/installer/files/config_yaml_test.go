@@ -83,6 +83,14 @@ codesphere:
               bomRef: ide-service
             pool:
               4: 2
+pcApps:
+  spec:
+    source:
+      targetRevision: main
+      helm:
+        valuesObject:
+          featureFlags:
+            enableSomething: true
 `
 	})
 
@@ -102,6 +110,7 @@ codesphere:
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(rootConfig.Registry.Server).To(Equal("registry.example.com"))
+			Expect(rootConfig.PcApps).To(HaveKey("spec"))
 			Expect(rootConfig.Codesphere.Migration).NotTo(BeNil())
 			Expect(rootConfig.Codesphere.Migration.Postgres).NotTo(BeNil())
 			Expect(rootConfig.Codesphere.Migration.Postgres.Host).To(Equal("10.0.0.25"))
