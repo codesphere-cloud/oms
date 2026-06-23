@@ -287,6 +287,28 @@ var _ = Describe("EnsureCephSSHKeys", func() {
 	})
 })
 
+var _ = Describe("EnsureSshWorkspaceProxyHostKey", func() {
+	It("writes the host private key to vault", func() {
+		vault := newVault()
+
+		Expect(secrets.EnsureSshWorkspaceProxyHostKey(vault)).To(Succeed())
+
+		hostKey := vault.GetSecret("sshWorkspaceProxyHostKey")
+		Expect(hostKey).NotTo(BeNil())
+		Expect(hostKey.File.Name).To(Equal("key.pem"))
+		Expect(hostKey.File.Content).To(ContainSubstring("BEGIN RSA PRIVATE KEY"))
+	})
+
+	It("is idempotent", func() {
+		vault := newVault()
+		Expect(secrets.EnsureSshWorkspaceProxyHostKey(vault)).To(Succeed())
+
+		origKey := vault.GetSecret("sshWorkspaceProxyHostKey").File.Content
+		Expect(secrets.EnsureSshWorkspaceProxyHostKey(vault)).To(Succeed())
+		Expect(vault.GetSecret("sshWorkspaceProxyHostKey").File.Content).To(Equal(origKey))
+	})
+})
+
 var _ = Describe("EnsurePostgresSecrets", func() {
 	var postgres *files.PostgresConfig
 

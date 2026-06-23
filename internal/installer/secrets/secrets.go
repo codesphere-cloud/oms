@@ -35,6 +35,9 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureCephSSHKeys(vault, &config.Ceph); err != nil {
 		return fmt.Errorf("ensure ceph SSH keys: %w", err)
 	}
+	if err := EnsureSshWorkspaceProxyHostKey(vault); err != nil {
+		return fmt.Errorf("ensure ssh workspace proxy host key: %w", err)
+	}
 	if config.Postgres.Primary != nil {
 		if err := EnsurePostgresSecrets(vault, &config.Postgres); err != nil {
 			return fmt.Errorf("ensure postgres secrets: %w", err)
@@ -325,6 +328,24 @@ func EnsureCephSSHKeys(vault *files.InstallVault, ceph *files.CephConfig) error 
 		File: &files.SecretFile{Name: "id_rsa", Content: privKey},
 	})
 	ceph.CephAdmSSHKey.PublicKey = pubKey
+	return nil
+}
+
+// EnsureSshWorkspaceProxyHostKey generates the SSH host key for the SSH workspace proxy if not
+// already present in vault. Only the private key is stored (as key.pem); the matching public key
+// is derived by the proxy at runtime.
+func EnsureSshWorkspaceProxyHostKey(vault *files.InstallVault) error {
+	if vault.GetSecret(files.SecretSshWorkspaceProxyHostKey) != nil {
+		return nil
+	}
+	privKey, _, err := GenerateSSHKeyPair()
+	if err != nil {
+		return fmt.Errorf("generate ssh workspace proxy host key: %w", err)
+	}
+	vault.SetSecret(files.SecretEntry{
+		Name: files.SecretSshWorkspaceProxyHostKey,
+		File: &files.SecretFile{Name: "key.pem", Content: privKey},
+	})
 	return nil
 }
 
