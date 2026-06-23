@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
@@ -16,6 +17,11 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
+)
+
+const (
+	mergedInstallConfigDirPattern = "oms-install-config-*"
+	mergedInstallConfigFileName   = "config.yaml"
 )
 
 // InstallCodesphereCmd represents the codesphere command
@@ -29,8 +35,8 @@ type InstallCodesphereOpts struct {
 	*GlobalOptions
 	Package          string
 	Force            bool
-	Config           string
-	ConfigFiles      []string
+	Configs          []string
+	ConfigPath       string
 	Vault            string
 	PrivKey          string
 	SkipSteps        []string
@@ -77,7 +83,7 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	if dependenciesInstaller.HasExecutableSteps(cfg) || !installer.IsStepSkipped(cfg, c.Opts.SkipSteps, installer.ArgoCDStep) {
-		if err := installCodesphereDepencies(effectiveOpts, c.Env); err != nil {
+		if err := installCodesphereDepencies(effectiveOpts, cfg, c.Env); err != nil {
 			return err
 		}
 	}
@@ -112,7 +118,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	}
 	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from")
 	codesphere.cmd.PersistentFlags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
-	codesphere.cmd.PersistentFlags().StringArrayVarP(&codesphere.Opts.ConfigFiles, "config", "c", nil, "Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order")
+	codesphere.cmd.PersistentFlags().StringArrayVarP(&codesphere.Opts.Configs, "config", "c", nil, "Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.Vault, "vault", "", "Path to the SOPS-encrypted prod.vault.yaml file used for config templating")
 	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Path to the private key to encrypt/decrypt secrets")
 	codesphere.cmd.PersistentFlags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd")
@@ -143,10 +149,20 @@ func sharedInstallCodesphereSteps() []string {
 	return []string{"copy-dependencies", "extract-dependencies"}
 }
 
+// prepareInstallConfig resolves the install command's repeated --config inputs
+// into a single config file for downstream installer steps.
+//
+// For each input config it optionally renders vault-backed template expressions,
+// parses the YAML into a generic map, and deep-merges the maps in flag order so
+// later --config values override earlier ones. The merged YAML is then written
+// to a dedicated temporary directory at a stable file name,
+// "<tmp>/config.yaml", parsed once through the config manager, and returned via
+// effectiveOpts.ConfigPath. The returned cleanup function removes any rendered
+// per-file temps as well as the merged config directory.
 func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManager) (*InstallCodesphereOpts, files.RootConfig, func(), error) {
-	configFiles := opts.configInputs()
+	configFiles := append([]string(nil), opts.Configs...)
 	if len(configFiles) == 0 {
-		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: at least one config file is required")
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("no config.yaml input provided: at least one config file is required")
 	}
 
 	store := installer.NewLazyVaultTemplatingSecretStore(opts.Vault, opts.PrivKey)
@@ -164,7 +180,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 			tmpPath, renderCleanup, err := configtemplating.RenderConfigFileToTemp(configPath, store)
 			if err != nil {
 				cleanup()
-				return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: %w", err)
+				return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to render config template %s: %w", configPath, err)
 			}
 			cleanupFns = append(cleanupFns, renderCleanup)
 			renderedPath = tmpPath
@@ -173,13 +189,13 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		data, err := os.ReadFile(renderedPath)
 		if err != nil {
 			cleanup()
-			return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: failed to read config file %s: %w", renderedPath, err)
+			return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to read config file %s: %w", renderedPath, err)
 		}
 
 		var partial map[string]any
 		if err := yaml.Unmarshal(data, &partial); err != nil {
 			cleanup()
-			return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: failed to parse config.yaml: %w", err)
+			return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to parse config file %s: %w", renderedPath, err)
 		}
 		if partial == nil {
 			partial = map[string]any{}
@@ -190,56 +206,45 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	mergedBytes, err := yaml.Marshal(merged)
 	if err != nil {
 		cleanup()
-		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: failed to marshal merged config.yaml: %w", err)
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to marshal merged config.yaml: %w", err)
 	}
 
-	tmp, err := os.CreateTemp("", "oms-merged-config-*.yaml")
+	mergedDir, err := os.MkdirTemp("", mergedInstallConfigDirPattern)
 	if err != nil {
 		cleanup()
-		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: failed to create merged config file: %w", err)
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to create merged config directory: %w", err)
 	}
-	mergedPath := tmp.Name()
-	if err := tmp.Chmod(0600); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(mergedPath)
+	mergedPath := filepath.Join(mergedDir, mergedInstallConfigFileName)
+	tmp, err := os.OpenFile(mergedPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+	if err != nil {
 		cleanup()
-		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: failed to set merged config permissions: %w", err)
+		_ = os.RemoveAll(mergedDir)
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to create merged config file %s: %w", mergedPath, err)
 	}
 	if _, err := tmp.Write(mergedBytes); err != nil {
 		_ = tmp.Close()
-		_ = os.Remove(mergedPath)
+		_ = os.RemoveAll(mergedDir)
 		cleanup()
-		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: failed to write merged config file: %w", err)
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to write merged config file: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
-		_ = os.Remove(mergedPath)
+		_ = os.RemoveAll(mergedDir)
 		cleanup()
-		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: failed to close merged config file: %w", err)
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to close merged config file: %w", err)
 	}
 	cleanupFns = append(cleanupFns, func() {
-		_ = os.Remove(mergedPath)
+		_ = os.RemoveAll(mergedDir)
 	})
 
 	cfg, err := cm.ParseConfigYaml(mergedPath)
 	if err != nil {
 		cleanup()
-		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to extract config.yaml: %w", err)
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to parse merged config.yaml: %w", err)
 	}
 
 	effectiveOpts := *opts
-	effectiveOpts.Config = mergedPath
-	effectiveOpts.ConfigFiles = append([]string(nil), configFiles...)
-	effectiveOpts.Vault = ""
+	effectiveOpts.ConfigPath = mergedPath
+	effectiveOpts.Configs = append([]string(nil), configFiles...)
 
 	return &effectiveOpts, cfg, cleanup, nil
-}
-
-func (o *InstallCodesphereOpts) configInputs() []string {
-	if len(o.ConfigFiles) > 0 {
-		return append([]string(nil), o.ConfigFiles...)
-	}
-	if o.Config != "" {
-		return []string{o.Config}
-	}
-	return nil
 }

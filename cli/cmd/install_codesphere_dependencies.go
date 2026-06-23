@@ -32,29 +32,24 @@ type InstallCodesphereDepenciesCmd struct {
 }
 
 func (c *InstallCodesphereDepenciesCmd) RunE(_ *cobra.Command, _ []string) error {
-	effectiveOpts, _, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
+	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	return installCodesphereDepencies(effectiveOpts, c.Env)
+	return installCodesphereDepencies(effectiveOpts, cfg, c.Env)
 }
 
-func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error {
+func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
 	stlog := bootstrap.NewStepLogger(false)
 	cm := installer.NewConfig()
 	im := system.NewImage(context.Background())
 
-	cfg, err := cm.ParseConfigYaml(opts.Config)
-	if err != nil {
-		return fmt.Errorf("failed to extract config.yaml: %w", err)
-	}
-
 	ci := &installer.CodesphereInstaller{
-		ConfigPath:       opts.Config,
+		ConfigPath:       opts.ConfigPath,
 		VaultPath:        opts.Vault,
 		PrivKey:          opts.PrivKey,
 		Force:            opts.Force,
@@ -69,7 +64,7 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error 
 			return fmt.Errorf("failed to extract and validate package: %w", err)
 		}
 		if err := stlog.Step("Install ArgoCD pre-step", func() error {
-			return installArgoCDAndApps(opts, pm, stlog)
+			return installArgoCDAndApps(opts, cfg, pm, stlog)
 		}); err != nil {
 			return err
 		}
@@ -83,11 +78,12 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, env env.Env) error 
 
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
 // before the main dependency steps.
-func installArgoCDAndApps(opts *InstallCodesphereOpts, pm installer.PackageManager, stlog *bootstrap.StepLogger) error {
+func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, stlog *bootstrap.StepLogger) error {
 	install := &argoCDAndAppsInstall{
-		ctx:  context.Background(),
-		opts: opts,
-		pm:   pm,
+		ctx:    context.Background(),
+		opts:   opts,
+		pm:     pm,
+		config: cfg,
 	}
 
 	if err := stlog.Substep("Load vault data", install.loadVaultData); err != nil {
@@ -150,18 +146,14 @@ func (i *argoCDAndAppsInstall) loadVaultData() error {
 }
 
 func (i *argoCDAndAppsInstall) installArgoCD() error {
-	cfg, err := installer.NewConfig().ParseConfigYaml(i.opts.Config)
-	if err != nil {
-		return fmt.Errorf("failed to parse config.yaml: %w", err)
-	}
-	i.config = cfg
 	i.ociRegistryURL = i.opts.ArgoCDRegistryURL
-	if i.ociRegistryURL == "" && cfg.Registry != nil {
-		i.ociRegistryURL = cfg.Registry.Server + "/codesphere-cloud/charts"
+	if i.ociRegistryURL == "" && i.config.Registry != nil {
+		i.ociRegistryURL = i.config.Registry.Server + "/codesphere-cloud/charts"
 	}
+	var err error
 	i.argoInstall, err = argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
 		Version:        i.opts.ArgoCDVersion,
-		DatacenterId:   fmt.Sprintf("%d", cfg.Datacenter.ID),
+		DatacenterId:   fmt.Sprintf("%d", i.config.Datacenter.ID),
 		OciPassword:    i.ociPassword,
 		OciRegistryURL: i.ociRegistryURL,
 		GitPassword:    os.Getenv("OMS_GIT_PASSWORD"),
