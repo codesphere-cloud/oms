@@ -47,6 +47,7 @@ internal/util/testdata/
 # Generated config files
 config.yaml
 config-lts-1_77_2.yaml
+codesphere-lts-1_77_2.yaml
 prod.vault.yaml
 configure-k0s.sh
 

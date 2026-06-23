@@ -87,9 +87,8 @@ func LocalLTSConfigPath(configPath string, spec *LTSSpec) string {
 }
 
 // GenerateLTSJumpboxFiles generates the LTS-versioned config file needed on the jumpbox
-// without modifying the original root config. It returns the YAML bytes for
-// config-lts-<version>.yaml with a minimal codesphere section compatible with the
-// LTS installer's string-based schema.
+// without modifying the original root config. It returns the bytes for
+// config-lts-<version>.yaml with compat applied (experiments filtered, managed services cleared).
 func GenerateLTSJumpboxFiles(root *files.RootConfig, spec *LTSSpec) (jumpboxConfigBytes []byte, err error) {
 	csCopy := root.Codesphere
 	if err := ApplyLTSCompat(&csCopy, spec); err != nil {
@@ -98,7 +97,6 @@ func GenerateLTSJumpboxFiles(root *files.RootConfig, spec *LTSSpec) (jumpboxConf
 
 	rootCopy := *root
 	rootCopy.Codesphere = csCopy
-	// Clear the version annotation so the old LTS installer does not encounter an unknown field.
 	rootCopy.GeneratedForVersion = ""
 
 	jumpboxConfigBytes, err = rootCopy.Marshal()

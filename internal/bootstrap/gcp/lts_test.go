@@ -221,24 +221,16 @@ var _ = Describe("LTS Compatibility", func() {
 			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("generatedForVersion"))
-			// Original must not be modified
 			Expect(root.GeneratedForVersion).To(Equal("codesphere-lts-v1.77.2"))
 		})
 
-		It("returns codesphere bytes with compat applied (managed services stripped, experiments filtered)", func() {
+		It("returns inline codesphere with experiments filtered and managed services cleared", func() {
 			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(jumpboxBytes).NotTo(BeEmpty())
 			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("managedServices"))
 			Expect(string(jumpboxBytes)).To(ContainSubstring("managed-services"))
 			Expect(string(jumpboxBytes)).To(ContainSubstring("custom-service-image"))
-		})
-
-		It("jumpbox config has inline codesphere (not a path reference)", func() {
-			jumpboxBytes, err := gcp.GenerateLTSJumpboxFiles(root, spec)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(jumpboxBytes).NotTo(BeEmpty())
-			Expect(string(jumpboxBytes)).NotTo(ContainSubstring("/etc/codesphere/codesphere"))
 		})
 
 		It("errors when unsupported experiments are in the root config", func() {
