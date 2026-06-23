@@ -438,6 +438,7 @@ func (b *GCPBootstrapper) applyExternalLokiConfig() {
 
 	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled = true
 	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki = loki
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretLokiGatewayBasicAuthPassword, Fields: &files.SecretFields{Password: b.Env.ExternalLokiSecret}})
 }
 
 func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig() {
