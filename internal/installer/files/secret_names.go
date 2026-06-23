@@ -57,6 +57,9 @@ const (
 	// Ceph
 	SecretCephSshPrivateKey = "cephSshPrivateKey"
 
+	// SSH workspace proxy
+	SecretSshWorkspaceProxyHostKey = "sshWorkspaceProxyHostKey"
+
 	// Cluster / TLS
 	SecretSelfSignedCaKeyPem = "selfSignedCaKeyPem"
 
