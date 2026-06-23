@@ -770,6 +770,20 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(loki.Password).To(Equal("fake-loki-password"))
 					Expect(loki.User).To(Equal("fake-loki-user"))
 				})
+				It("stores External Loki credentials in the vault", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					secret := vault.GetSecret(files.SecretLokiGatewayBasicAuthPassword)
+					Expect(secret).NotTo(BeNil())
+					Expect(secret.Fields).NotTo(BeNil())
+					Expect(secret.Fields.Password).To(Equal("fake-loki-password"))
+				})
 			})
 			Context("When only external Loki endpoint is set", func() {
 				BeforeEach(func() {
