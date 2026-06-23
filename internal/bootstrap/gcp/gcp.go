@@ -62,7 +62,6 @@ func GetDNSRecordNames(baseDomain string) []struct {
 }
 
 var DefaultExperiments []string = []string{
-	"managed-services",
 	"headless-services",
 	"vcluster",
 	"custom-service-image",
