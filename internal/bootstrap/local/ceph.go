@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -74,6 +75,18 @@ type cephClientDef struct {
 	name string
 	// caps is the Ceph auth capabilities.
 	caps map[string]string
+}
+
+type kubernetesClientset = kubernetes.Interface
+
+type rgwExecPrerequisites struct {
+	monHosts    string
+	adminUser   string
+	adminSecret string
+}
+
+var newKubernetesClientset = func(config *rest.Config) (kubernetesClientset, error) {
+	return kubernetes.NewForConfig(config)
 }
 
 // DeployCephFilesystem creates the CephFS filesystem "codesphere" via a CephFilesystem CRD.
@@ -507,6 +520,23 @@ func (b *LocalBootstrapper) EnsureRGWAdminUser() (*RGWUserCredentials, error) {
 }
 
 func (b *LocalBootstrapper) appendCephMonitorArgs(args []string) ([]string, error) {
+	prereqs, err := b.rgwExecPrerequisites()
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{
+		"--mon-host", prereqs.monHosts,
+		"--no-mon-config",
+		"--name", prereqs.adminUser,
+		"--key", prereqs.adminSecret,
+	}, args...), nil
+}
+
+func (b *LocalBootstrapper) rgwExecPrerequisites() (*rgwExecPrerequisites, error) {
+	if b.cachedRGWExecPrereqs != nil {
+		return b.cachedRGWExecPrereqs, nil
+	}
+
 	monHosts, err := b.readCephMonitorHosts()
 	if err != nil {
 		return nil, err
@@ -515,12 +545,13 @@ func (b *LocalBootstrapper) appendCephMonitorArgs(args []string) ([]string, erro
 	if err != nil {
 		return nil, err
 	}
-	return append([]string{
-		"--mon-host", monHosts,
-		"--no-mon-config",
-		"--name", adminUser,
-		"--key", adminSecret,
-	}, args...), nil
+
+	b.cachedRGWExecPrereqs = &rgwExecPrerequisites{
+		monHosts:    monHosts,
+		adminUser:   adminUser,
+		adminSecret: adminSecret,
+	}
+	return b.cachedRGWExecPrereqs, nil
 }
 
 func (b *LocalBootstrapper) readCephMonitorHosts() (string, error) {
@@ -682,9 +713,9 @@ func (b *LocalBootstrapper) execRadosGWAdmin(args []string) (string, string, err
 }
 
 func (b *LocalBootstrapper) execInPod(namespace, podName, containerName string, command []string) (string, string, error) {
-	clientset, err := kubernetes.NewForConfig(b.restConfig)
+	clientset, err := b.podExecClientset()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create kubernetes clientset: %w", err)
+		return "", "", err
 	}
 
 	req := clientset.CoreV1().RESTClient().Post().
@@ -711,6 +742,20 @@ func (b *LocalBootstrapper) execInPod(namespace, podName, containerName string, 
 		Stderr: &stderr,
 	})
 	return stdout.String(), stderr.String(), err
+}
+
+func (b *LocalBootstrapper) podExecClientset() (kubernetesClientset, error) {
+	if b.cachedPodExecClientset != nil {
+		return b.cachedPodExecClientset, nil
+	}
+
+	clientset, err := newKubernetesClientset(b.restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create kubernetes clientset: %w", err)
+	}
+
+	b.cachedPodExecClientset = clientset
+	return b.cachedPodExecClientset, nil
 }
 
 func rgwUserCredentialsFromAdminJSON(raw string) (*RGWUserCredentials, error) {

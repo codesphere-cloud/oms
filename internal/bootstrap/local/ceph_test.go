@@ -4,10 +4,17 @@
 package local
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	kubefake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
+	ctrlclientfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 var _ = Describe("Ceph", func() {
@@ -85,6 +92,87 @@ var _ = Describe("Ceph", func() {
 		It("rejects admin JSON with missing keys", func() {
 			_, err := rgwUserCredentialsFromAdminJSON(`{"keys":[]}`)
 			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Describe("rgwExecPrerequisites", func() {
+		It("caches the Ceph monitor hosts and admin auth for repeated RGW execs", func() {
+			scheme := runtime.NewScheme()
+			Expect(corev1.AddToScheme(scheme)).To(Succeed())
+
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cephMonEndpointsConfigMap,
+					Namespace: rookNamespace,
+				},
+				Data: map[string]string{
+					"data": "a=10.0.0.1:6789,b=10.0.0.2:6789",
+				},
+			}
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      cephMonSecretName,
+					Namespace: rookNamespace,
+				},
+				Data: map[string][]byte{
+					"ceph-username": []byte("client.admin"),
+					"ceph-secret":   []byte("secret-1"),
+				},
+			}
+
+			bootstrapper := &LocalBootstrapper{
+				ctx:        context.Background(),
+				kubeClient: ctrlclientfake.NewClientBuilder().WithScheme(scheme).WithObjects(configMap, secret).Build(),
+			}
+
+			prereqs, err := bootstrapper.rgwExecPrerequisites()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(prereqs.monHosts).To(Equal("10.0.0.1:6789,10.0.0.2:6789"))
+			Expect(prereqs.adminUser).To(Equal("client.admin"))
+			Expect(prereqs.adminSecret).To(Equal("secret-1"))
+
+			configMap.Data["data"] = "c=10.0.0.3:6789"
+			Expect(bootstrapper.kubeClient.Update(context.Background(), configMap)).To(Succeed())
+
+			secret.Data["ceph-username"] = []byte("client.changed")
+			secret.Data["ceph-secret"] = []byte("secret-2")
+			Expect(bootstrapper.kubeClient.Update(context.Background(), secret)).To(Succeed())
+
+			cachedPrereqs, err := bootstrapper.rgwExecPrerequisites()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cachedPrereqs).To(BeIdenticalTo(prereqs))
+			Expect(cachedPrereqs.monHosts).To(Equal("10.0.0.1:6789,10.0.0.2:6789"))
+			Expect(cachedPrereqs.adminUser).To(Equal("client.admin"))
+			Expect(cachedPrereqs.adminSecret).To(Equal("secret-1"))
+		})
+	})
+
+	Describe("podExecClientset", func() {
+		It("creates the pod exec clientset only once per bootstrap run", func() {
+			originalFactory := newKubernetesClientset
+			defer func() {
+				newKubernetesClientset = originalFactory
+			}()
+
+			calls := 0
+			clientset := kubefake.NewSimpleClientset()
+			newKubernetesClientset = func(_ *rest.Config) (kubernetesClientset, error) {
+				calls++
+				return clientset, nil
+			}
+
+			bootstrapper := &LocalBootstrapper{
+				restConfig: &rest.Config{Host: "https://example.invalid"},
+			}
+
+			first, err := bootstrapper.podExecClientset()
+			Expect(err).NotTo(HaveOccurred())
+			second, err := bootstrapper.podExecClientset()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(first).To(BeIdenticalTo(clientset))
+			Expect(second).To(BeIdenticalTo(clientset))
+			Expect(calls).To(Equal(1))
 		})
 	})
 })

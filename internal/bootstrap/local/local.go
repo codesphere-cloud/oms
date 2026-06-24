@@ -62,6 +62,12 @@ type LocalBootstrapper struct {
 	Env *CodesphereEnvironment
 	// cephCredentials holds the Ceph auth credentials read after setup.
 	cephCredentials *CephCredentials
+	// cachedRGWExecPrereqs avoids rereading static Ceph monitor/admin auth data
+	// for repeated radosgw-admin execs in a single bootstrap run.
+	cachedRGWExecPrereqs *rgwExecPrerequisites
+	// cachedPodExecClientset avoids rebuilding the pod exec clientset for each
+	// radosgw-admin invocation in a single bootstrap run.
+	cachedPodExecClientset kubernetesClientset
 	// ageRecipient is the age public key used for SOPS vault encryption.
 	ageRecipient string
 	// ageKeyPath is the filesystem path to the age private key file.
