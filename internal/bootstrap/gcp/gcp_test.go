@@ -198,6 +198,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().GetAddress(projectId, "us-central1", "public-gateway").Return(nil, fmt.Errorf("not found"))
 			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "public-gateway" })).Return("2.2.2.2", nil)
 			gc.EXPECT().GetAddress(projectId, "us-central1", "public-gateway").Return(&computepb.Address{Address: protoString("2.2.2.2")}, nil)
+			gc.EXPECT().GetAddress(projectId, "us-central1", "ssh-proxy").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "ssh-proxy" })).Return("3.3.3.3", nil)
+			gc.EXPECT().GetAddress(projectId, "us-central1", "ssh-proxy").Return(&computepb.Address{Address: protoString("3.3.3.3")}, nil)
 
 			// UpdateInstallConfig
 			icg.EXPECT().GenerateSecrets().Return(nil)
@@ -223,7 +226,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// EnsureDNSRecords
 			gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, "test-zone", "example.com.", mock.Anything).Return(nil)
 			gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, "test-zone", mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
-				return len(records) == 4
+				return len(records) == 5
 			})).Return(nil)
 
 			// GenerateK0sConfigScript
@@ -1012,7 +1015,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	Describe("EnsureGatewayIPAddresses", func() {
 		Describe("Valid EnsureGatewayIPAddresses", func() {
-			It("creates two addresses", func() {
+			It("creates three addresses", func() {
 				// Gateway
 				gc.EXPECT().GetAddress(csEnv.ProjectID, csEnv.Region, "gateway").Return(nil, fmt.Errorf("not found"))
 				gc.EXPECT().CreateAddress(csEnv.ProjectID, csEnv.Region, mock.MatchedBy(func(a *computepb.Address) bool {
@@ -1025,10 +1028,17 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return *a.Name == "public-gateway"
 				})).Return("2.2.2.2", nil)
 
+				// SSH workspace proxy
+				gc.EXPECT().GetAddress(csEnv.ProjectID, csEnv.Region, "ssh-proxy").Return(nil, fmt.Errorf("not found"))
+				gc.EXPECT().CreateAddress(csEnv.ProjectID, csEnv.Region, mock.MatchedBy(func(a *computepb.Address) bool {
+					return *a.Name == "ssh-proxy"
+				})).Return("3.3.3.3", nil)
+
 				err := bs.EnsureGatewayIPAddresses()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bs.Env.GatewayIP).To(Equal("1.1.1.1"))
 				Expect(bs.Env.PublicGatewayIP).To(Equal("2.2.2.2"))
+				Expect(bs.Env.SshProxyIP).To(Equal("3.3.3.3"))
 			})
 		})
 
@@ -1246,8 +1256,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("ensures DNS records", func() {
 				gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, csEnv.DNSZoneName, csEnv.BaseDomain+".", mock.Anything).Return(nil)
 				gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, csEnv.DNSZoneName, mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
-					// Expect 4 records: *.ws, *.cs, cs, ws
-					return len(records) == 4
+					// Expect 5 records: cs, *.cs, ws, *.ws, *.ssh
+					return len(records) == 5
 				})).Return(nil)
 
 				err := bs.EnsureDNSRecords()

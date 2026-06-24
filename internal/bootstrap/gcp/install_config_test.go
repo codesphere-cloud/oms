@@ -319,6 +319,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
+				csEnv.SshProxyIP = "3.3.3.3"
+
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -327,6 +329,13 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				err := bs.UpdateInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
+
+				sshProxy := bs.Env.InstallConfig.PcApps["ssh-workspace-proxy"].(map[string]interface{})
+				sshProxyService := sshProxy["service"].(map[string]interface{})
+				Expect(sshProxyService["enabled"]).To(Equal(true))
+				Expect(sshProxyService["type"]).To(Equal("LoadBalancer"))
+				sshProxyAnnotations := sshProxyService["annotations"].(map[string]interface{})
+				Expect(sshProxyAnnotations["cloud.google.com/load-balancer-ipv4"]).To(Equal("3.3.3.3"))
 
 				Expect(bs.Env.InstallConfig.Datacenter.ID).To(Equal(1))
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("dev"))
