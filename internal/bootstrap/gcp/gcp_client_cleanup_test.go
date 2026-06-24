@@ -103,7 +103,7 @@ var _ = Describe("GCP Client Cleanup Methods", func() {
 				baseDomain := "example.com"
 				records := gcp.GetDNSRecordNames(baseDomain)
 
-				Expect(records).To(HaveLen(4))
+				Expect(records).To(HaveLen(5))
 				Expect(records[0].Name).To(Equal("cs.example.com."))
 				Expect(records[0].Rtype).To(Equal("A"))
 				Expect(records[1].Name).To(Equal("*.cs.example.com."))
@@ -112,6 +112,8 @@ var _ = Describe("GCP Client Cleanup Methods", func() {
 				Expect(records[2].Rtype).To(Equal("A"))
 				Expect(records[3].Name).To(Equal("*.ws.example.com."))
 				Expect(records[3].Rtype).To(Equal("A"))
+				Expect(records[4].Name).To(Equal("*.ssh.example.com."))
+				Expect(records[4].Rtype).To(Equal("A"))
 			})
 		})
 
@@ -120,7 +122,7 @@ var _ = Describe("GCP Client Cleanup Methods", func() {
 				baseDomain := "internal.codesphere.com"
 				records := gcp.GetDNSRecordNames(baseDomain)
 
-				Expect(records).To(HaveLen(4))
+				Expect(records).To(HaveLen(5))
 				for _, record := range records {
 					Expect(record.Name).To(ContainSubstring("internal.codesphere.com"))
 					Expect(record.Name).To(HaveSuffix("."))

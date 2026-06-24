@@ -9,6 +9,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 const (
@@ -207,6 +208,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Cluster.PublicGateway.Annotations = map[string]string{
 		"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
 	}
+
+	b.applySshProxyConfig()
 
 	dnsProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
@@ -416,6 +419,20 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 
 	return nil
+}
+
+func (b *GCPBootstrapper) applySshProxyConfig() {
+	b.Env.InstallConfig.PcApps = util.DeepMergeMaps(b.Env.InstallConfig.PcApps, files.ChartValues{
+		"ssh-workspace-proxy": map[string]any{
+			"service": map[string]any{
+				"enabled": true,
+				"type":    "LoadBalancer",
+				"annotations": map[string]any{
+					"cloud.google.com/load-balancer-ipv4": b.Env.SshProxyIP,
+				},
+			},
+		},
+	})
 }
 
 func (b *GCPBootstrapper) applyExternalLokiConfig() {

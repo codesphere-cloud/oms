@@ -58,6 +58,7 @@ func GetDNSRecordNames(baseDomain string) []struct {
 		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
 		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
 		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.ssh.%s.", baseDomain), "A"},
 	}
 }
 
@@ -106,6 +107,7 @@ type CodesphereEnvironment struct {
 	RecoverConfig                 bool            `json:"-"`
 	GatewayIP                     string          `json:"gateway_ip"`
 	PublicGatewayIP               string          `json:"public_gateway_ip"`
+	SshProxyIP                    string          `json:"ssh_proxy_ip"`
 	RegistryType                  RegistryType    `json:"registry_type"`
 	GitHubPAT                     string          `json:"-"`
 	GitHubAppName                 string          `json:"-"`
@@ -696,8 +698,8 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 	return nil
 }
 
-// EnsureGatewayIPAddresses reserves 2 static external IP addresses for the ingress
-// controllers of the cluster.
+// EnsureGatewayIPAddresses reserves the static external IP addresses for the ingress
+// controllers of the cluster (gateway and public gateway) and the SSH workspace proxy.
 func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 	var err error
 	b.Env.GatewayIP, err = b.EnsureExternalIP("gateway")
@@ -707,6 +709,10 @@ func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 	b.Env.PublicGatewayIP, err = b.EnsureExternalIP("public-gateway")
 	if err != nil {
 		return fmt.Errorf("failed to ensure public gateway IP: %w", err)
+	}
+	b.Env.SshProxyIP, err = b.EnsureExternalIP("ssh-proxy")
+	if err != nil {
+		return fmt.Errorf("failed to ensure ssh proxy IP: %w", err)
 	}
 
 	return nil
@@ -958,6 +964,12 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 			Type:    "A",
 			Ttl:     300,
 			Rrdatas: []string{b.Env.PublicGatewayIP},
+		},
+		{
+			Name:    fmt.Sprintf("*.ssh.%s.", b.Env.BaseDomain),
+			Type:    "A",
+			Ttl:     300,
+			Rrdatas: []string{b.Env.SshProxyIP},
 		},
 	}
 
