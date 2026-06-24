@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -987,6 +988,7 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 			b.startLTSCephMasterWatcher()
 			defer b.stopLTSCephMasterWatcher()
 		}
+		return b.runLTSInstallPhases(fullPackageFilename, ltsSpec)
 	}
 
 	err = b.runInstallCommand(fullPackageFilename)
@@ -995,6 +997,62 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 	}
 
 	return nil
+}
+
+// runLTSInstallPhases runs the three install phases separately for LTS versions.
+// Phases 1 (infra) and 2 (dependencies) run without inter-node SSH; steps that
+// need SSH (set-up-cluster, ms-backends, codesphere) are skipped. An SSH key
+// is then copied to the jumpbox, and Phase 3 (platform) runs with codesphere
+// included so the platform is deployed with inter-node SSH available.
+func (b *GCPBootstrapper) runLTSInstallPhases(packageFilename string, ltsSpec *LTSSpec) error {
+	ltsSkips := []string{"set-up-cluster", "ms-backends"}
+	if ltsSpec.SkipPcApps {
+		ltsSkips = append(ltsSkips, "argocd")
+	}
+
+	// Phase 1: Infrastructure (docker, postgres, ceph, kubernetes) — no SSH needed.
+	b.stlog.Logf("Running infrastructure phase (Phase 1)...")
+	infraSkips := append([]string{"codesphere"}, ltsSkips...)
+	if err := b.runInstallPhase(packageFilename, "infra", infraSkips); err != nil {
+		return fmt.Errorf("infra phase failed: %w", err)
+	}
+
+	// Phase 2: Dependencies (copy/extract) — skip SSH-needing steps.
+	b.stlog.Logf("Running dependencies phase (Phase 2)...")
+	if err := b.runInstallPhase(packageFilename, "dependencies", ltsSkips); err != nil {
+		return fmt.Errorf("dependencies phase failed: %w", err)
+	}
+
+	// Set up SSH key for the platform phase which needs inter-node access.
+	if ltsSpec.RequiresSSHKeyOnJumpbox {
+		if err := b.ensureSSHKeyOnJumpbox(); err != nil {
+			return err
+		}
+	}
+
+	// Phase 3: Platform (codesphere helm charts) — codesphere runs with SSH.
+	b.stlog.Logf("Running platform phase (Phase 3)...")
+	if err := b.runInstallPhase(packageFilename, "platform", ltsSkips); err != nil {
+		return fmt.Errorf("platform phase failed: %w", err)
+	}
+
+	return nil
+}
+
+// runInstallPhase runs a single install phase on the jumpbox with the given
+// skip steps. It builds the full oms install codesphere command for the phase.
+func (b *GCPBootstrapper) runInstallPhase(packageFilename, phase string, extraSkips []string) error {
+	skipSteps := append([]string{}, extraSkips...)
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		skipSteps = append(skipSteps, "load-container-images")
+	}
+
+	cmd := fmt.Sprintf("oms install codesphere %s -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s",
+		phase, b.Env.SecretsDir, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), packageFilename)
+	if len(skipSteps) > 0 {
+		cmd += " -s " + strings.Join(skipSteps, ",")
+	}
+	return b.Env.Jumpbox.RunSSHCommand("root", cmd)
 }
 
 // ensureNewOmsBinaryOnJumpbox copies a freshly-built linux/amd64 OMS binary to
@@ -1015,6 +1073,45 @@ func (b *GCPBootstrapper) ensureNewOmsBinaryOnJumpbox() error {
 
 	if err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("chmod +x %s && mv %s /usr/local/bin/oms", remoteTmpPath, remoteTmpPath)); err != nil {
 		return fmt.Errorf("failed to install OMS binary on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// ensureSSHKeyOnJumpbox copies the user's SSH private key to the jumpbox at
+// /root/.ssh/id_rsa and writes an SSH config so that the LTS installer's
+// private-cloud-installer.js can SSH to worker nodes via its internal SshClient.
+func (b *GCPBootstrapper) ensureSSHKeyOnJumpbox() error {
+	b.stlog.Logf("Copying SSH private key to jumpbox for inter-node access...")
+
+	srcPath := b.Env.SSHPrivateKeyPath
+	if srcPath == "" {
+		return fmt.Errorf("SSH private key path not set (use --ssh-private-key-path)")
+	}
+
+	keyBytes, err := os.ReadFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to read SSH private key from %s: %w", srcPath, err)
+	}
+
+	// Set up .ssh directory with correct permissions (SSH is strict: 700 for dir).
+	setupCmd := "mkdir -p /root/.ssh && chmod 700 /root/.ssh"
+	if err := b.Env.Jumpbox.RunSSHCommand("root", setupCmd); err != nil {
+		return fmt.Errorf("failed to create .ssh directory on jumpbox: %w", err)
+	}
+
+	// Write the key via heredoc.
+	writeKeyCmd := fmt.Sprintf("cat > /root/.ssh/id_rsa << 'OMSEOF'\n%s\nOMSEOF\nchmod 600 /root/.ssh/id_rsa", string(keyBytes))
+	if err := b.Env.Jumpbox.RunSSHCommand("root", writeKeyCmd); err != nil {
+		return fmt.Errorf("failed to write SSH private key on jumpbox: %w", err)
+	}
+
+	// Write an SSH config that explicitly uses this identity file so the
+	// LTS installer's ssh child process always finds it.
+	sshConfig := "Host *\n  IdentityFile /root/.ssh/id_rsa\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n"
+	writeConfigCmd := fmt.Sprintf("cat > /root/.ssh/config << 'OMSEOF'\n%sOMSEOF\nchmod 600 /root/.ssh/config", sshConfig)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", writeConfigCmd); err != nil {
+		return fmt.Errorf("failed to write SSH config on jumpbox: %w", err)
 	}
 
 	return nil
@@ -1091,8 +1188,13 @@ func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 
 	// LTS packages whose bom.json predates the pc-applications component
 	// need the ArgoCD+pc-apps pre-step skipped to avoid a missing-BOM error.
-	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil && ltsSpec.SkipPcApps {
-		b.Env.InstallSkipSteps = append(b.Env.InstallSkipSteps, "argocd")
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil {
+		if ltsSpec.SkipPcApps {
+			b.Env.InstallSkipSteps = append(b.Env.InstallSkipSteps, "argocd")
+		}
+		if ltsSpec.SkipSetupCluster {
+			b.Env.InstallSkipSteps = append(b.Env.InstallSkipSteps, "set-up-cluster", "ms-backends", "codesphere")
+		}
 	}
 
 	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s%s",

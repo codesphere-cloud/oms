@@ -44,6 +44,15 @@ type LTSSpec struct {
 	// skipping the ArgoCD+pc-apps pre-step. This is needed for LTS releases whose
 	// bom.json predates the pc-applications component (introduced after the LTS was cut).
 	SkipPcApps bool
+	// RequiresSSHKeyOnJumpbox instructs the bootstrap to copy the user's SSH private key
+	// to the jumpbox at /root/.ssh/id_rsa before running the installer. This is needed
+	// for LTS releases whose private-cloud-installer.js needs inter-node SSH (e.g. the
+	// set-up-cluster step) but no key exists on the jumpbox.
+	RequiresSSHKeyOnJumpbox bool
+	// SkipSetupCluster instructs the bootstrap to add "set-up-cluster" and "ms-backends"
+	// to the install skip-steps. Needed for LTS releases whose remote install-components.js
+	// commands fail on worker nodes.
+	SkipSetupCluster bool
 }
 
 // ltsRegistry is the single source of truth for all known LTS versions and their quirks.
@@ -61,6 +70,8 @@ var ltsRegistry = []LTSSpec{
 		RequiresOmsBinaryUpdate:   true,
 		RequiresCephMasterWatcher: true,
 		SkipPcApps:                true,
+		RequiresSSHKeyOnJumpbox:   true,
+		SkipSetupCluster:          true,
 	},
 }
 
