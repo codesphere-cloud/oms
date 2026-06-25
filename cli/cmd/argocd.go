@@ -96,7 +96,6 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 
 				When --deploy-dc-config is set, Codesphere-managed resources are applied after
 				the chart install/upgrade:
-				  - AppProjects (always)
 				  - Helm OCI registry secret (always, requires OMS_REGISTRY_PASSWORD)
 				  - Local cluster secret (only if --dc-id is provided)
 				  - Git repo credentials (only if OMS_GIT_PASSWORD env var is set)
@@ -118,7 +117,7 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	argocd.cmd.Flags().StringVar(&argocd.Opts.DatacenterId, "dc-id", "", "Codesphere Datacenter ID (optional, registers local cluster in ArgoCD)")
 	argocd.cmd.Flags().StringVar(&argocd.Opts.RegistryURL, "registry-url", "ghcr.io/codesphere-cloud/charts", "OCI registry URL for the Helm chart repository")
 	argocd.cmd.Flags().StringVarP(&argocd.Opts.Version, "version", "v", "", "Version of the ArgoCD helm chart to install")
-	argocd.cmd.Flags().BoolVar(&argocd.Opts.FullInstall, "deploy-dc-config", false, "Apply Codesphere-managed resources (AppProjects, Repo Creds, ...) after installing the chart")
+	argocd.cmd.Flags().BoolVar(&argocd.Opts.FullInstall, "deploy-dc-config", false, "Apply Codesphere-managed resources (Repo Creds, ...) after installing the chart")
 	argocd.cmd.Flags().StringArrayVarP(&argocd.Opts.ValueFiles, "values", "f", nil, "Specify values in a YAML file (can be specified multiple times)")
 	argocd.cmd.Flags().BoolVar(&argocd.Opts.ForceConflicts, "force-conflicts", false, "Force field ownership conflicts during upgrade (sets server-side apply ForceConflicts)")
 	argocd.cmd.Flags().StringVar(&argocd.Opts.RepoURL, "repo", "", "Helm chart repository URL; supports HTTP (default: https://argoproj.github.io/argo-helm) and OCI (e.g. oci://ghcr.io/argoproj/argo-helm)")

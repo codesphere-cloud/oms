@@ -66,7 +66,6 @@ func VaultGVR() schema.GroupVersionResource {
 // gvrMappings maps Kubernetes Kind names to their plural resource names.
 // New kinds used in embedded templates need a corresponding entry here.
 var gvrMappings = map[string]string{
-	"AppProject":     "appprojects",
 	"Vault":          "vaults",
 	"ServiceAccount": "serviceaccounts",
 	"Role":           "roles",

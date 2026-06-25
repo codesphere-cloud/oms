@@ -133,18 +133,6 @@ var _ = Describe("DenderTemplate", func() {
 })
 
 var _ = Describe("GvrForUnstructured", func() {
-	It("returns the correct GVR for AppProject", func() {
-		obj := &unstructured.Unstructured{}
-		obj.SetAPIVersion("argoproj.io/v1alpha1")
-		obj.SetKind("AppProject")
-
-		gvr, err := util.GvrForUnstructured(obj)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(gvr.Group).To(Equal("argoproj.io"))
-		Expect(gvr.Version).To(Equal("v1alpha1"))
-		Expect(gvr.Resource).To(Equal("appprojects"))
-	})
-
 	It("returns the correct GVR for Vault", func() {
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("vault.banzaicloud.com/v1alpha1")
