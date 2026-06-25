@@ -1366,9 +1366,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 						"cat > /root/.ssh/id_rsa << 'OMSEOF'\nfake-ssh-private-key\nOMSEOF\nchmod 600 /root/.ssh/id_rsa").Return(nil)
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 						"cat > /root/.ssh/config << 'OMSEOF'\nHost *\n  IdentityFile /root/.ssh/id_rsa\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\nOMSEOF\nchmod 600 /root/.ssh/config").Return(nil)
-					// Phase 3: Platform (codesphere runs with SSH).
+					// Phase 3: Copy kubeconfig, fix server address, then deploy via helm.
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-						"oms install codesphere platform -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p codesphere-lts-v1.77.2-abc1234567890-installer.tar.gz -s set-up-cluster,ms-backends,argocd").Return(nil)
+						"mkdir -p /var/lib/k0s/pki").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"scp -o StrictHostKeyChecking=no root@10.0.0.1:/var/lib/k0s/pki/admin.conf /var/lib/k0s/pki/admin.conf").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"sed -i 's|server: https://127.0.0.1:6443|server: https://10.0.0.1:6443|; s|server: https://localhost:6443|server: https://10.0.0.1:6443|' /var/lib/k0s/pki/admin.conf").Return(nil)
+					// Write codesphere values YAML for helm.
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						mock.Anything).Return(nil)
+					// Helm install.
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						mock.Anything).Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
