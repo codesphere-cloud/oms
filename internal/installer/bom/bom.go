@@ -7,9 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
 
 	"github.com/distribution/reference"
 )
+
+const GHCRRegistry = "ghcr.io"
 
 // Config represents the Bill of Materials configuration.
 type Config struct {
@@ -99,4 +103,75 @@ func (b *Config) GetCodesphereContainerImages() (map[string]string, error) {
 		return nil, fmt.Errorf("codesphere component not found in BOM")
 	}
 	return comp.ContainerImages, nil
+}
+
+// GHCRImageReferences returns unique GHCR image and OCI chart references from the BOM.
+func (b *Config) GHCRImageReferences() []string {
+	return b.ImageReferencesForRegistry(GHCRRegistry)
+}
+
+// ImageReferencesForRegistry returns unique image and OCI chart references for a registry.
+func (b *Config) ImageReferencesForRegistry(registry string) []string {
+	if b == nil {
+		return nil
+	}
+
+	refsSet := map[string]struct{}{}
+	for _, component := range b.Components {
+		for _, imageRef := range component.ContainerImages {
+			addRegistryRef(refsSet, imageRef, registry)
+		}
+
+		for _, fileRef := range component.Files {
+			addRegistryRef(refsSet, fileRef.OciRef, registry)
+		}
+	}
+
+	refs := make([]string, 0, len(refsSet))
+	for ref := range refsSet {
+		refs = append(refs, ref)
+	}
+	sort.Strings(refs)
+
+	return refs
+}
+
+func addRegistryRef(refsSet map[string]struct{}, value string, registry string) {
+	ref, ok := NormalizeImageReferenceForRegistry(value, registry)
+	if ok {
+		refsSet[ref] = struct{}{}
+	}
+}
+
+// NormalizeImageReferenceForRegistry normalizes a docker image reference and verifies its registry.
+func NormalizeImageReferenceForRegistry(value string, registry string) (string, bool) {
+	ref := strings.TrimSpace(value)
+	ref = strings.TrimPrefix(ref, "docker://")
+
+	if ref == "" || registry == "" {
+		return "", false
+	}
+
+	named, err := reference.ParseNormalizedNamed(ref)
+	if err != nil {
+		return "", false
+	}
+	if reference.Domain(named) != registry {
+		return "", false
+	}
+	if !hasTagOrDigest(named) {
+		return "", false
+	}
+
+	return reference.FamiliarString(named), true
+}
+
+func hasTagOrDigest(named reference.Named) bool {
+	if _, ok := named.(reference.Tagged); ok {
+		return true
+	}
+	if _, ok := named.(reference.Digested); ok {
+		return true
+	}
+	return false
 }
