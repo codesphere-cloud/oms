@@ -44,7 +44,7 @@ var _ = Describe("Bom", func() {
 							"glob": map[string]interface{}{
 								"cwd":     "helm/codesphere",
 								"include": "**/*",
-								"exclude": []string{"*.json5", "values-*.yaml"},
+								"exclude": []string{"*.json", "values-*.yaml"},
 							},
 						},
 						"schemaDump": map[string]interface{}{
@@ -211,6 +211,41 @@ var _ = Describe("Bom", func() {
 			images, err := freshCfg.GetCodesphereContainerImages()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(images).To(BeEmpty())
+		})
+	})
+
+	Describe("GHCRImageReferences", func() {
+		It("returns sorted unique GHCR refs from typed BOM fields", func() {
+			cfg := &bom.Config{
+				Components: map[string]bom.ComponentConfig{
+					"gateway": {
+						Files: map[string]bom.FileRef{
+							"chart": {
+								OciRef: "ghcr.io/codesphere-cloud/charts/gateway:0.13.3",
+							},
+						},
+						ContainerImages: map[string]string{
+							"envoyProxy":   "ghcr.io/codesphere-cloud/docker/envoyproxy/envoy:distroless-v1.37.0",
+							"ingressNginx": "registry.k8s.io/ingress-nginx/controller:v1.13.2",
+						},
+					},
+					"duplicate": {
+						Files: map[string]bom.FileRef{
+							"chart": {
+								OciRef: "docker://ghcr.io/codesphere-cloud/charts/gateway:0.13.3",
+							},
+						},
+						ContainerImages: map[string]string{
+							"missingTag": "ghcr.io/codesphere-cloud/docker/alpine/kubectl",
+						},
+					},
+				},
+			}
+
+			Expect(cfg.GHCRImageReferences()).To(Equal([]string{
+				"ghcr.io/codesphere-cloud/charts/gateway:0.13.3",
+				"ghcr.io/codesphere-cloud/docker/envoyproxy/envoy:distroless-v1.37.0",
+			}))
 		})
 	})
 })

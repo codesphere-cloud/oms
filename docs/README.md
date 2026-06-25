@@ -25,6 +25,7 @@ like downloading new versions.
 * [oms install](oms_install.md)	 - Install Codesphere and other components
 * [oms licenses](oms_licenses.md)	 - Print license information
 * [oms list](oms_list.md)	 - List resources available through OMS
+* [oms load](oms_load.md)	 - Load resources into a local or custom registry
 * [oms register](oms_register.md)	 - Register a new API key
 * [oms revoke](oms_revoke.md)	 - Revoke resources available through OMS
 * [oms smoketest](oms_smoketest.md)	 - Run smoke tests for Codesphere components

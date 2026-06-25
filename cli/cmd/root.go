@@ -72,6 +72,7 @@ func GetRootCmd() *cobra.Command {
 	// Package commands
 	AddListCmd(rootCmd, opts)
 	AddDownloadCmd(rootCmd, opts)
+	AddLoadCmd(rootCmd, opts)
 	AddInstallCmd(rootCmd, opts)
 	AddInitCmd(rootCmd, opts)
 	AddTemplateCmd(rootCmd, opts)
