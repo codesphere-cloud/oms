@@ -1025,7 +1025,8 @@ func (b *GCPBootstrapper) runLTSInstallPhases(packageFilename string, ltsSpec *L
 		return fmt.Errorf("dependencies phase failed: %w", err)
 	}
 
-	// Set up SSH key for the platform phase which needs inter-node access.
+	// Set up SSH key so the jumpbox can reach the postgres VM for
+	// database creation below.
 	if ltsSpec.RequiresSSHKeyOnJumpbox {
 		if err := b.ensureSSHKeyOnJumpbox(); err != nil {
 			return err
@@ -1130,6 +1131,42 @@ for s in vault.get("secrets", []):
 yaml.dump(result, sys.stdout, default_flow_style=False)
 ' > "$SECRETS_VALUES"
 echo "Generated secrets values file."
+
+# Create postgres Service + Endpoints so codosphere pods can reach
+# the external postgres VM. The old installer normally does this
+# via set-up-cluster, which we skip because the LTS BOM lacks a
+# codesphere component.
+PG_IP=$(python3 -c "import yaml; c=yaml.safe_load(open('/etc/codesphere/config.yaml')); print(c.get('postgres',{}).get('primary',{}).get('ip',''))")
+if [ -n "$PG_IP" ]; then
+  "$KUBECTL" apply -f - << SERVICE_EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: codesphere
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: postgres
+  namespace: codesphere
+subsets:
+- addresses:
+  - ip: $PG_IP
+  ports:
+  - port: 5432
+SERVICE_EOF
+  echo "Created postgres Service → $PG_IP"
+  # Create required databases on the postgres VM.
+  ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@"$PG_IP" \
+    "docker exec codesphere-postgres.service psql -U postgres -c 'CREATE DATABASE codesphere;' 2>/dev/null; \
+     docker exec codesphere-postgres.service psql -U postgres -c 'CREATE DATABASE user_activity;' 2>/dev/null; \
+     echo 'Databases ready.'" || echo "Warning: could not create databases on $PG_IP"
+fi
 
 # Clean up any orphaned resources from previous failed install attempts.
 # Helm refuses to adopt resources that lack its ownership labels.
