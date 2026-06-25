@@ -710,7 +710,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 		It("renders valid YAML with raft storage and PVC for replicas=1", func() {
 			data := templateData{
 				Namespace:         "vault",
-				OpenBaoImage:      "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao:2.5.4",
+				OpenBaoImage:      "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4",
 				BankVaultsImage:   "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0",
 				SecretsEngineName: "cs-secrets-engine",
 				BaoUsername:       "admin",
@@ -730,7 +730,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 			spec := vault["spec"].(map[string]interface{})
 			Expect(spec["size"]).To(BeNumerically("==", 1))
-			Expect(spec["image"]).To(Equal("ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao:2.5.4"))
+			Expect(spec["image"]).To(Equal("ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4"))
 
 			// Should have volumeClaimTemplates (raft always needs persistent storage)
 			Expect(spec).To(HaveKey("volumeClaimTemplates"))
@@ -802,7 +802,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 			data := templateData{
 				Namespace:         "vault",
-				OpenBaoImage:      "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao:2.5.4",
+				OpenBaoImage:      "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4",
 				BankVaultsImage:   "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0",
 				SecretsEngineName: "cs-secrets-engine",
 				BaoUsername:       "admin",
