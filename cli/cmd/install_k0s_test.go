@@ -528,6 +528,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.FileWriter = mockFileWriter
 
 				mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+				mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 				mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false).Return(nil)
 				mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 				mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)

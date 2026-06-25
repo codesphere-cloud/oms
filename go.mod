@@ -3,6 +3,11 @@ module github.com/codesphere-cloud/oms
 go 1.26.4
 
 replace (
+	// GoReleaser pulls github.com/chrismellard/docker-credential-acr-env,
+	// which imports github.com/Azure/azure-sdk-for-go/version. Azure SDK
+	// v68 removed that package, so keep the legacy monorepo on a verified
+	// version that still provides it.
+	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v67.2.0+incompatible
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v5.2.0+incompatible
 
@@ -283,7 +288,7 @@ require (
 	github.com/golangci/swaggoswag v0.0.0-20250504205917-77f2aca3143e // indirect
 	github.com/golangci/unconvert v0.0.0-20250410112200-a129a6e6413e // indirect
 	github.com/google/certificate-transparency-go v1.3.3 // indirect
-	github.com/google/go-containerregistry v0.21.6 // indirect
+	github.com/google/go-containerregistry v0.21.6
 	github.com/google/ko v0.18.2-0.20260407063826-ae9c7272d7de // indirect
 	github.com/google/rpmpack v0.7.1 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
@@ -580,6 +585,7 @@ require (
 	github.com/libopenstorage/secrets v0.0.0-20240416031220-a17cf7f72c6c // indirect
 	github.com/liggitt/tabwriter v0.0.0-20181228230101-89fcab3d43de // indirect
 	github.com/mattn/go-runewidth v0.0.24 // indirect
+	github.com/mattn/go-sqlite3 v1.14.28 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.1-0.20231216201459-8508981c8b6c // indirect
 	github.com/moby/moby/api v1.54.2 // indirect
@@ -617,6 +623,7 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
+	go.step.sm/crypto v0.81.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.5 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
