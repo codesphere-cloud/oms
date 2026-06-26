@@ -202,11 +202,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	b.Env.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
 	b.Env.InstallConfig.Cluster.Gateway.Annotations = map[string]string{
-		"cloud.google.com/load-balancer-ipv4": b.Env.GatewayIP,
+		"networking.gke.io/load-balancer-ip-addresses": b.Env.GatewayIP,
 	}
 	b.Env.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
 	b.Env.InstallConfig.Cluster.PublicGateway.Annotations = map[string]string{
-		"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
+		"networking.gke.io/load-balancer-ip-addresses": b.Env.PublicGatewayIP,
 	}
 
 	b.applySshProxyConfig()
@@ -431,7 +431,7 @@ func (b *GCPBootstrapper) applySshProxyConfig() {
 						"enabled": true,
 						"type":    "LoadBalancer",
 						"annotations": map[string]any{
-							"cloud.google.com/load-balancer-ipv4": b.Env.SshProxyIP,
+							"networking.gke.io/load-balancer-ip-addresses": b.Env.SshProxyIP,
 						},
 					},
 				},

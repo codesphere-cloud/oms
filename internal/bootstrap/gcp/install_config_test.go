@@ -338,7 +338,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(sshProxyService["enabled"]).To(Equal(true))
 				Expect(sshProxyService["type"]).To(Equal("LoadBalancer"))
 				sshProxyAnnotations := sshProxyService["annotations"].(map[string]interface{})
-				Expect(sshProxyAnnotations["cloud.google.com/load-balancer-ipv4"]).To(Equal("3.3.3.3"))
+				Expect(sshProxyAnnotations["networking.gke.io/load-balancer-ip-addresses"]).To(Equal("3.3.3.3"))
 
 				Expect(bs.Env.InstallConfig.Datacenter.ID).To(Equal(1))
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("dev"))
