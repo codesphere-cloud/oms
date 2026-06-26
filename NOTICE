@@ -1349,21 +1349,21 @@ License URL: https://github.com/kubernetes/streaming/blob/v0.36.2/LICENSE
  
 ----------
 Module: k8s.io/utils
-Version: v0.0.0-20260617174310-a95e086a2553
+Version: v0.0.0-20260626114624-be93311217bd
 License: Apache-2.0
-License URL: https://github.com/kubernetes/utils/blob/a95e086a2553/LICENSE
+License URL: https://github.com/kubernetes/utils/blob/be93311217bd/LICENSE
  
 ----------
 Module: k8s.io/utils/internal/third_party/forked/golang
-Version: v0.0.0-20260617174310-a95e086a2553
+Version: v0.0.0-20260626114624-be93311217bd
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/utils/blob/a95e086a2553/internal/third_party/forked/golang/LICENSE
+License URL: https://github.com/kubernetes/utils/blob/be93311217bd/internal/third_party/forked/golang/LICENSE
  
 ----------
 Module: k8s.io/utils/third_party/forked/golang/btree
-Version: v0.0.0-20260617174310-a95e086a2553
+Version: v0.0.0-20260626114624-be93311217bd
 License: Apache-2.0
-License URL: https://github.com/kubernetes/utils/blob/a95e086a2553/third_party/forked/golang/btree/LICENSE
+License URL: https://github.com/kubernetes/utils/blob/be93311217bd/third_party/forked/golang/btree/LICENSE
  
 ----------
 Module: oras.land/oras-go/v2
