@@ -423,12 +423,17 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 func (b *GCPBootstrapper) applySshProxyConfig() {
 	b.Env.InstallConfig.PcApps = util.DeepMergeMaps(b.Env.InstallConfig.PcApps, files.ChartValues{
-		"ssh-workspace-proxy": map[string]any{
-			"service": map[string]any{
+		"applications": map[string]any{
+			"ssh-workspace-proxy": map[string]any{
 				"enabled": true,
-				"type":    "LoadBalancer",
-				"annotations": map[string]any{
-					"cloud.google.com/load-balancer-ipv4": b.Env.SshProxyIP,
+				"valuesObject": map[string]any{
+					"service": map[string]any{
+						"enabled": true,
+						"type":    "LoadBalancer",
+						"annotations": map[string]any{
+							"cloud.google.com/load-balancer-ipv4": b.Env.SshProxyIP,
+						},
+					},
 				},
 			},
 		},

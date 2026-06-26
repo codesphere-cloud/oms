@@ -330,8 +330,11 @@ var _ = Describe("Installconfig & Secrets", func() {
 				err := bs.UpdateInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
 
-				sshProxy := bs.Env.InstallConfig.PcApps["ssh-workspace-proxy"].(map[string]interface{})
-				sshProxyService := sshProxy["service"].(map[string]interface{})
+				applications := bs.Env.InstallConfig.PcApps["applications"].(map[string]interface{})
+				sshProxy := applications["ssh-workspace-proxy"].(map[string]interface{})
+				Expect(sshProxy["enabled"]).To(Equal(true))
+				sshProxyValues := sshProxy["valuesObject"].(map[string]interface{})
+				sshProxyService := sshProxyValues["service"].(map[string]interface{})
 				Expect(sshProxyService["enabled"]).To(Equal(true))
 				Expect(sshProxyService["type"]).To(Equal("LoadBalancer"))
 				sshProxyAnnotations := sshProxyService["annotations"].(map[string]interface{})
