@@ -34,7 +34,7 @@ var vaultCRTemplate []byte
 const (
 	openBaoUnsealSecretName = "openbao-unseal-keys"
 	DefaultOpenBaoNamespace = "vault"
-	openBaoImage            = "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao:2.5.4"
+	openBaoImage            = "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4"
 	bankVaultsImage         = "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0"
 	bankVaultsChartRepo     = "oci://ghcr.io/bank-vaults/helm-charts"
 	bankVaultsChartName     = "vault-operator"
