@@ -139,6 +139,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	previousPrimaryHostname := b.Env.InstallConfig.Postgres.Primary.Hostname
 	b.Env.InstallConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
 	b.Env.InstallConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
+	b.Env.InstallConfig.Postgres.Primary.SSHPort = 22
 
 	b.Env.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
 	b.Env.InstallConfig.Ceph.NodesSubnet = "10.10.0.0/20"
@@ -147,14 +148,17 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			Hostname:  b.Env.CephNodes[0].GetName(),
 			IsMaster:  true,
 			IPAddress: b.Env.CephNodes[0].GetInternalIP(),
+			SSHPort:   22,
 		},
 		{
 			Hostname:  b.Env.CephNodes[1].GetName(),
 			IPAddress: b.Env.CephNodes[1].GetInternalIP(),
+			SSHPort:   22,
 		},
 		{
 			Hostname:  b.Env.CephNodes[2].GetName(),
 			IPAddress: b.Env.CephNodes[2].GetInternalIP(),
+			SSHPort:   22,
 		},
 	}
 	b.Env.InstallConfig.Ceph.OSDs = []files.CephOSD{
@@ -180,18 +184,21 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		ControlPlanes: []files.K8sNode{
 			{
 				IPAddress: b.Env.ControlPlaneNodes[0].GetInternalIP(),
+				SSHPort:   22,
 			},
 		},
 		Workers: []files.K8sNode{
 			{
 				IPAddress: b.Env.ControlPlaneNodes[0].GetInternalIP(),
+				SSHPort:   22,
 			},
-
 			{
 				IPAddress: b.Env.ControlPlaneNodes[1].GetInternalIP(),
+				SSHPort:   22,
 			},
 			{
 				IPAddress: b.Env.ControlPlaneNodes[2].GetInternalIP(),
+				SSHPort:   22,
 			},
 		},
 	}
@@ -365,8 +372,19 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
 	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
+
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil {
+		if UserSpecifiedExperiments(b.Env.InstallConfig.Codesphere.Experiments) {
+			if err := ValidateExperiments(b.Env.InstallConfig.Codesphere.Experiments, ltsSpec.Experiments); err != nil {
+				return fmt.Errorf("unsupported experiments for %s: %w", b.Env.InstallVersion, err)
+			}
+		}
+		b.Env.InstallConfig.Codesphere.Experiments = FilterExperiments(b.Env.InstallConfig.Codesphere.Experiments, ltsSpec.Experiments)
+	}
 	b.applyExternalLokiConfig()
 	b.applyPrometheusRemoteWriteConfig()
+
+	b.Env.InstallConfig.GeneratedForVersion = b.Env.InstallVersion
 
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
@@ -404,16 +422,24 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
+	jumpboxConfigLocalPath := b.Env.InstallConfigPath
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil && ltsSpec.RequiresJumpboxFiles {
+		var err error
+		jumpboxConfigLocalPath, err = b.writeLTSJumpboxFiles(ltsSpec)
+		if err != nil {
+			return err
+		}
+	}
+
 	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
-	if err != nil {
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, jumpboxConfigLocalPath, remoteInstallConfigPath); err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
+	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}
@@ -576,6 +602,22 @@ func (b *GCPBootstrapper) EncryptVault() error {
 	}
 
 	return nil
+}
+
+// writeLTSJumpboxFiles generates the LTS-versioned config-lts-<version>.yaml locally
+// and returns its path for copying to the jumpbox.
+func (b *GCPBootstrapper) writeLTSJumpboxFiles(spec *LTSSpec) (jumpboxConfigLocalPath string, err error) {
+	jumpboxConfigBytes, err := GenerateLTSJumpboxFiles(b.Env.InstallConfig, spec)
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare %s jumpbox config: %w", spec.InstallVersion, err)
+	}
+
+	jumpboxConfigLocalPath = LocalLTSConfigPath(b.Env.InstallConfigPath, spec)
+	if err := b.fw.CreateAndWrite(jumpboxConfigLocalPath, jumpboxConfigBytes, "Jumpbox Config ("+spec.InstallVersion+")"); err != nil {
+		return "", fmt.Errorf("failed to write %s jumpbox config file: %w", spec.InstallVersion, err)
+	}
+
+	return jumpboxConfigLocalPath, nil
 }
 
 // decryptVault creates an unencrypted copy of the vault in dst on the jumpbox

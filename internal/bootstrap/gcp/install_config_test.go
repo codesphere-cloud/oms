@@ -760,6 +760,76 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.OpenBao.Engine).To(Equal("fake-engine"))
 				})
 			})
+
+			Context("When install version is codesphere-lts-v1.77.2", func() {
+				BeforeEach(func() {
+					csEnv.InstallVersion = "codesphere-lts-v1.77.2"
+					csEnv.Experiments = []string{"managed-services", "custom-service-image", "ms-in-ls"}
+					csEnv.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
+						{
+							Name:        "postgres",
+							Version:     "v1",
+							Author:      "Codesphere",
+							DisplayName: "PostgreSQL",
+							Backend: files.ManagedServiceBackend{
+								API: files.ManagedServiceAPI{Endpoint: "http://ms-backend:3000"},
+							},
+						},
+						{
+							Name:    "s3",
+							Version: "v2",
+						},
+					}
+				})
+				It("generates the LTS jumpbox files and copies them to the jumpbox", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					fw.EXPECT().CreateAndWrite("config-lts-1_77_2.yaml", mock.Anything, mock.Anything).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+				})
+				It("does not modify the in-memory codesphere config for LTS 1.77.2", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					fw.EXPECT().CreateAndWrite(mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					// In-memory config must be filtered to only LTS-compatible experiments
+					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(ConsistOf("managed-services", "custom-service-image", "ms-in-ls"))
+					Expect(bs.Env.InstallConfig.CodesphereConfigPath).To(BeEmpty())
+
+					// Managed services are preserved for LTS 1.77.2 (they remain in the profile config)
+					services := bs.Env.InstallConfig.Codesphere.ManagedServices
+					Expect(services[0].Author).To(Equal("Codesphere"))
+					Expect(services[0].DisplayName).To(Equal("PostgreSQL"))
+					Expect(services[0].Backend.API.Endpoint).To(Equal("http://ms-backend:3000"))
+				})
+			})
+
+			Context("When install version is not codesphere-lts-v1.77.2", func() {
+				BeforeEach(func() {
+					csEnv.InstallVersion = "master"
+					csEnv.Experiments = gcp.DefaultExperiments
+				})
+				It("uses the regular config.yaml directly (inline codesphere object)", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					// config.yaml → /etc/codesphere/config.yaml, prod.vault.yaml → secrets dir
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
 			Context("When external Loki config is set", func() {
 				BeforeEach(func() {
 					csEnv.ExternalLokiEndpoint = "https://loki.example.com/loki/api/v1/push"

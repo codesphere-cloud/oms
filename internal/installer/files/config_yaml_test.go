@@ -198,6 +198,25 @@ codesphere:
 			Expect(rootConfig.Registry.Server).To(Equal("minimal.registry.com"))
 			Expect(rootConfig.Codesphere.DeployConfig.Images).To(BeEmpty())
 		})
+
+		It("should handle LTS 1.77.2 format where codesphere is a path string", func() {
+			lts177Yaml := `registry:
+  server: registry.example.com
+codesphere: /etc/codesphere/codesphere.yaml
+`
+			err := os.WriteFile(configFile, []byte(lts177Yaml), 0644)
+			Expect(err).NotTo(HaveOccurred())
+
+			data, err := os.ReadFile(configFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = rootConfig.Unmarshal(data)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(rootConfig.Registry.Server).To(Equal("registry.example.com"))
+			Expect(rootConfig.CodesphereConfigPath).To(Equal("/etc/codesphere/codesphere.yaml"))
+			Expect(rootConfig.Codesphere.DeployConfig.Images).To(BeEmpty())
+		})
 	})
 
 	Describe("ExtractBomRefs", func() {
@@ -343,6 +362,18 @@ codesphere:
 			cluster := raw["cluster"].(map[string]interface{})
 			certs := cluster["certificates"].(map[string]interface{})
 			Expect(certs["override"]).To(Equal(expectedOverride))
+		})
+
+		It("omits the codesphere key when CodesphereConfigPath is set to OmitCodesphereSentinel", func() {
+			rootConfig.CodesphereConfigPath = files.OmitCodesphereSentinel
+			data, err := rootConfig.Marshal()
+			Expect(err).NotTo(HaveOccurred())
+
+			var raw map[string]interface{}
+			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
+
+			_, hasCodesphere := raw["codesphere"]
+			Expect(hasCodesphere).To(BeFalse(), "codesphere key must be absent when using OmitCodesphereSentinel")
 		})
 
 		It("should unmarshal ACME config from upstream docs format and populate Solver", func() {
