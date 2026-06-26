@@ -1256,7 +1256,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("ensures DNS records", func() {
 				gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, csEnv.DNSZoneName, csEnv.BaseDomain+".", mock.Anything).Return(nil)
 				gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, csEnv.DNSZoneName, mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
-					// Expect 5 records: cs, *.cs, ws, *.ws, *.ssh
+					// Expect 5 records: cs, *.cs, ws, *.ws, *.ssh.cs
 					return len(records) == 5
 				})).Return(nil)
 

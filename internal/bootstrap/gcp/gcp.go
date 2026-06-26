@@ -58,7 +58,7 @@ func GetDNSRecordNames(baseDomain string) []struct {
 		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
 		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
 		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
-		{fmt.Sprintf("*.ssh.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.ssh.cs.%s.", baseDomain), "A"},
 	}
 }
 
@@ -966,7 +966,7 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 			Rrdatas: []string{b.Env.PublicGatewayIP},
 		},
 		{
-			Name:    fmt.Sprintf("*.ssh.%s.", b.Env.BaseDomain),
+			Name:    fmt.Sprintf("*.ssh.cs.%s.", b.Env.BaseDomain),
 			Type:    "A",
 			Ttl:     300,
 			Rrdatas: []string{b.Env.SshProxyIP},

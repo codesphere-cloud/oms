@@ -112,7 +112,7 @@ var _ = Describe("GCP Client Cleanup Methods", func() {
 				Expect(records[2].Rtype).To(Equal("A"))
 				Expect(records[3].Name).To(Equal("*.ws.example.com."))
 				Expect(records[3].Rtype).To(Equal("A"))
-				Expect(records[4].Name).To(Equal("*.ssh.example.com."))
+				Expect(records[4].Name).To(Equal("*.ssh.cs.example.com."))
 				Expect(records[4].Rtype).To(Equal("A"))
 			})
 		})
