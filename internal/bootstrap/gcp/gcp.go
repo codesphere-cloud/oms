@@ -1132,10 +1132,17 @@ yaml.dump(result, sys.stdout, default_flow_style=False)
 ' > "$SECRETS_VALUES"
 echo "Generated secrets values file."
 
-# Create postgres Service + Endpoints so codosphere pods can reach
-# the external postgres VM. The old installer normally does this
-# via set-up-cluster, which we skip because the LTS BOM lacks a
-# codesphere component.
+# Clean up any orphaned resources from previous failed install attempts.
+# Helm refuses to adopt resources that lack its ownership labels.
+"$HELM" uninstall codesphere -n codesphere 2>/dev/null || true
+"$KUBECTL" delete svc,deploy,ingress,configmap,secret,netpol,certificate,issuer --all -n codesphere 2>/dev/null || true
+
+# Create GHCR pull secret for image pulling.
+%s
+
+# Create postgres Service + Endpoints so codesphere pods can reach
+# the external postgres VM, and create required databases.
+# (Run after cleanup so the Service isn't deleted.)
 PG_IP=$(python3 -c "import yaml; c=yaml.safe_load(open('/etc/codesphere/config.yaml')); print(c.get('postgres',{}).get('primary',{}).get('ip',''))")
 if [ -n "$PG_IP" ]; then
   "$KUBECTL" apply -f - << SERVICE_EOF
@@ -1161,20 +1168,11 @@ subsets:
   - port: 5432
 SERVICE_EOF
   echo "Created postgres Service → $PG_IP"
-  # Create required databases on the postgres VM.
   ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@"$PG_IP" \
     "docker exec codesphere-postgres.service psql -U postgres -c 'CREATE DATABASE codesphere;' 2>/dev/null; \
      docker exec codesphere-postgres.service psql -U postgres -c 'CREATE DATABASE user_activity;' 2>/dev/null; \
      echo 'Databases ready.'" || echo "Warning: could not create databases on $PG_IP"
 fi
-
-# Clean up any orphaned resources from previous failed install attempts.
-# Helm refuses to adopt resources that lack its ownership labels.
-"$HELM" uninstall codesphere -n codesphere 2>/dev/null || true
-"$KUBECTL" delete svc,deploy,ingress,configmap,secret,netpol,certificate,issuer --all -n codesphere 2>/dev/null || true
-
-# Create GHCR pull secret for image pulling.
-%s
 
 echo "Installing codesphere platform via helm..."
 "$HELM" upgrade --install codesphere "$CHART" \
