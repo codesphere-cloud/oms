@@ -337,6 +337,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				sshProxyService := sshProxyValues["service"].(map[string]interface{})
 				Expect(sshProxyService["enabled"]).To(Equal(true))
 				Expect(sshProxyService["type"]).To(Equal("LoadBalancer"))
+				Expect(sshProxyService["loadBalancerIP"]).To(Equal("3.3.3.3"))
 				sshProxyAnnotations := sshProxyService["annotations"].(map[string]interface{})
 				Expect(sshProxyAnnotations["cloud.google.com/load-balancer-ipv4"]).To(Equal("3.3.3.3"))
 

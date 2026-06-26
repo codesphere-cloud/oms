@@ -428,8 +428,9 @@ func (b *GCPBootstrapper) applySshProxyConfig() {
 				"enabled": true,
 				"valuesObject": map[string]any{
 					"service": map[string]any{
-						"enabled": true,
-						"type":    "LoadBalancer",
+						"enabled":        true,
+						"type":           "LoadBalancer",
+						"loadBalancerIP": b.Env.SshProxyIP,
 						"annotations": map[string]any{
 							"cloud.google.com/load-balancer-ipv4": b.Env.SshProxyIP,
 						},
