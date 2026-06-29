@@ -191,15 +191,15 @@ License URL: https://github.com/cloudflare/circl/blob/v1.6.3/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/barman-cloud/pkg/api
-Version: v0.5.0
+Version: v0.5.1
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/barman-cloud/blob/v0.5.0/LICENSE
+License URL: https://github.com/cloudnative-pg/barman-cloud/blob/v0.5.1/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/cloudnative-pg
-Version: v1.29.1
+Version: v1.30.0
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.29.1/LICENSE
+License URL: https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.30.0/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/cnpg-i/pkg/identity
@@ -209,9 +209,9 @@ License URL: https://github.com/cloudnative-pg/cnpg-i/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/machinery/pkg
-Version: v0.4.0
+Version: v0.5.0
 License: Apache-2.0
-License URL: https://github.com/cloudnative-pg/machinery/blob/v0.4.0/LICENSE
+License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
@@ -695,9 +695,9 @@ License URL: https://github.com/kube-object-storage/lib-bucket-provisioner/blob/
  
 ----------
 Module: github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1
-Version: v8.4.0
+Version: v8.6.0
 License: Apache-2.0
-License URL: https://github.com/kubernetes-csi/external-snapshotter/blob/client/v8.4.0/client/LICENSE
+License URL: https://github.com/kubernetes-csi/external-snapshotter/blob/client/v8.6.0/client/LICENSE
  
 ----------
 Module: github.com/lann/builder
@@ -869,9 +869,9 @@ License URL: https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE
  
 ----------
 Module: github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring
-Version: v0.87.1
+Version: v0.92.0
 License: Apache-2.0
-License URL: https://github.com/prometheus-operator/prometheus-operator/blob/pkg/apis/monitoring/v0.87.1/pkg/apis/monitoring/LICENSE
+License URL: https://github.com/prometheus-operator/prometheus-operator/blob/pkg/apis/monitoring/v0.92.0/pkg/apis/monitoring/LICENSE
  
 ----------
 Module: github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil
@@ -1349,21 +1349,21 @@ License URL: https://github.com/kubernetes/streaming/blob/v0.36.2/LICENSE
  
 ----------
 Module: k8s.io/utils
-Version: v0.0.0-20260617174310-a95e086a2553
+Version: v0.0.0-20260626114624-be93311217bd
 License: Apache-2.0
-License URL: https://github.com/kubernetes/utils/blob/a95e086a2553/LICENSE
+License URL: https://github.com/kubernetes/utils/blob/be93311217bd/LICENSE
  
 ----------
 Module: k8s.io/utils/internal/third_party/forked/golang
-Version: v0.0.0-20260617174310-a95e086a2553
+Version: v0.0.0-20260626114624-be93311217bd
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/utils/blob/a95e086a2553/internal/third_party/forked/golang/LICENSE
+License URL: https://github.com/kubernetes/utils/blob/be93311217bd/internal/third_party/forked/golang/LICENSE
  
 ----------
 Module: k8s.io/utils/third_party/forked/golang/btree
-Version: v0.0.0-20260617174310-a95e086a2553
+Version: v0.0.0-20260626114624-be93311217bd
 License: Apache-2.0
-License URL: https://github.com/kubernetes/utils/blob/a95e086a2553/third_party/forked/golang/btree/LICENSE
+License URL: https://github.com/kubernetes/utils/blob/be93311217bd/third_party/forked/golang/btree/LICENSE
  
 ----------
 Module: oras.land/oras-go/v2
