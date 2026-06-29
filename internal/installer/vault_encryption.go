@@ -158,7 +158,7 @@ func generateAgeKey(keyPath string) (string, error) {
 
 // EncryptFileWithSOPS encrypts src with SOPS+age and writes ciphertext to target.
 func EncryptFileWithSOPS(src, target, recipient string) error {
-	cmd := exec.Command("sops", "--encrypt", "--age", recipient, "--output", target, src)
+	cmd := exec.Command("sops", "--encrypt", "--input-type", "yaml", "--age", recipient, "--output", target, src)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("sops encrypt failed: %w: %s", err, out)

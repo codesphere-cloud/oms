@@ -179,9 +179,35 @@ func isSOPSEncryptedYAML(data []byte) (bool, error) {
 }
 
 func parseVaultData(data []byte) (*files.InstallVault, error) {
+	data = unwrapSOPSData(data)
+
 	vault := &files.InstallVault{}
 	if err := vault.Unmarshal(data); err != nil {
 		return nil, err
 	}
 	return vault, nil
+}
+
+// unwrapSOPSData strips a top-level "data" literal block scalar wrapper if
+// present. SOPS whole-file encryption stores the entire document
+// under a data key.
+func unwrapSOPSData(data []byte) []byte {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return data
+	}
+	if len(doc.Content) == 0 {
+		return data
+	}
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode || len(root.Content) != 2 {
+		return data
+	}
+	keyNode := root.Content[0]
+	valNode := root.Content[1]
+	if keyNode.Value != "data" || valNode.Kind != yaml.ScalarNode {
+		return data
+	}
+	// The scalar value is the inner YAML content.
+	return []byte(valNode.Value)
 }

@@ -64,3 +64,5 @@ func (o *OpenBaoInstaller) ValidateConfig() error {
 func (o *OpenBaoInstaller) ReadinessTimeout() time.Duration {
 	return o.readinessTimeout()
 }
+
+var UnwrapSOPSData = unwrapSOPSData

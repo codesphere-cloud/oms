@@ -258,7 +258,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				setupCommonMocks()
 				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
 				mockFileWriter.EXPECT().Exists(c.Opts.Vault).Return(false)
-				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.Anything, os.FileMode(0600)).Return(nil)
+				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.MatchedBy(func(data []byte) bool {
+					return !strings.Contains(string(data), "content: |+")
+				}), os.FileMode(0600)).Return(nil)
 
 				err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
@@ -290,7 +292,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				setupCommonMocks()
 				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
 				mockFileWriter.EXPECT().Exists(c.Opts.Vault).Return(true)
-				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.Anything, os.FileMode(0600)).Return(nil)
+				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.MatchedBy(func(data []byte) bool {
+					return !strings.Contains(string(data), "content: |+")
+				}), os.FileMode(0600)).Return(nil)
 
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
@@ -322,9 +326,31 @@ var _ = Describe("InstallK0sCmd", func() {
 				setupCommonMocks()
 				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\nnew: true\n", nil)
 				mockFileWriter.EXPECT().Exists(c.Opts.Vault).Return(true)
-				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.Anything, os.FileMode(0600)).Return(nil)
+				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.MatchedBy(func(data []byte) bool {
+					return !strings.Contains(string(data), "content: |+")
+				}), os.FileMode(0600)).Return(nil)
 
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("trims trailing newlines from kubeconfig before storing in vault", func() {
+				c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+				c.Opts.Package = "test-package.tar.gz"
+				c.Opts.Version = "v1.30.0+k0s.0"
+				c.Opts.Vault = filepath.Join(tempDir, "prod.vault.yaml")
+
+				setupCommonMocks()
+				// kubeconfig with multiple trailing newlines — should be stripped
+				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").
+					Return("apiVersion: v1\nkind: Config\n\n\n", nil)
+				mockFileWriter.EXPECT().Exists(c.Opts.Vault).Return(false)
+				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.MatchedBy(func(data []byte) bool {
+					// Must not contain |+ chomping — trailing newlines should be stripped
+					return !strings.Contains(string(data), "content: |+")
+				}), os.FileMode(0600)).Return(nil)
+
+				err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
