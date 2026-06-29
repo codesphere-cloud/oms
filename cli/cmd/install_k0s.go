@@ -237,7 +237,7 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	if err != nil {
 		return fmt.Errorf("failed to retrieve kubeconfig from k0sctl: %w", err)
 	}
-	kubeconfigContent = strings.TrimRight(kubeconfigContent, "\n")
+	kubeconfigContent = strings.TrimRight(kubeconfigContent, "\n\r")
 
 	vault, wasEncrypted, err := c.loadOrCreateVault()
 	if err != nil {

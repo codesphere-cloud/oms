@@ -347,7 +347,20 @@ var _ = Describe("InstallK0sCmd", func() {
 				mockFileWriter.EXPECT().Exists(c.Opts.Vault).Return(false)
 				mockFileWriter.EXPECT().WriteFile(c.Opts.Vault, mock.MatchedBy(func(data []byte) bool {
 					// Must not contain |+ chomping — trailing newlines should be stripped
-					return !strings.Contains(string(data), "content: |+")
+					if strings.Contains(string(data), "content: |+") {
+						return false
+					}
+					// Verify the stored kubeconfig has no trailing newlines
+					var vault files.InstallVault
+					if err := yaml.Unmarshal(data, &vault); err != nil {
+						return false
+					}
+					for _, s := range vault.Secrets {
+						if s.Name == "kubeConfig" && s.File != nil {
+							return s.File.Content == "apiVersion: v1\nkind: Config"
+						}
+					}
+					return false
 				}), os.FileMode(0600)).Return(nil)
 
 				err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
