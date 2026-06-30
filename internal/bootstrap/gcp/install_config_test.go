@@ -92,8 +92,9 @@ var _ = Describe("Installconfig & Secrets", func() {
 			DNSZoneName:           "test-zone",
 			SSHPublicKeyPath:      "key.pub",
 			ProjectID:             "pid",
-			Experiments:           gcp.DefaultExperiments,
-			FeatureFlags:          map[string]bool{},
+			InternalFlags:         gcp.DefaultInternalFlags,
+			PreviewFlags:          gcp.DefaultPreviewFlags,
+			FeatureFlags:          gcp.DefaultFeatureFlags,
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{
@@ -344,7 +345,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("dev"))
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(map[string]bool{}))
-				Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(gcp.DefaultExperiments))
+				Expect(bs.Env.InstallConfig.Codesphere.Internal).To(Equal(gcp.DefaultInternalFlags))
+				Expect(bs.Env.InstallConfig.Codesphere.Preview).To(Equal(util.StringSliceToBoolMap(gcp.DefaultPreviewFlags)))
 
 				expectedInstallURI := "https://github.com/apps/" + bs.Env.GitHubAppName + "/installations/new"
 				Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub.OAuth.InstallationURI).To(Equal(expectedInstallURI))
@@ -378,11 +380,11 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("staging"))
 			})
-			Context("When Experiments are set in CodesphereEnvironment", func() {
+			Context("When internal flags are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
-					csEnv.Experiments = []string{"fake-exp1", "fake-exp2"}
+					csEnv.InternalFlags = []string{"fake-exp1", "fake-exp2"}
 				})
-				It("uses those experiments instead of defaults", func() {
+				It("uses those internal flags instead of defaults", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -392,12 +394,29 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(csEnv.Experiments))
+					Expect(bs.Env.InstallConfig.Codesphere.Internal).To(Equal(csEnv.InternalFlags))
+				})
+			})
+			Context("When preview flags are set in CodesphereEnvironment", func() {
+				BeforeEach(func() {
+					csEnv.PreviewFlags = []string{"fake-preview1", "fake-preview2"}
+				})
+				It("uses those preview flags instead of defaults", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.Preview).To(Equal(util.StringSliceToBoolMap(csEnv.PreviewFlags)))
 				})
 			})
 			Context("When feature flags are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
-					csEnv.FeatureFlags = map[string]bool{"fake-flag1": true, "fake-flag2": true}
+					csEnv.FeatureFlags = []string{"fake-flag1", "fake-flag2"}
 				})
 				It("uses those feature flags", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
@@ -409,7 +428,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(csEnv.FeatureFlags))
+					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(util.StringSliceToBoolMap(csEnv.FeatureFlags)))
 				})
 			})
 			Context("When GitHub App name is not set ", func() {

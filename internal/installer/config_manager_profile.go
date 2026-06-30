@@ -115,8 +115,14 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Codesphere.DNSServers == nil {
 		g.Config.Codesphere.DNSServers = []string{"8.8.8.8", "1.1.1.1"}
 	}
-	if g.Config.Codesphere.Experiments == nil {
-		g.Config.Codesphere.Experiments = []string{}
+	if g.Config.Codesphere.Internal == nil {
+		g.Config.Codesphere.Internal = []string{}
+	}
+	if g.Config.Codesphere.Preview == nil {
+		g.Config.Codesphere.Preview = map[string]bool{}
+	}
+	if g.Config.Codesphere.Features == nil {
+		g.Config.Codesphere.Features = map[string]bool{}
 	}
 	if g.Config.Codesphere.WorkspaceImages == nil {
 		g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{

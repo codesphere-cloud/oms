@@ -110,7 +110,9 @@ codesphere:
     cNameBaseDomain: custom.example.com
   dnsServers:
     - 8.8.8.8
-  experiments: []
+  internal: []
+  preview: {}
+  features: {}
   deployConfig:
     images:
       ubuntu-24.04:

@@ -69,10 +69,11 @@ type LocalBootstrapper struct {
 }
 
 type CodesphereEnvironment struct {
-	BaseDomain   string          `json:"base_domain"`
-	Experiments  []string        `json:"experiments"`
-	FeatureFlags map[string]bool `json:"feature_flags"`
-	Profile      string          `json:"profile"`
+	BaseDomain    string   `json:"base_domain"`
+	InternalFlags []string `json:"internal"`
+	PreviewFlags  []string `json:"preview"`
+	FeatureFlags  []string `json:"feature_flags"`
+	Profile       string   `json:"profile"`
 	// Installer
 	InstallVersion string `json:"install_version"`
 	InstallHash    string `json:"install_hash"`
@@ -636,8 +637,9 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	}
 	b.Env.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
 
-	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
-	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
+	b.Env.InstallConfig.Codesphere.Internal = b.Env.InternalFlags
+	b.Env.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
+	b.Env.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
 
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()

@@ -35,10 +35,12 @@ import (
 )
 
 type BootstrapLocalCmd struct {
-	cmd             *cobra.Command
-	CodesphereEnv   *local.CodesphereEnvironment
-	Yes             bool
-	FeatureFlagList []string
+	cmd           *cobra.Command
+	CodesphereEnv *local.CodesphereEnvironment
+	Yes           bool
+	// Experiments backs the deprecated --experiments flag; its values
+	// are folded into the internal bucket for backwards compatibility.
+	Experiments []string
 }
 
 func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, args []string) error {
@@ -75,8 +77,11 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 
 	// Codesphere Environment
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.BaseDomain, "base-domain", "cs.local", "Base domain for Codesphere")
-	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapLocalCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapLocalCmd.Experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
+	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
+	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.Profile, "profile", installer.PROFILE_DEV, "Profile to apply to the install config like resources (supported: dev, minimal, prod)")
 	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.K0s, "k0s", false, "Use k0s-specific configuration (required to deploy to k0s clusters)")
 
@@ -124,8 +129,8 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 		return err
 	}
 
-	for _, flag := range c.FeatureFlagList {
-		c.CodesphereEnv.FeatureFlags[flag] = true
+	if c.cmd.Flags().Changed("experiments") && !c.cmd.Flags().Changed("internal-flags") {
+		c.CodesphereEnv.InternalFlags = c.Experiments
 	}
 
 	stlog := bootstrap.NewStepLogger(false)

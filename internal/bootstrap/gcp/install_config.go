@@ -363,8 +363,9 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
-	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
-	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
+	b.Env.InstallConfig.Codesphere.Internal = b.Env.InternalFlags
+	b.Env.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
+	b.Env.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
 	b.applyExternalLokiConfig()
 	b.applyPrometheusRemoteWriteConfig()
 
