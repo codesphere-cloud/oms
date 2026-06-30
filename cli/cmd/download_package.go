@@ -87,7 +87,7 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Version, "version", "V", "", "Codesphere version to download")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Hash, "hash", "H", "", "Hash of the version to download if multiple builds exist for the same version")
-	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer.tar.gz", "Specify artifact to download")
+	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer-lite.tar.gz", "Specify artifact to download")
 	pkg.cmd.Flags().BoolVarP(&pkg.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
 	AddCmd(download, pkg.cmd)
 
