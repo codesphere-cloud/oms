@@ -16,4 +16,5 @@ e.g. mirror images from GHCR.
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)
-* [oms load images](oms_load_images.md)	 - Copy all GHCR image and OCI chart references from a BOM into a target registry
+* [oms load images](oms_load_images.md)	 - Mirror all Codesphere OCI images required to install package from Codesphere's registry
+
