@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/util/retry"
 )
 
 //go:embed manifests/openbao/vault-cr.yaml
@@ -759,40 +760,44 @@ func (o *OpenBaoInstaller) EnsureImagePullSecret() error {
 	}
 
 	secretsClient := o.Clientset.CoreV1().Secrets(o.Config.Namespace)
-	existing, err := secretsClient.Get(o.ctx, imagePullSecretName, metav1.GetOptions{})
-	if err != nil {
-		if !k8serrors.IsNotFound(err) {
-			return fmt.Errorf("checking image pull secret: %w", err)
-		}
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      imagePullSecretName,
-				Namespace: o.Config.Namespace,
-			},
-			Type: corev1.SecretTypeDockerConfigJson,
-			Data: map[string][]byte{corev1.DockerConfigJsonKey: dockerConfig},
-		}
-		_, err = secretsClient.Create(o.ctx, secret, metav1.CreateOptions{})
-		if err == nil {
+
+	// RetryOnConflict re-runs the closure on a resourceVersion conflict (409),
+	// covering both the concurrent-create race (Get says NotFound, Create says
+	// AlreadyExists) and a concurrent update between our Get and Update — each
+	// retry re-fetches the latest object before re-applying.
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		existing, err := secretsClient.Get(o.ctx, imagePullSecretName, metav1.GetOptions{})
+		if err != nil {
+			if !k8serrors.IsNotFound(err) {
+				return fmt.Errorf("checking image pull secret: %w", err)
+			}
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      imagePullSecretName,
+					Namespace: o.Config.Namespace,
+				},
+				Type: corev1.SecretTypeDockerConfigJson,
+				Data: map[string][]byte{corev1.DockerConfigJsonKey: dockerConfig},
+			}
+			// Treat a concurrent create as a conflict so RetryOnConflict
+			// re-enters and falls through to the update branch.
+			if _, err := secretsClient.Create(o.ctx, secret, metav1.CreateOptions{}); err != nil {
+				if k8serrors.IsAlreadyExists(err) {
+					return k8serrors.NewConflict(corev1.Resource("secrets"), imagePullSecretName, err)
+				}
+				return fmt.Errorf("creating image pull secret: %w", err)
+			}
 			return nil
 		}
-		if !k8serrors.IsAlreadyExists(err) {
-			return fmt.Errorf("creating image pull secret: %w", err)
-		}
-		// Created concurrently between our Get and Create — re-fetch and update.
-		existing, err = secretsClient.Get(o.ctx, imagePullSecretName, metav1.GetOptions{})
-		if err != nil {
-			return fmt.Errorf("re-fetching image pull secret after create conflict: %w", err)
-		}
-	}
 
-	// Update existing secret — preserve metadata, refresh type and data.
-	existing.Type = corev1.SecretTypeDockerConfigJson
-	existing.Data = map[string][]byte{corev1.DockerConfigJsonKey: dockerConfig}
-	if _, err := secretsClient.Update(o.ctx, existing, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("updating image pull secret: %w", err)
-	}
-	return nil
+		// Update existing secret — preserve metadata, refresh type and data.
+		existing.Type = corev1.SecretTypeDockerConfigJson
+		existing.Data = map[string][]byte{corev1.DockerConfigJsonKey: dockerConfig}
+		if _, err := secretsClient.Update(o.ctx, existing, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("updating image pull secret: %w", err)
+		}
+		return nil
+	})
 }
 
 // buildDockerConfigJSON renders a .dockerconfigjson payload authenticating to
