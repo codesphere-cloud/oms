@@ -224,15 +224,15 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 			Pass --skip-steps argocd or add argocd to operations.skip to skip the ArgoCD pre-step.`),
 			Example: formatExamples("install codesphere dependencies", []io.Example{
 				{
-					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml",
+					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml",
 					Desc: "Install cluster dependencies (including ArgoCD)",
 				},
 				{
-					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml -s argocd",
+					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s argocd",
 					Desc: "Install cluster dependencies without the ArgoCD pre-step",
 				},
 				{
-					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml --pc-apps-values base.yaml --pc-apps-values dc-overlay.yaml",
+					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml --pc-apps-values base.yaml --pc-apps-values dc-overlay.yaml",
 					Desc: "Install cluster dependencies with custom pc-apps values files",
 				},
 			}),

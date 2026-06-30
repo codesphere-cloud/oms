@@ -65,7 +65,7 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 			Requires the infrastructure and dependencies phases to have completed successfully.`),
 			Example: formatExamples("install codesphere platform", []io.Example{
 				{
-					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml",
+					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml",
 					Desc: "Install Codesphere platform only",
 				},
 			}),
