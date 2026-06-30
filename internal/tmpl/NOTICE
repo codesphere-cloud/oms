@@ -41,9 +41,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.11.0/iam/
  
 ----------
 Module: cloud.google.com/go/longrunning
-Version: v1.0.0
+Version: v1.1.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v1.0.0/longrunning/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v1.1.0/longrunning/LICENSE
  
 ----------
 Module: cloud.google.com/go/resourcemanager
@@ -185,9 +185,9 @@ License URL: https://github.com/clipperhouse/uax29/blob/v2.7.0/LICENSE
  
 ----------
 Module: github.com/cloudflare/circl
-Version: v1.6.3
+Version: v1.6.4
 License: BSD-3-Clause
-License URL: https://github.com/cloudflare/circl/blob/v1.6.3/LICENSE
+License URL: https://github.com/cloudflare/circl/blob/v1.6.4/LICENSE
  
 ----------
 Module: github.com/cloudnative-pg/barman-cloud/pkg/api
@@ -335,9 +335,9 @@ License URL: https://github.com/getsops/gopgagent/blob/7044f28e491e/LICENSE
  
 ----------
 Module: github.com/getsops/sops/v3
-Version: v3.13.1
+Version: v3.13.2
 License: MPL-2.0
-License URL: https://github.com/getsops/sops/blob/v3.13.1/LICENSE
+License URL: https://github.com/getsops/sops/blob/v3.13.2/LICENSE
  
 ----------
 Module: github.com/go-errors/errors
@@ -539,9 +539,9 @@ License URL: https://github.com/google/uuid/blob/v1.6.0/LICENSE
  
 ----------
 Module: github.com/googleapis/enterprise-certificate-proxy/client
-Version: v0.3.16
+Version: v0.3.17
 License: Apache-2.0
-License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.16/LICENSE
+License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.17/LICENSE
  
 ----------
 Module: github.com/googleapis/gax-go/v2
@@ -1193,21 +1193,21 @@ License URL: https://github.com/googleapis/google-api-go-client/blob/v0.286.0/in
  
 ----------
 Module: google.golang.org/genproto/googleapis
-Version: v0.0.0-20260615183401-62b3387ff324
+Version: v0.0.0-20260622175928-b703f567277d
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/62b3387ff324/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/b703f567277d/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/api
-Version: v0.0.0-20260615183401-62b3387ff324
+Version: v0.0.0-20260622175928-b703f567277d
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/62b3387ff324/googleapis/api/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/b703f567277d/googleapis/api/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20260615183401-62b3387ff324
+Version: v0.0.0-20260622175928-b703f567277d
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/62b3387ff324/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/b703f567277d/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc
