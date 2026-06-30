@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	k8s "github.com/codesphere-cloud/oms/internal/util"
+	"github.com/distribution/reference"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,14 +37,27 @@ var vaultCRTemplate []byte
 const (
 	openBaoUnsealSecretName = "openbao-unseal-keys"
 	DefaultOpenBaoNamespace = "vault"
-	openBaoImage            = "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4"
-	bankVaultsImage         = "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0"
-	bankVaultsChartRepo     = "oci://ghcr.io/bank-vaults/helm-charts"
-	bankVaultsChartName     = "vault-operator"
-	bankVaultsChartVersion  = "1.22.5"
-	defaultPasswordLength   = 32
-	pollInterval            = 5 * time.Second
-	maxPollInterval         = 30 * time.Second
+
+	// imagePullSecretName is the dockerconfigjson Secret created from the
+	// OMS_REGISTRY_USER/OMS_REGISTRY_PASSWORD env vars and attached to the
+	// "openbao" ServiceAccount so the operator-managed pods can pull the
+	// OpenBao and bank-vaults images from the configured (private) registry.
+	imagePullSecretName = "openbao-registry"
+
+	// Default image and chart locations. All point at the private Codesphere
+	// GHCR mirror; each is overridable via a CLI flag so a customer can use
+	// their own mirrored OCI registry. The registry the pull secret
+	// authenticates to is derived from these refs at runtime, not hardcoded.
+	DefaultOpenBaoImage        = "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4"
+	DefaultBankVaultsImage     = "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0"
+	DefaultOperatorImage       = "ghcr.io/codesphere-cloud/docker/ghcr.io/bank-vaults/vault-operator:1.24.0"
+	DefaultBankVaultsChartRepo = "oci://ghcr.io/codesphere-cloud/docker/ghcr.io/bank-vaults/helm-charts"
+
+	bankVaultsChartName    = "vault-operator"
+	bankVaultsChartVersion = "1.24.0"
+	defaultPasswordLength  = 32
+	pollInterval           = 5 * time.Second
+	maxPollInterval        = 30 * time.Second
 
 	// defaultReadinessTimeoutPerReplica is added to the base timeout for each
 	// replica when waiting for all OpenBao pods to become ready. Pods come up
@@ -97,6 +112,22 @@ type OpenBaoInstallerConfig struct {
 	ReadinessTimeoutPerReplica time.Duration
 	AgeRecipient               string
 	AgeKeyPath                 string
+	// RegistryUser/RegistryPassword are read from OMS_REGISTRY_USER and
+	// OMS_REGISTRY_PASSWORD. When both are set, an image pull secret for the
+	// configured registry is created and wired onto the openbao ServiceAccount
+	// (and the operator chart), and a Helm OCI login is performed before pulling
+	// the operator chart. When both are empty, no pull secret is configured and
+	// no registry login is attempted (unchanged behavior).
+	RegistryUser     string
+	RegistryPassword string
+
+	// Image and chart overrides. Empty values are backfilled in validateConfig
+	// from the Default* constants, so a customer can repoint any of them at a
+	// mirrored OCI registry without affecting the default install.
+	OpenBaoImage      string // OpenBao server image (Vault CR spec.image)
+	BankVaultsImage   string // bank-vaults configurer image (Vault CR spec.bankVaultsImage)
+	OperatorImage     string // bank-vaults operator pod image (Helm values override)
+	OperatorChartRepo string // OCI repo hosting the vault-operator Helm chart
 }
 
 // OpenBaoInstaller orchestrates the Day-0 bootstrap, configuration, and DR
@@ -167,6 +198,18 @@ func (o *OpenBaoInstaller) validateConfig() error {
 	if o.Config.ReadinessTimeoutPerReplica <= 0 {
 		o.Config.ReadinessTimeoutPerReplica = defaultReadinessTimeoutPerReplica
 	}
+	if o.Config.OpenBaoImage == "" {
+		o.Config.OpenBaoImage = DefaultOpenBaoImage
+	}
+	if o.Config.BankVaultsImage == "" {
+		o.Config.BankVaultsImage = DefaultBankVaultsImage
+	}
+	if o.Config.OperatorImage == "" {
+		o.Config.OperatorImage = DefaultOperatorImage
+	}
+	if o.Config.OperatorChartRepo == "" {
+		o.Config.OperatorChartRepo = DefaultBankVaultsChartRepo
+	}
 	return nil
 }
 
@@ -217,6 +260,13 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 	})
 	if err != nil {
 		return fmt.Errorf("failed to ensure namespace: %w", err)
+	}
+
+	// Create the GHCR pull secret before the operator schedules any pods, so
+	// the openbao ServiceAccount can reference it from the moment pods appear.
+	err = o.Logger.Step("Ensuring image pull secret", o.EnsureImagePullSecret)
+	if err != nil {
+		return fmt.Errorf("failed to ensure image pull secret: %w", err)
 	}
 
 	err = o.Logger.Step("Deploying Bank-Vaults Operator", o.DeployBankVaultsOperator)
@@ -325,15 +375,19 @@ func (o *OpenBaoInstaller) GeneratePassword() error {
 // installed in a different namespace, we skip re-deployment — one instance
 // is sufficient for the entire cluster.
 func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
+	values, err := o.operatorChartValues()
+	if err != nil {
+		return err
+	}
 	cfg := ChartConfig{
 		ReleaseName: operatorName,
-		ChartName:   bankVaultsChartRepo + "/" + bankVaultsChartName,
+		ChartName:   o.Config.OperatorChartRepo + "/" + bankVaultsChartName,
 		Version:     bankVaultsChartVersion,
 		Namespace:   o.Config.Namespace,
 		// Namespace creation is handled exclusively by ensureNamespace, which
 		// runs earlier in the install pipeline — keep a single creation path.
 		CreateNamespace: false,
-		Values:          map[string]interface{}{},
+		Values:          values,
 	}
 
 	// Upgrade in place when a release already exists in the target namespace.
@@ -342,6 +396,9 @@ func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 		return err
 	}
 	if exists {
+		if err := o.loginChartRegistry(); err != nil {
+			return err
+		}
 		return o.Helm.UpgradeChart(o.ctx, cfg, UpgradeChartOptions{})
 	}
 
@@ -366,7 +423,68 @@ func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 	}
 
 	// Operator does not exist — perform fresh install.
+	if err := o.loginChartRegistry(); err != nil {
+		return err
+	}
 	return o.Helm.InstallChart(o.ctx, cfg, InstallChartOptions{})
+}
+
+// loginChartRegistry authenticates the Helm client against the OCI registry
+// hosting the operator chart, so a chart mirrored to a private registry can be
+// pulled. No-op when no credentials were supplied (public chart registry). The
+// authenticated registry client is reused by the subsequent chart pull. Mirrors
+// the pattern in pc_apps.go.
+func (o *OpenBaoInstaller) loginChartRegistry() error {
+	if !o.imagePullSecretConfigured() {
+		return nil
+	}
+	parsed, err := url.Parse(o.Config.OperatorChartRepo)
+	if err != nil {
+		return fmt.Errorf("parsing operator chart repo %q: %w", o.Config.OperatorChartRepo, err)
+	}
+	if parsed.Host == "" {
+		return fmt.Errorf("operator chart repo %q has no host", o.Config.OperatorChartRepo)
+	}
+	if err := o.Helm.LoginRegistry(o.ctx, parsed.Host, o.Config.RegistryUser, o.Config.RegistryPassword); err != nil {
+		return fmt.Errorf("authenticating to chart registry %q: %w", parsed.Host, err)
+	}
+	return nil
+}
+
+// operatorChartValues builds the Helm values overriding the vault-operator
+// chart: the operator pod image (always, from OperatorImage) and, when
+// credentials are configured, the image pull secret referencing
+// imagePullSecretName so the operator pod can pull from a private registry.
+//
+// NOTE: the value keys (image.repository, image.tag, image.imagePullSecrets)
+// follow the bank-vaults vault-operator chart schema. A chart version bump can
+// move these — confirm with:
+//
+//	helm show values oci://ghcr.io/bank-vaults/helm-charts/vault-operator --version 1.24.0
+//
+// Wrong keys are silently ignored and the operator falls back to its chart
+// defaults (public image, no pull secret).
+func (o *OpenBaoInstaller) operatorChartValues() (map[string]interface{}, error) {
+	image := map[string]interface{}{}
+	if o.Config.OperatorImage != "" {
+		ref, err := reference.ParseNormalizedNamed(o.Config.OperatorImage)
+		if err != nil {
+			return nil, fmt.Errorf("parsing operator image %q: %w", o.Config.OperatorImage, err)
+		}
+		image["repository"] = reference.TrimNamed(ref).Name()
+		if tagged, ok := ref.(reference.Tagged); ok {
+			image["tag"] = tagged.Tag()
+		}
+	}
+	if o.imagePullSecretConfigured() {
+		image["imagePullSecrets"] = []interface{}{
+			map[string]interface{}{"name": imagePullSecretName},
+		}
+	}
+	if len(image) == 0 {
+		return map[string]interface{}{}, nil
+	}
+	return map[string]interface{}{"image": image}, nil
 }
 
 // cleanOrphanedOperatorRBAC best-effort deletes the operator's cluster-scoped
@@ -447,6 +565,10 @@ type vaultCRTemplateData struct {
 	Replicas          int
 	StorageSize       string
 	RetryJoinAddrs    []string
+	// ImagePullSecretName is the name of the dockerconfigjson Secret to attach
+	// to the openbao ServiceAccount. Empty when no registry credentials were
+	// supplied, in which case the template omits imagePullSecrets entirely.
+	ImagePullSecretName string
 }
 
 // Build retry_join addresses for Raft so each node can autonomously
@@ -470,16 +592,24 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 
 	retryJoinAddrs := buildRetryJoinAddrs(o.Config.Replicas, o.Config.Namespace)
 
+	// Wire the pull secret onto the ServiceAccount only when credentials were
+	// supplied; EnsureImagePullSecret has already created it by this point.
+	var pullSecretName string
+	if o.imagePullSecretConfigured() {
+		pullSecretName = imagePullSecretName
+	}
+
 	data := vaultCRTemplateData{
-		Namespace:         o.Config.Namespace,
-		OpenBaoImage:      openBaoImage,
-		BankVaultsImage:   bankVaultsImage,
-		SecretsEngineName: o.Config.SecretsEngineName,
-		BaoUsername:       o.Config.Username,
-		BaoPassword:       o.password,
-		Replicas:          o.Config.Replicas,
-		StorageSize:       o.Config.StorageSize,
-		RetryJoinAddrs:    retryJoinAddrs,
+		Namespace:           o.Config.Namespace,
+		OpenBaoImage:        o.Config.OpenBaoImage,
+		BankVaultsImage:     o.Config.BankVaultsImage,
+		SecretsEngineName:   o.Config.SecretsEngineName,
+		BaoUsername:         o.Config.Username,
+		BaoPassword:         o.password,
+		Replicas:            o.Config.Replicas,
+		StorageSize:         o.Config.StorageSize,
+		RetryJoinAddrs:      retryJoinAddrs,
+		ImagePullSecretName: pullSecretName,
 	}
 
 	var buf bytes.Buffer
@@ -589,6 +719,121 @@ func (o *OpenBaoInstaller) ensureUnsealSecret(secretsClient corev1client.SecretI
 		return fmt.Errorf("updating unseal secret from backup: %w", err)
 	}
 	return nil
+}
+
+// imagePullSecretConfigured reports whether registry credentials were supplied
+// (both username and password). Used to decide whether the pull secret is
+// created and whether to wire it onto the openbao ServiceAccount.
+func (o *OpenBaoInstaller) imagePullSecretConfigured() bool {
+	return o.Config.RegistryUser != "" && o.Config.RegistryPassword != ""
+}
+
+// EnsureImagePullSecret creates or updates the dockerconfigjson Secret used to
+// pull the OpenBao, bank-vaults configurer, and operator images from their
+// (possibly private, possibly mirrored) registries. Credentials come from
+// OMS_REGISTRY_USER/OMS_REGISTRY_PASSWORD:
+//   - both empty: no-op (clusters with node-level creds or public access).
+//   - both set: create/update the secret idempotently.
+//   - exactly one set: error, since a partial credential never works.
+//
+// The dockerconfigjson contains one auths entry per distinct registry host
+// derived from the configured image refs, so a single secret authenticates to
+// every registry the install pulls from. It is attached to the openbao
+// ServiceAccount by ApplyVaultCR and to the operator chart by
+// DeployBankVaultsOperator when credentials are present.
+func (o *OpenBaoInstaller) EnsureImagePullSecret() error {
+	if o.Config.RegistryUser == "" && o.Config.RegistryPassword == "" {
+		return nil
+	}
+	if !o.imagePullSecretConfigured() {
+		return fmt.Errorf("incomplete registry credentials: set both OMS_REGISTRY_USER and OMS_REGISTRY_PASSWORD, or neither")
+	}
+
+	hosts, err := registryHostsFor(o.Config.OpenBaoImage, o.Config.BankVaultsImage, o.Config.OperatorImage)
+	if err != nil {
+		return err
+	}
+	dockerConfig, err := buildDockerConfigJSON(hosts, o.Config.RegistryUser, o.Config.RegistryPassword)
+	if err != nil {
+		return fmt.Errorf("building docker config: %w", err)
+	}
+
+	secretsClient := o.Clientset.CoreV1().Secrets(o.Config.Namespace)
+	existing, err := secretsClient.Get(o.ctx, imagePullSecretName, metav1.GetOptions{})
+	if err != nil {
+		if !k8serrors.IsNotFound(err) {
+			return fmt.Errorf("checking image pull secret: %w", err)
+		}
+		secret := &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      imagePullSecretName,
+				Namespace: o.Config.Namespace,
+			},
+			Type: corev1.SecretTypeDockerConfigJson,
+			Data: map[string][]byte{corev1.DockerConfigJsonKey: dockerConfig},
+		}
+		_, err = secretsClient.Create(o.ctx, secret, metav1.CreateOptions{})
+		if err == nil {
+			return nil
+		}
+		if !k8serrors.IsAlreadyExists(err) {
+			return fmt.Errorf("creating image pull secret: %w", err)
+		}
+		// Created concurrently between our Get and Create — re-fetch and update.
+		existing, err = secretsClient.Get(o.ctx, imagePullSecretName, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("re-fetching image pull secret after create conflict: %w", err)
+		}
+	}
+
+	// Update existing secret — preserve metadata, refresh type and data.
+	existing.Type = corev1.SecretTypeDockerConfigJson
+	existing.Data = map[string][]byte{corev1.DockerConfigJsonKey: dockerConfig}
+	if _, err := secretsClient.Update(o.ctx, existing, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("updating image pull secret: %w", err)
+	}
+	return nil
+}
+
+// buildDockerConfigJSON renders a .dockerconfigjson payload authenticating to
+// each given registry host with the same username/password.
+func buildDockerConfigJSON(hosts []string, username, password string) ([]byte, error) {
+	type dockerAuth struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Auth     string `json:"auth"`
+	}
+	auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+	auths := make(map[string]dockerAuth, len(hosts))
+	for _, host := range hosts {
+		auths[host] = dockerAuth{Username: username, Password: password, Auth: auth}
+	}
+	return json.Marshal(map[string]map[string]dockerAuth{"auths": auths})
+}
+
+// registryHostsFor returns the distinct registry hosts of the given image
+// references (e.g. "ghcr.io/codesphere-cloud/.../openbao:2.5.4" -> "ghcr.io").
+// Empty refs are skipped. The result is order-stable so the rendered secret is
+// deterministic across runs.
+func registryHostsFor(images ...string) ([]string, error) {
+	seen := make(map[string]struct{})
+	var hosts []string
+	for _, image := range images {
+		if image == "" {
+			continue
+		}
+		ref, err := reference.ParseNormalizedNamed(image)
+		if err != nil {
+			return nil, fmt.Errorf("parsing image reference %q: %w", image, err)
+		}
+		host := reference.Domain(ref)
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		hosts = append(hosts, host)
+	}
+	return hosts, nil
 }
 
 // readinessTimeout returns how long to wait for all pods to become ready.
