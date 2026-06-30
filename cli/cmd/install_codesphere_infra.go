@@ -63,7 +63,7 @@ func AddInstallCodesphereInfraCmd(codesphere *cobra.Command, opts *InstallCodesp
 			Runs steps: copy-dependencies, extract-dependencies, load-container-images, sops, docker, postgres, ceph, kubernetes.`),
 			Example: formatExamples("install codesphere infra", []io.Example{
 				{
-					Cmd:  "-p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml",
+					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml",
 					Desc: "Install infrastructure components only",
 				},
 				{

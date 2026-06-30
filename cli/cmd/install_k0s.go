@@ -66,7 +66,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.30.0+k0s.0)"},
 				{Cmd: "--k0sctl-version <version>", Desc: "Version of k0sctl to use (e.g., v0.17.4)"},
-				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from"},
+				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from"},
 				{Cmd: "--ssh-key-path <path>", Desc: "SSH private key path for remote installation"},
 				{Cmd: "--force", Desc: "Force new download and installation"},
 				{Cmd: "--no-download", Desc: "Skip downloading k0s binary (expects it to be on remote nodes)"},
@@ -78,7 +78,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to install")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", "", "Version of k0sctl to use")
-	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from")
+	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file (required)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.SSHKeyPath, "ssh-key-path", "", "SSH private key path for remote installation")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")

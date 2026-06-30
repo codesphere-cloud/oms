@@ -43,7 +43,6 @@ func openTar(filename string, fileIo FileIO) (*tar.Reader, error) {
 	}
 	bufferedFile := bufio.NewReader(file)
 
-	log.Println("Reading TAR archive contents...")
 	tr := tar.NewReader(bufferedFile)
 	return tr, nil
 }
@@ -62,7 +61,6 @@ func openTarGz(filename string, fileIo FileIO) (*tar.Reader, error) {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
 
-	log.Println("Reading TAR archive contents...")
 	tr := tar.NewReader(gzr)
 	return tr, nil
 }
@@ -71,13 +69,11 @@ func openTarGz(filename string, fileIo FileIO) (*tar.Reader, error) {
 func extractEntry(header *tar.Header, targetPath string, fileIo FileIO, tr *tar.Reader) error {
 	switch header.Typeflag {
 	case tar.TypeDir:
-		log.Printf("Creating directory: %s", targetPath)
 		if err := fileIo.MkdirAll(targetPath, os.FileMode(header.Mode)); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", targetPath, err)
 		}
 
 	case tar.TypeReg:
-		log.Printf("Extracting file: %s", targetPath)
 		if err := fileIo.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", targetPath, err)
 		}
