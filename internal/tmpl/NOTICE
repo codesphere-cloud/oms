@@ -1211,9 +1211,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/b703f567277d/googlea
  
 ----------
 Module: google.golang.org/grpc
-Version: v1.81.1
+Version: v1.82.0
 License: Apache-2.0
-License URL: https://github.com/grpc/grpc-go/blob/v1.81.1/LICENSE
+License URL: https://github.com/grpc/grpc-go/blob/v1.82.0/LICENSE
  
 ----------
 Module: google.golang.org/protobuf
