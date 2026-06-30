@@ -17,13 +17,13 @@ oms install codesphere dependencies [flags]
 
 ```
 # Install cluster dependencies (including ArgoCD)
-$ oms install codesphere dependencies -p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml
+$ oms install codesphere dependencies -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml
 
 # Install cluster dependencies without the ArgoCD pre-step
-$ oms install codesphere dependencies -p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml -s argocd
+$ oms install codesphere dependencies -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s argocd
 
 # Install cluster dependencies with custom pc-apps values files
-$ oms install codesphere dependencies -p codesphere-v1.2.3-installer.tar.gz -k <path-to-private-key> -c config.yaml --pc-apps-values base.yaml --pc-apps-values dc-overlay.yaml
+$ oms install codesphere dependencies -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml --pc-apps-values base.yaml --pc-apps-values dc-overlay.yaml
 
 ```
 
@@ -45,7 +45,7 @@ $ oms install codesphere dependencies -p codesphere-v1.2.3-installer.tar.gz -k <
   -c, --config stringArray           Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order
       --direct-connection            Use direct connection for installation, requires having access to the cluster nodes from your machine
   -f, --force                        Enforce package extraction
-  -p, --package string               Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from
+  -p, --package string               Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load binaries, installer etc. from
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
   -k, --priv-key string              Path to the private key to encrypt/decrypt secrets
   -s, --skip-steps strings           Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd

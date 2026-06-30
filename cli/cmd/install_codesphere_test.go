@@ -28,7 +28,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 		globalOpts = &cmd.GlobalOptions{}
 		opts = &cmd.InstallCodesphereOpts{
 			GlobalOptions: globalOpts,
-			Package:       "codesphere-v1.66.0-installer.tar.gz",
+			Package:       "codesphere-v1.66.0-installer-lite.tar.gz",
 			Force:         false,
 		}
 		c = cmd.InstallCodesphereCmd{

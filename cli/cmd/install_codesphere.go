@@ -116,7 +116,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 		Opts: &InstallCodesphereOpts{GlobalOptions: opts},
 		Env:  env.NewEnv(),
 	}
-	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load binaries, installer etc. from")
+	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load binaries, installer etc. from")
 	codesphere.cmd.PersistentFlags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
 	codesphere.cmd.PersistentFlags().StringArrayVarP(&codesphere.Opts.Configs, "config", "c", nil, "Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.Vault, "vault", "", "Path to the SOPS-encrypted prod.vault.yaml file used for config templating")
