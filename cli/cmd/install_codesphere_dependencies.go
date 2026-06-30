@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -118,10 +119,14 @@ type argoCDAndAppsInstall struct {
 }
 
 func (i *argoCDAndAppsInstall) loadVaultData() error {
-	var err error
-	i.vault, err = installer.LoadVaultData(i.opts.Vault, i.opts.PrivKey)
+	vaultPath, err := i.resolveVaultPath()
 	if err != nil {
-		return fmt.Errorf("failed to load vault: %w", err)
+		return err
+	}
+
+	i.vault, err = installer.LoadVaultData(vaultPath, i.opts.PrivKey)
+	if err != nil {
+		return fmt.Errorf("failed to load vault %s: %w", vaultPath, err)
 	}
 	if s := i.vault.GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
 		i.ociPassword = s.Fields.Password
@@ -143,6 +148,16 @@ func (i *argoCDAndAppsInstall) loadVaultData() error {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 	return nil
+}
+
+func (i *argoCDAndAppsInstall) resolveVaultPath() (string, error) {
+	if strings.TrimSpace(i.opts.Vault) != "" {
+		return i.opts.Vault, nil
+	}
+	if strings.TrimSpace(i.config.Secrets.BaseDir) == "" {
+		return "", fmt.Errorf("vault path is not set and config.yaml secrets.baseDir is empty")
+	}
+	return filepath.Join(i.config.Secrets.BaseDir, "prod.vault.yaml"), nil
 }
 
 func (i *argoCDAndAppsInstall) installArgoCD() error {
