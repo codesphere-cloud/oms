@@ -268,6 +268,18 @@ License: Apache-2.0
 License URL: https://github.com/distribution/reference/blob/v0.6.0/LICENSE
  
 ----------
+Module: github.com/docker/cli/cli/config
+Version: v29.5.3
+License: Apache-2.0
+License URL: https://github.com/docker/cli/blob/v29.5.3/LICENSE
+ 
+----------
+Module: github.com/docker/docker-credential-helpers
+Version: v0.9.8
+License: MIT
+License URL: https://github.com/docker/docker-credential-helpers/blob/v0.9.8/LICENSE
+ 
+----------
 Module: github.com/dylibso/observe-sdk/go
 Version: v0.0.0-20240828172851-9145d8ad07e1
 License: Apache-2.0
@@ -508,6 +520,12 @@ License: BSD-3-Clause
 License URL: https://github.com/google/go-cmp/blob/v0.7.0/LICENSE
  
 ----------
+Module: github.com/google/go-containerregistry
+Version: v0.21.6
+License: Apache-2.0
+License URL: https://github.com/google/go-containerregistry/blob/v0.21.6/LICENSE
+ 
+----------
 Module: github.com/google/go-github/v74/github
 Version: v74.0.0
 License: BSD-3-Clause
@@ -680,6 +698,36 @@ Module: github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg
 Version: v1.7.7
 License: Apache-2.0
 License URL: https://github.com/k8snetworkplumbingwg/network-attachment-definition-client/blob/v1.7.7/LICENSE
+ 
+----------
+Module: github.com/klauspost/compress
+Version: v1.18.6
+License: MIT
+License URL: https://github.com/klauspost/compress/blob/v1.18.6/LICENSE
+ 
+----------
+Module: github.com/klauspost/compress
+Version: v1.18.6
+License: Apache-2.0
+License URL: https://github.com/klauspost/compress/blob/v1.18.6/LICENSE
+ 
+----------
+Module: github.com/klauspost/compress
+Version: v1.18.6
+License: BSD-3-Clause
+License URL: https://github.com/klauspost/compress/blob/v1.18.6/LICENSE
+ 
+----------
+Module: github.com/klauspost/compress/internal/snapref
+Version: v1.18.6
+License: BSD-3-Clause
+License URL: https://github.com/klauspost/compress/blob/v1.18.6/internal/snapref/LICENSE
+ 
+----------
+Module: github.com/klauspost/compress/zstd/internal/xxhash
+Version: v1.18.6
+License: MIT
+License URL: https://github.com/klauspost/compress/blob/v1.18.6/zstd/internal/xxhash/LICENSE.txt
  
 ----------
 Module: github.com/kr/fs

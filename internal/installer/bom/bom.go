@@ -7,7 +7,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
+	"sort"
 
+	"github.com/codesphere-cloud/oms/internal/registry"
 	"github.com/distribution/reference"
 )
 
@@ -99,4 +102,32 @@ func (b *Config) GetCodesphereContainerImages() (map[string]string, error) {
 		return nil, fmt.Errorf("codesphere component not found in BOM")
 	}
 	return comp.ContainerImages, nil
+}
+
+// ImageReferencesForCodesphereRegistry returns unique image and OCI chart references for the Codesphere registry.
+func (b *Config) ImageReferencesForCodesphereRegistry() []string {
+	if b == nil {
+		return nil
+	}
+
+	refs := []string{}
+	for _, component := range b.Components {
+		for i := range component.ContainerImages {
+			imageRef := component.ContainerImages[i]
+			if registry.IsCodesphereImageReference(imageRef) && !slices.Contains(refs, imageRef) {
+				refs = append(refs, imageRef)
+			}
+		}
+
+		for i := range component.Files {
+			fileRef := component.Files[i]
+			if registry.IsCodesphereImageReference(fileRef.OciRef) && !slices.Contains(refs, fileRef.OciRef) {
+				refs = append(refs, fileRef.OciRef)
+			}
+		}
+	}
+
+	sort.Strings(refs)
+
+	return refs
 }
