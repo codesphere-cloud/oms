@@ -6,6 +6,7 @@ package installer_test
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,6 +24,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -67,8 +69,8 @@ var _ = Describe("OpenBaoInstaller", func() {
 			// No operator Deployment exists (fake clientset has nothing), so InstallChart is called
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.ReleaseName == "vault-operator" &&
-					cfg.ChartName == "oci://ghcr.io/bank-vaults/helm-charts/vault-operator" &&
-					cfg.Version == "1.22.5" &&
+					cfg.ChartName == installer.DefaultBankVaultsChartRepo+"/vault-operator" &&
+					cfg.Version == "1.24.0" &&
 					cfg.Namespace == "vault" &&
 					cfg.CreateNamespace == false
 			}), mock.Anything).Return(nil)
@@ -77,12 +79,57 @@ var _ = Describe("OpenBaoInstaller", func() {
 				Helm:      helmMock,
 				Clientset: clientset,
 				Logger:    bootstrap.NewStepLogger(true),
-				Config:    installer.OpenBaoInstallerConfig{Namespace: "vault"},
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace:         "vault",
+					OperatorChartRepo: installer.DefaultBankVaultsChartRepo,
+				},
 			}
 			inst.SetCtx(ctx)
 
 			err = inst.DeployBankVaultsOperator()
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("installs with mirror overrides: custom chart repo, operator image, and pull secret", func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
+			// Credentials are set, so the chart registry login must happen first.
+			helmMock.EXPECT().LoginRegistry(mock.Anything, "mirror.example.com", "u", "p").Return(nil)
+
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				if cfg.ChartName != "oci://mirror.example.com/bank-vaults/helm-charts/vault-operator" {
+					return false
+				}
+				image, ok := cfg.Values["image"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+				if image["repository"] != "mirror.example.com/bank-vaults/vault-operator" || image["tag"] != "1.24.0" {
+					return false
+				}
+				secrets, ok := image["imagePullSecrets"].([]interface{})
+				return ok && len(secrets) == 1 &&
+					secrets[0].(map[string]interface{})["name"] == "openbao-registry"
+			}), mock.Anything).Return(nil)
+
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace:         "vault",
+					RegistryUser:      "u",
+					RegistryPassword:  "p",
+					OperatorImage:     "mirror.example.com/bank-vaults/vault-operator:1.24.0",
+					OperatorChartRepo: "oci://mirror.example.com/bank-vaults/helm-charts",
+				},
+			}
+			inst.SetCtx(ctx)
+
+			Expect(inst.DeployBankVaultsOperator()).To(Succeed())
 		})
 
 		It("performs fresh install when target namespace does not exist", func() {
@@ -658,19 +705,139 @@ var _ = Describe("OpenBaoInstaller", func() {
 		})
 	})
 
+	Describe("EnsureImagePullSecret", func() {
+		newInstaller := func(user, password string) *installer.OpenBaoInstaller {
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace:        "vault",
+					RegistryUser:     user,
+					RegistryPassword: password,
+					// Both default images live on ghcr.io.
+					OpenBaoImage:    installer.DefaultOpenBaoImage,
+					BankVaultsImage: installer.DefaultBankVaultsImage,
+				},
+			}
+			inst.SetCtx(ctx)
+			return inst
+		}
+
+		It("creates a dockerconfigjson secret when both credentials are set", func() {
+			inst := newInstaller("gh-user", "gh-token")
+			Expect(inst.EnsureImagePullSecret()).To(Succeed())
+
+			secret, err := clientset.CoreV1().Secrets("vault").Get(ctx, "openbao-registry", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(secret.Type).To(Equal(corev1.SecretTypeDockerConfigJson))
+
+			var cfg struct {
+				Auths map[string]struct {
+					Username string `json:"username"`
+					Password string `json:"password"`
+					Auth     string `json:"auth"`
+				} `json:"auths"`
+			}
+			Expect(json.Unmarshal(secret.Data[corev1.DockerConfigJsonKey], &cfg)).To(Succeed())
+			entry, ok := cfg.Auths["ghcr.io"]
+			Expect(ok).To(BeTrue())
+			Expect(entry.Username).To(Equal("gh-user"))
+			Expect(entry.Password).To(Equal("gh-token"))
+			Expect(entry.Auth).To(Equal(base64.StdEncoding.EncodeToString([]byte("gh-user:gh-token"))))
+		})
+
+		It("is a no-op when no credentials are set", func() {
+			inst := newInstaller("", "")
+			Expect(inst.EnsureImagePullSecret()).To(Succeed())
+
+			_, err := clientset.CoreV1().Secrets("vault").Get(ctx, "openbao-registry", metav1.GetOptions{})
+			Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("errors when only one credential is set", func() {
+			Expect(newInstaller("gh-user", "").EnsureImagePullSecret()).ToNot(Succeed())
+			Expect(newInstaller("", "gh-token").EnsureImagePullSecret()).ToNot(Succeed())
+		})
+
+		It("is idempotent and refreshes credentials on re-run", func() {
+			Expect(newInstaller("gh-user", "old-token").EnsureImagePullSecret()).To(Succeed())
+			Expect(newInstaller("gh-user", "new-token").EnsureImagePullSecret()).To(Succeed())
+
+			secret, err := clientset.CoreV1().Secrets("vault").Get(ctx, "openbao-registry", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(string(secret.Data[corev1.DockerConfigJsonKey])).To(ContainSubstring("new-token"))
+		})
+
+		It("emits one deduplicated auths entry per distinct registry host", func() {
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace:        "vault",
+					RegistryUser:     "u",
+					RegistryPassword: "p",
+					OpenBaoImage:     "registry-a.example.com/openbao/openbao:2.5.4",
+					BankVaultsImage:  "registry-b.example.com/bank-vaults/bank-vaults:1.19.0",
+					// Same host as OpenBaoImage — must be deduplicated.
+					OperatorImage: "registry-a.example.com/bank-vaults/vault-operator:1.24.0",
+				},
+			}
+			inst.SetCtx(ctx)
+			Expect(inst.EnsureImagePullSecret()).To(Succeed())
+
+			secret, err := clientset.CoreV1().Secrets("vault").Get(ctx, "openbao-registry", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			var cfg struct {
+				Auths map[string]json.RawMessage `json:"auths"`
+			}
+			Expect(json.Unmarshal(secret.Data[corev1.DockerConfigJsonKey], &cfg)).To(Succeed())
+			Expect(cfg.Auths).To(HaveLen(2))
+			Expect(cfg.Auths).To(HaveKey("registry-a.example.com"))
+			Expect(cfg.Auths).To(HaveKey("registry-b.example.com"))
+		})
+	})
+
+	Describe("validateConfig image/chart defaults", func() {
+		It("backfills empty image and chart fields with the Default* values", func() {
+			inst := &installer.OpenBaoInstaller{
+				Logger: bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{Namespace: "vault", Replicas: 1},
+			}
+			Expect(inst.ValidateConfig()).To(Succeed())
+			Expect(inst.Config.OpenBaoImage).To(Equal(installer.DefaultOpenBaoImage))
+			Expect(inst.Config.BankVaultsImage).To(Equal(installer.DefaultBankVaultsImage))
+			Expect(inst.Config.OperatorImage).To(Equal(installer.DefaultOperatorImage))
+			Expect(inst.Config.OperatorChartRepo).To(Equal(installer.DefaultBankVaultsChartRepo))
+		})
+
+		It("leaves explicitly-set overrides untouched", func() {
+			inst := &installer.OpenBaoInstaller{
+				Logger: bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace:    "vault",
+					Replicas:     1,
+					OpenBaoImage: "mirror.example.com/openbao:2.5.4",
+				},
+			}
+			Expect(inst.ValidateConfig()).To(Succeed())
+			Expect(inst.Config.OpenBaoImage).To(Equal("mirror.example.com/openbao:2.5.4"))
+		})
+	})
+
 	Describe("Vault CR template rendering", func() {
 		// templateData mirrors the unexported vaultCRTemplateData struct
 		// so the test can render the template independently.
 		type templateData struct {
-			Namespace         string
-			OpenBaoImage      string
-			BankVaultsImage   string
-			SecretsEngineName string
-			BaoUsername       string
-			BaoPassword       string
-			Replicas          int
-			StorageSize       string
-			RetryJoinAddrs    []string
+			Namespace           string
+			OpenBaoImage        string
+			BankVaultsImage     string
+			SecretsEngineName   string
+			BaoUsername         string
+			BaoPassword         string
+			Replicas            int
+			StorageSize         string
+			RetryJoinAddrs      []string
+			ImagePullSecretName string
 		}
 
 		renderTemplate := func(data templateData) []map[string]interface{} {
@@ -706,6 +873,47 @@ var _ = Describe("OpenBaoInstaller", func() {
 			}
 			return nil
 		}
+
+		It("wires imagePullSecrets onto the openbao ServiceAccount when set", func() {
+			data := templateData{
+				Namespace:           "vault",
+				OpenBaoImage:        "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4",
+				BankVaultsImage:     "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0",
+				SecretsEngineName:   "cs-secrets-engine",
+				BaoUsername:         "admin",
+				BaoPassword:         "test-password",
+				Replicas:            1,
+				StorageSize:         "10Gi",
+				RetryJoinAddrs:      []string{"http://openbao-0.vault.svc.cluster.local:8200"},
+				ImagePullSecretName: "openbao-registry",
+			}
+
+			docs := renderTemplate(data)
+			sa := findDoc(docs, "ServiceAccount")
+			Expect(sa).ToNot(BeNil())
+			pullSecrets := sa["imagePullSecrets"].([]interface{})
+			Expect(pullSecrets).To(HaveLen(1))
+			Expect(pullSecrets[0].(map[string]interface{})["name"]).To(Equal("openbao-registry"))
+		})
+
+		It("omits imagePullSecrets when no pull secret name is set", func() {
+			data := templateData{
+				Namespace:         "vault",
+				OpenBaoImage:      "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4",
+				BankVaultsImage:   "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0",
+				SecretsEngineName: "cs-secrets-engine",
+				BaoUsername:       "admin",
+				BaoPassword:       "test-password",
+				Replicas:          1,
+				StorageSize:       "10Gi",
+				RetryJoinAddrs:    []string{"http://openbao-0.vault.svc.cluster.local:8200"},
+			}
+
+			docs := renderTemplate(data)
+			sa := findDoc(docs, "ServiceAccount")
+			Expect(sa).ToNot(BeNil())
+			Expect(sa).ToNot(HaveKey("imagePullSecrets"))
+		})
 
 		It("renders valid YAML with raft storage and PVC for replicas=1", func() {
 			data := templateData{
