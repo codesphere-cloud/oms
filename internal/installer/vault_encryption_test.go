@@ -207,6 +207,83 @@ var _ = Describe("VaultEncryption", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
+
+	Describe("LoadVaultData", func() {
+		var tmpDir string
+
+		BeforeEach(func() {
+			var err error
+			tmpDir, err = os.MkdirTemp("", "load-vault-test-*")
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			Expect(os.RemoveAll(tmpDir)).To(Succeed())
+		})
+
+		It("parses a plain vault file without data: wrapper", func() {
+			vaultPath := filepath.Join(tmpDir, "plain.vault.yaml")
+			plainYAML := "secrets:\n    - name: test-secret\n      fields:\n        password: hunter2\n"
+			Expect(os.WriteFile(vaultPath, []byte(plainYAML), 0644)).To(Succeed())
+
+			vault, err := installer.LoadVaultData(vaultPath, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(vault.Secrets).To(HaveLen(1))
+			Expect(vault.Secrets[0].Name).To(Equal("test-secret"))
+			Expect(vault.Secrets[0].Fields.Password).To(Equal("hunter2"))
+		})
+
+		It("unwraps a plain file with data: | wrapper (SOPS whole-file format edge case)", func() {
+			vaultPath := filepath.Join(tmpDir, "wrapped.vault.yaml")
+			wrappedYAML := "data: |\n    secrets:\n        - name: test-secret\n          fields:\n            password: hunter2\n"
+			Expect(os.WriteFile(vaultPath, []byte(wrappedYAML), 0644)).To(Succeed())
+
+			vault, err := installer.LoadVaultData(vaultPath, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(vault.Secrets).To(HaveLen(1))
+			Expect(vault.Secrets[0].Name).To(Equal("test-secret"))
+			Expect(vault.Secrets[0].Fields.Password).To(Equal("hunter2"))
+		})
+
+		It("loads and decrypts a SOPS-encrypted vault end-to-end", func() {
+			if !sopsAndAgeAvailable() {
+				Skip("sops and age-keygen not available")
+			}
+
+			// Generate an age keypair.
+			ageKeyPath := filepath.Join(tmpDir, "age_key.txt")
+			out, err := exec.Command("age-keygen", "-o", ageKeyPath).CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), string(out))
+
+			// Extract the public key (recipient).
+			recipient, _, err := installer.ResolveAgeKey(ageKeyPath, tmpDir)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Write a plain vault file.
+			plainPath := filepath.Join(tmpDir, "plain.vault.yaml")
+			plainYAML := "secrets:\n    - name: sops-secret\n      fields:\n        password: s3cr3t\n"
+			Expect(os.WriteFile(plainPath, []byte(plainYAML), 0644)).To(Succeed())
+
+			// Encrypt with SOPS using --input-type yaml (whole-file mode,
+			// which wraps content under data: |).
+			vaultPath := filepath.Join(tmpDir, "encrypted.vault.yaml")
+			encryptCmd := exec.Command("sops", "--encrypt", "--input-type", "yaml", "--age", recipient, "--output", vaultPath, plainPath)
+			encOut, err := encryptCmd.CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), string(encOut))
+
+			// LoadVaultData should detect SOPS, decrypt, unwrap data: |, and parse.
+			vault, err := installer.LoadVaultData(vaultPath, ageKeyPath)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(vault.Secrets).To(HaveLen(1))
+			Expect(vault.Secrets[0].Name).To(Equal("sops-secret"))
+			Expect(vault.Secrets[0].Fields.Password).To(Equal("s3cr3t"))
+		})
+
+		It("returns an error for a non-existent file", func() {
+			_, err := installer.LoadVaultData(filepath.Join(tmpDir, "missing.yaml"), "")
+			Expect(err).To(HaveOccurred())
+		})
+	})
 })
 
 func splitLines(s string) []string {
