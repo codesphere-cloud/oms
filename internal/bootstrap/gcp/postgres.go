@@ -1,3 +1,6 @@
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 package gcp
 
 import "github.com/codesphere-cloud/oms/internal/installer/docker"
