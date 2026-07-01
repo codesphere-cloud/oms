@@ -95,8 +95,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			DNSZoneName:           "test-zone",
 			SSHPublicKeyPath:      "key.pub",
 			ProjectID:             "pid",
-			Experiments:           gcp.DefaultExperiments,
-			FeatureFlags:          map[string]bool{},
+			InternalFlags:         gcp.DefaultInternalFlags,
+			PreviewFlags:          gcp.DefaultPreviewFlags,
+			FeatureFlags:          gcp.DefaultFeatureFlags,
 			RootDiskSize:          50,
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},

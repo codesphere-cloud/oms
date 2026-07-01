@@ -28,7 +28,9 @@ type BootstrapGcpCmd struct {
 	CodesphereEnv     *gcp.CodesphereEnvironment
 	InputRegistryType string
 	SSHQuiet          bool
-	FeatureFlagList   []string
+	// experiments backs the deprecated --experiments flag; its values
+	// are folded into the internal bucket for backwards compatibility.
+	experiments []string
 }
 
 func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
@@ -53,7 +55,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 		},
 		Opts:          opts,
 		Env:           env.NewEnv(),
-		CodesphereEnv: &gcp.CodesphereEnvironment{FeatureFlags: map[string]bool{}},
+		CodesphereEnv: &gcp.CodesphereEnvironment{},
 	}
 	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
 
@@ -97,8 +99,11 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: local-container)")
-	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapGcpCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapGcpCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
+	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
+	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiEndpoint, "external-loki-endpoint", "", "External Loki endpoint for Grafana Alloy log forwarding (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiSecret, "external-loki-secret", "", "External Loki password stored in the generated vault (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiUser, "external-loki-user", "", "External Loki username for Grafana Alloy log forwarding (optional)")
@@ -172,8 +177,12 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		}
 	}
 
-	for _, flag := range c.FeatureFlagList {
-		c.CodesphereEnv.FeatureFlags[flag] = true
+	if c.cmd.Flags().Changed("experiments") {
+		if c.cmd.Flags().Changed("internal-flags") {
+			log.Printf("Warning: both --experiments and --internal-flags were set; ignoring deprecated --experiments values %v", c.experiments)
+		} else {
+			c.CodesphereEnv.InternalFlags = c.experiments
+		}
 	}
 
 	err = bs.Bootstrap()
