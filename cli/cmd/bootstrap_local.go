@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	stdio "io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,7 +41,7 @@ type BootstrapLocalCmd struct {
 	Yes           bool
 	// Experiments backs the deprecated --experiments flag; its values
 	// are folded into the internal bucket for backwards compatibility.
-	Experiments []string
+	experiments []string
 }
 
 func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, args []string) error {
@@ -78,7 +79,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	// Codesphere Environment
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.BaseDomain, "base-domain", "cs.local", "Base domain for Codesphere")
 	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapLocalCmd.Experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
+	flags.StringArrayVar(&bootstrapLocalCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
 	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
 	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
@@ -129,8 +130,12 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 		return err
 	}
 
-	if c.cmd.Flags().Changed("experiments") && !c.cmd.Flags().Changed("internal-flags") {
-		c.CodesphereEnv.InternalFlags = c.Experiments
+	if c.cmd.Flags().Changed("experiments") {
+		if c.cmd.Flags().Changed("internal-flags") {
+			log.Printf("Warning: both --experiments and --internal-flags were set; ignoring deprecated --experiments values %v", c.experiments)
+		} else {
+			c.CodesphereEnv.InternalFlags = c.experiments
+		}
 	}
 
 	stlog := bootstrap.NewStepLogger(false)

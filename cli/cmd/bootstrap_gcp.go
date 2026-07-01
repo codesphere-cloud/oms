@@ -28,9 +28,9 @@ type BootstrapGcpCmd struct {
 	CodesphereEnv     *gcp.CodesphereEnvironment
 	InputRegistryType string
 	SSHQuiet          bool
-	// Experiments backs the deprecated --experiments flag; its values
+	// experiments backs the deprecated --experiments flag; its values
 	// are folded into the internal bucket for backwards compatibility.
-	Experiments []string
+	experiments []string
 }
 
 func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
@@ -100,7 +100,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: local-container)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapGcpCmd.Experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
+	flags.StringArrayVar(&bootstrapGcpCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
 	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
@@ -177,8 +177,12 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		}
 	}
 
-	if c.cmd.Flags().Changed("experiments") && !c.cmd.Flags().Changed("internal-flags") {
-		c.CodesphereEnv.InternalFlags = c.Experiments
+	if c.cmd.Flags().Changed("experiments") {
+		if c.cmd.Flags().Changed("internal-flags") {
+			log.Printf("Warning: both --experiments and --internal-flags were set; ignoring deprecated --experiments values %v", c.experiments)
+		} else {
+			c.CodesphereEnv.InternalFlags = c.experiments
+		}
 	}
 
 	err = bs.Bootstrap()

@@ -77,6 +77,7 @@ var DefaultInternalFlags []string = []string{
 var DefaultPreviewFlags []string = []string{
 	"secret-management",
 	"sub-path-mount",
+	"workspace-ssh",
 }
 
 var DefaultFeatureFlags []string = []string{}
