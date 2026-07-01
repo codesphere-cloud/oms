@@ -302,7 +302,8 @@ type CodesphereConfig struct {
 	CertIssuer                 CertIssuerConfig       `yaml:"certIssuer"`
 	CustomDomains              CustomDomainsConfig    `yaml:"customDomains"`
 	DNSServers                 []string               `yaml:"dnsServers"`
-	Experiments                []string               `yaml:"experiments"`
+	Internal                   []string               `yaml:"internal"`
+	Preview                    map[string]bool        `yaml:"preview"`
 	Features                   map[string]bool        `yaml:"features"`
 	ExtraCAPem                 string                 `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars      map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`

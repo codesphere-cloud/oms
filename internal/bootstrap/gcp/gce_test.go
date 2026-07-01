@@ -145,15 +145,16 @@ var _ = Describe("GCE", func() {
 
 		BeforeEach(func() {
 			csEnv = &gcp.CodesphereEnvironment{
-				ProjectName:  "test",
-				Region:       "us-central1",
-				Zone:         "us-central1-a",
-				BaseDomain:   "example.com",
-				DNSProjectID: "dns-project",
-				DNSZoneName:  "test-zone",
-				SecretsDir:   "/etc/codesphere/secrets",
-				DatacenterID: 1,
-				Experiments:  gcp.DefaultExperiments,
+				ProjectName:   "test",
+				Region:        "us-central1",
+				Zone:          "us-central1-a",
+				BaseDomain:    "example.com",
+				DNSProjectID:  "dns-project",
+				DNSZoneName:   "test-zone",
+				SecretsDir:    "/etc/codesphere/secrets",
+				DatacenterID:  1,
+				InternalFlags: gcp.DefaultInternalFlags,
+				PreviewFlags:  gcp.DefaultPreviewFlags,
 			}
 			gc := gcp.NewMockGCPClientManager(GinkgoT())
 			bs = newTestBootstrapper(csEnv, gc)
@@ -202,7 +203,8 @@ var _ = Describe("GCE", func() {
 				DNSZoneName:           "test-zone",
 				SecretsDir:            "/etc/codesphere/secrets",
 				DatacenterID:          1,
-				Experiments:           gcp.DefaultExperiments,
+				InternalFlags:         gcp.DefaultInternalFlags,
+				PreviewFlags:          gcp.DefaultPreviewFlags,
 				InstallConfigPath:     "fake-config",
 				SecretsFilePath:       "fake-secrets",
 				GitHubAppName:         "fake-app",
@@ -248,16 +250,17 @@ var _ = Describe("GCE", func() {
 		BeforeEach(func() {
 			gc = gcp.NewMockGCPClientManager(GinkgoT())
 			csEnv = &gcp.CodesphereEnvironment{
-				ProjectName:  "test",
-				ProjectID:    "test-pid",
-				Region:       "us-central1",
-				Zone:         "us-central1-a",
-				BaseDomain:   "example.com",
-				DNSProjectID: "dns-project",
-				DNSZoneName:  "test-zone",
-				SecretsDir:   "/etc/codesphere/secrets",
-				DatacenterID: 1,
-				Experiments:  gcp.DefaultExperiments,
+				ProjectName:   "test",
+				ProjectID:     "test-pid",
+				Region:        "us-central1",
+				Zone:          "us-central1-a",
+				BaseDomain:    "example.com",
+				DNSProjectID:  "dns-project",
+				DNSZoneName:   "test-zone",
+				SecretsDir:    "/etc/codesphere/secrets",
+				DatacenterID:  1,
+				InternalFlags: gcp.DefaultInternalFlags,
+				PreviewFlags:  gcp.DefaultPreviewFlags,
 			}
 			logCh = make(chan string, 10)
 			bs = newTestBootstrapper(csEnv, gc)
@@ -487,15 +490,16 @@ var _ = Describe("GCE", func() {
 			gc := gcp.NewMockGCPClientManager(GinkgoT())
 			fw = util.NewMockFileIO(GinkgoT())
 			csEnv := &gcp.CodesphereEnvironment{
-				ProjectName:  "test",
-				Region:       "us-central1",
-				Zone:         "us-central1-a",
-				BaseDomain:   "example.com",
-				DNSProjectID: "dns-project",
-				DNSZoneName:  "test-zone",
-				SecretsDir:   "/etc/codesphere/secrets",
-				DatacenterID: 1,
-				Experiments:  gcp.DefaultExperiments,
+				ProjectName:   "test",
+				Region:        "us-central1",
+				Zone:          "us-central1-a",
+				BaseDomain:    "example.com",
+				DNSProjectID:  "dns-project",
+				DNSZoneName:   "test-zone",
+				SecretsDir:    "/etc/codesphere/secrets",
+				DatacenterID:  1,
+				InternalFlags: gcp.DefaultInternalFlags,
+				PreviewFlags:  gcp.DefaultPreviewFlags,
 			}
 			bs = newTestBootstrapperWithFileIO(csEnv, gc, fw)
 		})
@@ -546,8 +550,9 @@ var _ = Describe("GCE", func() {
 				SecretsDir:       "/etc/codesphere/secrets",
 				DatacenterID:     1,
 				SSHPublicKeyPath: "key.pub",
-				Experiments:      gcp.DefaultExperiments,
-				FeatureFlags:     map[string]bool{},
+				InternalFlags:    gcp.DefaultInternalFlags,
+				PreviewFlags:     gcp.DefaultPreviewFlags,
+				FeatureFlags:     gcp.DefaultFeatureFlags,
 				RootDiskSize:     50,
 			}
 			bs = newTestBootstrapperAll(csEnv, gc, fw, mockGitHubClient)

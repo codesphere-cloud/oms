@@ -126,7 +126,9 @@ codesphere:
   dnsServers:
     - 8.8.8.8
     - 8.8.4.4
-  experiments: []
+  internal: []
+  preview: {}
+  features: {}
   deployConfig:
     images: {}
   plans:
