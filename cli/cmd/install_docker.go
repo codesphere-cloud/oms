@@ -37,9 +37,6 @@ func (c *InstallDockerCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.InstallDocker()
 }
 
-// AddInstallDockerCmd registers the "install docker" sub-command under
-// the provided parent install command, following the same pattern as
-// AddInstallK0sCmd.
 func AddInstallDockerCmd(install *cobra.Command, opts *GlobalOptions) {
 	pg := InstallDockerCmd{
 		cmd: &cobra.Command{
