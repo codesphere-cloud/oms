@@ -88,6 +88,9 @@ func GetRootCmd() *cobra.Command {
 	// Resource creation commands
 	AddCreateCmd(rootCmd, opts)
 
+	// Cluster administration commands
+	AddAddClusterAdminCmd(rootCmd, opts)
+
 	return rootCmd
 }
 
