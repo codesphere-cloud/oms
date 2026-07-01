@@ -4,6 +4,7 @@
 package files
 
 import (
+	"fmt"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -61,6 +62,7 @@ type SecretFields struct {
 
 // RootConfig represents the relevant parts of the configuration file
 type RootConfig struct {
+	GeneratedForVersion    string                        `yaml:"generatedForVersion,omitempty"`
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
@@ -72,7 +74,9 @@ type RootConfig struct {
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
 	PcApps                 ChartValues                   `yaml:"pcApps,omitempty"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
-	Operations             *OperationsConfig             `yaml:"operations,omitempty"`
+
+	CodesphereConfigPath string            `yaml:"-"`
+	Operations           *OperationsConfig `yaml:"operations,omitempty"`
 }
 
 type OperationsConfig struct {
@@ -111,6 +115,9 @@ type PostgresPrimaryConfig struct {
 	SSLConfig SSLConfig `yaml:"sslConfig"`
 	IP        string    `yaml:"ip"`
 	Hostname  string    `yaml:"hostname"`
+	SSHPort   int       `yaml:"sshPort,omitempty"`
+
+	PrivateKey string `yaml:"-"`
 }
 
 type PostgresReplicaConfig struct {
@@ -139,6 +146,7 @@ type CephHost struct {
 	Hostname  string `yaml:"hostname"`
 	IPAddress string `yaml:"ipAddress"`
 	IsMaster  bool   `yaml:"isMaster"`
+	SSHPort   int    `yaml:"sshPort,omitempty"`
 }
 
 type CephOSD struct {
@@ -175,7 +183,9 @@ type KubernetesConfig struct {
 }
 
 type K8sNode struct {
-	IPAddress string `yaml:"ipAddress"`
+	IPAddress  string `yaml:"ipAddress"`
+	SSHAddress string `yaml:"sshAddress,omitempty"`
+	SSHPort    int    `yaml:"sshPort,omitempty"`
 }
 
 type ClusterConfig struct {
@@ -505,18 +515,36 @@ type OAuthConfig struct {
 }
 
 type ManagedServiceConfig struct {
-	Name          string                 `yaml:"name"`
-	API           ManagedServiceAPI      `yaml:"api,omitempty"`
-	Author        string                 `yaml:"author,omitempty"`
-	Category      string                 `yaml:"category,omitempty"`
-	ConfigSchema  map[string]interface{} `yaml:"configSchema,omitempty"`
-	DetailsSchema map[string]interface{} `yaml:"detailsSchema,omitempty"`
-	SecretsSchema map[string]interface{} `yaml:"secretsSchema,omitempty"`
-	Description   string                 `yaml:"description,omitempty"`
-	DisplayName   string                 `yaml:"displayName,omitempty"`
-	IconURL       string                 `yaml:"iconUrl,omitempty"`
-	Plans         []ServicePlan          `yaml:"plans,omitempty"`
-	Version       string                 `yaml:"version"`
+	Name          string                      `yaml:"name"`
+	Version       string                      `yaml:"version,omitempty"`
+	Backend       ManagedServiceBackend       `yaml:"backend,omitempty"`
+	Author        string                      `yaml:"author,omitempty"`
+	Category      string                      `yaml:"category,omitempty"`
+	ConfigSchema  map[string]interface{}      `yaml:"configSchema,omitempty"`
+	DetailsSchema map[string]interface{}      `yaml:"detailsSchema,omitempty"`
+	SecretsSchema map[string]interface{}      `yaml:"secretsSchema,omitempty"`
+	Description   string                      `yaml:"description,omitempty"`
+	DisplayName   string                      `yaml:"displayName,omitempty"`
+	IconURL       string                      `yaml:"iconUrl,omitempty"`
+	Scope         string                      `yaml:"scope,omitempty"`
+	Plans         []ServicePlan               `yaml:"plans,omitempty"`
+	Backups       *ManagedServiceBackups      `yaml:"backups,omitempty"`
+	Capabilities  *ManagedServiceCapabilities `yaml:"capabilities,omitempty"`
+}
+
+type ManagedServiceBackend struct {
+	API ManagedServiceAPI `yaml:"api"`
+}
+
+type ManagedServiceBackups struct {
+	ConfigSchema  map[string]any `yaml:"configSchema"`
+	SecretsSchema map[string]any `yaml:"secretsSchema"`
+}
+
+type ManagedServiceCapabilities struct {
+	Pause               bool `yaml:"pause"`
+	Backups             bool `yaml:"backups"`
+	PointInTimeRecovery bool `yaml:"pointInTimeRecovery"`
 }
 
 type ManagedServiceAPI struct {
@@ -620,15 +648,109 @@ type S3ManagedServiceConfig struct {
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
-// Marshal serializes the RootConfig to YAML
+// OmitCodesphereSentinel is a special CodesphereConfigPath value that instructs
+// Marshal to remove the codesphere key from the YAML output entirely.
+// Used for LTS releases whose installer rejects any codesphere value.
+const OmitCodesphereSentinel = "-"
+
+// Marshal serializes the RootConfig to YAML.
+// When CodesphereConfigPath is set to a non-empty value (other than the
+// OmitCodesphereSentinel), the codesphere section is written as a file-path
+// reference string instead of an inline object.
+// When CodesphereConfigPath equals OmitCodesphereSentinel, the codesphere key
+// is removed from the output entirely.
 func (c *RootConfig) Marshal() ([]byte, error) {
 	c.buildACMEOverride()
-	return yaml.Marshal(c)
+	if c.CodesphereConfigPath == "" {
+		return yaml.Marshal(c)
+	}
+
+	// Marshal normally first —> yaml.Marshal uses struct field tags and does NOT
+	// call this Marshal() method.
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse into a node tree so we can manipulate the codesphere value.
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return nil, err
+	}
+
+	if c.CodesphereConfigPath == OmitCodesphereSentinel {
+		if err := removeYAMLMappingKey(&root, "codesphere"); err != nil {
+			return nil, fmt.Errorf("failed to remove codesphere key: %w", err)
+		}
+	} else {
+		if err := replaceYAMLMappingValue(&root, "codesphere", c.CodesphereConfigPath); err != nil {
+			return nil, fmt.Errorf("failed to set codesphere path reference: %w", err)
+		}
+	}
+
+	return yaml.Marshal(&root)
 }
 
-// Unmarshal deserializes YAML data into the RootConfig
+// replaceYAMLMappingValue replaces the value of a top-level mapping key with a plain string scalar.
+func replaceYAMLMappingValue(root *yaml.Node, key, value string) error {
+	mapping := root
+	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
+		mapping = root.Content[0]
+	}
+	if mapping.Kind != yaml.MappingNode {
+		return fmt.Errorf("expected a YAML mapping node, got kind %d", mapping.Kind)
+	}
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			mapping.Content[i+1] = &yaml.Node{
+				Kind:  yaml.ScalarNode,
+				Tag:   "!!str",
+				Value: value,
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("key %q not found in YAML mapping", key)
+}
+
+// removeYAMLMappingKey removes a top-level key-value pair from a YAML mapping node.
+func removeYAMLMappingKey(root *yaml.Node, key string) error {
+	mapping := root
+	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
+		mapping = root.Content[0]
+	}
+	if mapping.Kind != yaml.MappingNode {
+		return fmt.Errorf("expected a YAML mapping node, got kind %d", mapping.Kind)
+	}
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			mapping.Content = append(mapping.Content[:i], mapping.Content[i+2:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("key %q not found in YAML mapping", key)
+}
+
+// Unmarshal deserializes YAML data into the RootConfig.
 func (c *RootConfig) Unmarshal(data []byte) error {
-	if err := yaml.Unmarshal(data, c); err != nil {
+	// Parse the document into a raw node first so we can inspect the codesphere field.
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return err
+	}
+	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
+		mapping := doc.Content[0]
+		if mapping.Kind == yaml.MappingNode {
+			for i := 0; i+1 < len(mapping.Content); i += 2 {
+				if mapping.Content[i].Value == "codesphere" && mapping.Content[i+1].Kind == yaml.ScalarNode {
+					c.CodesphereConfigPath = mapping.Content[i+1].Value
+					mapping.Content = append(mapping.Content[:i], mapping.Content[i+2:]...)
+					break
+				}
+			}
+		}
+	}
+	if err := doc.Decode(c); err != nil {
 		return err
 	}
 	c.extractACMESolverFromOverride()

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -20,10 +21,12 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
+	"go.yaml.in/yaml/v3"
 	"google.golang.org/api/dns/v1"
 )
 
@@ -81,9 +84,10 @@ type GCPBootstrapper struct {
 	// Environment
 	Env *CodesphereEnvironment
 	// SSH command runner
-	NodeClient   node.NodeClient
-	PortalClient portal.Portal
-	GitHubClient github.GitHubClient
+	NodeClient       node.NodeClient
+	PortalClient     portal.Portal
+	GitHubClient     github.GitHubClient
+	OmsBinaryBuilder func() (string, func(), error)
 }
 
 type CodesphereEnvironment struct {
@@ -191,16 +195,17 @@ func NewGCPBootstrapper(
 	gitHubClient github.GitHubClient,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:          ctx,
-		stlog:        stlog,
-		fw:           fw,
-		icg:          icg,
-		GCPClient:    gcpClient,
-		Env:          CodesphereEnv,
-		NodeClient:   sshRunner,
-		PortalClient: portalClient,
-		Time:         time,
-		GitHubClient: gitHubClient,
+		ctx:              ctx,
+		stlog:            stlog,
+		fw:               fw,
+		icg:              icg,
+		GCPClient:        gcpClient,
+		Env:              CodesphereEnv,
+		NodeClient:       sshRunner,
+		PortalClient:     portalClient,
+		Time:             time,
+		GitHubClient:     gitHubClient,
+		OmsBinaryBuilder: BuildOmsLinuxBinary,
 	}, nil
 }
 
@@ -987,12 +992,631 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil {
+		if ltsSpec.RequiresOmsBinaryUpdate {
+			if err := b.ensureNewOmsBinaryOnJumpbox(); err != nil {
+				return fmt.Errorf("failed to update OMS binary on jumpbox for %s: %w", b.Env.InstallVersion, err)
+			}
+		}
+		if ltsSpec.RequiresCephMasterWatcher {
+			b.startLTSCephMasterWatcher()
+			defer b.stopLTSCephMasterWatcher()
+		}
+		return b.runLTSInstallPhases(fullPackageFilename, ltsSpec)
+	}
+
 	err = b.runInstallCommand(fullPackageFilename)
 	if err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
 
 	return nil
+}
+
+// runLTSInstallPhases runs the three install phases separately for LTS versions.
+// Phases 1 (infra) and 2 (dependencies) run without inter-node SSH; steps that
+// need SSH (set-up-cluster, ms-backends, codesphere) are skipped. An SSH key
+// is then copied to the jumpbox, and Phase 3 (platform) runs with codesphere
+// included so the platform is deployed with inter-node SSH available.
+func (b *GCPBootstrapper) runLTSInstallPhases(packageFilename string, ltsSpec *LTSSpec) error {
+	ltsSkips := []string{"set-up-cluster", "ms-backends"}
+	if ltsSpec.SkipPcApps {
+		ltsSkips = append(ltsSkips, "argocd")
+	}
+
+	// Phase 1: Infrastructure (docker, postgres, ceph, kubernetes) — no SSH needed.
+	b.stlog.Logf("Running infrastructure phase (Phase 1)...")
+	infraSkips := append([]string{"codesphere"}, ltsSkips...)
+	if err := b.runInstallPhase(packageFilename, "infra", infraSkips); err != nil {
+		return fmt.Errorf("infra phase failed: %w", err)
+	}
+
+	// Phase 2: Dependencies (copy/extract) — skip SSH-needing steps.
+	b.stlog.Logf("Running dependencies phase (Phase 2)...")
+	if err := b.runInstallPhase(packageFilename, "dependencies", ltsSkips); err != nil {
+		return fmt.Errorf("dependencies phase failed: %w", err)
+	}
+
+	// Set up SSH key so the jumpbox can reach the postgres VM for
+	// database creation below.
+	if ltsSpec.RequiresSSHKeyOnJumpbox {
+		if err := b.ensureSSHKeyOnJumpbox(); err != nil {
+			return err
+		}
+	}
+
+	// Phase 3: Deploy Codesphere via helm directly (bypasses the old LTS
+	// private-cloud-installer.js which can't handle the codesphere component).
+	b.stlog.Logf("Deploying Codesphere platform via helm (Phase 3)...")
+	if err := b.installCodesphereViaHelm(packageFilename); err != nil {
+		return fmt.Errorf("platform phase (helm) failed: %w", err)
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) installCodesphereViaHelm(packageFilename string) error {
+	if len(b.Env.ControlPlaneNodes) == 0 {
+		return fmt.Errorf("no control plane nodes available for kubeconfig")
+	}
+	cpIP := b.Env.ControlPlaneNodes[0].GetInternalIP()
+
+	b.stlog.Logf("Copying kubeconfig from control plane (%s)...", cpIP)
+	mkdirCmd := "mkdir -p /var/lib/k0s/pki"
+	if err := b.Env.Jumpbox.RunSSHCommand("root", mkdirCmd); err != nil {
+		return fmt.Errorf("failed to create k0s dir on jumpbox: %w", err)
+	}
+	scpCmd := fmt.Sprintf("scp -o StrictHostKeyChecking=no root@%s:/var/lib/k0s/pki/admin.conf /var/lib/k0s/pki/admin.conf", cpIP)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", scpCmd); err != nil {
+		return fmt.Errorf("failed to copy kubeconfig from control plane: %w", err)
+	}
+	sedCmd := fmt.Sprintf("sed -i 's|server: https://127.0.0.1:6443|server: https://%s:6443|; s|server: https://localhost:6443|server: https://%s:6443|' /var/lib/k0s/pki/admin.conf", cpIP, cpIP)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", sedCmd); err != nil {
+		return fmt.Errorf("failed to update kubeconfig server address: %w", err)
+	}
+
+	csValues, err := yaml.Marshal(b.Env.InstallConfig.Codesphere)
+	if err != nil {
+		return fmt.Errorf("failed to marshal codesphere config for helm: %w", err)
+	}
+	writeValuesCmd := fmt.Sprintf("cat > /etc/codesphere/codesphere-values.yaml << 'OMSEOF'\n%s\nOMSEOF", string(csValues))
+	if err := b.Env.Jumpbox.RunSSHCommand("root", writeValuesCmd); err != nil {
+		return fmt.Errorf("failed to write codesphere values on jumpbox: %w", err)
+	}
+
+	globalVals := b.buildGlobalHelmValues()
+	globalYAML, err := yaml.Marshal(map[string]interface{}{"global": globalVals})
+	if err != nil {
+		return fmt.Errorf("failed to marshal global helm values: %w", err)
+	}
+	writeGlobalCmd := fmt.Sprintf("cat > /etc/codesphere/global-values.yaml << 'OMSEOF'\n%s\nOMSEOF", string(globalYAML))
+	if err := b.Env.Jumpbox.RunSSHCommand("root", writeGlobalCmd); err != nil {
+		return fmt.Errorf("failed to write global values on jumpbox: %w", err)
+	}
+
+	script := `set -e
+export KUBECONFIG=/var/lib/k0s/pki/admin.conf
+
+KUBECTL=$(find /root/oms-workdir -name kubectl -type f 2>/dev/null | head -1)
+HELM=$(find /root/oms-workdir -name "helm" -type f 2>/dev/null | head -1)
+[ -z "$KUBECTL" ] && echo "ERROR: kubectl not found" && exit 1
+[ -z "$HELM" ] && echo "ERROR: helm binary not found" && exit 1
+chmod +x "$KUBECTL" "$HELM" 2>/dev/null || true
+
+CHART=$(find /root/oms-workdir -path "*/deps/codesphere/files/chart/Chart.yaml" 2>/dev/null | head -1 | xargs dirname)
+[ -z "$CHART" ] && echo "ERROR: codesphere chart not found" && exit 1
+
+VAULT_FILE=/etc/codesphere/secrets/prod.vault.yaml
+AGE_KEY=/etc/codesphere/secrets/age_key.txt
+SECRETS_VALUES=/etc/codesphere/secrets-values.yaml
+
+echo "Installing prerequisite CRDs..."
+# cert-manager CRDs (needed for Certificate and Issuer resources)
+"$KUBECTL" apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.12.0/cert-manager.crds.yaml
+# Prometheus PodMonitor CRD
+"$KUBECTL" apply -f https://raw.githubusercontent.com/prometheus-operator/prometheus-operator/v0.68.0/example/prometheus-operator-crd/monitoring.coreos.com_podmonitors.yaml
+
+echo "Creating prerequisite namespaces and issuer..."
+"$KUBECTL" create ns workspaces --dry-run=client -o yaml | "$KUBECTL" apply -f -
+"$KUBECTL" create ns ws-o11y --dry-run=client -o yaml | "$KUBECTL" apply -f -
+"$KUBECTL" apply -f - << 'ISSUER_EOF'
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: codesphere-issuer
+spec:
+  selfSigned: {}
+ISSUER_EOF
+
+# Decrypt vault and generate secrets values (maps vault secrets to global.*)
+echo "Decrypting vault and generating helm secrets values..."
+SOPS_AGE_KEY_FILE="$AGE_KEY" sops --decrypt "$VAULT_FILE" | python3 -c '
+import sys, yaml
+vault = yaml.safe_load(sys.stdin)
+result = {"global": {}}
+for s in vault.get("secrets", []):
+    name = s["name"]
+    if "fields" in s and s["fields"]:
+        result["global"][name] = s["fields"].get("password", "")
+    elif "file" in s and s["file"]:
+        result["global"][name] = s["file"].get("content", "")
+yaml.dump(result, sys.stdout, default_flow_style=False)
+' > "$SECRETS_VALUES"
+echo "Generated secrets values file."
+
+# Clean up any orphaned resources from previous failed install attempts.
+# Helm refuses to adopt resources that lack its ownership labels.
+"$HELM" uninstall codesphere -n codesphere 2>/dev/null || true
+"$KUBECTL" delete svc,deploy,ingress,configmap,secret,netpol,certificate,issuer --all -n codesphere 2>/dev/null || true
+
+# Create GHCR pull secret for image pulling.
+%s
+
+# Create postgres Service + Endpoints so codesphere pods can reach
+# the external postgres VM, and create required databases.
+# (Run after cleanup so the Service isn't deleted.)
+PG_IP=$(python3 -c "import yaml; c=yaml.safe_load(open('/etc/codesphere/config.yaml')); print(c.get('postgres',{}).get('primary',{}).get('ip',''))")
+if [ -n "$PG_IP" ]; then
+  "$KUBECTL" apply -f - << SERVICE_EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: codesphere
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: postgres
+  namespace: codesphere
+subsets:
+- addresses:
+  - ip: $PG_IP
+  ports:
+  - port: 5432
+SERVICE_EOF
+  echo "Created postgres Service → $PG_IP"
+  ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@"$PG_IP" \
+    "docker exec codesphere-postgres.service psql -U postgres -c 'CREATE DATABASE codesphere;' 2>/dev/null; \
+     docker exec codesphere-postgres.service psql -U postgres -c 'CREATE DATABASE user_activity;' 2>/dev/null; \
+     echo 'Databases ready.'" || echo "Warning: could not create databases on $PG_IP"
+fi
+
+echo "Installing codesphere platform via helm..."
+"$HELM" upgrade --install codesphere "$CHART" \
+  --namespace codesphere --create-namespace \
+  -f /etc/codesphere/config.yaml \
+  -f /etc/codesphere/codesphere-values.yaml \
+  -f /etc/codesphere/global-values.yaml \
+  -f "$SECRETS_VALUES" \
+  --timeout 10m
+echo "Codesphere platform deployed successfully."
+`
+	// Build the registry secret creation snippet.
+	regCredSnippet := ""
+	if b.Env.GitHubPAT != "" && b.Env.RegistryUser != "" {
+		regCredSnippet = fmt.Sprintf(
+			`"$KUBECTL" delete secret docker-regcred -n codesphere 2>/dev/null || true
+"$KUBECTL" create secret docker-registry docker-regcred \
+  --docker-server=ghcr.io \
+  --docker-username=%s \
+  --docker-password=%s \
+  -n codesphere`, b.Env.RegistryUser, b.Env.GitHubPAT)
+	}
+	return b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf(script, regCredSnippet))
+}
+
+// buildGlobalHelmValues constructs the global.* helm values from the OMS
+// install config, generating token keys and service tokens where needed.
+// This replicates what the old LTS private-cloud-installer.js normally does.
+func (b *GCPBootstrapper) buildGlobalHelmValues() map[string]interface{} {
+	g := map[string]interface{}{}
+
+	// --- Token keys + service account tokens ---
+	tokenVault := &files.InstallVault{}
+	// Errors are non-fatal here; we proceed with whatever is generated.
+	_ = secrets.EnsureAuthKeys(tokenVault)
+	_ = secrets.EnsureServiceAccountTokens(tokenVault)
+	for _, s := range tokenVault.Secrets {
+		if s.File != nil {
+			g[s.Name] = s.File.Content
+		} else if s.Fields != nil {
+			g[s.Name] = s.Fields.Password
+		}
+	}
+
+	// --- Optional _secrets.tpl keys (empty defaults to avoid b64enc nil panics) ---
+	for _, k := range []string{
+		"stripeWebhookEndpointSecret", "stripePublishableKey", "stripeSecretKey",
+		"sendGridApiKey", "digitalOceanApiToken", "mongoDbPasswordEncryptionKey", "mixpanelToken",
+		"facebookClientId", "facebookClientSecret",
+		"googleClientId", "googleClientSecret",
+		"gitHubClientId", "gitHubClientSecret",
+		"bitbucketClientId", "bitbucketClientSecret",
+		"gitlabClientId", "gitlabClientSecret",
+		"googleCloudAvatarPrivateKey", "googleCloudVmImagesPrivateKey",
+		"googleCloudAvatarBucket", "googleCloudAvatarClientEmail", "googleCloudAvatarProjectId",
+		"gitlabAppClientId", "gitlabAppClientSecret",
+		"bitbucketAppsClientId", "bitbucketAppsClientSecret",
+		"azureDevOpsAppClientId", "azureDevOpsAppClientSecret",
+		"recaptchaSecret", "recaptchaSecretV3", "recaptchaKey", "recaptchaKeyV3",
+		"postgresUserTeam", "postgresPasswordTeam",
+		"postgresUserUserActivity", "postgresPasswordUserActivity",
+		"postgresUserWorkspace", "postgresPasswordWorkspace",
+		"postgresUserPublicapi", "postgresPasswordPublicapi",
+	} {
+		if _, exists := g[k]; !exists {
+			g[k] = ""
+		}
+	}
+
+	// --- Map config sections to global.* ---
+	cfg := b.Env.InstallConfig
+	cs := cfg.Codesphere
+
+	dc := cfg.Datacenter
+	g["dataCenterId"] = dc.ID
+	g["defaultDataCenterId"] = dc.ID
+	g["dataCenters"] = []interface{}{map[string]interface{}{
+		"id": dc.ID, "name": dc.Name, "city": dc.City, "countryCode": dc.CountryCode,
+	}}
+	g["env"] = "prod"
+	g["hostName"] = cs.Domain
+	g["domainName"] = cs.Domain
+	g["workspaceHostingBaseDomain"] = cs.WorkspaceHostingBaseDomain
+	g["dnsServers"] = cs.DNSServers
+
+	// Experiments: chart expects {name: [envs]}, config has []string
+	expMap := map[string][]string{}
+	for _, e := range cs.Experiments {
+		expMap[e] = []string{"prod"}
+	}
+	g["experiments"] = expMap
+
+	// Features: same transformation
+	featMap := map[string][]string{}
+	for k, v := range cs.Features {
+		if v {
+			featMap[k] = []string{"prod"}
+		}
+	}
+	g["features"] = featMap
+
+	g["deployConfig"] = cs.DeployConfig
+	g["plans"] = cs.Plans
+	g["gitProviders"] = cs.GitProviders
+	if g["gitProviders"] == nil {
+		g["gitProviders"] = map[string]interface{}{}
+	}
+	// Chart expects oauth.providers.{name}.enabled, not OMS oauth.oidc format.
+	g["oauth"] = map[string]interface{}{
+		"providers": map[string]interface{}{
+			"github":    map[string]interface{}{"enabled": false},
+			"gitlab":    map[string]interface{}{"enabled": false},
+			"bitbucket": map[string]interface{}{"enabled": false},
+			"google":    map[string]interface{}{"enabled": false},
+			"facebook":  map[string]interface{}{"enabled": false},
+		},
+		"additionalProviders": map[string]interface{}{},
+	}
+	g["customDomains"] = cs.CustomDomains
+	if cs.OpenBao != nil {
+		g["openBao"] = cs.OpenBao
+	} else {
+		g["openBao"] = map[string]interface{}{
+			"engine": "cs-secrets-engine",
+			"user":   "admin",
+		}
+	}
+	g["managedServices"] = cs.ManagedServices
+	g["extraCaPem"] = cs.ExtraCAPem
+	g["extraWorkspaceEnvVars"] = cs.ExtraWorkspaceEnvVars
+	g["extraWorkspaceFiles"] = cs.ExtraWorkspaceFiles
+	g["override"] = cs.Override
+
+	// Postgres connection config (chart uses global.postgres.*, not top-level postgres.*)
+	g["postgres"] = map[string]interface{}{
+		"host":                 "postgres",
+		"port":                 5432,
+		"database":             "postgres",
+		"userActivityDatabase": "user_activity",
+		"ssl":                  map[string]interface{}{"rejectUnauthorized": false},
+	}
+	if cfg.Postgres.Primary != nil {
+		if cfg.Postgres.Primary.IP != "" {
+			g["postgres"].(map[string]interface{})["host"] = cfg.Postgres.Primary.IP
+		}
+		if cfg.Postgres.Primary.Hostname != "" {
+			g["postgres"].(map[string]interface{})["host"] = cfg.Postgres.Primary.Hostname
+		}
+	}
+
+	// workspaceObservability defaults (chart references many nested fields)
+	g["workspaceObservability"] = map[string]interface{}{
+		"kubeNamespace":                      "ws-o11y",
+		"caSecretName":                       "ws-o11y-ca",
+		"certIssuerName":                     "codesphere-issuer",
+		"certificatesLifetimeDays":           365,
+		"certificatesRenewBeforeDays":        30,
+		"openSearchImage":                    "",
+		"openSearchInitImage":                "",
+		"openSearchStorageClass":             "rook-ceph-block",
+		"openSearchVersion":                  "",
+		"otelCollectorImage":                 "",
+		"otelCollectorInitImage":             "",
+		"opensearchUnderprovisionFactors":    map[string]interface{}{"cpu": 100, "memory": 256},
+		"otelCollectorUnderprovisionFactors": map[string]interface{}{"cpu": 100, "memory": 256},
+	}
+
+	// workspaceImages defaults
+	g["workspaceImages"] = map[string]interface{}{
+		"server": map[string]interface{}{},
+		"vpn":    map[string]interface{}{},
+	}
+
+	// workspaceRouterImage defaults
+	g["workspaceRouterImage"] = map[string]interface{}{
+		"name": "ghcr.io/codesphere-cloud/docker/workspace-router",
+		"tag":  "latest",
+	}
+
+	// workspacePriorityClass defaults
+	g["workspacePriorityClass"] = map[string]interface{}{
+		"free": "workspace-free",
+		"paid": "workspace-paid",
+	}
+
+	// publicIP from gateway
+	g["publicIP"] = b.Env.GatewayIP
+
+	// metrics defaults
+	g["metrics"] = map[string]interface{}{
+		"type": "prometheus",
+		"prometheus": map[string]interface{}{
+			"jobName":        "codesphere",
+			"pushGatewayUrl": "",
+		},
+	}
+
+	// ipService defaults
+	g["ipService"] = map[string]interface{}{
+		"loadBalancerKind": "metallb",
+		"addressPools":     []string{},
+	}
+
+	// publicApi defaults
+	g["publicApi"] = map[string]interface{}{
+		"rateLimitPerMin": 60,
+	}
+
+	// Recaptcha defaults
+	g["recaptchaV3Threshold"] = 0.5
+	g["showPromotions"] = false
+	g["sendGridListId"] = ""
+	g["twitterTrackingId"] = ""
+	g["googleTrackingId"] = ""
+	g["teamCleanupWhitelist"] = []string{}
+
+	// workspace hosting
+	g["hosts"] = []interface{}{}
+	g["availableDataCenters"] = []interface{}{dc.ID}
+	g["namespace"] = "codesphere"
+	g["mounterHmacSecret"] = "" // filled by vault if present
+
+	// Cert issuer from config
+	g["certIssuer"] = map[string]interface{}{
+		"type": cs.CertIssuer.Type,
+		"acme": cs.CertIssuer.Acme,
+	}
+	g["deployCert"] = cfg.Cluster.Certificates.CA
+
+	// Ceph
+	ceph := cfg.Ceph
+	g["ceph"] = map[string]interface{}{
+		"mdsNamespace":              "rook-ceph",
+		"credentialsSecretName":     "rook-ceph",
+		"activeMds":                 1,
+		"monEndpointsConfigMapName": "rook-ceph-mon-endpoints",
+		"storageClass":              "rook-cephfs",
+		"cephAdmSshKey":             ceph.CephAdmSSHKey,
+		"csiKubeletDir":             ceph.CsiKubeletDir,
+		"nodesSubnet":               ceph.NodesSubnet,
+		"hosts":                     ceph.Hosts,
+		"osds":                      ceph.OSDs,
+	}
+
+	// Network policies
+	g["networkPolicies"] = map[string]interface{}{
+		"workspace": map[string]interface{}{
+			"namespace":     "workspaces",
+			"podSubnet":     "10.244.0.0/16",
+			"serviceSubnet": "10.96.0.0/12",
+			"cephIps":       []string{},
+		},
+		"publicGateway":         map[string]interface{}{"namespace": "codesphere", "name": "public-gateway"},
+		"workspaceReverseProxy": map[string]interface{}{"namespace": "codesphere", "name": "workspace-reverse-proxy"},
+		"gateway":               map[string]interface{}{"namespace": "codesphere", "name": "gateway"},
+		"restrictProxyIngress":  false,
+	}
+
+	// Frontend gateway
+	g["frontendGateway"] = map[string]interface{}{
+		"redirectMarketingPages": map[string]interface{}{"enabled": false},
+		"redirectToIde":          true,
+		"cert":                   map[string]interface{}{"algorithm": "RSA", "size": 2048},
+		"config":                 map[string]interface{}{"worker": map[string]interface{}{"worker_processes": "1"}},
+		"image":                  map[string]interface{}{"name": "ghcr.io/codesphere-cloud/docker/nginx", "tag": "1.26.3"},
+		"replicas":               1,
+		"requests":               map[string]interface{}{"cpu": "1000m", "ephemeral-storage": "50M", "memory": "80Mi"},
+		"issuer":                 "codesphere-issuer",
+	}
+
+	// Branding
+	g["branding"] = map[string]interface{}{
+		"desc":               "Codesphere - Your zero-config cloud IDE",
+		"docsUrl":            "https://codesphere.com/docs/en",
+		"pipelineExampleUrl": "https://github.com/codesphere-cloud/nodejs-template/blob/main/ci.yml",
+		"faviconHref":        "/ide/assets/favicon-32x32.png",
+		"title":              "Codesphere",
+		"tosUrl":             "https://codesphere.com/terms",
+	}
+
+	// Email
+	g["emailConfig"] = map[string]interface{}{
+		"noReplyAddress":   "noreply@codesphere.com",
+		"supportAddress":   "support@codesphere.com",
+		"organizationName": "Codesphere",
+		"blogLink":         "https://codesphere.com/blog",
+		"feedbackLink":     "https://codesphere.com/feedback",
+		"tutorialLink":     "https://codesphere.com/docs",
+		"topLogoUrl":       "https://codesphere.com/logo.png",
+	}
+
+	// Other hardcoded defaults from the chart
+	g["logAsJson"] = true
+	g["customDomainIngressClass"] = "nginx"
+	g["allowWorkspacesOnControlPlane"] = cfg.Kubernetes.ManagedByCodesphere
+	g["imageTag"] = cfg.GeneratedForVersion
+	if g["imageTag"] == "" {
+		g["imageTag"] = "v1.77.2"
+	}
+	g["freeWorkspaceTeamLimit"] = 5
+	g["freeWorkspaceClusterLimit"] = 3
+	g["freeGpuWsTeamLimit"] = 0
+	g["gracePeriodDays"] = 21
+	g["useDedicatedWorkspaceNodes"] = true
+	g["useUsageBasedBillingForNewCustomers"] = false
+	g["trustyThresholdCent"] = 1000
+
+	// Services defaults
+	g["services"] = map[string]interface{}{
+		"priorityClass": "system-cluster-critical",
+		"marketplace":   map[string]interface{}{"replicas": 1, "image": "ghcr.io/codesphere-cloud/docker/marketplace"},
+	}
+
+	// OTEL defaults
+	g["otel"] = map[string]interface{}{
+		"config":   map[string]interface{}{},
+		"limits":   map[string]interface{}{},
+		"requests": map[string]interface{}{},
+		"replicas": 1,
+	}
+
+	return g
+}
+
+// runInstallPhase runs a single install phase on the jumpbox with the given
+// skip steps. It builds the full oms install codesphere command for the phase.
+func (b *GCPBootstrapper) runInstallPhase(packageFilename, phase string, extraSkips []string) error {
+	skipSteps := append([]string{}, extraSkips...)
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		skipSteps = append(skipSteps, "load-container-images")
+	}
+
+	cmd := fmt.Sprintf("oms install codesphere %s -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s",
+		phase, b.Env.SecretsDir, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), packageFilename)
+	if len(skipSteps) > 0 {
+		cmd += " -s " + strings.Join(skipSteps, ",")
+	}
+	return b.Env.Jumpbox.RunSSHCommand("root", cmd)
+}
+
+// ensureNewOmsBinaryOnJumpbox copies a freshly-built linux/amd64 OMS binary to
+// the jumpbox, replacing the old installed version.
+func (b *GCPBootstrapper) ensureNewOmsBinaryOnJumpbox() error {
+	b.stlog.Logf("Updating OMS binary on jumpbox for %s compatibility...", b.Env.InstallVersion)
+
+	binaryPath, cleanup, err := b.OmsBinaryBuilder()
+	if err != nil {
+		return fmt.Errorf("failed to prepare OMS linux binary: %w", err)
+	}
+	defer cleanup()
+
+	const remoteTmpPath = "/tmp/oms-new"
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, binaryPath, remoteTmpPath); err != nil {
+		return fmt.Errorf("failed to copy OMS binary to jumpbox: %w", err)
+	}
+
+	if err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("chmod +x %s && mv %s /usr/local/bin/oms", remoteTmpPath, remoteTmpPath)); err != nil {
+		return fmt.Errorf("failed to install OMS binary on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// ensureSSHKeyOnJumpbox copies the user's SSH private key to the jumpbox at
+// /root/.ssh/id_rsa and writes an SSH config so that the LTS installer's
+// private-cloud-installer.js can SSH to worker nodes via its internal SshClient.
+func (b *GCPBootstrapper) ensureSSHKeyOnJumpbox() error {
+	b.stlog.Logf("Copying SSH private key to jumpbox for inter-node access...")
+
+	srcPath := b.Env.SSHPrivateKeyPath
+	if srcPath == "" {
+		return fmt.Errorf("SSH private key path not set (use --ssh-private-key-path)")
+	}
+
+	keyBytes, err := os.ReadFile(srcPath)
+	if err != nil {
+		return fmt.Errorf("failed to read SSH private key from %s: %w", srcPath, err)
+	}
+
+	// Set up .ssh directory with correct permissions (SSH is strict: 700 for dir).
+	setupCmd := "mkdir -p /root/.ssh && chmod 700 /root/.ssh"
+	if err := b.Env.Jumpbox.RunSSHCommand("root", setupCmd); err != nil {
+		return fmt.Errorf("failed to create .ssh directory on jumpbox: %w", err)
+	}
+
+	// Write the key via heredoc.
+	writeKeyCmd := fmt.Sprintf("cat > /root/.ssh/id_rsa << 'OMSEOF'\n%s\nOMSEOF\nchmod 600 /root/.ssh/id_rsa", string(keyBytes))
+	if err := b.Env.Jumpbox.RunSSHCommand("root", writeKeyCmd); err != nil {
+		return fmt.Errorf("failed to write SSH private key on jumpbox: %w", err)
+	}
+
+	// Write an SSH config that explicitly uses this identity file so the
+	// LTS installer's ssh child process always finds it.
+	sshConfig := "Host *\n  IdentityFile /root/.ssh/id_rsa\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n"
+	writeConfigCmd := fmt.Sprintf("cat > /root/.ssh/config << 'OMSEOF'\n%sOMSEOF\nchmod 600 /root/.ssh/config", sshConfig)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", writeConfigCmd); err != nil {
+		return fmt.Errorf("failed to write SSH config on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// startLTSCephMasterWatcher starts a background process on the ceph master node that continuously
+// re-adds the master to the Ceph orchestrator host inventory. This is required for LTS versions
+// because the installer's configureHosts step applies a declarative host spec containing only the
+// non-master nodes, which removes the master from the inventory. The watcher restores it within
+// seconds, before the subsequent configureMonitors step runs.
+func (b *GCPBootstrapper) startLTSCephMasterWatcher() {
+	if len(b.Env.CephNodes) == 0 || len(b.Env.InstallConfig.Ceph.Hosts) == 0 {
+		return
+	}
+	masterHost := b.Env.InstallConfig.Ceph.Hosts[0]
+	// Use cephadm shell (same as the installer) so the command runs inside the ceph container,
+	// bypassing any standalone-binary or keyring availability issues on the host.
+	// The FSID is auto-detected from /var/lib/ceph/; all output is logged for diagnostics.
+	cmd := fmt.Sprintf(
+		`nohup bash -c "while true; do FSID=\$(ls /var/lib/ceph/ 2>/dev/null | head -1); [ -n \"\$FSID\" ] && [ -x /usr/local/bin/cephadm ] && /usr/local/bin/cephadm shell --fsid \"\$FSID\" -- ceph orch host add %s %s 2>&1; sleep 3; done" > /tmp/ceph-host-watcher.log 2>&1 & echo $! > /tmp/ceph-host-watcher.pid`,
+		masterHost.Hostname,
+		masterHost.IPAddress,
+	)
+	if err := b.Env.CephNodes[0].RunSSHCommand("root", cmd); err != nil {
+		b.stlog.Logf("Note: could not start ceph master host watcher on %s: %v", masterHost.Hostname, err)
+	}
+}
+
+// stopLTSCephMasterWatcher stops the background watcher started by startLTSCephMasterWatcher.
+func (b *GCPBootstrapper) stopLTSCephMasterWatcher() {
+	if len(b.Env.CephNodes) == 0 || len(b.Env.InstallConfig.Ceph.Hosts) == 0 {
+		return
+	}
+	cmd := `kill $(cat /tmp/ceph-host-watcher.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/ceph-host-watcher.pid /tmp/ceph-host-watcher.log`
+	_ = b.Env.CephNodes[0].RunSSHCommand("root", cmd)
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
@@ -1022,8 +1646,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
 		packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
-	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
-	if err != nil {
+	if err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd); err != nil {
 		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
@@ -1032,6 +1655,18 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 
 func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere...")
+
+	// LTS packages whose bom.json predates the pc-applications component
+	// need the ArgoCD+pc-apps pre-step skipped to avoid a missing-BOM error.
+	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil {
+		if ltsSpec.SkipPcApps {
+			b.Env.InstallSkipSteps = append(b.Env.InstallSkipSteps, "argocd")
+		}
+		if ltsSpec.SkipSetupCluster {
+			b.Env.InstallSkipSteps = append(b.Env.InstallSkipSteps, "set-up-cluster", "ms-backends", "codesphere")
+		}
+	}
+
 	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s%s",
 		b.Env.SecretsDir, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), packageFilename, b.generateSkipStepsArg())
 	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)

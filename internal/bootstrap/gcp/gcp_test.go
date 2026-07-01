@@ -1336,6 +1336,87 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			Context("LTS 1.77.2", func() {
+				BeforeEach(func() {
+					csEnv.InstallVersion = "codesphere-lts-v1.77.2"
+				})
+				JustBeforeEach(func() {
+					// Inject a stub binary builder so tests don't invoke `go build`.
+					bs.OmsBinaryBuilder = func() (string, func(), error) {
+						f, err := os.CreateTemp("", "oms-test-binary-*")
+						Expect(err).NotTo(HaveOccurred())
+						Expect(f.Close()).To(Succeed())
+						return f.Name(), func() { Expect(os.Remove(f.Name())).To(Succeed()) }, nil
+					}
+					// Create a fake SSH private key file for the jumpbox key copy.
+					sshKeyFile, err := os.CreateTemp("", "oms-test-ssh-key-*")
+					Expect(err).NotTo(HaveOccurred())
+					_, err = sshKeyFile.WriteString("fake-ssh-private-key")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(sshKeyFile.Close()).To(Succeed())
+					csEnv.SSHPrivateKeyPath = sshKeyFile.Name()
+					DeferCleanup(func() { Expect(os.Remove(sshKeyFile.Name())).To(Succeed()) })
+				})
+				It("downloads package, updates OMS binary, and installs codesphere", func() {
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms download package -f installer.tar.gz -H abc1234567890 codesphere-lts-v1.77.2").Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), mock.Anything, "/tmp/oms-new").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"chmod +x /tmp/oms-new && mv /tmp/oms-new /usr/local/bin/oms").Return(nil)
+					// Phase 1: Infra (skip codesphere + SSH-needing steps).
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms install codesphere infra -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p codesphere-lts-v1.77.2-abc1234567890-installer.tar.gz -s codesphere,set-up-cluster,ms-backends,argocd").Return(nil)
+					// Phase 2: Dependencies (skip SSH-needing steps).
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms install codesphere dependencies -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p codesphere-lts-v1.77.2-abc1234567890-installer.tar.gz -s set-up-cluster,ms-backends,argocd").Return(nil)
+					// SSH key setup for platform phase.
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"mkdir -p /root/.ssh && chmod 700 /root/.ssh").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"cat > /root/.ssh/id_rsa << 'OMSEOF'\nfake-ssh-private-key\nOMSEOF\nchmod 600 /root/.ssh/id_rsa").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"cat > /root/.ssh/config << 'OMSEOF'\nHost *\n  IdentityFile /root/.ssh/id_rsa\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\nOMSEOF\nchmod 600 /root/.ssh/config").Return(nil)
+					// Phase 3: Copy kubeconfig, fix server address, then deploy via helm.
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"mkdir -p /var/lib/k0s/pki").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"scp -o StrictHostKeyChecking=no root@10.0.0.1:/var/lib/k0s/pki/admin.conf /var/lib/k0s/pki/admin.conf").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"sed -i 's|server: https://127.0.0.1:6443|server: https://10.0.0.1:6443|; s|server: https://localhost:6443|server: https://10.0.0.1:6443|' /var/lib/k0s/pki/admin.conf").Return(nil)
+					// Write codesphere values YAML for helm.
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						mock.Anything).Return(nil)
+					// Helm install.
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						mock.Anything).Return(nil)
+
+					err := bs.InstallCodesphere()
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("fails when OmsBinaryBuilder fails", func() {
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms download package -f installer.tar.gz -H abc1234567890 codesphere-lts-v1.77.2").Return(nil)
+					bs.OmsBinaryBuilder = func() (string, func(), error) {
+						return "", func() {}, fmt.Errorf("build failed")
+					}
+
+					err := bs.InstallCodesphere()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to update OMS binary on jumpbox for codesphere-lts-v1.77.2"))
+				})
+
+				It("fails when copying binary to jumpbox fails", func() {
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms download package -f installer.tar.gz -H abc1234567890 codesphere-lts-v1.77.2").Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.MatchedBy(jumpboxMatcher), mock.Anything, "/tmp/oms-new").Return(fmt.Errorf("copy failed"))
+
+					err := bs.InstallCodesphere()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to update OMS binary on jumpbox for codesphere-lts-v1.77.2"))
+				})
+			})
+
 			Context("with local package", func() {
 				BeforeEach(func() {
 					csEnv.InstallLocal = "fake-installer-lite.tar.gz"
@@ -1398,7 +1479,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when download package fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(fmt.Errorf("download error"))
+				downloadCmd := "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3"
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", downloadCmd).Return(fmt.Errorf("download error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())

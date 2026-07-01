@@ -94,6 +94,10 @@ func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 		return errors.New("unauthorized: invalid API key")
 	}
 
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return fmt.Errorf("OMS-Portal rate limit exceeded (HTTP 429): please wait before retrying")
+	}
+
 	if resp.StatusCode >= 300 {
 		log.Printf("Non-2xx response received from OMS-Portal (%s) - Status: %d", c.Env.GetOmsPortalApi(), resp.StatusCode)
 

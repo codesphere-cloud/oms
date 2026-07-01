@@ -157,7 +157,7 @@ func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
 		return destDir, nil
 	}
 
-	log.Printf("Extracting installer bundle %s → %s", bundlePath, destDir)
+	log.Printf("Extracting installer bundle %s -> %s", bundlePath, destDir)
 	if err := util.ExtractTarGz(b.fw, bundlePath, destDir); err != nil {
 		return "", fmt.Errorf("failed to extract installer bundle: %w", err)
 	}
@@ -237,10 +237,10 @@ func symlinkBinary(name, target string) error {
 	}
 
 	if err := os.Symlink(localPath, target); err != nil {
-		return fmt.Errorf("failed to symlink %q → %q: %w", target, localPath, err)
+		return fmt.Errorf("failed to symlink %q -> %q: %w", target, localPath, err)
 	}
 
-	log.Printf("Symlinked %s → %s", target, localPath)
+	log.Printf("Symlinked %s -> %s", target, localPath)
 	return nil
 }
 
@@ -424,7 +424,7 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 	if b.fw.Exists(depsDir) {
 		log.Printf("deps directory already exists at %s, skipping extraction", depsDir)
 	} else {
-		log.Printf("Extracting deps.tar.gz → %s", depsDir)
+		log.Printf("Extracting deps.tar.gz -> %s", depsDir)
 		if err := util.ExtractTarGz(b.fw, archivePath, depsDir); err != nil {
 			return fmt.Errorf("failed to extract deps.tar.gz: %w", err)
 		}

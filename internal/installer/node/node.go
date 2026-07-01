@@ -93,9 +93,12 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 	_ = session.Setenv("OMS_PORTAL_API", os.Getenv("OMS_PORTAL_API"))
 	_ = agent.RequestAgentForwarding(session) // Best effort, ignore errors
 
+	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
-	session.Stderr = &stderrBuf
-	if !r.Quiet {
+	if r.Quiet {
+		session.Stdout = &stdoutBuf
+		session.Stderr = &stderrBuf
+	} else {
 		session.Stdout = os.Stdout
 		session.Stderr = os.Stderr
 	}
@@ -106,8 +109,17 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 
 	if err := session.Wait(); err != nil {
 		// A non-zero exit status from the remote command is also considered an error
-		if r.Quiet && stderrBuf.Len() > 0 {
-			return fmt.Errorf("command failed: %w\n%s", err, stderrBuf.String())
+		if r.Quiet {
+			var extra string
+			if stdoutBuf.Len() > 0 {
+				extra += "\nstdout:\n" + stdoutBuf.String()
+			}
+			if stderrBuf.Len() > 0 {
+				extra += "\nstderr:\n" + stderrBuf.String()
+			}
+			if extra != "" {
+				return fmt.Errorf("command failed: %w%s", err, extra)
+			}
 		}
 		return fmt.Errorf("command failed: %w", err)
 	}
