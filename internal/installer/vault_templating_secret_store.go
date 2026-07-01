@@ -179,6 +179,8 @@ func isSOPSEncryptedYAML(data []byte) (bool, error) {
 }
 
 func parseVaultData(data []byte) (*files.InstallVault, error) {
+	data = unwrapSOPSData(data)
+
 	vault := &files.InstallVault{}
 	if err := vault.Unmarshal(data); err != nil {
 		return nil, err

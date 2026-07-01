@@ -14,6 +14,7 @@ import (
 
 	"filippo.io/age"
 	sopsage "github.com/getsops/sops/v3/age"
+	"go.yaml.in/yaml/v3"
 )
 
 var (
@@ -158,7 +159,7 @@ func generateAgeKey(keyPath string) (string, error) {
 
 // EncryptFileWithSOPS encrypts src with SOPS+age and writes ciphertext to target.
 func EncryptFileWithSOPS(src, target, recipient string) error {
-	cmd := exec.Command("sops", "--encrypt", "--age", recipient, "--output", target, src)
+	cmd := exec.Command("sops", "--encrypt", "--input-type", "yaml", "--age", recipient, "--output", target, src)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("sops encrypt failed: %w: %s", err, out)
@@ -169,7 +170,7 @@ func EncryptFileWithSOPS(src, target, recipient string) error {
 // DecryptFileWithSOPS decrypts a SOPS-encrypted file and returns the plaintext bytes.
 // If keyPath is non-empty, SOPS_AGE_KEY_FILE is set for the sops process.
 func DecryptFileWithSOPS(src, keyPath string) ([]byte, error) {
-	cmd := exec.Command("sops", "--decrypt", src)
+	cmd := exec.Command("sops", "--decrypt", "--input-type", "yaml", src)
 	if keyPath != "" {
 		cmd.Env = append(os.Environ(), "SOPS_AGE_KEY_FILE="+keyPath)
 	}
@@ -181,4 +182,28 @@ func DecryptFileWithSOPS(src, keyPath string) ([]byte, error) {
 		return nil, fmt.Errorf("sops decrypt failed: %w", err)
 	}
 	return out, nil
+}
+
+// unwrapSOPSData strips a top-level "data" literal block scalar wrapper if
+// present. When SOPS encrypts with --input-type yaml, it
+// wraps the entire document under a data: | key.
+func unwrapSOPSData(data []byte) []byte {
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return data
+	}
+	if len(doc.Content) == 0 {
+		return data
+	}
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode || len(root.Content) != 2 {
+		return data
+	}
+	keyNode := root.Content[0]
+	valNode := root.Content[1]
+	if keyNode.Value != "data" || valNode.Kind != yaml.ScalarNode {
+		return data
+	}
+	// The scalar value is the inner YAML content.
+	return []byte(valNode.Value)
 }
