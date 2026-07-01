@@ -333,11 +333,6 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to generate k0s config script: %w", err)
 	}
 
-	err = b.stlog.Step("Install Postgres", b.InstallPostgres)
-	if err != nil {
-		return fmt.Errorf("failed to install postgres: %w", err)
-	}
-
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
 		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
 		if err != nil {
@@ -395,7 +390,6 @@ func (b *GCPBootstrapper) createTestUser() error {
 	testuser.LogAndPersistResult(result, b.Env.OmsWorkdir)
 	return nil
 }
-
 func (b *GCPBootstrapper) ValidateInput() error {
 	err := b.validateInstallVersion()
 	if err != nil {
@@ -1040,7 +1034,6 @@ func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere...")
 	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s%s",
 		b.Env.SecretsDir, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), packageFilename, b.generateSkipStepsArg())
-
 	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 }
 

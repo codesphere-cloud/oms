@@ -6,6 +6,7 @@ package docker
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 )
@@ -14,36 +15,38 @@ import (
 // The interface makes the command easy to unit-test with mocks.
 //
 //mockery:generate: true
-type DockerInstaller interface {
+type DockerManager interface {
 	// IsInstalled checks whether the docker binary is available on the remote host.
 	IsInstalled() bool
 
 	// Install installs Docker Engine on the remote host using Docker's official apt repository.
-	Install() error
+	InstallWithApt() error
 }
 
-type dockerInstaller struct {
+type dockerManager struct {
 	remoteUser string
 	remoteNode *node.Node
 }
 
-func New(user string, node *node.Node) DockerInstaller {
-	return &dockerInstaller{
+func New(user string, node *node.Node) DockerManager {
+	return &dockerManager{
 		remoteUser: user,
 		remoteNode: node,
 	}
 }
 
 // IsInstalled checks whether the docker binary is available on the remote host.
-func (d *dockerInstaller) IsInstalled() bool {
+func (d *dockerManager) IsInstalled() bool {
 	err := d.remoteNode.RunSSHCommand(d.remoteUser, "command -v docker")
 
 	return err == nil
 }
 
-// Install installs Docker Engine on the remote host using Docker's official apt repository
+// InstallWithApt installs Docker Engine on the remote host using Docker's official apt repository
 // see https://docs.docker.com/engine/install/ubuntu/#install-using-the-repository
-func (d *dockerInstaller) Install() error {
+func (d *dockerManager) InstallWithApt() error {
+	log.Println("Installing Docker on remote host via apt...")
+
 	if err := d.removeConflictingPackages(); err != nil {
 		return fmt.Errorf("failed to remove conflicting docker packages")
 	}
@@ -70,7 +73,7 @@ func (d *dockerInstaller) Install() error {
 // removeConflictingPackages removes any unofficial Docker packages that may
 // conflict with the official Docker Engine packages. The list matches what the
 // official docs specify.
-func (d *dockerInstaller) removeConflictingPackages() error {
+func (d *dockerManager) removeConflictingPackages() error {
 	cmd := "apt-get remove -y docker.io docker-compose docker-compose-v2 docker-doc podman-docker containerd runc 2>/dev/null || true"
 	if err := d.remoteNode.RunSSHCommand(d.remoteUser, cmd); err != nil {
 		return fmt.Errorf("failed to remove conflicting packages: %w", err)
@@ -81,7 +84,8 @@ func (d *dockerInstaller) removeConflictingPackages() error {
 
 // installAptPrerequisites ensures ca-certificates and curl are present;
 // these are required before the Docker GPG key and repo can be added.
-func (d *dockerInstaller) installAptPrerequisites() error {
+func (d *dockerManager) installAptPrerequisites() error {
+	log.Println("Installing Docker apt prerequisites...")
 	for _, cmd := range []string{
 		"apt-get update -qq",
 		"apt-get install -y -qq ca-certificates curl",
@@ -96,7 +100,8 @@ func (d *dockerInstaller) installAptPrerequisites() error {
 
 // addDockerRepository adds Docker's official GPG key and apt repository,
 // exactly as described in the official Ubuntu install docs.
-func (d *dockerInstaller) addDockerRepository() error {
+func (d *dockerManager) addDockerRepository() error {
+	log.Println("Adding Docker apt repository...")
 	dockerAddRepoCmd := fmt.Sprintf(
 		"sudo install -m 0755 -d /etc/apt/keyrings && " +
 			"sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc && " +
@@ -128,7 +133,7 @@ func (d *dockerInstaller) addDockerRepository() error {
 }
 
 // installDockerPackages installs docker and related packages using apt-get.
-func (d *dockerInstaller) installDockerPackages() error {
+func (d *dockerManager) installDockerPackages() error {
 	cmd := fmt.Sprintf(
 		"apt-get install -y -qq " +
 			"docker-ce " +
@@ -147,7 +152,7 @@ func (d *dockerInstaller) installDockerPackages() error {
 
 // startDaemon starts and enables the Docker daemon via systemctl so it
 // survives reboots.
-func (d *dockerInstaller) startDaemon() error {
+func (d *dockerManager) startDaemon() error {
 	for _, cmd := range []string{
 		"systemctl start docker",
 		"systemctl enable docker",
