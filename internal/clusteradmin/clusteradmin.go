@@ -45,6 +45,13 @@ func AddClusterAdmin(ctx context.Context, clientset kubernetes.Interface, opts O
 		return err
 	}
 
+	if strings.TrimSpace(opts.Namespace) == "" {
+		return fmt.Errorf("namespace must not be empty")
+	}
+	if strings.TrimSpace(opts.SecretName) == "" {
+		return fmt.Errorf("secret name must not be empty")
+	}
+
 	secrets := clientset.CoreV1().Secrets(opts.Namespace)
 
 	existing, err := secrets.Get(ctx, opts.SecretName, metav1.GetOptions{})

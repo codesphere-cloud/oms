@@ -93,4 +93,19 @@ var _ = Describe("AddClusterAdmin", func() {
 		opts.Email = "not-an-email"
 		Expect(clusteradmin.AddClusterAdmin(ctx, clientset, opts)).To(MatchError(ContainSubstring("invalid email")))
 	})
+
+	It("rejects a display name followed by a bare email address without angle brackets", func() {
+		opts.Email = "Max Mustermann max@mail.com"
+		Expect(clusteradmin.AddClusterAdmin(ctx, clientset, opts)).To(MatchError(ContainSubstring("invalid email")))
+	})
+
+	It("rejects an empty namespace", func() {
+		opts.Namespace = "   "
+		Expect(clusteradmin.AddClusterAdmin(ctx, clientset, opts)).To(MatchError(ContainSubstring("namespace must not be empty")))
+	})
+
+	It("rejects an empty secret name", func() {
+		opts.SecretName = "   "
+		Expect(clusteradmin.AddClusterAdmin(ctx, clientset, opts)).To(MatchError(ContainSubstring("secret name must not be empty")))
+	})
 })

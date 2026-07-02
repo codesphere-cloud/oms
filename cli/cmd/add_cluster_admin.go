@@ -41,7 +41,8 @@ func AddAddClusterAdminCmd(parent *cobra.Command, opts *GlobalOptions) {
 				deployment consumes via a secretKeyRef. The secret is created if it does not exist yet and
 				updated otherwise, so running the command again overwrites the previous email.
 
-				The target cluster is determined by the current kubeconfig context.`),
+				The target cluster is determined by the current kubeconfig context. Set the KUBECONFIG
+				environment variable to target a different kubeconfig.`),
 			Example: formatExamples("add-cluster-admin", []packageio.Example{
 				{Cmd: "--email niklas@codesphere.com", Desc: "Set the cluster admin email using the default secret and namespace"},
 				{Cmd: "--email admin@codesphere.com --namespace kube-system --secret-name cluster-admin-email", Desc: "Set the cluster admin email in a custom namespace"},
