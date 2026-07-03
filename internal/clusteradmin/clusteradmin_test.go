@@ -99,6 +99,34 @@ var _ = Describe("AddClusterAdmin", func() {
 		Expect(clusteradmin.AddClusterAdmin(ctx, clientset, opts)).To(MatchError(ContainSubstring("invalid email")))
 	})
 
+	It("creates the namespace when CreateNamespace is set and it does not exist yet", func() {
+		opts.CreateNamespace = true
+		Expect(clusteradmin.AddClusterAdmin(ctx, clientset, opts)).To(Succeed())
+
+		_, err := clientset.CoreV1().Namespaces().Get(ctx, opts.Namespace, metav1.GetOptions{})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(getEmail()).To(Equal("niklas@codesphere.com"))
+	})
+
+	It("succeeds when CreateNamespace is set and the namespace already exists", func() {
+		_, err := clientset.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: opts.Namespace},
+		}, metav1.CreateOptions{})
+		Expect(err).ToNot(HaveOccurred())
+
+		opts.CreateNamespace = true
+		Expect(clusteradmin.AddClusterAdmin(ctx, clientset, opts)).To(Succeed())
+
+		Expect(getEmail()).To(Equal("niklas@codesphere.com"))
+	})
+
+	It("does not create the namespace when CreateNamespace is not set", func() {
+		Expect(clusteradmin.AddClusterAdmin(ctx, clientset, opts)).To(Succeed())
+
+		_, err := clientset.CoreV1().Namespaces().Get(ctx, opts.Namespace, metav1.GetOptions{})
+		Expect(err).To(HaveOccurred())
+	})
+
 	It("rejects an empty namespace", func() {
 		opts.Namespace = "   "
 		Expect(clusteradmin.AddClusterAdmin(ctx, clientset, opts)).To(MatchError(ContainSubstring("namespace must not be empty")))

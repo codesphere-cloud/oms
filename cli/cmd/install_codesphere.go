@@ -73,7 +73,7 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	if c.Opts.CodesphereOnly {
-		return installCodespherePlatform(effectiveOpts, c.Env)
+		return installCodespherePlatform(effectiveOpts, cfg, c.Env)
 	}
 
 	if infraInstaller.HasExecutableSteps(cfg) {
@@ -92,7 +92,7 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	return installCodespherePlatform(effectiveOpts, c.Env)
+	return installCodespherePlatform(effectiveOpts, cfg, c.Env)
 }
 
 func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {

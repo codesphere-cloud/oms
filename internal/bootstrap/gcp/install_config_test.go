@@ -432,6 +432,40 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(util.StringSliceToBoolMap(csEnv.FeatureFlags)))
 				})
 			})
+			Context("When cluster admin email is set", func() {
+				BeforeEach(func() {
+					csEnv.ClusterAdminEmail = "admin@codesphere.com"
+				})
+				It("writes the email to the install config", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.ClusterAdminEmail).To(Equal("admin@codesphere.com"))
+				})
+			})
+			Context("When cluster admin email is not set", func() {
+				BeforeEach(func() {
+					csEnv.InstallConfig.Codesphere.ClusterAdminEmail = "existing@codesphere.com"
+				})
+				It("keeps the value of an existing config", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.ClusterAdminEmail).To(Equal("existing@codesphere.com"))
+				})
+			})
 			Context("When GitHub App name is not set ", func() {
 				BeforeEach(func() {
 					csEnv.GitHubAppName = ""

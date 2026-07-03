@@ -151,13 +151,19 @@ func (i *argoCDAndAppsInstall) loadVaultData() error {
 }
 
 func (i *argoCDAndAppsInstall) resolveVaultPath() (string, error) {
-	if strings.TrimSpace(i.opts.Vault) != "" {
-		return i.opts.Vault, nil
+	return resolveVaultPath(i.opts.Vault, i.config)
+}
+
+// resolveVaultPath returns the explicit --vault path or falls back to
+// prod.vault.yaml in the config's secrets baseDir.
+func resolveVaultPath(vaultPath string, config files.RootConfig) (string, error) {
+	if strings.TrimSpace(vaultPath) != "" {
+		return vaultPath, nil
 	}
-	if strings.TrimSpace(i.config.Secrets.BaseDir) == "" {
+	if strings.TrimSpace(config.Secrets.BaseDir) == "" {
 		return "", fmt.Errorf("vault path is not set and config.yaml secrets.baseDir is empty")
 	}
-	return filepath.Join(i.config.Secrets.BaseDir, "prod.vault.yaml"), nil
+	return filepath.Join(config.Secrets.BaseDir, "prod.vault.yaml"), nil
 }
 
 func (i *argoCDAndAppsInstall) installArgoCD() error {
