@@ -215,9 +215,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.3.0
+Version: v1.4.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.3.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.4.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
