@@ -7,9 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
@@ -21,7 +19,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -119,45 +116,24 @@ type argoCDAndAppsInstall struct {
 }
 
 func (i *argoCDAndAppsInstall) loadVaultData() error {
-	vaultPath, err := i.resolveVaultPath()
+	vault, kubeConfig, err := installer.VaultAndRESTConfig(i.opts.Vault, i.opts.PrivKey, i.config)
 	if err != nil {
 		return err
 	}
+	i.vault = vault
+	i.kubeConfig = kubeConfig
 
-	i.vault, err = installer.LoadVaultData(vaultPath, i.opts.PrivKey)
-	if err != nil {
-		return fmt.Errorf("failed to load vault %s: %w", vaultPath, err)
-	}
 	if s := i.vault.GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
 		i.ociPassword = s.Fields.Password
 	}
 	if i.ociPassword == "" {
 		return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
 	}
-	kubeConfigContent, err := kubeConfigContentFromVault(i.vault)
-	if err != nil {
-		return err
-	}
-
-	i.kubeConfig, err = clientcmd.RESTConfigFromKubeConfig([]byte(kubeConfigContent))
-	if err != nil {
-		return fmt.Errorf("failed to load kubernetes config from vault: %w", err)
-	}
 	i.kubeClient, err = ctrlclient.New(i.kubeConfig, ctrlclient.Options{})
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 	return nil
-}
-
-func (i *argoCDAndAppsInstall) resolveVaultPath() (string, error) {
-	if strings.TrimSpace(i.opts.Vault) != "" {
-		return i.opts.Vault, nil
-	}
-	if strings.TrimSpace(i.config.Secrets.BaseDir) == "" {
-		return "", fmt.Errorf("vault path is not set and config.yaml secrets.baseDir is empty")
-	}
-	return filepath.Join(i.config.Secrets.BaseDir, "prod.vault.yaml"), nil
 }
 
 func (i *argoCDAndAppsInstall) installArgoCD() error {
@@ -215,17 +191,6 @@ func (i *argoCDAndAppsInstall) installPcApps() error {
 		return fmt.Errorf("failed to install pc-apps: %w", err)
 	}
 	return nil
-}
-
-func kubeConfigContentFromVault(vault *files.InstallVault) (string, error) {
-	if vault == nil {
-		return "", fmt.Errorf("vault is not loaded")
-	}
-	kubeConfig := vault.GetSecret(files.SecretKubeConfig)
-	if kubeConfig == nil || kubeConfig.File == nil || strings.TrimSpace(kubeConfig.File.Content) == "" {
-		return "", fmt.Errorf("kubeconfig not found in vault (secret %q)", files.SecretKubeConfig)
-	}
-	return kubeConfig.File.Content, nil
 }
 
 func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCodesphereOpts) {

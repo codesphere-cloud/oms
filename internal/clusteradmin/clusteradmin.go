@@ -31,6 +31,10 @@ type Opts struct {
 	Email      string
 	Namespace  string
 	SecretName string
+	// CreateNamespace creates the target namespace if it does not exist yet
+	// instead of failing. Used during installation, where the secret may be
+	// written before the platform charts have created the namespace.
+	CreateNamespace bool
 }
 
 // AddClusterAdmin writes the given email to the cluster-admin-email secret in
@@ -40,7 +44,7 @@ type Opts struct {
 // The email is stored under the EmailKey data key. Running the command again
 // with a different email overwrites the previous value.
 func AddClusterAdmin(ctx context.Context, clientset kubernetes.Interface, opts Opts) error {
-	email, err := normalizeEmail(opts.Email)
+	email, err := NormalizeEmail(opts.Email)
 	if err != nil {
 		return err
 	}
@@ -50,6 +54,12 @@ func AddClusterAdmin(ctx context.Context, clientset kubernetes.Interface, opts O
 	}
 	if strings.TrimSpace(opts.SecretName) == "" {
 		return fmt.Errorf("secret name must not be empty")
+	}
+
+	if opts.CreateNamespace {
+		if err := ensureNamespace(ctx, clientset, opts.Namespace); err != nil {
+			return err
+		}
 	}
 
 	secrets := clientset.CoreV1().Secrets(opts.Namespace)
@@ -92,8 +102,19 @@ func AddClusterAdmin(ctx context.Context, clientset kubernetes.Interface, opts O
 	return nil
 }
 
-// normalizeEmail validates and canonicalizes an email address.
-func normalizeEmail(raw string) (string, error) {
+// ensureNamespace creates the namespace if it does not exist yet.
+func ensureNamespace(ctx context.Context, clientset kubernetes.Interface, namespace string) error {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespace},
+	}
+	if _, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+		return fmt.Errorf("creating namespace %s: %w", namespace, err)
+	}
+	return nil
+}
+
+// NormalizeEmail validates and canonicalizes an email address.
+func NormalizeEmail(raw string) (string, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return "", fmt.Errorf("email must not be empty")

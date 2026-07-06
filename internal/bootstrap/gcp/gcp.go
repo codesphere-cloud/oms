@@ -15,6 +15,7 @@ import (
 
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/clusteradmin"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer"
@@ -134,6 +135,7 @@ type CodesphereEnvironment struct {
 	PrometheusRemoteWriteUser     string       `json:"prometheus_remote_write_user,omitempty"`
 	PrometheusRemoteWritePassword string       `json:"-"`
 	PrometheusRemoteWriteURL      string       `json:"prometheus_remote_write_url,omitempty"`
+	ClusterAdminEmail             string       `json:"cluster_admin_email,omitempty"`
 
 	// ACME Issuer
 	GoogleACMEIssuer bool `json:"google_acme_issuer,omitempty"`
@@ -438,7 +440,32 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
+	err = b.validateClusterAdminEmail()
+	if err != nil {
+		return err
+	}
+
 	return b.validateTelemetryExportParams()
+}
+
+func (b *GCPBootstrapper) validateClusterAdminEmail() error {
+	if b.Env.ClusterAdminEmail == "" {
+		return nil
+	}
+
+	// The email reaches the cluster via the install config, which is only
+	// updated when the config is written.
+	if !b.Env.WriteConfig {
+		return fmt.Errorf("cluster admin email requires write-config to be enabled")
+	}
+
+	email, err := clusteradmin.NormalizeEmail(b.Env.ClusterAdminEmail)
+	if err != nil {
+		return fmt.Errorf("invalid cluster admin email: %w", err)
+	}
+	b.Env.ClusterAdminEmail = email
+
+	return nil
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact

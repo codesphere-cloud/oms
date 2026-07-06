@@ -4,6 +4,7 @@
 package cmd_test
 
 import (
+	"context"
 	"os"
 	"runtime"
 
@@ -56,7 +57,9 @@ var _ = Describe("InstallCodesphereCmd", func() {
 			c.Opts.Configs = []string{tempConfigFile.Name()}
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
-			err = c.RunE(nil, []string{})
+			runCmd := &cobra.Command{}
+			runCmd.SetContext(context.Background())
+			err = c.RunE(runCmd, []string{})
 
 			Expect(err).To(HaveOccurred())
 			if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {

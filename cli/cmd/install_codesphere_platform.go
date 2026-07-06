@@ -11,6 +11,7 @@ import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
 )
@@ -22,21 +23,25 @@ type InstallCodespherePlatformCmd struct {
 	Env  env.Env
 }
 
-func (c *InstallCodespherePlatformCmd) RunE(_ *cobra.Command, _ []string) error {
-	effectiveOpts, _, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
+func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) error {
+	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	return installCodespherePlatform(effectiveOpts, c.Env)
+	return installCodespherePlatform(cmd.Context(), effectiveOpts, cfg, c.Env)
 }
 
-func installCodespherePlatform(opts *InstallCodesphereOpts, env env.Env) error {
+func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
+	if err := installer.EnsureClusterAdminSecret(ctx, opts.Vault, opts.PrivKey, cfg); err != nil {
+		return fmt.Errorf("failed to set cluster admin email: %w", err)
+	}
+
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
 	cm := installer.NewConfig()
-	im := system.NewImage(context.Background())
+	im := system.NewImage(ctx)
 
 	ci := &installer.CodesphereInstaller{
 		ConfigPath:       opts.ConfigPath,

@@ -366,6 +366,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Codesphere.Internal = b.Env.InternalFlags
 	b.Env.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
 	b.Env.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
+	// Only set when the flag is provided so a recovered config keeps its value on re-runs.
+	if b.Env.ClusterAdminEmail != "" {
+		b.Env.InstallConfig.Codesphere.ClusterAdminEmail = b.Env.ClusterAdminEmail
+	}
 	b.applyExternalLokiConfig()
 	b.applyPrometheusRemoteWriteConfig()
 

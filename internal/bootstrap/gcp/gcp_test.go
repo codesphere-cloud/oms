@@ -308,6 +308,37 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 			})
 		})
+		Context("When a cluster admin email is set", func() {
+			BeforeEach(func() {
+				csEnv.ClusterAdminEmail = "Admin@Codesphere.com"
+				csEnv.WriteConfig = true
+			})
+			It("passes validation and normalizes the email", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(bs.Env.ClusterAdminEmail).To(Equal("admin@codesphere.com"))
+			})
+
+			Context("when the email is invalid", func() {
+				BeforeEach(func() {
+					csEnv.ClusterAdminEmail = "not-an-email"
+				})
+				It("fails", func() {
+					err := bs.ValidateInput()
+					Expect(err).To(MatchError(MatchRegexp("invalid cluster admin email")))
+				})
+			})
+
+			Context("when write-config is disabled", func() {
+				BeforeEach(func() {
+					csEnv.WriteConfig = false
+				})
+				It("fails", func() {
+					err := bs.ValidateInput()
+					Expect(err).To(MatchError(MatchRegexp("cluster admin email requires write-config")))
+				})
+			})
+		})
 		Context("When a version and hash are specified", func() {
 			BeforeEach(func() {
 				mockPortalClient = portal.NewMockPortal(GinkgoT())
