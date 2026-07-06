@@ -11,9 +11,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 )
 
-// DockerManager abstracts Docker operations on a remote host.
-// The interface makes the command easy to unit-test with mocks.
-//
 //mockery:generate: true
 type DockerManager interface {
 	// IsInstalled checks whether the docker binary is available on the remote host.
