@@ -52,7 +52,8 @@ type InstallCodesphereOpts struct {
 	PCAppsValues         []string
 }
 
-func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
+func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
+	ctx := cmd.Context()
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -73,7 +74,7 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	if c.Opts.CodesphereOnly {
-		return installCodespherePlatform(effectiveOpts, cfg, c.Env)
+		return installCodespherePlatform(ctx, effectiveOpts, cfg, c.Env)
 	}
 
 	if infraInstaller.HasExecutableSteps(cfg) {
@@ -92,7 +93,7 @@ func (c *InstallCodesphereCmd) RunE(_ *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	return installCodespherePlatform(effectiveOpts, cfg, c.Env)
+	return installCodespherePlatform(ctx, effectiveOpts, cfg, c.Env)
 }
 
 func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
