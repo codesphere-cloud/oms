@@ -22,7 +22,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/codesphere-cloud/cs-go v1.4.0
-	github.com/creativeprojects/go-selfupdate v1.5.2
+	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/getsops/sops/v3 v3.13.2
 	github.com/jedib0t/go-pretty/v6 v6.8.2
 	github.com/lithammer/shortuuid v3.0.0+incompatible
@@ -552,6 +552,7 @@ require (
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
+	github.com/google/go-github/v86 v86.0.0 // indirect
 	github.com/google/go-github/v88 v88.0.0 // indirect
 	github.com/google/go-licenses/v2 v2.0.1 // indirect
 	github.com/google/go-querystring v1.2.0 // indirect
@@ -622,7 +623,7 @@ require (
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
 	golang.org/x/tools v0.47.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
