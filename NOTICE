@@ -1127,9 +1127,9 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.4/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.53.0
+Version: v0.54.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.53.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.54.0:LICENSE
  
 ----------
 Module: golang.org/x/mod/semver
@@ -1151,9 +1151,9 @@ License URL: https://cs.opensource.google/go/x/oauth2/+/v0.36.0:LICENSE
  
 ----------
 Module: golang.org/x/sync
-Version: v0.21.0
+Version: v0.22.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sync/+/v0.21.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sync/+/v0.22.0:LICENSE
  
 ----------
 Module: golang.org/x/sys
@@ -1169,9 +1169,9 @@ License URL: https://cs.opensource.google/go/x/term/+/v0.45.0:LICENSE
  
 ----------
 Module: golang.org/x/text
-Version: v0.38.0
+Version: v0.40.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/text/+/v0.38.0:LICENSE
+License URL: https://cs.opensource.google/go/x/text/+/v0.40.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
