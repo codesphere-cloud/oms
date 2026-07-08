@@ -239,9 +239,9 @@ License URL: https://github.com/cpuguy83/go-md2man/blob/v2.0.7/LICENSE.md
  
 ----------
 Module: github.com/creativeprojects/go-selfupdate
-Version: v1.5.2
+Version: v1.6.0
 License: MIT
-License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.5.2/LICENSE
+License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.6.0/LICENSE
  
 ----------
 Module: github.com/cyphar/filepath-securejoin
@@ -512,6 +512,12 @@ Module: github.com/google/go-github/v74/github
 Version: v74.0.0
 License: BSD-3-Clause
 License URL: https://github.com/google/go-github/blob/v74.0.0/LICENSE
+ 
+----------
+Module: github.com/google/go-github/v86/github
+Version: v86.0.0
+License: BSD-3-Clause
+License URL: https://github.com/google/go-github/blob/v86.0.0/LICENSE
  
 ----------
 Module: github.com/google/go-querystring/query
@@ -1151,9 +1157,9 @@ License URL: https://cs.opensource.google/go/x/sync/+/v0.21.0:LICENSE
  
 ----------
 Module: golang.org/x/sys
-Version: v0.46.0
+Version: v0.47.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sys/+/v0.46.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sys/+/v0.47.0:LICENSE
  
 ----------
 Module: golang.org/x/term
