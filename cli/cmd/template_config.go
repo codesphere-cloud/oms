@@ -9,7 +9,7 @@ import (
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
-	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -95,7 +95,7 @@ func (c *TemplateConfigCmd) Render() ([]byte, error) {
 		return nil, fmt.Errorf("failed to read config file %s: %w", c.Opts.Config, err)
 	}
 
-	store := installer.NewLazyVaultTemplatingSecretStore(c.Opts.Vault, c.Opts.AgeKey)
+	store := vault.NewLazyVaultTemplatingSecretStore(c.Opts.Vault, c.Opts.AgeKey)
 	rendered, err := configtemplating.RenderInstallConfigTemplate(data, store)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render config template: %w", err)

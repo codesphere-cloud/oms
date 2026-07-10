@@ -12,6 +12,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -149,7 +150,7 @@ pcApps:
       targetRevision: '{{ secret "pcAppsRevision" }}'
 `), 0644)).To(Succeed())
 
-		vault := &files.InstallVault{
+		testVault := &files.InstallVault{
 			Secrets: []files.SecretEntry{
 				{Name: "dcCity", File: &files.SecretFile{Content: "Templated City"}},
 				{Name: "baseDomain", File: &files.SecretFile{Content: "templated.example.com"}},
@@ -157,13 +158,13 @@ pcApps:
 				{Name: "pcAppsRevision", File: &files.SecretFile{Content: "from-vault"}},
 			},
 		}
-		vaultYAML, err := vault.Marshal()
+		vaultYAML, err := testVault.Marshal()
 		Expect(err).ToNot(HaveOccurred())
 		Expect(os.WriteFile(plaintextVaultPath, vaultYAML, 0600)).To(Succeed())
 		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).ToNot(HaveOccurred())
-		Expect(installer.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
+		Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 		opts := &InstallCodesphereOpts{
 			Configs: []string{basePath, overlayPath},

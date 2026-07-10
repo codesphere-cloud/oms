@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -43,7 +43,7 @@ postgres:
 `), 0644)).To(Succeed())
 		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 
-		vault := &files.InstallVault{
+		testVault := &files.InstallVault{
 			Secrets: []files.SecretEntry{
 				{
 					Name: "codesphereLicenseKey",
@@ -58,12 +58,12 @@ postgres:
 				},
 			},
 		}
-		vaultYaml, err := vault.Marshal()
+		vaultYaml, err := testVault.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.WriteFile(plaintextVaultPath, vaultYaml, 0600)).To(Succeed())
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(installer.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
+		Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 		rootCmd := cmd.GetRootCmd()
 		var output bytes.Buffer

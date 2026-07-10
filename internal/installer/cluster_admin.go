@@ -11,6 +11,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/clusteradmin"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -22,9 +23,11 @@ func ResolveVaultPath(vaultPath string, config files.RootConfig) (string, error)
 	if strings.TrimSpace(vaultPath) != "" {
 		return vaultPath, nil
 	}
+
 	if strings.TrimSpace(config.Secrets.BaseDir) == "" {
 		return "", fmt.Errorf("vault path is not set and config.yaml secrets.baseDir is empty")
 	}
+
 	return filepath.Join(config.Secrets.BaseDir, "prod.vault.yaml"), nil
 }
 
@@ -36,18 +39,22 @@ func VaultAndRESTConfig(vaultPath, privKey string, cfg files.RootConfig) (*files
 	if err != nil {
 		return nil, nil, err
 	}
-	vault, err := LoadVaultData(resolvedPath, privKey)
+
+	vault, err := vault.LoadVaultData(resolvedPath, privKey)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load vault %s: %w", resolvedPath, err)
 	}
+
 	kubeConfigContent, err := kubeConfigContentFromVault(vault)
 	if err != nil {
 		return nil, nil, err
 	}
+
 	restConfig, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeConfigContent))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load kubernetes config from vault: %w", err)
 	}
+
 	return vault, restConfig, nil
 }
 
@@ -55,10 +62,12 @@ func kubeConfigContentFromVault(vault *files.InstallVault) (string, error) {
 	if vault == nil {
 		return "", fmt.Errorf("vault is not loaded")
 	}
+
 	kubeConfig := vault.GetSecret(files.SecretKubeConfig)
 	if kubeConfig == nil || kubeConfig.File == nil || strings.TrimSpace(kubeConfig.File.Content) == "" {
 		return "", fmt.Errorf("kubeconfig not found in vault (secret %q)", files.SecretKubeConfig)
 	}
+
 	return kubeConfig.File.Content, nil
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
@@ -287,13 +288,13 @@ func (c *InstallK0sCmd) writeEncryptedVault(vaultYAML []byte) error {
 		return fmt.Errorf("failed to write temporary vault file: %w", err)
 	}
 
-	recipient, _, err := installer.ResolveAgeKey(c.Opts.VaultPrivKey, "")
+	recipient, _, err := vault.ResolveAgeKey(c.Opts.VaultPrivKey, "")
 	if err != nil {
 		_ = c.FileWriter.Remove(tmpPath)
 		return fmt.Errorf("failed to resolve age key for vault rencryption: %w", err)
 	}
 
-	if err := installer.EncryptFileWithSOPS(tmpPath, c.Opts.Vault, recipient); err != nil {
+	if err := vault.EncryptFileWithSOPS(tmpPath, c.Opts.Vault, recipient); err != nil {
 		_ = c.FileWriter.Remove(tmpPath)
 		return fmt.Errorf("failed to encrypt vault file: %w", err)
 	}
@@ -307,12 +308,12 @@ func (c *InstallK0sCmd) loadOrCreateVault() (*files.InstallVault, bool, error) {
 		return &files.InstallVault{}, false, nil
 	}
 
-	wasEncrypted, err := installer.IsSOPSEncryptedFile(c.Opts.Vault)
+	wasEncrypted, err := vault.IsSOPSEncryptedFile(c.Opts.Vault)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to check if vault is encrypted: %w", err)
 	}
 
-	vault, err := installer.LoadVaultData(c.Opts.Vault, c.Opts.VaultPrivKey)
+	vault, err := vault.LoadVaultData(c.Opts.Vault, c.Opts.VaultPrivKey)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to load vault: %w", err)
 	}
