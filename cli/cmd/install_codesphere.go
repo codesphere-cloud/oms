@@ -14,6 +14,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
@@ -166,7 +167,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		return nil, files.RootConfig{}, func() {}, fmt.Errorf("no config.yaml input provided: at least one config file is required")
 	}
 
-	store := installer.NewLazyVaultTemplatingSecretStore(opts.Vault, opts.PrivKey)
+	store := vault.NewLazyVaultTemplatingSecretStore(opts.Vault, opts.PrivKey)
 	cleanupFns := []func(){}
 	cleanup := func() {
 		for i := len(cleanupFns) - 1; i >= 0; i-- {

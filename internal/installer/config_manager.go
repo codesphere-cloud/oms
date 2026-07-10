@@ -11,6 +11,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -68,7 +69,7 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 		return fmt.Errorf("failed to read %s: %w", configPath, err)
 	}
 
-	store := NewVaultTemplatingSecretStore(g.Vault)
+	store := vault.NewVaultTemplatingSecretStore(g.Vault)
 	data, err = configtemplating.RenderInstallConfigTemplate(data, store)
 	if err != nil {
 		return err
@@ -84,7 +85,7 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 }
 
 func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
-	vault, err := LoadVaultData(vaultPath, "")
+	vault, err := vault.LoadVaultData(vaultPath, "")
 	if err != nil {
 		return err
 	}

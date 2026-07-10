@@ -17,6 +17,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
@@ -121,7 +122,7 @@ func (ci *CodesphereInstaller) prepareConfig(cm ConfigManager) (files.RootConfig
 	}
 
 	if ci.VaultPath != "" {
-		store := NewLazyVaultTemplatingSecretStore(ci.VaultPath, ci.PrivKey)
+		store := vault.NewLazyVaultTemplatingSecretStore(ci.VaultPath, ci.PrivKey)
 		renderedConfig, renderCleanup, err := configtemplating.RenderConfigFileToTemp(ci.ConfigPath, store)
 		if err != nil {
 			return files.RootConfig{}, cleanup, fmt.Errorf("failed to render config template: %w", err)

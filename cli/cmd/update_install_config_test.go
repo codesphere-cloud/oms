@@ -16,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 func quoteYAMLString(s string) string {
@@ -193,7 +194,7 @@ codesphere:
 		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(installer.EncryptFileWithSOPS(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
+		Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
 		previousAgeKeyFile, hadPreviousAgeKeyFile := os.LookupEnv("SOPS_AGE_KEY_FILE")
 		Expect(os.Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)).To(Succeed())
 		DeferCleanup(func() {

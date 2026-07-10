@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
-	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -45,7 +45,8 @@ func (c *BetaVaultSecretCmd) RunE(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
 
-	creator := installer.NewVaultSecretCreator(kubeClient)
+	creator := vault.NewVaultSecretCreator(kubeClient)
+
 	return creator.CreateSecretFromFile(c.cmd.Context(), c.Opts.VaultFile, c.Opts.AgeKeyPath, c.Opts.Namespace, c.Opts.SecretName)
 }
 
