@@ -14,7 +14,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
-func SopsAndAgeAvailable() bool {
+func sopsAndAgeAvailable() bool {
 	if _, err := exec.LookPath("sops"); err != nil {
 		return false
 	}
@@ -63,7 +63,7 @@ var _ = Describe("VaultEncryption", func() {
 
 		Context("with an explicit key file argument", func() {
 			It("reads the recipient from the explicit file and returns it as the key path", func() {
-				if !SopsAndAgeAvailable() {
+				if !sopsAndAgeAvailable() {
 					Skip("age-keygen not available")
 				}
 				keyFile := filepath.Join(tmpDir, "explicit.txt")
@@ -88,7 +88,7 @@ var _ = Describe("VaultEncryption", func() {
 
 		Context("with SOPS_AGE_KEY env var containing only a private key (no comment)", func() {
 			It("should fall back to age-keygen -y to derive the recipient", func() {
-				if !SopsAndAgeAvailable() {
+				if !sopsAndAgeAvailable() {
 					Skip("age-keygen not available")
 				}
 				// Generate a real key to get valid content.
@@ -120,7 +120,7 @@ var _ = Describe("VaultEncryption", func() {
 
 		Context("with SOPS_AGE_KEY_FILE env var pointing to a key file", func() {
 			It("should read the recipient from the referenced file", func() {
-				if !SopsAndAgeAvailable() {
+				if !sopsAndAgeAvailable() {
 					Skip("age-keygen not available")
 				}
 				keyFile := filepath.Join(tmpDir, "keys.txt")
@@ -146,7 +146,7 @@ var _ = Describe("VaultEncryption", func() {
 
 		Context("with no env vars set", func() {
 			It("should generate a new key when no default location exists", func() {
-				if !SopsAndAgeAvailable() {
+				if !sopsAndAgeAvailable() {
 					Skip("age-keygen not available")
 				}
 
@@ -246,7 +246,7 @@ var _ = Describe("VaultEncryption", func() {
 		})
 
 		It("loads and decrypts a SOPS-encrypted vault end-to-end", func() {
-			if !SopsAndAgeAvailable() {
+			if !sopsAndAgeAvailable() {
 				Skip("sops and age-keygen not available")
 			}
 
