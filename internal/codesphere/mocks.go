@@ -291,8 +291,8 @@ func (_c *MockClient_GetPipelineState_Call) RunAndReturn(run func(workspaceID in
 }
 
 // ListTeams provides a mock function for the type MockClient
-func (_mock *MockClient) ListTeams() ([]api.Team, error) {
-	ret := _mock.Called()
+func (_mock *MockClient) ListTeams(orgId string) ([]api.Team, error) {
+	ret := _mock.Called(orgId)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListTeams")
@@ -300,18 +300,18 @@ func (_mock *MockClient) ListTeams() ([]api.Team, error) {
 
 	var r0 []api.Team
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func() ([]api.Team, error)); ok {
-		return returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(string) ([]api.Team, error)); ok {
+		return returnFunc(orgId)
 	}
-	if returnFunc, ok := ret.Get(0).(func() []api.Team); ok {
-		r0 = returnFunc()
+	if returnFunc, ok := ret.Get(0).(func(string) []api.Team); ok {
+		r0 = returnFunc(orgId)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]api.Team)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func() error); ok {
-		r1 = returnFunc()
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(orgId)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -324,13 +324,13 @@ type MockClient_ListTeams_Call struct {
 }
 
 // ListTeams is a helper method to define mock.On call
-func (_e *MockClient_Expecter) ListTeams() *MockClient_ListTeams_Call {
-	return &MockClient_ListTeams_Call{Call: _e.mock.On("ListTeams")}
+func (_e *MockClient_Expecter) ListTeams(orgId any) *MockClient_ListTeams_Call {
+	return &MockClient_ListTeams_Call{Call: _e.mock.On("ListTeams", orgId)}
 }
 
-func (_c *MockClient_ListTeams_Call) Run(run func()) *MockClient_ListTeams_Call {
+func (_c *MockClient_ListTeams_Call) Run(run func(orgId string)) *MockClient_ListTeams_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		run(args[0].(string))
 	})
 	return _c
 }
@@ -340,7 +340,7 @@ func (_c *MockClient_ListTeams_Call) Return(vs []api.Team, err error) *MockClien
 	return _c
 }
 
-func (_c *MockClient_ListTeams_Call) RunAndReturn(run func() ([]api.Team, error)) *MockClient_ListTeams_Call {
+func (_c *MockClient_ListTeams_Call) RunAndReturn(run func(orgId string) ([]api.Team, error)) *MockClient_ListTeams_Call {
 	_c.Call.Return(run)
 	return _c
 }
