@@ -188,6 +188,9 @@ func (g *InstallConfig) applyCommonProperties() {
 			{Name: "s3", Version: "v1"},
 			{Name: "virtual-k8s", Version: "v1"},
 			{Name: "ferretdb", Version: "v0"},
+			{Name: "opensearch", Version: "v0"},
+			{Name: "rabbitmq", Version: "v0"},
+			{Name: "valkey", Version: "v0"},
 		}
 	}
 	if g.Config.Secrets.BaseDir == "" {

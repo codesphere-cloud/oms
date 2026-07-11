@@ -538,8 +538,10 @@ type PlanParam struct {
 }
 
 type ManagedServiceBackendsConfig struct {
-	Postgres *PgManagedServiceConfig `yaml:"postgres,omitempty"`
-	S3       *S3ManagedServiceConfig `yaml:"s3,omitempty"`
+	Postgres         *PgManagedServiceConfig         `yaml:"postgres,omitempty"`
+	S3               *S3ManagedServiceConfig         `yaml:"s3,omitempty"`
+	RabbitMqOperator *RabbitMqOperatorConfig         `yaml:"rabbitMqOperator,omitempty"`
+	K8sBackend       *K8sBackendManagedServiceConfig `yaml:"k8sBackend,omitempty"`
 }
 
 type MonitoringConfig struct {
@@ -618,7 +620,15 @@ type PgManagedServiceConfig struct {
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
+type K8sBackendManagedServiceConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
 type S3ManagedServiceConfig struct {
+	Override ChartOverride `yaml:"override,omitempty"`
+}
+
+type RabbitMqOperatorConfig struct {
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 

@@ -151,7 +151,17 @@ var _ = Describe("ConfigManagerProfile", func() {
 
 					// Managed service config
 					Expect(config.Codesphere.ManagedServices).ToNot(BeNil())
-					Expect(len(config.Codesphere.ManagedServices)).To(Equal(5))
+					Expect(config.Codesphere.ManagedServices).To(ContainElements(
+						files.ManagedServiceConfig{Name: "postgres", Version: "v1"},
+						files.ManagedServiceConfig{Name: "babelfish", Version: "v1"},
+						files.ManagedServiceConfig{Name: "s3", Version: "v1"},
+						files.ManagedServiceConfig{Name: "virtual-k8s", Version: "v1"},
+						files.ManagedServiceConfig{Name: "ferretdb", Version: "v0"},
+						files.ManagedServiceConfig{Name: "opensearch", Version: "v0"},
+						files.ManagedServiceConfig{Name: "rabbitmq", Version: "v0"},
+						files.ManagedServiceConfig{Name: "valkey", Version: "v0"},
+					))
+					Expect(len(config.Codesphere.ManagedServices)).To(Equal(8))
 
 					// Secrets
 					Expect(config.Secrets.BaseDir).To(Equal("/root/secrets"))

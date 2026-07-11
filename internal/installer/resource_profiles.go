@@ -222,6 +222,21 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 		},
 	})
 
+	if config.ManagedServiceBackends.K8sBackend == nil {
+		config.ManagedServiceBackends.K8sBackend = &files.K8sBackendManagedServiceConfig{}
+	}
+	config.ManagedServiceBackends.K8sBackend.Override = util.DeepMergeMaps(config.ManagedServiceBackends.K8sBackend.Override, map[string]any{
+		"replicas": 1,
+		"resources": map[string]any{
+			"requests": zeroRequests(),
+		},
+	})
+
+	// TODO(CU-869dm2x7t): update rabbitmq operator chart to make replicas and resources configurable via helm values
+	if config.ManagedServiceBackends.RabbitMqOperator == nil {
+		config.ManagedServiceBackends.RabbitMqOperator = &files.RabbitMqOperatorConfig{}
+	}
+
 	serviceProfiles := map[string]any{}
 	for _, serviceName := range []string{
 		"auth_service",
