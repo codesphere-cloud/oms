@@ -47,9 +47,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v1.2
  
 ----------
 Module: cloud.google.com/go/resourcemanager
-Version: v1.15.0
+Version: v1.16.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.15.0/resourcemanager/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.16.0/resourcemanager/LICENSE
  
 ----------
 Module: cloud.google.com/go/serviceusage
