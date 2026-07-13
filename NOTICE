@@ -5,9 +5,9 @@ This project includes code licensed under the following terms:
  
 ----------
 Module: cloud.google.com/go/artifactregistry
-Version: v1.25.0
+Version: v1.26.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.25.0/artifactregistry/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.26.0/artifactregistry/LICENSE
  
 ----------
 Module: cloud.google.com/go/auth
