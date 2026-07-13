@@ -35,15 +35,15 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata
  
 ----------
 Module: cloud.google.com/go/iam/apiv1/iampb
-Version: v1.11.0
+Version: v1.12.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.11.0/iam/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.12.0/iam/LICENSE
  
 ----------
 Module: cloud.google.com/go/longrunning
-Version: v1.1.0
+Version: v1.2.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v1.1.0/longrunning/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v1.2.0/longrunning/LICENSE
  
 ----------
 Module: cloud.google.com/go/resourcemanager
@@ -551,9 +551,9 @@ License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.
  
 ----------
 Module: github.com/googleapis/gax-go/v2
-Version: v2.22.0
+Version: v2.23.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/gax-go/blob/v2.22.0/v2/LICENSE
+License URL: https://github.com/googleapis/gax-go/blob/v2.23.0/v2/LICENSE
  
 ----------
 Module: github.com/gorilla/websocket
@@ -1205,9 +1205,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/b703f567277d/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/api
-Version: v0.0.0-20260622175928-b703f567277d
+Version: v0.0.0-20260630182238-925bb5da69e7
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/b703f567277d/googleapis/api/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/925bb5da69e7/googleapis/api/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
