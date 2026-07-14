@@ -211,6 +211,12 @@ func (o *OpenBaoInstaller) validateConfig() error {
 	if o.Config.OperatorChartRepo == "" {
 		o.Config.OperatorChartRepo = DefaultBankVaultsChartRepo
 	}
+	if !strings.HasPrefix(o.Config.OperatorChartRepo, "oci://") {
+		return fmt.Errorf("--operator-chart-repo must use oci:// scheme, got %q", o.Config.OperatorChartRepo)
+	}
+	if (o.Config.RegistryUser == "") != (o.Config.RegistryPassword == "") {
+		return fmt.Errorf("incomplete registry credentials: set both OMS_REGISTRY_USER and OMS_REGISTRY_PASSWORD, or neither")
+	}
 	return nil
 }
 
@@ -263,8 +269,10 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to ensure namespace: %w", err)
 	}
 
-	// Create the GHCR pull secret before the operator schedules any pods, so
-	// the openbao ServiceAccount can reference it from the moment pods appear.
+	// Create the registry pull secret (one auths entry per distinct registry
+	// host derived from the configured image refs) before the operator
+	// schedules any pods, so the openbao ServiceAccount can reference it from
+	// the moment pods appear.
 	err = o.Logger.Step("Ensuring image pull secret", o.EnsureImagePullSecret)
 	if err != nil {
 		return fmt.Errorf("failed to ensure image pull secret: %w", err)
@@ -473,14 +481,16 @@ func (o *OpenBaoInstaller) operatorChartValues() (map[string]interface{}, error)
 			return nil, fmt.Errorf("parsing operator image %q: %w", o.Config.OperatorImage, err)
 		}
 		image["repository"] = reference.TrimNamed(ref).Name()
-		if tagged, ok := ref.(reference.Tagged); ok {
-			image["tag"] = tagged.Tag()
+		tagged, ok := ref.(reference.Tagged)
+		if !ok {
+			return nil, fmt.Errorf("operator image %q must include a tag: the vault-operator chart renders the image as repository:tag, so digest-only references are not supported", o.Config.OperatorImage)
 		}
+		image["tag"] = tagged.Tag()
 	}
 	if o.imagePullSecretConfigured() {
-		image["imagePullSecrets"] = []interface{}{
-			map[string]interface{}{"name": imagePullSecretName},
-		}
+		// The chart's imagePullSecrets helper renders `- name: {{ . }}` per
+		// entry, so it takes a list of secret names, not LocalObjectReferences.
+		image["imagePullSecrets"] = []string{imagePullSecretName}
 	}
 	if len(image) == 0 {
 		return map[string]interface{}{}, nil
@@ -732,10 +742,9 @@ func (o *OpenBaoInstaller) imagePullSecretConfigured() bool {
 // EnsureImagePullSecret creates or updates the dockerconfigjson Secret used to
 // pull the OpenBao, bank-vaults configurer, and operator images from their
 // (possibly private, possibly mirrored) registries. Credentials come from
-// OMS_REGISTRY_USER/OMS_REGISTRY_PASSWORD:
-//   - both empty: no-op (clusters with node-level creds or public access).
-//   - both set: create/update the secret idempotently.
-//   - exactly one set: error, since a partial credential never works.
+// OMS_REGISTRY_USER/OMS_REGISTRY_PASSWORD. When they are unset this is a no-op
+// (clusters with node-level creds or public access); a partial credential is
+// rejected earlier by validateConfig.
 //
 // The dockerconfigjson contains one auths entry per distinct registry host
 // derived from the configured image refs, so a single secret authenticates to
@@ -743,11 +752,8 @@ func (o *OpenBaoInstaller) imagePullSecretConfigured() bool {
 // ServiceAccount by ApplyVaultCR and to the operator chart by
 // DeployBankVaultsOperator when credentials are present.
 func (o *OpenBaoInstaller) EnsureImagePullSecret() error {
-	if o.Config.RegistryUser == "" && o.Config.RegistryPassword == "" {
-		return nil
-	}
 	if !o.imagePullSecretConfigured() {
-		return fmt.Errorf("incomplete registry credentials: set both OMS_REGISTRY_USER and OMS_REGISTRY_PASSWORD, or neither")
+		return nil
 	}
 
 	hosts, err := registryHostsFor(o.Config.OpenBaoImage, o.Config.BankVaultsImage, o.Config.OperatorImage)

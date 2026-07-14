@@ -110,9 +110,10 @@ var _ = Describe("OpenBaoInstaller", func() {
 				if image["repository"] != "mirror.example.com/bank-vaults/vault-operator" || image["tag"] != "1.24.0" {
 					return false
 				}
-				secrets, ok := image["imagePullSecrets"].([]interface{})
-				return ok && len(secrets) == 1 &&
-					secrets[0].(map[string]interface{})["name"] == "openbao-registry"
+				// The chart expects a list of secret names, not
+				// LocalObjectReferences.
+				secrets, ok := image["imagePullSecrets"].([]string)
+				return ok && len(secrets) == 1 && secrets[0] == "openbao-registry"
 			}), mock.Anything).Return(nil)
 
 			inst := &installer.OpenBaoInstaller{
@@ -130,6 +131,31 @@ var _ = Describe("OpenBaoInstaller", func() {
 			inst.SetCtx(ctx)
 
 			Expect(inst.DeployBankVaultsOperator()).To(Succeed())
+		})
+
+		It("rejects an operator image without a tag or with only a digest", func() {
+			newInstaller := func(operatorImage string) *installer.OpenBaoInstaller {
+				inst := &installer.OpenBaoInstaller{
+					Helm:      helmMock,
+					Clientset: clientset,
+					Logger:    bootstrap.NewStepLogger(true),
+					Config: installer.OpenBaoInstallerConfig{
+						Namespace:         "vault",
+						OperatorImage:     operatorImage,
+						OperatorChartRepo: "oci://mirror.example.com/bank-vaults/helm-charts",
+					},
+				}
+				inst.SetCtx(ctx)
+				return inst
+			}
+
+			// The vault-operator chart renders the image as repository:tag, so
+			// untagged and digest-only references cannot be expressed.
+			untagged := newInstaller("mirror.example.com/bank-vaults/vault-operator")
+			Expect(untagged.DeployBankVaultsOperator()).To(MatchError(ContainSubstring("must include a tag")))
+
+			digestOnly := newInstaller("mirror.example.com/bank-vaults/vault-operator@sha256:" + strings.Repeat("ab", 32))
+			Expect(digestOnly.DeployBankVaultsOperator()).To(MatchError(ContainSubstring("must include a tag")))
 		})
 
 		It("performs fresh install when target namespace does not exist", func() {
@@ -754,9 +780,12 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 		})
 
-		It("errors when only one credential is set", func() {
-			Expect(newInstaller("gh-user", "").EnsureImagePullSecret()).ToNot(Succeed())
-			Expect(newInstaller("", "gh-token").EnsureImagePullSecret()).ToNot(Succeed())
+		It("is a no-op when only one credential is set (rejected earlier by validateConfig)", func() {
+			Expect(newInstaller("gh-user", "").EnsureImagePullSecret()).To(Succeed())
+			Expect(newInstaller("", "gh-token").EnsureImagePullSecret()).To(Succeed())
+
+			_, err := clientset.CoreV1().Secrets("vault").Get(ctx, "openbao-registry", metav1.GetOptions{})
+			Expect(k8serrors.IsNotFound(err)).To(BeTrue())
 		})
 
 		It("is idempotent and refreshes credentials on re-run", func() {
@@ -795,6 +824,32 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(cfg.Auths).To(HaveKey("registry-a.example.com"))
 			Expect(cfg.Auths).To(HaveKey("registry-b.example.com"))
 		})
+
+		It("derives the registry host from digest-only image references", func() {
+			digest := "sha256:" + strings.Repeat("ab", 32)
+			inst := &installer.OpenBaoInstaller{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace:        "vault",
+					RegistryUser:     "u",
+					RegistryPassword: "p",
+					OpenBaoImage:     "registry.example.com/openbao/openbao@" + digest,
+					BankVaultsImage:  "registry.example.com/bank-vaults/bank-vaults@" + digest,
+				},
+			}
+			inst.SetCtx(ctx)
+			Expect(inst.EnsureImagePullSecret()).To(Succeed())
+
+			secret, err := clientset.CoreV1().Secrets("vault").Get(ctx, "openbao-registry", metav1.GetOptions{})
+			Expect(err).ToNot(HaveOccurred())
+			var cfg struct {
+				Auths map[string]json.RawMessage `json:"auths"`
+			}
+			Expect(json.Unmarshal(secret.Data[corev1.DockerConfigJsonKey], &cfg)).To(Succeed())
+			Expect(cfg.Auths).To(HaveLen(1))
+			Expect(cfg.Auths).To(HaveKey("registry.example.com"))
+		})
 	})
 
 	Describe("validateConfig image/chart defaults", func() {
@@ -821,6 +876,36 @@ var _ = Describe("OpenBaoInstaller", func() {
 			}
 			Expect(inst.ValidateConfig()).To(Succeed())
 			Expect(inst.Config.OpenBaoImage).To(Equal("mirror.example.com/openbao:2.5.4"))
+		})
+
+		It("rejects an operator chart repo without the oci:// scheme", func() {
+			inst := &installer.OpenBaoInstaller{
+				Logger: bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace:         "vault",
+					Replicas:          1,
+					OperatorChartRepo: "https://mirror.example.com/bank-vaults/helm-charts",
+				},
+			}
+			Expect(inst.ValidateConfig()).To(MatchError(ContainSubstring("oci://")))
+		})
+
+		It("rejects partial registry credentials", func() {
+			newInstaller := func(user, password string) *installer.OpenBaoInstaller {
+				return &installer.OpenBaoInstaller{
+					Logger: bootstrap.NewStepLogger(true),
+					Config: installer.OpenBaoInstallerConfig{
+						Namespace:        "vault",
+						Replicas:         1,
+						RegistryUser:     user,
+						RegistryPassword: password,
+					},
+				}
+			}
+			Expect(newInstaller("gh-user", "").ValidateConfig()).ToNot(Succeed())
+			Expect(newInstaller("", "gh-token").ValidateConfig()).ToNot(Succeed())
+			Expect(newInstaller("gh-user", "gh-token").ValidateConfig()).To(Succeed())
+			Expect(newInstaller("", "").ValidateConfig()).To(Succeed())
 		})
 	})
 
