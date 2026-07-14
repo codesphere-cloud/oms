@@ -17,7 +17,7 @@ require (
 	cloud.google.com/go/compute v1.64.0
 	cloud.google.com/go/iam v1.12.0
 	cloud.google.com/go/resourcemanager v1.16.0
-	cloud.google.com/go/serviceusage v1.14.0
+	cloud.google.com/go/serviceusage v1.15.0
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
