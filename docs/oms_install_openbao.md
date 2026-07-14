@@ -50,7 +50,7 @@ $ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --secrets-en
 $ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --timeout 10m
 
 # Use a mirrored OCI registry (set OMS_REGISTRY_USER/OMS_REGISTRY_PASSWORD)
-$ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --openbao-image my-mirror.example.com/openbao/openbao:2.5.4 --operator-chart-repo oci://my-mirror.example.com/bank-vaults/helm-charts
+$ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --openbao-image my-mirror.example.com/openbao/openbao:2.5.5 --operator-chart-repo oci://my-mirror.example.com/bank-vaults/helm-charts
 
 ```
 
@@ -63,7 +63,7 @@ $ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --openbao-im
       --dr-backup-path string        Path for SOPS-encrypted DR backup file (required)
   -h, --help                         help for openbao
   -n, --namespace string             Kubernetes namespace for OpenBao deployment (default "vault")
-      --openbao-image string         OpenBao server image (override for a mirrored OCI registry) (default "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4")
+      --openbao-image string         OpenBao server image (override for a mirrored OCI registry) (default "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.5")
       --operator-chart-repo string   OCI repo hosting the vault-operator Helm chart (override for a mirrored OCI registry) (default "oci://ghcr.io/codesphere-cloud/docker/ghcr.io/bank-vaults/helm-charts")
       --operator-image string        Bank-Vaults operator pod image (override for a mirrored OCI registry) (default "ghcr.io/codesphere-cloud/docker/ghcr.io/bank-vaults/vault-operator:1.24.0")
       --replicas int                 Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA) (default 3)

@@ -167,7 +167,7 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json", Desc: "Fresh bootstrap with DR backup saved locally"},
 				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json --secrets-engine my-engine --bao-user myuser", Desc: "Custom engine and user"},
 				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json --timeout 10m", Desc: "Extended timeout for slower clusters"},
-				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json --openbao-image my-mirror.example.com/openbao/openbao:2.5.4 --operator-chart-repo oci://my-mirror.example.com/bank-vaults/helm-charts", Desc: "Use a mirrored OCI registry (set OMS_REGISTRY_USER/OMS_REGISTRY_PASSWORD)"},
+				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json --openbao-image my-mirror.example.com/openbao/openbao:2.5.5 --operator-chart-repo oci://my-mirror.example.com/bank-vaults/helm-charts", Desc: "Use a mirrored OCI registry (set OMS_REGISTRY_USER/OMS_REGISTRY_PASSWORD)"},
 			}),
 		},
 		Opts: &InstallOpenBaoOpts{GlobalOptions: opts},

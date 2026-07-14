@@ -49,7 +49,7 @@ const (
 	// GHCR mirror; each is overridable via a CLI flag so a customer can use
 	// their own mirrored OCI registry. The registry the pull secret
 	// authenticates to is derived from these refs at runtime, not hardcoded.
-	DefaultOpenBaoImage        = "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4"
+	DefaultOpenBaoImage        = "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.5"
 	DefaultBankVaultsImage     = "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0"
 	DefaultOperatorImage       = "ghcr.io/codesphere-cloud/docker/ghcr.io/bank-vaults/vault-operator:1.24.0"
 	DefaultBankVaultsChartRepo = "oci://ghcr.io/codesphere-cloud/docker/ghcr.io/bank-vaults/helm-charts"
@@ -823,7 +823,7 @@ func buildDockerConfigJSON(hosts []string, username, password string) ([]byte, e
 }
 
 // registryHostsFor returns the distinct registry hosts of the given image
-// references (e.g. "ghcr.io/codesphere-cloud/.../openbao:2.5.4" -> "ghcr.io").
+// references (e.g. "ghcr.io/codesphere-cloud/.../openbao:2.5.5" -> "ghcr.io").
 // Empty refs are skipped. The result is order-stable so the rendered secret is
 // deterministic across runs.
 func registryHostsFor(images ...string) ([]string, error) {
