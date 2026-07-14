@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+package vault
 
 import (
 	"fmt"
@@ -17,9 +17,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-var (
-	xdgConfigHome = "XDG_CONFIG_HOME"
-)
+var xdgConfigHome = "XDG_CONFIG_HOME"
 
 // ResolveAgeKey resolves an existing age key or generates a new one.
 //

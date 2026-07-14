@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+package vault
 
 import (
 	. "github.com/onsi/ginkgo/v2"

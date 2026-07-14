@@ -18,6 +18,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -418,7 +419,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred(), string(encryptOut))
 				Expect(os.Remove(plainPath)).To(Succeed())
 
-				encrypted, err := installer.IsSOPSEncryptedFile(vaultPath)
+				encrypted, err := vault.IsSOPSEncryptedFile(vaultPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(encrypted).To(BeTrue())
 
@@ -439,7 +440,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Verify the vault was re-encrypted after saving kubeconfig.
-				encrypted, err = installer.IsSOPSEncryptedFile(vaultPath)
+				encrypted, err = vault.IsSOPSEncryptedFile(vaultPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(encrypted).To(BeTrue(), "vault should be re-encrypted after saving kubeconfig")
 

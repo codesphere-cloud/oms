@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer_test
+package vault_test
 
 import (
 	"os"
@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 func sopsAndAgeAvailable() bool {
@@ -73,14 +73,14 @@ var _ = Describe("VaultEncryption", func() {
 				// Set conflicting env vars to prove the explicit file takes priority.
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", filepath.Join(tmpDir, "ignored.txt"))).To(Succeed())
 
-				recipient, keyPath, err := installer.ResolveAgeKey(keyFile, tmpDir)
+				recipient, keyPath, err := vault.ResolveAgeKey(keyFile, tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(Equal(keyFile))
 			})
 
 			It("returns an error if the explicit file does not exist", func() {
-				_, _, err := installer.ResolveAgeKey(filepath.Join(tmpDir, "missing.txt"), tmpDir)
+				_, _, err := vault.ResolveAgeKey(filepath.Join(tmpDir, "missing.txt"), tmpDir)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to read age key"))
 			})
@@ -111,7 +111,7 @@ var _ = Describe("VaultEncryption", func() {
 
 				Expect(os.Setenv("SOPS_AGE_KEY", privKeyLine)).To(Succeed())
 
-				recipient, keyPath, err := installer.ResolveAgeKey("", tmpDir)
+				recipient, keyPath, err := vault.ResolveAgeKey("", tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(BeEmpty())
@@ -129,7 +129,7 @@ var _ = Describe("VaultEncryption", func() {
 
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", keyFile)).To(Succeed())
 
-				recipient, keyPath, err := installer.ResolveAgeKey("", tmpDir)
+				recipient, keyPath, err := vault.ResolveAgeKey("", tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(Equal(keyFile))
@@ -138,7 +138,7 @@ var _ = Describe("VaultEncryption", func() {
 			It("should return error if the file does not exist", func() {
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", filepath.Join(tmpDir, "nonexistent.txt"))).To(Succeed())
 
-				_, _, err := installer.ResolveAgeKey("", tmpDir)
+				_, _, err := vault.ResolveAgeKey("", tmpDir)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to read age key"))
 			})
@@ -150,7 +150,7 @@ var _ = Describe("VaultEncryption", func() {
 					Skip("age-keygen not available")
 				}
 
-				recipient, keyPath, err := installer.ResolveAgeKey("", tmpDir)
+				recipient, keyPath, err := vault.ResolveAgeKey("", tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(Equal(filepath.Join(tmpDir, "age_key.txt")))
@@ -178,7 +178,7 @@ var _ = Describe("VaultEncryption", func() {
 			path := filepath.Join(tmpDir, "plain.yaml")
 			Expect(os.WriteFile(path, []byte("key: value\n"), 0644)).To(Succeed())
 
-			encrypted, err := installer.IsSOPSEncryptedFile(path)
+			encrypted, err := vault.IsSOPSEncryptedFile(path)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(encrypted).To(BeFalse())
 		})
@@ -187,7 +187,7 @@ var _ = Describe("VaultEncryption", func() {
 			path := filepath.Join(tmpDir, "sops.yaml")
 			Expect(os.WriteFile(path, []byte("sops:\n  age: age1abc\n"), 0644)).To(Succeed())
 
-			encrypted, err := installer.IsSOPSEncryptedFile(path)
+			encrypted, err := vault.IsSOPSEncryptedFile(path)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(encrypted).To(BeTrue())
 		})
@@ -196,14 +196,14 @@ var _ = Describe("VaultEncryption", func() {
 			path := filepath.Join(tmpDir, "empty.yaml")
 			Expect(os.WriteFile(path, []byte{}, 0644)).To(Succeed())
 
-			encrypted, err := installer.IsSOPSEncryptedFile(path)
+			encrypted, err := vault.IsSOPSEncryptedFile(path)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(encrypted).To(BeFalse())
 		})
 
 		It("returns an error for a non-existent file", func() {
 			path := filepath.Join(tmpDir, "missing.yaml")
-			_, err := installer.IsSOPSEncryptedFile(path)
+			_, err := vault.IsSOPSEncryptedFile(path)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -226,7 +226,7 @@ var _ = Describe("VaultEncryption", func() {
 			plainYAML := "secrets:\n    - name: test-secret\n      fields:\n        password: hunter2\n"
 			Expect(os.WriteFile(vaultPath, []byte(plainYAML), 0644)).To(Succeed())
 
-			vault, err := installer.LoadVaultData(vaultPath, "")
+			vault, err := vault.LoadVaultData(vaultPath, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(vault.Secrets).To(HaveLen(1))
 			Expect(vault.Secrets[0].Name).To(Equal("test-secret"))
@@ -238,7 +238,7 @@ var _ = Describe("VaultEncryption", func() {
 			wrappedYAML := "data: |\n    secrets:\n        - name: test-secret\n          fields:\n            password: hunter2\n"
 			Expect(os.WriteFile(vaultPath, []byte(wrappedYAML), 0644)).To(Succeed())
 
-			vault, err := installer.LoadVaultData(vaultPath, "")
+			vault, err := vault.LoadVaultData(vaultPath, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(vault.Secrets).To(HaveLen(1))
 			Expect(vault.Secrets[0].Name).To(Equal("test-secret"))
@@ -256,7 +256,7 @@ var _ = Describe("VaultEncryption", func() {
 			Expect(err).ToNot(HaveOccurred(), string(out))
 
 			// Extract the public key (recipient).
-			recipient, _, err := installer.ResolveAgeKey(ageKeyPath, tmpDir)
+			recipient, _, err := vault.ResolveAgeKey(ageKeyPath, tmpDir)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Write a plain vault file.
@@ -272,7 +272,7 @@ var _ = Describe("VaultEncryption", func() {
 			Expect(err).ToNot(HaveOccurred(), string(encOut))
 
 			// LoadVaultData should detect SOPS, decrypt, unwrap data: |, and parse.
-			vault, err := installer.LoadVaultData(vaultPath, ageKeyPath)
+			vault, err := vault.LoadVaultData(vaultPath, ageKeyPath)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(vault.Secrets).To(HaveLen(1))
 			Expect(vault.Secrets[0].Name).To(Equal("sops-secret"))
@@ -280,7 +280,7 @@ var _ = Describe("VaultEncryption", func() {
 		})
 
 		It("returns an error for a non-existent file", func() {
-			_, err := installer.LoadVaultData(filepath.Join(tmpDir, "missing.yaml"), "")
+			_, err := vault.LoadVaultData(filepath.Join(tmpDir, "missing.yaml"), "")
 			Expect(err).To(HaveOccurred())
 		})
 	})
