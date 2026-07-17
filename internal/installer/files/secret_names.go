@@ -43,6 +43,10 @@ const (
 	// OpenBao
 	SecretOpenBaoPassword = "openBaoPassword"
 
+	// OpenFGA
+	SecretOpenfgaDbBackupAccessKeyId     = "openfgaDbBackupAccessKeyId"
+	SecretOpenfgaDbBackupSecretAccessKey = "openfgaDbBackupSecretAccessKey"
+
 	// Monitoring
 	SecretLokiGatewayBasicAuthPassword = "lokiGatewayBasicAuthPassword"
 	SecretCentralOtelCreds             = "centralOtelCreds"

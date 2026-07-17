@@ -171,6 +171,7 @@ var _ = Describe("EnsureDefaultSecrets", func() {
 			"githubAppsClientId", "githubAppsClientSecret",
 			"gitlabAppClientId", "gitlabAppClientSecret",
 			"stripeSecretKey", "sendGridApiKey", "openBaoPassword",
+			"openfgaDbBackupAccessKeyId", "openfgaDbBackupSecretAccessKey",
 		} {
 			secret := vault.GetSecret(name)
 			Expect(secret).NotTo(BeNil(), "missing %s", name)
