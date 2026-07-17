@@ -261,6 +261,8 @@ var optionalPasswordSecrets = []string{
 	files.SecretStripeSecretKey,
 	files.SecretSendGridApiKey,
 	files.SecretOpenBaoPassword,
+	files.SecretOpenfgaDbBackupAccessKeyId,
+	files.SecretOpenfgaDbBackupSecretAccessKey,
 }
 
 func setPassword(vault *files.InstallVault, name, password string) {
