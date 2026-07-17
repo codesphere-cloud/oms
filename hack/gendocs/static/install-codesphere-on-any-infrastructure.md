@@ -37,7 +37,7 @@ Decide on the following before provisioning anything:
 - Stable private IP addresses for every machine.
 - A public IP address for the jumpbox. This is separate from the service addresses and should accept SSH only from trusted administrator networks.
 - Three stable, externally reachable service IP addresses: platform gateway, workspace gateway, and workspace SSH proxy.
-- GitHub Container Registry credentials. Codesphere nodes pull images directly from `ghcr.io`, so provide a GitHub username and a personal access token with at least `read:packages` access to the Codesphere packages.
+- GitHub Container Registry credentials supplied by Codesphere. Codesphere nodes currently pull images directly from `ghcr.io`, and customers must request the required username and token from Codesphere.
 - Access to the Codesphere package portal.
 - An initial cluster administrator email, if desired.
 - OAuth credentials for each Git provider or OIDC provider that users will use.
@@ -73,9 +73,9 @@ Use separate control-plane and worker pools in production. Start with:
 | PostgreSQL replica | 1 recommended | 2 vCPU, 8 GiB RAM | 200 GiB SSD root disk | No |
 | Ceph | **4 or more** | 16 vCPU, 64 GiB RAM | 50 GiB SSD root, one 10 GiB DB/WAL disk, and one or more 500 GiB data disks | No |
 | Dedicated k0s control plane | **3** | 4 vCPU, 8 GiB RAM | 50 GiB SSD root disk | No |
-| Dedicated k0s worker | **3 or more** | 8 vCPU, 32 GiB RAM | 200 GiB SSD root disk | No |
+| Dedicated k0s worker | **3 or more** | 16 vCPU, 64 GiB RAM | 200 GiB SSD root disk | No |
 
-Three control-plane nodes provide control-plane quorum and high availability. Scale the separate worker pool for workload CPU, memory, scheduling headroom, and the number of simultaneous node failures the platform must tolerate. Scale Ceph beyond four nodes and add data disks based on usable-capacity targets, replication overhead, recovery headroom, and growth.
+Three control-plane nodes provide control-plane quorum and high availability. Start the separate worker pool with at least three 16-vCPU, 64-GiB machines, then scale it for workload CPU, memory, scheduling headroom, and the number of simultaneous node failures the platform must tolerate. Scale Ceph beyond four nodes and add data disks based on usable-capacity targets, replication overhead, recovery headroom, and growth.
 
 Use 250 GiB Ceph data disks as the POC minimum and 500 GiB data disks as the production minimum. Present Ceph DB/WAL and data disks as distinct, unused block devices; do not format or mount them. For production, validate disk performance and size the DB/WAL device for the selected data devices and workload.
 
@@ -176,9 +176,11 @@ The API key must remain set for subsequent OMS portal operations. Supply it thro
 
 Codesphere images are pulled directly from GitHub Container Registry. Every k0s node must have outbound HTTPS access to `ghcr.io` and the related GitHub package endpoints.
 
-Create or select a GitHub personal access token with at least the `read:packages` scope and access to the Codesphere packages. If the organization enforces SSO, authorize the token for that organization. Use a dedicated machine account where possible so image pulls do not depend on an employee account.
+Request the GHCR username and token from Codesphere before generating the install configuration. Customer-created GitHub personal access tokens do not automatically have access to the private Codesphere packages.
 
-Keep the token ready for the configuration-generation step, but do not write it into shell history, an Ansible inventory, or `config.yaml`. Unauthenticated pulls or a token without package access will cause the platform installation to fail.
+> **Registry authentication is currently in a transitional stage.** For now, Codesphere provides separate GHCR credentials, and the token must be supplied to the install-configuration workflow as the registry password. A future version will use OMS portal authentication for registry access, removing the need to request and configure a separate GHCR token.
+
+Keep the token ready for the configuration-generation step, but do not write it into shell history or `config.yaml`. Store it only in `prod.vault.yaml` as `registryPassword`, as shown below. Unauthenticated pulls or a token without package access will cause the platform installation to fail.
 
 ## 9. Generate the install configuration and secrets
 
@@ -197,53 +199,39 @@ oms init install-config \
   --with-comments
 ```
 
-The profile supplies initial values and the wizard prompts for the final settings. Use `minimal` for the POC topology or `production` for the production baseline. The selected profile configures software defaults; it does not provision or resize machines.
+### Choose an install configuration profile
 
-An Ansible inventory can prepopulate the Kubernetes and Ceph host lists. For example:
+The profile controls the default Codesphere software footprint, allowing the installation to fit differently sized infrastructure. It does not provision machines or automatically decide how many PostgreSQL, Ceph, control-plane, or worker nodes to use. The wizard or command flags must still describe the actual topology and IP addresses.
 
-```yaml
-k8s-cp:
-  hosts:
-    k0s-1:
-      private_ip: 10.10.0.11
-    k0s-2:
-      private_ip: 10.10.0.12
-    k0s-3:
-      private_ip: 10.10.0.13
-k8s-workers:
-  hosts:
-    k0s-4:
-      private_ip: 10.10.0.14
-    k0s-5:
-      private_ip: 10.10.0.15
-    k0s-6:
-      private_ip: 10.10.0.16
-ceph:
-  hosts:
-    ceph-1:
-      private_ip: 10.10.0.21
-    ceph-2:
-      private_ip: 10.10.0.22
-    ceph-3:
-      private_ip: 10.10.0.23
-    ceph-4:
-      private_ip: 10.10.0.24
-```
+The profiles currently behave as follows:
 
-Pass it to the generator and review the imported values in the wizard:
+| Profile | Intended use | Monitoring | Kubernetes resource behavior | Other differences |
+| --- | --- | --- | --- | --- |
+| `dev` or `development` | Small development and sandbox installations | Loki, Grafana, and Grafana Alloy are disabled | Applies the `noRequests` resource profile described below | Datacenter name defaults to `dev` |
+| `minimal` | POC installations that need the normal monitoring stack with a reduced scheduling footprint | Loki, Grafana, and Grafana Alloy are enabled | Applies the same `noRequests` resource profile | Datacenter name defaults to `dev`; CloudNativePG operator, Barman Cloud plugin, and RGW load balancer are enabled |
+| `prod` or `production` | Production installations | Loki, Grafana, and Grafana Alloy are enabled | Does not apply the reduced-resource overrides; charts retain their normal resource and replica defaults | Datacenter name defaults to `production` |
 
-```bash
-oms init install-config \
-  --profile production \
-  --config config.yaml \
-  --vault prod.vault.yaml \
-  --ansible-inventory inventory.yaml \
-  --with-comments
-```
+The `noRequests` resource profile used by `dev` and `minimal` removes CPU and memory requests from Codesphere services and supporting charts. It also reduces several supporting components to one replica, including ingress controllers, Loki components, RGW load balancer, and managed-service backends. Selected core Codesphere services retain two replicas, but their resource requests are set to zero. This makes the Kubernetes scheduler accept a smaller cluster, but it removes resource guarantees and reduces failure tolerance. Do not interpret successful scheduling with this profile as proof that the hosts have enough real CPU or memory under load.
 
-The supported inventory groups are `k8s-cp`, `k8s-workers`, and `ceph`, with hosts represented as dictionary keys and each host containing `private_ip`.
+All profiles start with the same common infrastructure defaults, including Codesphere-managed Kubernetes, installed PostgreSQL, Ceph, `LoadBalancer` gateways, disabled MetalLB, and placeholder localhost addresses. They also start with the standard workspace and hosting plan defaults. Replace all placeholder topology, domain, registry, and secrets values during the wizard or configuration review.
 
-Interactive mode is enabled by default. In that mode, profile and inventory values seed the wizard, while individual non-interactive configuration flags are not applied. For automation, pass `--interactive=false` and provide every required value through flags, the profile, and the inventory. Treat a non-interactive validation failure as a missing or inconsistent input rather than bypassing it.
+Use `minimal` for the POC topology described in section 2 and `production` for the production baseline. Use `dev` only when disabling the bundled monitoring components is appropriate.
+
+> **Optional Ansible inventory:** Users who already maintain host topology in an Ansible inventory can import it with `--ansible-inventory inventory.yaml`. OMS reads the optional `k8s-cp`, `k8s-workers`, and `ceph` groups; each host needs a `private_ip`. For example:
+>
+> ```yaml
+> k8s-cp:
+>   hosts:
+>     cp-1: {private_ip: 10.10.0.11}
+> k8s-workers:
+>   hosts:
+>     worker-1: {private_ip: 10.10.0.21}
+> ceph:
+>   hosts:
+>     ceph-1: {private_ip: 10.10.0.31}
+> ```
+
+Interactive mode is enabled by default. In that mode, the profile seeds the wizard, while individual non-interactive configuration flags are not applied. For automation, pass `--interactive=false` and provide every required value through flags and the profile. Treat a non-interactive validation failure as a missing or inconsistent input rather than bypassing it.
 
 After generation, set the registry section in `config.yaml` to:
 
@@ -254,16 +242,16 @@ registry:
   loadContainerImages: false
 ```
 
-Set the existing registry entries in `prod.vault.yaml` to the GitHub username and personal access token:
+As part of install-config generation, set the existing registry entries in `prod.vault.yaml` to the GHCR username and token supplied by Codesphere. The token is the registry password:
 
 ```yaml
 secrets:
   - name: registryUsername
     fields:
-      password: <github-username>
+      password: <codesphere-provided-ghcr-username>
   - name: registryPassword
     fields:
-      password: <github-personal-access-token>
+      password: <codesphere-provided-ghcr-token>
 ```
 
 The username is intentionally stored in the `password` field used by the installer secret format. Keep both values in the vault and never place the token directly in `config.yaml`.
@@ -296,7 +284,7 @@ Review the generated files and ensure they describe the actual infrastructure:
 
   Always list at least three addresses under `controlPlanes` for a highly available control plane. Dedicated worker addresses go under `workers`; increase that list for the expected workload CPU, memory, and failure tolerance.
 
-  The interactive `oms init install-config` wizard asks separately for the comma-separated control-plane and worker IPs. With an Ansible inventory, put controller hosts under `k8s-cp` and worker hosts under `k8s-workers`.
+  The interactive `oms init install-config` wizard asks separately for the comma-separated control-plane and worker IPs.
 
   k0s supports combined control-plane/worker nodes. However, the current OMS k0sctl configuration generator treats an IP present in both lists as control-plane-only and ignores the duplicate worker entry. Until combined-role generation is supported by OMS, use dedicated control-plane and worker entries in this workflow.
 - The platform and public gateways use `LoadBalancer`, or `ExternalIP` where that is the chosen integration.
@@ -349,23 +337,12 @@ Verify every record from outside the private network before continuing.
 
 ## 12. Obtain the installer package
 
-Browse the available Codesphere packages and download the selected lite installer build on the jumpbox:
+Browse the available Codesphere packages and download the selected installer build on the jumpbox:
 
 ```bash
 oms list packages
-oms download package --version <version> --file installer-lite.tar.gz
+oms download package --version <version>
 ```
-
-`oms list packages` shows the versions and available builds visible to the configured portal account. If multiple builds share a version, pass the selected hash explicitly:
-
-```bash
-oms download package \
-  --version <version> \
-  --hash <hash> \
-  --file installer-lite.tar.gz
-```
-
-Verify the artifact's provenance and checksum according to the release process before executing it.
 
 ## 13. Install Codesphere
 
@@ -397,6 +374,39 @@ oms install codesphere \
   --skip-steps load-container-images
 ```
 
+### Skip installation steps
+
+Skip steps make the installer resumable and allow it to work with prerequisites that are already installed or managed outside OMS. They are also useful when rerunning only a later phase after changing configuration. A skipped step is not validated or replaced by OMS, so skip it only when its result is already present or intentionally unnecessary; skipping a required prerequisite can make a later step fail.
+
+Use `--skip-steps` for a single invocation, with multiple names separated by commas. To persist skips across future runs, add them to `config.yaml`:
+
+```yaml
+operations:
+  skip:
+    - load-container-images
+```
+
+The supported skip names are:
+
+| Step | What skipping it bypasses |
+| --- | --- |
+| `copy-dependencies` | Copying packaged installation dependencies to the target hosts |
+| `extract-dependencies` | Extracting the packaged dependencies on the target hosts |
+| `load-container-images` | Loading images bundled in the deprecated full installer package; current lite packages pull images from GHCR, so skip this step |
+| `sops` | Installing the SOPS dependency used for encrypted installation secrets |
+| `docker` | Installing and configuring Docker on the target hosts |
+| `postgres` | Installing and configuring the PostgreSQL instance described by the install configuration |
+| `ceph` | Installing and configuring the Ceph cluster and OSDs |
+| `kubernetes` | Installing and configuring the Codesphere-managed k0s cluster |
+| `argocd` | The Argo CD bootstrap portion of the cluster-dependencies phase |
+| `set-up-cluster` | Configuring cluster-level dependencies after the base infrastructure is ready |
+| `ms-backends` | Installing the managed-service backend components |
+| `codesphere` | Deploying the Codesphere platform itself |
+
+> **The full installer package is deprecated.** Current installations should use `installer-lite.tar.gz` and skip `load-container-images`. The step remains available only for compatibility with legacy full packages.
+
+For the installation in this guide, only `load-container-images` is skipped because `installer-lite.tar.gz` contains no platform images. Do not copy other skip steps into a rerun without checking which prerequisites already exist.
+
 The combined command installs in this order:
 
 1. Copies and extracts dependencies.
@@ -405,7 +415,8 @@ The combined command installs in this order:
 4. Installs or configures PostgreSQL.
 5. Installs and configures Ceph.
 6. Installs and configures k0s when Kubernetes is Codesphere-managed.
-7. Installs Argo CD and the Codesphere platform.
+7. Installs Argo CD, cluster dependencies, and managed-service backends.
+8. Installs the Codesphere platform.
 
 The installation can also be run as the separate `infra`, `dependencies`, and `platform` phases when operational change control requires distinct checkpoints.
 
