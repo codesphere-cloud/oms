@@ -16,6 +16,23 @@ This command performs the full lifecycle:
 
 The command is idempotent and safe to re-run.
 
+By default the OpenBao, bank-vaults, and operator images and the operator
+Helm chart are pulled from the private Codesphere registry mirror. Use the
+--openbao-image, --bank-vaults-image, --operator-image and
+--operator-chart-repo flags to repoint them at your own mirrored OCI
+registry.
+
+Because the default registry is private, set both environment variables
+below: the installer creates an image pull secret (with an entry for every
+registry host the configured images live on), attaches it to the openbao
+ServiceAccount and operator pod, and uses the credentials to authenticate
+the operator chart pull. Leave them unset only on clusters with node-level
+registry access or fully public images.
+
+Environment variables:
+  OMS_REGISTRY_USER      Registry username (e.g. GitHub user for ghcr.io)
+  OMS_REGISTRY_PASSWORD  Registry token/PAT (read:packages for ghcr.io)
+
 ```
 oms install openbao [flags]
 ```
@@ -32,21 +49,28 @@ $ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --secrets-en
 # Extended timeout for slower clusters
 $ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --timeout 10m
 
+# Use a mirrored OCI registry (set OMS_REGISTRY_USER/OMS_REGISTRY_PASSWORD)
+$ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --openbao-image my-mirror.example.com/openbao/openbao:2.5.5 --operator-chart-repo oci://my-mirror.example.com/bank-vaults/helm-charts
+
 ```
 
 ### Options
 
 ```
-  -k, --age-key-file string     Path to age private key file for SOPS encryption/decryption (auto-detected if not set)
-      --bao-user string         Username for the userpass auth method (ignored on restore, uses DR backup value) (default "admin")
-      --dr-backup-path string   Path for SOPS-encrypted DR backup file (required)
-  -h, --help                    help for openbao
-  -n, --namespace string        Kubernetes namespace for OpenBao deployment (default "vault")
-      --replicas int            Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA) (default 3)
-      --secrets-engine string   Name of the KV-v2 secrets engine to provision (default "cs-secrets-engine")
-      --storage-size string     PVC storage size for each OpenBao replica (default "10Gi")
-      --timeout duration        Timeout for waiting on initialization (default 5m0s)
-  -y, --yes                     Auto-approve re-initialization of an existing deployment when no DR backup is found
+  -k, --age-key-file string          Path to age private key file for SOPS encryption/decryption (auto-detected if not set)
+      --bank-vaults-image string     Bank-Vaults configurer image (override for a mirrored OCI registry) (default "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0")
+      --bao-user string              Username for the userpass auth method (ignored on restore, uses DR backup value) (default "admin")
+      --dr-backup-path string        Path for SOPS-encrypted DR backup file (required)
+  -h, --help                         help for openbao
+  -n, --namespace string             Kubernetes namespace for OpenBao deployment (default "vault")
+      --openbao-image string         OpenBao server image (override for a mirrored OCI registry) (default "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.5")
+      --operator-chart-repo string   OCI repo hosting the vault-operator Helm chart (override for a mirrored OCI registry) (default "oci://ghcr.io/codesphere-cloud/docker/ghcr.io/bank-vaults/helm-charts")
+      --operator-image string        Bank-Vaults operator pod image (override for a mirrored OCI registry) (default "ghcr.io/codesphere-cloud/docker/ghcr.io/bank-vaults/vault-operator:1.24.0")
+      --replicas int                 Number of OpenBao replicas (1 for single-node, odd number >= 3 for HA) (default 3)
+      --secrets-engine string        Name of the KV-v2 secrets engine to provision (default "cs-secrets-engine")
+      --storage-size string          PVC storage size for each OpenBao replica (default "10Gi")
+      --timeout duration             Timeout for waiting on initialization (default 5m0s)
+  -y, --yes                          Auto-approve re-initialization of an existing deployment when no DR backup is found
 ```
 
 ### SEE ALSO

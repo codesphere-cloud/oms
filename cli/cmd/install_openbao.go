@@ -44,6 +44,10 @@ type InstallOpenBaoOpts struct {
 	Timeout           time.Duration
 	AgeKeyFile        string
 	Yes               bool
+	OpenBaoImage      string
+	BankVaultsImage   string
+	OperatorImage     string
+	OperatorChartRepo string
 }
 
 func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
@@ -75,6 +79,18 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 		Timeout:           c.Opts.Timeout,
 		AgeRecipient:      recipient,
 		AgeKeyPath:        keyPath,
+		// Optional registry credentials for the private OpenBao/bank-vaults image
+		// mirror (any OCI registry, not just ghcr.io). When both are set the
+		// installer creates a pull secret and wires it onto the openbao
+		// ServiceAccount; when unset, behavior is unchanged.
+		RegistryUser:     os.Getenv("OMS_REGISTRY_USER"),
+		RegistryPassword: os.Getenv("OMS_REGISTRY_PASSWORD"),
+		// Image/chart overrides for mirrored OCI registries. Defaults are set on
+		// the flags (the installer's Default* values).
+		OpenBaoImage:      c.Opts.OpenBaoImage,
+		BankVaultsImage:   c.Opts.BankVaultsImage,
+		OperatorImage:     c.Opts.OperatorImage,
+		OperatorChartRepo: c.Opts.OperatorChartRepo,
 	}
 
 	inst, err := installer.NewOpenBaoInstaller(cfg)
@@ -129,11 +145,29 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 				5. Wait for initialization to complete
 				6. Extract and encrypt unseal keys + password as SOPS DR backup
 
-				The command is idempotent and safe to re-run.`),
+				The command is idempotent and safe to re-run.
+
+				By default the OpenBao, bank-vaults, and operator images and the operator
+				Helm chart are pulled from the private Codesphere registry mirror. Use the
+				--openbao-image, --bank-vaults-image, --operator-image and
+				--operator-chart-repo flags to repoint them at your own mirrored OCI
+				registry.
+
+				Because the default registry is private, set both environment variables
+				below: the installer creates an image pull secret (with an entry for every
+				registry host the configured images live on), attaches it to the openbao
+				ServiceAccount and operator pod, and uses the credentials to authenticate
+				the operator chart pull. Leave them unset only on clusters with node-level
+				registry access or fully public images.
+
+				Environment variables:
+				  OMS_REGISTRY_USER      Registry username (e.g. GitHub user for ghcr.io)
+				  OMS_REGISTRY_PASSWORD  Registry token/PAT (read:packages for ghcr.io)`),
 			Example: formatExamples("install openbao", []packageio.Example{
 				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json", Desc: "Fresh bootstrap with DR backup saved locally"},
 				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json --secrets-engine my-engine --bao-user myuser", Desc: "Custom engine and user"},
 				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json --timeout 10m", Desc: "Extended timeout for slower clusters"},
+				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json --openbao-image my-mirror.example.com/openbao/openbao:2.5.5 --operator-chart-repo oci://my-mirror.example.com/bank-vaults/helm-charts", Desc: "Use a mirrored OCI registry (set OMS_REGISTRY_USER/OMS_REGISTRY_PASSWORD)"},
 			}),
 		},
 		Opts: &InstallOpenBaoOpts{GlobalOptions: opts},
@@ -147,6 +181,10 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 	openbao.cmd.Flags().DurationVar(&openbao.Opts.Timeout, "timeout", 5*time.Minute, "Timeout for waiting on initialization")
 	openbao.cmd.Flags().StringVarP(&openbao.Opts.AgeKeyFile, "age-key-file", "k", "", "Path to age private key file for SOPS encryption/decryption (auto-detected if not set)")
 	openbao.cmd.Flags().BoolVarP(&openbao.Opts.Yes, "yes", "y", false, "Auto-approve re-initialization of an existing deployment when no DR backup is found")
+	openbao.cmd.Flags().StringVar(&openbao.Opts.OpenBaoImage, "openbao-image", installer.DefaultOpenBaoImage, "OpenBao server image (override for a mirrored OCI registry)")
+	openbao.cmd.Flags().StringVar(&openbao.Opts.BankVaultsImage, "bank-vaults-image", installer.DefaultBankVaultsImage, "Bank-Vaults configurer image (override for a mirrored OCI registry)")
+	openbao.cmd.Flags().StringVar(&openbao.Opts.OperatorImage, "operator-image", installer.DefaultOperatorImage, "Bank-Vaults operator pod image (override for a mirrored OCI registry)")
+	openbao.cmd.Flags().StringVar(&openbao.Opts.OperatorChartRepo, "operator-chart-repo", installer.DefaultBankVaultsChartRepo, "OCI repo hosting the vault-operator Helm chart (override for a mirrored OCI registry)")
 
 	util.MarkFlagRequired(openbao.cmd, "dr-backup-path")
 

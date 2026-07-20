@@ -6,6 +6,10 @@ kind: ServiceAccount
 metadata:
   name: openbao
   namespace: {{ .Namespace }}
+{{- if .ImagePullSecretName }}
+imagePullSecrets:
+  - name: {{ .ImagePullSecretName }}
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
