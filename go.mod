@@ -52,7 +52,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/google/go-github/v74 v74.0.0
 	github.com/lib/pq v1.12.3
-	github.com/rook/rook/pkg/apis v0.0.0-20260709190019-838960a11d59
+	github.com/rook/rook/pkg/apis v0.0.0-20260720085041-02428dc8ac95
 )
 
 require (
