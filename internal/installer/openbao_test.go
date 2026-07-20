@@ -158,6 +158,58 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(digestOnly.DeployBankVaultsOperator()).To(MatchError(ContainSubstring("must include a tag")))
 		})
 
+		It("authenticates the chart registry before pulling when registry credentials are set", func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
+			// With credentials set, LoginRegistry must be called for the chart
+			// repo host before the chart is pulled. The strict mock fails the
+			// test if this expectation is not satisfied.
+			helmMock.EXPECT().LoginRegistry(mock.Anything, "mirror.example.com", "u", "p").Return(nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace:         "vault",
+					RegistryUser:      "u",
+					RegistryPassword:  "p",
+					OperatorChartRepo: "oci://mirror.example.com/bank-vaults/helm-charts",
+				},
+			}
+			inst.SetCtx(ctx)
+
+			Expect(inst.DeployBankVaultsOperator()).To(Succeed())
+		})
+
+		It("does not authenticate the chart registry when no registry credentials are set", func() {
+			ns := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "vault"}}
+			_, err := clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			helmMock.EXPECT().FindRelease("vault", "vault-operator").Return(nil, nil)
+			// No LoginRegistry expectation is set: the strict mock fails the test
+			// if LoginRegistry is called when credentials are absent.
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+			inst := &installer.OpenBaoInstaller{
+				Helm:      helmMock,
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoInstallerConfig{
+					Namespace:         "vault",
+					OperatorChartRepo: installer.DefaultBankVaultsChartRepo,
+				},
+			}
+			inst.SetCtx(ctx)
+
+			Expect(inst.DeployBankVaultsOperator()).To(Succeed())
+		})
+
 		It("performs fresh install when target namespace does not exist", func() {
 			// Namespace "new-ns" is NOT created — FindRelease must be skipped.
 			// No operator Deployment exists, so InstallChart is called directly.

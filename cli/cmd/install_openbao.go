@@ -79,10 +79,10 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 		Timeout:           c.Opts.Timeout,
 		AgeRecipient:      recipient,
 		AgeKeyPath:        keyPath,
-		// Optional GHCR credentials for the private OpenBao/bank-vaults image
-		// mirror. When both are set the installer creates a pull secret and
-		// wires it onto the openbao ServiceAccount; when unset, behavior is
-		// unchanged.
+		// Optional registry credentials for the private OpenBao/bank-vaults image
+		// mirror (any OCI registry, not just ghcr.io). When both are set the
+		// installer creates a pull secret and wires it onto the openbao
+		// ServiceAccount; when unset, behavior is unchanged.
 		RegistryUser:     os.Getenv("OMS_REGISTRY_USER"),
 		RegistryPassword: os.Getenv("OMS_REGISTRY_PASSWORD"),
 		// Image/chart overrides for mirrored OCI registries. Defaults are set on

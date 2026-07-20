@@ -125,9 +125,12 @@ type OpenBaoInstallerConfig struct {
 	// Image and chart overrides. Empty values are backfilled in validateConfig
 	// from the Default* constants, so a customer can repoint any of them at a
 	// mirrored OCI registry without affecting the default install.
-	OpenBaoImage      string // OpenBao server image (Vault CR spec.image)
-	BankVaultsImage   string // bank-vaults configurer image (Vault CR spec.bankVaultsImage)
-	OperatorImage     string // bank-vaults operator pod image (Helm values override)
+	OpenBaoImage    string // OpenBao server image (Vault CR spec.image)
+	BankVaultsImage string // bank-vaults configurer image (Vault CR spec.bankVaultsImage)
+	// OperatorImage is the bank-vaults operator pod image (Helm values override).
+	// It must include a tag: the vault-operator chart renders the image as
+	// repository:tag, so digest-only references are not supported.
+	OperatorImage     string
 	OperatorChartRepo string // OCI repo hosting the vault-operator Helm chart
 }
 
