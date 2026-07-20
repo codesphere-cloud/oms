@@ -215,9 +215,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.8.0
+Version: v1.9.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.8.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.9.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -881,15 +881,15 @@ License URL: https://github.com/prometheus-operator/prometheus-operator/blob/pkg
  
 ----------
 Module: github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil
-Version: v1.23.2
+Version: v1.24.0
 License: BSD-3-Clause
-License URL: https://github.com/prometheus/client_golang/blob/v1.23.2/internal/github.com/golang/gddo/LICENSE
+License URL: https://github.com/prometheus/client_golang/blob/v1.24.0/internal/github.com/golang/gddo/LICENSE
  
 ----------
 Module: github.com/prometheus/client_golang/prometheus
-Version: v1.23.2
+Version: v1.24.0
 License: Apache-2.0
-License URL: https://github.com/prometheus/client_golang/blob/v1.23.2/LICENSE
+License URL: https://github.com/prometheus/client_golang/blob/v1.24.0/LICENSE
  
 ----------
 Module: github.com/prometheus/client_model/go
@@ -899,15 +899,15 @@ License URL: https://github.com/prometheus/client_model/blob/v0.6.2/LICENSE
  
 ----------
 Module: github.com/prometheus/common
-Version: v0.68.1
+Version: v0.70.0
 License: Apache-2.0
-License URL: https://github.com/prometheus/common/blob/v0.68.1/LICENSE
+License URL: https://github.com/prometheus/common/blob/v0.70.0/LICENSE
  
 ----------
 Module: github.com/prometheus/procfs
-Version: v0.20.1
+Version: v0.21.1
 License: Apache-2.0
-License URL: https://github.com/prometheus/procfs/blob/v0.20.1/LICENSE
+License URL: https://github.com/prometheus/procfs/blob/v0.21.1/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
