@@ -6,7 +6,7 @@ This guide describes how to prepare infrastructure for Codesphere without depend
 
 ## What the installation builds
 
-The installation uses a management host as the single entry point into a private network. From there, OMS installs and configures PostgreSQL, Ceph, k0s, and the Codesphere platform.
+The installation uses a jumpbox as the single entry point into a private network. From there, OMS installs and configures PostgreSQL, Ceph, k0s, and the Codesphere platform.
 
 ```text
 administrator
@@ -22,8 +22,8 @@ jumpbox
 Internet
     |
     +-- platform gateway IP       -> cs.<base-domain> and *.cs.<base-domain>
-    +-- workspace gateway IP      -> ws.<base-domain> and *.ws.<base-domain>
-    `-- workspace SSH proxy IP    -> *.ssh.cs.<base-domain>
+    +-- workspace gateway IP      -> <dc-id>.<base-domain> and *.<dc-id>.<base-domain>
+    `-- workspace SSH proxy IP    -> *.<dc-id>.ssh.<base-domain>
 ```
 
 The installer can manage PostgreSQL, Ceph, and Kubernetes on these machines. An external PostgreSQL database or an existing Kubernetes cluster can also be described in the install configuration, but those alternatives are outside the topology covered by this guide.
@@ -47,7 +47,17 @@ Git provider credentials must be supplied as complete sets. For example, a GitHu
 
 ## 2. Provision the machines
 
-Provision x86-64 machines running Ubuntu 22.04 LTS or an equivalent supported operating system. Choose a topology based on the purpose of the installation.
+Provision x86-64 machines and choose a topology based on the purpose of the installation.
+
+### Minimum supported versions
+
+Codesphere requires:
+
+- Ubuntu 22.04 LTS or a newer supported version
+- Kubernetes 1.31 or newer
+- Ceph 18.2 or newer
+
+The Kubernetes and Ceph minimums also apply when those components are installed or managed outside OMS.
 
 ### POC topology
 
@@ -101,7 +111,7 @@ Reserve three stable external addresses and connect them to Kubernetes `LoadBala
 2. The public workspace gateway serves workspace HTTP and HTTPS traffic.
 3. The workspace SSH proxy serves SSH traffic for workspaces.
 
-On a public cloud, install and configure that provider's Kubernetes cloud controller or load-balancer integration. On bare metal or other infrastructure without a native implementation, configure MetalLB with an address pool containing the reserved addresses. The addresses must remain stable across service and node restarts.
+On a public cloud, install and configure that provider's Kubernetes cloud controller or load-balancer integration. On bare metal or other infrastructure without a native implementation, configure MetalLB with an address pool containing the reserved addresses. The addresses must remain stable across service and node restarts. If the integration can be completed only after Kubernetes is running, finish it in [section 14](#14-complete-the-infrastructure-integration).
 
 Apply these boundary firewall rules:
 
@@ -156,7 +166,7 @@ Keep time synchronized on every host. Confirm that hostnames, private addresses,
 
 ## 7. Prepare the jumpbox
 
-Install OMS on the jumpbox together with `sops` and `age`. Pin and verify approved versions so the environment is repeatable.
+Install [OMS](https://github.com/codesphere-cloud/oms) on the jumpbox together with `sops` and `age`. Pin and verify approved versions so the environment is repeatable.
 
 The jumpbox must have enough free space for the installer package and extracted installation dependencies. Create a root-only secrets directory:
 
@@ -222,13 +232,16 @@ Use `minimal` for the POC topology described in section 2 and `production` for t
 > ```yaml
 > k8s-cp:
 >   hosts:
->     cp-1: {private_ip: 10.10.0.11}
+>     cp-1:
+>       private_ip: 10.10.0.11
 > k8s-workers:
 >   hosts:
->     worker-1: {private_ip: 10.10.0.21}
+>     worker-1:
+>       private_ip: 10.10.0.21
 > ceph:
 >   hosts:
->     ceph-1: {private_ip: 10.10.0.31}
+>     ceph-1:
+>       private_ip: 10.10.0.31
 > ```
 
 Interactive mode is enabled by default. In that mode, the profile seeds the wizard, while individual non-interactive configuration flags are not applied. For automation, pass `--interactive=false` and provide every required value through flags and the profile. Treat a non-interactive validation failure as a missing or inconsistent input rather than bypassing it.
@@ -289,7 +302,7 @@ Review the generated files and ensure they describe the actual infrastructure:
   k0s supports combined control-plane/worker nodes. However, the current OMS k0sctl configuration generator treats an IP present in both lists as control-plane-only and ignores the duplicate worker entry. Until combined-role generation is supported by OMS, use dedicated control-plane and worker entries in this workflow.
 - The platform and public gateways use `LoadBalancer`, or `ExternalIP` where that is the chosen integration.
 - `codesphere.domain` is `cs.<base-domain>`.
-- `codesphere.workspaceHostingBaseDomain` and the custom-domain CNAME base are `ws.<base-domain>`.
+- `codesphere.workspaceHostingBaseDomain` and the custom-domain CNAME base are `<dc-id>.<base-domain>`.
 - The workspace SSH proxy application is enabled and assigned its reserved address.
 - ACME or another certificate issuer is configured for the selected DNS and load-balancer design.
 - Git provider and OIDC redirect URLs use the final `https://cs.<base-domain>` address.
@@ -323,17 +336,17 @@ Back up `config.yaml`, the encrypted vault, and the age identity to an approved 
 
 Create these records after the three stable addresses are allocated:
 
-| Record | Target |
-| --- | --- |
-| `cs.<base-domain>` | Platform gateway IP |
-| `*.cs.<base-domain>` | Platform gateway IP |
-| `ws.<base-domain>` | Workspace gateway IP |
-| `*.ws.<base-domain>` | Workspace gateway IP |
-| `*.ssh.cs.<base-domain>` | Workspace SSH proxy IP |
+| Record | Kubernetes service | Target |
+| --- | --- | --- |
+| `cs.<base-domain>` | `gateway-controller` | Platform gateway IP |
+| `*.cs.<base-domain>` | `gateway-controller` | Platform gateway IP |
+| `<dc-id>.<base-domain>` | `public-gateway-controller` | Workspace gateway IP |
+| `*.<dc-id>.<base-domain>` | `public-gateway-controller` | Workspace gateway IP |
+| `*.<dc-id>.ssh.<base-domain>` | `ssh-workspace-proxy` | Workspace SSH proxy IP |
 
 Use a short TTL such as 300 seconds during initial setup. Depending on the DNS provider and network design, the records may be A/AAAA, alias, or load-balancer records. Ensure the certificate solver can update DNS when using DNS-01, or that TCP 80 reaches the platform gateway when using HTTP-01.
 
-Verify every record from outside the private network before continuing.
+Some cloud-controller and load-balancer integrations assign external IP addresses only after Kubernetes and the provider integration are running. If the three addresses are not known yet, defer creating and verifying these records until [section 14](#14-complete-the-infrastructure-integration), then return to this table with the assigned addresses. Otherwise, verify every record from outside the private network before continuing.
 
 ## 12. Obtain the installer package
 
@@ -428,10 +441,12 @@ Confirm that the three services receive the reserved addresses:
 
 ```bash
 /etc/codesphere/deps/kubernetes/files/k0s kubectl \
-  get services --all-namespaces
+  get services -n codesphere -o wide | grep LoadBalancer
 ```
 
-The platform gateway, public workspace gateway, and workspace SSH proxy must retain their intended addresses. If the load-balancer implementation does not assign them from `config.yaml`, patch or annotate the services using that implementation's supported mechanism and then make the change persistent in the install configuration.
+The `gateway-controller`, `public-gateway-controller`, and `ssh-workspace-proxy` services must retain their intended addresses. If the load-balancer implementation does not assign them from `config.yaml`, patch or annotate the services using that implementation's supported mechanism and then make the change persistent in the install configuration.
+
+If DNS configuration was deferred because these external addresses were not available earlier, create and verify the records described in [section 11](#11-configure-dns) now.
 
 ## 15. Verify the installation
 
@@ -443,7 +458,7 @@ Complete these checks before handing over the environment:
 4. `https://cs.<base-domain>` presents a trusted certificate and loads Codesphere.
 5. A workspace can be created, reached over HTTPS, and reached through the workspace SSH proxy.
 
-Run the Codesphere smoke test when credentials for the environment are available:
+Run the Codesphere smoke test when an API key for the environment is available:
 
 ```bash
 oms smoketest codesphere --help
