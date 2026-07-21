@@ -67,6 +67,7 @@ users:
 		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).ToNot(HaveOccurred())
+
 		vaultPath := filepath.Join(secretsDir, "prod.vault.yaml")
 		Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 

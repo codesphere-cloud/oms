@@ -36,15 +36,15 @@ users:
     token: test-token
 `
 
-// writeVaultFile SOPS-encrypts iv with a freshly generated age key and writes
+// writeVaultFile SOPS-encrypts vault with a freshly generated age key and writes
 // it to dir/prod.vault.yaml, returning the vault path and the age key path
 // needed to decrypt it. Skips the test if sops/age-keygen are unavailable.
-func writeVaultFile(dir string, iv *files.InstallVault) (vaultPath, ageKeyPath string) {
+func writeVaultFile(dir string, installVault *files.InstallVault) (vaultPath, ageKeyPath string) {
 	if !sopsAndAgeAvailable() {
 		Skip("sops and age-keygen not available")
 	}
 
-	vaultYAML, err := iv.Marshal()
+	vaultYAML, err := installVault.Marshal()
 	Expect(err).ToNot(HaveOccurred())
 
 	plaintextPath := filepath.Join(dir, "prod.vault.plain.yaml")
