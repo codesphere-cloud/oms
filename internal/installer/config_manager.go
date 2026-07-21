@@ -116,6 +116,9 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 
 	switch g.Config.Postgres.Mode {
 	case "install":
+		if err := validatePostgresServerAddress(g.Config.Postgres); err != nil {
+			errors = append(errors, err.Error())
+		}
 		if g.Config.Postgres.Primary == nil {
 			errors = append(errors, "postgres primary configuration is required when mode is 'install'")
 		} else {
@@ -174,6 +177,18 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 	}
 
 	return errors
+}
+
+func validatePostgresServerAddress(config files.PostgresConfig) error {
+	if config.Mode != "install" {
+		return nil
+	}
+
+	if config.ServerAddress == "" {
+		return nil
+	}
+
+	return fmt.Errorf("postgres.serverAddress must not be set when postgres.mode is 'install'")
 }
 
 func (g *InstallConfig) ValidateVault() []string {
