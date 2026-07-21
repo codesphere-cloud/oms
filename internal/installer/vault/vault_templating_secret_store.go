@@ -142,6 +142,9 @@ func LoadVaultData(vaultPath, ageKeyPath string) (*files.InstallVault, error) {
 	return vault, nil
 }
 
+// LoadUnencryptedVaultData reads parses an unencrypted vault at vaultPath
+// returning the decoded install vault.
+// This is only used for GCP Bootstrapping. All other features should force a decrypted vault.
 func LoadUnencryptedVaultData(vaultPath string) (*files.InstallVault, error) {
 	data, err := os.ReadFile(vaultPath)
 	if err != nil {
