@@ -117,6 +117,9 @@ func (ci *CodesphereInstaller) loadConfig(cm ConfigManager) (files.RootConfig, e
 	if err != nil {
 		return files.RootConfig{}, fmt.Errorf("failed to extract config.yaml: %w", err)
 	}
+	if err := validatePostgresServerAddress(config.Postgres); err != nil {
+		return files.RootConfig{}, fmt.Errorf("invalid postgres configuration: %w", err)
+	}
 
 	ci.warnIfVaultDirDiffersFromSecretsDir(config)
 	return config, nil
