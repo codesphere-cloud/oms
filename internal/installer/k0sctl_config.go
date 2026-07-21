@@ -5,6 +5,7 @@ package installer
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"gopkg.in/yaml.v3"
@@ -68,7 +69,12 @@ type K0sctlApplyHooks struct {
 	After  []string `yaml:"after,omitempty"`
 }
 
-func createK0sctlHost(node files.K8sNode, role string, installFlags []string, sshKeyPath string, k0sBinaryPath string) K0sctlHost {
+func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, installFlags []string, sshKeyPath string, k0sBinaryPath string) {
+	for _, host := range k.Hosts {
+		if host.PrivateAddress == node.IPAddress {
+			return
+		}
+	}
 	host := K0sctlHost{
 		Role: role,
 		SSH: K0sctlSSH{
@@ -89,7 +95,7 @@ func createK0sctlHost(node files.K8sNode, role string, installFlags []string, ss
 		host.K0sBinaryPath = k0sBinaryPath
 	}
 
-	return host
+	k.Hosts = append(k.Hosts, host)
 }
 
 // GenerateK0sctlConfig generates a k0sctl configuration from a Codesphere install-config
@@ -123,24 +129,20 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 		},
 	}
 
-	// Track added IPs to avoid duplicates
-	addedIPs := make(map[string]bool)
-
-	// Add controller-only nodes from control planes
+	// Add control-plane nodes, enabling their worker role when configured.
 	for _, cp := range installConfig.Kubernetes.ControlPlanes {
-		host := createK0sctlHost(cp, "controller", nil, sshKeyPath, k0sBinaryPath)
-		k0sctlConfig.Spec.Hosts = append(k0sctlConfig.Spec.Hosts, host)
-		addedIPs[cp.IPAddress] = true
+		var installFlags []string
+		// A node may intentionally be listed as both a control plane and a worker.
+		if slices.Contains(installConfig.Kubernetes.Workers, cp) {
+			installFlags = []string{"--enable-worker", "--no-taints=true"}
+		}
+
+		k0sctlConfig.Spec.addUniqueK0sctlHost(cp, "controller", installFlags, sshKeyPath, k0sBinaryPath)
 	}
 
 	// Add dedicated worker nodes if present
 	for _, worker := range installConfig.Kubernetes.Workers {
-		if addedIPs[worker.IPAddress] {
-			continue
-		}
-		host := createK0sctlHost(worker, "worker", nil, sshKeyPath, k0sBinaryPath)
-		k0sctlConfig.Spec.Hosts = append(k0sctlConfig.Spec.Hosts, host)
-		addedIPs[worker.IPAddress] = true
+		k0sctlConfig.Spec.addUniqueK0sctlHost(worker, "worker", nil, sshKeyPath, k0sBinaryPath)
 	}
 
 	return k0sctlConfig, nil
