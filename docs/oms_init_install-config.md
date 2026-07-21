@@ -77,7 +77,7 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --openbao-user string           Username for OpenBao authentication (default "admin")
       --postgres-mode string          PostgreSQL setup mode (install/external)
       --postgres-primary-ip string    Primary PostgreSQL server IP
-      --postgres-server string        PostgreSQL server address. Required when using external mode.
+      --postgres-server string        PostgreSQL server hostname for install mode or address for external mode
       --profile string                Use a predefined configuration profile (dev, production, minimal)
       --registry-server string        Server for container registry
       --secrets-dir string            Secrets base directory (default "/root/secrets")

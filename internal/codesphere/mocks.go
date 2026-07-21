@@ -324,19 +324,26 @@ type MockClient_ListTeams_Call struct {
 }
 
 // ListTeams is a helper method to define mock.On call
+//   - orgId string
 func (_e *MockClient_Expecter) ListTeams(orgId any) *MockClient_ListTeams_Call {
 	return &MockClient_ListTeams_Call{Call: _e.mock.On("ListTeams", orgId)}
 }
 
 func (_c *MockClient_ListTeams_Call) Run(run func(orgId string)) *MockClient_ListTeams_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
 	})
 	return _c
 }
 
-func (_c *MockClient_ListTeams_Call) Return(vs []api.Team, err error) *MockClient_ListTeams_Call {
-	_c.Call.Return(vs, err)
+func (_c *MockClient_ListTeams_Call) Return(teams []api.Team, err error) *MockClient_ListTeams_Call {
+	_c.Call.Return(teams, err)
 	return _c
 }
 

@@ -162,7 +162,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 
 	// Postgres
 	c.cmd.Flags().StringVar(&c.Opts.PostgresMode, "postgres-mode", "", "PostgreSQL setup mode (install/external)")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server address. Required when using external mode.")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server hostname for install mode or address for external mode")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
 
 	// K8s
@@ -350,18 +350,22 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		config.Postgres.Mode = c.Opts.PostgresMode
 	}
 
+	postgresPrimaryHostname := determinePostgresPrimaryHostname(config.Postgres.Mode, c.Opts)
 	if c.Opts.PostgresServerAddress != "" {
 		config.Postgres.ServerAddress = c.Opts.PostgresServerAddress
 	}
+	if c.Opts.PostgresServerAddress != "" && config.Postgres.Mode == "install" {
+		config.Postgres.ServerAddress = ""
+	}
 
-	if c.Opts.PostgresPrimaryHostname != "" && c.Opts.PostgresPrimaryIP != "" {
+	if postgresPrimaryHostname != "" || c.Opts.PostgresPrimaryIP != "" {
 		if config.Postgres.Primary == nil {
-			config.Postgres.Primary = &files.PostgresPrimaryConfig{
-				Hostname: c.Opts.PostgresPrimaryHostname,
-				IP:       c.Opts.PostgresPrimaryIP,
-			}
-		} else {
-			config.Postgres.Primary.Hostname = c.Opts.PostgresPrimaryHostname
+			config.Postgres.Primary = &files.PostgresPrimaryConfig{}
+		}
+		if postgresPrimaryHostname != "" {
+			config.Postgres.Primary.Hostname = postgresPrimaryHostname
+		}
+		if c.Opts.PostgresPrimaryIP != "" {
 			config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
 		}
 	}
@@ -555,4 +559,16 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	}
 
 	return config
+}
+
+func determinePostgresPrimaryHostname(postgresMode string, opts *InitInstallConfigOpts) string {
+	if postgresMode != "install" {
+		return opts.PostgresPrimaryHostname
+	}
+
+	if opts.PostgresServerAddress == "" {
+		return opts.PostgresPrimaryHostname
+	}
+
+	return opts.PostgresServerAddress
 }

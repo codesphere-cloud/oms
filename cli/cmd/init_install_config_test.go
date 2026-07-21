@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
@@ -51,6 +52,45 @@ var _ = Describe("ApplyProfile", func() {
 			Expect(config.Postgres.Mode).To(Equal("install"))
 			Expect(config.Kubernetes.ManagedByCodesphere).To(BeTrue())
 		})
+	})
+})
+
+var _ = Describe("UpdateConfigFromOpts", func() {
+	It("uses postgres-server as the primary hostname in install mode", func() {
+		config := &files.RootConfig{
+			Postgres: files.PostgresConfig{
+				Mode:          "install",
+				ServerAddress: "localhost",
+				Primary: &files.PostgresPrimaryConfig{
+					IP:       "127.0.0.1",
+					Hostname: "localhost",
+				},
+			},
+		}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			PostgresMode:          "install",
+			PostgresPrimaryIP:     "1.2.3.4",
+			PostgresServerAddress: "test-server",
+		}}
+
+		command.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Postgres.ServerAddress).To(BeEmpty())
+		Expect(config.Postgres.Primary).NotTo(BeNil())
+		Expect(config.Postgres.Primary.IP).To(Equal("1.2.3.4"))
+		Expect(config.Postgres.Primary.Hostname).To(Equal("test-server"))
+	})
+
+	It("uses postgres-server as the server address in external mode", func() {
+		config := &files.RootConfig{Postgres: files.PostgresConfig{Mode: "external"}}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			PostgresMode:          "external",
+			PostgresServerAddress: "postgres.example.com:5432",
+		}}
+
+		command.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Postgres.ServerAddress).To(Equal("postgres.example.com:5432"))
 	})
 })
 
