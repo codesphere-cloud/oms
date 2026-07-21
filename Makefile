@@ -40,6 +40,7 @@ docs:
 	mkdir docs
 	go run -ldflags="-X 'github.com/codesphere-cloud/oms/internal/version.binName=oms'" hack/gendocs/main.go
 	cp docs/oms.md docs/README.md
+	cp hack/gendocs/static/*.md docs/
 
 generate-license: generate
 	go tool go-licenses report --template .NOTICE.template ./... > NOTICE
