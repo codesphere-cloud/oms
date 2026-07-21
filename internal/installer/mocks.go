@@ -553,6 +553,57 @@ func (_c *MockInstallConfigManager_LoadVaultFromFile_Call) RunAndReturn(run func
 	return _c
 }
 
+// LoadVaultFromUnecryptedFile provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) LoadVaultFromUnecryptedFile(vaultPath string) error {
+	ret := _mock.Called(vaultPath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LoadVaultFromUnecryptedFile")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string) error); ok {
+		r0 = returnFunc(vaultPath)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadVaultFromUnecryptedFile'
+type MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call struct {
+	*mock.Call
+}
+
+// LoadVaultFromUnecryptedFile is a helper method to define mock.On call
+//   - vaultPath string
+func (_e *MockInstallConfigManager_Expecter) LoadVaultFromUnecryptedFile(vaultPath any) *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call {
+	return &MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call{Call: _e.mock.On("LoadVaultFromUnecryptedFile", vaultPath)}
+}
+
+func (_c *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call) Run(run func(vaultPath string)) *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call) Return(err error) *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call) RunAndReturn(run func(vaultPath string) error) *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ValidateInstallConfig provides a mock function for the type MockInstallConfigManager
 func (_mock *MockInstallConfigManager) ValidateInstallConfig() []string {
 	ret := _mock.Called()
