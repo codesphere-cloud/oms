@@ -229,6 +229,18 @@ var _ = Describe("ConfigManager", func() {
 					errors := configManager.ValidateInstallConfig()
 					Expect(errors).To(ContainElement(ContainSubstring("postgres primary hostname is required")))
 				})
+
+				It("should reject an external server address", func() {
+					configManager.Config.Postgres.Primary = &files.PostgresPrimaryConfig{
+						IP:       "10.50.0.2",
+						Hostname: "pg-primary",
+					}
+					configManager.Config.Postgres.ServerAddress = "postgres.example.com:5432"
+
+					errors := configManager.ValidateInstallConfig()
+
+					Expect(errors).To(ContainElement(ContainSubstring("postgres.serverAddress must not be set when postgres.mode is 'install'")))
+				})
 			})
 
 			Context("external mode", func() {
