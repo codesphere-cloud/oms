@@ -168,13 +168,36 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 			})
 
-			It("should fail when k0s binary exists and force is false", func() {
+			It("should reuse a cached k0s binary with the requested version", func() {
+				err := os.MkdirAll(workDir, 0755)
+				Expect(err).ToNot(HaveOccurred())
+				err = os.WriteFile(k0sPath, []byte("#!/bin/sh\nprintf 'v1.29.1+k0s.0\\n'\n"), 0755)
+				Expect(err).ToNot(HaveOccurred())
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(true)
 
-				_, err := k0s.Download("v1.29.1+k0s.0", false, false)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("k0s binary already exists"))
-				Expect(err.Error()).To(ContainSubstring("Use --force to overwrite"))
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(path).To(Equal(k0sPath))
+			})
+
+			It("should replace a cached k0s binary with a different version", func() {
+				err := os.MkdirAll(workDir, 0755)
+				Expect(err).ToNot(HaveOccurred())
+				err = os.WriteFile(k0sPath, []byte("#!/bin/sh\nprintf 'v1.28.0+k0s.0\\n'\n"), 0755)
+				Expect(err).ToNot(HaveOccurred())
+				mockFileWriter.EXPECT().Exists(k0sPath).Return(true)
+
+				realFile, err := os.Create(k0sPath)
+				Expect(err).ToNot(HaveOccurred())
+				defer util.CloseFileIgnoreError(realFile)
+
+				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
+				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
+				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
+
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(path).To(Equal(k0sPath))
 			})
 
 			It("should proceed when k0s binary exists and force is true", func() {

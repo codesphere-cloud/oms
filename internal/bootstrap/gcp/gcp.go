@@ -351,6 +351,21 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
+		err = b.stlog.Step("Install k0s", b.InstallK0s)
+		if err != nil {
+			return fmt.Errorf("failed to install k0s: %w", err)
+		}
+
+		err = b.stlog.Step("Wait for k0s nodes", b.WaitForK0sNodes)
+		if err != nil {
+			return fmt.Errorf("failed waiting for k0s nodes: %w", err)
+		}
+
+		err = b.stlog.Step("Ensure Codesphere prerequisites", b.EnsureCodespherePrerequisites)
+		if err != nil {
+			return fmt.Errorf("failed to ensure Codesphere prerequisites: %w", err)
+		}
+
 		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
 		if err != nil {
 			return fmt.Errorf("failed to install Codesphere: %w", err)
@@ -1058,52 +1073,103 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 }
 
 func (b *GCPBootstrapper) InstallCodesphere() error {
-	fullPackageFilename, err := b.ensureCodespherePackageOnJumpbox()
-	if err != nil {
+	if err := b.ensureCodespherePackageOnJumpbox(); err != nil {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
-	err = b.runInstallCommand(fullPackageFilename)
-	if err != nil {
+	if err := b.runInstallCommand(b.codespherePackageFilename()); err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
 
 	return nil
 }
 
-func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
-	packageFilename := "installer.tar.gz"
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		packageFilename = "installer-lite.tar.gz"
+// InstallK0s deploys k0s with the native OMS installer and stores its
+// kubeconfig in the encrypted install vault for the remaining installer steps.
+func (b *GCPBootstrapper) InstallK0s() error {
+	// Reuse matching cached binaries and let k0sctl reconcile normally. Without
+	// --force, an unchanged cluster remains untouched on bootstrap retries.
+	installCmd := fmt.Sprintf("oms install k0s --install-config /etc/codesphere/config.yaml --vault %s --vault-priv-key %s/age_key.txt",
+		filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), b.Env.SecretsDir)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", installCmd); err != nil {
+		return fmt.Errorf("failed to install k0s from jumpbox: %w", err)
 	}
 
+	return nil
+}
+
+// WaitForK0sNodes restores the readiness barrier from the TypeScript
+// Kubernetes setup. k0sctl apply completing is not sufficient for the
+// Codesphere charts: all schedulable nodes must be Ready before gateway
+// controllers and their admission webhooks are installed.
+func (b *GCPBootstrapper) WaitForK0sNodes() error {
+	const command = "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m"
+	if err := b.Env.ControlPlaneNodes[0].RunSSHCommand("root", command); err != nil {
+		return fmt.Errorf("k0s nodes did not become ready: %w", err)
+	}
+	return nil
+}
+
+// EnsureCodespherePrerequisites recreates the resources normally installed by
+// the skipped TypeScript Kubernetes step. The dummy error-page-server Service
+// must exist before ingress-nginx starts; otherwise both gateway controllers
+// exit while resolving their configured default backend. The TypeScript
+// platform step removes this unmanaged Service before Helm installs the real
+// one.
+func (b *GCPBootstrapper) EnsureCodespherePrerequisites() error {
+	const namespaceCommand = "k0s kubectl create namespace codesphere --dry-run=client -o yaml | k0s kubectl apply -f -"
+	if err := b.Env.ControlPlaneNodes[0].RunSSHCommand("root", namespaceCommand); err != nil {
+		return fmt.Errorf("failed to create Codesphere namespace: %w", err)
+	}
+
+	const serviceCommand = "k0s kubectl -n codesphere create service clusterip error-page-server --tcp=8080:8080 --dry-run=client -o yaml | k0s kubectl apply -f -"
+	if err := b.Env.ControlPlaneNodes[0].RunSSHCommand("root", serviceCommand); err != nil {
+		return fmt.Errorf("failed to create dummy error-page-server service: %w", err)
+	}
+	return nil
+}
+
+func (b *GCPBootstrapper) codespherePackageFilename() string {
+	packageFilename := b.codespherePackageArchiveName()
+	if b.Env.InstallLocal != "" {
+		return "local-" + packageFilename
+	}
+	return portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFilename)
+}
+
+func (b *GCPBootstrapper) codespherePackageArchiveName() string {
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		return "installer-lite.tar.gz"
+	}
+	return "installer.tar.gz"
+}
+
+func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 	if b.Env.InstallLocal != "" {
 		b.stlog.Logf("Copying local package %s to jumpbox...", b.Env.InstallLocal)
-		fullPackageFilename := fmt.Sprintf("local-%s", packageFilename)
-		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallLocal, "/root/"+fullPackageFilename)
+		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallLocal, "/root/"+b.codespherePackageFilename())
 		if err != nil {
-			return "", fmt.Errorf("failed to copy local install package to jumpbox: %w", err)
+			return fmt.Errorf("failed to copy local install package to jumpbox: %w", err)
 		}
-		return fullPackageFilename, nil
+		return nil
 	}
 
 	if b.Env.InstallVersion == "" {
-		return "", errors.New("either install version or a local package must be specified to install Codesphere")
+		return errors.New("either install version or a local package must be specified to install Codesphere")
 	}
 
-	fullPackageFilename := portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFilename)
 	if b.Env.InstallHash == "" {
-		return "", fmt.Errorf("install hash must be set when install version is set")
+		return fmt.Errorf("install hash must be set when install version is set")
 	}
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
-		packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
+		b.codespherePackageArchiveName(), b.Env.InstallHash, b.Env.InstallVersion)
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
-		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
+		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
-	return fullPackageFilename, nil
+	return nil
 }
 
 func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
@@ -1114,9 +1180,12 @@ func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 }
 
 func (b *GCPBootstrapper) generateSkipStepsArg() string {
-	skipSteps := b.Env.InstallSkipSteps
+	// k0s is installed by OMS before the TypeScript installer runs, so the
+	// TypeScript Kubernetes step must never run during GCP bootstrapping.
+	skipSteps := util.AppendUnique(nil, b.Env.InstallSkipSteps...)
+	skipSteps = util.AppendUnique(skipSteps, "kubernetes")
 	if b.Env.RegistryType == RegistryTypeGitHub {
-		skipSteps = append(skipSteps, "load-container-images")
+		skipSteps = util.AppendUnique(skipSteps, "load-container-images")
 	}
 	if len(skipSteps) == 0 {
 		return ""
@@ -1124,7 +1193,6 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 
 	return " -s " + strings.Join(skipSteps, ",")
 }
-
 func (b *GCPBootstrapper) GenerateK0sConfigScript() error {
 	script := `#!/bin/bash
 

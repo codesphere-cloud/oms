@@ -1395,7 +1395,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 					// Expect install codesphere
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s load-container-images").Return(nil)
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes,load-container-images").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1412,7 +1412,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H def9876543210 v1.2.3").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer.tar.gz -s kubernetes").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1421,7 +1421,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("downloads and installs codesphere with hash", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz -s kubernetes").Return(nil)
+
+				err := bs.InstallCodesphere()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("preserves requested skip steps without duplicating kubernetes", func() {
+				csEnv.InstallSkipSteps = []string{"postgres", "kubernetes"}
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz -s postgres,kubernetes").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1440,7 +1449,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer-lite.tar.gz").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz -s load-container-images").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz -s kubernetes,load-container-images").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -1454,7 +1463,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer.tar.gz").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer.tar.gz").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer.tar.gz -s kubernetes").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -1498,12 +1507,77 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when install codesphere fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz -s kubernetes").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install Codesphere from jumpbox"))
 			})
+		})
+	})
+
+	Describe("InstallK0s", func() {
+		BeforeEach(func() {
+			csEnv.InstallVersion = "v1.2.3"
+			csEnv.InstallHash = "abc1234567890"
+		})
+
+		It("downloads k0s and lets k0sctl distribute it independently of the Codesphere package", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms install k0s --install-config /etc/codesphere/config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
+
+			err := bs.InstallK0s()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("reports a native k0s installation failure", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
+				return strings.HasPrefix(command, "oms install k0s ")
+			})).Return(fmt.Errorf("k0s error"))
+
+			err := bs.InstallK0s()
+			Expect(err).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
+		})
+	})
+
+	Describe("EnsureCodespherePrerequisites", func() {
+		const namespaceCommand = "k0s kubectl create namespace codesphere --dry-run=client -o yaml | k0s kubectl apply -f -"
+		const serviceCommand = "k0s kubectl -n codesphere create service clusterip error-page-server --tcp=8080:8080 --dry-run=client -o yaml | k0s kubectl apply -f -"
+
+		It("idempotently creates the namespace and dummy default-backend service", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", namespaceCommand).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", serviceCommand).Return(nil)
+
+			Expect(bs.EnsureCodespherePrerequisites()).To(Succeed())
+		})
+
+		It("reports namespace creation failures", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", namespaceCommand).Return(fmt.Errorf("kubectl error"))
+
+			Expect(bs.EnsureCodespherePrerequisites()).To(MatchError(ContainSubstring("failed to create Codesphere namespace")))
+		})
+
+		It("reports dummy service creation failures", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", namespaceCommand).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", serviceCommand).Return(fmt.Errorf("kubectl error"))
+
+			Expect(bs.EnsureCodespherePrerequisites()).To(MatchError(ContainSubstring("failed to create dummy error-page-server service")))
+		})
+	})
+
+	Describe("WaitForK0sNodes", func() {
+		const command = "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m"
+
+		It("waits for every node before installing cluster components", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", command).Return(nil)
+
+			Expect(bs.WaitForK0sNodes()).To(Succeed())
+		})
+
+		It("reports nodes that fail to become ready", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", command).Return(fmt.Errorf("timeout"))
+
+			Expect(bs.WaitForK0sNodes()).To(MatchError(ContainSubstring("k0s nodes did not become ready")))
 		})
 	})
 
