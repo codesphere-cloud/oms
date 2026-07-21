@@ -3,6 +3,11 @@ module github.com/codesphere-cloud/oms
 go 1.26.5
 
 replace (
+	// GoReleaser pulls github.com/chrismellard/docker-credential-acr-env,
+	// which imports github.com/Azure/azure-sdk-for-go/version. Azure SDK
+	// v68 removed that package, so keep the legacy monorepo on a verified
+	// version that still provides it.
+	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v67.2.0+incompatible
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v5.2.0+incompatible
 
