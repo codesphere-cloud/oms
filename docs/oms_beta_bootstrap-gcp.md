@@ -17,6 +17,7 @@ oms beta bootstrap-gcp [flags]
 ### Options
 
 ```
+      --acme-staging                              Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)
       --azure-devops-app-client-id string         Azure DevOps App Client ID (optional)
       --azure-devops-app-client-secret string     Azure DevOps App Client Secret (optional)
       --base-domain string                        Base domain for Codesphere (required)

@@ -120,6 +120,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput ACME issuer", func() {
+		It("rejects selecting Let's Encrypt staging and Google Public CA together", func() {
+			csEnv.ACMEStaging = true
+			csEnv.GoogleACMEIssuer = true
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("acme-staging cannot be combined with google-acme-issuer")))
+		})
+	})
+
 	Describe("Bootstrap", func() {
 		BeforeEach(func() {
 			csEnv.InstallConfig = &files.RootConfig{Registry: &files.RegistryConfig{}}
