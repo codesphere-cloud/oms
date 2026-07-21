@@ -126,7 +126,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			It("loads existing vault before existing config for templating", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
 				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
-				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
