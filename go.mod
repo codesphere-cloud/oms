@@ -14,17 +14,17 @@ replace (
 
 require (
 	cloud.google.com/go/artifactregistry v1.26.0
-	cloud.google.com/go/compute v1.64.0
+	cloud.google.com/go/compute v1.65.0
 	cloud.google.com/go/iam v1.12.0
 	cloud.google.com/go/resourcemanager v1.16.0
 	cloud.google.com/go/serviceusage v1.15.0
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.4.0
+	github.com/codesphere-cloud/cs-go v1.9.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/getsops/sops/v3 v3.13.2
-	github.com/jedib0t/go-pretty/v6 v6.8.2
+	github.com/jedib0t/go-pretty/v6 v6.8.3
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
@@ -52,7 +52,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/google/go-github/v74 v74.0.0
 	github.com/lib/pq v1.12.3
-	github.com/rook/rook/pkg/apis v0.0.0-20260709190019-838960a11d59
+	github.com/rook/rook/pkg/apis v0.0.0-20260720085041-02428dc8ac95
 )
 
 require (
@@ -403,9 +403,9 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/polydawn/refmt v0.90.0 // indirect
-	github.com/prometheus/client_golang v1.23.2 // indirect
+	github.com/prometheus/client_golang v1.24.0 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/procfs v0.20.1 // indirect
+	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/quasilyte/go-ruleguard v0.4.5 // indirect
 	github.com/quasilyte/go-ruleguard/dsl v0.3.23 // indirect
 	github.com/quasilyte/gogrep v0.5.0 // indirect
@@ -598,7 +598,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.92.0 // indirect
-	github.com/prometheus/common v0.68.1 // indirect
+	github.com/prometheus/common v0.70.0 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/rubenv/sql-migrate v1.8.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect

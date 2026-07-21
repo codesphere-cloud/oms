@@ -121,7 +121,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			})
 			Context("when no teams are returned by the API", func() {
 				It("returns an error indicating no teams are available", func() {
-					mockClient.EXPECT().ListTeams().Return([]api.Team{}, nil).Once()
+					mockClient.EXPECT().ListTeams("").Return([]api.Team{}, nil).Once()
 
 					err := c.RunSmoketest()
 					Expect(err).To(MatchError(ContainSubstring("no teams available")))
@@ -130,7 +130,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			Context("when no primary team is returned by the API", func() {
 				It("uses the first team", func() {
 					falseVal := false
-					mockClient.EXPECT().ListTeams().Return([]api.Team{
+					mockClient.EXPECT().ListTeams("").Return([]api.Team{
 						{Id: 99, Name: "other team", IsFirst: &falseVal},
 						{Id: 21, Name: "primary team", IsFirst: &falseVal},
 					}, nil).Once()
@@ -144,7 +144,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			It("uses the primary team of the user", func() {
 				falseVal := false
 				trueVal := true
-				mockClient.EXPECT().ListTeams().Return([]api.Team{
+				mockClient.EXPECT().ListTeams("").Return([]api.Team{
 					{Id: 99, Name: "other team", IsFirst: &falseVal},
 					{Id: 21, Name: "primary team", IsFirst: &trueVal},
 				}, nil).Once()
