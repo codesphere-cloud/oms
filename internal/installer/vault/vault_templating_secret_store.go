@@ -142,6 +142,29 @@ func LoadVaultData(vaultPath, ageKeyPath string) (*files.InstallVault, error) {
 	return vault, nil
 }
 
+func LoadUnencryptedVaultData(vaultPath string) (*files.InstallVault, error) {
+	data, err := os.ReadFile(vaultPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read vault file %s: %w", vaultPath, err)
+	}
+
+	encrypted, err := isSOPSEncryptedYAML(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect vault file %s: %w", vaultPath, err)
+	}
+
+	if encrypted {
+		return nil, fmt.Errorf("failed to use unencrypted vault: vault is encrpted")
+	}
+
+	vault, err := parseVaultData(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse decrypted vault.yaml: %w", err)
+	}
+
+	return vault, nil
+}
+
 // IsSOPSEncryptedFile checks whether the file at path is a SOPS-encrypted YAML document.
 func IsSOPSEncryptedFile(path string) (bool, error) {
 	data, err := os.ReadFile(path)

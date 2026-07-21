@@ -30,6 +30,7 @@ type InstallConfigManager interface {
 	// Configuration management
 	LoadInstallConfigFromFile(configPath string) error
 	LoadVaultFromFile(vaultPath string) error
+	LoadVaultFromUnecryptedFile(vaultPath string) error
 	ValidateInstallConfig() []string
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
@@ -86,6 +87,16 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 
 func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
 	vault, err := vault.LoadVaultData(vaultPath, "")
+	if err != nil {
+		return err
+	}
+
+	g.Vault = vault
+	return nil
+}
+
+func (g *InstallConfig) LoadVaultFromUnecryptedFile(vaultPath string) error {
+	vault, err := vault.LoadUnencryptedVaultData(vaultPath)
 	if err != nil {
 		return err
 	}
