@@ -89,3 +89,4 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
 ### SEE ALSO
 
 * [oms init](oms_init.md)	 - Initialize configuration files
+
