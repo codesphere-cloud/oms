@@ -215,6 +215,7 @@ var _ = Describe("IAM & Admin", func() {
 					"serviceusage.googleapis.com",
 					"artifactregistry.googleapis.com",
 					"dns.googleapis.com",
+					"storage.googleapis.com",
 				}).Return(nil)
 
 				err := bs.EnsureAPIsEnabled()

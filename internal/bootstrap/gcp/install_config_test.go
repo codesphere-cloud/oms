@@ -311,6 +311,51 @@ var _ = Describe("Installconfig & Secrets", func() {
 		})
 	})
 
+	Describe("EnsureOpenfgaBackupBucket", func() {
+		It("creates the bucket, service account and HMAC key", func() {
+			vault := &files.InstallVault{}
+			icg.EXPECT().GetVault().Return(vault)
+
+			gc.EXPECT().EnsureStorageBucket("pid", "pid-openfga-backup", "us-central1").Return(nil)
+			gc.EXPECT().CreateServiceAccount("pid", "openfga-backup", "openfga-backup").Return("openfga-backup@pid.iam.gserviceaccount.com", true, nil)
+			gc.EXPECT().AssignIAMRole("pid", "openfga-backup", "pid", []string{"roles/storage.objectAdmin"}).Return(nil)
+			gc.EXPECT().CreateHMACKey("pid", "openfga-backup@pid.iam.gserviceaccount.com").Return("access-id", "secret-key", nil)
+
+			err := bs.EnsureOpenfgaBackupBucket()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bs.Env.OpenfgaBackupBucket).To(Equal("pid-openfga-backup"))
+			Expect(bs.Env.OpenfgaBackupAccessKeyID).To(Equal("access-id"))
+			Expect(bs.Env.OpenfgaBackupSecret).To(Equal("secret-key"))
+		})
+
+		It("does not create a new HMAC key when a real secret already exists", func() {
+			vault := &files.InstallVault{
+				Secrets: []files.SecretEntry{
+					{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: "existing-secret"}},
+				},
+			}
+			icg.EXPECT().GetVault().Return(vault)
+
+			gc.EXPECT().EnsureStorageBucket("pid", "pid-openfga-backup", "us-central1").Return(nil)
+			gc.EXPECT().CreateServiceAccount("pid", "openfga-backup", "openfga-backup").Return("openfga-backup@pid.iam.gserviceaccount.com", false, nil)
+			gc.EXPECT().AssignIAMRole("pid", "openfga-backup", "pid", []string{"roles/storage.objectAdmin"}).Return(nil)
+			// CreateHMACKey must not be called.
+
+			err := bs.EnsureOpenfgaBackupBucket()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bs.Env.OpenfgaBackupBucket).To(Equal("pid-openfga-backup"))
+			Expect(bs.Env.OpenfgaBackupAccessKeyID).To(BeEmpty())
+		})
+
+		It("returns an error when bucket creation fails", func() {
+			gc.EXPECT().EnsureStorageBucket("pid", "pid-openfga-backup", "us-central1").Return(fmt.Errorf("bucket error"))
+
+			err := bs.EnsureOpenfgaBackupBucket()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to ensure openfga backup bucket"))
+		})
+	})
+
 	Describe("UpdateInstallConfig", func() {
 		var vault *files.InstallVault
 		BeforeEach(func() {
@@ -330,6 +375,9 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				err := bs.UpdateInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
+
+				// No openfga backup bucket provisioned → config stays unset.
+				Expect(bs.Env.InstallConfig.Codesphere.OpenfgaBackups).To(BeNil())
 
 				applications := bs.Env.InstallConfig.PcApps["applications"].(map[string]interface{})
 				sshProxy := applications["ssh-workspace-proxy"].(map[string]interface{})
@@ -380,6 +428,33 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("staging"))
+			})
+			It("wires the openfga backup config and secrets when a bucket was provisioned", func() {
+				csEnv.OpenfgaBackupBucket = "pid-openfga-backup"
+				csEnv.OpenfgaBackupAccessKeyID = "access-id"
+				csEnv.OpenfgaBackupSecret = "secret-key"
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+
+				ob := bs.Env.InstallConfig.Codesphere.OpenfgaBackups
+				Expect(ob).NotTo(BeNil())
+				Expect(ob.Enabled).To(BeTrue())
+				Expect(ob.DestinationPath).To(Equal("s3://pid-openfga-backup"))
+				Expect(ob.EndpointURL).To(Equal("https://storage.googleapis.com"))
+
+				accessKey := vault.GetSecret(files.SecretOpenfgaDbBackupAccessKeyId)
+				Expect(accessKey).NotTo(BeNil())
+				Expect(accessKey.Fields.Password).To(Equal("access-id"))
+				secretKey := vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey)
+				Expect(secretKey).NotTo(BeNil())
+				Expect(secretKey.Fields.Password).To(Equal("secret-key"))
 			})
 			Context("When internal flags are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
