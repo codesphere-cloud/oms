@@ -209,6 +209,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().AssignIAMRole(projectID, "cloud-controller", projectID, []string{"roles/compute.admin"}).Return(nil)
 			gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", projectID, []string{"roles/dns.admin"}).Return(nil)
 
+			// EnsureOpenfgaBackupBucket
+			gc.EXPECT().EnsureStorageBucket(projectID, projectID+"-openfga-backup", "us-central1").Return(nil)
+			gc.EXPECT().CreateServiceAccount(projectID, "openfga-backup", "openfga-backup").Return("openfga-backup@p.iam.gserviceaccount.com", true, nil)
+			gc.EXPECT().AssignIAMRole(projectID, "openfga-backup", projectID, []string{"roles/storage.objectAdmin"}).Return(nil)
+			gc.EXPECT().CreateHMACKey(projectID, "openfga-backup@p.iam.gserviceaccount.com").Return("fake-access-id", "fake-secret", nil)
+
 			// EnsureVPC
 			gc.EXPECT().CreateVPC(projectID, "us-central1", projectID+"-vpc", projectID+"-us-central1-subnet", projectID+"-router", projectID+"-nat-gateway").Return(nil)
 
