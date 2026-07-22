@@ -317,6 +317,7 @@ type CodesphereConfig struct {
 	OAuth                      *OAuthProvidersConfig  `yaml:"oauth,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
+	OpenfgaBackups             *OpenfgaBackupsConfig  `yaml:"openfgaBackups,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
 	TelemetryExport            *TelemetryExport       `yaml:"telemetryExport,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
@@ -337,6 +338,21 @@ type OpenBaoConfig struct {
 	Engine string `yaml:"engine,omitempty"`
 	URI    string `yaml:"uri,omitempty"`
 	User   string `yaml:"user,omitempty"`
+}
+
+// OpenfgaBackupsConfig is the friendly representation of the OpenFGA database
+// backup settings. On marshal it is translated into the openfga subchart values
+// under codesphere.override (see buildOpenfgaBackupOverride).
+type OpenfgaBackupsConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Schedule is an optional 6-field cron expression. When empty the chart default applies.
+	Schedule string `yaml:"schedule,omitempty"`
+	// DestinationPath is the S3-style backup target (e.g. s3://backup-openfga-dev). Required when enabled.
+	DestinationPath string `yaml:"destinationPath,omitempty"`
+	// EndpointURL is the S3-compatible endpoint (e.g. https://s3.de.io.cloud.ovh.net). Required when enabled.
+	EndpointURL string `yaml:"endpointURL,omitempty"`
+	// RetentionPolicy is optional (e.g. "7d"). When empty the chart default of "7d" applies.
+	RetentionPolicy string `yaml:"retentionPolicy,omitempty"`
 }
 
 type OAuthProvidersConfig struct {
@@ -625,6 +641,7 @@ type S3ManagedServiceConfig struct {
 // Marshal serializes the RootConfig to YAML
 func (c *RootConfig) Marshal() ([]byte, error) {
 	c.buildACMEOverride()
+	c.buildOpenfgaBackupValues()
 	return yaml.Marshal(c)
 }
 
@@ -712,6 +729,70 @@ func (c *RootConfig) buildACMEOverride() {
 
 	issuers["acme"] = existingAcme
 	c.Cluster.Certificates.Override["issuers"] = issuers
+}
+
+// buildOpenfgaBackupValues translates codesphere.openfgaBackups into the openfga
+// application values under pcApps.applications.openfga.valuesObject.postgres.backup.
+// OpenFGA is deployed via the pc-apps app-of-apps (ArgoCD), not the codesphere
+// umbrella chart, so this is where its Helm values belong. Optional fields
+// (schedule, retentionPolicy) are only emitted when set so the chart defaults
+// apply otherwise. Existing pcApps entries (e.g. other applications) are preserved.
+func (c *RootConfig) buildOpenfgaBackupValues() {
+	ob := c.Codesphere.OpenfgaBackups
+	if ob == nil {
+		return
+	}
+
+	backup := map[string]interface{}{
+		"enabled": ob.Enabled,
+	}
+	if ob.Schedule != "" {
+		backup["schedule"] = ob.Schedule
+	}
+	if ob.DestinationPath != "" {
+		backup["destinationPath"] = ob.DestinationPath
+	}
+	if ob.EndpointURL != "" {
+		backup["endpointURL"] = ob.EndpointURL
+	}
+	if ob.RetentionPolicy != "" {
+		backup["retentionPolicy"] = ob.RetentionPolicy
+	}
+
+	if c.PcApps == nil {
+		c.PcApps = ChartValues{}
+	}
+
+	applications, ok := c.PcApps["applications"].(map[string]interface{})
+	if !ok {
+		applications = map[string]interface{}{}
+	}
+
+	openfga, ok := applications["openfga"].(map[string]interface{})
+	if !ok {
+		openfga = map[string]interface{}{}
+	}
+	// Only enable the openfga application when backups are on; never emit
+	// enabled:false here, as that would disable the whole openfga application
+	// (a core component) rather than just its backups.
+	if ob.Enabled {
+		openfga["enabled"] = true
+	}
+
+	valuesObject, ok := openfga["valuesObject"].(map[string]interface{})
+	if !ok {
+		valuesObject = map[string]interface{}{}
+	}
+	postgres, ok := valuesObject["postgres"].(map[string]interface{})
+	if !ok {
+		postgres = map[string]interface{}{}
+	}
+
+	postgres["backup"] = backup
+	valuesObject["postgres"] = postgres
+	openfga["valuesObject"] = valuesObject
+	applications["openfga"] = openfga
+	c.PcApps["applications"] = applications
 }
 
 // extractACMESolverFromOverride populates the ACMEConfig.Solver from
