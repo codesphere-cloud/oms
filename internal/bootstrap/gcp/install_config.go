@@ -376,6 +376,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 	b.applyExternalLokiConfig()
 	b.applyPrometheusRemoteWriteConfig()
+	b.applyOpenfgaBackupConfig()
 
 	if !b.Env.ExistingConfigUsed {
 		err := b.icg.GenerateSecrets()
@@ -448,6 +449,72 @@ func (b *GCPBootstrapper) applySshProxyConfig() {
 			},
 		},
 	})
+}
+
+// openfgaBackupSAName is the service account whose HMAC key authenticates OpenFGA
+// database backups against the S3-compatible Cloud Storage endpoint.
+const openfgaBackupSAName = "openfga-backup"
+
+// EnsureOpenfgaBackupBucket creates the Cloud Storage bucket, dedicated service
+// account and HMAC key used for OpenFGA database backups. The bucket and HMAC key
+// live in the project so they are removed together with the project on cleanup.
+//
+// The HMAC secret is only returned at creation time, so it is persisted to the
+// vault by applyOpenfgaBackupConfig. Creation is skipped when a real secret is
+// already present in the vault (e.g. on re-runs or recovered configs).
+func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
+	bucketName := fmt.Sprintf("%s-openfga-backup", b.Env.ProjectID)
+
+	if err := b.GCPClient.EnsureStorageBucket(b.Env.ProjectID, bucketName, b.Env.Region); err != nil {
+		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
+	}
+	b.Env.OpenfgaBackupBucket = bucketName
+
+	saEmail, _, err := b.GCPClient.CreateServiceAccount(b.Env.ProjectID, openfgaBackupSAName, openfgaBackupSAName)
+	if err != nil {
+		return fmt.Errorf("failed to ensure openfga backup service account: %w", err)
+	}
+	if err := b.GCPClient.AssignIAMRole(b.Env.ProjectID, openfgaBackupSAName, b.Env.ProjectID, []string{"roles/storage.objectAdmin"}); err != nil {
+		return fmt.Errorf("failed to assign storage role to openfga backup service account: %w", err)
+	}
+
+	// The HMAC secret cannot be retrieved after creation, so only create a new key
+	// when we don't already have a real one persisted in the vault.
+	if existing := b.icg.GetVault().GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey); existing != nil &&
+		existing.Fields != nil && existing.Fields.Password != "" && existing.Fields.Password != "dummy" {
+		return nil
+	}
+
+	accessID, secret, err := b.GCPClient.CreateHMACKey(b.Env.ProjectID, saEmail)
+	if err != nil {
+		return fmt.Errorf("failed to create openfga backup HMAC key: %w", err)
+	}
+	b.Env.OpenfgaBackupAccessKeyID = accessID
+	b.Env.OpenfgaBackupSecret = secret
+
+	return nil
+}
+
+// applyOpenfgaBackupConfig wires the bucket created by EnsureOpenfgaBackupBucket
+// into the install config and persists the HMAC credentials to the vault. It is a
+// no-op when no bucket was provisioned.
+func (b *GCPBootstrapper) applyOpenfgaBackupConfig() {
+	if b.Env.OpenfgaBackupBucket == "" {
+		return
+	}
+
+	b.Env.InstallConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
+		Enabled:         true,
+		DestinationPath: "s3://" + b.Env.OpenfgaBackupBucket,
+		EndpointURL:     "https://storage.googleapis.com",
+	}
+
+	// Only overwrite when a new HMAC key was created this run; otherwise the
+	// existing secret loaded from the vault is kept.
+	if b.Env.OpenfgaBackupAccessKeyID != "" {
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupAccessKeyId, Fields: &files.SecretFields{Password: b.Env.OpenfgaBackupAccessKeyID}})
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: b.Env.OpenfgaBackupSecret}})
+	}
 }
 
 func (b *GCPBootstrapper) applyExternalLokiConfig() {
