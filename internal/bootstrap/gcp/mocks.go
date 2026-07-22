@@ -312,6 +312,78 @@ func (_c *MockGCPClientManager_CreateFirewallRule_Call) RunAndReturn(run func(pr
 	return _c
 }
 
+// CreateHMACKey provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) CreateHMACKey(projectID string, serviceAccountEmail string) (string, string, error) {
+	ret := _mock.Called(projectID, serviceAccountEmail)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateHMACKey")
+	}
+
+	var r0 string
+	var r1 string
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (string, string, error)); ok {
+		return returnFunc(projectID, serviceAccountEmail)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = returnFunc(projectID, serviceAccountEmail)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) string); ok {
+		r1 = returnFunc(projectID, serviceAccountEmail)
+	} else {
+		r1 = ret.Get(1).(string)
+	}
+	if returnFunc, ok := ret.Get(2).(func(string, string) error); ok {
+		r2 = returnFunc(projectID, serviceAccountEmail)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockGCPClientManager_CreateHMACKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateHMACKey'
+type MockGCPClientManager_CreateHMACKey_Call struct {
+	*mock.Call
+}
+
+// CreateHMACKey is a helper method to define mock.On call
+//   - projectID string
+//   - serviceAccountEmail string
+func (_e *MockGCPClientManager_Expecter) CreateHMACKey(projectID any, serviceAccountEmail any) *MockGCPClientManager_CreateHMACKey_Call {
+	return &MockGCPClientManager_CreateHMACKey_Call{Call: _e.mock.On("CreateHMACKey", projectID, serviceAccountEmail)}
+}
+
+func (_c *MockGCPClientManager_CreateHMACKey_Call) Run(run func(projectID string, serviceAccountEmail string)) *MockGCPClientManager_CreateHMACKey_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_CreateHMACKey_Call) Return(accessID string, secret string, err error) *MockGCPClientManager_CreateHMACKey_Call {
+	_c.Call.Return(accessID, secret, err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_CreateHMACKey_Call) RunAndReturn(run func(projectID string, serviceAccountEmail string) (string, string, error)) *MockGCPClientManager_CreateHMACKey_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateInstance provides a mock function for the type MockGCPClientManager
 func (_mock *MockGCPClientManager) CreateInstance(projectID string, zone string, instance *computepb.Instance) error {
 	ret := _mock.Called(projectID, zone, instance)
@@ -1155,6 +1227,69 @@ func (_c *MockGCPClientManager_EnsureDNSRecordSets_Call) RunAndReturn(run func(p
 	return _c
 }
 
+// EnsureStorageBucket provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) EnsureStorageBucket(projectID string, bucketName string, location string) error {
+	ret := _mock.Called(projectID, bucketName, location)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EnsureStorageBucket")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, string) error); ok {
+		r0 = returnFunc(projectID, bucketName, location)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGCPClientManager_EnsureStorageBucket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EnsureStorageBucket'
+type MockGCPClientManager_EnsureStorageBucket_Call struct {
+	*mock.Call
+}
+
+// EnsureStorageBucket is a helper method to define mock.On call
+//   - projectID string
+//   - bucketName string
+//   - location string
+func (_e *MockGCPClientManager_Expecter) EnsureStorageBucket(projectID any, bucketName any, location any) *MockGCPClientManager_EnsureStorageBucket_Call {
+	return &MockGCPClientManager_EnsureStorageBucket_Call{Call: _e.mock.On("EnsureStorageBucket", projectID, bucketName, location)}
+}
+
+func (_c *MockGCPClientManager_EnsureStorageBucket_Call) Run(run func(projectID string, bucketName string, location string)) *MockGCPClientManager_EnsureStorageBucket_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_EnsureStorageBucket_Call) Return(err error) *MockGCPClientManager_EnsureStorageBucket_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_EnsureStorageBucket_Call) RunAndReturn(run func(projectID string, bucketName string, location string) error) *MockGCPClientManager_EnsureStorageBucket_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAddress provides a mock function for the type MockGCPClientManager
 func (_mock *MockGCPClientManager) GetAddress(projectID string, region string, addressName string) (*computepb.Address, error) {
 	ret := _mock.Called(projectID, region, addressName)
@@ -1752,141 +1887,6 @@ func (_c *MockGCPClientManager_UpdateProject_Call) Return(err error) *MockGCPCli
 }
 
 func (_c *MockGCPClientManager_UpdateProject_Call) RunAndReturn(run func(projectID string, labels map[string]string) error) *MockGCPClientManager_UpdateProject_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// EnsureStorageBucket provides a mock function for the type MockGCPClientManager
-func (_mock *MockGCPClientManager) EnsureStorageBucket(projectID string, bucketName string, location string) error {
-	ret := _mock.Called(projectID, bucketName, location)
-
-	if len(ret) == 0 {
-		panic("no return value specified for EnsureStorageBucket")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, string) error); ok {
-		r0 = returnFunc(projectID, bucketName, location)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockGCPClientManager_EnsureStorageBucket_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EnsureStorageBucket'
-type MockGCPClientManager_EnsureStorageBucket_Call struct {
-	*mock.Call
-}
-
-// EnsureStorageBucket is a helper method to define mock.On call
-//   - projectID string
-//   - bucketName string
-//   - location string
-func (_e *MockGCPClientManager_Expecter) EnsureStorageBucket(projectID any, bucketName any, location any) *MockGCPClientManager_EnsureStorageBucket_Call {
-	return &MockGCPClientManager_EnsureStorageBucket_Call{Call: _e.mock.On("EnsureStorageBucket", projectID, bucketName, location)}
-}
-
-func (_c *MockGCPClientManager_EnsureStorageBucket_Call) Run(run func(projectID string, bucketName string, location string)) *MockGCPClientManager_EnsureStorageBucket_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockGCPClientManager_EnsureStorageBucket_Call) Return(err error) *MockGCPClientManager_EnsureStorageBucket_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockGCPClientManager_EnsureStorageBucket_Call) RunAndReturn(run func(projectID string, bucketName string, location string) error) *MockGCPClientManager_EnsureStorageBucket_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// CreateHMACKey provides a mock function for the type MockGCPClientManager
-func (_mock *MockGCPClientManager) CreateHMACKey(projectID string, serviceAccountEmail string) (string, string, error) {
-	ret := _mock.Called(projectID, serviceAccountEmail)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CreateHMACKey")
-	}
-
-	var r0 string
-	var r1 string
-	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(string, string) (string, string, error)); ok {
-		return returnFunc(projectID, serviceAccountEmail)
-	}
-	if returnFunc, ok := ret.Get(0).(func(string, string) string); ok {
-		r0 = returnFunc(projectID, serviceAccountEmail)
-	} else {
-		r0 = ret.Get(0).(string)
-	}
-	if returnFunc, ok := ret.Get(1).(func(string, string) string); ok {
-		r1 = returnFunc(projectID, serviceAccountEmail)
-	} else {
-		r1 = ret.Get(1).(string)
-	}
-	if returnFunc, ok := ret.Get(2).(func(string, string) error); ok {
-		r2 = returnFunc(projectID, serviceAccountEmail)
-	} else {
-		r2 = ret.Error(2)
-	}
-	return r0, r1, r2
-}
-
-// MockGCPClientManager_CreateHMACKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateHMACKey'
-type MockGCPClientManager_CreateHMACKey_Call struct {
-	*mock.Call
-}
-
-// CreateHMACKey is a helper method to define mock.On call
-//   - projectID string
-//   - serviceAccountEmail string
-func (_e *MockGCPClientManager_Expecter) CreateHMACKey(projectID any, serviceAccountEmail any) *MockGCPClientManager_CreateHMACKey_Call {
-	return &MockGCPClientManager_CreateHMACKey_Call{Call: _e.mock.On("CreateHMACKey", projectID, serviceAccountEmail)}
-}
-
-func (_c *MockGCPClientManager_CreateHMACKey_Call) Run(run func(projectID string, serviceAccountEmail string)) *MockGCPClientManager_CreateHMACKey_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockGCPClientManager_CreateHMACKey_Call) Return(accessID string, secret string, err error) *MockGCPClientManager_CreateHMACKey_Call {
-	_c.Call.Return(accessID, secret, err)
-	return _c
-}
-
-func (_c *MockGCPClientManager_CreateHMACKey_Call) RunAndReturn(run func(projectID string, serviceAccountEmail string) (string, string, error)) *MockGCPClientManager_CreateHMACKey_Call {
 	_c.Call.Return(run)
 	return _c
 }
