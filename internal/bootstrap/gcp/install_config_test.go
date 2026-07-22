@@ -791,6 +791,23 @@ var _ = Describe("Installconfig & Secrets", func() {
 				})
 			})
 
+			Context("When ACME staging is enabled", func() {
+				BeforeEach(func() {
+					csEnv.ACMEStaging = true
+				})
+
+				It("uses the Let's Encrypt staging directory", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.Server).To(Equal("https://acme-staging-v02.api.letsencrypt.org/directory"))
+				})
+			})
+
 			Context("When OpenBao config is set", func() {
 				BeforeEach(func() {
 					csEnv.OpenBaoURI = "https://openbao.example.com"

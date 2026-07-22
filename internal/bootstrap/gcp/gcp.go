@@ -139,6 +139,7 @@ type CodesphereEnvironment struct {
 
 	// ACME Issuer
 	GoogleACMEIssuer bool `json:"google_acme_issuer,omitempty"`
+	ACMEStaging      bool `json:"acme_staging,omitempty"`
 
 	// OpenBao
 	OpenBaoURI      string `json:"-"`
@@ -405,6 +406,10 @@ func (b *GCPBootstrapper) createTestUser() error {
 	return nil
 }
 func (b *GCPBootstrapper) ValidateInput() error {
+	if b.Env.GoogleACMEIssuer && b.Env.ACMEStaging {
+		return fmt.Errorf("acme-staging cannot be combined with google-acme-issuer")
+	}
+
 	err := b.validateInstallVersion()
 	if err != nil {
 		return err

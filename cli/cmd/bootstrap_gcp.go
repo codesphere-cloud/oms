@@ -121,6 +121,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.Int64Var(&bootstrapGcpCmd.CodesphereEnv.RootDiskSize, "root-disk-size", 50, "Instance root disk size in GB (default: 50)")
 
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.GoogleACMEIssuer, "google-acme-issuer", false, "Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.ACMEStaging, "acme-staging", false, "Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)")
 
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoURI, "openbao-uri", "", "URI for OpenBao (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")
