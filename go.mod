@@ -467,7 +467,7 @@ require (
 	github.com/ultraware/whitespace v0.2.0 // indirect
 	github.com/uudashr/gocognit v1.2.1 // indirect
 	github.com/uudashr/iface v1.5.0 // indirect
-	github.com/vektra/mockery/v3 v3.7.1 // indirect
+	github.com/vektra/mockery/v3 v3.7.2 // indirect
 	github.com/wagoodman/go-progress v0.0.0-20260303201901-10176f79b2c0 // indirect
 	github.com/whyrusleeping/cbor-gen v0.3.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
