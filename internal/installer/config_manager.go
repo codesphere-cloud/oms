@@ -30,6 +30,7 @@ type InstallConfigManager interface {
 	// Configuration management
 	LoadInstallConfigFromFile(configPath string) error
 	LoadVaultFromFile(vaultPath string) error
+	LoadVaultFromUnecryptedFile(vaultPath string) error
 	ValidateInstallConfig() []string
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
@@ -84,8 +85,21 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 	return nil
 }
 
+// LoadVaultFromFile loads the vault content from an encrypted file into the installConfig
+// Returns an error if age key file has not been set as environment variable SOPS_AGE_KEY_FILE
 func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
 	vault, err := vault.LoadVaultData(vaultPath, "")
+	if err != nil {
+		return err
+	}
+
+	g.Vault = vault
+	return nil
+}
+
+// LoadVaultFromUnecryptedFile loads the vault content from an unencrypted file into the installConfig
+func (g *InstallConfig) LoadVaultFromUnecryptedFile(vaultPath string) error {
+	vault, err := vault.LoadUnencryptedVaultData(vaultPath)
 	if err != nil {
 		return err
 	}

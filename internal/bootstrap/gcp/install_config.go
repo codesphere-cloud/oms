@@ -29,7 +29,7 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 
 	if b.fw.Exists(b.Env.InstallConfigPath) {
 		if err := b.loadVaultForConfigTemplating(); err != nil {
-			return err
+			return fmt.Errorf("failed to load vault templating: %w", err)
 		}
 
 		err := b.icg.LoadInstallConfigFromFile(b.Env.InstallConfigPath)
@@ -55,8 +55,9 @@ func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
 		return nil
 	}
 
-	if err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath); err != nil {
-		return fmt.Errorf("failed to load vault file for config templating: %w", err)
+	// during bootstrapping, the vault is not yet encrpyted
+	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
 
 	return nil
@@ -565,7 +566,7 @@ func (b *GCPBootstrapper) EnsureAgeKey() error {
 
 func (b *GCPBootstrapper) EnsureSecrets() error {
 	if b.fw.Exists(b.Env.SecretsFilePath) {
-		err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath)
+		err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath)
 		if err != nil {
 			return fmt.Errorf("failed to load vault file: %w", err)
 		}

@@ -6,13 +6,16 @@ package installer_test
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 const testKubeConfig = `apiVersion: v1
@@ -33,13 +36,29 @@ users:
     token: test-token
 `
 
-// writeVaultFile marshals the vault to dir/prod.vault.yaml and returns the path.
-func writeVaultFile(dir string, vault *files.InstallVault) string {
-	vaultYAML, err := vault.Marshal()
+// writeVaultFile SOPS-encrypts vault with a freshly generated age key and writes
+// it to dir/prod.vault.yaml, returning the vault path and the age key path
+// needed to decrypt it. Skips the test if sops/age-keygen are unavailable.
+func writeVaultFile(dir string, installVault *files.InstallVault) (vaultPath, ageKeyPath string) {
+	if !sopsAndAgeAvailable() {
+		Skip("sops and age-keygen not available")
+	}
+
+	vaultYAML, err := installVault.Marshal()
 	Expect(err).ToNot(HaveOccurred())
-	vaultPath := filepath.Join(dir, "prod.vault.yaml")
-	Expect(os.WriteFile(vaultPath, vaultYAML, 0600)).To(Succeed())
-	return vaultPath
+
+	plaintextPath := filepath.Join(dir, "prod.vault.plain.yaml")
+	Expect(os.WriteFile(plaintextPath, vaultYAML, 0600)).To(Succeed())
+
+	ageKeyPath = filepath.Join(dir, "age_key.txt")
+	Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
+	recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
+	Expect(err).ToNot(HaveOccurred())
+
+	vaultPath = filepath.Join(dir, "prod.vault.yaml")
+	Expect(vault.EncryptFileWithSOPS(plaintextPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
+
+	return vaultPath, ageKeyPath
 }
 
 func vaultWithKubeConfig() *files.InstallVault {
@@ -89,9 +108,9 @@ var _ = Describe("ResolveVaultPath", func() {
 
 var _ = Describe("VaultAndRESTConfig", func() {
 	It("loads the vault and builds a REST config from the kubeconfig secret", func() {
-		vaultPath := writeVaultFile(GinkgoT().TempDir(), vaultWithKubeConfig())
+		vaultPath, ageKeyPath := writeVaultFile(GinkgoT().TempDir(), vaultWithKubeConfig())
 
-		vault, restConfig, err := installer.VaultAndRESTConfig(vaultPath, "", files.RootConfig{})
+		vault, restConfig, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, files.RootConfig{})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(vault).ToNot(BeNil())
 		Expect(vault.GetSecret(files.SecretKubeConfig)).ToNot(BeNil())
@@ -102,9 +121,9 @@ var _ = Describe("VaultAndRESTConfig", func() {
 
 	It("resolves the vault path via the config secrets baseDir", func() {
 		secretsDir := GinkgoT().TempDir()
-		writeVaultFile(secretsDir, vaultWithKubeConfig())
+		_, ageKeyPath := writeVaultFile(secretsDir, vaultWithKubeConfig())
 
-		vault, restConfig, err := installer.VaultAndRESTConfig("", "", files.RootConfig{
+		vault, restConfig, err := installer.VaultAndRESTConfig("", ageKeyPath, files.RootConfig{
 			Secrets: files.SecretsConfig{BaseDir: secretsDir},
 		})
 		Expect(err).ToNot(HaveOccurred())
@@ -125,7 +144,7 @@ var _ = Describe("VaultAndRESTConfig", func() {
 	})
 
 	It("fails when the vault does not contain a kubeconfig secret", func() {
-		vaultPath := writeVaultFile(GinkgoT().TempDir(), &files.InstallVault{
+		vaultPath, ageKeyPath := writeVaultFile(GinkgoT().TempDir(), &files.InstallVault{
 			Secrets: []files.SecretEntry{
 				{
 					Name:   files.SecretRegistryPassword,
@@ -134,12 +153,12 @@ var _ = Describe("VaultAndRESTConfig", func() {
 			},
 		})
 
-		_, _, err := installer.VaultAndRESTConfig(vaultPath, "", files.RootConfig{})
+		_, _, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, files.RootConfig{})
 		Expect(err).To(MatchError(ContainSubstring("kubeconfig not found in vault")))
 	})
 
 	It("fails when the kubeconfig secret content is empty", func() {
-		vaultPath := writeVaultFile(GinkgoT().TempDir(), &files.InstallVault{
+		vaultPath, ageKeyPath := writeVaultFile(GinkgoT().TempDir(), &files.InstallVault{
 			Secrets: []files.SecretEntry{
 				{
 					Name: files.SecretKubeConfig,
@@ -148,12 +167,12 @@ var _ = Describe("VaultAndRESTConfig", func() {
 			},
 		})
 
-		_, _, err := installer.VaultAndRESTConfig(vaultPath, "", files.RootConfig{})
+		_, _, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, files.RootConfig{})
 		Expect(err).To(MatchError(ContainSubstring("kubeconfig not found in vault")))
 	})
 
 	It("fails when the kubeconfig content is not a valid kubeconfig", func() {
-		vaultPath := writeVaultFile(GinkgoT().TempDir(), &files.InstallVault{
+		vaultPath, ageKeyPath := writeVaultFile(GinkgoT().TempDir(), &files.InstallVault{
 			Secrets: []files.SecretEntry{
 				{
 					Name: files.SecretKubeConfig,
@@ -162,7 +181,7 @@ var _ = Describe("VaultAndRESTConfig", func() {
 			},
 		})
 
-		_, _, err := installer.VaultAndRESTConfig(vaultPath, "", files.RootConfig{})
+		_, _, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, files.RootConfig{})
 		Expect(err).To(MatchError(ContainSubstring("failed to load kubernetes config from vault")))
 	})
 })

@@ -5,20 +5,27 @@ package codesphere
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("argoCDAndAppsInstall.loadVaultData", func() {
 	It("falls back to config secrets.baseDir when --vault is not set", func() {
+		if !installCodesphereSopsAndAgeAvailable() {
+			Skip("sops and age-keygen not available")
+		}
+
 		tmpDir := GinkgoT().TempDir()
 		secretsDir := filepath.Join(tmpDir, "secrets")
 		Expect(os.MkdirAll(secretsDir, 0700)).To(Succeed())
 
-		vault := &files.InstallVault{
+		installVault := &files.InstallVault{
 			Secrets: []files.SecretEntry{
 				{
 					Name: files.SecretRegistryPassword,
@@ -51,12 +58,23 @@ users:
 				},
 			},
 		}
-		vaultYAML, err := vault.Marshal()
+		vaultYAML, err := installVault.Marshal()
 		Expect(err).ToNot(HaveOccurred())
-		Expect(os.WriteFile(filepath.Join(secretsDir, "prod.vault.yaml"), vaultYAML, 0600)).To(Succeed())
+		plaintextVaultPath := filepath.Join(secretsDir, "prod.vault.plain.yaml")
+		Expect(os.WriteFile(plaintextVaultPath, vaultYAML, 0600)).To(Succeed())
+
+		ageKeyPath := filepath.Join(tmpDir, "age_key.txt")
+		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
+		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
+		Expect(err).ToNot(HaveOccurred())
+
+		vaultPath := filepath.Join(secretsDir, "prod.vault.yaml")
+		Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 		install := &argoCDAndAppsInstall{
-			opts: &InstallCodesphereOpts{},
+			opts: &InstallCodesphereOpts{
+				PrivKey: ageKeyPath,
+			},
 			config: files.RootConfig{
 				Secrets: files.SecretsConfig{
 					BaseDir: secretsDir,
