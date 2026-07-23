@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
@@ -216,7 +217,7 @@ codesphere:
 
 	Context("valid configuration", func() {
 		It("validates successfully", func() {
-			if !sopsAndAgeAvailableForUpdateInstallConfig() {
+			if !testutil.SopsAndAgeAvailable() {
 				Skip("sops and age-keygen not available")
 			}
 

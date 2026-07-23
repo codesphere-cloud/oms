@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd_test
+package k0s_test
 
 import (
 	"os"
@@ -14,7 +14,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v3"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
+	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
@@ -30,8 +31,8 @@ func execCmd(name string, args ...string) ([]byte, error) {
 
 var _ = Describe("InstallK0sCmd", func() {
 	var (
-		c              cmd.InstallK0sCmd
-		opts           *cmd.InstallK0sOpts
+		c              k0s.InstallK0sCmd
+		opts           *k0s.InstallK0sOpts
 		globalOpts     *util.GlobalOptions
 		mockEnv        *env.MockEnv
 		mockFileWriter *intutil.MockFileIO
@@ -41,14 +42,14 @@ var _ = Describe("InstallK0sCmd", func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		mockFileWriter = intutil.NewMockFileIO(GinkgoT())
 		globalOpts = &util.GlobalOptions{}
-		opts = &cmd.InstallK0sOpts{
+		opts = &k0s.InstallK0sOpts{
 			GlobalOptions: globalOpts,
 			Version:       "",
 			Package:       "",
 			InstallConfig: "",
 			Force:         false,
 		}
-		c = cmd.InstallK0sCmd{
+		c = k0s.InstallK0sCmd{
 			Opts:       *opts,
 			Env:        mockEnv,
 			FileWriter: mockFileWriter,
@@ -384,7 +385,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			})
 
 			It("re-encrypts vault after saving kubeconfig when vault was SOPS-encrypted", func() {
-				if !sopsAndAgeAvailable() {
+				if !testutil.SopsAndAgeAvailable() {
 					Skip("sops and age-keygen not available")
 				}
 
@@ -451,7 +452,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			})
 
 			It("leaves the vault untouched when vault decryption fails with invalid key", func() {
-				if !sopsAndAgeAvailable() {
+				if !testutil.SopsAndAgeAvailable() {
 					Skip("sops and age-keygen not available")
 				}
 
@@ -521,7 +522,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			})
 
 			It("leaves the vault untouched when encryption of the new vault fails", func() {
-				if !sopsAndAgeAvailable() {
+				if !testutil.SopsAndAgeAvailable() {
 					Skip("sops and age-keygen not available")
 				}
 

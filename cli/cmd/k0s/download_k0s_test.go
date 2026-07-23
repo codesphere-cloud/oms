@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd_test
+package k0s_test
 
 import (
 	"errors"
@@ -9,17 +9,17 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
-var _ = Describe("DownloadK0sCmd", func() {
+var _ = Describe("DownloadK0sk0s", func() {
 	var (
-		c              cmd.DownloadK0sCmd
-		opts           *cmd.DownloadK0sOpts
+		c              k0s.DownloadK0sCmd
+		opts           *k0s.DownloadK0sOpts
 		globalOpts     *util.GlobalOptions
 		mockEnv        *env.MockEnv
 		mockFileWriter *intutil.MockFileIO
@@ -29,13 +29,13 @@ var _ = Describe("DownloadK0sCmd", func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		mockFileWriter = intutil.NewMockFileIO(GinkgoT())
 		globalOpts = &util.GlobalOptions{}
-		opts = &cmd.DownloadK0sOpts{
+		opts = &k0s.DownloadK0sOpts{
 			GlobalOptions: globalOpts,
 			Version:       "",
 			Force:         false,
 			Quiet:         false,
 		}
-		c = cmd.DownloadK0sCmd{
+		c = k0s.DownloadK0sCmd{
 			Opts:       *opts,
 			Env:        mockEnv,
 			FileWriter: mockFileWriter,

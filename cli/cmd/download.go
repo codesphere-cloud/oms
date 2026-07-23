@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
@@ -26,5 +27,5 @@ func AddDownloadCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(rootCmd, download.cmd)
 
 	AddDownloadPackageCmd(download.cmd, opts)
-	AddDownloadK0sCmd(download.cmd, opts)
+	k0s.AddDownloadCmd(download.cmd, opts)
 }
