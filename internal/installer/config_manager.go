@@ -176,6 +176,15 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		}
 	}
 
+	if ob := g.Config.Codesphere.OpenfgaBackups; ob != nil && ob.Enabled {
+		if ob.DestinationPath == "" {
+			errors = append(errors, "openfga backups destinationPath is required when openfgaBackups is enabled")
+		}
+		if ob.EndpointURL == "" {
+			errors = append(errors, "openfga backups endpointURL is required when openfgaBackups is enabled")
+		}
+	}
+
 	return errors
 }
 
