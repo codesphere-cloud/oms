@@ -16,7 +16,7 @@ oms beta bootstrap-local [flags]
 ### Options
 
 ```
-      --argocd                       After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version
+      --argocd                       After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version (default true)
       --base-domain string           Base domain for Codesphere (default "cs.local")
       --feature-flags stringArray    Feature flags to enable in Codesphere installation (optional)
   -h, --help                         help for bootstrap-local
