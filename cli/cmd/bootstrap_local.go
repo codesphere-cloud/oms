@@ -75,7 +75,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash (required when install-version is set)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallLocal, "install-local", "", "Path to a local installer package (tar.gz or unpacked directory)")
 	// Registry
-	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (optional)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username")
 
 	// Codesphere Environment
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.BaseDomain, "base-domain", "cs.local", "Base domain for Codesphere")

@@ -17,6 +17,11 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+func sopsAndAgeAvailable() bool {
+	return exec.Command("sops", "--version").Run() == nil &&
+		exec.Command("age-keygen", "--version").Run() == nil
+}
+
 type argoCDInstallerStub struct {
 	called bool
 }
@@ -40,6 +45,10 @@ var _ = Describe("AppInstaller", func() {
 
 var _ = Describe("VaultAndRESTConfig", func() {
 	It("falls back to config secrets.baseDir when the vault path is not set", func() {
+		if !sopsAndAgeAvailable() {
+			Skip("sops and age-keygen not available")
+		}
+
 		tmpDir := GinkgoT().TempDir()
 		secretsDir := filepath.Join(tmpDir, "secrets")
 		Expect(os.MkdirAll(secretsDir, 0700)).To(Succeed())

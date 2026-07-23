@@ -16,7 +16,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
@@ -671,17 +670,6 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	}
 	if err := vault.EncryptFileWithSOPS(b.Env.SecretsFilePath, filepath.Join(b.Env.InstallConfig.Secrets.BaseDir, "prod.vault.yaml"), b.ageRecipient); err != nil {
 		return fmt.Errorf("failed to encrypt vault file: %w", err)
-	}
-
-	if !b.Env.UseArgoCD {
-		// The ArgoCD-and-apps installer owns this sync when that integration is enabled.
-		if err := secrets.EnsureServiceAccountTokens(b.icg.GetVault()); err != nil {
-			return fmt.Errorf("failed to ensure service account tokens: %w", err)
-		}
-		creator := vault.NewVaultSecretCreator(b.kubeClient)
-		if err := creator.CreateSecretFromVault(b.ctx, b.icg.GetVault(), vault.VaultSecretNamespace, vault.VaultSecretName); err != nil {
-			return fmt.Errorf("failed to create vault secret: %w", err)
-		}
 	}
 
 	return nil
