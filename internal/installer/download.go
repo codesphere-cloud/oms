@@ -23,6 +23,10 @@ func downloadBinary(fw util.FileIO, http portal.Http, workdir, binaryName, downl
 		return "", fmt.Errorf("%s binary already exists at %s. Use --force to overwrite", binaryName, binaryPath)
 	}
 
+	return downloadBinaryToPath(fw, http, binaryPath, binaryName, downloadURL, quiet)
+}
+
+func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, binaryName, downloadURL string, quiet bool) (string, error) {
 	dstFile, err := fw.Create(binaryPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create %s binary file: %w", binaryName, err)

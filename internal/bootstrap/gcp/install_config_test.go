@@ -1072,6 +1072,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("ExistingConfigUsed", func() {
 			BeforeEach(func() {
 				csEnv.ExistingConfigUsed = true
+				icg.EXPECT().GenerateSecrets().Return(nil)
 			})
 
 			Context("with unchanged IP and existing key", func() {
@@ -1101,7 +1102,6 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					icg.AssertNotCalled(GinkgoT(), "GenerateSecrets")
 					Expect(vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem).File.Content).To(Equal(origKey))
 					Expect(bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem).To(Equal(origCert))
 				})

@@ -123,12 +123,26 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 		},
 	}
 
-	// Track added IPs to avoid duplicates
+	// A node may intentionally be listed as both a control plane and a worker.
+	// The TypeScript installer preserves that topology by installing k0s on the
+	// controller with --enable-worker and --no-taints. Keep the same behaviour
+	// here instead of silently turning overlapping nodes into controller-only
+	// nodes when deduplicating the host list.
+	workerIPs := make(map[string]bool, len(installConfig.Kubernetes.Workers))
+	for _, worker := range installConfig.Kubernetes.Workers {
+		workerIPs[worker.IPAddress] = true
+	}
+
+	// Track added IPs to avoid emitting the same host twice.
 	addedIPs := make(map[string]bool)
 
-	// Add controller-only nodes from control planes
+	// Add control-plane nodes, enabling their worker role when configured.
 	for _, cp := range installConfig.Kubernetes.ControlPlanes {
-		host := createK0sctlHost(cp, "controller", nil, sshKeyPath, k0sBinaryPath)
+		var installFlags []string
+		if workerIPs[cp.IPAddress] {
+			installFlags = []string{"--enable-worker", "--no-taints=true"}
+		}
+		host := createK0sctlHost(cp, "controller", installFlags, sshKeyPath, k0sBinaryPath)
 		k0sctlConfig.Spec.Hosts = append(k0sctlConfig.Spec.Hosts, host)
 		addedIPs[cp.IPAddress] = true
 	}

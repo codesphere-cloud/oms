@@ -65,6 +65,10 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *f
 		return err
 	}
 
+	if err := v.ensureNamespace(ctx, namespace); err != nil {
+		return err
+	}
+
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
@@ -82,6 +86,16 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *f
 	}
 
 	log.Printf("Successfully created secret '%s' in namespace '%s' with %d entries", secretName, namespace, len(secretData))
+	return nil
+}
+
+func (v *VaultSecretCreator) ensureNamespace(ctx context.Context, namespace string) error {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{Name: namespace},
+	}
+	if _, err := controllerutil.CreateOrUpdate(ctx, v.client, ns, func() error { return nil }); err != nil {
+		return fmt.Errorf("failed to ensure namespace %q: %w", namespace, err)
+	}
 	return nil
 }
 

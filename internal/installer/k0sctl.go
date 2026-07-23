@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -66,6 +67,24 @@ func (k *K0sctl) GetLatestVersion() (string, error) {
 }
 
 func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error) {
+	cacheDir, err := k.Env.GetOmsCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine cache directory: %w", err)
+	}
+
+	// An unpinned k0sctl download is used by `oms install k0s`. Reuse that
+	// cached binary on subsequent applies so the install command is idempotent.
+	// Explicit version requests retain the existing overwrite protection.
+	if version == "" && !force {
+		cachedPath := filepath.Join(cacheDir, "k0sctl")
+		if k.FileWriter.Exists(cachedPath) {
+			if !quiet {
+				log.Printf("Using cached k0sctl at %s", cachedPath)
+			}
+			return cachedPath, nil
+		}
+	}
+
 	if version == "" {
 		var err error
 		version, err = k.GetLatestVersion()
@@ -87,11 +106,6 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 
 	if !quiet {
 		log.Printf("Downloading k0sctl %s from %s", version, downloadURL)
-	}
-
-	cacheDir, err := k.Env.GetOmsCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to determine cache directory: %w", err)
 	}
 
 	path, err := downloadBinary(k.FileWriter, k.Http, cacheDir, "k0sctl", downloadURL, force, quiet)

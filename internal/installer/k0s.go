@@ -6,6 +6,7 @@ package installer
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -64,9 +65,35 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to determine cache directory: %w", err)
 	}
+	if err := k.FileWriter.MkdirAll(cacheDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create workdir: %w", err)
+	}
+
+	// The cache uses a stable filename because k0sctl expects a local binary
+	// path. Verify that binary before deciding whether it needs replacing.
+	// This keeps repeated installs idempotent without accidentally reusing a
+	// different k0s release.
+	cachePath := filepath.Join(cacheDir, "k0s")
+	if k.FileWriter.Exists(cachePath) && !force {
+		cachedVersion, versionErr := util.RunCommandWithOutput(cachePath, []string{"version"}, "")
+		if versionErr == nil && strings.TrimSpace(cachedVersion) == version {
+			if !quiet {
+				log.Printf("Using cached k0s %s at %s", version, cachePath)
+			}
+			return cachePath, nil
+		}
+
+		if !quiet {
+			if versionErr != nil {
+				log.Printf("Cached k0s version could not be determined; replacing it: %v", versionErr)
+			} else {
+				log.Printf("Cached k0s version %s does not match requested version %s; replacing it", strings.TrimSpace(cachedVersion), version)
+			}
+		}
+	}
 
 	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0s/releases/download/%s/k0s-%s-%s", version, version, k.Goarch)
-	path, err := downloadBinary(k.FileWriter, k.Http, cacheDir, "k0s", downloadURL, force, quiet)
+	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, "k0s", downloadURL, quiet)
 	if err != nil {
 		return "", err
 	}

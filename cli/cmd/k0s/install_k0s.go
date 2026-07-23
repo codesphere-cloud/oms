@@ -42,6 +42,8 @@ type InstallK0sOpts struct {
 	VaultPrivKey  string
 }
 
+const defaultK0sVersion = "v1.31.14+k0s.0"
+
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	hw := portal.NewHttpWrapper()
 	env := c.Env
@@ -66,7 +68,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 			- Deploy k0s to all nodes defined in the install-config using k0sctl`),
 			Example: util.FormatExamples("install k0s", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
-				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.30.0+k0s.0)"},
+				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.31.14+k0s.0)"},
 				{Cmd: "--k0sctl-version <version>", Desc: "Version of k0sctl to use (e.g., v0.17.4)"},
 				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from"},
 				{Cmd: "--ssh-key-path <path>", Desc: "SSH private key path for remote installation"},
@@ -78,7 +80,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
 	}
-	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to install")
+	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", defaultK0sVersion, "Version of k0s to install")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", "", "Version of k0sctl to use")
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file (required)")
