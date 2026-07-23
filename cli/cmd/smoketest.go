@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/codesphere"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
@@ -24,5 +25,5 @@ func AddSmoketestCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	}
 	util.AddCmd(rootCmd, smoketest.cmd)
 
-	AddSmoketestCodesphereCmd(smoketest.cmd, opts)
+	codesphere.AddSmoketestCmd(smoketest.cmd, opts)
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package apikey
 
 import (
 	"fmt"
@@ -36,7 +36,7 @@ func (c *RevokeAPIKeyCmd) Revoke(p portal.Portal) error {
 	return nil
 }
 
-func AddRevokeAPIKeyCmd(list *cobra.Command, opts *util.GlobalOptions) {
+func AddRevokeCmd(list *cobra.Command, opts *util.GlobalOptions) {
 	c := RevokeAPIKeyCmd{
 		cmd: &cobra.Command{
 			Use:   "api-key",

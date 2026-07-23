@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
@@ -23,5 +24,5 @@ func AddRevokeCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 		},
 	}
 	util.AddCmd(rootCmd, revoke.cmd)
-	AddRevokeAPIKeyCmd(revoke.cmd, opts)
+	apikey.AddRevokeCmd(revoke.cmd, opts)
 }
