@@ -67,6 +67,8 @@ type LocalBootstrapper struct {
 	ageRecipient string
 	// ageKeyPath is the filesystem path to the age private key file.
 	ageKeyPath string
+	// argoCDAndAppsInstall is reused for the ArgoCD, vault, and pc-apps stages.
+	argoCDAndAppsInstall *argocd.AppInstaller
 }
 
 type CodesphereEnvironment struct {
@@ -227,21 +229,35 @@ func (b *LocalBootstrapper) Bootstrap() error {
 	return nil
 }
 
-func (b *LocalBootstrapper) BootstrapArgoCD() error {
+func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*argocd.AppInstaller, error) {
 	// renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
-	install, err := argocd.NewInstaller(argocd.InstallerConfig{
+	argoCDInstall, err := argocd.NewInstaller(argocd.InstallerConfig{
 		Version:        "9.5.21",
 		OciPassword:    b.Env.RegistryPassword,
 		OciRegistryURL: strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://"),
 		FullInstall:    true,
+		ForceConflicts: true,
+		RESTConfig:     b.restConfig,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
+		return nil, fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 	}
-	if err := install.Install(); err != nil {
-		return fmt.Errorf("failed to install chart ArgoCD: %w", err)
+	return argocd.NewAppInstaller(argocd.AppInstallerConfig{
+		Config:     *b.Env.InstallConfig,
+		Vault:      b.icg.GetVault(),
+		RESTConfig: b.restConfig,
+		KubeClient: b.kubeClient,
+		Installer:  argoCDInstall,
+	}), nil
+}
+
+func (b *LocalBootstrapper) BootstrapArgoCD() error {
+	install, err := b.newArgoCDAndAppsInstall()
+	if err != nil {
+		return err
 	}
-	return nil
+	b.argoCDAndAppsInstall = install
+	return install.InstallArgoCD()
 }
 
 func (b *LocalBootstrapper) EnsureNamespaces() error {
@@ -641,11 +657,8 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	b.Env.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
 	b.Env.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
 
-	if !b.Env.ExistingConfigUsed {
-		err := b.icg.GenerateSecrets()
-		if err != nil {
-			return fmt.Errorf("failed to generate secrets: %w", err)
-		}
+	if err := b.icg.GenerateSecrets(); err != nil {
+		return fmt.Errorf("failed to generate secrets: %w", err)
 	}
 
 	if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
@@ -657,11 +670,6 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	}
 	if err := vault.EncryptFileWithSOPS(b.Env.SecretsFilePath, filepath.Join(b.Env.InstallConfig.Secrets.BaseDir, "prod.vault.yaml"), b.ageRecipient); err != nil {
 		return fmt.Errorf("failed to encrypt vault file: %w", err)
-	}
-
-	creator := vault.NewVaultSecretCreator(b.kubeClient)
-	if err := creator.CreateSecretFromVault(b.ctx, b.icg.GetVault(), vault.VaultSecretNamespace, vault.VaultSecretName); err != nil {
-		return fmt.Errorf("failed to create vault secret: %w", err)
 	}
 
 	return nil

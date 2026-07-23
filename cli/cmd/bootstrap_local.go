@@ -75,7 +75,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash (required when install-version is set)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallLocal, "install-local", "", "Path to a local installer package (tar.gz or unpacked directory)")
 	// Registry
-	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (optional)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username")
 
 	// Codesphere Environment
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.BaseDomain, "base-domain", "cs.local", "Base domain for Codesphere")
@@ -95,7 +95,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallConfigPath, "install-config", "", "Path to install config file (default: <install-dir>/config.yaml)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "", "Path to secrets file (default: <install-dir>/prod.vault.yaml)")
 	// ArgoCD integration
-	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.UseArgoCD, "argocd", false, "After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version")
+	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.UseArgoCD, "argocd", true, "After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDRegistryURL, "registry-url", "oci://ghcr.io/codesphere-cloud/charts", "OCI registry URL used for the ArgoCD helm pull secret (only relevant with --argocd)")
 	bootstrapLocalCmd.cmd.RunE = bootstrapLocalCmd.RunE
 

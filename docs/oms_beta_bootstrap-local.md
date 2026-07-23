@@ -16,7 +16,7 @@ oms beta bootstrap-local [flags]
 ### Options
 
 ```
-      --argocd                       After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version
+      --argocd                       After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version (default true)
       --base-domain string           Base domain for Codesphere (default "cs.local")
       --feature-flags stringArray    Feature flags to enable in Codesphere installation (optional)
   -h, --help                         help for bootstrap-local
@@ -31,7 +31,7 @@ oms beta bootstrap-local [flags]
       --preview-flags stringArray    Preview flags to enable in Codesphere installation (optional) (default [secret-management,sub-path-mount,workspace-ssh])
       --profile string               Profile to apply to the install config like resources (supported: dev, minimal, prod) (default "dev")
       --registry-url string          OCI registry URL used for the ArgoCD helm pull secret (only relevant with --argocd) (default "oci://ghcr.io/codesphere-cloud/charts")
-      --registry-user string         Custom Registry username (optional)
+      --registry-user string         Custom Registry username
       --secrets-file string          Path to secrets file (default: <install-dir>/prod.vault.yaml)
       --service-cidr string          Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
   -y, --yes                          Auto-approve the local bootstrapping warning prompt
