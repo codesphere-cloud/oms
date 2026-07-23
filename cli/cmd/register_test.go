@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
 )
 
@@ -130,7 +131,7 @@ var _ = Describe("RegisterCmd", func() {
 var _ = Describe("AddRegisterCmd", func() {
 	It("adds the register command to the parent", func() {
 		parent := &cobra.Command{}
-		opts := &cmd.GlobalOptions{}
+		opts := &util.GlobalOptions{}
 		cmd.AddRegisterCmd(parent, opts)
 		found := false
 		for _, c := range parent.Commands() {

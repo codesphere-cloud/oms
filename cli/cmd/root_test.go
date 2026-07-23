@@ -8,10 +8,10 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 )
 
-var _ = Describe("AddCmd", func() {
+var _ = Describe("util.AddCmd", func() {
 	It("inherits the parent Args validator when the child does not define one", func() {
 		parent := &cobra.Command{
 			Use:           "root",
@@ -23,7 +23,7 @@ var _ = Describe("AddCmd", func() {
 			Use:  "child",
 			RunE: func(_ *cobra.Command, _ []string) error { return nil },
 		}
-		cmd.AddCmd(parent, child)
+		util.AddCmd(parent, child)
 
 		parent.SetArgs([]string{"child", "extra"})
 		err := parent.Execute()
@@ -49,7 +49,7 @@ var _ = Describe("AddCmd", func() {
 				return nil
 			},
 		}
-		cmd.AddCmd(parent, child)
+		util.AddCmd(parent, child)
 
 		parent.SetArgs([]string{"child", "value"})
 		err := parent.Execute()

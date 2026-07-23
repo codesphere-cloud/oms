@@ -13,6 +13,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
@@ -206,7 +207,7 @@ codesphere:
 		})
 
 		opts = &UpdateInstallConfigOpts{
-			GlobalOptions: &GlobalOptions{},
+			GlobalOptions: &util.GlobalOptions{},
 			ConfigFile:    configFile.Name(),
 			VaultFile:     vaultFile.Name(),
 		}

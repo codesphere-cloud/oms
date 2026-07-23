@@ -9,9 +9,10 @@ import (
 	"os"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,7 @@ type BootstrapGcpRestartVMsCmd struct {
 }
 
 type BootstrapGcpRestartVMsOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	ProjectID string
 	Zone      string
 	Name      string
@@ -30,7 +31,7 @@ type BootstrapGcpRestartVMsOpts struct {
 // resolveProjectAndZone returns the project ID and zone from flags or the infra file.
 // If both flags are set they are used directly; if neither is set, the infra file is read.
 // Providing only one of --project-id / --zone is an error.
-func (c *BootstrapGcpRestartVMsCmd) resolveProjectAndZone(fw util.FileIO) (string, string, error) {
+func (c *BootstrapGcpRestartVMsCmd) resolveProjectAndZone(fw intutil.FileIO) (string, string, error) {
 	projectID := c.Opts.ProjectID
 	zone := c.Opts.Zone
 
@@ -58,7 +59,7 @@ func (c *BootstrapGcpRestartVMsCmd) resolveProjectAndZone(fw util.FileIO) (strin
 func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false)
-	fw := util.NewFilesystemWriter()
+	fw := intutil.NewFilesystemWriter()
 
 	projectID, zone, err := c.resolveProjectAndZone(fw)
 	if err != nil {
@@ -74,7 +75,7 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 
 	bs, err := gcp.NewGCPBootstrapper(
 		ctx,
-		nil, stlog, csEnv, nil, gcpClient, fw, nil, nil, util.NewTime(), nil,
+		nil, stlog, csEnv, nil, gcpClient, fw, nil, nil, intutil.NewTime(), nil,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create bootstrapper: %w", err)
@@ -97,7 +98,7 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 	return nil
 }
 
-func AddBootstrapGcpRestartVMsCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions) {
+func AddBootstrapGcpRestartVMsCmd(bootstrapGcp *cobra.Command, opts *util.GlobalOptions) {
 	restartVMs := BootstrapGcpRestartVMsCmd{
 		cmd: &cobra.Command{
 			Use:   "restart-vms",
@@ -107,7 +108,7 @@ func AddBootstrapGcpRestartVMsCmd(bootstrapGcp *cobra.Command, opts *GlobalOptio
 				By default, restarts all VMs defined in the infrastructure.
 				Use --name to restart a single VM.
 				Project ID and zone are read from the local infra file if available`),
-			Example: formatExamples("beta bootstrap-gcp restart-vms", []csio.Example{
+			Example: util.FormatExamples("beta bootstrap-gcp restart-vms", []csio.Example{
 				{Desc: "Restart all VMs using project info from the local infra file"},
 				{Cmd: "--name jumpbox", Desc: "Restart only the jumpbox VM"},
 				{Cmd: "--name k0s-1", Desc: "Restart a specific k0s node"},

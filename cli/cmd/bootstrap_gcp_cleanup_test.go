@@ -14,19 +14,20 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("BootstrapGcpCleanupCmd", func() {
 	var (
 		opts       *cmd.BootstrapGcpCleanupOpts
-		globalOpts *cmd.GlobalOptions
+		globalOpts *util.GlobalOptions
 	)
 
 	BeforeEach(func() {
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = &util.GlobalOptions{}
 		opts = &cmd.BootstrapGcpCleanupOpts{
 			GlobalOptions:  globalOpts,
 			ProjectID:      "",
@@ -142,7 +143,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 		Context("when created", func() {
 			It("should hold all required dependencies", func() {
 				mockGCPClient := gcp.NewMockGCPClientManager(GinkgoT())
-				mockFileIO := util.NewMockFileIO(GinkgoT())
+				mockFileIO := intutil.NewMockFileIO(GinkgoT())
 				stlog := bootstrap.NewStepLogger(false)
 				confirmReader := bytes.NewBufferString("test-project\n")
 
@@ -167,13 +168,13 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 		var (
 			cleanupCmd    *cmd.BootstrapGcpCleanupCmd
 			mockGCPClient *gcp.MockGCPClientManager
-			mockFileIO    *util.MockFileIO
+			mockFileIO    *intutil.MockFileIO
 			deps          *gcp.CleanupDeps
 		)
 
 		BeforeEach(func() {
 			mockGCPClient = gcp.NewMockGCPClientManager(GinkgoT())
-			mockFileIO = util.NewMockFileIO(GinkgoT())
+			mockFileIO = intutil.NewMockFileIO(GinkgoT())
 
 			cleanupCmd = &cmd.BootstrapGcpCleanupCmd{
 				Opts: &cmd.BootstrapGcpCleanupOpts{

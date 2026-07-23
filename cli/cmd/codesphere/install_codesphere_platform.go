@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package codesphere
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -68,7 +69,7 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 			Long: io.Long(`Install the Codesphere platform (Phase 3).
 			Runs step: codesphere.
 			Requires the infrastructure and dependencies phases to have completed successfully.`),
-			Example: formatExamples("install codesphere platform", []io.Example{
+			Example: util.FormatExamples("install codesphere platform", []io.Example{
 				{
 					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml",
 					Desc: "Install Codesphere platform only",
@@ -79,6 +80,6 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 		Env:  env.NewEnv(),
 	}
 
-	AddCmd(codesphere, platform.cmd)
+	util.AddCmd(codesphere, platform.cmd)
 	platform.cmd.RunE = platform.RunE
 }

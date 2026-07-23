@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
@@ -21,7 +21,7 @@ type InstallPCAppsCmd struct {
 }
 
 type InstallPCAppsOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Version        string
 	Namespace      string
 	ValuesFiles    []string
@@ -58,7 +58,7 @@ func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddPCAppsCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
+func AddPCAppsCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	pcApps := InstallPCAppsCmd{
 		Opts: InstallPCAppsOpts{
 			GlobalOptions: opts,
@@ -74,7 +74,7 @@ func AddPCAppsCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 			Registry credentials and chart URL are read automatically from the
 			Kubernetes secret "argocd-codesphere-oci-read" in the argocd namespace.
 			This secret is created by "oms beta install argocd --deploy-dc-config".`),
-		Example: formatExamples("beta install pc-apps", []packageio.Example{
+		Example: util.FormatExamples("beta install pc-apps", []packageio.Example{
 			{Cmd: "--version 1.0.0", Desc: "Install a specific version"},
 			{Cmd: "--version 1.0.0 -f base.yaml -f dc-overlay.yaml", Desc: "Install with custom values files"},
 			{Cmd: "--version 1.0.0 --namespace custom-ns", Desc: "Install into a custom namespace"},
@@ -89,5 +89,5 @@ func AddPCAppsCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 
 	util.MarkFlagRequired(pcApps.cmd, "version")
 
-	AddCmd(parentCmd, pcApps.cmd)
+	util.AddCmd(parentCmd, pcApps.cmd)
 }

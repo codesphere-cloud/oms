@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
@@ -26,7 +27,7 @@ type ExtendBaseimageCmd struct {
 }
 
 type ExtendBaseimageOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Package    string
 	Dockerfile string
 	Baseimage  string
@@ -50,7 +51,7 @@ func (c *ExtendBaseimageCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
+func AddExtendBaseimageCmd(extend *cobra.Command, opts *util.GlobalOptions) {
 	baseimage := ExtendBaseimageCmd{
 		cmd: &cobra.Command{
 			Use:   "baseimage",
@@ -69,7 +70,7 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *GlobalOptions) {
 	baseimage.cmd.Flags().StringVarP(&baseimage.Opts.Baseimage, "baseimage", "b", "workspace-agent-24.04", "Base image file name inside the package to extend (default: 'workspace-agent-24.04')")
 	baseimage.cmd.Flags().BoolVarP(&baseimage.Opts.Force, "force", "f", false, "Enforce package extraction")
 
-	AddCmd(extend, baseimage.cmd)
+	util.AddCmd(extend, baseimage.cmd)
 
 	baseimage.cmd.RunE = baseimage.RunE
 }

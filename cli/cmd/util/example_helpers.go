@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package util
 
 import (
 	"strings"
@@ -10,9 +10,9 @@ import (
 	"github.com/codesphere-cloud/oms/internal/version"
 )
 
-// formatExamples builds an Example string similar to io.FormatExampleCommands
+// FormatExamples builds an Example string similar to io.FormatExampleCommands
 // it prefixes commands with a stable binary name (e.g. "oms") instead of temporary go-build paths
-func formatExamples(cmdName string, examples []io.Example) string {
+func FormatExamples(cmdName string, examples []io.Example) string {
 	var b strings.Builder
 	for i, ex := range examples {
 		if ex.Desc != "" {

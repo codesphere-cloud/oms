@@ -9,9 +9,10 @@ import (
 	"os"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -21,7 +22,7 @@ type BootstrapGcpCleanupCmd struct {
 }
 
 type BootstrapGcpCleanupOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	ProjectID      string
 	Force          bool
 	SkipDNSCleanup bool
@@ -34,7 +35,7 @@ func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false)
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-	fw := util.NewFilesystemWriter()
+	fw := intutil.NewFilesystemWriter()
 
 	deps := &gcp.CleanupDeps{
 		GCPClient:     gcpClient,
@@ -88,13 +89,13 @@ func (c *BootstrapGcpCleanupCmd) ExecuteCleanup(deps *gcp.CleanupDeps) error {
 	return nil
 }
 
-func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions) {
+func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *util.GlobalOptions) {
 	cleanup := BootstrapGcpCleanupCmd{
 		cmd: &cobra.Command{
 			Use:   "cleanup",
 			Short: "Clean up GCP infrastructure created by bootstrap-gcp",
 			Long:  csio.Long(`Deletes a GCP project that was previously created using the bootstrap-gcp command.`),
-			Example: formatExamples("beta bootstrap-gcp cleanup", []csio.Example{
+			Example: util.FormatExamples("beta bootstrap-gcp cleanup", []csio.Example{
 				{Desc: "Clean up using project ID from the local infra file"},
 				{Cmd: "--project-id my-project-abc123", Desc: "Clean up a specific project"},
 				{Cmd: "--project-id my-project-abc123 --force", Desc: "Force cleanup without confirmation (skips OMS-managed check)"},
@@ -116,5 +117,5 @@ func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions)
 	flags.StringVar(&cleanup.Opts.DNSProjectID, "dns-project-id", "", "GCP Project ID for DNS zone (optional, will use infra file if not provided)")
 
 	cleanup.cmd.RunE = cleanup.RunE
-	AddCmd(bootstrapGcp, cleanup.cmd)
+	util.AddCmd(bootstrapGcp, cleanup.cmd)
 }

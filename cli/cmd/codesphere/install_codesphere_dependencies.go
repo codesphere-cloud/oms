@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package codesphere
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"runtime"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
@@ -203,7 +204,7 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 			Runs ArgoCD install, vault secret sync, and pc-apps deployment first, then steps: set-up-cluster, ms-backends.
 			Requires the infrastructure phase to have completed successfully.
 			Pass --skip-steps argocd or add argocd to operations.skip to skip the ArgoCD pre-step.`),
-			Example: formatExamples("install codesphere dependencies", []io.Example{
+			Example: util.FormatExamples("install codesphere dependencies", []io.Example{
 				{
 					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml",
 					Desc: "Install cluster dependencies (including ArgoCD)",
@@ -222,6 +223,6 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 		Env:  env.NewEnv(),
 	}
 
-	AddCmd(codesphere, deps.cmd)
+	util.AddCmd(codesphere, deps.cmd)
 	deps.cmd.RunE = deps.RunE
 }

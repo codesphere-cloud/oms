@@ -9,10 +9,10 @@ import (
 	"log"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
-	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ type BuildImagesCmd struct {
 }
 
 type BuildImagesOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Config string
 	Force  bool
 }
@@ -42,7 +42,7 @@ func (c *BuildImagesCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddBuildImagesCmd(build *cobra.Command, opts *GlobalOptions) {
+func AddBuildImagesCmd(build *cobra.Command, opts *util.GlobalOptions) {
 	buildImages := BuildImagesCmd{
 		cmd: &cobra.Command{
 			Use:   "images",
@@ -58,7 +58,7 @@ func AddBuildImagesCmd(build *cobra.Command, opts *GlobalOptions) {
 
 	util.MarkFlagRequired(buildImages.cmd, "config")
 
-	AddCmd(build, buildImages.cmd)
+	util.AddCmd(build, buildImages.cmd)
 
 	buildImages.cmd.RunE = buildImages.RunE
 }

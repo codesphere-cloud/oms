@@ -8,26 +8,14 @@ import (
 	"os"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/spf13/cobra"
 )
 
-type GlobalOptions struct {
-	OmsPortalApiKey string
-}
-
-// AddCmd adds a command, inheriting the parent's Args validator if not explicitly set.
-// Individual commands that need different argument rules can override this by setting their own Args validator.
-func AddCmd(parent *cobra.Command, cmd *cobra.Command) {
-	if cmd.Args == nil {
-		cmd.Args = parent.Args
-	}
-	parent.AddCommand(cmd)
-}
-
 // GetRootCmd adds all child commands to the root command and sets flags appropriately.
 func GetRootCmd() *cobra.Command {
-	opts := &GlobalOptions{}
+	opts := &util.GlobalOptions{}
 	rootCmd := &cobra.Command{
 		Use:   "oms",
 		Short: "Codesphere Operations Management System (OMS)",

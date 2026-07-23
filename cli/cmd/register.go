@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +27,7 @@ type RegisterCmd struct {
 }
 
 type RegisterOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Owner        string
 	Organization string
 	Role         string
@@ -47,7 +48,7 @@ func (c *RegisterCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddRegisterCmd(list *cobra.Command, opts *GlobalOptions) {
+func AddRegisterCmd(list *cobra.Command, opts *util.GlobalOptions) {
 	c := RegisterCmd{
 		cmd: &cobra.Command{
 			Use:   "register",
@@ -63,7 +64,7 @@ func AddRegisterCmd(list *cobra.Command, opts *GlobalOptions) {
 
 	c.cmd.RunE = c.RunE
 
-	AddCmd(list, c.cmd)
+	util.AddCmd(list, c.cmd)
 }
 
 func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
@@ -73,7 +74,7 @@ func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
 
 	var expiresAt time.Time
 	if c.Opts.ValidFor != "" {
-		validForDuration, err := util.GetDurationFromString(c.Opts.ValidFor)
+		validForDuration, err := intutil.GetDurationFromString(c.Opts.ValidFor)
 		if err != nil {
 			return nil, err
 		}

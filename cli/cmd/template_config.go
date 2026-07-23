@@ -8,9 +8,9 @@ import (
 	"os"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
-	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -20,7 +20,7 @@ type TemplateConfigCmd struct {
 }
 
 type TemplateConfigOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Config string
 	Vault  string
 	AgeKey string
@@ -43,7 +43,7 @@ func (c *TemplateConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func AddTemplateConfigCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
+func AddTemplateConfigCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	configCmd := &TemplateConfigCmd{
 		cmd: &cobra.Command{
 			Use:   "config",
@@ -65,7 +65,7 @@ Template syntax in config.yaml:
   caCert: "{{ secret "caCert" "file.content" }}"
 
 Secret names and selectors must match entries in the prod.vault.yaml file.`),
-			Example: formatExamples("template config", []io.Example{
+			Example: util.FormatExamples("template config", []io.Example{
 				{
 					Cmd:  "--config config.yaml --vault prod.vault.yaml --age-key age_key.txt",
 					Desc: "Render config.yaml with secrets from prod.vault.yaml",
@@ -84,7 +84,7 @@ Secret names and selectors must match entries in the prod.vault.yaml file.`),
 	util.MarkFlagRequired(configCmd.cmd, "vault")
 	util.MarkFlagRequired(configCmd.cmd, "age-key")
 
-	AddCmd(parentCmd, configCmd.cmd)
+	util.AddCmd(parentCmd, configCmd.cmd)
 
 	configCmd.cmd.RunE = configCmd.RunE
 }

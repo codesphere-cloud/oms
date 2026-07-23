@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +13,7 @@ type ListCmd struct {
 	cmd *cobra.Command
 }
 
-func AddListCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddListCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	list := ListCmd{
 		cmd: &cobra.Command{
 			Use:   "list",
@@ -21,7 +22,7 @@ func AddListCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 				eg. available Codesphere packages`),
 		},
 	}
-	AddCmd(rootCmd, list.cmd)
+	util.AddCmd(rootCmd, list.cmd)
 	AddListPackagesCmd(list.cmd, opts)
 	AddListAPIKeysCmd(list.cmd, opts)
 }
