@@ -432,11 +432,13 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 		if b.argoCDAndAppsInstall == nil {
 			return fmt.Errorf("ArgoCD and apps installer is not initialized")
 		}
-		if err := b.stlog.Substep("Sync vault secret", b.argoCDAndAppsInstall.SyncVaultSecret); err != nil {
+		if err := b.stlog.Substep("Sync vault secret", func() error {
+			return b.argoCDAndAppsInstall.SyncVaultSecret(b.ctx)
+		}); err != nil {
 			return err
 		}
 		if err := b.stlog.Substep("Install pc-apps", func() error {
-			return b.argoCDAndAppsInstall.InstallPCApps(filepath.Join(depsDir, "bom.json"))
+			return b.argoCDAndAppsInstall.InstallPCApps(b.ctx, filepath.Join(depsDir, "bom.json"))
 		}); err != nil {
 			return err
 		}

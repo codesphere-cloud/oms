@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer_test
+package argocd_test
 
 import (
 	"os"
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	. "github.com/onsi/ginkgo/v2"
@@ -25,11 +26,11 @@ func (s *argoCDInstallerStub) Install() error {
 	return nil
 }
 
-var _ = Describe("ArgoCDAndAppsInstall", func() {
+var _ = Describe("AppInstaller", func() {
 	It("uses the configured ArgoCD installer instance", func() {
 		argoCDInstall := &argoCDInstallerStub{}
-		install := installer.NewArgoCDAndAppsInstall(installer.ArgoCDAndAppsInstallConfig{
-			ArgoCDInstaller: argoCDInstall,
+		install := argocd.NewAppInstaller(argocd.AppInstallerConfig{
+			Installer: argoCDInstall,
 		})
 
 		Expect(install.InstallArgoCD()).To(Succeed())

@@ -69,7 +69,7 @@ type LocalBootstrapper struct {
 	// ageKeyPath is the filesystem path to the age private key file.
 	ageKeyPath string
 	// argoCDAndAppsInstall is reused for the ArgoCD, vault, and pc-apps stages.
-	argoCDAndAppsInstall *installer.ArgoCDAndAppsInstall
+	argoCDAndAppsInstall *argocd.AppInstaller
 }
 
 type CodesphereEnvironment struct {
@@ -230,7 +230,7 @@ func (b *LocalBootstrapper) Bootstrap() error {
 	return nil
 }
 
-func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*installer.ArgoCDAndAppsInstall, error) {
+func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*argocd.AppInstaller, error) {
 	// renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
 	argoCDInstall, err := argocd.NewInstaller(argocd.InstallerConfig{
 		Version:        "9.5.21",
@@ -243,13 +243,12 @@ func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*installer.ArgoCDAndAppsI
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 	}
-	return installer.NewArgoCDAndAppsInstall(installer.ArgoCDAndAppsInstallConfig{
-		Context:         b.ctx,
-		Config:          *b.Env.InstallConfig,
-		Vault:           b.icg.GetVault(),
-		RESTConfig:      b.restConfig,
-		KubeClient:      b.kubeClient,
-		ArgoCDInstaller: argoCDInstall,
+	return argocd.NewAppInstaller(argocd.AppInstallerConfig{
+		Config:     *b.Env.InstallConfig,
+		Vault:      b.icg.GetVault(),
+		RESTConfig: b.restConfig,
+		KubeClient: b.kubeClient,
+		Installer:  argoCDInstall,
 	}), nil
 }
 

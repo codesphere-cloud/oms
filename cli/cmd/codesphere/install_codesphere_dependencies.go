@@ -76,7 +76,7 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
 // before the main dependency steps.
 func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, stlog *bootstrap.StepLogger) error {
-	var install *installer.ArgoCDAndAppsInstall
+	var install *argocdinstaller.AppInstaller
 	if err := stlog.Substep("Load vault data", func() error {
 		installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, cfg)
 		if err != nil {
@@ -112,14 +112,13 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 		if err != nil {
 			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 		}
-		install = installer.NewArgoCDAndAppsInstall(installer.ArgoCDAndAppsInstallConfig{
-			Context:         context.Background(),
-			Config:          cfg,
-			Vault:           installVault,
-			RESTConfig:      restConfig,
-			KubeClient:      kubeClient,
-			ArgoCDInstaller: argoCDInstall,
-			PCAppsValues:    opts.PCAppsValues,
+		install = argocdinstaller.NewAppInstaller(argocdinstaller.AppInstallerConfig{
+			Config:       cfg,
+			Vault:        installVault,
+			RESTConfig:   restConfig,
+			KubeClient:   kubeClient,
+			Installer:    argoCDInstall,
+			PCAppsValues: opts.PCAppsValues,
 		})
 		return nil
 	}); err != nil {
@@ -128,11 +127,13 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 	if err := stlog.Substep("Install ArgoCD", install.InstallArgoCD); err != nil {
 		return err
 	}
-	if err := stlog.Substep("Sync vault secret", install.SyncVaultSecret); err != nil {
+	if err := stlog.Substep("Sync vault secret", func() error {
+		return install.SyncVaultSecret(context.Background())
+	}); err != nil {
 		return err
 	}
 	if err := stlog.Substep("Install pc-apps", func() error {
-		return install.InstallPCApps(pm.GetDependencyPath("bom.json"))
+		return install.InstallPCApps(context.Background(), pm.GetDependencyPath("bom.json"))
 	}); err != nil {
 		return err
 	}
