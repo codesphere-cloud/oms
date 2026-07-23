@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package codesphere
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func (c *SmoketestCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.RunSmoketest()
 }
 
-func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *util.GlobalOptions) {
+func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	var stepNames []string
 	for _, s := range availableSteps {
 		stepNames = append(stepNames, s.Name())

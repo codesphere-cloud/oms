@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd_test
+package apikey_test
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
 	"github.com/codesphere-cloud/oms/internal/portal"
 )
 
@@ -19,12 +19,12 @@ var _ = Describe("UpdateAPIKey", func() {
 
 	var (
 		mockPortal *portal.MockPortal
-		c          cmd.UpdateAPIKeyCmd
+		c          apikey.UpdateAPIKeyCmd
 	)
 
 	BeforeEach(func() {
 		mockPortal = portal.NewMockPortal(GinkgoT())
-		c = cmd.UpdateAPIKeyCmd{}
+		c = apikey.UpdateAPIKeyCmd{}
 	})
 
 	Describe("Run", func() {

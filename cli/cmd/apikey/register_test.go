@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd_test
+package apikey_test
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
 )
@@ -20,7 +20,7 @@ import (
 var _ = Describe("RegisterCmd", func() {
 	var (
 		mockPortal   *portal.MockPortal
-		c            cmd.RegisterCmd
+		c            apikey.RegisterCmd
 		validFor     string
 		owner        string
 		organization string
@@ -32,9 +32,9 @@ var _ = Describe("RegisterCmd", func() {
 		validFor = "10d"
 		owner = "test-owner"
 		organization = "test-org"
-		role = cmd.API_KEY_ROLE_ADMIN
-		c = cmd.RegisterCmd{
-			Opts: cmd.RegisterOpts{
+		role = apikey.API_KEY_ROLE_ADMIN
+		c = apikey.RegisterCmd{
+			Opts: apikey.RegisterOpts{
 				Owner:        owner,
 				Organization: organization,
 				Role:         role,
@@ -80,8 +80,8 @@ var _ = Describe("RegisterCmd", func() {
 
 	Context("when role is valid", func() {
 		It("accepts Admin role", func() {
-			c.Opts.Role = cmd.API_KEY_ROLE_ADMIN
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, cmd.API_KEY_ROLE_ADMIN, mock.Anything).Return(&portal.ApiKey{}, nil)
+			c.Opts.Role = apikey.API_KEY_ROLE_ADMIN
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, apikey.API_KEY_ROLE_ADMIN, mock.Anything).Return(&portal.ApiKey{}, nil)
 
 			ak, err := c.Register(mockPortal)
 			Expect(err).To(BeNil())
@@ -89,8 +89,8 @@ var _ = Describe("RegisterCmd", func() {
 		})
 
 		It("accepts Dev role", func() {
-			c.Opts.Role = cmd.API_KEY_ROLE_DEV
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, cmd.API_KEY_ROLE_DEV, mock.Anything).Return(&portal.ApiKey{}, nil)
+			c.Opts.Role = apikey.API_KEY_ROLE_DEV
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, apikey.API_KEY_ROLE_DEV, mock.Anything).Return(&portal.ApiKey{}, nil)
 
 			ak, err := c.Register(mockPortal)
 			Expect(err).To(BeNil())
@@ -98,8 +98,8 @@ var _ = Describe("RegisterCmd", func() {
 		})
 
 		It("accepts Ext role", func() {
-			c.Opts.Role = cmd.API_KEY_ROLE_EXT
-			mockPortal.EXPECT().RegisterAPIKey(owner, organization, cmd.API_KEY_ROLE_EXT, mock.Anything).Return(&portal.ApiKey{}, nil)
+			c.Opts.Role = apikey.API_KEY_ROLE_EXT
+			mockPortal.EXPECT().RegisterAPIKey(owner, organization, apikey.API_KEY_ROLE_EXT, mock.Anything).Return(&portal.ApiKey{}, nil)
 
 			ak, err := c.Register(mockPortal)
 			Expect(err).To(BeNil())
@@ -132,7 +132,7 @@ var _ = Describe("AddRegisterCmd", func() {
 	It("adds the register command to the parent", func() {
 		parent := &cobra.Command{}
 		opts := &util.GlobalOptions{}
-		cmd.AddRegisterCmd(parent, opts)
+		apikey.AddRegisterCmd(parent, opts)
 		found := false
 		for _, c := range parent.Commands() {
 			if c.Use == "register" {

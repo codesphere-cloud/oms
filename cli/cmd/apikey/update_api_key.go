@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package apikey
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ type UpdateAPIKeyOpts struct {
 	ValidFor string
 }
 
-func AddApiKeyUpdateCmd(parentCmd *cobra.Command) {
+func AddUpdateCmd(parentCmd *cobra.Command) {
 	cmdState := &UpdateAPIKeyCmd{
 		Opts: UpdateAPIKeyOpts{},
 	}

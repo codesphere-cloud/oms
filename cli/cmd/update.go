@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +24,7 @@ func AddUpdateCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	}
 
 	AddOmsUpdateCmd(updateCmd.cmd)
-	AddApiKeyUpdateCmd(updateCmd.cmd)
+	apikey.AddUpdateCmd(updateCmd.cmd)
 	AddUpdateDockerfileCmd(updateCmd.cmd, opts)
 	AddUpdateInstallConfigCmd(updateCmd.cmd, opts)
 

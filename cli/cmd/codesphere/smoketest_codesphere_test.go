@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd_test
+package codesphere_test
 
 import (
 	"fmt"
@@ -15,13 +15,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/codesphere"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
-	"github.com/codesphere-cloud/oms/internal/codesphere"
+	intcs "github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/codesphere/teststeps"
 )
 
-func mockFullTestRun(mockClient *codesphere.MockClient, teamId, planId, workspaceId int) {
+func mockFullTestRun(mockClient *intcs.MockClient, teamId, planId, workspaceId int) {
 	// Expect the rest of the steps to run with the fetched plan ID
 	mockClient.EXPECT().CreateWorkspace(
 		teamId,
@@ -75,8 +75,8 @@ func mockFullTestRun(mockClient *codesphere.MockClient, teamId, planId, workspac
 
 var _ = Describe("SmoketestCodesphereCmd", func() {
 	var (
-		mockClient  *codesphere.MockClient
-		c           cmd.SmoketestCodesphereCmd
+		mockClient  *intcs.MockClient
+		c           codesphere.SmoketestCodesphereCmd
 		opts        *teststeps.SmoketestCodesphereOpts
 		planId      string
 		teamId      string
@@ -94,7 +94,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 	JustBeforeEach(func() {
 		planIdInt, _ = strconv.Atoi(planId)
 		teamIdInt, _ = strconv.Atoi(teamId)
-		mockClient = codesphere.NewMockClient(GinkgoT())
+		mockClient = intcs.NewMockClient(GinkgoT())
 		opts = &teststeps.SmoketestCodesphereOpts{
 			BaseURL: "https://test.codesphere.com/api",
 			Token:   "test-token",
@@ -106,7 +106,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			Steps:   []string{},
 			Client:  mockClient,
 		}
-		c = cmd.SmoketestCodesphereCmd{
+		c = codesphere.SmoketestCodesphereCmd{
 			Opts: opts,
 		}
 	})
@@ -644,7 +644,7 @@ var _ = Describe("AddSmoketestCodesphereCmd", func() {
 	It("adds the smoketest codesphere command to the parent", func() {
 		parent := &cobra.Command{}
 		opts := &util.GlobalOptions{}
-		cmd.AddSmoketestCodesphereCmd(parent, opts)
+		codesphere.AddSmoketestCmd(parent, opts)
 		found := false
 		for _, c := range parent.Commands() {
 			if c.Use == "codesphere" {
