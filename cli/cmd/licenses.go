@@ -6,6 +6,7 @@ package cmd
 import (
 	"log"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/tmpl"
 	"github.com/spf13/cobra"
 )
@@ -34,6 +35,6 @@ func AddLicensesCmd(rootCmd *cobra.Command) {
 			Long:  `Print information about the OMS license and open source licenses of dependencies.`,
 		},
 	}
-	AddCmd(rootCmd, licenses.cmd)
+	util.AddCmd(rootCmd, licenses.cmd)
 	licenses.cmd.RunE = licenses.RunE
 }

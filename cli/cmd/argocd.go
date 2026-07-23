@@ -8,6 +8,7 @@ import (
 	"os"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -20,7 +21,7 @@ type InstallArgoCDCmd struct {
 }
 
 type InstallArgoCDOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Version        string
 	DatacenterId   string
 	RegistryURL    string
@@ -87,7 +88,7 @@ func resolveOCIPassword() (string, error) {
 	return string(pw), nil
 }
 
-func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
+func AddArgoCDCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	argocd := InstallArgoCDCmd{
 		cmd: &cobra.Command{
 			Use:   "argocd",
@@ -106,7 +107,7 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 				Environment variables:
 				  OMS_REGISTRY_PASSWORD  Password/token for the Helm OCI registry (required for --deploy-dc-config)
 				  OMS_GIT_PASSWORD       Password/token for git repo access (optional)`),
-			Example: formatExamples("beta install argocd", []packageio.Example{
+			Example: util.FormatExamples("beta install argocd", []packageio.Example{
 				{Cmd: "", Desc: "Install ArgoCD helm chart only"},
 				{Cmd: "--version 7.8.0", Desc: "Install a specific chart version"},
 				{Cmd: "--deploy-dc-config", Desc: "Install chart and apply Codesphere resources (prompts for OCI password)"},
@@ -123,5 +124,5 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	argocd.cmd.Flags().StringVar(&argocd.Opts.RepoURL, "repo", "", "Helm chart repository URL; supports HTTP (default: https://argoproj.github.io/argo-helm) and OCI (e.g. oci://ghcr.io/argoproj/argo-helm)")
 	argocd.cmd.RunE = argocd.RunE
 
-	AddCmd(parentCmd, argocd.cmd)
+	util.AddCmd(parentCmd, argocd.cmd)
 }

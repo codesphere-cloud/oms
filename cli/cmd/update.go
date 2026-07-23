@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +13,7 @@ type UpdateCmd struct {
 	cmd *cobra.Command
 }
 
-func AddUpdateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddUpdateCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	updateCmd := UpdateCmd{
 		cmd: &cobra.Command{
 			Use:   "update",
@@ -26,5 +27,5 @@ func AddUpdateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	AddUpdateDockerfileCmd(updateCmd.cmd, opts)
 	AddUpdateInstallConfigCmd(updateCmd.cmd, opts)
 
-	AddCmd(rootCmd, updateCmd.cmd)
+	util.AddCmd(rootCmd, updateCmd.cmd)
 }

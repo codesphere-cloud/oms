@@ -8,8 +8,9 @@ import (
 	"log"
 	"time"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +19,7 @@ type UpdateAPIKeyCmd struct {
 }
 
 type UpdateAPIKeyOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	APIKeyID string
 	ValidFor string
 }
@@ -45,11 +46,11 @@ func AddApiKeyUpdateCmd(parentCmd *cobra.Command) {
 	util.MarkFlagRequired(apiKeyCmd, "id")
 	util.MarkFlagRequired(apiKeyCmd, "valid-for")
 
-	AddCmd(parentCmd, apiKeyCmd)
+	util.AddCmd(parentCmd, apiKeyCmd)
 }
 
 func (c *UpdateAPIKeyCmd) UpdateAPIKey(p portal.Portal) error {
-	validForDuration, err := util.GetDurationFromString(c.Opts.ValidFor)
+	validForDuration, err := intutil.GetDurationFromString(c.Opts.ValidFor)
 	if err != nil {
 		return err
 	}

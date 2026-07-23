@@ -9,20 +9,21 @@ import (
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
 type InitInstallConfigCmd struct {
 	cmd        *cobra.Command
 	Opts       *InitInstallConfigOpts
-	FileWriter util.FileIO
+	FileWriter intutil.FileIO
 }
 
 type InitInstallConfigOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 
 	ConfigFile string
 	VaultFile  string
@@ -104,7 +105,7 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.InitInstallConfig(icg)
 }
 
-func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
+func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c := InitInstallConfigCmd{
 		cmd: &cobra.Command{
 			Use:   "install-config",
@@ -127,7 +128,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 			- production: HA multi-node setup
 			- minimal: Minimal testing setup
 			`),
-			Example: formatExamples("init install-config", []csio.Example{
+			Example: util.FormatExamples("init install-config", []csio.Example{
 				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
 				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
 				{Cmd: "--profile production -c config.yaml --vault prod.vault.yaml", Desc: "Use production profile"},
@@ -136,7 +137,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 			}),
 		},
 		Opts:       &InitInstallConfigOpts{GlobalOptions: opts},
-		FileWriter: util.NewFilesystemWriter(),
+		FileWriter: intutil.NewFilesystemWriter(),
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
@@ -194,7 +195,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(c.cmd, "vault")
 
 	c.cmd.RunE = c.RunE
-	AddCmd(init, c.cmd)
+	util.AddCmd(init, c.cmd)
 }
 
 func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {

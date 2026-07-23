@@ -9,10 +9,10 @@ import (
 	"log"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
-	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ type BuildImageCmd struct {
 }
 
 type BuildImageOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Dockerfile string
 	Package    string
 	Registry   string
@@ -38,13 +38,13 @@ func (c *BuildImageCmd) RunE(cmd *cobra.Command, args []string) error {
 	return c.BuildImage(pm, im)
 }
 
-func AddBuildImageCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
+func AddBuildImageCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	imageCmd := &BuildImageCmd{
 		cmd: &cobra.Command{
 			Use:   "image",
 			Short: "Build and push Docker image using Dockerfile and Codesphere package version",
 			Long:  `Build a Docker image from a Dockerfile and push it to a registry, tagged with the Codesphere version from the package.`,
-			Example: formatExamples("build image", []io.Example{
+			Example: util.FormatExamples("build image", []io.Example{
 				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz --registry my-registry.com/my-image", Desc: "Build image for Codesphere version 1.68.0 and push to specified registry"},
 			}),
 			Args: cobra.ExactArgs(0),
@@ -62,7 +62,7 @@ func AddBuildImageCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(imageCmd.cmd, "package")
 	util.MarkFlagRequired(imageCmd.cmd, "registry")
 
-	AddCmd(parentCmd, imageCmd.cmd)
+	util.AddCmd(parentCmd, imageCmd.cmd)
 
 	imageCmd.cmd.RunE = imageCmd.RunE
 }

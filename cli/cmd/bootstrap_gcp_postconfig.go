@@ -8,9 +8,10 @@ import (
 	"log"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +23,7 @@ type BootstrapGcpPostconfigCmd struct {
 }
 
 type BootstrapGcpPostconfigOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	InstallConfigPath string
 	PrivateKeyPath    string
 }
@@ -31,7 +32,7 @@ func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, args []string) error 
 	log.Printf("running post-configuration steps...")
 
 	icg := installer.NewInstallConfigManager()
-	fw := util.NewFilesystemWriter()
+	fw := intutil.NewFilesystemWriter()
 
 	infraFilePath := gcp.GetInfraFilePath()
 	codesphereEnv, exists, err := gcp.LoadInfraFile(fw, infraFilePath)
@@ -51,7 +52,7 @@ func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, args []string) error 
 	return fmt.Errorf("not implemented: run config script on k0s-1 node to install GCP CCM")
 }
 
-func AddBootstrapGcpPostconfigCmd(bootstrapGcp *cobra.Command, opts *GlobalOptions) {
+func AddBootstrapGcpPostconfigCmd(bootstrapGcp *cobra.Command, opts *util.GlobalOptions) {
 	postconfig := BootstrapGcpPostconfigCmd{
 		cmd: &cobra.Command{
 			Use:   "postconfig",
@@ -70,6 +71,6 @@ func AddBootstrapGcpPostconfigCmd(bootstrapGcp *cobra.Command, opts *GlobalOptio
 	flags.StringVar(&postconfig.Opts.InstallConfigPath, "install-config-path", "config.yaml", "Path to the installation configuration file")
 	flags.StringVar(&postconfig.Opts.PrivateKeyPath, "private-key-path", "", "Path to the GCP service account private key file (optional)")
 
-	AddCmd(bootstrapGcp, postconfig.cmd)
+	util.AddCmd(bootstrapGcp, postconfig.cmd)
 	postconfig.cmd.RunE = postconfig.RunE
 }

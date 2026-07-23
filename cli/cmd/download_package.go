@@ -10,19 +10,20 @@ import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 // DownloadPackageCmd represents the package command
 type DownloadPackageCmd struct {
 	cmd        *cobra.Command
 	Opts       DownloadPackageOpts
-	FileWriter util.FileIO
+	FileWriter intutil.FileIO
 }
 
 type DownloadPackageOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Version  string
 	Hash     string
 	Filename string
@@ -54,7 +55,7 @@ func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
+func AddDownloadPackageCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	pkg := DownloadPackageCmd{
 		cmd: &cobra.Command{
 			Use:   "package [VERSION]",
@@ -62,7 +63,7 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 			Long: io.Long(`Download a specific version of a Codesphere package
 				To list available packages, run oms list packages.`),
 			Args: cobra.ArbitraryArgs,
-			Example: formatExamples("download package", []io.Example{
+			Example: util.FormatExamples("download package", []io.Example{
 				{Cmd: "codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0", Desc: "Download Codesphere version 1.55.0"},
 				{Cmd: "--version codesphere-v1.55.0 --file installer-lite.tar.gz", Desc: "Download lite package of Codesphere version 1.55.0"},
@@ -82,14 +83,14 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *GlobalOptions) {
 				return nil
 			},
 		},
-		FileWriter: util.NewFilesystemWriter(),
+		FileWriter: intutil.NewFilesystemWriter(),
 	}
 
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Version, "version", "V", "", "Codesphere version to download")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Hash, "hash", "H", "", "Hash of the version to download if multiple builds exist for the same version")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer-lite.tar.gz", "Specify artifact to download")
 	pkg.cmd.Flags().BoolVarP(&pkg.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
-	AddCmd(download, pkg.cmd)
+	util.AddCmd(download, pkg.cmd)
 
 	pkg.cmd.RunE = pkg.RunE
 }
@@ -108,7 +109,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 			return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
 		}
 	}
-	defer util.CloseFileIgnoreError(out)
+	defer intutil.CloseFileIgnoreError(out)
 
 	// get already downloaded file size of fullFilename
 	fileSize := 0
@@ -126,7 +127,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	if err != nil {
 		return err
 	}
-	defer util.CloseFileIgnoreError(verifyFile)
+	defer intutil.CloseFileIgnoreError(verifyFile)
 
 	err = p.VerifyBuildArtifactDownload(verifyFile, download)
 	if err != nil {

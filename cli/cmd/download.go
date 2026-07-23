@@ -5,6 +5,8 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +15,7 @@ type DownloadCmd struct {
 	cmd *cobra.Command
 }
 
-func AddDownloadCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddDownloadCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	download := DownloadCmd{
 		cmd: &cobra.Command{
 			Use:   "download",
@@ -22,8 +24,8 @@ func AddDownloadCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 				e.g. available Codesphere packages`),
 		},
 	}
-	AddCmd(rootCmd, download.cmd)
+	util.AddCmd(rootCmd, download.cmd)
 
 	AddDownloadPackageCmd(download.cmd, opts)
-	AddDownloadK0sCmd(download.cmd, opts)
+	k0s.AddDownloadCmd(download.cmd, opts)
 }

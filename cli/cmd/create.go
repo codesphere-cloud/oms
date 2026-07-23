@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +14,7 @@ type CreateCmd struct {
 	cmd *cobra.Command
 }
 
-func AddCreateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddCreateCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	create := CreateCmd{
 		cmd: &cobra.Command{
 			Use:   "create",
@@ -21,7 +22,7 @@ func AddCreateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Long:  io.Long(`Create resources for Codesphere installations, such as test users for automated testing.`),
 		},
 	}
-	AddCmd(rootCmd, create.cmd)
+	util.AddCmd(rootCmd, create.cmd)
 
 	AddCreateTestUserCmd(create.cmd, opts)
 }

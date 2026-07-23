@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/codesphere/teststeps"
-	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +50,7 @@ func (c *SmoketestCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.RunSmoketest()
 }
 
-func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *GlobalOptions) {
+func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	var stepNames []string
 	for _, s := range availableSteps {
 		stepNames = append(stepNames, s.Name())
@@ -63,7 +63,7 @@ func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *GlobalOptions) {
 			Long: io.Long(`Run automated smoke tests for a Codesphere installation by creating a workspace,
 				setting environment variables, executing commands, syncing landscape, and running a pipeline stage.
 				The workspace is automatically deleted after the test completes.`),
-			Example: formatExamples("smoketest codesphere", []io.Example{
+			Example: util.FormatExamples("smoketest codesphere", []io.Example{
 				{
 					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN",
 					Desc: "Run smoke tests against a Codesphere installation",
@@ -110,7 +110,7 @@ func AddSmoketestCodesphereCmd(parent *cobra.Command, opts *GlobalOptions) {
 
 	c.cmd.RunE = c.RunE
 
-	AddCmd(parent, c.cmd)
+	util.AddCmd(parent, c.cmd)
 }
 
 func (c *SmoketestCodesphereCmd) RunSmoketest() (err error) {

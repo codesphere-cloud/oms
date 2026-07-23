@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -21,5 +22,5 @@ func AddUpgradeCmd(rootCmd *cobra.Command) {
 		},
 	}
 
-	AddCmd(rootCmd, upgrade.cmd)
+	util.AddCmd(rootCmd, upgrade.cmd)
 }

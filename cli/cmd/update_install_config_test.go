@@ -13,6 +13,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
@@ -40,7 +42,7 @@ var _ = Describe("UpdateInstallConfig", func() {
 	)
 
 	BeforeEach(func() {
-		if !sopsAndAgeAvailableForUpdateInstallConfig() {
+		if !testutil.SopsAndAgeAvailable() {
 			Skip("sops and age-keygen not available")
 		}
 
@@ -206,7 +208,7 @@ codesphere:
 		})
 
 		opts = &UpdateInstallConfigOpts{
-			GlobalOptions: &GlobalOptions{},
+			GlobalOptions: &util.GlobalOptions{},
 			ConfigFile:    configFile.Name(),
 			VaultFile:     vaultFile.Name(),
 		}
@@ -455,16 +457,6 @@ codesphere:
 		})
 	})
 })
-
-func sopsAndAgeAvailableForUpdateInstallConfig() bool {
-	if _, err := exec.LookPath("sops"); err != nil {
-		return false
-	}
-	if _, err := exec.LookPath("age-keygen"); err != nil {
-		return false
-	}
-	return true
-}
 
 var _ = Describe("SecretDependencyTracker", func() {
 	var tracker *SecretDependencyTracker

@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -18,7 +18,7 @@ type RevokeAPIKeyCmd struct {
 }
 
 type RevokeAPIKeyOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	ID string
 }
 
@@ -36,7 +36,7 @@ func (c *RevokeAPIKeyCmd) Revoke(p portal.Portal) error {
 	return nil
 }
 
-func AddRevokeAPIKeyCmd(list *cobra.Command, opts *GlobalOptions) {
+func AddRevokeAPIKeyCmd(list *cobra.Command, opts *util.GlobalOptions) {
 	c := RevokeAPIKeyCmd{
 		cmd: &cobra.Command{
 			Use:   "api-key",
@@ -51,5 +51,5 @@ func AddRevokeAPIKeyCmd(list *cobra.Command, opts *GlobalOptions) {
 
 	c.cmd.RunE = c.RunE
 
-	AddCmd(list, c.cmd)
+	util.AddCmd(list, c.cmd)
 }

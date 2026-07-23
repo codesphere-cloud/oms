@@ -232,10 +232,14 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
+	acmeServer := "https://acme-v02.api.letsencrypt.org/directory"
+	if b.Env.ACMEStaging {
+		acmeServer = "https://acme-staging-v02.api.letsencrypt.org/directory"
+	}
 	acmeConfig := &files.ACMEConfig{
 		Enabled: true,
 		Email:   "oms-testing@" + b.Env.BaseDomain,
-		Server:  "https://acme-v02.api.letsencrypt.org/directory",
+		Server:  acmeServer,
 	}
 	if b.Env.GoogleACMEIssuer {
 		keyID, b64MacKey, err := b.GCPClient.CreatePublicCAExternalAccountKey(b.Env.ProjectID)

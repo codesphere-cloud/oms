@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 
@@ -20,7 +21,7 @@ import (
 
 var _ = Describe("TemplateConfigCmd", func() {
 	It("renders config templates with secrets from a vault file", func() {
-		if !sopsAndAgeAvailable() {
+		if !testutil.SopsAndAgeAvailable() {
 			Skip("sops and age-keygen not available")
 		}
 
@@ -102,13 +103,3 @@ postgres:
 		Expect(configCmd.Flags().Lookup("age-key")).NotTo(BeNil())
 	})
 })
-
-func sopsAndAgeAvailable() bool {
-	if _, err := exec.LookPath("sops"); err != nil {
-		return false
-	}
-	if _, err := exec.LookPath("age-keygen"); err != nil {
-		return false
-	}
-	return true
-}

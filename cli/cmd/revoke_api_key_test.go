@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
 )
 
@@ -51,7 +52,7 @@ var _ = Describe("RevokeCmd", func() {
 var _ = Describe("AddRevokeAPIKeyCmd", func() {
 	It("adds the api-key command to the parent", func() {
 		parent := &cobra.Command{}
-		opts := &cmd.GlobalOptions{}
+		opts := &util.GlobalOptions{}
 		cmd.AddRevokeAPIKeyCmd(parent, opts)
 		found := false
 		for _, c := range parent.Commands() {

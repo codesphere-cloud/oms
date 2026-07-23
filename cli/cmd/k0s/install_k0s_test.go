@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd_test
+package k0s_test
 
 import (
 	"os"
@@ -14,12 +14,14 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v3"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
+	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 func execCmd(name string, args ...string) ([]byte, error) {
@@ -29,25 +31,25 @@ func execCmd(name string, args ...string) ([]byte, error) {
 
 var _ = Describe("InstallK0sCmd", func() {
 	var (
-		c              cmd.InstallK0sCmd
-		opts           *cmd.InstallK0sOpts
-		globalOpts     *cmd.GlobalOptions
+		c              k0s.InstallK0sCmd
+		opts           *k0s.InstallK0sOpts
+		globalOpts     *util.GlobalOptions
 		mockEnv        *env.MockEnv
-		mockFileWriter *util.MockFileIO
+		mockFileWriter *intutil.MockFileIO
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		mockFileWriter = util.NewMockFileIO(GinkgoT())
-		globalOpts = &cmd.GlobalOptions{}
-		opts = &cmd.InstallK0sOpts{
+		mockFileWriter = intutil.NewMockFileIO(GinkgoT())
+		globalOpts = &util.GlobalOptions{}
+		opts = &k0s.InstallK0sOpts{
 			GlobalOptions: globalOpts,
 			Version:       "",
 			Package:       "",
 			InstallConfig: "",
 			Force:         false,
 		}
-		c = cmd.InstallK0sCmd{
+		c = k0s.InstallK0sCmd{
 			Opts:       *opts,
 			Env:        mockEnv,
 			FileWriter: mockFileWriter,
@@ -249,10 +251,10 @@ var _ = Describe("InstallK0sCmd", func() {
 
 		Context("with --vault flag", func() {
 			BeforeEach(func() {
-				if !sopsAndAgeAvailable() {
+				if !testutil.SopsAndAgeAvailable() {
 					Skip("sops and age-keygen not available")
 				}
-				c.FileWriter = util.NewFilesystemWriter()
+				c.FileWriter = intutil.NewFilesystemWriter()
 			})
 
 			It("saves kubeconfig to a new vault", func() {
@@ -425,6 +427,12 @@ var _ = Describe("InstallK0sCmd", func() {
 			})
 
 			It("re-encrypts vault after saving kubeconfig when vault was SOPS-encrypted", func() {
+				if !testutil.SopsAndAgeAvailable() {
+					Skip("sops and age-keygen not available")
+				}
+
+				c.FileWriter = intutil.NewFilesystemWriter()
+
 				ageKeyPath := filepath.Join(tempDir, "age_key.txt")
 				out, err := execCmd("age-keygen", "-o", ageKeyPath)
 				Expect(err).NotTo(HaveOccurred(), string(out))
@@ -482,6 +490,12 @@ var _ = Describe("InstallK0sCmd", func() {
 			})
 
 			It("leaves the vault untouched when vault decryption fails with invalid key", func() {
+				if !testutil.SopsAndAgeAvailable() {
+					Skip("sops and age-keygen not available")
+				}
+
+				c.FileWriter = intutil.NewFilesystemWriter()
+
 				ageKeyPath := filepath.Join(tempDir, "age_key.txt")
 				out, err := execCmd("age-keygen", "-o", ageKeyPath)
 				Expect(err).NotTo(HaveOccurred(), string(out))
@@ -542,6 +556,10 @@ var _ = Describe("InstallK0sCmd", func() {
 			})
 
 			It("leaves the vault untouched when encryption of the new vault fails", func() {
+				if !testutil.SopsAndAgeAvailable() {
+					Skip("sops and age-keygen not available")
+				}
+
 				ageKeyPath := filepath.Join(tempDir, "age_key.txt")
 				out, err := execCmd("age-keygen", "-o", ageKeyPath)
 				Expect(err).NotTo(HaveOccurred(), string(out))
@@ -594,6 +612,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				}), mock.Anything, mock.Anything).Return(nil)
 				mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+				mockFileWriter.EXPECT().MkdirAll(mock.Anything, os.FileMode(0755)).Return(nil)
 
 				// Vault exists and is encrypted.
 				mockFileWriter.EXPECT().Exists(vaultPath).Return(true)

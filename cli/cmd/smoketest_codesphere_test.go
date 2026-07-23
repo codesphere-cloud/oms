@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/codesphere/teststeps"
 )
@@ -642,7 +643,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 var _ = Describe("AddSmoketestCodesphereCmd", func() {
 	It("adds the smoketest codesphere command to the parent", func() {
 		parent := &cobra.Command{}
-		opts := &cmd.GlobalOptions{}
+		opts := &util.GlobalOptions{}
 		cmd.AddSmoketestCodesphereCmd(parent, opts)
 		found := false
 		for _, c := range parent.Commands() {

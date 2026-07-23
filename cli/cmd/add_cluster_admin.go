@@ -7,8 +7,9 @@ import (
 	"fmt"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/clusteradmin"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -18,12 +19,12 @@ type AddClusterAdminCmd struct {
 }
 
 type AddClusterAdminOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	clusteradmin.Opts
 }
 
 func (c *AddClusterAdminCmd) RunE(_ *cobra.Command, _ []string) error {
-	clientset, _, err := util.NewClients()
+	clientset, _, err := intutil.NewClients()
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
@@ -31,7 +32,7 @@ func (c *AddClusterAdminCmd) RunE(_ *cobra.Command, _ []string) error {
 	return clusteradmin.AddClusterAdmin(c.cmd.Context(), clientset, c.Opts.Opts)
 }
 
-func AddAddClusterAdminCmd(parent *cobra.Command, opts *GlobalOptions) {
+func AddAddClusterAdminCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	c := AddClusterAdminCmd{
 		cmd: &cobra.Command{
 			Use:   "add-cluster-admin",
@@ -43,7 +44,7 @@ func AddAddClusterAdminCmd(parent *cobra.Command, opts *GlobalOptions) {
 
 				The target cluster is determined by the current kubeconfig context. Set the KUBECONFIG
 				environment variable to target a different kubeconfig.`),
-			Example: formatExamples("add-cluster-admin", []packageio.Example{
+			Example: util.FormatExamples("add-cluster-admin", []packageio.Example{
 				{Cmd: "--email niklas@codesphere.com", Desc: "Set the cluster admin email using the default secret and namespace"},
 				{Cmd: "--email admin@codesphere.com --namespace kube-system --secret-name cluster-admin-email", Desc: "Set the cluster admin email in a custom namespace"},
 			}),
@@ -59,5 +60,5 @@ func AddAddClusterAdminCmd(parent *cobra.Command, opts *GlobalOptions) {
 
 	util.MarkFlagRequired(c.cmd, "email")
 
-	AddCmd(parent, c.cmd)
+	util.AddCmd(parent, c.cmd)
 }

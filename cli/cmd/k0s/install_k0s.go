@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package k0s
 
 import (
 	"fmt"
@@ -12,12 +12,13 @@ import (
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 // InstallK0sCmd represents the k0s download command
@@ -25,11 +26,11 @@ type InstallK0sCmd struct {
 	cmd        *cobra.Command
 	Opts       InstallK0sOpts
 	Env        env.Env
-	FileWriter util.FileIO
+	FileWriter intutil.FileIO
 }
 
 type InstallK0sOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Version       string
 	K0sctlVersion string
 	Package       string
@@ -51,7 +52,7 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.InstallK0s(pm, k0s, k0sctl)
 }
 
-func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
+func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s := InstallK0sCmd{
 		cmd: &cobra.Command{
 			Use:   "k0s",
@@ -63,7 +64,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 			- Generate a k0s configuration from the install-config
 			- Generate a k0sctl configuration for cluster deployment
 			- Deploy k0s to all nodes defined in the install-config using k0sctl`),
-			Example: formatExamples("install k0s", []packageio.Example{
+			Example: util.FormatExamples("install k0s", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.30.0+k0s.0)"},
 				{Cmd: "--k0sctl-version <version>", Desc: "Version of k0sctl to use (e.g., v0.17.4)"},
@@ -75,7 +76,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 		},
 		Opts:       InstallK0sOpts{GlobalOptions: opts},
 		Env:        env.NewEnv(),
-		FileWriter: util.NewFilesystemWriter(),
+		FileWriter: intutil.NewFilesystemWriter(),
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to install")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", "", "Version of k0sctl to use")
@@ -90,7 +91,7 @@ func AddInstallK0sCmd(install *cobra.Command, opts *GlobalOptions) {
 
 	_ = k0s.cmd.MarkFlagRequired("install-config")
 
-	AddCmd(install, k0s.cmd)
+	util.AddCmd(install, k0s.cmd)
 
 	k0s.cmd.RunE = k0s.RunE
 }
