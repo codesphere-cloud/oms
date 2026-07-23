@@ -129,6 +129,24 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput remote OMS binary", func() {
+		BeforeEach(func() {
+			csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
+		})
+
+		It("accepts an existing local binary", func() {
+			fw.EXPECT().Exists(csEnv.RemoteOmsBinaryPath).Return(true)
+
+			Expect(bs.ValidateInput()).To(Succeed())
+		})
+
+		It("rejects a missing local binary", func() {
+			fw.EXPECT().Exists(csEnv.RemoteOmsBinaryPath).Return(false)
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("remote OMS binary not found")))
+		})
+	})
+
 	Describe("Bootstrap", func() {
 		BeforeEach(func() {
 			csEnv.InstallConfig = &files.RootConfig{Registry: &files.RegistryConfig{}}
@@ -1154,6 +1172,18 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureJumpboxConfigured()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It("copies and uses a requested local OMS binary even when OMS is already installed", func() {
+				csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "ubuntu", mock.Anything).Return(nil)
+				nodeClient.EXPECT().CopyFile(csEnv.Jumpbox, csEnv.RemoteOmsBinaryPath, "/usr/local/bin/oms").Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", "chmod 0755 /usr/local/bin/oms").Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(command string) bool {
+					return strings.HasPrefix(command, "command -v ")
+				})).Return(nil).Twice()
+
+				Expect(bs.EnsureJumpboxConfigured()).To(Succeed())
+			})
 		})
 
 		Describe("Invalid cases", func() {
@@ -1173,6 +1203,26 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureJumpboxConfigured()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install OMS"))
+			})
+
+			It("fails when the local OMS binary cannot be copied", func() {
+				csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "ubuntu", mock.Anything).Return(nil)
+				nodeClient.EXPECT().CopyFile(csEnv.Jumpbox, csEnv.RemoteOmsBinaryPath, "/usr/local/bin/oms").Return(fmt.Errorf("copy error"))
+
+				Expect(bs.EnsureJumpboxConfigured()).To(MatchError(ContainSubstring("failed to copy local OMS binary")))
+			})
+
+			It("fails when an OMS dependency cannot be installed", func() {
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "ubuntu", mock.Anything).Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", "command -v oms >/dev/null 2>&1").Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", "command -v sops >/dev/null 2>&1").Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", "command -v age-keygen >/dev/null 2>&1").Return(fmt.Errorf("missing"))
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(command string) bool {
+					return strings.Contains(command, "dl.filippo.io/age")
+				})).Return(fmt.Errorf("download error"))
+
+				Expect(bs.EnsureJumpboxConfigured()).To(MatchError(ContainSubstring("failed to ensure OMS dependencies")))
 			})
 		})
 	})

@@ -190,6 +190,8 @@ type CodesphereEnvironment struct {
 	CreateTestUser bool   `json:"-"`
 	OmsWorkdir     string `json:"-"`
 	RootDiskSize   int64  `json:"root_disk_size"`
+	// Local OMS binary copied to the jumpbox instead of installing a release.
+	RemoteOmsBinaryPath string `json:"-"`
 }
 
 func NewGCPBootstrapper(
@@ -408,6 +410,10 @@ func (b *GCPBootstrapper) createTestUser() error {
 func (b *GCPBootstrapper) ValidateInput() error {
 	if b.Env.GoogleACMEIssuer && b.Env.ACMEStaging {
 		return fmt.Errorf("acme-staging cannot be combined with google-acme-issuer")
+	}
+
+	if b.Env.RemoteOmsBinaryPath != "" && !b.fw.Exists(b.Env.RemoteOmsBinaryPath) {
+		return fmt.Errorf("remote OMS binary not found at path: %s", b.Env.RemoteOmsBinaryPath)
 	}
 
 	err := b.validateInstallVersion()
@@ -848,12 +854,38 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		}
 	}
 
-	hasOms := b.Env.Jumpbox.HasCommand("oms")
-	if hasOms {
+	err := b.EnsureOmsInstalled()
+	if err != nil {
+		return fmt.Errorf("failed to ensure OMS is present on jumpbox: %w", err)
+	}
+
+	err = b.Env.Jumpbox.EnsureOmsDependencies()
+	if err != nil {
+		return fmt.Errorf("failed to ensure OMS dependencies on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) EnsureOmsInstalled() (err error) {
+	if b.Env.RemoteOmsBinaryPath != "" {
+		err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.RemoteOmsBinaryPath, "/usr/local/bin/oms")
+		if err != nil {
+			return fmt.Errorf("failed to copy local OMS binary to jumpbox: %w", err)
+		}
+
+		err = b.Env.Jumpbox.RunSSHCommand("root", "chmod 0755 /usr/local/bin/oms")
+		if err != nil {
+			return fmt.Errorf("failed to make local OMS binary executable on jumpbox: %w", err)
+		}
 		return nil
 	}
 
-	err := b.Env.Jumpbox.InstallOms()
+	if b.Env.Jumpbox.HasCommand("oms") {
+		return nil
+	}
+
+	err = b.Env.Jumpbox.InstallOms()
 	if err != nil {
 		return fmt.Errorf("failed to install OMS on jumpbox: %w", err)
 	}

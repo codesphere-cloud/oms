@@ -202,13 +202,39 @@ func (n *Node) InstallOms() error {
 	remoteCommands := []string{
 		"wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms",
 		"chmod +x oms; sudo mv oms /usr/local/bin/",
-		"curl -LO https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64; sudo mv sops-v3.11.0.linux.amd64 /usr/local/bin/sops; sudo chmod +x /usr/local/bin/sops",
-		"wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
 	}
 	for _, cmd := range remoteCommands {
 		err := n.RunSSHCommand("root", cmd)
 		if err != nil {
 			return fmt.Errorf("failed to run remote command '%s': %w", cmd, err)
+		}
+	}
+	return nil
+}
+
+// EnsureOmsDependencies installs the command-line tools used by remote OMS
+// workflows independently of how the OMS binary itself was provisioned.
+func (n *Node) EnsureOmsDependencies() error {
+	dependencies := []struct {
+		command string
+		install string
+	}{
+		{
+			command: "sops",
+			install: "curl -LO https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64; sudo mv sops-v3.11.0.linux.amd64 /usr/local/bin/sops; sudo chmod +x /usr/local/bin/sops",
+		},
+		{
+			command: "age-keygen",
+			install: "wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
+		},
+	}
+
+	for _, dependency := range dependencies {
+		if n.HasCommand(dependency.command) {
+			continue
+		}
+		if err := n.RunSSHCommand("root", dependency.install); err != nil {
+			return fmt.Errorf("failed to install OMS dependency %s: %w", dependency.command, err)
 		}
 	}
 	return nil
