@@ -172,6 +172,7 @@ func DecryptFileWithSOPS(src, keyPath string) ([]byte, error) {
 	if keyPath != "" {
 		cmd.Env = append(os.Environ(), "SOPS_AGE_KEY_FILE="+keyPath)
 	}
+
 	out, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -179,6 +180,7 @@ func DecryptFileWithSOPS(src, keyPath string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("sops decrypt failed: %w", err)
 	}
+
 	return out, nil
 }
 

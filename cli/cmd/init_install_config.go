@@ -309,6 +309,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 
 	if c.Opts.VaultFile != "" {
 		log.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
+
 		err := icg.LoadVaultFromFile(c.Opts.VaultFile)
 		if err != nil {
 			return fmt.Errorf("failed to load vault file: %w", err)
@@ -321,6 +322,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	}
 
 	log.Println("Configuration is valid!")
+
 	return nil
 }
 

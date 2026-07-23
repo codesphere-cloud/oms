@@ -120,7 +120,7 @@ codesphere:
 		Expect(string(rendered)).To(ContainSubstring(`apiToken: "super-secret-token"`))
 	})
 
-	It("supports unencrypted prod.vault.yaml files", func() {
+	It("rejects unencrypted prod.vault.yaml files", func() {
 		tempDir := GinkgoT().TempDir()
 		vaultPath := filepath.Join(tempDir, "prod.vault.yaml")
 
@@ -130,6 +130,7 @@ codesphere:
 
 		_, err = vault.LoadVaultData(vaultPath, "")
 
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("is not SOPS-encrypted"))
 	})
 })

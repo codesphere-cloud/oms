@@ -125,12 +125,39 @@ func LoadVaultData(vaultPath, ageKeyPath string) (*files.InstallVault, error) {
 		return nil, fmt.Errorf("failed to inspect vault file %s: %w", vaultPath, err)
 	}
 
+	if !encrypted {
+		return nil, fmt.Errorf("vault file %s is not SOPS-encrypted", vaultPath)
+	}
+
+	decryptedData, err := DecryptFileWithSOPS(vaultPath, ageKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt vault.yaml: %w", err)
+	}
+
+	vault, err := parseVaultData(decryptedData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse decrypted vault.yaml: %w", err)
+	}
+
+	return vault, nil
+}
+
+// LoadUnencryptedVaultData reads parses an unencrypted vault at vaultPath
+// returning the decoded install vault.
+// This is only used for GCP Bootstrapping. All other features should force a decrypted vault.
+func LoadUnencryptedVaultData(vaultPath string) (*files.InstallVault, error) {
+	data, err := os.ReadFile(vaultPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read vault file %s: %w", vaultPath, err)
+	}
+
+	encrypted, err := isSOPSEncryptedYAML(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect vault file %s: %w", vaultPath, err)
+	}
+
 	if encrypted {
-		decrypted, err := DecryptFileWithSOPS(vaultPath, ageKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decrypt vault.yaml: %w", err)
-		}
-		data = decrypted
+		return nil, fmt.Errorf("failed to use unencrypted vault: vault is encrpted")
 	}
 
 	vault, err := parseVaultData(data)
