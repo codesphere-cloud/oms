@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd_test
+package apikey_test
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
 )
@@ -18,15 +18,15 @@ import (
 var _ = Describe("RevokeCmd", func() {
 	var (
 		mockPortal *portal.MockPortal
-		c          cmd.RevokeAPIKeyCmd
+		c          apikey.RevokeAPIKeyCmd
 		key        string
 	)
 
 	BeforeEach(func() {
 		mockPortal = portal.NewMockPortal(GinkgoT())
 		key = "test-key"
-		c = cmd.RevokeAPIKeyCmd{
-			Opts: cmd.RevokeAPIKeyOpts{
+		c = apikey.RevokeAPIKeyCmd{
+			Opts: apikey.RevokeAPIKeyOpts{
 				ID: key,
 			},
 		}
@@ -53,7 +53,7 @@ var _ = Describe("AddRevokeAPIKeyCmd", func() {
 	It("adds the api-key command to the parent", func() {
 		parent := &cobra.Command{}
 		opts := &util.GlobalOptions{}
-		cmd.AddRevokeAPIKeyCmd(parent, opts)
+		apikey.AddRevokeCmd(parent, opts)
 		found := false
 		for _, c := range parent.Commands() {
 			if c.Use == "api-key" {

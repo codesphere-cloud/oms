@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/spf13/cobra"
@@ -67,7 +68,7 @@ func GetRootCmd() *cobra.Command {
 	AddLicensesCmd(rootCmd)
 
 	// OMS API key management commands
-	AddRegisterCmd(rootCmd, opts)
+	apikey.AddRegisterCmd(rootCmd, opts)
 	AddRevokeCmd(rootCmd, opts)
 
 	// Smoke test commands

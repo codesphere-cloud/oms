@@ -4,7 +4,7 @@
 //go:build integration
 // +build integration
 
-package cmd_test
+package apikey_test
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
 	"github.com/codesphere-cloud/oms/internal/portal"
 )
 
@@ -53,8 +53,8 @@ var _ = Describe("API Key Integration Tests", func() {
 
 	Describe("Standalone created-key behavior", func() {
 		It("created API key can list builds when used", func() {
-			registerCmd := cmd.RegisterCmd{
-				Opts: cmd.RegisterOpts{
+			registerCmd := apikey.RegisterCmd{
+				Opts: apikey.RegisterOpts{
 					Owner:        fmt.Sprintf("standalone-test-%d@test.com", time.Now().Unix()),
 					Organization: "StandaloneTestOrg",
 					Role:         "Ext",
@@ -95,8 +95,8 @@ var _ = Describe("API Key Integration Tests", func() {
 	Describe("Complete API Key Flow", func() {
 		It("should successfully complete the full API key lifecycle", func() {
 			By("Registering a new customer API key")
-			registerCmd := cmd.RegisterCmd{
-				Opts: cmd.RegisterOpts{
+			registerCmd := apikey.RegisterCmd{
+				Opts: apikey.RegisterOpts{
 					Owner:        testOwner,
 					Organization: testOrg,
 					Role:         testRole,
@@ -146,8 +146,8 @@ var _ = Describe("API Key Integration Tests", func() {
 
 			By("Extending the API Key to a future date")
 			beforeUpdate := time.Now()
-			updateCmd := cmd.UpdateAPIKeyCmd{
-				Opts: cmd.UpdateAPIKeyOpts{
+			updateCmd := apikey.UpdateAPIKeyCmd{
+				Opts: apikey.UpdateAPIKeyOpts{
 					APIKeyID: registeredKey.KeyID,
 					ValidFor: fmt.Sprintf("%dd", extendDays),
 				},
@@ -176,8 +176,8 @@ var _ = Describe("API Key Integration Tests", func() {
 			Expect(updatedKey.ExpiresAt.Before(maxExpected) || updatedKey.ExpiresAt.Equal(maxExpected)).To(BeTrue())
 
 			By("Revoking the API Key")
-			revokeCmd := cmd.RevokeAPIKeyCmd{
-				Opts: cmd.RevokeAPIKeyOpts{
+			revokeCmd := apikey.RevokeAPIKeyCmd{
+				Opts: apikey.RevokeAPIKeyOpts{
 					ID: registeredKey.KeyID,
 				},
 			}
@@ -224,8 +224,8 @@ var _ = Describe("API Key Integration Tests", func() {
 
 	Describe("API Key Update With Wrong Input", func() {
 		It("should handle update with invalid valid-for format", func() {
-			updateCmd := cmd.UpdateAPIKeyCmd{
-				Opts: cmd.UpdateAPIKeyOpts{
+			updateCmd := apikey.UpdateAPIKeyCmd{
+				Opts: apikey.UpdateAPIKeyOpts{
 					APIKeyID: "test-key-id",
 					ValidFor: "invalid-date",
 				},
