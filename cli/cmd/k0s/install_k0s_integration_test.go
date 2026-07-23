@@ -4,7 +4,7 @@
 //go:build integration
 // +build integration
 
-package cmd_test
+package k0s_test
 
 import (
 	"fmt"

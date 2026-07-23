@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package k0s
 
 import (
 	"fmt"
@@ -45,7 +45,7 @@ func (c *DownloadK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddDownloadK0sCmd(download *cobra.Command, opts *util.GlobalOptions) {
+func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	k0s := DownloadK0sCmd{
 		cmd: &cobra.Command{
 			Use:   "k0s",

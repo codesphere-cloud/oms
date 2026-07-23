@@ -6,6 +6,7 @@ package cmd
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/codesphere"
+	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
@@ -26,6 +27,6 @@ func AddInstallCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(rootCmd, install.cmd)
 
 	codesphere.AddInstallCmd(install.cmd, opts)
-	AddInstallK0sCmd(install.cmd, opts)
+	k0s.AddInstallCmd(install.cmd, opts)
 	AddInstallOpenBaoCmd(install.cmd, opts)
 }
