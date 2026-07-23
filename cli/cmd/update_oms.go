@@ -11,6 +11,7 @@ import (
 	"github.com/creativeprojects/go-selfupdate"
 	"github.com/spf13/cobra"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/version"
 )
 
@@ -66,7 +67,7 @@ func AddOmsUpdateCmd(parentCmd *cobra.Command) {
 			return cmdState.SelfUpdate()
 		},
 	}
-	AddCmd(parentCmd, omsCmd)
+	util.AddCmd(parentCmd, omsCmd)
 }
 
 func (c *UpdateOmsCmd) SelfUpdate() error {

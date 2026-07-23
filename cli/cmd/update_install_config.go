@@ -9,21 +9,22 @@ import (
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
 type UpdateInstallConfigCmd struct {
 	cmd        *cobra.Command
 	Opts       *UpdateInstallConfigOpts
-	FileWriter util.FileIO
+	FileWriter intutil.FileIO
 }
 
 type UpdateInstallConfigOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 
 	ConfigFile string
 	VaultFile  string
@@ -69,7 +70,7 @@ func (c *UpdateInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.UpdateInstallConfig(icg)
 }
 
-func AddUpdateInstallConfigCmd(update *cobra.Command, opts *GlobalOptions) {
+func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) {
 	c := UpdateInstallConfigCmd{
 		cmd: &cobra.Command{
 			Use:   "install-config",
@@ -83,14 +84,14 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *GlobalOptions) {
 			
 			For example, updating the PostgreSQL primary IP will trigger regeneration
 			of the PostgreSQL server certificates that include that IP address.`),
-			Example: formatExamples("update install-config", []csio.Example{
+			Example: util.FormatExamples("update install-config", []csio.Example{
 				{Cmd: "--postgres-primary-ip 10.10.0.4 --config config.yaml --vault prod.vault.yaml", Desc: "Update PostgreSQL primary IP and regenerate certificates"},
 				{Cmd: "--domain new.example.com --config config.yaml --vault prod.vault.yaml", Desc: "Update Codesphere domain"},
 				{Cmd: "--k8s-api-server 10.0.0.10 --config config.yaml --vault prod.vault.yaml", Desc: "Update Kubernetes API server host"},
 			}),
 		},
 		Opts:       &UpdateInstallConfigOpts{GlobalOptions: opts},
-		FileWriter: util.NewFilesystemWriter(),
+		FileWriter: intutil.NewFilesystemWriter(),
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Path to existing config.yaml file")
@@ -139,7 +140,7 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(c.cmd, "vault")
 
 	c.cmd.RunE = c.RunE
-	AddCmd(update, c.cmd)
+	util.AddCmd(update, c.cmd)
 }
 
 func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfigManager) error {

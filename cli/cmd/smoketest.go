@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +14,7 @@ type SmoketestCmd struct {
 	cmd *cobra.Command
 }
 
-func AddSmoketestCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddSmoketestCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	smoketest := SmoketestCmd{
 		cmd: &cobra.Command{
 			Use:   "smoketest",
@@ -21,7 +22,7 @@ func AddSmoketestCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Long:  io.Long(`Run automated smoke tests for Codesphere installations to verify functionality.`),
 		},
 	}
-	AddCmd(rootCmd, smoketest.cmd)
+	util.AddCmd(rootCmd, smoketest.cmd)
 
 	AddSmoketestCodesphereCmd(smoketest.cmd, opts)
 }

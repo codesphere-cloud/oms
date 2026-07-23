@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -21,5 +22,5 @@ func AddUpgradeCephCmd(upgrade *cobra.Command) {
 			Long:  io.Long(`Coming soon: Install a Ceph cluster`),
 		},
 	}
-	AddCmd(upgrade, ceph.cmd)
+	util.AddCmd(upgrade, ceph.cmd)
 }

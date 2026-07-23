@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -18,12 +19,12 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 type BootstrapGcpCmd struct {
 	cmd               *cobra.Command
-	Opts              *GlobalOptions
+	Opts              *util.GlobalOptions
 	Env               env.Env
 	CodesphereEnv     *gcp.CodesphereEnvironment
 	InputRegistryType string
@@ -42,7 +43,7 @@ func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
+func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	bootstrapGcpCmd := BootstrapGcpCmd{
 		cmd: &cobra.Command{
 			Use:   "bootstrap-gcp",
@@ -139,7 +140,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
 
-	AddCmd(parent, bootstrapGcpCmd.cmd)
+	util.AddCmd(parent, bootstrapGcpCmd.cmd)
 	AddBootstrapGcpPostconfigCmd(bootstrapGcpCmd.cmd, opts)
 	AddBootstrapGcpCleanupCmd(bootstrapGcpCmd.cmd, opts)
 	AddBootstrapGcpRestartVMsCmd(bootstrapGcpCmd.cmd, opts)
@@ -150,7 +151,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	stlog := bootstrap.NewStepLogger(false)
 	icg := installer.NewInstallConfigManager()
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-	fw := util.NewFilesystemWriter()
+	fw := intutil.NewFilesystemWriter()
 	portalClient := portal.NewPortalClient()
 	githubClient := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)
 
@@ -164,7 +165,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		fw,
 		node.NewSSHNodeClient(c.SSHQuiet),
 		portalClient,
-		util.NewTime(),
+		intutil.NewTime(),
 		githubClient,
 	)
 	if err != nil {

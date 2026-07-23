@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/testuser"
-	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 type CreateTestUserCmd struct {
@@ -21,7 +21,7 @@ type CreateTestUserCmd struct {
 }
 
 type CreateTestUserOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	testuser.CreateTestUserOpts
 }
 
@@ -36,7 +36,7 @@ func (c *CreateTestUserCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddCreateTestUserCmd(parent *cobra.Command, opts *GlobalOptions) {
+func AddCreateTestUserCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	c := CreateTestUserCmd{
 		cmd: &cobra.Command{
 			Use:   "test-user",
@@ -70,5 +70,5 @@ func AddCreateTestUserCmd(parent *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(c.cmd, "postgres-host")
 	util.MarkFlagRequired(c.cmd, "postgres-password")
 
-	AddCmd(parent, c.cmd)
+	util.AddCmd(parent, c.cmd)
 }

@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package codesphere
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"runtime"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
@@ -61,7 +62,7 @@ func AddInstallCodesphereInfraCmd(codesphere *cobra.Command, opts *InstallCodesp
 			Short: "Install Codesphere infrastructure (Phase 1)",
 			Long: io.Long(`Install infrastructure dependencies for a Codesphere instance (Phase 1).
 			Runs steps: copy-dependencies, extract-dependencies, load-container-images, sops, docker, postgres, ceph, kubernetes.`),
-			Example: formatExamples("install codesphere infra", []io.Example{
+			Example: util.FormatExamples("install codesphere infra", []io.Example{
 				{
 					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml",
 					Desc: "Install infrastructure components only",
@@ -76,6 +77,6 @@ func AddInstallCodesphereInfraCmd(codesphere *cobra.Command, opts *InstallCodesp
 		Env:  env.NewEnv(),
 	}
 
-	AddCmd(codesphere, infra.cmd)
+	util.AddCmd(codesphere, infra.cmd)
 	infra.cmd.RunE = infra.RunE
 }

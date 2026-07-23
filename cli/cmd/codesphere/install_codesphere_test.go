@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd_test
+package codesphere_test
 
 import (
 	"context"
@@ -12,27 +12,28 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 
-	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/codesphere"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 )
 
 var _ = Describe("InstallCodesphereCmd", func() {
 	var (
-		c          cmd.InstallCodesphereCmd
-		opts       *cmd.InstallCodesphereOpts
-		globalOpts *cmd.GlobalOptions
+		c          codesphere.InstallCodesphereCmd
+		opts       *codesphere.InstallCodesphereOpts
+		globalOpts *util.GlobalOptions
 		mockEnv    *env.MockEnv
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		globalOpts = &cmd.GlobalOptions{}
-		opts = &cmd.InstallCodesphereOpts{
+		globalOpts = &util.GlobalOptions{}
+		opts = &codesphere.InstallCodesphereOpts{
 			GlobalOptions: globalOpts,
 			Package:       "codesphere-v1.66.0-installer-lite.tar.gz",
 			Force:         false,
 		}
-		c = cmd.InstallCodesphereCmd{
+		c = codesphere.InstallCodesphereCmd{
 			Opts: opts,
 			Env:  mockEnv,
 		}
@@ -77,16 +78,16 @@ var _ = Describe("InstallCodesphereCmd", func() {
 var _ = Describe("AddInstallCodesphereCmd", func() {
 	var (
 		parentCmd  *cobra.Command
-		globalOpts *cmd.GlobalOptions
+		globalOpts *util.GlobalOptions
 	)
 
 	BeforeEach(func() {
 		parentCmd = &cobra.Command{Use: "install"}
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = &util.GlobalOptions{}
 	})
 
 	It("adds the codesphere command with correct properties and flags", func() {
-		cmd.AddInstallCodesphereCmd(parentCmd, globalOpts)
+		codesphere.AddInstallCmd(parentCmd, globalOpts)
 
 		var codesphereCmd *cobra.Command
 		for _, c := range parentCmd.Commands() {

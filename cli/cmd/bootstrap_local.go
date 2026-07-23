@@ -19,11 +19,12 @@ import (
 
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
@@ -100,7 +101,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 
 	util.MarkFlagRequired(bootstrapLocalCmd.cmd, "registry-user")
 
-	AddCmd(parent, bootstrapLocalCmd.cmd)
+	util.AddCmd(parent, bootstrapLocalCmd.cmd)
 }
 
 func (c *BootstrapLocalCmd) BootstrapLocal() error {
@@ -140,7 +141,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 	stlog := bootstrap.NewStepLogger(false)
 	icg := installer.NewInstallConfigManager()
-	fw := util.NewFilesystemWriter()
+	fw := intutil.NewFilesystemWriter()
 	kubeClient, restConfig, err := c.GetKubeClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize Kubernetes client: %w", err)

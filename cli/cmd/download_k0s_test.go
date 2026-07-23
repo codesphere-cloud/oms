@@ -10,24 +10,25 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("DownloadK0sCmd", func() {
 	var (
 		c              cmd.DownloadK0sCmd
 		opts           *cmd.DownloadK0sOpts
-		globalOpts     *cmd.GlobalOptions
+		globalOpts     *util.GlobalOptions
 		mockEnv        *env.MockEnv
-		mockFileWriter *util.MockFileIO
+		mockFileWriter *intutil.MockFileIO
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		mockFileWriter = util.NewMockFileIO(GinkgoT())
-		globalOpts = &cmd.GlobalOptions{}
+		mockFileWriter = intutil.NewMockFileIO(GinkgoT())
+		globalOpts = &util.GlobalOptions{}
 		opts = &cmd.DownloadK0sOpts{
 			GlobalOptions: globalOpts,
 			Version:       "",

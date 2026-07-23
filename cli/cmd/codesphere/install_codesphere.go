@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package cmd
+package codesphere
 
 import (
 	"fmt"
@@ -9,13 +9,14 @@ import (
 	"path/filepath"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )
@@ -33,7 +34,7 @@ type InstallCodesphereCmd struct {
 }
 
 type InstallCodesphereOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Package          string
 	Force            bool
 	Configs          []string
@@ -97,14 +98,14 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	return installCodespherePlatform(ctx, effectiveOpts, cfg, c.Env)
 }
 
-func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
+func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere := InstallCodesphereCmd{
 		cmd: &cobra.Command{
 			Use:   "codesphere",
 			Short: "Install a Codesphere instance",
 			Long: io.Long(`Install a Codesphere instance with the provided package, configuration file, and private key.
 			Uses the private-cloud-installer.js script included in the package to perform the installation.`),
-			Example: formatExamples("install codesphere", []io.Example{
+			Example: util.FormatExamples("install codesphere", []io.Example{
 				{
 					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s copy-dependencies,extract-dependencies,load-container-images,ceph,postgres,kubernetes,docker",
 					Desc: "Skip most pre-installation steps. E.g. if you only need to re-apply Codesphere's helm charts",
@@ -138,7 +139,7 @@ func AddInstallCodesphereCmd(install *cobra.Command, opts *GlobalOptions) {
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
 	util.MarkPersistentFlagRequired(codesphere.cmd, "priv-key")
 
-	AddCmd(install, codesphere.cmd)
+	util.AddCmd(install, codesphere.cmd)
 
 	codesphere.cmd.RunE = codesphere.RunE
 
@@ -202,7 +203,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		if partial == nil {
 			partial = map[string]any{}
 		}
-		merged = util.DeepMergeMaps(merged, partial)
+		merged = intutil.DeepMergeMaps(merged, partial)
 	}
 
 	mergedBytes, err := yaml.Marshal(merged)

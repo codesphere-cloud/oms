@@ -15,11 +15,12 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 func execCmd(name string, args ...string) ([]byte, error) {
@@ -31,15 +32,15 @@ var _ = Describe("InstallK0sCmd", func() {
 	var (
 		c              cmd.InstallK0sCmd
 		opts           *cmd.InstallK0sOpts
-		globalOpts     *cmd.GlobalOptions
+		globalOpts     *util.GlobalOptions
 		mockEnv        *env.MockEnv
-		mockFileWriter *util.MockFileIO
+		mockFileWriter *intutil.MockFileIO
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		mockFileWriter = util.NewMockFileIO(GinkgoT())
-		globalOpts = &cmd.GlobalOptions{}
+		mockFileWriter = intutil.NewMockFileIO(GinkgoT())
+		globalOpts = &util.GlobalOptions{}
 		opts = &cmd.InstallK0sOpts{
 			GlobalOptions: globalOpts,
 			Version:       "",
@@ -387,7 +388,7 @@ var _ = Describe("InstallK0sCmd", func() {
 					Skip("sops and age-keygen not available")
 				}
 
-				c.FileWriter = util.NewFilesystemWriter()
+				c.FileWriter = intutil.NewFilesystemWriter()
 
 				ageKeyPath := filepath.Join(tempDir, "age_key.txt")
 				out, err := execCmd("age-keygen", "-o", ageKeyPath)
@@ -454,7 +455,7 @@ var _ = Describe("InstallK0sCmd", func() {
 					Skip("sops and age-keygen not available")
 				}
 
-				c.FileWriter = util.NewFilesystemWriter()
+				c.FileWriter = intutil.NewFilesystemWriter()
 
 				ageKeyPath := filepath.Join(tempDir, "age_key.txt")
 				out, err := execCmd("age-keygen", "-o", ageKeyPath)
@@ -577,6 +578,7 @@ var _ = Describe("InstallK0sCmd", func() {
 				}), mock.Anything, mock.Anything).Return(nil)
 				mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
+				mockFileWriter.EXPECT().MkdirAll(mock.Anything, os.FileMode(0755)).Return(nil)
 
 				// Vault exists and is encrypted.
 				mockFileWriter.EXPECT().Exists(vaultPath).Return(true)

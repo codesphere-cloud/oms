@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +13,7 @@ type BetaCmd struct {
 	cmd *cobra.Command
 }
 
-func AddBetaCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddBetaCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	beta := BetaCmd{
 		cmd: &cobra.Command{
 			Use:   "beta",
@@ -21,7 +22,7 @@ func AddBetaCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 				Be aware that that usage and behavior may change as the features are developed.`),
 		},
 	}
-	AddCmd(rootCmd, beta.cmd)
+	util.AddCmd(rootCmd, beta.cmd)
 
 	AddExtendCmd(beta.cmd, opts)
 	AddBootstrapGcpCmd(beta.cmd, opts)

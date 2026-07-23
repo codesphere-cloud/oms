@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
-	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -22,7 +22,7 @@ type BetaVaultSecretCmd struct {
 }
 
 type BetaVaultSecretOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	VaultFile  string
 	AgeKeyPath string
 	Namespace  string
@@ -50,7 +50,7 @@ func (c *BetaVaultSecretCmd) RunE(_ *cobra.Command, _ []string) error {
 	return creator.CreateSecretFromFile(c.cmd.Context(), c.Opts.VaultFile, c.Opts.AgeKeyPath, c.Opts.Namespace, c.Opts.SecretName)
 }
 
-func AddBetaVaultSecretCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
+func AddBetaVaultSecretCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	cmd := BetaVaultSecretCmd{
 		cmd: &cobra.Command{
 			Use:   "vault-secret",
@@ -58,7 +58,7 @@ func AddBetaVaultSecretCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 			Long: packageio.Long(`Create a Kubernetes secret from a SOPS-encrypted prod.vault.yaml file.
 				Reads the encrypted vault file, decrypts it using the age key, and creates a Kubernetes secret
 				with all the vault entries as key-value pairs in the target cluster.`),
-			Example: formatExamples("vault-secret", []packageio.Example{
+			Example: util.FormatExamples("vault-secret", []packageio.Example{
 				{Cmd: "--vault-file prod.vault.yaml --namespace default --secret-name vault-secrets", Desc: "Create secret using default age key location"},
 				{Cmd: "--vault-file prod.vault.yaml --age-key /path/to/age_key.txt --namespace kube-system --secret-name cluster-secrets", Desc: "Create secret with explicit age key path"},
 			}),
@@ -74,5 +74,5 @@ func AddBetaVaultSecretCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(cmd.cmd, "vault-file")
 
 	cmd.cmd.RunE = cmd.RunE
-	AddCmd(parentCmd, cmd.cmd)
+	util.AddCmd(parentCmd, cmd.cmd)
 }

@@ -9,16 +9,17 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 )
 
 var _ = Describe("BootstrapGcpRestartVMsCmd", func() {
 	var (
-		globalOpts *cmd.GlobalOptions
+		globalOpts *util.GlobalOptions
 		parentCmd  *cobra.Command
 	)
 
 	BeforeEach(func() {
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = &util.GlobalOptions{}
 		parentCmd = &cobra.Command{Use: "bootstrap-gcp"}
 		cmd.AddBootstrapGcpRestartVMsCmd(parentCmd, globalOpts)
 	})

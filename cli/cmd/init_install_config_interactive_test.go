@@ -9,8 +9,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/codesphere-cloud/oms/internal/util/testing"
 )
 
@@ -98,13 +99,13 @@ var _ = Describe("Interactive profile usage", func() {
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{
-					GlobalOptions: &GlobalOptions{},
+					GlobalOptions: &util.GlobalOptions{},
 					ConfigFile:    configFile.Name(),
 					VaultFile:     vaultFile.Name(),
 					Profile:       "dev",
 					Interactive:   false, // Non-interactive to avoid stdin issues
 				},
-				FileWriter: util.NewFilesystemWriter(),
+				FileWriter: intutil.NewFilesystemWriter(),
 			}
 
 			icg := installer.NewInstallConfigManager()
@@ -156,13 +157,13 @@ var _ = Describe("Interactive profile usage", func() {
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{
-					GlobalOptions: &GlobalOptions{},
+					GlobalOptions: &util.GlobalOptions{},
 					ConfigFile:    "config.yaml",
 					VaultFile:     "vault.yaml",
 					Profile:       "dev",
 					Interactive:   true,
 				},
-				FileWriter: util.NewFilesystemWriter(),
+				FileWriter: intutil.NewFilesystemWriter(),
 			}
 
 			err := c.InitInstallConfig(mockIcg)
@@ -184,14 +185,14 @@ var _ = Describe("Interactive profile usage", func() {
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{
-					GlobalOptions:        &GlobalOptions{},
+					GlobalOptions:        &util.GlobalOptions{},
 					ConfigFile:           configFile.Name(),
 					VaultFile:            vaultFile.Name(),
 					Profile:              "dev",
 					Interactive:          false,
 					CodesphereOpenBaoUri: "not-a-valid-url",
 				},
-				FileWriter: util.NewFilesystemWriter(),
+				FileWriter: intutil.NewFilesystemWriter(),
 			}
 
 			icg := installer.NewInstallConfigManager()

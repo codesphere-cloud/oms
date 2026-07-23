@@ -10,10 +10,11 @@ import (
 	"log"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +25,7 @@ type UpdateDockerfileCmd struct {
 }
 
 type UpdateDockerfileOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Package    string
 	Dockerfile string
 	Baseimage  string
@@ -48,7 +49,7 @@ func (c *UpdateDockerfileCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddUpdateDockerfileCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
+func AddUpdateDockerfileCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	dockerfileCmd := &UpdateDockerfileCmd{
 		cmd: &cobra.Command{
 			Use:   "dockerfile",
@@ -57,7 +58,7 @@ func AddUpdateDockerfileCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
 
 This command extracts the base image from a Codesphere package and updates the FROM statement
 in the specified Dockerfile to use that base image. The base image is loaded into the local Docker daemon so it can be used for building.`,
-			Example: formatExamples("update dockerfile", []io.Example{
+			Example: util.FormatExamples("update dockerfile", []io.Example{
 				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz", Desc: "Update Dockerfile to use the default base image from the package (workspace-agent-24.04)"},
 				{Cmd: "--dockerfile baseimage/Dockerfile --package codesphere-v1.68.0.tar.gz --baseimage workspace-agent-20.04.tar", Desc: "Update Dockerfile to use the workspace-agent-20.04 base image from the package"},
 			}),
@@ -75,7 +76,7 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 	util.MarkFlagRequired(dockerfileCmd.cmd, "dockerfile")
 	util.MarkFlagRequired(dockerfileCmd.cmd, "package")
 
-	AddCmd(parentCmd, dockerfileCmd.cmd)
+	util.AddCmd(parentCmd, dockerfileCmd.cmd)
 
 	dockerfileCmd.cmd.RunE = dockerfileCmd.RunE
 }
@@ -109,9 +110,9 @@ func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im s
 	if err != nil {
 		return fmt.Errorf("failed to open dockerfile %s: %w", c.Opts.Dockerfile, err)
 	}
-	defer util.CloseFileIgnoreError(dockerfileFile)
+	defer intutil.CloseFileIgnoreError(dockerfileFile)
 
-	dockerfileManager := util.NewDockerfileManager()
+	dockerfileManager := intutil.NewDockerfileManager()
 	updatedContent, err := dockerfileManager.UpdateFromStatement(dockerfileFile, imageName)
 	if err != nil {
 		return fmt.Errorf("failed to update FROM statement: %w", err)
