@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package codesphere
+package installer_test
 
 import (
 	"os"
@@ -9,18 +9,36 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("argoCDAndAppsInstall.loadVaultData", func() {
-	It("falls back to config secrets.baseDir when --vault is not set", func() {
-		if !installCodesphereSopsAndAgeAvailable() {
-			Skip("sops and age-keygen not available")
-		}
+type argoCDInstallerStub struct {
+	called bool
+}
 
+func (s *argoCDInstallerStub) Install() error {
+	s.called = true
+	return nil
+}
+
+var _ = Describe("ArgoCDAndAppsInstall", func() {
+	It("uses the configured ArgoCD installer instance", func() {
+		argoCDInstall := &argoCDInstallerStub{}
+		install := installer.NewArgoCDAndAppsInstall(installer.ArgoCDAndAppsInstallConfig{
+			ArgoCDInstaller: argoCDInstall,
+		})
+
+		Expect(install.InstallArgoCD()).To(Succeed())
+		Expect(argoCDInstall.called).To(BeTrue())
+	})
+})
+
+var _ = Describe("VaultAndRESTConfig", func() {
+	It("falls back to config secrets.baseDir when the vault path is not set", func() {
 		tmpDir := GinkgoT().TempDir()
 		secretsDir := filepath.Join(tmpDir, "secrets")
 		Expect(os.MkdirAll(secretsDir, 0700)).To(Succeed())
@@ -71,22 +89,15 @@ users:
 		vaultPath := filepath.Join(secretsDir, "prod.vault.yaml")
 		Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
-		install := &argoCDAndAppsInstall{
-			opts: &InstallCodesphereOpts{
-				PrivKey: ageKeyPath,
-			},
-			config: files.RootConfig{
-				Secrets: files.SecretsConfig{
-					BaseDir: secretsDir,
-				},
+		config := files.RootConfig{
+			Secrets: files.SecretsConfig{
+				BaseDir: secretsDir,
 			},
 		}
 
-		err = install.loadVaultData()
+		loadedVault, restConfig, err := installer.VaultAndRESTConfig("", ageKeyPath, config)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(install.vault).ToNot(BeNil())
-		Expect(install.ociPassword).To(Equal("registry-password"))
-		Expect(install.kubeConfig).ToNot(BeNil())
-		Expect(install.kubeClient).ToNot(BeNil())
+		Expect(loadedVault).ToNot(BeNil())
+		Expect(restConfig).ToNot(BeNil())
 	})
 })

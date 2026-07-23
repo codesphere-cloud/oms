@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -431,19 +429,16 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 	}
 
 	if b.Env.UseArgoCD {
-		pcApps, err := installer.NewPcAppsFromBom(
-			b.kubeClient,
-			b.restConfig,
-			filepath.Join(depsDir, "bom.json"),
-			argocd.DefaultNamespace,
-			nil,
-			b.Env.InstallConfig.PcApps,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to initialize pc-apps installer from BOM: %w", err)
+		if b.argoCDAndAppsInstall == nil {
+			return fmt.Errorf("ArgoCD and apps installer is not initialized")
 		}
-		if err := pcApps.Install(b.ctx); err != nil {
-			return fmt.Errorf("failed to install pc-apps: %w", err)
+		if err := b.stlog.Substep("Sync vault secret", b.argoCDAndAppsInstall.SyncVaultSecret); err != nil {
+			return err
+		}
+		if err := b.stlog.Substep("Install pc-apps", func() error {
+			return b.argoCDAndAppsInstall.InstallPCApps(filepath.Join(depsDir, "bom.json"))
+		}); err != nil {
+			return err
 		}
 	}
 
