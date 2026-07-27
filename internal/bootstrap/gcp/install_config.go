@@ -250,7 +250,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		acmeConfig.EABKeyID = keyID
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: b64MacKey}})
 	}
-	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+	b.Env.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
 		Type: "acme",
 		Acme: acmeConfig,
 	}

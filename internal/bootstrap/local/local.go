@@ -628,8 +628,10 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	b.Env.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
 
 	// TODO: certificates
-	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
-		Type: "self-signed",
+	if b.Env.InstallConfig.Codesphere.CertIssuer == nil {
+		b.Env.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
+			Type: "self-signed",
+		}
 	}
 
 	b.Env.InstallConfig.Codesphere.Domain = b.Env.BaseDomain

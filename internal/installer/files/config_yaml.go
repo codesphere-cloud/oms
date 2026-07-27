@@ -299,7 +299,7 @@ type CodesphereConfig struct {
 	Domain                     string                 `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                 `yaml:"workspaceHostingBaseDomain"`
 	PublicIP                   string                 `yaml:"publicIp"`
-	CertIssuer                 CertIssuerConfig       `yaml:"certIssuer"`
+	CertIssuer                 *CertIssuerConfig      `yaml:"certIssuer,omitempty"`
 	CustomDomains              CustomDomainsConfig    `yaml:"customDomains"`
 	DNSServers                 []string               `yaml:"dnsServers"`
 	Internal                   []string               `yaml:"internal"`
@@ -646,6 +646,13 @@ func NewRootConfig() RootConfig {
 	}
 }
 
+func (c *CodesphereConfig) EnsureCertIssuer() *CertIssuerConfig {
+	if c.CertIssuer == nil {
+		c.CertIssuer = &CertIssuerConfig{}
+	}
+	return c.CertIssuer
+}
+
 func (c *RootConfig) ExtractBomRefs() []string {
 	var bomRefs []string
 	for _, imageConfig := range c.Codesphere.DeployConfig.Images {
@@ -671,7 +678,7 @@ func Capitalize(s string) string {
 // configuration from codesphere.certIssuer.acme.solver, matching the documented
 // config.yaml structure.
 func (c *RootConfig) buildACMEOverride() {
-	if c.Codesphere.CertIssuer.Acme == nil || c.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
+	if c.Codesphere.CertIssuer == nil || c.Codesphere.CertIssuer.Acme == nil || c.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
 		return
 	}
 
@@ -717,7 +724,7 @@ func (c *RootConfig) buildACMEOverride() {
 // extractACMESolverFromOverride populates the ACMEConfig.Solver from
 // cluster.certificates.override.issuers.acme.dnsSolver after unmarshaling.
 func (c *RootConfig) extractACMESolverFromOverride() {
-	if c.Codesphere.CertIssuer.Acme == nil {
+	if c.Codesphere.CertIssuer == nil || c.Codesphere.CertIssuer.Acme == nil {
 		return
 	}
 
