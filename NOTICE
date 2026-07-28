@@ -545,9 +545,9 @@ License URL: https://github.com/google/uuid/blob/v1.6.0/LICENSE
  
 ----------
 Module: github.com/googleapis/enterprise-certificate-proxy/client
-Version: v0.3.18
+Version: v0.3.19
 License: Apache-2.0
-License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.18/LICENSE
+License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.19/LICENSE
  
 ----------
 Module: github.com/googleapis/gax-go/v2
@@ -1187,15 +1187,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.290.0
+Version: v0.291.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.290.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.291.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.290.0
+Version: v0.291.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.290.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.291.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1211,9 +1211,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/e059f2f05d78/googlea
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20260720171339-e059f2f05d78
+Version: v0.0.0-20260724162435-b2f20204f0df
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/e059f2f05d78/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/b2f20204f0df/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc
