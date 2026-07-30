@@ -68,6 +68,13 @@ func (g *InstallConfig) SetAgeKeyResolver(resolver func(explicitKeyFile, fallbac
 	g.ageKeyResolver = resolver
 }
 
+func (g *InstallConfig) encryptVault(src, target, recipient string) error {
+	if g.vaultEncryptor != nil {
+		return g.vaultEncryptor(src, target, recipient)
+	}
+	return vault.EncryptFileWithSOPS(src, target, recipient)
+}
+
 func NewInstallConfigManager() InstallConfigManager {
 	config := files.NewRootConfig()
 	return &InstallConfig{
@@ -328,11 +335,7 @@ func (g *InstallConfig) WriteEncryptedVault(vaultPath string, withComments bool)
 		_ = g.fileIO.Remove(encryptedPath)
 	}()
 
-	encryptor := g.vaultEncryptor
-	if encryptor == nil {
-		encryptor = vault.EncryptFileWithSOPS
-	}
-	if err := encryptor(plainPath, encryptedPath, recipient); err != nil {
+	if err := g.encryptVault(plainPath, encryptedPath, recipient); err != nil {
 		return err
 	}
 
