@@ -27,6 +27,18 @@ type MockFileIO struct {
 	mkdirAllError error
 }
 
+type failingVaultEncryptor struct{}
+
+func (failingVaultEncryptor) Encrypt(_, _, _ string) error {
+	return errors.New("encryption failed")
+}
+
+type staticAgeKeyResolver struct{}
+
+func (staticAgeKeyResolver) Resolve(_, _ string) (string, string, error) {
+	return "recipient", "", nil
+}
+
 func NewMockFileIO() *MockFileIO {
 	return &MockFileIO{
 		files: make(map[string][]byte),
@@ -535,12 +547,8 @@ var _ = Describe("ConfigManager", func() {
 				Vault:  &files.InstallVault{},
 			}
 			manager.SetFileIO(mockIO)
-			manager.SetAgeKeyResolver(func(_, _ string) (string, string, error) {
-				return "recipient", "", nil
-			})
-			manager.SetVaultEncryptor(func(_, _, _ string) error {
-				return errors.New("encryption failed")
-			})
+			manager.SetAgeKeyResolver(staticAgeKeyResolver{})
+			manager.SetVaultEncryptor(failingVaultEncryptor{})
 
 			err := manager.WriteEncryptedVault(vaultPath, false)
 			Expect(err).To(HaveOccurred())

@@ -45,10 +45,30 @@ type InstallConfigManager interface {
 	WriteEncryptedVault(vaultPath string, withComments bool) error
 }
 
+type VaultEncryptor interface {
+	Encrypt(src, target, recipient string) error
+}
+
+type AgeKeyResolver interface {
+	Resolve(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error)
+}
+
+type sopsVaultEncryptor struct{}
+
+func (sopsVaultEncryptor) Encrypt(src, target, recipient string) error {
+	return vault.EncryptFileWithSOPS(src, target, recipient)
+}
+
+type sopsAgeKeyResolver struct{}
+
+func (sopsAgeKeyResolver) Resolve(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error) {
+	return vault.ResolveAgeKey(explicitKeyFile, fallbackDir)
+}
+
 type InstallConfig struct {
 	fileIO         util.FileIO
-	vaultEncryptor func(src, target, recipient string) error
-	ageKeyResolver func(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error)
+	vaultEncryptor VaultEncryptor
+	ageKeyResolver AgeKeyResolver
 	Config         *files.RootConfig
 	Vault          *files.InstallVault
 }
@@ -59,28 +79,35 @@ func (g *InstallConfig) SetFileIO(fio util.FileIO) {
 }
 
 // SetVaultEncryptor overrides vault encryption (useful for testing).
-func (g *InstallConfig) SetVaultEncryptor(encryptor func(src, target, recipient string) error) {
+func (g *InstallConfig) SetVaultEncryptor(encryptor VaultEncryptor) {
 	g.vaultEncryptor = encryptor
 }
 
 // SetAgeKeyResolver overrides age key resolution (useful for testing).
-func (g *InstallConfig) SetAgeKeyResolver(resolver func(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error)) {
+func (g *InstallConfig) SetAgeKeyResolver(resolver AgeKeyResolver) {
 	g.ageKeyResolver = resolver
 }
 
 func (g *InstallConfig) encryptVault(src, target, recipient string) error {
 	if g.vaultEncryptor != nil {
-		return g.vaultEncryptor(src, target, recipient)
+		return g.vaultEncryptor.Encrypt(src, target, recipient)
 	}
-	return vault.EncryptFileWithSOPS(src, target, recipient)
+	return sopsVaultEncryptor{}.Encrypt(src, target, recipient)
+}
+
+func (g *InstallConfig) resolveAgeKey(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error) {
+	if g.ageKeyResolver != nil {
+		return g.ageKeyResolver.Resolve(explicitKeyFile, fallbackDir)
+	}
+	return sopsAgeKeyResolver{}.Resolve(explicitKeyFile, fallbackDir)
 }
 
 func NewInstallConfigManager() InstallConfigManager {
 	config := files.NewRootConfig()
 	return &InstallConfig{
 		fileIO:         &util.FilesystemWriter{},
-		vaultEncryptor: vault.EncryptFileWithSOPS,
-		ageKeyResolver: vault.ResolveAgeKey,
+		vaultEncryptor: sopsVaultEncryptor{},
+		ageKeyResolver: sopsAgeKeyResolver{},
 		Config:         &config,
 		Vault:          &files.InstallVault{},
 	}
@@ -307,11 +334,7 @@ func (g *InstallConfig) WriteEncryptedVault(vaultPath string, withComments bool)
 		return err
 	}
 
-	resolveAgeKey := g.ageKeyResolver
-	if resolveAgeKey == nil {
-		resolveAgeKey = vault.ResolveAgeKey
-	}
-	recipient, _, err := resolveAgeKey("", filepath.Dir(vaultPath))
+	recipient, _, err := g.resolveAgeKey("", filepath.Dir(vaultPath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
