@@ -70,3 +70,4 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
 ### SEE ALSO
 
 * [oms update](oms_update.md)	 - Update OMS related resources
+
