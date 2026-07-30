@@ -6,7 +6,9 @@ package installer_test
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 
+	"filippo.io/age"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -507,6 +509,29 @@ var _ = Describe("ConfigManager", func() {
 			err := configManager.WriteVault("/tmp/vault.yaml", false)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("no configuration provided"))
+		})
+	})
+
+	Describe("WriteEncryptedVault", func() {
+		It("should preserve the existing vault when encryption fails", func() {
+			tmpDir := GinkgoT().TempDir()
+			vaultPath := filepath.Join(tmpDir, "prod.vault.yaml")
+			keyPath := filepath.Join(tmpDir, "age-key.txt")
+			original := []byte("existing encrypted content")
+			identity, err := age.GenerateX25519Identity()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(os.WriteFile(keyPath, []byte(identity.String()), 0600)).To(Succeed())
+			Expect(os.WriteFile(vaultPath, original, 0600)).To(Succeed())
+			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", keyPath)
+			GinkgoT().Setenv("PATH", tmpDir)
+
+			manager := installer.NewInstallConfigManager()
+			err = manager.WriteEncryptedVault(vaultPath, false)
+			Expect(err).To(HaveOccurred())
+
+			content, readErr := os.ReadFile(vaultPath)
+			Expect(readErr).NotTo(HaveOccurred())
+			Expect(content).To(Equal(original))
 		})
 	})
 

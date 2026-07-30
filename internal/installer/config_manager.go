@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
@@ -42,6 +43,7 @@ type InstallConfigManager interface {
 	GenerateSecrets() error
 	WriteInstallConfig(configPath string, withComments bool) error
 	WriteVault(vaultPath string, withComments bool) error
+	WriteEncryptedVault(vaultPath string, withComments bool) error
 }
 
 type InstallConfig struct {
@@ -267,20 +269,9 @@ func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool)
 }
 
 func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
-	if g.Config == nil {
-		return fmt.Errorf("no configuration provided - config is nil")
-	}
-	if g.Vault == nil {
-		g.Vault = &files.InstallVault{}
-	}
-
-	vaultYAML, err := g.Vault.Marshal()
+	vaultYAML, err := g.marshalVault(vaultPath, withComments)
 	if err != nil {
-		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
-	}
-
-	if withComments {
-		vaultYAML = AddVaultComments(vaultYAML)
+		return err
 	}
 
 	if err := g.fileIO.CreateAndWrite(vaultPath, vaultYAML, "Secrets"); err != nil {
@@ -288,6 +279,86 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	}
 
 	return nil
+}
+
+func (g *InstallConfig) WriteEncryptedVault(vaultPath string, withComments bool) error {
+	vaultYAML, err := g.marshalVault(vaultPath, withComments)
+	if err != nil {
+		return err
+	}
+
+	recipient, _, err := vault.ResolveAgeKey("", filepath.Dir(vaultPath))
+	if err != nil {
+		return fmt.Errorf("failed to resolve age key: %w", err)
+	}
+
+	plainFile, err := os.CreateTemp(filepath.Dir(vaultPath), "."+filepath.Base(vaultPath)+".plaintext-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary plaintext vault: %w", err)
+	}
+	plainPath := plainFile.Name()
+	defer func() {
+		_ = os.Remove(plainPath)
+	}()
+	if _, err := plainFile.Write(vaultYAML); err != nil {
+		_ = plainFile.Close()
+		return fmt.Errorf("failed to write temporary plaintext vault: %w", err)
+	}
+	if err := plainFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary plaintext vault: %w", err)
+	}
+
+	encryptedFile, err := os.CreateTemp(filepath.Dir(vaultPath), "."+filepath.Base(vaultPath)+".encrypted-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary encrypted vault: %w", err)
+	}
+	encryptedPath := encryptedFile.Name()
+	if err := encryptedFile.Close(); err != nil {
+		_ = os.Remove(encryptedPath)
+		return fmt.Errorf("failed to close temporary encrypted vault: %w", err)
+	}
+	defer func() {
+		_ = os.Remove(encryptedPath)
+	}()
+
+	if err := vault.EncryptFileWithSOPS(plainPath, encryptedPath, recipient); err != nil {
+		return err
+	}
+
+	mode := os.FileMode(0600)
+	if info, err := os.Stat(vaultPath); err == nil {
+		mode = info.Mode().Perm()
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to inspect encrypted vault target: %w", err)
+	}
+	if err := os.Chmod(encryptedPath, mode); err != nil {
+		return fmt.Errorf("failed to set encrypted vault permissions: %w", err)
+	}
+	if err := os.Rename(encryptedPath, vaultPath); err != nil {
+		return fmt.Errorf("failed to replace encrypted vault: %w", err)
+	}
+
+	return nil
+}
+
+func (g *InstallConfig) marshalVault(vaultPath string, withComments bool) ([]byte, error) {
+	if g.Config == nil {
+		return nil, fmt.Errorf("no configuration provided - config is nil")
+	}
+	if g.Vault == nil {
+		g.Vault = &files.InstallVault{}
+	}
+
+	vaultYAML, err := g.Vault.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal %s: %w", filepath.Base(vaultPath), err)
+	}
+
+	if withComments {
+		vaultYAML = AddVaultComments(vaultYAML)
+	}
+
+	return vaultYAML, nil
 }
 
 func AddConfigComments(yamlData []byte) []byte {

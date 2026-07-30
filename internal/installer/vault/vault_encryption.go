@@ -4,7 +4,6 @@
 package vault
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -163,45 +162,6 @@ func EncryptFileWithSOPS(src, target, recipient string) error {
 	if err != nil {
 		return fmt.Errorf("sops encrypt failed: %w: %s", err, out)
 	}
-	return nil
-}
-
-// EncryptDataWithSOPSAtomically encrypts data into a temporary file next to
-// target and replaces target only after encryption succeeds. Plaintext is
-// passed to SOPS through stdin and is never written to disk.
-func EncryptDataWithSOPSAtomically(data []byte, target, recipient string) error {
-	mode := os.FileMode(0600)
-	if info, err := os.Stat(target); err == nil {
-		mode = info.Mode().Perm()
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("failed to inspect encryption target: %w", err)
-	}
-
-	encryptedFile, err := os.CreateTemp(filepath.Dir(target), "."+filepath.Base(target)+".encrypted-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temporary encrypted file: %w", err)
-	}
-	encryptedPath := encryptedFile.Name()
-	if err := encryptedFile.Close(); err != nil {
-		_ = os.Remove(encryptedPath)
-		return fmt.Errorf("failed to close temporary encrypted file: %w", err)
-	}
-	defer func() {
-		_ = os.Remove(encryptedPath)
-	}()
-
-	cmd := exec.Command("sops", "--encrypt", "--input-type", "yaml", "--age", recipient, "--output", encryptedPath, "/dev/stdin")
-	cmd.Stdin = bytes.NewReader(data)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("sops encrypt failed: %w: %s", err, out)
-	}
-	if err := os.Chmod(encryptedPath, mode); err != nil {
-		return fmt.Errorf("failed to set encrypted vault permissions: %w", err)
-	}
-	if err := os.Rename(encryptedPath, target); err != nil {
-		return fmt.Errorf("failed to replace encrypted vault: %w", err)
-	}
-
 	return nil
 }
 

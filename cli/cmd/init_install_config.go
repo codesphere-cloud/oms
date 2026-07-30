@@ -353,12 +353,14 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		config.Postgres.Mode = c.Opts.PostgresMode
 	}
 
-	postgresPrimaryHostname := determinePostgresPrimaryHostname(config.Postgres.Mode, c.Opts)
+	postgresPrimaryHostname, postgresServerAddress := determinePostgresServerConfig(
+		config.Postgres.Mode,
+		c.Opts.PostgresServerAddress,
+		c.Opts.PostgresPrimaryHostname,
+		config.Postgres.ServerAddress,
+	)
 	if c.Opts.PostgresServerAddress != "" {
-		config.Postgres.ServerAddress = c.Opts.PostgresServerAddress
-	}
-	if c.Opts.PostgresServerAddress != "" && config.Postgres.Mode == "install" {
-		config.Postgres.ServerAddress = ""
+		config.Postgres.ServerAddress = postgresServerAddress
 	}
 
 	if postgresPrimaryHostname != "" || c.Opts.PostgresPrimaryIP != "" {
@@ -564,14 +566,12 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	return config
 }
 
-func determinePostgresPrimaryHostname(postgresMode string, opts *InitInstallConfigOpts) string {
-	if postgresMode != "install" {
-		return opts.PostgresPrimaryHostname
+func determinePostgresServerConfig(postgresMode, postgresServer, primaryHostname, serverAddress string) (string, string) {
+	if postgresServer == "" {
+		return primaryHostname, serverAddress
 	}
-
-	if opts.PostgresServerAddress == "" {
-		return opts.PostgresPrimaryHostname
+	if postgresMode == "install" {
+		return postgresServer, ""
 	}
-
-	return opts.PostgresServerAddress
+	return primaryHostname, postgresServer
 }

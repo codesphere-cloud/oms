@@ -4,39 +4,15 @@
 package vault_test
 
 import (
-	"bytes"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
-
-func TestEncryptDataWithSOPSAtomicallyPreservesTargetOnFailure(t *testing.T) {
-	tmpDir := t.TempDir()
-	targetPath := filepath.Join(tmpDir, "vault.yaml")
-	original := []byte("existing encrypted content")
-
-	if err := os.WriteFile(targetPath, original, 0600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := vault.EncryptDataWithSOPSAtomically([]byte("secrets: []\n"), targetPath, "invalid-recipient"); err == nil {
-		t.Fatal("expected encryption to fail")
-	}
-
-	content, err := os.ReadFile(targetPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(content, original) {
-		t.Fatalf("target changed after failed encryption: got %q, want %q", content, original)
-	}
-}
 
 func sopsAndAgeAvailable() bool {
 	if _, err := exec.LookPath("sops"); err != nil {

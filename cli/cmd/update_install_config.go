@@ -6,7 +6,6 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"path/filepath"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -14,7 +13,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
-	installervault "github.com/codesphere-cloud/oms/internal/installer/vault"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -184,7 +182,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := c.writeEncryptedVault(icg); err != nil {
+	if err := icg.WriteEncryptedVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
@@ -203,16 +201,12 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, vault *f
 }
 
 func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, tracker *SecretDependencyTracker) {
-	primaryHostname := c.Opts.PostgresPrimaryHostname
-	serverAddress := c.Opts.PostgresServerAddress
-	if c.Opts.PostgresServer != "" {
-		if config.Postgres.Mode == "install" && primaryHostname == "" {
-			primaryHostname = c.Opts.PostgresServer
-		}
-		if config.Postgres.Mode == "external" && serverAddress == "" {
-			serverAddress = c.Opts.PostgresServer
-		}
-	}
+	primaryHostname, serverAddress := determinePostgresServerConfig(
+		config.Postgres.Mode,
+		c.Opts.PostgresServer,
+		c.Opts.PostgresPrimaryHostname,
+		c.Opts.PostgresServerAddress,
+	)
 
 	if c.Opts.PostgresPrimaryIP != "" || primaryHostname != "" {
 		if config.Postgres.Primary != nil {
@@ -248,23 +242,6 @@ func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, 
 		log.Printf("Updating PostgreSQL server address: %s -> %s\n", config.Postgres.ServerAddress, serverAddress)
 		config.Postgres.ServerAddress = serverAddress
 	}
-}
-
-func (c *UpdateInstallConfigCmd) writeEncryptedVault(icg installer.InstallConfigManager) error {
-	recipient, _, err := installervault.ResolveAgeKey("", filepath.Dir(c.Opts.VaultFile))
-	if err != nil {
-		return fmt.Errorf("failed to resolve age key: %w", err)
-	}
-
-	vaultData, err := icg.GetVault().Marshal()
-	if err != nil {
-		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
-	}
-	if c.Opts.WithComments {
-		vaultData = installer.AddVaultComments(vaultData)
-	}
-
-	return installervault.EncryptDataWithSOPSAtomically(vaultData, c.Opts.VaultFile, recipient)
 }
 
 func (c *UpdateInstallConfigCmd) applyCephUpdates(config *files.RootConfig) {
