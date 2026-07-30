@@ -59,6 +59,7 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --postgres-primary-ip string                   Primary PostgreSQL server IP
       --postgres-replica-ip string                   Replica PostgreSQL server IP
       --postgres-replica-name string                 Replica PostgreSQL server name
+      --postgres-server string                       PostgreSQL primary hostname for install mode or server address for external mode
       --postgres-server-address string               PostgreSQL server address (for external mode)
       --public-ip string                             Codesphere public IP address
       --vault string                                 Path to existing prod.vault.yaml file (default "prod.vault.yaml")
@@ -69,4 +70,3 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
 ### SEE ALSO
 
 * [oms update](oms_update.md)	 - Update OMS related resources
-

@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -13,6 +14,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	installervault "github.com/codesphere-cloud/oms/internal/installer/vault"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -37,6 +39,7 @@ type UpdateInstallConfigOpts struct {
 	PostgresReplicaIP       string
 	PostgresReplicaName     string
 	PostgresServerAddress   string
+	PostgresServer          string
 
 	CephNodesSubnet string
 
@@ -105,6 +108,7 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 	c.cmd.Flags().StringVar(&c.Opts.PostgresReplicaIP, "postgres-replica-ip", "", "Replica PostgreSQL server IP")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresReplicaName, "postgres-replica-name", "", "Replica PostgreSQL server name")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server-address", "", "PostgreSQL server address (for external mode)")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServer, "postgres-server", "", "PostgreSQL primary hostname for install mode or server address for external mode")
 
 	// Ceph update flags
 	c.cmd.Flags().StringVar(&c.Opts.CephNodesSubnet, "ceph-nodes-subnet", "", "Ceph nodes subnet")
@@ -180,7 +184,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+	if err := c.writeEncryptedVault(icg); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
@@ -199,16 +203,27 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, vault *f
 }
 
 func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, tracker *SecretDependencyTracker) {
-	if c.Opts.PostgresPrimaryIP != "" || c.Opts.PostgresPrimaryHostname != "" {
+	primaryHostname := c.Opts.PostgresPrimaryHostname
+	serverAddress := c.Opts.PostgresServerAddress
+	if c.Opts.PostgresServer != "" {
+		if config.Postgres.Mode == "install" && primaryHostname == "" {
+			primaryHostname = c.Opts.PostgresServer
+		}
+		if config.Postgres.Mode == "external" && serverAddress == "" {
+			serverAddress = c.Opts.PostgresServer
+		}
+	}
+
+	if c.Opts.PostgresPrimaryIP != "" || primaryHostname != "" {
 		if config.Postgres.Primary != nil {
 			if c.Opts.PostgresPrimaryIP != "" && config.Postgres.Primary.IP != c.Opts.PostgresPrimaryIP {
 				log.Printf("Updating PostgreSQL primary IP: %s -> %s\n", config.Postgres.Primary.IP, c.Opts.PostgresPrimaryIP)
 				config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
-			if c.Opts.PostgresPrimaryHostname != "" && config.Postgres.Primary.Hostname != c.Opts.PostgresPrimaryHostname {
-				log.Printf("Updating PostgreSQL primary hostname: %s -> %s\n", config.Postgres.Primary.Hostname, c.Opts.PostgresPrimaryHostname)
-				config.Postgres.Primary.Hostname = c.Opts.PostgresPrimaryHostname
+			if primaryHostname != "" && config.Postgres.Primary.Hostname != primaryHostname {
+				log.Printf("Updating PostgreSQL primary hostname: %s -> %s\n", config.Postgres.Primary.Hostname, primaryHostname)
+				config.Postgres.Primary.Hostname = primaryHostname
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
 		}
@@ -229,10 +244,27 @@ func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, 
 		}
 	}
 
-	if c.Opts.PostgresServerAddress != "" && config.Postgres.ServerAddress != c.Opts.PostgresServerAddress {
-		log.Printf("Updating PostgreSQL server address: %s -> %s\n", config.Postgres.ServerAddress, c.Opts.PostgresServerAddress)
-		config.Postgres.ServerAddress = c.Opts.PostgresServerAddress
+	if serverAddress != "" && config.Postgres.ServerAddress != serverAddress {
+		log.Printf("Updating PostgreSQL server address: %s -> %s\n", config.Postgres.ServerAddress, serverAddress)
+		config.Postgres.ServerAddress = serverAddress
 	}
+}
+
+func (c *UpdateInstallConfigCmd) writeEncryptedVault(icg installer.InstallConfigManager) error {
+	recipient, _, err := installervault.ResolveAgeKey("", filepath.Dir(c.Opts.VaultFile))
+	if err != nil {
+		return fmt.Errorf("failed to resolve age key: %w", err)
+	}
+
+	vaultData, err := icg.GetVault().Marshal()
+	if err != nil {
+		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
+	}
+	if c.Opts.WithComments {
+		vaultData = installer.AddVaultComments(vaultData)
+	}
+
+	return installervault.EncryptDataWithSOPSAtomically(vaultData, c.Opts.VaultFile, recipient)
 }
 
 func (c *UpdateInstallConfigCmd) applyCephUpdates(config *files.RootConfig) {
@@ -444,8 +476,7 @@ func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTr
 		}
 	}
 
-	log.Println("\nIMPORTANT: The vault file has been updated with new secrets.")
-	log.Println("   Remember to re-encrypt it with SOPS before storing.")
+	log.Println("\nThe vault file has been updated and re-encrypted with SOPS.")
 	log.Println()
 }
 
