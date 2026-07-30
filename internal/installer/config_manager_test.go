@@ -5,10 +5,10 @@ package installer_test
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 
-	"filippo.io/age"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -45,6 +45,18 @@ func (m *MockFileIO) CreateAndWrite(filePath string, data []byte, fileType strin
 		return m.writeError
 	}
 	m.files[filePath] = data
+	return nil
+}
+
+func (m *MockFileIO) CreateTemp(dir, pattern string) (string, error) {
+	path := filepath.Join(dir, pattern+"mock")
+	m.files[path] = nil
+	return path, nil
+}
+
+func (m *MockFileIO) Rename(oldPath, newPath string) error {
+	m.files[newPath] = m.files[oldPath]
+	delete(m.files, oldPath)
 	return nil
 }
 
@@ -514,24 +526,25 @@ var _ = Describe("ConfigManager", func() {
 
 	Describe("WriteEncryptedVault", func() {
 		It("should preserve the existing vault when encryption fails", func() {
-			tmpDir := GinkgoT().TempDir()
-			vaultPath := filepath.Join(tmpDir, "prod.vault.yaml")
-			keyPath := filepath.Join(tmpDir, "age-key.txt")
+			vaultPath := "prod.vault.yaml"
 			original := []byte("existing encrypted content")
-			identity, err := age.GenerateX25519Identity()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(os.WriteFile(keyPath, []byte(identity.String()), 0600)).To(Succeed())
-			Expect(os.WriteFile(vaultPath, original, 0600)).To(Succeed())
-			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", keyPath)
-			GinkgoT().Setenv("PATH", tmpDir)
+			mockIO := NewMockFileIO()
+			mockIO.files[vaultPath] = original
+			manager := &installer.InstallConfig{
+				Config: &files.RootConfig{},
+				Vault:  &files.InstallVault{},
+			}
+			manager.SetFileIO(mockIO)
+			manager.SetAgeKeyResolver(func(_, _ string) (string, string, error) {
+				return "recipient", "", nil
+			})
+			manager.SetVaultEncryptor(func(_, _, _ string) error {
+				return errors.New("encryption failed")
+			})
 
-			manager := installer.NewInstallConfigManager()
-			err = manager.WriteEncryptedVault(vaultPath, false)
+			err := manager.WriteEncryptedVault(vaultPath, false)
 			Expect(err).To(HaveOccurred())
-
-			content, readErr := os.ReadFile(vaultPath)
-			Expect(readErr).NotTo(HaveOccurred())
-			Expect(content).To(Equal(original))
+			Expect(mockIO.GetFileContent(vaultPath)).To(Equal(original))
 		})
 	})
 

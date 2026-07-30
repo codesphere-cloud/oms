@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"net/url"
-	"os"
 	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
@@ -47,9 +46,11 @@ type InstallConfigManager interface {
 }
 
 type InstallConfig struct {
-	fileIO util.FileIO
-	Config *files.RootConfig
-	Vault  *files.InstallVault
+	fileIO         util.FileIO
+	vaultEncryptor func(src, target, recipient string) error
+	ageKeyResolver func(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error)
+	Config         *files.RootConfig
+	Vault          *files.InstallVault
 }
 
 // SetFileIO overrides the file I/O implementation (useful for testing).
@@ -57,12 +58,24 @@ func (g *InstallConfig) SetFileIO(fio util.FileIO) {
 	g.fileIO = fio
 }
 
+// SetVaultEncryptor overrides vault encryption (useful for testing).
+func (g *InstallConfig) SetVaultEncryptor(encryptor func(src, target, recipient string) error) {
+	g.vaultEncryptor = encryptor
+}
+
+// SetAgeKeyResolver overrides age key resolution (useful for testing).
+func (g *InstallConfig) SetAgeKeyResolver(resolver func(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error)) {
+	g.ageKeyResolver = resolver
+}
+
 func NewInstallConfigManager() InstallConfigManager {
 	config := files.NewRootConfig()
 	return &InstallConfig{
-		fileIO: &util.FilesystemWriter{},
-		Config: &config,
-		Vault:  &files.InstallVault{},
+		fileIO:         &util.FilesystemWriter{},
+		vaultEncryptor: vault.EncryptFileWithSOPS,
+		ageKeyResolver: vault.ResolveAgeKey,
+		Config:         &config,
+		Vault:          &files.InstallVault{},
 	}
 }
 
@@ -287,54 +300,46 @@ func (g *InstallConfig) WriteEncryptedVault(vaultPath string, withComments bool)
 		return err
 	}
 
-	recipient, _, err := vault.ResolveAgeKey("", filepath.Dir(vaultPath))
+	resolveAgeKey := g.ageKeyResolver
+	if resolveAgeKey == nil {
+		resolveAgeKey = vault.ResolveAgeKey
+	}
+	recipient, _, err := resolveAgeKey("", filepath.Dir(vaultPath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
 
-	plainFile, err := os.CreateTemp(filepath.Dir(vaultPath), "."+filepath.Base(vaultPath)+".plaintext-*")
+	plainPath, err := g.fileIO.CreateTemp(filepath.Dir(vaultPath), "."+filepath.Base(vaultPath)+".plaintext-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary plaintext vault: %w", err)
 	}
-	plainPath := plainFile.Name()
 	defer func() {
-		_ = os.Remove(plainPath)
+		_ = g.fileIO.Remove(plainPath)
 	}()
-	if _, err := plainFile.Write(vaultYAML); err != nil {
-		_ = plainFile.Close()
+	if err := g.fileIO.WriteFile(plainPath, vaultYAML, 0600); err != nil {
 		return fmt.Errorf("failed to write temporary plaintext vault: %w", err)
 	}
-	if err := plainFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temporary plaintext vault: %w", err)
-	}
 
-	encryptedFile, err := os.CreateTemp(filepath.Dir(vaultPath), "."+filepath.Base(vaultPath)+".encrypted-*")
+	encryptedPath, err := g.fileIO.CreateTemp(filepath.Dir(vaultPath), "."+filepath.Base(vaultPath)+".encrypted-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary encrypted vault: %w", err)
 	}
-	encryptedPath := encryptedFile.Name()
-	if err := encryptedFile.Close(); err != nil {
-		_ = os.Remove(encryptedPath)
-		return fmt.Errorf("failed to close temporary encrypted vault: %w", err)
-	}
 	defer func() {
-		_ = os.Remove(encryptedPath)
+		_ = g.fileIO.Remove(encryptedPath)
 	}()
 
-	if err := vault.EncryptFileWithSOPS(plainPath, encryptedPath, recipient); err != nil {
+	encryptor := g.vaultEncryptor
+	if encryptor == nil {
+		encryptor = vault.EncryptFileWithSOPS
+	}
+	if err := encryptor(plainPath, encryptedPath, recipient); err != nil {
 		return err
 	}
 
-	mode := os.FileMode(0600)
-	if info, err := os.Stat(vaultPath); err == nil {
-		mode = info.Mode().Perm()
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("failed to inspect encrypted vault target: %w", err)
-	}
-	if err := os.Chmod(encryptedPath, mode); err != nil {
+	if err := g.fileIO.Chmod(encryptedPath, 0600); err != nil {
 		return fmt.Errorf("failed to set encrypted vault permissions: %w", err)
 	}
-	if err := os.Rename(encryptedPath, vaultPath); err != nil {
+	if err := g.fileIO.Rename(encryptedPath, vaultPath); err != nil {
 		return fmt.Errorf("failed to replace encrypted vault: %w", err)
 	}
 
