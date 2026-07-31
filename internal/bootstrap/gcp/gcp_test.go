@@ -12,6 +12,7 @@ import (
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/github"
@@ -1235,9 +1236,74 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureHostsConfigured()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It("creates the directory the installer uploads the age key to on every node", func() {
+				mkdirs := map[string]int{}
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if command == "mkdir -p /etc/codesphere/secrets" {
+							mkdirs[n.GetName()]++
+						}
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				// The postgres node plus every cluster node of every data center.
+				Expect(mkdirs).To(Equal(map[string]int{
+					"postgres": 1,
+					"k0s-1":    1, "k0s-2": 1, "k0s-3": 1,
+					"ceph-1": 1, "ceph-2": 1, "ceph-3": 1,
+				}))
+			})
+
+			It("creates a secondary data center's own secrets directory on its nodes only", func() {
+				secondary := &datacenter.DataCenter{ID: 2, Suffix: "-dc2", SecretsDir: "/etc/codesphere/secrets-dc2"}
+				secondary.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1-dc2", nodeClient)}
+				secondary.CephNodes = []*node.Node{fakeNode("ceph-1-dc2", nodeClient)}
+
+				bs.Env.DataCenters = []*datacenter.DataCenter{
+					{
+						ID:                1,
+						SecretsDir:        "/etc/codesphere/secrets",
+						ControlPlaneNodes: bs.Env.ControlPlaneNodes,
+						CephNodes:         bs.Env.CephNodes,
+					},
+					secondary,
+				}
+
+				mkdirs := map[string][]string{}
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if dir, found := strings.CutPrefix(command, "mkdir -p "); found {
+							mkdirs[n.GetName()] = append(mkdirs[n.GetName()], dir)
+						}
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				// Both paths on the secondary's nodes, because the installer's fixed path is
+				// created everywhere; the secondary's path on nobody else's.
+				Expect(mkdirs["k0s-1-dc2"]).To(ConsistOf("/etc/codesphere/secrets", "/etc/codesphere/secrets-dc2"))
+				Expect(mkdirs["ceph-1-dc2"]).To(ConsistOf("/etc/codesphere/secrets", "/etc/codesphere/secrets-dc2"))
+				Expect(mkdirs["k0s-1"]).To(ConsistOf("/etc/codesphere/secrets"))
+				Expect(mkdirs["postgres"]).To(ConsistOf("/etc/codesphere/secrets"))
+			})
 		})
 
 		Describe("Invalid cases", func() {
+			It("fails when the secrets directory cannot be created", func() {
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						if command == "mkdir -p /etc/codesphere/secrets" {
+							return fmt.Errorf("ouch")
+						}
+						return nil
+					})
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to create secrets directory on postgres")))
+			})
+
 			It("fails when ConfigureInotifyWatches fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch"))
 
