@@ -344,6 +344,10 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				Expect(bs.Env.InstallConfig.Datacenter.ID).To(Equal(1))
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("dev"))
+				// A single data center relies on the installer defaulting the topology to the
+				// local data center, so the config stays as it was before multi-DC support.
+				Expect(bs.Env.InstallConfig.DataCenters).To(BeEmpty())
+				Expect(bs.Env.InstallConfig.DefaultDataCenterID).To(BeZero())
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(map[string]bool{}))
 				Expect(bs.Env.InstallConfig.Codesphere.Internal).To(Equal(gcp.DefaultInternalFlags))
