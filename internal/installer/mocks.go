@@ -604,6 +604,86 @@ func (_c *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call) RunAndRetur
 	return _c
 }
 
+// SetInstallConfig provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) SetInstallConfig(config *files.RootConfig) {
+	_mock.Called(config)
+	return
+}
+
+// MockInstallConfigManager_SetInstallConfig_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetInstallConfig'
+type MockInstallConfigManager_SetInstallConfig_Call struct {
+	*mock.Call
+}
+
+// SetInstallConfig is a helper method to define mock.On call
+//   - config *files.RootConfig
+func (_e *MockInstallConfigManager_Expecter) SetInstallConfig(config any) *MockInstallConfigManager_SetInstallConfig_Call {
+	return &MockInstallConfigManager_SetInstallConfig_Call{Call: _e.mock.On("SetInstallConfig", config)}
+}
+
+func (_c *MockInstallConfigManager_SetInstallConfig_Call) Run(run func(config *files.RootConfig)) *MockInstallConfigManager_SetInstallConfig_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *files.RootConfig
+		if args[0] != nil {
+			arg0 = args[0].(*files.RootConfig)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_SetInstallConfig_Call) Return() *MockInstallConfigManager_SetInstallConfig_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockInstallConfigManager_SetInstallConfig_Call) RunAndReturn(run func(config *files.RootConfig)) *MockInstallConfigManager_SetInstallConfig_Call {
+	_c.Run(run)
+	return _c
+}
+
+// SetVault provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) SetVault(vault *files.InstallVault) {
+	_mock.Called(vault)
+	return
+}
+
+// MockInstallConfigManager_SetVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetVault'
+type MockInstallConfigManager_SetVault_Call struct {
+	*mock.Call
+}
+
+// SetVault is a helper method to define mock.On call
+//   - vault *files.InstallVault
+func (_e *MockInstallConfigManager_Expecter) SetVault(vault any) *MockInstallConfigManager_SetVault_Call {
+	return &MockInstallConfigManager_SetVault_Call{Call: _e.mock.On("SetVault", vault)}
+}
+
+func (_c *MockInstallConfigManager_SetVault_Call) Run(run func(vault *files.InstallVault)) *MockInstallConfigManager_SetVault_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 *files.InstallVault
+		if args[0] != nil {
+			arg0 = args[0].(*files.InstallVault)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_SetVault_Call) Return() *MockInstallConfigManager_SetVault_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockInstallConfigManager_SetVault_Call) RunAndReturn(run func(vault *files.InstallVault)) *MockInstallConfigManager_SetVault_Call {
+	_c.Run(run)
+	return _c
+}
+
 // ValidateInstallConfig provides a mock function for the type MockInstallConfigManager
 func (_mock *MockInstallConfigManager) ValidateInstallConfig() []string {
 	ret := _mock.Called()

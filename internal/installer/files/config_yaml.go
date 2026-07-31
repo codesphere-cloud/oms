@@ -4,6 +4,7 @@
 package files
 
 import (
+	"fmt"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -39,6 +40,40 @@ func (v *InstallVault) SetSecret(entry SecretEntry) {
 	v.Secrets = append(v.Secrets, entry)
 }
 
+// RemoveSecret deletes the entry with the given name, if present.
+func (v *InstallVault) RemoveSecret(name string) {
+	for i := range v.Secrets {
+		if v.Secrets[i].Name == name {
+			v.Secrets = append(v.Secrets[:i], v.Secrets[i+1:]...)
+			return
+		}
+	}
+}
+
+// Clone returns a deep copy of the vault, so callers can derive a new vault without
+// aliasing the original's secret entries.
+func (v *InstallVault) Clone() *InstallVault {
+	if v == nil {
+		return nil
+	}
+
+	clone := &InstallVault{Secrets: make([]SecretEntry, 0, len(v.Secrets))}
+	for _, entry := range v.Secrets {
+		copied := SecretEntry{Name: entry.Name}
+		if entry.File != nil {
+			file := *entry.File
+			copied.File = &file
+		}
+		if entry.Fields != nil {
+			fields := *entry.Fields
+			copied.Fields = &fields
+		}
+		clone.Secrets = append(clone.Secrets, copied)
+	}
+
+	return clone
+}
+
 func (v *InstallVault) Unmarshal(data []byte) error {
 	return yaml.Unmarshal(data, v)
 }
@@ -62,6 +97,8 @@ type SecretFields struct {
 // RootConfig represents the relevant parts of the configuration file
 type RootConfig struct {
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
+	DataCenters            []DatacenterConfig            `yaml:"dataCenters,omitempty"`
+	DefaultDataCenterID    int                           `yaml:"defaultDataCenterId,omitempty"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
@@ -79,6 +116,11 @@ type OperationsConfig struct {
 	Skip []string `yaml:"skip"`
 }
 
+// DatacenterConfig describes one data center. RootConfig.Datacenter is the data center an installer
+// run installs; RootConfig.DataCenters lists every data center of the installation, which the
+// installer needs to render the platform's data center picker. Both are the same in a
+// single-data-center installation, where DataCenters may be left empty: the installer then defaults
+// it to the local data center. DefaultDataCenterID likewise defaults to Datacenter.ID.
 type DatacenterConfig struct {
 	ID          int    `yaml:"id"`
 	Name        string `yaml:"name"`
@@ -643,6 +685,23 @@ func (c *RootConfig) Marshal() ([]byte, error) {
 	c.buildACMEOverride()
 	c.buildOpenfgaBackupValues()
 	return yaml.Marshal(c)
+}
+
+// Clone returns a deep copy of the config, so a caller can derive a new config without sharing
+// the original's maps, slices and pointers. It round-trips through YAML, so — like any other
+// load of this config — keys the struct does not model are not carried over.
+func (c *RootConfig) Clone() (*RootConfig, error) {
+	data, err := c.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("marshal config for cloning: %w", err)
+	}
+
+	clone := NewRootConfig()
+	if err := clone.Unmarshal(data); err != nil {
+		return nil, fmt.Errorf("unmarshal cloned config: %w", err)
+	}
+
+	return &clone, nil
 }
 
 // Unmarshal deserializes YAML data into the RootConfig
