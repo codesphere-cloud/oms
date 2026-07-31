@@ -851,8 +851,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureLocalContainerRegistry", func() {
 		Describe("Valid EnsureLocalContainerRegistry", func() {
 			It("installs local registry", func() {
-				vault := &files.InstallVault{}
-				icg.EXPECT().GetVault().Return(vault)
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				// Setup mocked node
 				// Check if running - return error to simulate not running
@@ -868,7 +867,56 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.EnsureLocalContainerRegistry()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal("custom-registry"))
+				Expect(bs.Env.RegistryUsername).To(Equal("custom-registry"))
+				Expect(bs.Env.RegistryPassword).NotTo(BeEmpty())
+				Expect(bs.Env.ContainerRegistryURL).To(Equal(bs.Env.PostgreSQLNode.GetInternalIP() + ":5000"))
+			})
+
+			// A re-run that adds a data center finds the registry already up. Its nodes still
+			// need the registry's self-signed certificate, or every image pull fails.
+			It("distributes the registry certificate even when the registry is already running", func() {
+				vault := &files.InstallVault{}
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "custom-registry"}})
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "existing-password"}})
+				icg.EXPECT().GetVault().Return(vault)
+
+				bs.Env.MultiDC = true
+				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
+				bs.Env.CephNodes = []*node.Node{fakeNode("ceph-1", nodeClient)}
+				secondary := &gcp.DataCenter{ID: 2, Suffix: "-dc2"}
+				secondary.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1-dc2", nodeClient)}
+				secondary.CephNodes = []*node.Node{fakeNode("ceph-1-dc2", nodeClient)}
+
+				// Registry is already running with credentials in the vault.
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(nil)
+
+				scpTargets := []string{}
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.HasPrefix(cmd, "scp ")
+				})).RunAndReturn(func(_ *node.Node, _ string, cmd string) error {
+					scpTargets = append(scpTargets, cmd)
+					return nil
+				}).Times(4)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "update-ca-certificates").Return(nil).Times(4)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "systemctl restart docker.service || true").Return(nil).Times(4)
+
+				// Register the second data center only after ensureDataCenters would have run,
+				// mirroring what EnsureComputeInstances produces for a --multi-dc bootstrap.
+				bs.Env.DataCenters = []*gcp.DataCenter{
+					{
+						ID:                1,
+						ControlPlaneNodes: bs.Env.ControlPlaneNodes,
+						CephNodes:         bs.Env.CephNodes,
+					},
+					secondary,
+				}
+				bs.Env.DataCenters[0].SetConfigManager(icg)
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(scpTargets).To(HaveLen(4))
+				Expect(bs.Env.RegistryPassword).To(Equal("existing-password"))
 			})
 		})
 
@@ -988,17 +1036,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.GitHubPAT = "fake-pat"
 			csEnv.RegistryUser = "custom-registry"
 		})
-		It("sets configuration options in installconfig", func() {
-			vault := &files.InstallVault{}
-			icg.EXPECT().GetVault().Return(vault)
-
+		// The resolved registry and its credentials live on the environment; every data center's
+		// config picks them up in updateInstallConfig.
+		It("resolves ghcr.io as the registry for all data centers", func() {
 			err := bs.EnsureGitHubAccessConfigured()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
-			Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal(csEnv.RegistryUser))
-			Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal(csEnv.GitHubPAT))
-			Expect(bs.Env.InstallConfig.Registry.LoadContainerImages).To(BeFalse())
-			Expect(bs.Env.InstallConfig.Registry.ReplaceImagesInBom).To(BeFalse())
+			Expect(bs.Env.ContainerRegistryURL).To(Equal("ghcr.io"))
+			Expect(bs.Env.RegistryUsername).To(Equal(csEnv.RegistryUser))
+			Expect(bs.Env.RegistryPassword).To(Equal(csEnv.GitHubPAT))
 		})
 
 		Context("When GitHub PAT is missing", func() {
@@ -1235,9 +1280,74 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureHostsConfigured()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It("creates the directory the installer uploads the age key to on every node", func() {
+				mkdirs := map[string]int{}
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if command == "mkdir -p /etc/codesphere/secrets" {
+							mkdirs[n.GetName()]++
+						}
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				// The postgres node plus every cluster node of every data center.
+				Expect(mkdirs).To(Equal(map[string]int{
+					"postgres": 1,
+					"k0s-1":    1, "k0s-2": 1, "k0s-3": 1,
+					"ceph-1": 1, "ceph-2": 1, "ceph-3": 1,
+				}))
+			})
+
+			It("creates a secondary data center's own secrets directory on its nodes only", func() {
+				secondary := &gcp.DataCenter{ID: 2, Suffix: "-dc2", SecretsDir: "/etc/codesphere/secrets-dc2"}
+				secondary.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1-dc2", nodeClient)}
+				secondary.CephNodes = []*node.Node{fakeNode("ceph-1-dc2", nodeClient)}
+
+				bs.Env.DataCenters = []*gcp.DataCenter{
+					{
+						ID:                1,
+						SecretsDir:        "/etc/codesphere/secrets",
+						ControlPlaneNodes: bs.Env.ControlPlaneNodes,
+						CephNodes:         bs.Env.CephNodes,
+					},
+					secondary,
+				}
+
+				mkdirs := map[string][]string{}
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if dir, found := strings.CutPrefix(command, "mkdir -p "); found {
+							mkdirs[n.GetName()] = append(mkdirs[n.GetName()], dir)
+						}
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				// Both paths on the secondary's nodes, because the installer's fixed path is
+				// created everywhere; the secondary's path on nobody else's.
+				Expect(mkdirs["k0s-1-dc2"]).To(ConsistOf("/etc/codesphere/secrets", "/etc/codesphere/secrets-dc2"))
+				Expect(mkdirs["ceph-1-dc2"]).To(ConsistOf("/etc/codesphere/secrets", "/etc/codesphere/secrets-dc2"))
+				Expect(mkdirs["k0s-1"]).To(ConsistOf("/etc/codesphere/secrets"))
+				Expect(mkdirs["postgres"]).To(ConsistOf("/etc/codesphere/secrets"))
+			})
 		})
 
 		Describe("Invalid cases", func() {
+			It("fails when the secrets directory cannot be created", func() {
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						if command == "mkdir -p /etc/codesphere/secrets" {
+							return fmt.Errorf("ouch")
+						}
+						return nil
+					})
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to create secrets directory on postgres")))
+			})
+
 			It("fails when ConfigureInotifyWatches fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch"))
 
@@ -1353,6 +1463,41 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.EnsureDNSRecords()
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("points each data center's platform host at its own gateway", func() {
+				bs.Env.DataCenters = []*gcp.DataCenter{
+					{
+						ID: 1, GatewayIP: "1.1.1.1", PublicGatewayIP: "1.1.1.2", SshProxyIP: "1.1.1.3",
+						WorkspaceHostingBaseDomain: "1.ws.example.com", SshBaseDomain: "1.ssh.cs.example.com",
+					},
+					{
+						ID: 2, Suffix: "-dc2", GatewayIP: "2.2.2.1", PublicGatewayIP: "2.2.2.2", SshProxyIP: "2.2.2.3",
+						WorkspaceHostingBaseDomain: "2.ws.example.com", SshBaseDomain: "2.ssh.cs.example.com",
+					},
+				}
+
+				gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, csEnv.DNSZoneName, csEnv.BaseDomain+".", mock.Anything).Return(nil)
+				targets := map[string]string{}
+				gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, csEnv.DNSZoneName, mock.Anything).
+					RunAndReturn(func(_ string, _ string, records []*dns.ResourceRecordSet) error {
+						for _, r := range records {
+							targets[r.Name] = r.Rrdatas[0]
+						}
+						return nil
+					})
+
+				Expect(bs.EnsureDNSRecords()).To(Succeed())
+				// The shared platform name stays on the primary data center's gateway, but the
+				// per-data-center platform host the frontend calls resolves to its own gateway.
+				Expect(targets["cs.example.com."]).To(Equal("1.1.1.1"))
+				Expect(targets["*.cs.example.com."]).To(Equal("1.1.1.1"))
+				Expect(targets["1.cs.example.com."]).To(Equal("1.1.1.1"))
+				Expect(targets["2.cs.example.com."]).To(Equal("2.2.2.1"))
+				Expect(targets["*.2.cs.example.com."]).To(Equal("2.2.2.1"))
+				// Workspaces and SSH keep pointing at the public gateway and SSH proxy.
+				Expect(targets["2.ws.example.com."]).To(Equal("2.2.2.2"))
+				Expect(targets["*.2.ssh.cs.example.com."]).To(Equal("2.2.2.3"))
 			})
 		})
 

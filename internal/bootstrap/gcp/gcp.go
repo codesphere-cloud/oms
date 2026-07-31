@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -36,6 +35,24 @@ const (
 	RegistryTypeGitHub           RegistryType = "github"
 )
 
+// remoteK0sConfigScriptPath is where each data center's k0s configuration script is placed on
+// that data center's first control plane node. Data centers have separate nodes, so the path can
+// be the same for all of them.
+const remoteK0sConfigScriptPath = "/root/configure-k0s.sh"
+
+// installerNodeSecretsDir is where the Codesphere installer uploads a data center's age key on
+// every one of that data center's nodes. The path is fixed even though the installer reads the key
+// from the data center's own secrets.baseDir on the jumpbox, and the installer only creates
+// baseDir on the node — so for a data center whose baseDir differs, the upload target would not
+// exist. Creating it up front is harmless: data centers have separate nodes, so a node only ever
+// holds its own data center's key.
+const installerNodeSecretsDir = "/etc/codesphere/secrets"
+
+// vpcSubnetCIDR is the range of the project's single subnet, shared by all data centers. It is
+// also each data center's ceph.nodesSubnet; their Ceph clusters stay separate because each has
+// its own hosts, monitors and FSID.
+const vpcSubnetCIDR = "10.10.0.0/20"
+
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
 // A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
 func CheckOMSManagedLabel(labels map[string]string) bool {
@@ -46,21 +63,47 @@ func CheckOMSManagedLabel(labels map[string]string) bool {
 	return exists && value == "true"
 }
 
-// GetDNSRecordNames returns the DNS record names that OMS creates for a given base domain.
-func GetDNSRecordNames(baseDomain string) []struct {
-	Name  string
-	Rtype string
-} {
-	return []struct {
-		Name  string
-		Rtype string
-	}{
+// DNSRecordName identifies a DNS record set that OMS manages.
+type DNSRecordName struct {
+	Name  string `json:"name"`
+	Rtype string `json:"rtype"`
+}
+
+// GetDNSRecordNames returns the DNS record names a single-data-center bootstrap creates for a
+// given base domain. It is the fallback for infra files written before multi-DC support, which
+// do not record the created records.
+func GetDNSRecordNames(baseDomain string) []DNSRecordName {
+	return []DNSRecordName{
 		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
 		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
 		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
 		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
 		{fmt.Sprintf("*.ssh.cs.%s.", baseDomain), "A"},
 	}
+}
+
+// DataCenterDNSRecordNames returns every DNS record OMS creates for the given data center
+// layout: the shared platform gateway names plus each data center's workspace and SSH names.
+func DataCenterDNSRecordNames(baseDomain string, dcs []*DataCenter) []DNSRecordName {
+	records := []DNSRecordName{
+		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
+	}
+	for _, dc := range dcs {
+		records = append(records,
+			DNSRecordName{fmt.Sprintf("%s.", dc.WorkspaceHostingBaseDomain), "A"},
+			DNSRecordName{fmt.Sprintf("*.%s.", dc.WorkspaceHostingBaseDomain), "A"},
+			DNSRecordName{fmt.Sprintf("*.%s.", dc.SshBaseDomain), "A"},
+		)
+		if len(dcs) > 1 {
+			records = append(records,
+				DNSRecordName{fmt.Sprintf("%s.", dc.PlatformDomain(baseDomain)), "A"},
+				DNSRecordName{fmt.Sprintf("*.%s.", dc.PlatformDomain(baseDomain)), "A"},
+			)
+		}
+	}
+
+	return records
 }
 
 // This should ALWAYS be empty. Internal flags are for internal feature
@@ -96,18 +139,68 @@ type GCPBootstrapper struct {
 	NodeClient   node.NodeClient
 	PortalClient portal.Portal
 	GitHubClient github.GitHubClient
+	// NewConfigManager creates the install config manager of a data center. Each data center
+	// owns its own config and vault, so multi-DC bootstraps need more than one.
+	NewConfigManager func() installer.InstallConfigManager
+}
+
+// primaryDC returns the first data center, which owns the shared PostgreSQL server and the
+// platform gateway that codesphere.domain resolves to.
+func (b *GCPBootstrapper) primaryDC() *DataCenter {
+	return b.Env.DataCenters[0]
+}
+
+// secondaryDCs returns every data center apart from the primary one.
+func (b *GCPBootstrapper) secondaryDCs() []*DataCenter {
+	return b.Env.DataCenters[1:]
+}
+
+// allNodes returns every node of the project: the jumpbox, the shared postgres node and all
+// data centers' Ceph and k0s nodes.
+func (b *GCPBootstrapper) allNodes() []*node.Node {
+	nodes := []*node.Node{b.Env.Jumpbox, b.Env.PostgreSQLNode}
+	for _, dc := range b.Env.DataCenters {
+		nodes = append(nodes, dc.ControlPlaneNodes...)
+		nodes = append(nodes, dc.CephNodes...)
+	}
+
+	return nodes
+}
+
+// clusterNodes returns every Ceph and k0s node of all data centers, i.e. all nodes except the
+// jumpbox and the shared postgres node.
+func (b *GCPBootstrapper) clusterNodes() []*node.Node {
+	nodes := []*node.Node{}
+	for _, dc := range b.Env.DataCenters {
+		nodes = append(nodes, dc.ControlPlaneNodes...)
+		nodes = append(nodes, dc.CephNodes...)
+	}
+
+	return nodes
 }
 
 type CodesphereEnvironment struct {
-	ProjectID                     string       `json:"project_id"`
-	ProjectTTL                    string       `json:"project_ttl"`
-	ProjectName                   string       `json:"project_name"`
-	DNSProjectID                  string       `json:"dns_project_id"`
-	Jumpbox                       *node.Node   `json:"jumpbox"`
-	PostgreSQLNode                *node.Node   `json:"postgres_node"`
-	ControlPlaneNodes             []*node.Node `json:"control_plane_nodes"`
-	CephNodes                     []*node.Node `json:"ceph_nodes"`
-	ContainerRegistryURL          string       `json:"-"`
+	ProjectID      string     `json:"project_id"`
+	ProjectTTL     string     `json:"project_ttl"`
+	ProjectName    string     `json:"project_name"`
+	DNSProjectID   string     `json:"dns_project_id"`
+	Jumpbox        *node.Node `json:"jumpbox"`
+	PostgreSQLNode *node.Node `json:"postgres_node"`
+	// MultiDC bootstraps two data centers that share the PostgreSQL server but run separate
+	// Kubernetes and Ceph clusters.
+	MultiDC bool `json:"multi_dc"`
+	// DataCenters holds the per-data-center state. It always has at least one entry.
+	DataCenters []*DataCenter `json:"datacenters"`
+	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
+	// those instead of recomputing the list.
+	DNSRecords []DNSRecordName `json:"dns_records,omitempty"`
+	// Mirrors of DataCenters[0], written for infra files consumed by cleanup and restart-vms.
+	ControlPlaneNodes []*node.Node `json:"control_plane_nodes"`
+	CephNodes         []*node.Node `json:"ceph_nodes"`
+	// ContainerRegistryURL is the resolved registry server all data centers pull images from.
+	ContainerRegistryURL          string       `json:"container_registry_url,omitempty"`
+	RegistryUsername              string       `json:"-"`
+	RegistryPassword              string       `json:"-"`
 	ExistingConfigUsed            bool         `json:"-"`
 	InstallVersion                string       `json:"install_version"`
 	InstallLocal                  string       `json:"install_local"`
@@ -181,10 +274,13 @@ type CodesphereEnvironment struct {
 	SSHPrivateKeyPath          string `json:"-"`
 	DatacenterID               int    `json:"-"`
 	DatacenterName             string `json:"-"`
-	CustomPgIP                 string `json:"custom_pg_ip"`
-	Region                     string `json:"region"`
-	Zone                       string `json:"zone"`
-	DNSZoneName                string `json:"dns_zone_name"`
+	// DatacenterIDExplicit records whether --datacenter-id was set on the command line. The
+	// value alone cannot distinguish the default 1 from an explicit 1.
+	DatacenterIDExplicit bool   `json:"-"`
+	CustomPgIP           string `json:"custom_pg_ip"`
+	Region               string `json:"region"`
+	Zone                 string `json:"zone"`
+	DNSZoneName          string `json:"dns_zone_name"`
 
 	// Test user creation
 	CreateTestUser bool   `json:"-"`
@@ -208,16 +304,17 @@ func NewGCPBootstrapper(
 	gitHubClient github.GitHubClient,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:          ctx,
-		stlog:        stlog,
-		fw:           fw,
-		icg:          icg,
-		GCPClient:    gcpClient,
-		Env:          CodesphereEnv,
-		NodeClient:   sshRunner,
-		PortalClient: portalClient,
-		Time:         time,
-		GitHubClient: gitHubClient,
+		ctx:              ctx,
+		stlog:            stlog,
+		fw:               fw,
+		icg:              icg,
+		GCPClient:        gcpClient,
+		Env:              CodesphereEnv,
+		NodeClient:       sshRunner,
+		PortalClient:     portalClient,
+		Time:             time,
+		GitHubClient:     gitHubClient,
+		NewConfigManager: installer.NewInstallConfigManager,
 	}, nil
 }
 
@@ -324,19 +421,41 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.WriteConfig {
-		err = b.stlog.Step("Update install config", b.UpdateInstallConfig)
+		err = b.writeDataCenterConfig(b.primaryDC())
 		if err != nil {
-			return fmt.Errorf("failed to update install config: %w", err)
+			return err
+		}
+	}
+
+	// Secondary data centers fall back to deriving their config and vault from the primary one,
+	// so this has to run after the primary's secrets were generated above.
+	for _, dc := range b.secondaryDCs() {
+		err = b.stlog.Step(dc.StepName("Ensure install config"), func() error {
+			return b.ensureInstallConfig(dc)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to ensure install config of data center %d: %w", dc.ID, err)
 		}
 
-		err = b.stlog.Step("Ensure age key", b.EnsureAgeKey)
+		err = b.stlog.Step(dc.StepName("Ensure secrets"), func() error {
+			return b.ensureSecrets(dc)
+		})
 		if err != nil {
-			return fmt.Errorf("failed to ensure age key: %w", err)
+			return fmt.Errorf("failed to ensure secrets of data center %d: %w", dc.ID, err)
 		}
 
-		err = b.stlog.Step("Encrypt vault", b.EncryptVault)
+		err = b.stlog.Step(dc.StepName("Derive config and vault"), func() error {
+			return b.seedSecondaryDataCenter(b.primaryDC(), dc)
+		})
 		if err != nil {
-			return fmt.Errorf("failed to encrypt vault: %w", err)
+			return fmt.Errorf("failed to derive data center %d: %w", dc.ID, err)
+		}
+
+		if b.Env.WriteConfig {
+			err = b.writeDataCenterConfig(dc)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -351,12 +470,14 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
-		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
+		err = b.InstallCodesphere()
 		if err != nil {
 			return fmt.Errorf("failed to install Codesphere: %w", err)
 		}
 
-		err = b.stlog.Step("Run k0s config script", b.RunK0sConfigScript)
+		// Every data center is installed before any k0s script runs, so a script never patches
+		// gateway services an install has yet to create.
+		err = b.RunK0sConfigScript()
 		if err != nil {
 			return fmt.Errorf("failed to run k0s config script: %w", err)
 		}
@@ -371,8 +492,11 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	return nil
 }
 
-// createTestUser creates a test user in the PostgreSQL instance using the testuser package and logs the credentials.
+// createTestUser creates a test user in the shared PostgreSQL instance using the testuser package
+// and logs the credentials. The user's team is homed in the primary data center.
 func (b *GCPBootstrapper) createTestUser() error {
+	b.ensureDataCenters()
+
 	if b.Env.PostgreSQLNode == nil {
 		return fmt.Errorf("postgres node not found in bootstrap environment")
 	}
@@ -382,10 +506,11 @@ func (b *GCPBootstrapper) createTestUser() error {
 		return fmt.Errorf("postgres node has no external IP")
 	}
 
-	if b.Env.InstallConfig == nil {
+	primary := b.primaryDC()
+	if primary.InstallConfig == nil {
 		return fmt.Errorf("install config not found in bootstrap environment")
 	}
-	pgPasswordSecret := b.icg.GetVault().GetSecret(files.SecretPostgresPassword)
+	pgPasswordSecret := primary.ConfigManager().GetVault().GetSecret(files.SecretPostgresPassword)
 	if pgPasswordSecret == nil || pgPasswordSecret.Fields == nil {
 		return fmt.Errorf("postgres admin password not found in vault")
 	}
@@ -398,7 +523,7 @@ func (b *GCPBootstrapper) createTestUser() error {
 		Password:     pgPassword,
 		DBName:       testuser.DefaultDBName,
 		SSLMode:      "require",
-		DatacenterID: b.Env.DatacenterID,
+		DatacenterID: primary.ID,
 	})
 	if err != nil {
 		return err
@@ -456,7 +581,48 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
+	err = b.validateMultiDC()
+	if err != nil {
+		return err
+	}
+
 	return b.validateTelemetryExportParams()
+}
+
+// validateMultiDC rejects flag combinations a multi-data-center bootstrap cannot satisfy.
+func (b *GCPBootstrapper) validateMultiDC() error {
+	if !b.Env.MultiDC {
+		return nil
+	}
+
+	// A secondary data center's config and vault are derived from the primary's, which only
+	// happens when configs are written.
+	if !b.Env.WriteConfig {
+		return fmt.Errorf("multi-dc requires write-config to be enabled")
+	}
+
+	// The data center IDs are derived (1 and 2) and drive the workspace hosting domains.
+	if b.Env.DatacenterIDExplicit {
+		return fmt.Errorf("datacenter-id cannot be combined with multi-dc, the IDs are derived")
+	}
+
+	// The k0s cluster is named codesphere-<datacenter name>, so both names must be set and
+	// distinct. BuildDataCenters derives the second one by suffixing the first.
+	if b.Env.DatacenterName == "" {
+		return fmt.Errorf("datacenter-name is required with multi-dc")
+	}
+
+	// Every data center gets its own local config and vault, derived by suffixing these paths.
+	for name, path := range map[string]string{
+		"install-config": b.Env.InstallConfigPath,
+		"secrets-file":   b.Env.SecretsFilePath,
+	} {
+		if path == "" {
+			return fmt.Errorf("cannot derive a per-data-center path: %s is empty", name)
+		}
+	}
+
+	return nil
 }
 
 func (b *GCPBootstrapper) validateClusterAdminEmail() error {
@@ -613,7 +779,7 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 
 	repo, err := b.GCPClient.GetArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
 	if err == nil && repo != nil {
-		b.Env.InstallConfig.Registry.Server = repo.GetRegistryUri()
+		b.Env.ContainerRegistryURL = repo.GetRegistryUri()
 		return nil
 	}
 
@@ -621,6 +787,7 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	if err != nil || repo == nil {
 		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
 	}
+	b.Env.ContainerRegistryURL = repo.GetRegistryUri()
 
 	return nil
 }
@@ -685,7 +852,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		Allowed: []*computepb.Allowed{
 			{IPProtocol: protoString("all")},
 		},
-		SourceRanges: []string{"10.10.0.0/20"},
+		SourceRanges: []string{vpcSubnetCIDR},
 		Description:  protoString("Allow all internal traffic"),
 	}
 	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, internalRule)
@@ -748,19 +915,34 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 	return nil
 }
 
-// EnsureGatewayIPAddresses reserves the static external IP addresses for the ingress
-// controllers of the cluster (gateway and public gateway) and the SSH workspace proxy.
+// EnsureGatewayIPAddresses reserves the static external IP addresses of every data center: the
+// ingress controllers of its cluster (gateway and public gateway) and its SSH workspace proxy.
 func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
+	b.ensureDataCenters()
+
+	for _, dc := range b.Env.DataCenters {
+		if err := b.ensureGatewayIPAddresses(dc); err != nil {
+			return err
+		}
+	}
+	b.mirrorPrimaryDataCenter()
+
+	return nil
+}
+
+// ensureGatewayIPAddresses reserves one data center's static external IP addresses. Their names
+// carry the data-center suffix, so the primary data center keeps the unsuffixed names.
+func (b *GCPBootstrapper) ensureGatewayIPAddresses(dc *DataCenter) error {
 	var err error
-	b.Env.GatewayIP, err = b.EnsureExternalIP("gateway")
+	dc.GatewayIP, err = b.EnsureExternalIP("gateway" + dc.Suffix)
 	if err != nil {
 		return fmt.Errorf("failed to ensure gateway IP: %w", err)
 	}
-	b.Env.PublicGatewayIP, err = b.EnsureExternalIP("public-gateway")
+	dc.PublicGatewayIP, err = b.EnsureExternalIP("public-gateway" + dc.Suffix)
 	if err != nil {
 		return fmt.Errorf("failed to ensure public gateway IP: %w", err)
 	}
-	b.Env.SshProxyIP, err = b.EnsureExternalIP("ssh-proxy")
+	dc.SshProxyIP, err = b.EnsureExternalIP("ssh-proxy" + dc.Suffix)
 	if err != nil {
 		return fmt.Errorf("failed to ensure ssh proxy IP: %w", err)
 	}
@@ -801,14 +983,9 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 }
 
 func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
-	allNodes := []*node.Node{
-		b.Env.Jumpbox,
-	}
-	allNodes = append(allNodes, b.Env.ControlPlaneNodes...)
-	allNodes = append(allNodes, b.Env.PostgreSQLNode)
-	allNodes = append(allNodes, b.Env.CephNodes...)
+	b.ensureDataCenters()
 
-	for _, node := range allNodes {
+	for _, node := range b.allNodes() {
 		err := b.stlog.Substep(fmt.Sprintf("Ensuring root login enabled on %s", node.GetName()), func() error {
 			return b.ensureRootLoginEnabledInNode(node)
 		})
@@ -894,8 +1071,9 @@ func (b *GCPBootstrapper) EnsureOmsInstalled() (err error) {
 }
 
 func (b *GCPBootstrapper) EnsureHostsConfigured() error {
-	allNodes := append(b.Env.ControlPlaneNodes, b.Env.PostgreSQLNode)
-	allNodes = append(allNodes, b.Env.CephNodes...)
+	b.ensureDataCenters()
+
+	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.clusterNodes()...)
 
 	for _, node := range allNodes {
 		if !node.HasInotifyWatchesConfigured() {
@@ -910,38 +1088,76 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 				return fmt.Errorf("failed to configure memory map on %s: %w", node.GetName(), err)
 			}
 		}
+		err := node.RunSSHCommand("root", "mkdir -p "+installerNodeSecretsDir)
+		if err != nil {
+			return fmt.Errorf("failed to create secrets directory on %s: %w", node.GetName(), err)
+		}
+	}
+
+	// A secondary data center's secrets directory differs from the fixed path above, so create that
+	// one too on its own nodes. Nodes belong to exactly one data center, so no node gets a foreign
+	// data center's directory.
+	for _, dc := range b.Env.DataCenters {
+		if dc.SecretsDir == installerNodeSecretsDir {
+			continue
+		}
+		for _, n := range append(append([]*node.Node{}, dc.ControlPlaneNodes...), dc.CephNodes...) {
+			err := n.RunSSHCommand("root", "mkdir -p "+dc.SecretsDir)
+			if err != nil {
+				return fmt.Errorf("failed to create secrets directory on %s: %w", n.GetName(), err)
+			}
+		}
 	}
 
 	return nil
 }
 
-// EnsureLocalContainerRegistry installs a docker registry on the postgres node to speed up image loading time
+// EnsureLocalContainerRegistry installs a container registry on the postgres node to speed up
+// image loading time, and makes every cluster node of every data center trust its certificate.
 func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
+	b.ensureDataCenters()
+
+	registryServer, err := b.ensureRegistryRunning()
+	if err != nil {
+		return err
+	}
+	b.Env.ContainerRegistryURL = registryServer
+
+	// The certificate must be distributed on every run, not only when the registry was just
+	// created: a re-run that adds a data center finds the registry already up, and that data
+	// center's nodes would otherwise not trust it.
+	return b.distributeRegistryCert(b.clusterNodes())
+}
+
+// ensureRegistryRunning starts the container registry on the postgres node and generates its
+// credentials when it is not already serving. Returns the registry server address.
+func (b *GCPBootstrapper) ensureRegistryRunning() (string, error) {
 	localRegistryServer := b.Env.PostgreSQLNode.GetInternalIP() + ":5000"
 
 	// Figure out if registry is already running
 	b.stlog.Logf("Checking if local container registry is already running on postgres node")
 	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
 	err := b.Env.PostgreSQLNode.RunSSHCommand("root", checkCommand)
+	vault := b.primaryDC().ConfigManager().GetVault()
 	registryUsername := ""
 	registryPassword := ""
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
+	if s := vault.GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
 		registryUsername = s.Fields.Password
 	}
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
+	if s := vault.GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
 		registryPassword = s.Fields.Password
 	}
-	if err == nil && b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server == localRegistryServer &&
-		registryUsername != "" && registryPassword != "" {
+	if err == nil && registryUsername != "" && registryPassword != "" {
 		b.stlog.Logf("Local container registry already running on postgres node")
-		return nil
+		b.Env.RegistryUsername = registryUsername
+		b.Env.RegistryPassword = registryPassword
+		return localRegistryServer, nil
 	}
 
-	b.Env.InstallConfig.Registry.Server = localRegistryServer
 	registryUsername = "custom-registry"
 	registryPassword = shortuuid.New()
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: registryUsername}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
+	b.Env.RegistryUsername = registryUsername
+	b.Env.RegistryPassword = registryPassword
 
 	commands := []string{
 		"apt-get update",
@@ -961,19 +1177,24 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		-v /root/registry.crt:/certs/registry.crt \
 		-v /root/registry.key:/certs/registry.key \
 		registry:2`,
-		`mkdir -p /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server,
-		`cp /root/registry.crt /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server + `/ca.crt`,
+		`mkdir -p /etc/docker/certs.d/` + localRegistryServer,
+		`cp /root/registry.crt /etc/docker/certs.d/` + localRegistryServer + `/ca.crt`,
 	}
 	for _, cmd := range commands {
 		b.stlog.Logf("Running command on postgres node: %s", util.Truncate(cmd, 12))
 		err := b.Env.PostgreSQLNode.RunSSHCommand("root", cmd)
 		if err != nil {
-			return fmt.Errorf("failed to run command on postgres node: %w", err)
+			return "", fmt.Errorf("failed to run command on postgres node: %w", err)
 		}
 	}
 
-	allNodes := append(b.Env.ControlPlaneNodes, b.Env.CephNodes...)
-	for _, node := range allNodes {
+	return localRegistryServer, nil
+}
+
+// distributeRegistryCert installs the local registry's self-signed certificate on the given
+// nodes. It is idempotent, so it is safe — and required — to re-run for an additional data center.
+func (b *GCPBootstrapper) distributeRegistryCert(nodes []*node.Node) error {
+	for _, node := range nodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
 		err := b.Env.PostgreSQLNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
 		if err != nil {
@@ -992,19 +1213,20 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	return nil
 }
 
+// EnsureGitHubAccessConfigured resolves ghcr.io as the registry all data centers pull from.
 func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.GitHubPAT == "" {
 		return fmt.Errorf("GitHub PAT is not set")
 	}
-	b.Env.InstallConfig.Registry.Server = "ghcr.io"
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
-	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
-	b.Env.InstallConfig.Registry.LoadContainerImages = false
+	b.Env.ContainerRegistryURL = "ghcr.io"
+	b.Env.RegistryUsername = b.Env.RegistryUser
+	b.Env.RegistryPassword = b.Env.GitHubPAT
 	return nil
 }
 
 func (b *GCPBootstrapper) EnsureDNSRecords() error {
+	b.ensureDataCenters()
+
 	gcpProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
 		gcpProject = b.Env.ProjectID
@@ -1016,37 +1238,30 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 		return fmt.Errorf("failed to ensure DNS managed zone: %w", err)
 	}
 
+	// The platform is served from one domain shared by all data centers, pointing at the
+	// primary data center's gateway.
 	records := []*dns.ResourceRecordSet{
-		{
-			Name:    fmt.Sprintf("cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.ssh.cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.SshProxyIP},
-		},
+		dnsARecord(fmt.Sprintf("cs.%s.", b.Env.BaseDomain), b.primaryDC().GatewayIP),
+		dnsARecord(fmt.Sprintf("*.cs.%s.", b.Env.BaseDomain), b.primaryDC().GatewayIP),
+	}
+	// Workspaces and their SSH endpoints resolve per data center, so each one gets its own
+	// names pointing at its own public gateway and SSH proxy.
+	for _, dc := range b.Env.DataCenters {
+		records = append(records,
+			dnsARecord(fmt.Sprintf("%s.", dc.WorkspaceHostingBaseDomain), dc.PublicGatewayIP),
+			dnsARecord(fmt.Sprintf("*.%s.", dc.WorkspaceHostingBaseDomain), dc.PublicGatewayIP),
+			dnsARecord(fmt.Sprintf("*.%s.", dc.SshBaseDomain), dc.SshProxyIP),
+		)
+		// The platform calls each data center's own services at <dc-id>.cs.<base-domain>, which
+		// the wildcard above would send to the primary data center's gateway. A single data
+		// center is that primary, so it needs no record of its own.
+		if len(b.Env.DataCenters) > 1 {
+			platformDomain := dc.PlatformDomain(b.Env.BaseDomain)
+			records = append(records,
+				dnsARecord(fmt.Sprintf("%s.", platformDomain), dc.GatewayIP),
+				dnsARecord(fmt.Sprintf("*.%s.", platformDomain), dc.GatewayIP),
+			)
+		}
 	}
 
 	err = b.GCPClient.EnsureDNSRecordSets(gcpProject, zoneName, records)
@@ -1054,18 +1269,59 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 		return fmt.Errorf("failed to ensure DNS record sets: %w", err)
 	}
 
+	// Record what was created so cleanup deletes exactly these records instead of recomputing
+	// the list from the base domain.
+	b.Env.DNSRecords = DataCenterDNSRecordNames(b.Env.BaseDomain, b.Env.DataCenters)
+
 	return nil
 }
 
+// dnsARecord builds a short-TTL A record set, as used during initial setup.
+func dnsARecord(name, ip string) *dns.ResourceRecordSet {
+	return &dns.ResourceRecordSet{
+		Name:    name,
+		Type:    "A",
+		Ttl:     300,
+		Rrdatas: []string{ip},
+	}
+}
+
+// InstallCodesphere installs Codesphere into every data center from the shared jumpbox, in
+// ascending data center order. The order matters: the primary data center's install creates the
+// database, roles and schema that the secondary ones reuse.
 func (b *GCPBootstrapper) InstallCodesphere() error {
+	b.ensureDataCenters()
+
 	fullPackageFilename, err := b.ensureCodespherePackageOnJumpbox()
 	if err != nil {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
-	err = b.runInstallCommand(fullPackageFilename)
-	if err != nil {
-		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
+	for _, dc := range b.Env.DataCenters {
+		err = b.stlog.Step(dc.StepName("Install Codesphere"), func() error {
+			return b.runInstallCommand(dc, fullPackageFilename)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to install Codesphere from jumpbox (data center %d): %w", dc.ID, err)
+		}
+	}
+
+	return nil
+}
+
+// RunK0sConfigScript runs every data center's k0s configuration script on its first control
+// plane node. It requires that data center's Codesphere install to have completed, since the
+// script patches the gateway services the install creates.
+func (b *GCPBootstrapper) RunK0sConfigScript() error {
+	b.ensureDataCenters()
+
+	for _, dc := range b.Env.DataCenters {
+		err := b.stlog.Step(dc.StepName("Run k0s config script"), func() error {
+			return b.runK0sConfigScript(dc)
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1106,11 +1362,16 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 	return fullPackageFilename, nil
 }
 
-func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
-	b.stlog.Logf("Installing Codesphere...")
-	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s%s",
-		b.Env.SecretsDir, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), packageFilename, b.generateSkipStepsArg())
-	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
+func (b *GCPBootstrapper) runInstallCommand(dc *DataCenter, packageFilename string) error {
+	b.stlog.Logf("Installing Codesphere in data center %d...", dc.ID)
+	return b.Env.Jumpbox.RunSSHCommand("root", b.InstallCommand(dc, packageFilename))
+}
+
+// InstallCommand returns the command that installs Codesphere into the given data center from
+// the jumpbox. It is also printed for the operator when the bootstrap does not install itself.
+func (b *GCPBootstrapper) InstallCommand(dc *DataCenter, packageFilename string) string {
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s",
+		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename, b.generateSkipStepsArg())
 }
 
 func (b *GCPBootstrapper) generateSkipStepsArg() string {
@@ -1125,7 +1386,21 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 	return " -s " + strings.Join(skipSteps, ",")
 }
 
+// GenerateK0sConfigScript writes and uploads the k0s cloud-provider configuration script of
+// every data center to that data center's first control plane node.
 func (b *GCPBootstrapper) GenerateK0sConfigScript() error {
+	b.ensureDataCenters()
+
+	for _, dc := range b.Env.DataCenters {
+		if err := b.generateK0sConfigScript(dc); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) generateK0sConfigScript(dc *DataCenter) error {
 	script := `#!/bin/bash
 
 cat <<EOF > cloud.conf
@@ -1193,14 +1468,14 @@ $KUBECTL apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-gc
 $KUBECTL apply -f cc-deployment.yaml
 
 # set loadBalancerIP for public-gateway-controller and gateway-controller
-$KUBECTL patch svc public-gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + b.Env.PublicGatewayIP + `'"}}'
-$KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + b.Env.GatewayIP + `'"}}'
+$KUBECTL patch svc public-gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + dc.PublicGatewayIP + `'"}}'
+$KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + dc.GatewayIP + `'"}}'
 
 sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
 
-ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[1].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
+ssh -o StrictHostKeyChecking=no root@` + dc.ControlPlaneNodes[1].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
 
-ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[2].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
+ssh -o StrictHostKeyChecking=no root@` + dc.ControlPlaneNodes[2].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
 
 systemctl daemon-reload
 systemctl restart k0scontroller
@@ -1209,25 +1484,27 @@ systemctl restart k0scontroller
 	// --enable-cloud-provider on worker nodes systemd file /etc/systemd/system/k0sworker.service
 	// in addition on the first node: /etc/systemd/system/k0scontroller.service the flag --enable-cloud-provider
 
-	err := b.fw.WriteFile("configure-k0s.sh", []byte(script), 0755)
+	localScript := dc.K0sConfigScriptPath()
+	err := b.fw.WriteFile(localScript, []byte(script), 0755)
 	if err != nil {
-		return fmt.Errorf("failed to write configure-k0s.sh: %w", err)
+		return fmt.Errorf("failed to write %s: %w", localScript, err)
 	}
-	err = b.Env.ControlPlaneNodes[0].NodeClient.CopyFile(b.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh")
+	controller := dc.ControlPlaneNodes[0]
+	err = controller.NodeClient.CopyFile(controller, localScript, remoteK0sConfigScriptPath)
 	if err != nil {
-		return fmt.Errorf("failed to copy configure-k0s.sh to control plane node: %w", err)
+		return fmt.Errorf("failed to copy %s to control plane node: %w", localScript, err)
 	}
-	err = b.Env.ControlPlaneNodes[0].RunSSHCommand("root", "chmod +x /root/configure-k0s.sh")
+	err = controller.RunSSHCommand("root", "chmod +x "+remoteK0sConfigScriptPath)
 	if err != nil {
-		return fmt.Errorf("failed to make configure-k0s.sh executable on control plane node: %w", err)
+		return fmt.Errorf("failed to make %s executable: %w", localScript, err)
 	}
 	return nil
 }
 
-func (b *GCPBootstrapper) RunK0sConfigScript() error {
-	err := b.Env.ControlPlaneNodes[0].RunSSHCommand("root", "/root/configure-k0s.sh")
+func (b *GCPBootstrapper) runK0sConfigScript(dc *DataCenter) error {
+	err := dc.ControlPlaneNodes[0].RunSSHCommand("root", remoteK0sConfigScriptPath)
 	if err != nil {
-		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
+		return fmt.Errorf("failed to configure k0s in data center %d: %w", dc.ID, err)
 	}
 
 	return nil

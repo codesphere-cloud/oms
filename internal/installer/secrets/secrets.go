@@ -420,8 +420,8 @@ func EnsurePostgresUsers(vault *files.InstallVault) error {
 		if err != nil {
 			return fmt.Errorf("generate postgres password for %s: %w", svc.Name, err)
 		}
-		setPasswordIfAbsent(vault, fmt.Sprintf("postgresUser%s", files.Capitalize(svc.Name)), svc.DBUsername())
-		setPasswordIfAbsent(vault, fmt.Sprintf("postgresPassword%s", files.Capitalize(svc.Name)), svcPwd)
+		setPasswordIfAbsent(vault, files.PostgresUserSecretName(svc.Name), svc.DBUsername())
+		setPasswordIfAbsent(vault, files.PostgresPasswordSecretName(svc.Name), svcPwd)
 	}
 	return nil
 }

@@ -40,6 +40,12 @@ func LoadInfraFile(fw util.FileIO, infraFilePath string) (CodesphereEnvironment,
 
 // WriteInfraFile writes details about the bootstrapped codesphere environment into a file.
 func (b *GCPBootstrapper) WriteInfraFile() error {
+	b.ensureDataCenters()
+
+	// The legacy top-level node and IP fields are what cleanup and restart-vms read, so keep
+	// them in sync with the primary data center before serialising.
+	b.mirrorPrimaryDataCenter()
+
 	envBytes, err := json.MarshalIndent(b.Env, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal codesphere env: %w", err)

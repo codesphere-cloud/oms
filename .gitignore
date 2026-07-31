@@ -48,6 +48,10 @@ internal/util/testdata/
 config.yaml
 prod.vault.yaml
 configure-k0s.sh
+# ... and their per-data-center variants written by a --multi-dc bootstrap
+config-dc*.yaml
+prod-dc*.vault.yaml
+configure-k0s-dc*.sh
 
 # Debugger files
 __debug*
