@@ -150,6 +150,11 @@ func (b *GCPBootstrapper) primaryDC() *DataCenter {
 	return b.Env.DataCenters[0]
 }
 
+// secondaryDCs returns every data center apart from the primary one.
+func (b *GCPBootstrapper) secondaryDCs() []*DataCenter {
+	return b.Env.DataCenters[1:]
+}
+
 // allNodes returns every node of the project: the jumpbox, the shared postgres node and all
 // data centers' Ceph and k0s nodes.
 func (b *GCPBootstrapper) allNodes() []*node.Node {
@@ -416,19 +421,41 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.WriteConfig {
-		err = b.stlog.Step("Update install config", b.UpdateInstallConfig)
+		err = b.writeDataCenterConfig(b.primaryDC())
 		if err != nil {
-			return fmt.Errorf("failed to update install config: %w", err)
+			return err
+		}
+	}
+
+	// Secondary data centers fall back to deriving their config and vault from the primary one,
+	// so this has to run after the primary's secrets were generated above.
+	for _, dc := range b.secondaryDCs() {
+		err = b.stlog.Step(dc.StepName("Ensure install config"), func() error {
+			return b.ensureInstallConfig(dc)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to ensure install config of data center %d: %w", dc.ID, err)
 		}
 
-		err = b.stlog.Step("Ensure age key", b.EnsureAgeKey)
+		err = b.stlog.Step(dc.StepName("Ensure secrets"), func() error {
+			return b.ensureSecrets(dc)
+		})
 		if err != nil {
-			return fmt.Errorf("failed to ensure age key: %w", err)
+			return fmt.Errorf("failed to ensure secrets of data center %d: %w", dc.ID, err)
 		}
 
-		err = b.stlog.Step("Encrypt vault", b.EncryptVault)
+		err = b.stlog.Step(dc.StepName("Derive config and vault"), func() error {
+			return b.seedSecondaryDataCenter(b.primaryDC(), dc)
+		})
 		if err != nil {
-			return fmt.Errorf("failed to encrypt vault: %w", err)
+			return fmt.Errorf("failed to derive data center %d: %w", dc.ID, err)
+		}
+
+		if b.Env.WriteConfig {
+			err = b.writeDataCenterConfig(dc)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -554,7 +581,48 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
+	err = b.validateMultiDC()
+	if err != nil {
+		return err
+	}
+
 	return b.validateTelemetryExportParams()
+}
+
+// validateMultiDC rejects flag combinations a multi-data-center bootstrap cannot satisfy.
+func (b *GCPBootstrapper) validateMultiDC() error {
+	if !b.Env.MultiDC {
+		return nil
+	}
+
+	// A secondary data center's config and vault are derived from the primary's, which only
+	// happens when configs are written.
+	if !b.Env.WriteConfig {
+		return fmt.Errorf("multi-dc requires write-config to be enabled")
+	}
+
+	// The data center IDs are derived (1 and 2) and drive the workspace hosting domains.
+	if b.Env.DatacenterIDExplicit {
+		return fmt.Errorf("datacenter-id cannot be combined with multi-dc, the IDs are derived")
+	}
+
+	// The k0s cluster is named codesphere-<datacenter name>, so both names must be set and
+	// distinct. BuildDataCenters derives the second one by suffixing the first.
+	if b.Env.DatacenterName == "" {
+		return fmt.Errorf("datacenter-name is required with multi-dc")
+	}
+
+	// Every data center gets its own local config and vault, derived by suffixing these paths.
+	for name, path := range map[string]string{
+		"install-config": b.Env.InstallConfigPath,
+		"secrets-file":   b.Env.SecretsFilePath,
+	} {
+		if path == "" {
+			return fmt.Errorf("cannot derive a per-data-center path: %s is empty", name)
+		}
+	}
+
+	return nil
 }
 
 func (b *GCPBootstrapper) validateClusterAdminEmail() error {
