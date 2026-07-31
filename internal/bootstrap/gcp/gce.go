@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
+	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
 	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -24,18 +25,71 @@ type VMDef struct {
 	Tags            []string
 	AdditionalDisks []int64
 	ExternalIP      bool
+	// DataCenterID is the data center the VM belongs to, or 0 for the project-shared VMs
+	// (jumpbox and postgres) that every data center uses.
+	DataCenterID int
 }
 
-// Example VM definitions (expand as needed)
-var vmDefs = []VMDef{
-	{"jumpbox", "e2-medium", []string{"jumpbox", "ssh"}, []int64{}, true},
-	{"postgres", "e2-standard-2", []string{"postgres"}, []int64{}, true},
-	{"ceph-1", "e2-standard-8", []string{"ceph"}, []int64{10, 100}, false},
-	{"ceph-2", "e2-standard-8", []string{"ceph"}, []int64{10, 100}, false},
-	{"ceph-3", "e2-standard-8", []string{"ceph"}, []int64{10, 100}, false},
-	{"k0s-1", "e2-standard-8", []string{"k0s"}, []int64{}, false},
-	{"k0s-2", "e2-standard-8", []string{"k0s"}, []int64{}, false},
-	{"k0s-3", "e2-standard-8", []string{"k0s"}, []int64{}, false},
+// cephNodesPerDataCenter and k0sNodesPerDataCenter are the per-data-center node counts. Three
+// Ceph nodes are the minimum for replication; three k0s nodes give one control plane and three
+// workers, as written into the install config.
+const (
+	cephNodesPerDataCenter = 3
+	k0sNodesPerDataCenter  = 3
+)
+
+// sharedVMDefs returns the VMs that exist once per project, regardless of how many data centers
+// are bootstrapped. The postgres node hosts the database both data centers share.
+func sharedVMDefs() []VMDef {
+	return []VMDef{
+		{Name: "jumpbox", MachineType: "e2-medium", Tags: []string{"jumpbox", "ssh"}, AdditionalDisks: []int64{}, ExternalIP: true},
+		{Name: "postgres", MachineType: "e2-standard-2", Tags: []string{"postgres"}, AdditionalDisks: []int64{}, ExternalIP: true},
+	}
+}
+
+// dataCenterVMDefs returns the Ceph and k0s VMs of one data center. The suffix is empty for the
+// primary data center, so single-DC bootstraps keep the names ceph-1..3 and k0s-1..3.
+func dataCenterVMDefs(dcID int, suffix string) []VMDef {
+	defs := make([]VMDef, 0, cephNodesPerDataCenter+k0sNodesPerDataCenter)
+	for i := 1; i <= cephNodesPerDataCenter; i++ {
+		defs = append(defs, VMDef{
+			Name:            fmt.Sprintf("ceph-%d%s", i, suffix),
+			MachineType:     "e2-standard-8",
+			Tags:            []string{"ceph"},
+			AdditionalDisks: []int64{10, 100},
+			DataCenterID:    dcID,
+		})
+	}
+
+	for i := 1; i <= k0sNodesPerDataCenter; i++ {
+		defs = append(defs, VMDef{
+			Name:            fmt.Sprintf("k0s-%d%s", i, suffix),
+			MachineType:     "e2-standard-8",
+			Tags:            []string{"k0s"},
+			AdditionalDisks: []int64{},
+			DataCenterID:    dcID,
+		})
+	}
+
+	return defs
+}
+
+// VMDefsForEnv returns every VM definition of the environment: the project-shared VMs plus the
+// Ceph and k0s VMs of each data center. When the environment carries no data centers — as with
+// an infra file written before multi-DC support — it falls back to a single unsuffixed one.
+func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
+	defs := sharedVMDefs()
+
+	dcs := env.DataCenters
+	if len(dcs) == 0 {
+		dcs = []*datacenter.DataCenter{{ID: datacenter.PrimaryID}}
+	}
+
+	for _, dc := range dcs {
+		defs = append(defs, dataCenterVMDefs(dc.ID, dc.Suffix)...)
+	}
+
+	return defs
 }
 
 // validateVMProvisioningOptions checks that spot and preemptible options are not both set
@@ -51,20 +105,25 @@ type vmResult struct {
 	name       string
 	externalIP string
 	internalIP string
+	dcID       int
 }
 
 // EnsureComputeInstances ensures that all required compute instances are present and running.
 func (b *GCPBootstrapper) EnsureComputeInstances() error {
-	wg := sync.WaitGroup{}
-	errCh := make(chan error, len(vmDefs))
-	resultCh := make(chan vmResult, len(vmDefs))
-	logCh := make(chan string, len(vmDefs))
+	b.ensureDataCenters()
+
 	sshKeys, err := b.getSSHKeys()
 	if err != nil {
 		return fmt.Errorf("failed to determine SSH keys: %w", err)
 	}
 
-	for _, vm := range vmDefs {
+	vms := VMDefsForEnv(b.Env)
+	wg := sync.WaitGroup{}
+	errCh := make(chan error, len(vms))
+	resultCh := make(chan vmResult, len(vms))
+	logCh := make(chan string, len(vms))
+
+	for _, vm := range vms {
 		wg.Add(1)
 		go func(vm VMDef) {
 			defer wg.Done()
@@ -99,6 +158,13 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		NodeClient: b.NodeClient,
 		FileIO:     b.fw,
 	}
+	dcByID := map[int]*datacenter.DataCenter{}
+
+	for _, dc := range b.Env.DataCenters {
+		dc.CephNodes = nil
+		dc.ControlPlaneNodes = nil
+		dcByID[dc.ID] = dc
+	}
 	for result := range resultCh {
 		switch result.vmType {
 		case "jumpbox":
@@ -106,22 +172,34 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		case "postgres":
 			b.Env.PostgreSQLNode = b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
 		case "ceph":
-			node := b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
-			b.Env.CephNodes = append(b.Env.CephNodes, node)
+			dc, ok := dcByID[result.dcID]
+			if !ok {
+				return fmt.Errorf("instance %s belongs to unknown data center %d", result.name, result.dcID)
+			}
+
+			dc.CephNodes = append(dc.CephNodes, b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP))
 		case "k0s":
-			node := b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP)
-			b.Env.ControlPlaneNodes = append(b.Env.ControlPlaneNodes, node)
+			dc, ok := dcByID[result.dcID]
+			if !ok {
+				return fmt.Errorf("instance %s belongs to unknown data center %d", result.name, result.dcID)
+			}
+
+			dc.ControlPlaneNodes = append(dc.ControlPlaneNodes, b.Env.Jumpbox.CreateSubNode(result.name, result.externalIP, result.internalIP))
 		}
 	}
 
-	//sort ceph nodes by name to ensure consistent ordering
-	sort.Slice(b.Env.CephNodes, func(i, j int) bool {
-		return b.Env.CephNodes[i].GetName() < b.Env.CephNodes[j].GetName()
-	})
-	//sort control plane nodes by name to ensure consistent ordering
-	sort.Slice(b.Env.ControlPlaneNodes, func(i, j int) bool {
-		return b.Env.ControlPlaneNodes[i].GetName() < b.Env.ControlPlaneNodes[j].GetName()
-	})
+	// Sort each data center's nodes by name to ensure consistent ordering, since the install
+	// config assigns roles by index.
+	for _, dc := range b.Env.DataCenters {
+		sort.Slice(dc.CephNodes, func(i, j int) bool {
+			return dc.CephNodes[i].GetName() < dc.CephNodes[j].GetName()
+		})
+		sort.Slice(dc.ControlPlaneNodes, func(i, j int) bool {
+			return dc.ControlPlaneNodes[i].GetName() < dc.ControlPlaneNodes[j].GetName()
+		})
+	}
+
+	b.mirrorPrimaryDataCenter()
 
 	return nil
 }
@@ -186,6 +264,7 @@ func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, sshKeys string,
 		name:       vm.Name,
 		externalIP: externalIP,
 		internalIP: internalIP,
+		dcID:       vm.DataCenterID,
 	}, nil
 }
 
@@ -369,30 +448,33 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 		name, pollInterval*time.Duration(maxAttempts))
 }
 
-// findVMDef looks up a VM definition by name. Returns nil if not found.
-func findVMDef(name string) *VMDef {
-	for _, vm := range vmDefs {
-		if vm.Name == name {
-			return &vm
+// findVMDef looks up a VM definition by name among the given definitions. Returns nil if not
+// found.
+func findVMDef(defs []VMDef, name string) *VMDef {
+	for i := range defs {
+		if defs[i].Name == name {
+			return &defs[i]
 		}
 	}
 	return nil
 }
 
-// validVMNames returns the list of known VM names from vmDefs.
-func validVMNames() []string {
-	names := make([]string, len(vmDefs))
-	for i, vm := range vmDefs {
+// validVMNames returns the names of the given VM definitions.
+func validVMNames(defs []VMDef) []string {
+	names := make([]string, len(defs))
+	for i, vm := range defs {
 		names[i] = vm.Name
 	}
 	return names
 }
 
-// RestartVM restarts a single stopped or terminated VM by a name that is defined in vmDefs.
+// RestartVM restarts a single stopped or terminated VM by a name defined for this environment.
 func (b *GCPBootstrapper) RestartVM(name string) error {
-	vm := findVMDef(name)
+	defs := VMDefsForEnv(b.Env)
+
+	vm := findVMDef(defs, name)
 	if vm == nil {
-		return fmt.Errorf("unknown VM name %q; valid names are: %s", name, strings.Join(validVMNames(), ", "))
+		return fmt.Errorf("unknown VM name %q; valid names are: %s", name, strings.Join(validVMNames(defs), ", "))
 	}
 
 	projectID := b.Env.ProjectID
@@ -431,10 +513,11 @@ func (b *GCPBootstrapper) RestartVM(name string) error {
 	return nil
 }
 
-// RestartVMs restarts all stopped or terminated VMs defined in vmDefs.
+// RestartVMs restarts all stopped or terminated VMs of the environment, across every data center.
 func (b *GCPBootstrapper) RestartVMs() error {
 	var errs []error
-	for _, vm := range vmDefs {
+
+	for _, vm := range VMDefsForEnv(b.Env) {
 		if err := b.RestartVM(vm.Name); err != nil {
 			errs = append(errs, err)
 		}
