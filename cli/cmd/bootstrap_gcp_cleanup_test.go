@@ -322,7 +322,38 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 
 				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
 				mockFileIO.EXPECT().ReadFile("/tmp/test-infra.json").Return(envData, nil)
-				mockGCPClient.EXPECT().DeleteDNSRecordSets("test-project", "test-zone", "example.com").Return(nil)
+				// An infra file without a recorded record list predates multi-DC support, so
+				// cleanup falls back to the single-data-center record names.
+				mockGCPClient.EXPECT().DeleteDNSRecordSets("test-project", "test-zone", gcp.GetDNSRecordNames("example.com")).Return(nil)
+				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
+				mockFileIO.EXPECT().Remove("/tmp/test-infra.json").Return(nil)
+
+				err := cleanupCmd.ExecuteCleanup(deps)
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		Context("when the infra file recorded the DNS records it created", func() {
+			It("should delete exactly those records", func() {
+				cleanupCmd.Opts.ProjectID = "test-project"
+				cleanupCmd.Opts.Force = true
+
+				recorded := []gcp.DNSRecordName{
+					{Name: "cs.example.com.", Rtype: "A"},
+					{Name: "2.ws.example.com.", Rtype: "A"},
+				}
+				validEnv := gcp.CodesphereEnvironment{
+					ProjectID:   "test-project",
+					BaseDomain:  "example.com",
+					DNSZoneName: "test-zone",
+					MultiDC:     true,
+					DNSRecords:  recorded,
+				}
+				envData, _ := json.Marshal(validEnv)
+
+				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(true)
+				mockFileIO.EXPECT().ReadFile("/tmp/test-infra.json").Return(envData, nil)
+				mockGCPClient.EXPECT().DeleteDNSRecordSets("test-project", "test-zone", recorded).Return(nil)
 				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
 				mockFileIO.EXPECT().Remove("/tmp/test-infra.json").Return(nil)
 

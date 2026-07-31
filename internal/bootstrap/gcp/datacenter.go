@@ -82,6 +82,16 @@ func (dc *DataCenter) RemoteAgeKeyPath() string {
 	return filepath.Join(dc.SecretsDir, "age_key.txt")
 }
 
+// PlatformDomain returns the host this data center serves its own platform services on. The
+// platform derives it from the data center ID and codesphere.domain, which OMS sets to
+// cs.<base-domain>, and the frontend calls it directly — the browser asks
+// <dc-id>.cs.<base-domain> for the config of the data center a workspace lives in. So it has to
+// resolve to this data center's platform gateway, not to the primary's, which is what
+// cs.<base-domain> and its wildcard point at.
+func (dc *DataCenter) PlatformDomain(baseDomain string) string {
+	return fmt.Sprintf("%d.cs.%s", dc.ID, baseDomain)
+}
+
 // K0sConfigScriptPath returns the local filename of this data center's k0s configuration script.
 func (dc *DataCenter) K0sConfigScriptPath() string {
 	return fmt.Sprintf("configure-k0s%s.sh", dc.Suffix)
