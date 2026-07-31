@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 )
@@ -66,13 +67,13 @@ func (b *GCPBootstrapper) validateRegistryParams() error {
 }
 
 // EnsureArtifactRegistry ensures the project's GCP Artifact Registry repository exists and
-// points the install config's registry server at it
+// resolves it as the registry all data centers pull their images from.
 func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	repoName := "codesphere-registry"
 
 	repo, err := b.GCPClient.GetArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
 	if err == nil && repo != nil {
-		b.Env.InstallConfig.EnsureRegistry().Server = repo.GetRegistryUri()
+		b.Env.ContainerRegistryURL = repo.GetRegistryUri()
 		return nil
 	}
 
@@ -81,21 +82,54 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
 	}
 
+	b.Env.ContainerRegistryURL = repo.GetRegistryUri()
+
 	return nil
 }
 
-// EnsureLocalContainerRegistry installs a docker registry on the jumpbox to speed up image loading time
+// EnsureLocalContainerRegistry installs a container registry on the jumpbox to speed up image
+// loading time, and makes every cluster node of every data center trust its certificate.
 func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
+	registryNode, err := b.registryNode()
+	if err != nil {
+		return err
+	}
+
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
+
+	registryServer, err := b.ensureRegistryRunning(registryNode)
+	if err != nil {
+		return err
+	}
+
+	b.Env.ContainerRegistryURL = registryServer
+
+	// The certificate must be distributed on every run, not only when the registry was just
+	// created: a re-run that adds a data center finds the registry already up, and that data
+	// center's nodes would otherwise not trust it.
+	return b.distributeRegistryCert(registryNode, b.clusterNodes())
+}
+
+// registryNode returns the jumpbox the local container registry runs on. It is shared by all
+// data centers, so a single registry serves every cluster.
+func (b *GCPBootstrapper) registryNode() (*node.Node, error) {
 	registryNode := b.Env.Jumpbox
 	if registryNode == nil {
-		return fmt.Errorf("jumpbox not found in bootstrap environment")
+		return nil, fmt.Errorf("jumpbox not found in bootstrap environment")
 	}
 
 	if registryNode.GetInternalIP() == "" {
-		return fmt.Errorf("jumpbox has no internal IP")
+		return nil, fmt.Errorf("jumpbox has no internal IP")
 	}
 
-	registry := b.Env.InstallConfig.EnsureRegistry()
+	return registryNode, nil
+}
+
+// ensureRegistryRunning starts the container registry on the registry node and generates its
+// credentials when it is not already serving. Returns the registry server address.
+func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node) (string, error) {
 	localRegistryServer := registryNode.GetInternalIP() + ":5000"
 
 	// Figure out if registry is already running
@@ -103,29 +137,30 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
 	err := registryNode.RunSSHCommand("root", checkCommand)
+	vault := b.primaryDC().ConfigManager.GetVault()
 	registryUsername := ""
 	registryPassword := ""
 
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
+	if s := vault.GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
 		registryUsername = s.Fields.Password
 	}
 
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
+	if s := vault.GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
 		registryPassword = s.Fields.Password
 	}
 
-	if err == nil && registry.Server == localRegistryServer &&
-		registryUsername != "" && registryPassword != "" {
+	if err == nil && registryUsername != "" && registryPassword != "" {
 		b.stlog.Logf("Local container registry already running on the jumpbox")
-		return nil
+		b.Env.RegistryUsername = registryUsername
+		b.Env.RegistryPassword = registryPassword
+
+		return localRegistryServer, nil
 	}
 
-	registry.Server = localRegistryServer
 	registryUsername = "custom-registry"
 	registryPassword = shortuuid.New()
-
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: registryUsername}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
+	b.Env.RegistryUsername = registryUsername
+	b.Env.RegistryPassword = registryPassword
 
 	commands := []string{
 		"apt-get update",
@@ -145,20 +180,25 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		-v /root/registry.crt:/certs/registry.crt \
 		-v /root/registry.key:/certs/registry.key \
 		registry:3`,
-		`mkdir -p /etc/docker/certs.d/` + registry.Server,
-		`cp /root/registry.crt /etc/docker/certs.d/` + registry.Server + `/ca.crt`,
+		`mkdir -p /etc/docker/certs.d/` + localRegistryServer,
+		`cp /root/registry.crt /etc/docker/certs.d/` + localRegistryServer + `/ca.crt`,
 	}
 	for _, cmd := range commands {
 		b.stlog.Logf("Running command on the jumpbox: %s", util.Truncate(cmd, 12))
 
 		err := registryNode.RunSSHCommand("root", cmd)
 		if err != nil {
-			return fmt.Errorf("failed to run command on the jumpbox: %w", err)
+			return "", fmt.Errorf("failed to run command on the jumpbox: %w", err)
 		}
 	}
 
-	allNodes := append(b.Env.ControlPlaneNodes, b.Env.CephNodes...)
-	for _, node := range allNodes {
+	return localRegistryServer, nil
+}
+
+// distributeRegistryCert installs the local registry's self-signed certificate on the given
+// nodes. It is idempotent, so it is safe — and required — to re-run for an additional data center.
+func (b *GCPBootstrapper) distributeRegistryCert(registryNode *node.Node, nodes []*node.Node) error {
+	for _, node := range nodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
 
 		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
@@ -180,20 +220,16 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	return nil
 }
 
-// EnsureGitHubAccessConfigured points the install config at ghcr.io and stores the GitHub
-// credentials in the vault. The cluster pulls images from GHCR directly
+// EnsureGitHubAccessConfigured resolves ghcr.io as the registry all data centers pull from. The
+// credentials are written into every data center's vault by updateInstallConfig.
 func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.GitHubPAT == "" {
 		return fmt.Errorf("GitHub PAT is not set")
 	}
 
-	registry := b.Env.InstallConfig.EnsureRegistry()
-	registry.Server = "ghcr.io"
-	registry.ReplaceImagesInBom = false
-	registry.LoadContainerImages = false
-
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
+	b.Env.ContainerRegistryURL = "ghcr.io"
+	b.Env.RegistryUsername = b.Env.RegistryUser
+	b.Env.RegistryPassword = b.Env.GitHubPAT
 
 	return nil
 }
