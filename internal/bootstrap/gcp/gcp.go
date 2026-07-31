@@ -96,18 +96,36 @@ type GCPBootstrapper struct {
 	NodeClient   node.NodeClient
 	PortalClient portal.Portal
 	GitHubClient github.GitHubClient
+	// NewConfigManager creates the install config manager of a data center. Each data center
+	// owns its own config and vault, so multi-DC bootstraps need more than one.
+	NewConfigManager func() installer.InstallConfigManager
+}
+
+// primaryDC returns the first data center, which owns the shared PostgreSQL server and the
+// platform gateway that codesphere.domain resolves to.
+func (b *GCPBootstrapper) primaryDC() *DataCenter {
+	return b.Env.DataCenters[0]
 }
 
 type CodesphereEnvironment struct {
-	ProjectID                     string       `json:"project_id"`
-	ProjectTTL                    string       `json:"project_ttl"`
-	ProjectName                   string       `json:"project_name"`
-	DNSProjectID                  string       `json:"dns_project_id"`
-	Jumpbox                       *node.Node   `json:"jumpbox"`
-	PostgreSQLNode                *node.Node   `json:"postgres_node"`
-	ControlPlaneNodes             []*node.Node `json:"control_plane_nodes"`
-	CephNodes                     []*node.Node `json:"ceph_nodes"`
-	ContainerRegistryURL          string       `json:"-"`
+	ProjectID      string     `json:"project_id"`
+	ProjectTTL     string     `json:"project_ttl"`
+	ProjectName    string     `json:"project_name"`
+	DNSProjectID   string     `json:"dns_project_id"`
+	Jumpbox        *node.Node `json:"jumpbox"`
+	PostgreSQLNode *node.Node `json:"postgres_node"`
+	// MultiDC bootstraps two data centers that share the PostgreSQL server but run separate
+	// Kubernetes and Ceph clusters.
+	MultiDC bool `json:"multi_dc"`
+	// DataCenters holds the per-data-center state. It always has at least one entry.
+	DataCenters []*DataCenter `json:"datacenters"`
+	// Mirrors of DataCenters[0], written for infra files consumed by cleanup and restart-vms.
+	ControlPlaneNodes []*node.Node `json:"control_plane_nodes"`
+	CephNodes         []*node.Node `json:"ceph_nodes"`
+	// ContainerRegistryURL is the resolved registry server all data centers pull images from.
+	ContainerRegistryURL          string       `json:"container_registry_url,omitempty"`
+	RegistryUsername              string       `json:"-"`
+	RegistryPassword              string       `json:"-"`
 	ExistingConfigUsed            bool         `json:"-"`
 	InstallVersion                string       `json:"install_version"`
 	InstallLocal                  string       `json:"install_local"`
@@ -181,10 +199,13 @@ type CodesphereEnvironment struct {
 	SSHPrivateKeyPath          string `json:"-"`
 	DatacenterID               int    `json:"-"`
 	DatacenterName             string `json:"-"`
-	CustomPgIP                 string `json:"custom_pg_ip"`
-	Region                     string `json:"region"`
-	Zone                       string `json:"zone"`
-	DNSZoneName                string `json:"dns_zone_name"`
+	// DatacenterIDExplicit records whether --datacenter-id was set on the command line. The
+	// value alone cannot distinguish the default 1 from an explicit 1.
+	DatacenterIDExplicit bool   `json:"-"`
+	CustomPgIP           string `json:"custom_pg_ip"`
+	Region               string `json:"region"`
+	Zone                 string `json:"zone"`
+	DNSZoneName          string `json:"dns_zone_name"`
 
 	// Test user creation
 	CreateTestUser bool   `json:"-"`
@@ -208,16 +229,17 @@ func NewGCPBootstrapper(
 	gitHubClient github.GitHubClient,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:          ctx,
-		stlog:        stlog,
-		fw:           fw,
-		icg:          icg,
-		GCPClient:    gcpClient,
-		Env:          CodesphereEnv,
-		NodeClient:   sshRunner,
-		PortalClient: portalClient,
-		Time:         time,
-		GitHubClient: gitHubClient,
+		ctx:              ctx,
+		stlog:            stlog,
+		fw:               fw,
+		icg:              icg,
+		GCPClient:        gcpClient,
+		Env:              CodesphereEnv,
+		NodeClient:       sshRunner,
+		PortalClient:     portalClient,
+		Time:             time,
+		GitHubClient:     gitHubClient,
+		NewConfigManager: installer.NewInstallConfigManager,
 	}, nil
 }
 
