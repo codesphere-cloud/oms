@@ -9,6 +9,7 @@ import (
 	"os"
 	"runtime"
 
+	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
@@ -18,6 +19,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -89,7 +92,14 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 		if registryPassword == "" {
 			return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
 		}
-		kubeClient, err := ctrlclient.New(restConfig, ctrlclient.Options{})
+		scheme := k8sruntime.NewScheme()
+		if err := clientgoscheme.AddToScheme(scheme); err != nil {
+			return fmt.Errorf("failed to add kubernetes core scheme: %w", err)
+		}
+		if err := argov1alpha1.AddToScheme(scheme); err != nil {
+			return fmt.Errorf("failed to add ArgoCD scheme: %w", err)
+		}
+		kubeClient, err := ctrlclient.New(restConfig, ctrlclient.Options{Scheme: scheme})
 		if err != nil {
 			return fmt.Errorf("failed to create kubernetes client: %w", err)
 		}

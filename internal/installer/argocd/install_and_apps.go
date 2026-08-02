@@ -21,7 +21,7 @@ type InstallerAPI interface {
 }
 
 // AppInstallerConfig configures the shared ArgoCD, vault secret, and
-// pc-applications installation workflow.
+// pc-applications app-of-apps workflow.
 type AppInstallerConfig struct {
 	Config       files.RootConfig
 	Vault        *files.InstallVault
@@ -31,8 +31,8 @@ type AppInstallerConfig struct {
 	PCAppsValues []string
 }
 
-// AppInstaller installs ArgoCD, syncs the vault secret, and installs
-// pc-applications from the installer BOM.
+// AppInstaller installs ArgoCD, syncs the vault secret, and registers the
+// pc-applications app-of-apps from the installer BOM.
 type AppInstaller struct {
 	cfg AppInstallerConfig
 }
@@ -66,12 +66,11 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 	return nil
 }
 
-// InstallPCApps installs or upgrades pc-applications using the version from
-// the supplied installer BOM.
+// InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
+// Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomPath string) error {
 	pcApps, err := installer.NewPcAppsFromBom(
 		i.cfg.KubeClient,
-		i.cfg.RESTConfig,
 		bomPath,
 		DefaultNamespace,
 		i.cfg.PCAppsValues,

@@ -17,6 +17,7 @@ import (
 
 	"golang.org/x/term"
 
+	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -232,6 +233,10 @@ func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Clien
 
 	if err := rookcephv1.AddToScheme(scheme); err != nil {
 		return nil, nil, fmt.Errorf("failed to add Rook Ceph scheme: %w", err)
+	}
+
+	if err := argov1alpha1.AddToScheme(scheme); err != nil {
+		return nil, nil, fmt.Errorf("failed to add ArgoCD scheme: %w", err)
 	}
 
 	kubeClient, err := ctrlclient.New(kubeConfig, ctrlclient.Options{Scheme: scheme})
