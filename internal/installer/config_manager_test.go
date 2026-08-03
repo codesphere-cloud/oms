@@ -298,6 +298,35 @@ var _ = Describe("ConfigManager", func() {
 			})
 		})
 
+		Context("openfga backups validation", func() {
+			It("should require destinationPath and endpointURL when enabled", func() {
+				configManager.Config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
+					Enabled: true,
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("openfga backups destinationPath is required")))
+				Expect(errors).To(ContainElement(ContainSubstring("openfga backups endpointURL is required")))
+			})
+
+			It("should pass when enabled with required fields set", func() {
+				configManager.Config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
+					Enabled:         true,
+					DestinationPath: "s3://backup-openfga-dev",
+					EndpointURL:     "https://storage.googleapis.com",
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).ToNot(ContainElement(ContainSubstring("openfga backups")))
+			})
+
+			It("should not require fields when disabled", func() {
+				configManager.Config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
+					Enabled: false,
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).ToNot(ContainElement(ContainSubstring("openfga backups")))
+			})
+		})
+
 		Context("ceph validation", func() {
 			It("should require at least one Ceph host", func() {
 				configManager.Config.Ceph.Hosts = []files.CephHost{}
