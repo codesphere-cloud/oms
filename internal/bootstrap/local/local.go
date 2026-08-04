@@ -524,7 +524,7 @@ func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
 
 func (b *LocalBootstrapper) EnsureSecrets() error {
 	if b.fw.Exists(b.Env.SecretsFilePath) {
-		err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath)
+		err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath)
 		if err != nil {
 			return fmt.Errorf("failed to load vault file: %w", err)
 		}

@@ -437,7 +437,7 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 		}); err != nil {
 			return err
 		}
-		if err := b.stlog.Substep("Install pc-apps", func() error {
+		if err := b.stlog.Substep("Register pc-apps app-of-apps", func() error {
 			return b.argoCDAndAppsInstall.InstallPCApps(b.ctx, filepath.Join(depsDir, "bom.json"))
 		}); err != nil {
 			return err

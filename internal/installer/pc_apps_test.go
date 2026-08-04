@@ -5,14 +5,14 @@ package installer_test
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"os"
 	"path/filepath"
 
+	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,13 +30,9 @@ var _ = Describe("PCApps.Install", func() {
 		secretURL      = "ghcr.io/codesphere-cloud/charts"
 		secretUsername = "github"
 		secretPassword = "super-secret-token"
-
-		// Derived from the secret
-		expectedChartURL = "oci://ghcr.io/codesphere-cloud/charts/pc-applications"
 	)
 
 	var (
-		helmMock   *installer.MockHelmClient
 		fakeClient client.Client
 		pcApps     *installer.PCApps
 		scheme     *runtime.Scheme
@@ -56,72 +52,94 @@ var _ = Describe("PCApps.Install", func() {
 		}
 	}
 
+	// getApp reads back the Application the installer applied.
+	getApp := func() *argov1alpha1.Application {
+		GinkgoHelper()
+		app := &argov1alpha1.Application{}
+		err := fakeClient.Get(context.Background(), client.ObjectKey{Name: "pc-applications", Namespace: "argocd"}, app)
+		Expect(err).ToNot(HaveOccurred())
+		return app
+	}
+
+	// helmValues decodes spec.source.helm.valuesObject of the applied Application.
+	helmValues := func(app *argov1alpha1.Application) map[string]interface{} {
+		GinkgoHelper()
+		Expect(app.Spec.Source).ToNot(BeNil())
+		Expect(app.Spec.Source.Helm).ToNot(BeNil())
+		Expect(app.Spec.Source.Helm.ValuesObject).ToNot(BeNil())
+		vals := map[string]interface{}{}
+		Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &vals)).To(Succeed())
+		return vals
+	}
+
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
-
-		helmMock = installer.NewMockHelmClient(GinkgoT())
+		Expect(argov1alpha1.AddToScheme(scheme)).To(Succeed())
 	})
 
-	Context("successful install (secret exists)", func() {
+	Context("successful apply (secret exists)", func() {
 		BeforeEach(func() {
 			fakeClient = fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(newSecret()).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, false)
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, false)
 		})
 
-		It("reads credentials from K8s secret and calls UpgradeChart with InstallIfNotExist", func() {
-			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				return cfg.ReleaseName == "pc-applications" &&
-					cfg.ChartName == expectedChartURL &&
-					cfg.Namespace == namespace &&
-					cfg.Version == version &&
-					cfg.CreateNamespace
-			}), installer.UpgradeChartOptions{InstallIfNotExist: true}).Return(nil)
+		It("creates an app-of-apps Application referencing the chart from the secret's registry", func() {
+			Expect(pcApps.Install(context.Background())).To(Succeed())
 
-			err := pcApps.Install(context.Background())
-			Expect(err).ToNot(HaveOccurred())
+			app := getApp()
+			Expect(app.Name).To(Equal("pc-applications"))
+			Expect(app.Namespace).To(Equal("argocd"))
+			Expect(app.Spec.Project).To(Equal("default"))
+
+			Expect(app.Spec.Source).ToNot(BeNil())
+			Expect(app.Spec.Source.RepoURL).To(Equal(secretURL))
+			Expect(app.Spec.Source.Chart).To(Equal("pc-applications"))
+			Expect(app.Spec.Source.TargetRevision).To(Equal(version))
+			Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("pc-applications"))
+
+			Expect(app.Spec.Destination.Server).To(Equal("https://kubernetes.default.svc"))
+			Expect(app.Spec.Destination.Namespace).To(Equal(namespace))
+
+			Expect(app.Spec.SyncPolicy).ToNot(BeNil())
+			Expect(app.Spec.SyncPolicy.Automated).ToNot(BeNil())
+			Expect(app.Spec.SyncPolicy.Automated.GetPrune()).To(BeTrue())
+			Expect([]string(app.Spec.SyncPolicy.SyncOptions)).To(ConsistOf("CreateNamespace=true", "ServerSideApply=true"))
 		})
 
-		It("returns an error when UpgradeChart fails", func() {
-			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				return cfg.ReleaseName == "pc-applications" &&
-					cfg.ChartName == expectedChartURL &&
-					cfg.Namespace == namespace &&
-					cfg.Version == version &&
-					cfg.CreateNamespace
-			}), installer.UpgradeChartOptions{
-				InstallIfNotExist: true,
-				ForceConflicts:    false,
-			}).
-				Return(errors.New("upgrade conflict"))
+		It("deploys into a custom destination namespace", func() {
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, "platform", nil, nil, false)
+			Expect(pcApps.Install(context.Background())).To(Succeed())
 
-			err := pcApps.Install(context.Background())
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("install/upgrade failed"))
+			app := getApp()
+			// The Application itself always lives in the argocd namespace.
+			Expect(app.Namespace).To(Equal("argocd"))
+			Expect(app.Spec.Destination.Namespace).To(Equal("platform"))
+		})
+
+		It("updates an existing Application to a new chart version", func() {
+			Expect(pcApps.Install(context.Background())).To(Succeed())
+
+			upgraded := installer.NewPCAppsForTesting(fakeClient, "2.0.0", namespace, nil, nil, false)
+			Expect(upgraded.Install(context.Background())).To(Succeed())
+
+			Expect(getApp().Spec.Source.TargetRevision).To(Equal("2.0.0"))
 		})
 	})
 
-	Context("registry login failure", func() {
-		BeforeEach(func() {
-			fakeClient = fake.NewClientBuilder().
-				WithScheme(scheme).
-				WithObjects(newSecret()).
-				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, false)
-		})
+	Context("client scheme without the ArgoCD types", func() {
+		It("fails to construct the installer with a clear error", func() {
+			bareScheme := runtime.NewScheme()
+			Expect(clientgoscheme.AddToScheme(bareScheme)).To(Succeed())
+			bareClient := fake.NewClientBuilder().WithScheme(bareScheme).Build()
 
-		It("returns an error without attempting install", func() {
-			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).
-				Return(errors.New("invalid credentials"))
-
-			err := pcApps.Install(context.Background())
+			_, err := installer.NewPCApps(bareClient, version, namespace, nil, nil, false)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("registry login failed"))
+			Expect(err.Error()).To(ContainSubstring("does not recognize"))
+			Expect(err.Error()).To(ContainSubstring("Application"))
 		})
 	})
 
@@ -131,7 +149,7 @@ var _ = Describe("PCApps.Install", func() {
 			fakeClient = fake.NewClientBuilder().
 				WithScheme(scheme).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, false)
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, false)
 		})
 
 		It("returns a clear error", func() {
@@ -142,7 +160,7 @@ var _ = Describe("PCApps.Install", func() {
 		})
 	})
 
-	Context("K8s secret exists but missing fields", func() {
+	Context("K8s secret exists but missing the registry url", func() {
 		BeforeEach(func() {
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
@@ -150,22 +168,22 @@ var _ = Describe("PCApps.Install", func() {
 					Namespace: "argocd",
 				},
 				Data: map[string][]byte{
-					"url":      []byte(secretURL),
 					"username": []byte(secretUsername),
-					// password is missing
+					"password": []byte(secretPassword),
+					// url is missing
 				},
 			}
 			fakeClient = fake.NewClientBuilder().
 				WithScheme(scheme).
 				WithObjects(secret).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, false)
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, false)
 		})
 
-		It("returns an error about missing fields", func() {
+		It("returns an error about the missing field", func() {
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("missing required fields"))
+			Expect(err.Error()).To(ContainSubstring("missing required field"))
 		})
 	})
 
@@ -187,33 +205,27 @@ var _ = Describe("PCApps.Install", func() {
 			Expect(os.RemoveAll(tmpDir)).To(Succeed())
 		})
 
-		It("merges multiple values files and passes them to the chart config", func() {
+		It("merges multiple values files into the Application's valuesObject", func() {
 			base := filepath.Join(tmpDir, "base.yaml")
 			Expect(os.WriteFile(base, []byte("foo: bar\nnested:\n  a: 1\n  b: 2\n"), 0644)).To(Succeed())
 
 			overlay := filepath.Join(tmpDir, "overlay.yaml")
 			Expect(os.WriteFile(overlay, []byte("foo: overridden\nnested:\n  b: 99\n  c: 3\n"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{base, overlay}, nil, false)
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, []string{base, overlay}, nil, false)
+			Expect(pcApps.Install(context.Background())).To(Succeed())
 
-			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				nested, ok := cfg.Values["nested"].(map[string]any)
-				if !ok {
-					return false
-				}
-				return cfg.Values["foo"] == "overridden" &&
-					nested["a"].(float64) == 1 &&
-					nested["b"].(float64) == 99 &&
-					nested["c"].(float64) == 3
-			}), installer.UpgradeChartOptions{InstallIfNotExist: true}).Return(nil)
-
-			err := pcApps.Install(context.Background())
-			Expect(err).ToNot(HaveOccurred())
+			vals := helmValues(getApp())
+			Expect(vals).To(HaveKeyWithValue("foo", "overridden"))
+			nested, ok := vals["nested"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(nested["a"]).To(BeNumerically("==", 1))
+			Expect(nested["b"]).To(BeNumerically("==", 99))
+			Expect(nested["c"]).To(BeNumerically("==", 3))
 		})
 
 		It("returns an error for non-existent values file", func() {
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{"/nonexistent/values.yaml"}, nil, false)
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, []string{"/nonexistent/values.yaml"}, nil, false)
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
@@ -224,7 +236,7 @@ var _ = Describe("PCApps.Install", func() {
 			badFile := filepath.Join(tmpDir, "bad.yaml")
 			Expect(os.WriteFile(badFile, []byte("{{invalid yaml"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{badFile}, nil, false)
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, []string{badFile}, nil, false)
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
@@ -242,22 +254,25 @@ var _ = Describe("PCApps.Install", func() {
 			fileValues := filepath.Join(tmpDir, "values.yaml")
 			Expect(os.WriteFile(fileValues, []byte("foo: from-file\nnested:\n  shared: from-file\n  fileOnly: true\n"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, []string{fileValues}, override, false)
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, []string{fileValues}, override, false)
+			Expect(pcApps.Install(context.Background())).To(Succeed())
 
-			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				nested, ok := cfg.Values["nested"].(map[string]any)
-				if !ok {
-					return false
-				}
-				return cfg.Values["foo"] == "from-file" &&
-					nested["configOnly"] == true &&
-					nested["shared"] == "from-file" &&
-					nested["fileOnly"] == true
-			}), installer.UpgradeChartOptions{InstallIfNotExist: true}).Return(nil)
+			vals := helmValues(getApp())
+			Expect(vals).To(HaveKeyWithValue("foo", "from-file"))
+			nested, ok := vals["nested"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(nested["configOnly"]).To(BeTrue())
+			Expect(nested["shared"]).To(Equal("from-file"))
+			Expect(nested["fileOnly"]).To(BeTrue())
+		})
 
-			err := pcApps.Install(context.Background())
-			Expect(err).ToNot(HaveOccurred())
+		It("omits valuesObject when no values are configured", func() {
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, false)
+			Expect(pcApps.Install(context.Background())).To(Succeed())
+
+			app := getApp()
+			Expect(app.Spec.Source.Helm).ToNot(BeNil())
+			Expect(app.Spec.Source.Helm.ValuesObject).To(BeNil())
 		})
 	})
 
@@ -269,16 +284,10 @@ var _ = Describe("PCApps.Install", func() {
 				Build()
 		})
 
-		It("passes ForceConflicts=true to UpgradeChart", func() {
-			pcApps = installer.NewPCAppsForTesting(helmMock, fakeClient, version, namespace, nil, nil, true)
-
-			helmMock.EXPECT().LoginRegistry(mock.Anything, "ghcr.io", secretUsername, secretPassword).Return(nil)
-			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.MatchedBy(func(opts installer.UpgradeChartOptions) bool {
-				return opts.InstallIfNotExist && opts.ForceConflicts
-			})).Return(nil)
-
-			err := pcApps.Install(context.Background())
-			Expect(err).ToNot(HaveOccurred())
+		It("applies the Application with forced field ownership", func() {
+			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, true)
+			Expect(pcApps.Install(context.Background())).To(Succeed())
+			Expect(getApp().Name).To(Equal("pc-applications"))
 		})
 	})
 })
