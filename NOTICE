@@ -167,18 +167,12 @@ License URL: https://github.com/argoproj/argo-cd/blob/7660efb23b2d/gitops-engine
  
 ----------
 Module: github.com/argoproj/argo-cd/v3
-Version: v3.4.6
+Version: v3.5.0
 License: Apache-2.0
-License URL: https://github.com/argoproj/argo-cd/blob/v3.4.6/LICENSE
+License URL: https://github.com/argoproj/argo-cd/blob/v3.5.0/LICENSE
  
 ----------
-Module: github.com/argoproj/pkg
-Version: v0.13.6
-License: Apache-2.0
-License URL: https://github.com/argoproj/pkg/blob/v0.13.6/LICENSE
- 
-----------
-Module: github.com/argoproj/pkg/v2/sync
+Module: github.com/argoproj/pkg/v2
 Version: v2.0.1
 License: Apache-2.0
 License URL: https://github.com/argoproj/pkg/blob/v2.0.1/LICENSE
@@ -221,9 +215,9 @@ License URL: https://github.com/bombsimon/logrusr/blob/v4.1.0/LICENSE
  
 ----------
 Module: github.com/bradleyfalzon/ghinstallation/v2
-Version: v2.18.0
+Version: v2.19.0
 License: Apache-2.0
-License URL: https://github.com/bradleyfalzon/ghinstallation/blob/v2.18.0/LICENSE
+License URL: https://github.com/bradleyfalzon/ghinstallation/blob/v2.19.0/LICENSE
  
 ----------
 Module: github.com/casbin/casbin/v2
@@ -350,12 +344,6 @@ Module: github.com/davecgh/go-spew/spew
 Version: v1.1.2-0.20180830191138-d8f796af33cc
 License: ISC
 License URL: https://github.com/davecgh/go-spew/blob/d8f796af33cc/LICENSE
- 
-----------
-Module: github.com/dgryski/go-rendezvous
-Version: v0.0.0-20200823014737-9f7001d12a5f
-License: MIT
-License URL: https://github.com/dgryski/go-rendezvous/blob/9f7001d12a5f/LICENSE
  
 ----------
 Module: github.com/distribution/reference
@@ -676,16 +664,16 @@ License: BSD-3-Clause
 License URL: https://github.com/google/go-github/blob/v74.0.0/LICENSE
  
 ----------
-Module: github.com/google/go-github/v84/github
-Version: v84.0.0
-License: BSD-3-Clause
-License URL: https://github.com/google/go-github/blob/v84.0.0/LICENSE
- 
-----------
 Module: github.com/google/go-github/v86/github
 Version: v86.0.0
 License: BSD-3-Clause
 License URL: https://github.com/google/go-github/blob/v86.0.0/LICENSE
+ 
+----------
+Module: github.com/google/go-github/v88/github
+Version: v88.0.0
+License: BSD-3-Clause
+License URL: https://github.com/google/go-github/blob/v88.0.0/LICENSE
  
 ----------
 Module: github.com/google/go-querystring/query
@@ -1157,9 +1145,9 @@ License URL: https://github.com/prometheus/procfs/blob/v0.21.1/LICENSE
  
 ----------
 Module: github.com/redis/go-redis/v9
-Version: v9.18.0
+Version: v9.20.1
 License: BSD-2-Clause
-License URL: https://github.com/redis/go-redis/blob/v9.18.0/LICENSE
+License URL: https://github.com/redis/go-redis/blob/v9.20.1/LICENSE
  
 ----------
 Module: github.com/robfig/cron/v3
