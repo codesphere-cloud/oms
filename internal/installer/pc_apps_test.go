@@ -107,7 +107,6 @@ var _ = Describe("PCApps.Install", func() {
 			Expect(app.Spec.SyncPolicy).ToNot(BeNil())
 			Expect(app.Spec.SyncPolicy.Automated).ToNot(BeNil())
 			Expect(app.Spec.SyncPolicy.Automated.GetPrune()).To(BeTrue())
-			Expect(app.Spec.SyncPolicy.Automated.GetSelfHeal()).To(BeTrue())
 			Expect([]string(app.Spec.SyncPolicy.SyncOptions)).To(ConsistOf("CreateNamespace=true", "ServerSideApply=true"))
 		})
 

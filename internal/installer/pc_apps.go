@@ -16,7 +16,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/cli/values"
@@ -145,9 +147,9 @@ func (p *PCApps) resolveRepoURL(ctx context.Context) (string, error) {
 	return baseURL, nil
 }
 
-// application renders the app-of-apps ArgoCD Application for the given repo URL
+// createApplication renders the app-of-apps ArgoCD Application for the given repo URL
 // and merged Helm values.
-func (p *PCApps) application(repoURL string, vals map[string]interface{}) (*argov1alpha1.Application, error) {
+func (p *PCApps) createApplication(repoURL string, vals map[string]interface{}) (*argov1alpha1.Application, error) {
 	helm := &argov1alpha1.ApplicationSourceHelm{
 		ReleaseName: pcAppsAppName,
 	}
@@ -159,7 +161,6 @@ func (p *PCApps) application(repoURL string, vals map[string]interface{}) (*argo
 		helm.ValuesObject = &runtime.RawExtension{Raw: raw}
 	}
 
-	enabled := true
 	return &argov1alpha1.Application{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: argov1alpha1.SchemeGroupVersion.String(),
@@ -183,7 +184,7 @@ func (p *PCApps) application(repoURL string, vals map[string]interface{}) (*argo
 			},
 			SyncPolicy: &argov1alpha1.SyncPolicy{
 				Automated: &argov1alpha1.SyncPolicyAutomated{
-					Prune: &enabled,
+					Prune: ptr.To(true),
 				},
 				SyncOptions: argov1alpha1.SyncOptions{
 					"CreateNamespace=true",
@@ -208,17 +209,27 @@ func (p *PCApps) Install(ctx context.Context) error {
 
 	repoURL, err := p.resolveRepoURL(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resolve repo url: %w", err)
 	}
 
-	app, err := p.application(repoURL, vals)
+	app, err := p.createApplication(repoURL, vals)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create argo appliaction: %w", err)
 	}
 
 	log.Printf("Applying ArgoCD Application %q (chart %s, version %s) in namespace %s\n",
 		pcAppsAppName, pcAppsChartName, p.version, ociCredentialNamespace)
-	if err := p.client.Update(ctx, app); err != nil {
+	current := &argov1alpha1.Application{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      app.Name,
+			Namespace: app.Namespace,
+		},
+	}
+	if _, err := controllerutil.CreateOrUpdate(ctx, p.client, current, func() error {
+		current.TypeMeta = app.TypeMeta
+		current.Spec = app.Spec
+		return nil
+	}); err != nil {
 		return fmt.Errorf("applying ArgoCD Application %q failed: %w", pcAppsAppName, err)
 	}
 

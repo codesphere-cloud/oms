@@ -20,7 +20,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -93,7 +93,7 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 			return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
 		}
 		scheme := k8sruntime.NewScheme()
-		if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		if err := k8sscheme.AddToScheme(scheme); err != nil {
 			return fmt.Errorf("failed to add kubernetes core scheme: %w", err)
 		}
 		if err := argov1alpha1.AddToScheme(scheme); err != nil {
