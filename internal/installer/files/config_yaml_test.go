@@ -277,7 +277,7 @@ codesphere:
 		// Verifies the marshaled YAML matches the structure documented at:
 		// https://docs.codesphere.com/private-cloud/cluster-ingress-ca-options
 		It("should marshal config.yaml to the expected ACME structure", func() {
-			rootConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+			rootConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
 				Type: files.CertIssuerTypeACME,
 				Acme: &files.ACMEConfig{
 					Enabled:  true,
@@ -373,6 +373,7 @@ cluster:
 			err := parsed.Unmarshal([]byte(acmeYaml))
 			Expect(err).NotTo(HaveOccurred())
 
+			Expect(parsed.Codesphere.CertIssuer).NotTo(BeNil())
 			Expect(parsed.Codesphere.CertIssuer.Type).To(Equal(files.CertIssuerTypeACME))
 			Expect(parsed.Codesphere.CertIssuer.Acme).NotTo(BeNil())
 			Expect(parsed.Codesphere.CertIssuer.Acme.Server).To(Equal("https://acme-v02.api.letsencrypt.org/directory"))
