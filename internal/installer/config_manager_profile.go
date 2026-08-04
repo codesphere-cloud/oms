@@ -93,8 +93,8 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Cluster.PublicGateway.ServiceType == "" {
 		g.Config.Cluster.PublicGateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
 	}
-	if g.Config.MetalLB == nil {
-		g.Config.MetalLB = &files.MetalLBConfig{
+	if g.Config.Cluster.MetalLB == nil {
+		g.Config.Cluster.MetalLB = &files.MetalLBConfig{
 			Enabled: false,
 			Pools:   []files.MetalLBPoolDef{},
 		}
@@ -103,6 +103,9 @@ func (g *InstallConfig) applyCommonProperties() {
 		g.Config.Registry = &files.RegistryConfig{}
 	}
 
+	if g.Config.Codesphere.CertIssuer.Type == "" {
+		g.Config.Codesphere.CertIssuer.Type = files.CertIssuerTypeSelfSigned
+	}
 	if g.Config.Codesphere.Domain == "" {
 		g.Config.Codesphere.Domain = "codesphere.local"
 	}

@@ -103,8 +103,8 @@ var _ = Describe("ConfigManagerProfile", func() {
 					Expect(config.Cluster.PublicGateway.ServiceType).To(Equal("LoadBalancer"))
 
 					// MetalLB
-					Expect(config.MetalLB).ToNot(BeNil())
-					Expect(config.MetalLB.Enabled).To(BeFalse())
+					Expect(config.Cluster.MetalLB).ToNot(BeNil())
+					Expect(config.Cluster.MetalLB.Enabled).To(BeFalse())
 
 					// Ceph OSDs
 					Expect(config.Ceph.OSDs).To(HaveLen(1))
