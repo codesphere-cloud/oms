@@ -497,9 +497,9 @@ License URL: https://github.com/go-jose/go-jose/blob/v4.1.4/json/LICENSE
  
 ----------
 Module: github.com/go-logr/logr
-Version: v1.4.3
+Version: v1.4.4
 License: Apache-2.0
-License URL: https://github.com/go-logr/logr/blob/v1.4.3/LICENSE
+License URL: https://github.com/go-logr/logr/blob/v1.4.4/LICENSE
  
 ----------
 Module: github.com/go-logr/stdr
@@ -1157,9 +1157,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260720085041-02428dc8ac95
+Version: v0.0.0-20260803155441-45c3e3a204a9
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/02428dc8ac95/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/45c3e3a204a9/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
