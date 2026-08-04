@@ -64,7 +64,7 @@ require (
 	github.com/argoproj/argo-cd/v3 v3.5.0
 	github.com/google/go-github/v74 v74.0.0
 	github.com/lib/pq v1.12.3
-	github.com/rook/rook/pkg/apis v0.0.0-20260720085041-02428dc8ac95
+	github.com/rook/rook/pkg/apis v0.0.0-20260803155441-45c3e3a204a9
 )
 
 require (
@@ -566,7 +566,7 @@ require (
 	github.com/getsops/gopgagent v0.0.0-20241224165529-7044f28e491e // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
-	github.com/go-logr/logr v1.4.3 // indirect
+	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/runtime/server-middleware v0.32.3 // indirect
 	github.com/go-redis/cache/v9 v9.0.0 // indirect
