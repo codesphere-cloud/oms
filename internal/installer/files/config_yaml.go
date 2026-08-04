@@ -5,6 +5,7 @@ package files
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -40,18 +41,18 @@ func (v *InstallVault) SetSecret(entry SecretEntry) {
 	v.Secrets = append(v.Secrets, entry)
 }
 
-// RemoveSecret deletes the entry with the given name, if present.
-func (v *InstallVault) RemoveSecret(name string) {
-	for i := range v.Secrets {
-		if v.Secrets[i].Name == name {
-			v.Secrets = append(v.Secrets[:i], v.Secrets[i+1:]...)
-			return
-		}
-	}
+// RemoveSecret deletes the entry with the given name and reports whether one was removed.
+func (v *InstallVault) RemoveSecret(name string) bool {
+	before := len(v.Secrets)
+	v.Secrets = slices.DeleteFunc(v.Secrets, func(s SecretEntry) bool {
+		return s.Name == name
+	})
+	return len(v.Secrets) != before
 }
 
 // Clone returns a deep copy of the vault, so callers can derive a new vault without
-// aliasing the original's secret entries.
+// aliasing the original's secret entries. A nil vault clones to nil, so a caller can pass
+// on a vault that was never loaded instead of guarding every call site.
 func (v *InstallVault) Clone() *InstallVault {
 	if v == nil {
 		return nil

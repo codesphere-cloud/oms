@@ -386,3 +386,140 @@ cluster:
 
 	})
 })
+
+var _ = Describe("InstallVault", func() {
+	var vault files.InstallVault
+
+	BeforeEach(func() {
+		vault = files.InstallVault{Secrets: []files.SecretEntry{
+			{Name: "postgresPassword", Fields: &files.SecretFields{Password: "pg-secret"}},
+			{Name: "kubeConfig", File: &files.SecretFile{Name: "kubeconfig", Content: "apiVersion: v1"}},
+			{Name: "tokenPrivateKey", Fields: &files.SecretFields{Password: "token-key"}},
+		}}
+	})
+
+	Describe("RemoveSecret", func() {
+		It("removes the named secret and reports that it did", func() {
+			Expect(vault.RemoveSecret("kubeConfig")).To(BeTrue())
+
+			Expect(vault.GetSecret("kubeConfig")).To(BeNil())
+			Expect(vault.Secrets).To(HaveLen(2))
+			Expect(vault.Secrets[0].Name).To(Equal("postgresPassword"))
+			Expect(vault.Secrets[1].Name).To(Equal("tokenPrivateKey"))
+		})
+
+		It("reports that nothing was removed for an unknown secret", func() {
+			Expect(vault.RemoveSecret("doesNotExist")).To(BeFalse())
+			Expect(vault.Secrets).To(HaveLen(3))
+		})
+
+		It("reports that nothing was removed from an empty vault", func() {
+			empty := files.InstallVault{}
+			Expect(empty.RemoveSecret("postgresPassword")).To(BeFalse())
+			Expect(empty.Secrets).To(BeEmpty())
+		})
+
+		It("removes the last remaining secret", func() {
+			single := files.InstallVault{Secrets: []files.SecretEntry{{Name: "only"}}}
+			Expect(single.RemoveSecret("only")).To(BeTrue())
+			Expect(single.Secrets).To(BeEmpty())
+		})
+	})
+
+	Describe("Clone", func() {
+		It("copies every secret entry", func() {
+			clone := vault.Clone()
+
+			Expect(clone.Secrets).To(HaveLen(3))
+			Expect(clone.GetSecret("postgresPassword").Fields.Password).To(Equal("pg-secret"))
+			Expect(clone.GetSecret("kubeConfig").File.Content).To(Equal("apiVersion: v1"))
+			Expect(clone.GetSecret("tokenPrivateKey").Fields.Password).To(Equal("token-key"))
+		})
+
+		It("does not alias the original's entries", func() {
+			clone := vault.Clone()
+
+			clone.GetSecret("postgresPassword").Fields.Password = "changed"
+			clone.GetSecret("kubeConfig").File.Content = "changed"
+			clone.SetSecret(files.SecretEntry{Name: "cephSshPrivateKey"})
+			Expect(clone.RemoveSecret("tokenPrivateKey")).To(BeTrue())
+
+			Expect(vault.GetSecret("postgresPassword").Fields.Password).To(Equal("pg-secret"))
+			Expect(vault.GetSecret("kubeConfig").File.Content).To(Equal("apiVersion: v1"))
+			Expect(vault.GetSecret("cephSshPrivateKey")).To(BeNil())
+			Expect(vault.GetSecret("tokenPrivateKey")).NotTo(BeNil())
+		})
+
+		It("keeps unset optional entry fields nil", func() {
+			sparse := files.InstallVault{Secrets: []files.SecretEntry{{Name: "empty"}}}
+
+			clone := sparse.Clone()
+
+			Expect(clone.Secrets).To(HaveLen(1))
+			Expect(clone.Secrets[0].File).To(BeNil())
+			Expect(clone.Secrets[0].Fields).To(BeNil())
+		})
+
+		It("clones a nil vault to nil", func() {
+			var unloaded *files.InstallVault
+			Expect(unloaded.Clone()).To(BeNil())
+		})
+	})
+})
+
+var _ = Describe("RootConfig Clone", func() {
+	var config files.RootConfig
+
+	BeforeEach(func() {
+		config = files.NewRootConfig()
+		config.Datacenter = files.DatacenterConfig{ID: 1, Name: "dc1"}
+		config.DataCenters = []files.DatacenterConfig{{ID: 1, Name: "dc1"}}
+		config.Secrets.BaseDir = "/etc/codesphere/secrets"
+		config.Registry.Server = "registry.example.com"
+		config.Codesphere.Features = map[string]bool{"multiDc": true}
+		config.Operations = &files.OperationsConfig{Skip: []string{"ceph"}}
+	})
+
+	It("copies the config", func() {
+		clone, err := config.Clone()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(clone.Datacenter).To(Equal(config.Datacenter))
+		Expect(clone.DataCenters).To(Equal(config.DataCenters))
+		Expect(clone.Secrets.BaseDir).To(Equal("/etc/codesphere/secrets"))
+		Expect(clone.Registry.Server).To(Equal("registry.example.com"))
+		Expect(clone.Codesphere.Features).To(Equal(map[string]bool{"multiDc": true}))
+		Expect(clone.Operations.Skip).To(Equal([]string{"ceph"}))
+	})
+
+	It("does not share maps, slices or pointers with the original", func() {
+		clone, err := config.Clone()
+		Expect(err).NotTo(HaveOccurred())
+
+		clone.Datacenter = files.DatacenterConfig{ID: 2, Name: "dc2"}
+		clone.DataCenters[0].Name = "changed"
+		clone.Secrets.BaseDir = "/etc/codesphere/secrets-dc2"
+		clone.Registry.Server = "changed"
+		clone.Codesphere.Features["multiDc"] = false
+		clone.Operations.Skip = append(clone.Operations.Skip, "postgres")
+
+		Expect(config.Datacenter.Name).To(Equal("dc1"))
+		Expect(config.DataCenters[0].Name).To(Equal("dc1"))
+		Expect(config.Secrets.BaseDir).To(Equal("/etc/codesphere/secrets"))
+		Expect(config.Registry.Server).To(Equal("registry.example.com"))
+		Expect(config.Codesphere.Features).To(Equal(map[string]bool{"multiDc": true}))
+		Expect(config.Operations.Skip).To(Equal([]string{"ceph"}))
+	})
+
+	It("drops keys the struct does not model, like any other load of the config", func() {
+		var loaded files.RootConfig
+		Expect(loaded.Unmarshal([]byte("dataCenter:\n  id: 1\nunmodelledKey: value\n"))).NotTo(HaveOccurred())
+
+		clone, err := loaded.Clone()
+		Expect(err).NotTo(HaveOccurred())
+
+		data, err := clone.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(data)).NotTo(ContainSubstring("unmodelledKey"))
+	})
+})
