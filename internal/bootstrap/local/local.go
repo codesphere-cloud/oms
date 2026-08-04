@@ -513,7 +513,9 @@ func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
 		return nil
 	}
 
-	if err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath); err != nil {
+	// The local prod.vault.yaml file itn eh secrets dir is always unecrpyted.
+	// The encrypted version is in the "secrets" dir.
+	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file for config templating: %w", err)
 	}
 
