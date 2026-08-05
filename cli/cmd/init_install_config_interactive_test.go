@@ -18,7 +18,7 @@ import (
 var _ = Describe("Interactive profile usage", func() {
 	Context("when using profile with interactive mode", func() {
 		It("should use profile values as defaults", func() {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			// Apply dev profile first (like the command does)
 			err := icg.ApplyProfile("dev")
@@ -65,7 +65,7 @@ var _ = Describe("Interactive profile usage", func() {
 		})
 
 		It("should allow non-interactive collection to use profile defaults", func() {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			// Apply dev profile
 			err := icg.ApplyProfile("dev")
@@ -108,7 +108,7 @@ var _ = Describe("Interactive profile usage", func() {
 				FileWriter: intutil.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = c.InitInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -131,7 +131,7 @@ var _ = Describe("Interactive profile usage", func() {
 
 	Context("when using production profile", func() {
 		It("should set production-specific defaults", func() {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err := icg.ApplyProfile("production")
 			Expect(err).NotTo(HaveOccurred())
@@ -153,7 +153,7 @@ var _ = Describe("Interactive profile usage", func() {
 			mockIcg.EXPECT().ValidateInstallConfig().Return([]string{"configuration validation failed"})
 			mockIcg.EXPECT().GenerateSecrets().Return(nil)
 			mockIcg.EXPECT().WriteInstallConfig("config.yaml", false).Return(nil)
-			mockIcg.EXPECT().WriteUnencryptedVault("vault.yaml", false).Return(nil)
+			mockIcg.EXPECT().WriteVault("vault.yaml", false).Return(nil)
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{
@@ -195,7 +195,7 @@ var _ = Describe("Interactive profile usage", func() {
 				FileWriter: intutil.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err = c.InitInstallConfig(icg)
 			Expect(err).To(HaveOccurred())

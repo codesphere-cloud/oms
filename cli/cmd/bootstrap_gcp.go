@@ -149,7 +149,11 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false)
-	icg := installer.NewInstallConfigManager()
+
+	icg, err := installer.NewInstallConfigManager("plain", "")
+	if err != nil {
+		return fmt.Errorf("failed to initialize conig manager: %w", err)
+	}
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := intutil.NewFilesystemWriter()
 	portalClient := portal.NewPortalClient()

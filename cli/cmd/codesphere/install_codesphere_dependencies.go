@@ -32,6 +32,9 @@ type InstallCodesphereDepenciesCmd struct {
 }
 
 func (c *InstallCodesphereDepenciesCmd) RunE(_ *cobra.Command, _ []string) error {
+	if err := validateInstallCodesphereVault(c.Opts); err != nil {
+		return err
+	}
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -81,7 +84,7 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, stlog *bootstrap.StepLogger) error {
 	var install *argocdinstaller.AppInstaller
 	if err := stlog.Substep("Load vault data", func() error {
-		installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, cfg)
+		installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 		if err != nil {
 			return err
 		}

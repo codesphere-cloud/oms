@@ -232,3 +232,16 @@ func installCodesphereSopsAndAgeAvailable() bool {
 	}
 	return true
 }
+
+var _ = Describe("install codesphere vault type", func() {
+	It("accepts sops", func() {
+		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt"}
+		Expect(validateInstallCodesphereVault(opts)).To(Succeed())
+	})
+
+	It("rejects plain vaults at the command boundary", func() {
+		opts := &InstallCodesphereOpts{VaultType: string(vault.TypePlain), PrivKey: "age-key.txt"}
+		err := validateInstallCodesphereVault(opts)
+		Expect(err).To(MatchError(`install codesphere requires vault type "sops"`))
+	})
+})

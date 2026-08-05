@@ -166,7 +166,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			icg.EXPECT().ApplyProfile("minimal").Return(nil)
 			// Returning a real install config to avoid nil pointer dereferences later
 			icg.EXPECT().GetInstallConfig().RunAndReturn(func() *files.RootConfig {
-				realIcm := installer.NewInstallConfigManager()
+				realIcm := newPlainInstallConfigManager()
 				_ = realIcm.ApplyProfile("minimal")
 				return realIcm.GetInstallConfig()
 			})
@@ -174,7 +174,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			projectId := "test-project-12345"
 
 			// EnsureSecrets
-			fw.EXPECT().Exists("fake-secret").Return(false)
+			icg.EXPECT().LoadVaultFromUnecryptedFile("fake-secret").Return(nil)
 			icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 			// EnsureProject
@@ -235,7 +235,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 			nodeClient.EXPECT().CopyFile(mock.Anything, "fake-config-file", "/etc/codesphere/config.yaml").Return(nil)
 			nodeClient.EXPECT().CopyFile(mock.Anything, "fake-secret", "/etc/codesphere/secrets/prod.vault.yaml").Return(nil)
-			icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
+			icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
 
 			// Enable Root Login
 			nodeClient.EXPECT().WaitReady(mock.Anything, mock.Anything).Return(nil).Return(nil)
@@ -727,7 +727,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 			It("uses existing when config file exists", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -737,7 +737,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("loads existing vault before existing config for templating", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
 				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
@@ -760,7 +759,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 				err := bs.EnsureInstallConfig()
@@ -784,7 +783,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureSecrets", func() {
 		Describe("Valid EnsureSecrets", func() {
 			It("loads existing secrets file", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
 				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
@@ -793,7 +791,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("skips when secrets file missing", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -803,7 +801,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("returns error when secrets file load fails", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
 				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
 
 				err := bs.EnsureSecrets()

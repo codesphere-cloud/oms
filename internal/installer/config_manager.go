@@ -42,15 +42,14 @@ type InstallConfigManager interface {
 	GenerateSecrets() error
 	WriteInstallConfig(configPath string, withComments bool) error
 	WriteVault(vaultPath string, withComments bool) error
-	WriteUnencryptedVault(vaultPath string, withComments bool) error
 }
 
 type InstallConfig struct {
-	fileIO         util.FileIO
-	vaultEncryptor vault.Encryptor
-	ageKeyResolver vault.AgeKeyResolver
-	Config         *files.RootConfig
-	Vault          *files.InstallVault
+	fileIO      util.FileIO
+	Config      *files.RootConfig
+	Vault       *files.InstallVault
+	vaultType   vault.Type
+	vaultAgeKey string
 }
 
 // SetFileIO overrides the file I/O implementation (useful for testing).
@@ -58,39 +57,41 @@ func (g *InstallConfig) SetFileIO(fio util.FileIO) {
 	g.fileIO = fio
 }
 
-// SetVaultEncryptor overrides vault encryption (useful for testing).
-func (g *InstallConfig) SetVaultEncryptor(encryptor vault.Encryptor) {
-	g.vaultEncryptor = encryptor
-}
-
-// SetAgeKeyResolver overrides age key resolution (useful for testing).
-func (g *InstallConfig) SetAgeKeyResolver(resolver vault.AgeKeyResolver) {
-	g.ageKeyResolver = resolver
-}
-
-func (g *InstallConfig) encryptVault(src, target, recipient string) error {
-	if g.vaultEncryptor == nil {
-		return fmt.Errorf("vault encryptor is not configured")
+// NewInstallConfigManager configures all vault reads and writes to go through
+// the selected vault implementation.
+func NewInstallConfigManager(vaultType string, ageKey string) (InstallConfigManager, error) {
+	t, err := vault.ParseType(vaultType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse vault type %s: %w", vaultType, err)
 	}
-	return g.vaultEncryptor.Encrypt(src, target, recipient)
-}
 
-func (g *InstallConfig) resolveAgeKey(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error) {
-	if g.ageKeyResolver == nil {
-		return "", "", fmt.Errorf("age key resolver is not configured")
+	if err := vault.ValidateConfiguration(t, ageKey); err != nil {
+		return nil, fmt.Errorf("failed to validate install config: %w", err)
 	}
-	return g.ageKeyResolver.Resolve(explicitKeyFile, fallbackDir)
-}
 
-func NewInstallConfigManager() InstallConfigManager {
 	config := files.NewRootConfig()
+
 	return &InstallConfig{
-		fileIO:         &util.FilesystemWriter{},
-		vaultEncryptor: vault.SOPSEncryptor{},
-		ageKeyResolver: vault.DefaultAgeKeyResolver{},
-		Config:         &config,
-		Vault:          &files.InstallVault{},
+		fileIO:      &util.FilesystemWriter{},
+		Config:      &config,
+		Vault:       &files.InstallVault{},
+		vaultType:   t,
+		vaultAgeKey: ageKey,
+	}, nil
+}
+
+func (g *InstallConfig) vaultStore(path string, comments bool, forcedType ...vault.Type) (vault.Vault, error) {
+	t := g.vaultType
+	if len(forcedType) > 0 {
+		t = forcedType[0]
 	}
+
+	vault, err := vault.New(t, vault.Options{Path: path, AgeKey: g.vaultAgeKey, WithComments: comments, FileIO: g.fileIO})
+	if err != nil {
+		return nil, fmt.Errorf("failed to read vault: %w", err)
+	}
+
+	return vault, nil
 }
 
 func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
@@ -114,26 +115,34 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 	return nil
 }
 
-// LoadVaultFromFile loads the vault content from an encrypted file into the installConfig
-// Returns an error if age key file has not been set as environment variable SOPS_AGE_KEY_FILE
+// LoadVaultFromFile loads vault content using the manager's configured backend.
+// An empty type selects the default SOPS backend.
 func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
-	vault, err := vault.LoadVaultData(vaultPath, "")
+	store, err := g.vaultStore(vaultPath, false)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize vault backend: %w", err)
 	}
 
-	g.Vault = vault
+	loaded, err := store.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load vault: %w", err)
+	}
+
+	g.Vault = loaded
 	return nil
 }
 
 // LoadVaultFromUnecryptedFile loads the vault content from an unencrypted file into the installConfig
 func (g *InstallConfig) LoadVaultFromUnecryptedFile(vaultPath string) error {
-	vault, err := vault.LoadUnencryptedVaultData(vaultPath)
+	store, err := g.vaultStore(vaultPath, false, vault.TypePlain)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize vault backend: %w", err)
 	}
 
-	g.Vault = vault
+	g.Vault, err = store.LoadOrCreate()
+	if err != nil {
+		return fmt.Errorf("failed to load vault: %w", err)
+	}
 	return nil
 }
 
@@ -304,81 +313,17 @@ func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool)
 	return nil
 }
 
-func (g *InstallConfig) WriteUnencryptedVault(vaultPath string, withComments bool) error {
-	vaultYAML, err := g.marshalVault(vaultPath, withComments)
-	if err != nil {
-		return err
-	}
-
-	if err := g.fileIO.CreateAndWrite(vaultPath, vaultYAML, "Secrets"); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
-	vaultYAML, err := g.marshalVault(vaultPath, withComments)
+	store, err := g.vaultStore(vaultPath, withComments)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize vault backend: %w", err)
 	}
 
-	recipient, _, err := g.resolveAgeKey("", filepath.Dir(vaultPath))
+	err = store.Save(g.Vault)
 	if err != nil {
-		return fmt.Errorf("failed to resolve age key: %w", err)
+		return fmt.Errorf("failed to write vault: %w", err)
 	}
-
-	plainPath, err := g.fileIO.CreateTemp(filepath.Dir(vaultPath), "."+filepath.Base(vaultPath)+".plaintext-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temporary plaintext vault: %w", err)
-	}
-	defer func() {
-		_ = g.fileIO.Remove(plainPath)
-	}()
-	if err := g.fileIO.WriteFile(plainPath, vaultYAML, 0600); err != nil {
-		return fmt.Errorf("failed to write temporary plaintext vault: %w", err)
-	}
-
-	encryptedPath, err := g.fileIO.CreateTemp(filepath.Dir(vaultPath), "."+filepath.Base(vaultPath)+".encrypted-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temporary encrypted vault: %w", err)
-	}
-	defer func() {
-		_ = g.fileIO.Remove(encryptedPath)
-	}()
-
-	if err := g.encryptVault(plainPath, encryptedPath, recipient); err != nil {
-		return err
-	}
-
-	if err := g.fileIO.Chmod(encryptedPath, 0600); err != nil {
-		return fmt.Errorf("failed to set encrypted vault permissions: %w", err)
-	}
-	if err := g.fileIO.Rename(encryptedPath, vaultPath); err != nil {
-		return fmt.Errorf("failed to replace encrypted vault: %w", err)
-	}
-
 	return nil
-}
-
-func (g *InstallConfig) marshalVault(vaultPath string, withComments bool) ([]byte, error) {
-	if g.Config == nil {
-		return nil, fmt.Errorf("no configuration provided - config is nil")
-	}
-	if g.Vault == nil {
-		g.Vault = &files.InstallVault{}
-	}
-
-	vaultYAML, err := g.Vault.Marshal()
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal %s: %w", filepath.Base(vaultPath), err)
-	}
-
-	if withComments {
-		vaultYAML = AddVaultComments(vaultYAML)
-	}
-
-	return vaultYAML, nil
 }
 
 func AddConfigComments(yamlData []byte) []byte {

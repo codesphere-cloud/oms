@@ -40,9 +40,9 @@ $ oms install codesphere platform -p codesphere-v1.2.3-installer-lite.tar.gz -k 
   -f, --force                        Enforce package extraction
   -p, --package string               Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load binaries, installer etc. from
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
-  -k, --priv-key string              Path to the private key to encrypt/decrypt secrets
+  -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)
   -s, --skip-steps strings           Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd
-      --vault string                 Path to the SOPS-encrypted prod.vault.yaml file used for config templating
+      --vault string                 Path to the prod.vault.yaml file used for config templating
 ```
 
 ### SEE ALSO

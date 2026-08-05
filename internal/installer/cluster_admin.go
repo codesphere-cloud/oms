@@ -31,21 +31,25 @@ func ResolveVaultPath(vaultPath string, config files.RootConfig) (string, error)
 	return filepath.Join(config.Secrets.BaseDir, "prod.vault.yaml"), nil
 }
 
-// VaultAndRESTConfig loads the vault at vaultPath (or the config's secrets
-// baseDir fallback) and builds a Kubernetes REST config from the kubeconfig
-// stored in it.
-func VaultAndRESTConfig(vaultPath, privKey string, cfg files.RootConfig) (*files.InstallVault, *rest.Config, error) {
+// VaultAndRESTConfig loads the selected vault implementation and builds
+// a Kubernetes REST config from its kubeconfig secret.
+func VaultAndRESTConfig(vaultPath, privKey, vaultType string, cfg files.RootConfig) (*files.InstallVault, *rest.Config, error) {
 	resolvedPath, err := ResolveVaultPath(vaultPath, cfg)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	vault, err := vault.LoadVaultData(resolvedPath, privKey)
+	store, err := vault.NewFromString(vaultType, vault.Options{Path: resolvedPath, AgeKey: privKey})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize vault backend: %w", err)
+	}
+
+	data, err := store.Load()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to load vault %s: %w", resolvedPath, err)
 	}
 
-	kubeConfigContent, err := kubeConfigContentFromVault(vault)
+	kubeConfigContent, err := kubeConfigContentFromVault(data)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -55,7 +59,7 @@ func VaultAndRESTConfig(vaultPath, privKey string, cfg files.RootConfig) (*files
 		return nil, nil, fmt.Errorf("failed to load kubernetes config from vault: %w", err)
 	}
 
-	return vault, restConfig, nil
+	return data, restConfig, nil
 }
 
 func kubeConfigContentFromVault(vault *files.InstallVault) (string, error) {
@@ -75,13 +79,13 @@ func kubeConfigContentFromVault(vault *files.InstallVault) (string, error) {
 // codesphere.clusterAdminEmail to the cluster-admin-email secret before the
 // platform is installed, so the auth-service finds it on first start.
 // It is a no-op when the config does not set an email.
-func EnsureClusterAdminSecret(ctx context.Context, vaultPath, privKey string, cfg files.RootConfig) error {
+func EnsureClusterAdminSecret(ctx context.Context, vaultPath, privKey, vaultType string, cfg files.RootConfig) error {
 	email := cfg.Codesphere.ClusterAdminEmail
 	if email == "" {
 		return nil
 	}
 
-	_, restConfig, err := VaultAndRESTConfig(vaultPath, privKey, cfg)
+	_, restConfig, err := VaultAndRESTConfig(vaultPath, privKey, vaultType, cfg)
 	if err != nil {
 		return err
 	}

@@ -27,6 +27,8 @@ type InitInstallConfigOpts struct {
 
 	ConfigFile string
 	VaultFile  string
+	VaultType  string
+	AgeKey     string
 
 	Profile              string
 	AnsibleInventoryFile string
@@ -100,7 +102,10 @@ type InitInstallConfigOpts struct {
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
-	icg := installer.NewInstallConfigManager()
+	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
+	}
 
 	return c.InitInstallConfig(icg)
 }
@@ -142,6 +147,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
+	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
+	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
 	c.cmd.Flags().StringVar(&c.Opts.AnsibleInventoryFile, "ansible-inventory", "", "Path to Ansible inventory file to import host information from")
@@ -244,7 +251,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := icg.WriteUnencryptedVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
@@ -280,16 +287,7 @@ func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println(strings.Repeat("=", 70))
 
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
-	log.Println("   Keep the vault file secure and encrypt it with SOPS before storing.")
-
-	log.Println("\nNext steps:")
-	log.Println("1. Review the generated config.yaml and prod.vault.yaml")
-	log.Println("2. Install SOPS and Age: brew install sops age")
-	log.Println("3. Generate an Age keypair: age-keygen -o age_key.txt")
-	log.Println("4. Encrypt the vault file:")
-	log.Printf("   age-keygen -y age_key.txt  # Get public key\n")
-	log.Printf("   sops --encrypt --age <PUBLIC_KEY> --in-place %s\n", c.Opts.VaultFile)
-	log.Println("5. Run the Codesphere installer with these configuration files")
+	log.Println("   Keep the vault file and its decryption key secure.")
 	log.Println()
 }
 

@@ -17,10 +17,8 @@ var _ = Describe("GenerateSecrets", func() {
 	var mgr *installer.InstallConfig
 
 	BeforeEach(func() {
-		mgr = &installer.InstallConfig{
-			Config: &files.RootConfig{},
-			Vault:  &files.InstallVault{},
-		}
+		mgr = newPlainInstallConfigManager().(*installer.InstallConfig)
+		mgr.Config = &files.RootConfig{}
 	})
 
 	Context("with basic configuration (no postgres)", func() {
@@ -187,10 +185,8 @@ var _ = Describe("GenerateSecrets", func() {
 
 	Context("uniqueness", func() {
 		It("generates different secrets for different instances", func() {
-			mgr2 := &installer.InstallConfig{
-				Config: &files.RootConfig{},
-				Vault:  &files.InstallVault{},
-			}
+			mgr2 := newPlainInstallConfigManager().(*installer.InstallConfig)
+			mgr2.Config = &files.RootConfig{}
 			Expect(mgr.GenerateSecrets()).To(Succeed())
 			Expect(mgr2.GenerateSecrets()).To(Succeed())
 

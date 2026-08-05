@@ -274,7 +274,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
-				loaded, err := vault.LoadVaultData(c.Opts.Vault, ageKeyPath)
+				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
+				Expect(err).NotTo(HaveOccurred())
+				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
@@ -324,7 +326,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
-				loaded, err := vault.LoadVaultData(c.Opts.Vault, ageKeyPath)
+				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
+				Expect(err).NotTo(HaveOccurred())
+				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(loaded.GetSecret("domainAuthPrivateKey")).NotTo(BeNil(), "pre-existing secret should be preserved")
 				secret := loaded.GetSecret(files.SecretKubeConfig)
@@ -374,7 +378,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
-				loaded, err := vault.LoadVaultData(c.Opts.Vault, ageKeyPath)
+				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
+				Expect(err).NotTo(HaveOccurred())
+				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
@@ -401,7 +407,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
-				loaded, err := vault.LoadVaultData(c.Opts.Vault, ageKeyPath)
+				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
+				Expect(err).NotTo(HaveOccurred())
+				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())

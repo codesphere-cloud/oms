@@ -31,7 +31,10 @@ type BootstrapGcpPostconfigOpts struct {
 func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, args []string) error {
 	log.Printf("running post-configuration steps...")
 
-	icg := installer.NewInstallConfigManager()
+	icg, err := installer.NewInstallConfigManager("plain", "")
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
+	}
 	fw := intutil.NewFilesystemWriter()
 
 	infraFilePath := gcp.GetInfraFilePath()
