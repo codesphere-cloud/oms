@@ -63,7 +63,6 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/argoproj/argo-cd/v3 v3.5.0
 	github.com/google/go-github/v74 v74.0.0
-	github.com/google/go-github/v90 v90.0.0
 	github.com/lib/pq v1.12.3
 	github.com/rook/rook/pkg/apis v0.0.0-20260803155441-45c3e3a204a9
 )
@@ -676,7 +675,7 @@ require (
 	k8s.io/kubectl v0.36.1 // indirect
 	k8s.io/kubernetes v1.36.1 // indirect
 	k8s.io/streaming v0.36.3 // indirect
-	oras.land/oras-go/v2 v2.6.1 // indirect
+	oras.land/oras-go/v2 v2.6.2 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.21.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.21.1 // indirect
