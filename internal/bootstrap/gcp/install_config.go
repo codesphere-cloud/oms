@@ -16,47 +16,55 @@ const (
 	remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
 )
 
-// EnsureInstallConfig uses the local config or recovers it from an existing jumpbox if desired.
-// Else it applies the minimal profile to a new config.
+// EnsureInstallConfig prepares the primary data center's install config.
 func (b *GCPBootstrapper) EnsureInstallConfig() error {
+	b.ensureDataCenters()
+
+	return b.ensureInstallConfig(b.primaryDC())
+}
+
+// ensureInstallConfig uses the data center's local config or recovers it from an existing
+// jumpbox if desired. Else it applies the minimal profile to a new config.
+func (b *GCPBootstrapper) ensureInstallConfig(dc *DataCenter) error {
 	// recovery will overwrite local config or create a new file
 	if b.Env.RecoverConfig {
-		err := b.recoverConfig()
+		err := b.recoverConfig(dc)
 		if err != nil {
 			return fmt.Errorf("failed to recover config: %w", err)
 		}
 	}
 
-	if b.fw.Exists(b.Env.InstallConfigPath) {
-		if err := b.loadVaultForConfigTemplating(); err != nil {
+	if b.fw.Exists(dc.InstallConfigPath) {
+		if err := b.loadVaultForConfigTemplating(dc); err != nil {
 			return fmt.Errorf("failed to load vault templating: %w", err)
 		}
 
-		err := b.icg.LoadInstallConfigFromFile(b.Env.InstallConfigPath)
+		err := dc.icg.LoadInstallConfigFromFile(dc.InstallConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to load config file: %w", err)
 		}
 
-		b.Env.ExistingConfigUsed = true
+		dc.ExistingConfigUsed = true
 	} else {
-		err := b.icg.ApplyProfile("minimal")
+		err := dc.icg.ApplyProfile("minimal")
 		if err != nil {
 			return fmt.Errorf("failed to apply profile: %w", err)
 		}
 	}
 
-	b.Env.InstallConfig = b.icg.GetInstallConfig()
+	dc.InstallConfig = dc.icg.GetInstallConfig()
+	b.mirrorPrimaryDataCenter()
 
 	return nil
 }
 
-func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
-	if !b.fw.Exists(b.Env.SecretsFilePath) {
+func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *DataCenter) error {
+	if !b.fw.Exists(dc.SecretsFilePath) {
 		return nil
 	}
 
 	// during bootstrapping, the vault is not yet encrpyted
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := dc.icg.LoadVaultFromUnecryptedFile(dc.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
 
@@ -66,7 +74,7 @@ func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
 // recoverConfig downloads the config and secrets from the jumpbox if it exists.
 // Since recovery is done when the project or VMs are not ensured, we need to search for the jumpbox IP first.
 // Returns an error if project or jumpbox does not exist or downloading fails.
-func (b *GCPBootstrapper) recoverConfig() error {
+func (b *GCPBootstrapper) recoverConfig(dc *DataCenter) error {
 	existingProject, err := b.GCPClient.GetProjectByName(b.Env.FolderID, b.Env.ProjectName)
 	if err != nil {
 		return fmt.Errorf("failed to find gcp project for config recovery: %w", err)
@@ -79,12 +87,12 @@ func (b *GCPBootstrapper) recoverConfig() error {
 	}
 	b.Env.Jumpbox = jumpbox
 
-	err = b.Env.Jumpbox.NodeClient.DownloadFile(jumpbox, remoteInstallConfigPath, b.Env.InstallConfigPath)
+	err = b.Env.Jumpbox.NodeClient.DownloadFile(jumpbox, dc.RemoteConfigPath, dc.InstallConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to download install config from jumpbox: %w", err)
 	}
 
-	err = b.recoverVault()
+	err = b.recoverVault(dc)
 	if err != nil {
 		return fmt.Errorf("failed to recover vault: %w", err)
 	}
@@ -93,8 +101,8 @@ func (b *GCPBootstrapper) recoverConfig() error {
 }
 
 // recoverVault unencrypts the secrets file on the jumpbox and download the file to the local destination
-func (b *GCPBootstrapper) recoverVault() error {
-	const vaultCopyPath string = "/tmp/prod.vault.yaml"
+func (b *GCPBootstrapper) recoverVault(dc *DataCenter) error {
+	vaultCopyPath := fmt.Sprintf("/tmp/prod%s.vault.yaml", dc.Suffix)
 	defer func() {
 		err := b.Env.Jumpbox.RunSSHCommand("root", "rm -f "+vaultCopyPath)
 		if err != nil {
@@ -102,12 +110,12 @@ func (b *GCPBootstrapper) recoverVault() error {
 		}
 	}()
 
-	err := b.decryptVault(vaultCopyPath)
+	err := b.decryptVault(dc, vaultCopyPath)
 	if err != nil {
 		return fmt.Errorf("failed to create decrypted vault for recovery: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.DownloadFile(b.Env.Jumpbox, vaultCopyPath, b.Env.SecretsFilePath)
+	err = b.Env.Jumpbox.NodeClient.DownloadFile(b.Env.Jumpbox, vaultCopyPath, dc.SecretsFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to download secrets file from jumpbox: %w", err)
 	}
@@ -115,50 +123,60 @@ func (b *GCPBootstrapper) recoverVault() error {
 	return nil
 }
 
+// UpdateInstallConfig writes the bootstrapped infrastructure into the primary data center's
+// install config.
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
+	b.ensureDataCenters()
+
+	return b.updateInstallConfig(b.primaryDC())
+}
+
+func (b *GCPBootstrapper) updateInstallConfig(dc *DataCenter) error {
 	// Update install config with necessary values
-	b.Env.InstallConfig.Datacenter.ID = b.Env.DatacenterID
-	if b.Env.DatacenterName == "" {
-		b.Env.DatacenterName = "dev"
-	}
-	b.Env.InstallConfig.Datacenter.Name = b.Env.DatacenterName
-	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
-	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
-	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
+	dc.InstallConfig.Datacenter.ID = dc.ID
+	dc.InstallConfig.Datacenter.Name = dc.Name
+	dc.InstallConfig.Datacenter.City = "Karlsruhe"
+	dc.InstallConfig.Datacenter.CountryCode = "DE"
+	// Each data center reads and writes its own vault. The installer resolves the vault from
+	// secrets.baseDir, so sharing a directory would let one data center's ceph and kubernetes
+	// steps overwrite another's credentials.
+	dc.InstallConfig.Secrets.BaseDir = dc.SecretsDir
 	if b.Env.RegistryType != RegistryTypeGitHub {
-		b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
-		b.Env.InstallConfig.Registry.LoadContainerImages = true
+		dc.InstallConfig.Registry.ReplaceImagesInBom = true
+		dc.InstallConfig.Registry.LoadContainerImages = true
 	}
 
-	if b.Env.InstallConfig.Postgres.Primary == nil {
-		b.Env.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
+	if dc.InstallConfig.Postgres.Primary == nil {
+		dc.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
 			Hostname: b.Env.PostgreSQLNode.GetName(),
 		}
 	}
 
-	previousPrimaryIP := b.Env.InstallConfig.Postgres.Primary.IP
-	previousPrimaryHostname := b.Env.InstallConfig.Postgres.Primary.Hostname
-	b.Env.InstallConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
-	b.Env.InstallConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
+	previousPrimaryIP := dc.InstallConfig.Postgres.Primary.IP
+	previousPrimaryHostname := dc.InstallConfig.Postgres.Primary.Hostname
+	dc.InstallConfig.Postgres.Primary.IP = b.Env.PostgreSQLNode.GetInternalIP()
+	dc.InstallConfig.Postgres.Primary.Hostname = b.Env.PostgreSQLNode.GetName()
 
-	b.Env.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
-	b.Env.InstallConfig.Ceph.NodesSubnet = "10.10.0.0/20"
-	b.Env.InstallConfig.Ceph.Hosts = []files.CephHost{
+	dc.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
+	// All data centers share the project's subnet; their Ceph clusters stay separate because
+	// each has its own hosts, monitors and FSID.
+	dc.InstallConfig.Ceph.NodesSubnet = vpcSubnetCIDR
+	dc.InstallConfig.Ceph.Hosts = []files.CephHost{
 		{
-			Hostname:  b.Env.CephNodes[0].GetName(),
+			Hostname:  dc.CephNodes[0].GetName(),
 			IsMaster:  true,
-			IPAddress: b.Env.CephNodes[0].GetInternalIP(),
+			IPAddress: dc.CephNodes[0].GetInternalIP(),
 		},
 		{
-			Hostname:  b.Env.CephNodes[1].GetName(),
-			IPAddress: b.Env.CephNodes[1].GetInternalIP(),
+			Hostname:  dc.CephNodes[1].GetName(),
+			IPAddress: dc.CephNodes[1].GetInternalIP(),
 		},
 		{
-			Hostname:  b.Env.CephNodes[2].GetName(),
-			IPAddress: b.Env.CephNodes[2].GetInternalIP(),
+			Hostname:  dc.CephNodes[2].GetName(),
+			IPAddress: dc.CephNodes[2].GetInternalIP(),
 		},
 	}
-	b.Env.InstallConfig.Ceph.OSDs = []files.CephOSD{
+	dc.InstallConfig.Ceph.OSDs = []files.CephOSD{
 		{
 			SpecID: "default",
 			Placement: files.CephPlacement{
@@ -175,48 +193,48 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		},
 	}
 
-	b.Env.InstallConfig.Kubernetes = files.KubernetesConfig{
+	dc.InstallConfig.Kubernetes = files.KubernetesConfig{
 		ManagedByCodesphere: true,
-		APIServerHost:       b.Env.ControlPlaneNodes[0].GetInternalIP(),
+		APIServerHost:       dc.ControlPlaneNodes[0].GetInternalIP(),
 		ControlPlanes: []files.K8sNode{
 			{
-				IPAddress: b.Env.ControlPlaneNodes[0].GetInternalIP(),
+				IPAddress: dc.ControlPlaneNodes[0].GetInternalIP(),
 			},
 		},
 		Workers: []files.K8sNode{
 			{
-				IPAddress: b.Env.ControlPlaneNodes[0].GetInternalIP(),
+				IPAddress: dc.ControlPlaneNodes[0].GetInternalIP(),
 			},
 
 			{
-				IPAddress: b.Env.ControlPlaneNodes[1].GetInternalIP(),
+				IPAddress: dc.ControlPlaneNodes[1].GetInternalIP(),
 			},
 			{
-				IPAddress: b.Env.ControlPlaneNodes[2].GetInternalIP(),
+				IPAddress: dc.ControlPlaneNodes[2].GetInternalIP(),
 			},
 		},
 	}
 
-	b.Env.InstallConfig.Cluster.Kyverno = &files.KyvernoConfig{
+	dc.InstallConfig.Cluster.Kyverno = &files.KyvernoConfig{
 		Enabled: false,
 	}
 
-	b.Env.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
-	b.Env.InstallConfig.Cluster.Gateway.Annotations = map[string]string{
-		"cloud.google.com/load-balancer-ipv4": b.Env.GatewayIP,
+	dc.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
+	dc.InstallConfig.Cluster.Gateway.Annotations = map[string]string{
+		"cloud.google.com/load-balancer-ipv4": dc.GatewayIP,
 	}
-	b.Env.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
-	b.Env.InstallConfig.Cluster.PublicGateway.Annotations = map[string]string{
-		"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
+	dc.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
+	dc.InstallConfig.Cluster.PublicGateway.Annotations = map[string]string{
+		"cloud.google.com/load-balancer-ipv4": dc.PublicGatewayIP,
 	}
 
-	b.applySshProxyConfig()
+	b.applySshProxyConfig(dc)
 
 	dnsProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
 		dnsProject = b.Env.ProjectID
 	}
-	b.Env.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
+	dc.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
 		"issuers": map[string]interface{}{
 			"letsEncryptHttp": map[string]interface{}{
 				"enabled": !b.Env.GoogleACMEIssuer,
@@ -248,26 +266,28 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 		acmeConfig.Server = "https://dv.acme-v02.api.pki.goog/directory"
 		acmeConfig.EABKeyID = keyID
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: b64MacKey}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: b64MacKey}})
 	}
-	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+	dc.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
 		Type: "acme",
 		Acme: acmeConfig,
 	}
 
-	b.Env.InstallConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
-	b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
-	b.Env.InstallConfig.Codesphere.PublicIP = b.Env.ControlPlaneNodes[1].GetExternalIP()
-	b.Env.InstallConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
-		CNameBaseDomain: "ws." + b.Env.BaseDomain,
+	// The platform is served from one domain shared by all data centers, while workspaces and
+	// custom domains resolve to the data center hosting them.
+	dc.InstallConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
+	dc.InstallConfig.Codesphere.WorkspaceHostingBaseDomain = dc.WorkspaceHostingBaseDomain
+	dc.InstallConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
+		CNameBaseDomain: dc.WorkspaceHostingBaseDomain,
 	}
-	b.Env.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
-	b.Env.InstallConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()
-	b.Env.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
+	dc.InstallConfig.Codesphere.PublicIP = dc.ControlPlaneNodes[1].GetExternalIP()
+	dc.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
+	dc.InstallConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()
+	dc.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
 
-	b.Env.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
+	dc.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
 	if b.Env.GitHubAppName != "" && b.Env.GitHubAppClientID != "" && b.Env.GitHubAppClientSecret != "" {
-		b.Env.InstallConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
+		dc.InstallConfig.Codesphere.GitProviders.GitHub = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://github.com",
 			API: files.APIConfig{
@@ -282,11 +302,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				InstallationURI:       "https://github.com/apps/" + b.Env.GitHubAppName + "/installations/new",
 			},
 		}
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGithubAppsClientId, Fields: &files.SecretFields{Password: b.Env.GitHubAppClientID}})
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGithubAppsClientSecret, Fields: &files.SecretFields{Password: b.Env.GitHubAppClientSecret}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGithubAppsClientId, Fields: &files.SecretFields{Password: b.Env.GitHubAppClientID}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGithubAppsClientSecret, Fields: &files.SecretFields{Password: b.Env.GitHubAppClientSecret}})
 	}
 	if b.Env.GitLabAppClientID != "" && b.Env.GitLabAppClientSecret != "" {
-		b.Env.InstallConfig.Codesphere.GitProviders.GitLab = &files.GitProviderConfig{
+		dc.InstallConfig.Codesphere.GitProviders.GitLab = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://gitlab.com",
 			API: files.APIConfig{
@@ -300,11 +320,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/gitlab/callback",
 			},
 		}
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGitlabAppClientId, Fields: &files.SecretFields{Password: b.Env.GitLabAppClientID}})
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGitlabAppClientSecret, Fields: &files.SecretFields{Password: b.Env.GitLabAppClientSecret}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGitlabAppClientId, Fields: &files.SecretFields{Password: b.Env.GitLabAppClientID}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGitlabAppClientSecret, Fields: &files.SecretFields{Password: b.Env.GitLabAppClientSecret}})
 	}
 	if b.Env.BitbucketAppClientID != "" && b.Env.BitbucketAppClientSecret != "" {
-		b.Env.InstallConfig.Codesphere.GitProviders.Bitbucket = &files.GitProviderConfig{
+		dc.InstallConfig.Codesphere.GitProviders.Bitbucket = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://bitbucket.org",
 			API: files.APIConfig{
@@ -318,11 +338,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/bitbucket/callback",
 			},
 		}
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretBitbucketAppsClientId, Fields: &files.SecretFields{Password: b.Env.BitbucketAppClientID}})
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretBitbucketAppsClientSecret, Fields: &files.SecretFields{Password: b.Env.BitbucketAppClientSecret}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretBitbucketAppsClientId, Fields: &files.SecretFields{Password: b.Env.BitbucketAppClientID}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretBitbucketAppsClientSecret, Fields: &files.SecretFields{Password: b.Env.BitbucketAppClientSecret}})
 	}
 	if b.Env.AzureDevOpsAppClientID != "" && b.Env.AzureDevOpsAppClientSecret != "" {
-		b.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps = &files.GitProviderConfig{
+		dc.InstallConfig.Codesphere.GitProviders.AzureDevOps = &files.GitProviderConfig{
 			Enabled: true,
 			URL:     "https://dev.azure.com",
 			API: files.APIConfig{
@@ -337,15 +357,15 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				Scope:                 "openid offline_access https://app.vssps.visualstudio.com/vso.code_full",
 			},
 		}
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAzureDevOpsAppClientId, Fields: &files.SecretFields{Password: b.Env.AzureDevOpsAppClientID}})
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAzureDevOpsAppClientSecret, Fields: &files.SecretFields{Password: b.Env.AzureDevOpsAppClientSecret}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAzureDevOpsAppClientId, Fields: &files.SecretFields{Password: b.Env.AzureDevOpsAppClientID}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAzureDevOpsAppClientSecret, Fields: &files.SecretFields{Password: b.Env.AzureDevOpsAppClientSecret}})
 	}
 	if b.Env.OidcIssuerURL != "" && b.Env.OidcClientID != "" && b.Env.OidcClientSecret != "" {
 		name := b.Env.OidcProviderName
 		if name == "" {
 			name = "OIDC"
 		}
-		b.Env.InstallConfig.Codesphere.OAuth = &files.OAuthProvidersConfig{
+		dc.InstallConfig.Codesphere.OAuth = &files.OAuthProvidersConfig{
 			Oidc: &files.OidcOAuthProvider{
 				Type:      "oidc",
 				Enabled:   true,
@@ -354,12 +374,12 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 				Scopes:    []string{"openid", "profile", "email"},
 			},
 		}
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOidcClientId, Fields: &files.SecretFields{Password: b.Env.OidcClientID}})
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOidcClientSecret, Fields: &files.SecretFields{Password: b.Env.OidcClientSecret}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOidcClientId, Fields: &files.SecretFields{Password: b.Env.OidcClientID}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOidcClientSecret, Fields: &files.SecretFields{Password: b.Env.OidcClientSecret}})
 	}
 
 	if b.Env.CentralOtelPassword != "" || b.Env.LocalTraceEndpoint != "" {
-		b.Env.InstallConfig.Codesphere.TelemetryExport = &files.TelemetryExport{
+		dc.InstallConfig.Codesphere.TelemetryExport = &files.TelemetryExport{
 			RemoteEndpoint: b.Env.CentralOtelEndpoint,
 			RemoteExport:   b.Env.CentralOtelPassword != "",
 			Traces:         b.Env.LocalTraceEndpoint != "",
@@ -368,71 +388,75 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
-	b.Env.InstallConfig.Codesphere.Internal = b.Env.InternalFlags
-	b.Env.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
-	b.Env.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
+	dc.InstallConfig.Codesphere.Internal = b.Env.InternalFlags
+	dc.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
+	dc.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
 	// Only set when the flag is provided so a recovered config keeps its value on re-runs.
 	if b.Env.ClusterAdminEmail != "" {
-		b.Env.InstallConfig.Codesphere.ClusterAdminEmail = b.Env.ClusterAdminEmail
+		dc.InstallConfig.Codesphere.ClusterAdminEmail = b.Env.ClusterAdminEmail
 	}
-	b.applyExternalLokiConfig()
-	b.applyPrometheusRemoteWriteConfig()
+	b.applyExternalLokiConfig(dc)
+	b.applyPrometheusRemoteWriteConfig(dc)
 
-	if !b.Env.ExistingConfigUsed {
-		err := b.icg.GenerateSecrets()
+	if !dc.ExistingConfigUsed {
+		err := dc.icg.GenerateSecrets()
 		if err != nil {
 			return fmt.Errorf("failed to generate secrets: %w", err)
 		}
 	} else {
-		if err := b.regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname); err != nil {
+		if err := b.regeneratePostgresCerts(dc, previousPrimaryIP, previousPrimaryHostname); err != nil {
 			return err
 		}
 	}
 
 	if b.Env.CentralOtelUsername != "" && b.Env.CentralOtelPassword != "" {
-		if b.Env.InstallConfig.Cluster.Monitoring == nil {
-			b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+		if dc.InstallConfig.Cluster.Monitoring == nil {
+			dc.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
 		}
-		b.Env.InstallConfig.Cluster.Monitoring.CentralOtelExport = &files.CentralOtelConfig{
+		dc.InstallConfig.Cluster.Monitoring.CentralOtelExport = &files.CentralOtelConfig{
 			Enabled:  true,
 			Username: b.Env.CentralOtelUsername,
 			Password: b.Env.CentralOtelPassword,
 		}
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretCentralOtelCreds, Fields: &files.SecretFields{Username: b.Env.CentralOtelUsername, Password: b.Env.CentralOtelPassword}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretCentralOtelCreds, Fields: &files.SecretFields{Username: b.Env.CentralOtelUsername, Password: b.Env.CentralOtelPassword}})
 	}
 
 	if b.Env.OpenBaoURI != "" {
-		b.Env.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
+		dc.InstallConfig.Codesphere.OpenBao = &files.OpenBaoConfig{
 			Engine: b.Env.OpenBaoEngine,
 			URI:    b.Env.OpenBaoURI,
 			User:   b.Env.OpenBaoUser,
 		}
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: b.Env.OpenBaoPassword}})
+		dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: b.Env.OpenBaoPassword}})
 	}
 
-	if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
+	if err := dc.icg.WriteInstallConfig(dc.InstallConfigPath, true); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
+	if err := dc.icg.WriteVault(dc.SecretsFilePath, true); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
+	// CopyFile creates the destination directory, so a secondary data center's secrets
+	// directory does not need to exist yet.
+	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, dc.InstallConfigPath, dc.RemoteConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
+	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, dc.SecretsFilePath, dc.RemoteVaultPath())
 	if err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}
 
+	b.mirrorPrimaryDataCenter()
+
 	return nil
 }
 
-func (b *GCPBootstrapper) applySshProxyConfig() {
-	b.Env.InstallConfig.PcApps = util.DeepMergeMaps(b.Env.InstallConfig.PcApps, files.ChartValues{
+func (b *GCPBootstrapper) applySshProxyConfig(dc *DataCenter) {
+	dc.InstallConfig.PcApps = util.DeepMergeMaps(dc.InstallConfig.PcApps, files.ChartValues{
 		"applications": map[string]any{
 			"ssh-workspace-proxy": map[string]any{
 				"enabled": true,
@@ -440,9 +464,9 @@ func (b *GCPBootstrapper) applySshProxyConfig() {
 					"service": map[string]any{
 						"enabled":        true,
 						"type":           "LoadBalancer",
-						"loadBalancerIP": b.Env.SshProxyIP,
+						"loadBalancerIP": dc.SshProxyIP,
 						"annotations": map[string]any{
-							"cloud.google.com/load-balancer-ipv4": b.Env.SshProxyIP,
+							"cloud.google.com/load-balancer-ipv4": dc.SshProxyIP,
 						},
 					},
 				},
@@ -451,16 +475,16 @@ func (b *GCPBootstrapper) applySshProxyConfig() {
 	})
 }
 
-func (b *GCPBootstrapper) applyExternalLokiConfig() {
+func (b *GCPBootstrapper) applyExternalLokiConfig(dc *DataCenter) {
 	if b.Env.ExternalLokiEndpoint == "" {
 		return
 	}
 
-	if b.Env.InstallConfig.Cluster.Monitoring == nil {
-		b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+	if dc.InstallConfig.Cluster.Monitoring == nil {
+		dc.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
-	if b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy == nil {
-		b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{}
+	if dc.InstallConfig.Cluster.Monitoring.GrafanaAlloy == nil {
+		dc.InstallConfig.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{}
 	}
 
 	loki := &files.LokiConnectionConfig{
@@ -469,42 +493,42 @@ func (b *GCPBootstrapper) applyExternalLokiConfig() {
 		Password: b.Env.ExternalLokiSecret,
 	}
 
-	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled = true
-	b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki = loki
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretLokiGatewayBasicAuthPassword, Fields: &files.SecretFields{Password: b.Env.ExternalLokiSecret}})
+	dc.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled = true
+	dc.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Loki = loki
+	dc.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretLokiGatewayBasicAuthPassword, Fields: &files.SecretFields{Password: b.Env.ExternalLokiSecret}})
 }
 
-func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig() {
+func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig(dc *DataCenter) {
 	if b.Env.PrometheusRemoteWriteURL == "" {
 		return
 	}
 
-	if b.Env.InstallConfig.Cluster.Monitoring == nil {
-		b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+	if dc.InstallConfig.Cluster.Monitoring == nil {
+		dc.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
-	if b.Env.InstallConfig.Cluster.Monitoring.Prometheus == nil {
-		b.Env.InstallConfig.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
+	if dc.InstallConfig.Cluster.Monitoring.Prometheus == nil {
+		dc.InstallConfig.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
 	}
-	if b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
-		b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{}
+	if dc.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
+		dc.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{}
 	}
 
-	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Enabled = true
-	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Url = b.Env.PrometheusRemoteWriteURL
-	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.ClusterName = b.Env.DatacenterName
-	b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Username = b.Env.PrometheusRemoteWriteUser
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: "promRemoteWritePassword", Fields: &files.SecretFields{Password: b.Env.PrometheusRemoteWritePassword}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: "promRemoteWriteUser", Fields: &files.SecretFields{Password: b.Env.PrometheusRemoteWriteUser}})
+	dc.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Enabled = true
+	dc.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Url = b.Env.PrometheusRemoteWriteURL
+	dc.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.ClusterName = dc.Name
+	dc.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite.Username = b.Env.PrometheusRemoteWriteUser
+	dc.icg.GetVault().SetSecret(files.SecretEntry{Name: "promRemoteWritePassword", Fields: &files.SecretFields{Password: b.Env.PrometheusRemoteWritePassword}})
+	dc.icg.GetVault().SetSecret(files.SecretEntry{Name: "promRemoteWriteUser", Fields: &files.SecretFields{Password: b.Env.PrometheusRemoteWriteUser}})
 }
 
 // regeneratePostgresCerts regenerates PostgreSQL TLS certificates when the IP/hostname
 // changed or no private key was loaded from the vault.
-func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname string) error {
-	vault := b.icg.GetVault()
+func (b *GCPBootstrapper) regeneratePostgresCerts(dc *DataCenter, previousPrimaryIP, previousPrimaryHostname string) error {
+	vault := dc.icg.GetVault()
 	primaryKeySecret := vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem)
 	primaryNeedsRegen := primaryKeySecret == nil || primaryKeySecret.File == nil ||
-		previousPrimaryIP != b.Env.InstallConfig.Postgres.Primary.IP ||
-		previousPrimaryHostname != b.Env.InstallConfig.Postgres.Primary.Hostname
+		previousPrimaryIP != dc.InstallConfig.Postgres.Primary.IP ||
+		previousPrimaryHostname != dc.InstallConfig.Postgres.Primary.Hostname
 
 	if primaryNeedsRegen {
 		caSecret := vault.GetSecret(files.SecretPostgresCaKeyPem)
@@ -513,9 +537,9 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 		}
 		primaryKeyPEM, primaryCertPEM, err := secrets.GenerateServerCertificate(
 			caSecret.File.Content,
-			b.Env.InstallConfig.Postgres.CACertPem,
-			b.Env.InstallConfig.Postgres.Primary.Hostname,
-			[]string{b.Env.InstallConfig.Postgres.Primary.IP})
+			dc.InstallConfig.Postgres.CACertPem,
+			dc.InstallConfig.Postgres.Primary.Hostname,
+			[]string{dc.InstallConfig.Postgres.Primary.IP})
 		if err != nil {
 			return fmt.Errorf("failed to generate primary server certificate: %w", err)
 		}
@@ -523,9 +547,9 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 			return fmt.Errorf("primary PostgreSQL cert/key validation failed: %w", err)
 		}
 		vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPrimaryServerKeyPem, File: &files.SecretFile{Name: "primary.key", Content: primaryKeyPEM}})
-		b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem = primaryCertPEM
+		dc.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem = primaryCertPEM
 	}
-	if b.Env.InstallConfig.Postgres.Replica != nil {
+	if dc.InstallConfig.Postgres.Replica != nil {
 		replicaKeySecret := vault.GetSecret(files.SecretPostgresReplicaServerKeyPem)
 		if replicaKeySecret == nil || replicaKeySecret.File == nil {
 			caSecret := vault.GetSecret(files.SecretPostgresCaKeyPem)
@@ -534,9 +558,9 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 			}
 			replicaKeyPEM, replicaCertPEM, err := secrets.GenerateServerCertificate(
 				caSecret.File.Content,
-				b.Env.InstallConfig.Postgres.CACertPem,
-				b.Env.InstallConfig.Postgres.Replica.Name,
-				[]string{b.Env.InstallConfig.Postgres.Replica.IP})
+				dc.InstallConfig.Postgres.CACertPem,
+				dc.InstallConfig.Postgres.Replica.Name,
+				[]string{dc.InstallConfig.Postgres.Replica.IP})
 			if err != nil {
 				return fmt.Errorf("failed to generate replica server certificate: %w", err)
 			}
@@ -544,19 +568,25 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 				return fmt.Errorf("replica PostgreSQL cert/key validation failed: %w", err)
 			}
 			vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaServerKeyPem, File: &files.SecretFile{Name: "replica.key", Content: replicaKeyPEM}})
-			b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem = replicaCertPEM
+			dc.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem = replicaCertPEM
 		}
 	}
 	return nil
 }
 
+// EnsureAgeKey generates the primary data center's age identity on the jumpbox.
 func (b *GCPBootstrapper) EnsureAgeKey() error {
-	hasKey := b.Env.Jumpbox.NodeClient.HasFile(b.Env.Jumpbox, b.Env.SecretsDir+"/age_key.txt")
-	if hasKey {
+	b.ensureDataCenters()
+
+	return b.ensureAgeKey(b.primaryDC())
+}
+
+func (b *GCPBootstrapper) ensureAgeKey(dc *DataCenter) error {
+	if b.Env.Jumpbox.NodeClient.HasFile(b.Env.Jumpbox, dc.RemoteAgeKeyPath()) {
 		return nil
 	}
 
-	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("mkdir -p %s; age-keygen -o %s/age_key.txt", b.Env.SecretsDir, b.Env.SecretsDir))
+	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("mkdir -p %s; age-keygen -o %s", dc.SecretsDir, dc.RemoteAgeKeyPath()))
 	if err != nil {
 		return fmt.Errorf("failed to generate age key on jumpbox: %w", err)
 	}
@@ -564,24 +594,41 @@ func (b *GCPBootstrapper) EnsureAgeKey() error {
 	return nil
 }
 
+// EnsureSecrets loads the primary data center's vault if it already exists locally.
 func (b *GCPBootstrapper) EnsureSecrets() error {
-	if b.fw.Exists(b.Env.SecretsFilePath) {
-		err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath)
+	b.ensureDataCenters()
+
+	return b.ensureSecrets(b.primaryDC())
+}
+
+func (b *GCPBootstrapper) ensureSecrets(dc *DataCenter) error {
+	if b.fw.Exists(dc.SecretsFilePath) {
+		err := dc.icg.LoadVaultFromUnecryptedFile(dc.SecretsFilePath)
 		if err != nil {
 			return fmt.Errorf("failed to load vault file: %w", err)
 		}
 	}
-	b.Env.Secrets = b.icg.GetVault()
+	if dc.IsPrimary() {
+		b.Env.Secrets = dc.icg.GetVault()
+	}
+	b.mirrorPrimaryDataCenter()
 	return nil
 }
 
+// EncryptVault encrypts the primary data center's vault on the jumpbox.
 func (b *GCPBootstrapper) EncryptVault() error {
-	err := b.Env.Jumpbox.RunSSHCommand("root", "cp "+b.Env.SecretsDir+"/prod.vault.yaml{,.bak}")
+	b.ensureDataCenters()
+
+	return b.encryptVault(b.primaryDC())
+}
+
+func (b *GCPBootstrapper) encryptVault(dc *DataCenter) error {
+	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("cp %s{,.bak}", dc.RemoteVaultPath()))
 	if err != nil {
 		return fmt.Errorf("failed backup vault on jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.RunSSHCommand("root", "sops --encrypt --in-place --age $(age-keygen -y "+b.Env.SecretsDir+"/age_key.txt) "+b.Env.SecretsDir+"/prod.vault.yaml")
+	err = b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("sops --encrypt --in-place --age $(age-keygen -y %s) %s", dc.RemoteAgeKeyPath(), dc.RemoteVaultPath()))
 	if err != nil {
 		return fmt.Errorf("failed to encrypt vault on jumpbox: %w", err)
 	}
@@ -589,10 +636,10 @@ func (b *GCPBootstrapper) EncryptVault() error {
 	return nil
 }
 
-// decryptVault creates an unencrypted copy of the vault in dst on the jumpbox
+// decryptVault creates an unencrypted copy of the data center's vault in dst on the jumpbox.
 // Make sure to delete the unencrypted file when not needed anymore.
-func (b *GCPBootstrapper) decryptVault(dst string) error {
-	err := b.Env.Jumpbox.RunSSHCommand("root", "cp "+b.Env.SecretsDir+"/prod.vault.yaml "+dst)
+func (b *GCPBootstrapper) decryptVault(dc *DataCenter, dst string) error {
+	err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("cp %s %s", dc.RemoteVaultPath(), dst))
 	if err != nil {
 		return fmt.Errorf("failed to create tmp vault on jumpbox: %w", err)
 	}
@@ -602,7 +649,7 @@ func (b *GCPBootstrapper) decryptVault(dst string) error {
 		return fmt.Errorf("failed to make vault file readable only for root on jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.RunSSHCommand("root", "SOPS_AGE_KEY_FILE="+b.Env.SecretsDir+"/age_key.txt sops --decrypt --in-place "+dst)
+	err = b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf("SOPS_AGE_KEY_FILE=%s sops --decrypt --in-place %s", dc.RemoteAgeKeyPath(), dst))
 	if err != nil {
 		return fmt.Errorf("failed to decrypt vault on jumpbox: %w", err)
 	}
