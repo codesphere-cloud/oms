@@ -215,46 +215,48 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 	log.Println("\n=== ACME Certificate Configuration (Optional) ===")
 
+	certIssuer := g.Config.Codesphere.EnsureCertIssuer()
+
 	// Initialize ACME config if it doesn't exist
-	if g.Config.Codesphere.CertIssuer.Acme == nil {
-		g.Config.Codesphere.CertIssuer.Acme = &files.ACMEConfig{}
+	if certIssuer.Acme == nil {
+		certIssuer.Acme = &files.ACMEConfig{}
 	}
 
-	g.Config.Codesphere.CertIssuer.Acme.Enabled = prompter.Bool("Enable ACME certificate issuer (e.g., Let's Encrypt)", g.Config.Codesphere.CertIssuer.Acme.Enabled)
+	certIssuer.Acme.Enabled = prompter.Bool("Enable ACME certificate issuer (e.g., Let's Encrypt)", certIssuer.Acme.Enabled)
 
 	// Early exit if ACME is disabled
-	if !g.Config.Codesphere.CertIssuer.Acme.Enabled {
-		g.Config.Codesphere.CertIssuer.Acme = nil
-		g.Config.Codesphere.CertIssuer.Type = files.CertIssuerTypeSelfSigned
+	if !certIssuer.Acme.Enabled {
+		certIssuer.Acme = nil
+		certIssuer.Type = files.CertIssuerTypeSelfSigned
 		return
 	}
-	g.Config.Codesphere.CertIssuer.Type = files.CertIssuerTypeACME
+	certIssuer.Type = files.CertIssuerTypeACME
 
-	defaultIssuerName := g.Config.Codesphere.CertIssuer.Acme.Name
+	defaultIssuerName := certIssuer.Acme.Name
 	if defaultIssuerName == "" {
 		defaultIssuerName = "acme-issuer"
 	}
-	g.Config.Codesphere.CertIssuer.Acme.Name = g.collectString(prompter, "ACME issuer name", defaultIssuerName)
+	certIssuer.Acme.Name = g.collectString(prompter, "ACME issuer name", defaultIssuerName)
 
-	defaultEmail := g.Config.Codesphere.CertIssuer.Acme.Email
+	defaultEmail := certIssuer.Acme.Email
 	if defaultEmail == "" {
 		defaultEmail = "admin@example.com"
 	}
-	g.Config.Codesphere.CertIssuer.Acme.Email = g.collectString(prompter, "Email address for ACME account registration", defaultEmail)
+	certIssuer.Acme.Email = g.collectString(prompter, "Email address for ACME account registration", defaultEmail)
 
-	defaultServer := g.Config.Codesphere.CertIssuer.Acme.Server
+	defaultServer := certIssuer.Acme.Server
 	if defaultServer == "" {
 		defaultServer = "https://acme-v02.api.letsencrypt.org/directory"
 	}
-	g.Config.Codesphere.CertIssuer.Acme.Server = g.collectString(prompter, "ACME server URL", defaultServer)
+	certIssuer.Acme.Server = g.collectString(prompter, "ACME server URL", defaultServer)
 
 	// External Account Binding (EAB)
 	log.Println("\n--- External Account Binding (Optional) ---")
-	hasEAB := prompter.Bool("Configure External Account Binding (required by some ACME CAs)", g.Config.Codesphere.CertIssuer.Acme.EABKeyID != "")
+	hasEAB := prompter.Bool("Configure External Account Binding (required by some ACME CAs)", certIssuer.Acme.EABKeyID != "")
 
-	g.Config.Codesphere.CertIssuer.Acme.EABKeyID = ""
+	certIssuer.Acme.EABKeyID = ""
 	if hasEAB {
-		g.Config.Codesphere.CertIssuer.Acme.EABKeyID = g.collectString(prompter, "EAB Key ID", g.Config.Codesphere.CertIssuer.Acme.EABKeyID)
+		certIssuer.Acme.EABKeyID = g.collectString(prompter, "EAB Key ID", certIssuer.Acme.EABKeyID)
 		existingEabKey := ""
 		if g.Vault != nil {
 			if s := g.Vault.GetSecret(files.SecretAcmeEabMacKey); s != nil && s.Fields != nil {
@@ -272,21 +274,21 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 
 	// DNS-01 Challenge Configuration
 	log.Println("\n--- DNS-01 Challenge Configuration (Optional) ---")
-	if g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
-		g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{}
+	if certIssuer.Acme.Solver.DNS01 == nil {
+		certIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{}
 	}
 
-	useDNS01 := prompter.Bool("Configure DNS-01 challenge solver", g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider != "")
+	useDNS01 := prompter.Bool("Configure DNS-01 challenge solver", certIssuer.Acme.Solver.DNS01.Provider != "")
 	if !useDNS01 {
-		g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01 = nil
+		certIssuer.Acme.Solver.DNS01 = nil
 		return
 	}
 	providerOptions := []string{"route53", "cloudflare", "azure", "gcp", "other"}
-	defaultProvider := g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider
+	defaultProvider := certIssuer.Acme.Solver.DNS01.Provider
 	if defaultProvider == "" {
 		defaultProvider = "cloudflare"
 	}
-	g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
+	certIssuer.Acme.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
 	log.Println("Note: Additional DNS provider configuration will need to be added to the vault file.")
 	log.Println("Provider config and secrets should be added manually after generation.")
 }

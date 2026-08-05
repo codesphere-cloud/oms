@@ -774,6 +774,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer).NotTo(BeNil())
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.Server).To(Equal("https://dv.acme-v02.api.pki.goog/directory"))
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.EABKeyID).To(Equal("fake-eab-key-id"))
 					Expect(vault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password).To(Equal("fake-eab-mac-key"))
@@ -804,6 +805,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer).NotTo(BeNil())
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.Server).To(Equal("https://acme-staging-v02.api.letsencrypt.org/directory"))
 				})
 			})

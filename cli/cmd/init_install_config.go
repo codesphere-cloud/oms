@@ -469,24 +469,25 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 
 	// ACME configuration
 	if c.Opts.ACMEEnabled {
-		if config.Codesphere.CertIssuer.Acme == nil {
-			config.Codesphere.CertIssuer.Acme = &files.ACMEConfig{}
+		certIssuer := config.Codesphere.EnsureCertIssuer()
+		if certIssuer.Acme == nil {
+			certIssuer.Acme = &files.ACMEConfig{}
 		}
-		config.Codesphere.CertIssuer.Type = files.CertIssuerTypeACME
-		config.Codesphere.CertIssuer.Acme.Enabled = true
+		certIssuer.Type = files.CertIssuerTypeACME
+		certIssuer.Acme.Enabled = true
 
 		if c.Opts.ACMEIssuerName != "" {
-			config.Codesphere.CertIssuer.Acme.Name = c.Opts.ACMEIssuerName
+			certIssuer.Acme.Name = c.Opts.ACMEIssuerName
 		}
 		if c.Opts.ACMEEmail != "" {
-			config.Codesphere.CertIssuer.Acme.Email = c.Opts.ACMEEmail
+			certIssuer.Acme.Email = c.Opts.ACMEEmail
 		}
 		if c.Opts.ACMEServer != "" {
-			config.Codesphere.CertIssuer.Acme.Server = c.Opts.ACMEServer
+			certIssuer.Acme.Server = c.Opts.ACMEServer
 		}
 
 		if c.Opts.ACMEEABKeyID != "" {
-			config.Codesphere.CertIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
+			certIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
 		}
 		if c.Opts.ACMEEABMacKey != "" {
 			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMEEABMacKey}})
@@ -494,7 +495,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 
 		// Configure DNS-01 solver
 		if c.Opts.ACMEDNS01Provider != "" {
-			config.Codesphere.CertIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{
+			certIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{
 				Provider: c.Opts.ACMEDNS01Provider,
 			}
 		}
