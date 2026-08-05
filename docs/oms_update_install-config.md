@@ -24,6 +24,12 @@ oms update install-config [flags]
 # Update PostgreSQL primary IP and regenerate certificates
 $ oms update install-config --postgres-primary-ip 10.10.0.4 --config config.yaml --vault prod.vault.yaml
 
+# Set the primary PostgreSQL hostname when mode is install
+$ oms update install-config --postgres-server postgres-1 --config config.yaml --vault prod.vault.yaml
+
+# Set the PostgreSQL connection address when mode is external
+$ oms update install-config --postgres-server db.example.com:5432 --config config.yaml --vault prod.vault.yaml
+
 # Update Codesphere domain
 $ oms update install-config --domain new.example.com --config config.yaml --vault prod.vault.yaml
 
@@ -55,12 +61,10 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --k8s-api-server string                        Kubernetes API server host
       --k8s-pod-cidr string                          Kubernetes Pod CIDR
       --k8s-service-cidr string                      Kubernetes Service CIDR
-      --postgres-primary-hostname string             Primary PostgreSQL server hostname
       --postgres-primary-ip string                   Primary PostgreSQL server IP
       --postgres-replica-ip string                   Replica PostgreSQL server IP
       --postgres-replica-name string                 Replica PostgreSQL server name
-      --postgres-server string                       PostgreSQL primary hostname for install mode or server address for external mode
-      --postgres-server-address string               PostgreSQL server address (for external mode)
+      --postgres-server string                       PostgreSQL server: primary hostname in install mode, connection address in external mode
       --public-ip string                             Codesphere public IP address
       --vault string                                 Path to existing prod.vault.yaml file (default "prod.vault.yaml")
       --with-comments                                Add helpful comments to the generated YAML files

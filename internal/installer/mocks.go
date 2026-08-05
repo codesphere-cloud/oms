@@ -696,12 +696,12 @@ func (_c *MockInstallConfigManager_ValidateVault_Call) RunAndReturn(run func() [
 	return _c
 }
 
-// WriteEncryptedVault provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) WriteEncryptedVault(vaultPath string, withComments bool) error {
+// WriteVault provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) WriteVault(vaultPath string, withComments bool) error {
 	ret := _mock.Called(vaultPath, withComments)
 
 	if len(ret) == 0 {
-		panic("no return value specified for WriteEncryptedVault")
+		panic("no return value specified for WriteVault")
 	}
 
 	var r0 error
@@ -713,19 +713,19 @@ func (_mock *MockInstallConfigManager) WriteEncryptedVault(vaultPath string, wit
 	return r0
 }
 
-// MockInstallConfigManager_WriteEncryptedVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WriteEncryptedVault'
-type MockInstallConfigManager_WriteEncryptedVault_Call struct {
+// MockInstallConfigManager_WriteVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WriteVault'
+type MockInstallConfigManager_WriteVault_Call struct {
 	*mock.Call
 }
 
-// WriteEncryptedVault is a helper method to define mock.On call
+// WriteVault is a helper method to define mock.On call
 //   - vaultPath string
 //   - withComments bool
-func (_e *MockInstallConfigManager_Expecter) WriteEncryptedVault(vaultPath any, withComments any) *MockInstallConfigManager_WriteEncryptedVault_Call {
-	return &MockInstallConfigManager_WriteEncryptedVault_Call{Call: _e.mock.On("WriteEncryptedVault", vaultPath, withComments)}
+func (_e *MockInstallConfigManager_Expecter) WriteVault(vaultPath any, withComments any) *MockInstallConfigManager_WriteVault_Call {
+	return &MockInstallConfigManager_WriteVault_Call{Call: _e.mock.On("WriteVault", vaultPath, withComments)}
 }
 
-func (_c *MockInstallConfigManager_WriteEncryptedVault_Call) Run(run func(vaultPath string, withComments bool)) *MockInstallConfigManager_WriteEncryptedVault_Call {
+func (_c *MockInstallConfigManager_WriteVault_Call) Run(run func(vaultPath string, withComments bool)) *MockInstallConfigManager_WriteVault_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -743,12 +743,12 @@ func (_c *MockInstallConfigManager_WriteEncryptedVault_Call) Run(run func(vaultP
 	return _c
 }
 
-func (_c *MockInstallConfigManager_WriteEncryptedVault_Call) Return(err error) *MockInstallConfigManager_WriteEncryptedVault_Call {
+func (_c *MockInstallConfigManager_WriteVault_Call) Return(err error) *MockInstallConfigManager_WriteVault_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockInstallConfigManager_WriteEncryptedVault_Call) RunAndReturn(run func(vaultPath string, withComments bool) error) *MockInstallConfigManager_WriteEncryptedVault_Call {
+func (_c *MockInstallConfigManager_WriteVault_Call) RunAndReturn(run func(vaultPath string, withComments bool) error) *MockInstallConfigManager_WriteVault_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -810,12 +810,12 @@ func (_c *MockInstallConfigManager_WriteInstallConfig_Call) RunAndReturn(run fun
 	return _c
 }
 
-// WriteVault provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) WriteVault(vaultPath string, withComments bool) error {
+// WriteUnencryptedVault provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) WriteUnencryptedVault(vaultPath string, withComments bool) error {
 	ret := _mock.Called(vaultPath, withComments)
 
 	if len(ret) == 0 {
-		panic("no return value specified for WriteVault")
+		panic("no return value specified for WriteUnencryptedVault")
 	}
 
 	var r0 error
@@ -827,19 +827,19 @@ func (_mock *MockInstallConfigManager) WriteVault(vaultPath string, withComments
 	return r0
 }
 
-// MockInstallConfigManager_WriteVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WriteVault'
-type MockInstallConfigManager_WriteVault_Call struct {
+// MockInstallConfigManager_WriteUnencryptedVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WriteUnencryptedVault'
+type MockInstallConfigManager_WriteUnencryptedVault_Call struct {
 	*mock.Call
 }
 
-// WriteVault is a helper method to define mock.On call
+// WriteUnencryptedVault is a helper method to define mock.On call
 //   - vaultPath string
 //   - withComments bool
-func (_e *MockInstallConfigManager_Expecter) WriteVault(vaultPath any, withComments any) *MockInstallConfigManager_WriteVault_Call {
-	return &MockInstallConfigManager_WriteVault_Call{Call: _e.mock.On("WriteVault", vaultPath, withComments)}
+func (_e *MockInstallConfigManager_Expecter) WriteUnencryptedVault(vaultPath any, withComments any) *MockInstallConfigManager_WriteUnencryptedVault_Call {
+	return &MockInstallConfigManager_WriteUnencryptedVault_Call{Call: _e.mock.On("WriteUnencryptedVault", vaultPath, withComments)}
 }
 
-func (_c *MockInstallConfigManager_WriteVault_Call) Run(run func(vaultPath string, withComments bool)) *MockInstallConfigManager_WriteVault_Call {
+func (_c *MockInstallConfigManager_WriteUnencryptedVault_Call) Run(run func(vaultPath string, withComments bool)) *MockInstallConfigManager_WriteUnencryptedVault_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -857,12 +857,12 @@ func (_c *MockInstallConfigManager_WriteVault_Call) Run(run func(vaultPath strin
 	return _c
 }
 
-func (_c *MockInstallConfigManager_WriteVault_Call) Return(err error) *MockInstallConfigManager_WriteVault_Call {
+func (_c *MockInstallConfigManager_WriteUnencryptedVault_Call) Return(err error) *MockInstallConfigManager_WriteUnencryptedVault_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockInstallConfigManager_WriteVault_Call) RunAndReturn(run func(vaultPath string, withComments bool) error) *MockInstallConfigManager_WriteVault_Call {
+func (_c *MockInstallConfigManager_WriteUnencryptedVault_Call) RunAndReturn(run func(vaultPath string, withComments bool) error) *MockInstallConfigManager_WriteUnencryptedVault_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -163,7 +163,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 
 	// Postgres
 	c.cmd.Flags().StringVar(&c.Opts.PostgresMode, "postgres-mode", "", "PostgreSQL setup mode (install/external)")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server hostname for install mode or address for external mode")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server: primary hostname in install mode, connection address in external mode")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
 
 	// K8s
@@ -244,7 +244,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+	if err := icg.WriteUnencryptedVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 

@@ -42,33 +42,13 @@ type InstallConfigManager interface {
 	GenerateSecrets() error
 	WriteInstallConfig(configPath string, withComments bool) error
 	WriteVault(vaultPath string, withComments bool) error
-	WriteEncryptedVault(vaultPath string, withComments bool) error
-}
-
-type VaultEncryptor interface {
-	Encrypt(src, target, recipient string) error
-}
-
-type AgeKeyResolver interface {
-	Resolve(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error)
-}
-
-type sopsVaultEncryptor struct{}
-
-func (sopsVaultEncryptor) Encrypt(src, target, recipient string) error {
-	return vault.EncryptFileWithSOPS(src, target, recipient)
-}
-
-type sopsAgeKeyResolver struct{}
-
-func (sopsAgeKeyResolver) Resolve(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error) {
-	return vault.ResolveAgeKey(explicitKeyFile, fallbackDir)
+	WriteUnencryptedVault(vaultPath string, withComments bool) error
 }
 
 type InstallConfig struct {
 	fileIO         util.FileIO
-	vaultEncryptor VaultEncryptor
-	ageKeyResolver AgeKeyResolver
+	vaultEncryptor vault.Encryptor
+	ageKeyResolver vault.AgeKeyResolver
 	Config         *files.RootConfig
 	Vault          *files.InstallVault
 }
@@ -79,35 +59,35 @@ func (g *InstallConfig) SetFileIO(fio util.FileIO) {
 }
 
 // SetVaultEncryptor overrides vault encryption (useful for testing).
-func (g *InstallConfig) SetVaultEncryptor(encryptor VaultEncryptor) {
+func (g *InstallConfig) SetVaultEncryptor(encryptor vault.Encryptor) {
 	g.vaultEncryptor = encryptor
 }
 
 // SetAgeKeyResolver overrides age key resolution (useful for testing).
-func (g *InstallConfig) SetAgeKeyResolver(resolver AgeKeyResolver) {
+func (g *InstallConfig) SetAgeKeyResolver(resolver vault.AgeKeyResolver) {
 	g.ageKeyResolver = resolver
 }
 
 func (g *InstallConfig) encryptVault(src, target, recipient string) error {
-	if g.vaultEncryptor != nil {
-		return g.vaultEncryptor.Encrypt(src, target, recipient)
+	if g.vaultEncryptor == nil {
+		return fmt.Errorf("vault encryptor is not configured")
 	}
-	return sopsVaultEncryptor{}.Encrypt(src, target, recipient)
+	return g.vaultEncryptor.Encrypt(src, target, recipient)
 }
 
 func (g *InstallConfig) resolveAgeKey(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error) {
-	if g.ageKeyResolver != nil {
-		return g.ageKeyResolver.Resolve(explicitKeyFile, fallbackDir)
+	if g.ageKeyResolver == nil {
+		return "", "", fmt.Errorf("age key resolver is not configured")
 	}
-	return sopsAgeKeyResolver{}.Resolve(explicitKeyFile, fallbackDir)
+	return g.ageKeyResolver.Resolve(explicitKeyFile, fallbackDir)
 }
 
 func NewInstallConfigManager() InstallConfigManager {
 	config := files.NewRootConfig()
 	return &InstallConfig{
 		fileIO:         &util.FilesystemWriter{},
-		vaultEncryptor: sopsVaultEncryptor{},
-		ageKeyResolver: sopsAgeKeyResolver{},
+		vaultEncryptor: vault.SOPSEncryptor{},
+		ageKeyResolver: vault.DefaultAgeKeyResolver{},
 		Config:         &config,
 		Vault:          &files.InstallVault{},
 	}
@@ -315,7 +295,7 @@ func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool)
 	return nil
 }
 
-func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
+func (g *InstallConfig) WriteUnencryptedVault(vaultPath string, withComments bool) error {
 	vaultYAML, err := g.marshalVault(vaultPath, withComments)
 	if err != nil {
 		return err
@@ -328,7 +308,7 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	return nil
 }
 
-func (g *InstallConfig) WriteEncryptedVault(vaultPath string, withComments bool) error {
+func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	vaultYAML, err := g.marshalVault(vaultPath, withComments)
 	if err != nil {
 		return err

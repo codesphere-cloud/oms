@@ -87,6 +87,8 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 			of the PostgreSQL server certificates that include that IP address.`),
 			Example: util.FormatExamples("update install-config", []csio.Example{
 				{Cmd: "--postgres-primary-ip 10.10.0.4 --config config.yaml --vault prod.vault.yaml", Desc: "Update PostgreSQL primary IP and regenerate certificates"},
+				{Cmd: "--postgres-server postgres-1 --config config.yaml --vault prod.vault.yaml", Desc: "Set the primary PostgreSQL hostname when mode is install"},
+				{Cmd: "--postgres-server db.example.com:5432 --config config.yaml --vault prod.vault.yaml", Desc: "Set the PostgreSQL connection address when mode is external"},
 				{Cmd: "--domain new.example.com --config config.yaml --vault prod.vault.yaml", Desc: "Update Codesphere domain"},
 				{Cmd: "--k8s-api-server 10.0.0.10 --config config.yaml --vault prod.vault.yaml", Desc: "Update Kubernetes API server host"},
 			}),
@@ -102,11 +104,13 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 
 	// PostgreSQL update flags
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryHostname, "postgres-primary-hostname", "", "Primary PostgreSQL server hostname")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryHostname, "postgres-primary-hostname", "", "Primary PostgreSQL server hostname (deprecated: use --postgres-server)")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresReplicaIP, "postgres-replica-ip", "", "Replica PostgreSQL server IP")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresReplicaName, "postgres-replica-name", "", "Replica PostgreSQL server name")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server-address", "", "PostgreSQL server address (for external mode)")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresServer, "postgres-server", "", "PostgreSQL primary hostname for install mode or server address for external mode")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server-address", "", "External PostgreSQL connection address (deprecated: use --postgres-server)")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServer, "postgres-server", "", "PostgreSQL server: primary hostname in install mode, connection address in external mode")
+	_ = c.cmd.Flags().MarkDeprecated("postgres-primary-hostname", "use --postgres-server instead")
+	_ = c.cmd.Flags().MarkDeprecated("postgres-server-address", "use --postgres-server instead")
 
 	// Ceph update flags
 	c.cmd.Flags().StringVar(&c.Opts.CephNodesSubnet, "ceph-nodes-subnet", "", "Ceph nodes subnet")
@@ -182,7 +186,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := icg.WriteEncryptedVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 

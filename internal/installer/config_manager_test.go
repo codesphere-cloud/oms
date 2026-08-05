@@ -536,7 +536,7 @@ var _ = Describe("ConfigManager", func() {
 		})
 	})
 
-	Describe("WriteEncryptedVault", func() {
+	Describe("WriteVault", func() {
 		It("should preserve the existing vault when encryption fails", func() {
 			vaultPath := "prod.vault.yaml"
 			original := []byte("existing encrypted content")
@@ -550,9 +550,22 @@ var _ = Describe("ConfigManager", func() {
 			manager.SetAgeKeyResolver(staticAgeKeyResolver{})
 			manager.SetVaultEncryptor(failingVaultEncryptor{})
 
-			err := manager.WriteEncryptedVault(vaultPath, false)
+			err := manager.WriteVault(vaultPath, false)
 			Expect(err).To(HaveOccurred())
 			Expect(mockIO.GetFileContent(vaultPath)).To(Equal(original))
+		})
+
+		It("should fail when the encryptor is not configured", func() {
+			manager := &installer.InstallConfig{
+				Config: &files.RootConfig{},
+				Vault:  &files.InstallVault{},
+			}
+			manager.SetFileIO(NewMockFileIO())
+			manager.SetAgeKeyResolver(staticAgeKeyResolver{})
+			manager.SetVaultEncryptor(nil)
+
+			err := manager.WriteVault("prod.vault.yaml", false)
+			Expect(err).To(MatchError("vault encryptor is not configured"))
 		})
 	})
 
@@ -583,7 +596,7 @@ var _ = Describe("ConfigManager", func() {
 		})
 
 		Context("vault deduplication on re-write", func() {
-			It("should not produce duplicate vault entries when WriteVault is called after loading existing vault", func() {
+			It("should not produce duplicate vault entries when WriteUnencryptedVault is called after loading existing vault", func() {
 				mockIO := NewMockFileIO()
 				configManager.SetFileIO(mockIO)
 
@@ -593,8 +606,8 @@ var _ = Describe("ConfigManager", func() {
 				err = configManager.GenerateSecrets()
 				Expect(err).ToNot(HaveOccurred())
 
-				// First write via WriteVault
-				err = configManager.WriteVault("/tmp/vault.yaml", false)
+				// First write via WriteUnencryptedVault
+				err = configManager.WriteUnencryptedVault("/tmp/vault.yaml", false)
 				Expect(err).ToNot(HaveOccurred())
 
 				firstVaultBytes := mockIO.GetFileContent("/tmp/vault.yaml")
@@ -607,7 +620,7 @@ var _ = Describe("ConfigManager", func() {
 				configManager.Vault = vault
 
 				// Re-write vault (simulating a second run)
-				err = configManager.WriteVault("/tmp/vault.yaml", false)
+				err = configManager.WriteUnencryptedVault("/tmp/vault.yaml", false)
 				Expect(err).ToNot(HaveOccurred())
 
 				secondVaultBytes := mockIO.GetFileContent("/tmp/vault.yaml")
@@ -646,7 +659,7 @@ var _ = Describe("ConfigManager", func() {
 				// Write config and vault
 				err = configManager.WriteInstallConfig("/tmp/config.yaml", false)
 				Expect(err).ToNot(HaveOccurred())
-				err = configManager.WriteVault("/tmp/vault.yaml", false)
+				err = configManager.WriteUnencryptedVault("/tmp/vault.yaml", false)
 				Expect(err).ToNot(HaveOccurred())
 
 				// --- Second run: simulate loading existing files ---
@@ -686,7 +699,7 @@ var _ = Describe("ConfigManager", func() {
 				Expect(err).ToNot(HaveOccurred(), "cert/key should match after load from vault")
 
 				// Write vault again
-				err = configManager2.WriteVault("/tmp/vault2.yaml", false)
+				err = configManager2.WriteUnencryptedVault("/tmp/vault2.yaml", false)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify no duplicates in re-written vault
