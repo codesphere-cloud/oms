@@ -711,7 +711,7 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 
 	repo, err := b.GCPClient.GetArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
 	if err == nil && repo != nil {
-		b.Env.InstallConfig.Registry.Server = repo.GetRegistryUri()
+		b.Env.ContainerRegistryURL = repo.GetRegistryUri()
 		return nil
 	}
 
@@ -719,6 +719,7 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	if err != nil || repo == nil {
 		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
 	}
+	b.Env.ContainerRegistryURL = repo.GetRegistryUri()
 
 	return nil
 }
@@ -1043,33 +1044,52 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	return nil
 }
 
-// EnsureLocalContainerRegistry installs a docker registry on the postgres node to speed up image loading time
+// EnsureLocalContainerRegistry installs a container registry on the postgres node to speed up
+// image loading time, and makes every cluster node of every data center trust its certificate.
 func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
+	b.ensureDataCenters()
+
+	registryServer, err := b.ensureRegistryRunning()
+	if err != nil {
+		return err
+	}
+	b.Env.ContainerRegistryURL = registryServer
+
+	// The certificate must be distributed on every run, not only when the registry was just
+	// created: a re-run that adds a data center finds the registry already up, and that data
+	// center's nodes would otherwise not trust it.
+	return b.distributeRegistryCert(b.clusterNodes())
+}
+
+// ensureRegistryRunning starts the container registry on the postgres node and generates its
+// credentials when it is not already serving. Returns the registry server address.
+func (b *GCPBootstrapper) ensureRegistryRunning() (string, error) {
 	localRegistryServer := b.Env.PostgreSQLNode.GetInternalIP() + ":5000"
 
 	// Figure out if registry is already running
 	b.stlog.Logf("Checking if local container registry is already running on postgres node")
 	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
 	err := b.Env.PostgreSQLNode.RunSSHCommand("root", checkCommand)
+	vault := b.primaryDC().ConfigManager().GetVault()
 	registryUsername := ""
 	registryPassword := ""
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
+	if s := vault.GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
 		registryUsername = s.Fields.Password
 	}
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
+	if s := vault.GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
 		registryPassword = s.Fields.Password
 	}
-	if err == nil && b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server == localRegistryServer &&
-		registryUsername != "" && registryPassword != "" {
+	if err == nil && registryUsername != "" && registryPassword != "" {
 		b.stlog.Logf("Local container registry already running on postgres node")
-		return nil
+		b.Env.RegistryUsername = registryUsername
+		b.Env.RegistryPassword = registryPassword
+		return localRegistryServer, nil
 	}
 
-	b.Env.InstallConfig.Registry.Server = localRegistryServer
 	registryUsername = "custom-registry"
 	registryPassword = shortuuid.New()
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: registryUsername}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
+	b.Env.RegistryUsername = registryUsername
+	b.Env.RegistryPassword = registryPassword
 
 	commands := []string{
 		"apt-get update",
@@ -1089,19 +1109,24 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		-v /root/registry.crt:/certs/registry.crt \
 		-v /root/registry.key:/certs/registry.key \
 		registry:2`,
-		`mkdir -p /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server,
-		`cp /root/registry.crt /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server + `/ca.crt`,
+		`mkdir -p /etc/docker/certs.d/` + localRegistryServer,
+		`cp /root/registry.crt /etc/docker/certs.d/` + localRegistryServer + `/ca.crt`,
 	}
 	for _, cmd := range commands {
 		b.stlog.Logf("Running command on postgres node: %s", util.Truncate(cmd, 12))
 		err := b.Env.PostgreSQLNode.RunSSHCommand("root", cmd)
 		if err != nil {
-			return fmt.Errorf("failed to run command on postgres node: %w", err)
+			return "", fmt.Errorf("failed to run command on postgres node: %w", err)
 		}
 	}
 
-	allNodes := append(b.Env.ControlPlaneNodes, b.Env.CephNodes...)
-	for _, node := range allNodes {
+	return localRegistryServer, nil
+}
+
+// distributeRegistryCert installs the local registry's self-signed certificate on the given
+// nodes. It is idempotent, so it is safe — and required — to re-run for an additional data center.
+func (b *GCPBootstrapper) distributeRegistryCert(nodes []*node.Node) error {
+	for _, node := range nodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
 		err := b.Env.PostgreSQLNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
 		if err != nil {
@@ -1120,15 +1145,14 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	return nil
 }
 
+// EnsureGitHubAccessConfigured resolves ghcr.io as the registry all data centers pull from.
 func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.GitHubPAT == "" {
 		return fmt.Errorf("GitHub PAT is not set")
 	}
-	b.Env.InstallConfig.Registry.Server = "ghcr.io"
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
-	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
-	b.Env.InstallConfig.Registry.LoadContainerImages = false
+	b.Env.ContainerRegistryURL = "ghcr.io"
+	b.Env.RegistryUsername = b.Env.RegistryUser
+	b.Env.RegistryPassword = b.Env.GitHubPAT
 	return nil
 }
 
