@@ -20,11 +20,15 @@ import (
 var xdgConfigHome = "XDG_CONFIG_HOME"
 
 // Encryptor encrypts a plaintext vault for an age recipient.
+//
+//mockery:generate: true
 type Encryptor interface {
 	Encrypt(src, target, recipient string) error
 }
 
 // AgeKeyResolver finds the age recipient used to encrypt a vault.
+//
+//mockery:generate: true
 type AgeKeyResolver interface {
 	Resolve(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error)
 }

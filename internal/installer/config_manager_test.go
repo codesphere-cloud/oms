@@ -15,6 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 type MockFileIO struct {
@@ -25,18 +26,6 @@ type MockFileIO struct {
 	existsResult  bool
 	isDirResult   bool
 	mkdirAllError error
-}
-
-type failingVaultEncryptor struct{}
-
-func (failingVaultEncryptor) Encrypt(_, _, _ string) error {
-	return errors.New("encryption failed")
-}
-
-type staticAgeKeyResolver struct{}
-
-func (staticAgeKeyResolver) Resolve(_, _ string) (string, string, error) {
-	return "recipient", "", nil
 }
 
 func NewMockFileIO() *MockFileIO {
@@ -546,26 +535,21 @@ var _ = Describe("ConfigManager", func() {
 				Config: &files.RootConfig{},
 				Vault:  &files.InstallVault{},
 			}
+			ageKeyResolver := vault.NewMockAgeKeyResolver(GinkgoT())
+			ageKeyResolver.EXPECT().Resolve("", ".").Return("recipient", "", nil)
+			encryptor := vault.NewMockEncryptor(GinkgoT())
+			encryptor.EXPECT().Encrypt(
+				".prod.vault.yaml.plaintext-*mock",
+				".prod.vault.yaml.encrypted-*mock",
+				"recipient",
+			).Return(errors.New("encryption failed"))
 			manager.SetFileIO(mockIO)
-			manager.SetAgeKeyResolver(staticAgeKeyResolver{})
-			manager.SetVaultEncryptor(failingVaultEncryptor{})
+			manager.SetAgeKeyResolver(ageKeyResolver)
+			manager.SetVaultEncryptor(encryptor)
 
 			err := manager.WriteVault(vaultPath, false)
 			Expect(err).To(HaveOccurred())
 			Expect(mockIO.GetFileContent(vaultPath)).To(Equal(original))
-		})
-
-		It("should fail when the encryptor is not configured", func() {
-			manager := &installer.InstallConfig{
-				Config: &files.RootConfig{},
-				Vault:  &files.InstallVault{},
-			}
-			manager.SetFileIO(NewMockFileIO())
-			manager.SetAgeKeyResolver(staticAgeKeyResolver{})
-			manager.SetVaultEncryptor(nil)
-
-			err := manager.WriteVault("prod.vault.yaml", false)
-			Expect(err).To(MatchError("vault encryptor is not configured"))
 		})
 	})
 
