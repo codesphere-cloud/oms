@@ -203,3 +203,64 @@ var _ = Describe("Interactive profile usage", func() {
 		})
 	})
 })
+
+var _ = Describe("Non-interactive install-config generation", func() {
+	DescribeTable("generates and validates the config for each profile",
+		func(profile string) {
+			configFile, err := os.CreateTemp("", "config-*.yaml")
+			Expect(err).NotTo(HaveOccurred())
+			configPath := configFile.Name()
+			Expect(configFile.Close()).To(Succeed())
+			DeferCleanup(func() { _ = os.Remove(configPath) })
+
+			vaultFile, err := os.CreateTemp("", "vault-*.yaml")
+			Expect(err).NotTo(HaveOccurred())
+			vaultPath := vaultFile.Name()
+			Expect(vaultFile.Close()).To(Succeed())
+			DeferCleanup(func() { _ = os.Remove(vaultPath) })
+
+			c := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					GlobalOptions: &util.GlobalOptions{},
+					ConfigFile:    configPath,
+					VaultFile:     vaultPath,
+					Profile:       profile,
+					Interactive:   false,
+				},
+				FileWriter: intutil.NewFilesystemWriter(),
+			}
+
+			icg := installer.NewInstallConfigManager()
+			err = c.InitInstallConfig(icg)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Both files must have been written.
+			_, err = os.Stat(configPath)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Stat(vaultPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The generated config must round-trip through the full load path and validate.
+			err = icg.LoadInstallConfigFromFile(configPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(icg.ValidateInstallConfig()).To(BeEmpty())
+
+			// The --validate CLI path must pass. The vault is skipped because the freshly
+			// generated vault is plaintext and LoadVaultFromFile requires SOPS encryption.
+			validateCmd := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					GlobalOptions: &util.GlobalOptions{},
+					ConfigFile:    configPath,
+					VaultFile:     "",
+					ValidateOnly:  true,
+				},
+				FileWriter: intutil.NewFilesystemWriter(),
+			}
+			validateIcg := installer.NewInstallConfigManager()
+			Expect(validateCmd.validateOnly(validateIcg)).To(Succeed())
+		},
+		Entry("dev profile", "dev"),
+		Entry("minimal profile", "minimal"),
+		Entry("production profile", "production"),
+	)
+})
