@@ -103,8 +103,9 @@ func (g *InstallConfig) applyCommonProperties() {
 		g.Config.Registry = &files.RegistryConfig{}
 	}
 
-	if g.Config.Codesphere.CertIssuer.Type == "" {
-		g.Config.Codesphere.CertIssuer.Type = files.CertIssuerTypeSelfSigned
+	certIssuer := g.Config.Codesphere.EnsureCertIssuer()
+	if certIssuer.Type == "" {
+		certIssuer.Type = files.CertIssuerTypeSelfSigned
 	}
 	if g.Config.Codesphere.Domain == "" {
 		g.Config.Codesphere.Domain = "codesphere.local"
