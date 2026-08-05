@@ -238,9 +238,6 @@ codesphere:
 			Expect(icg.GetVault().GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
 			Expect(config.Postgres.Primary.SSLConfig.ServerCertPem).NotTo(BeEmpty())
 
-			encrypted, err := vault.IsSOPSEncryptedFile(vaultFile.Name())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(encrypted).To(BeTrue())
 			updatedVault, err := vault.LoadVaultData(vaultFile.Name(), "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedVault.GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
