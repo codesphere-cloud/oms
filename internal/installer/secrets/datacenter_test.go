@@ -32,24 +32,6 @@ func primaryConfig() *files.RootConfig {
 	}
 }
 
-// secondaryConfig returns a config shaped like the one generated for a secondary data center:
-// the shared postgres server is external, so no postgres secrets are regenerated.
-func secondaryConfig(caCertPem string) *files.RootConfig {
-	return &files.RootConfig{
-		Postgres: files.PostgresConfig{
-			Mode:          "external",
-			ServerAddress: "10.10.0.5",
-			CACertPem:     caCertPem,
-		},
-		Codesphere: files.CodesphereConfig{
-			CertIssuer: files.CertIssuerConfig{
-				Type: "acme",
-				Acme: &files.ACMEConfig{Enabled: true, EABKeyID: "primary-eab-key"},
-			},
-		},
-	}
-}
-
 var _ = Describe("IsDataCenterScopedSecret", func() {
 	DescribeTable("classifies vault secrets",
 		func(name string, expected bool) {
@@ -157,6 +139,59 @@ var _ = Describe("DeriveDataCenterVault", func() {
 	})
 })
 
+var _ = Describe("DeriveDataCenterConfig", func() {
+	var primary *files.RootConfig
+
+	BeforeEach(func() {
+		primary = primaryConfig()
+		primary.Cluster.Certificates.CA.CertPem = "primary-ca-cert"
+		primary.Ceph.CephAdmSSHKey.PublicKey = "ssh-rsa primary-cephadm"
+		primary.Postgres.CACertPem = "primary-postgres-ca"
+		primary.Codesphere.Domain = "cs.example.com"
+	})
+
+	It("resets the fields paired with a data-center-scoped secret", func() {
+		derived, err := secrets.DeriveDataCenterConfig(primary)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(derived.Cluster.Certificates.CA.CertPem).To(BeEmpty())
+		Expect(derived.Ceph.CephAdmSSHKey.PublicKey).To(BeEmpty())
+		Expect(derived.Codesphere.CertIssuer.Acme.EABKeyID).To(BeEmpty())
+	})
+
+	It("keeps the fields shared by every data center", func() {
+		derived, err := secrets.DeriveDataCenterConfig(primary)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(derived.Postgres.CACertPem).To(Equal("primary-postgres-ca"))
+		Expect(derived.Codesphere.Domain).To(Equal("cs.example.com"))
+		Expect(derived.Codesphere.CertIssuer.Type).To(Equal(files.CertIssuerTypeACME))
+		Expect(derived.Codesphere.CertIssuer.Acme.Enabled).To(BeTrue())
+	})
+
+	It("does not modify or alias the primary config", func() {
+		derived, err := secrets.DeriveDataCenterConfig(primary)
+		Expect(err).NotTo(HaveOccurred())
+
+		derived.Codesphere.CertIssuer.Acme.Server = "https://other.example.com/directory"
+
+		Expect(primary.Cluster.Certificates.CA.CertPem).To(Equal("primary-ca-cert"))
+		Expect(primary.Ceph.CephAdmSSHKey.PublicKey).To(Equal("ssh-rsa primary-cephadm"))
+		Expect(primary.Codesphere.CertIssuer.Acme.EABKeyID).To(Equal("primary-eab-key"))
+		Expect(primary.Codesphere.CertIssuer.Acme.Server).ToNot(Equal("https://other.example.com/directory"))
+	})
+
+	It("handles a config without an ACME issuer", func() {
+		primary.Codesphere.CertIssuer = files.CertIssuerConfig{Type: files.CertIssuerTypeSelfSigned}
+
+		derived, err := secrets.DeriveDataCenterConfig(primary)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(derived.Codesphere.CertIssuer.Acme).To(BeNil())
+		Expect(derived.Cluster.Certificates.CA.CertPem).To(BeEmpty())
+	})
+})
+
 var _ = Describe("secondary data center secret generation", func() {
 	It("shares the database and auth secrets and regenerates the per-cluster ones", func() {
 		primaryVault := newVault()
@@ -164,8 +199,15 @@ var _ = Describe("secondary data center secret generation", func() {
 		Expect(secrets.EnsureSecrets(primaryVault, primaryCfg)).To(Succeed())
 
 		secondaryVault := secrets.DeriveDataCenterVault(primaryVault)
-		secondaryCfg := secondaryConfig(primaryCfg.Postgres.CACertPem)
-		secrets.ClearDataCenterScopedConfig(secondaryCfg)
+		secondaryCfg, err := secrets.DeriveDataCenterConfig(primaryCfg)
+		Expect(err).NotTo(HaveOccurred())
+		// The bootstrapper points a secondary data center at the shared postgres server before
+		// generating its secrets, so no postgres secret is regenerated here.
+		secondaryCfg.Postgres = files.PostgresConfig{
+			Mode:          "external",
+			ServerAddress: "10.10.0.5",
+			CACertPem:     primaryCfg.Postgres.CACertPem,
+		}
 		Expect(secrets.EnsureSecrets(secondaryVault, secondaryCfg)).To(Succeed())
 
 		By("keeping the shared postgres and auth credentials byte-identical")

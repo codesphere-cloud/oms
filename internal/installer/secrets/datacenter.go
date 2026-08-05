@@ -4,6 +4,7 @@
 package secrets
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -53,6 +54,9 @@ func IsDataCenterScopedSecret(name string) bool {
 // DeriveDataCenterVault returns a copy of the primary data center's vault with all
 // data-center-scoped secrets removed. Running EnsureSecrets over the result regenerates exactly
 // those, while the shared secrets stay byte-identical across data centers.
+//
+// Derive the config with DeriveDataCenterConfig before running EnsureSecrets, so the config
+// fields paired with the dropped secrets are regenerated along with them.
 func DeriveDataCenterVault(primary *files.InstallVault) *files.InstallVault {
 	derived := primary.Clone()
 	if derived == nil {
@@ -71,11 +75,27 @@ func DeriveDataCenterVault(primary *files.InstallVault) *files.InstallVault {
 	return derived
 }
 
-// ClearDataCenterScopedConfig resets the config fields that are written by the Ensure* functions
+// DeriveDataCenterConfig returns a copy of the primary data center's config with the fields that
+// belong to a single data center reset, so EnsureSecrets fills them in for this data center.
+//
+// The counterpart of DeriveDataCenterVault: both derive from the primary data center and both run
+// before EnsureSecrets, which regenerates every dropped secret together with the config field
+// paired with it.
+func DeriveDataCenterConfig(primary *files.RootConfig) (*files.RootConfig, error) {
+	derived, err := primary.Clone()
+	if err != nil {
+		return nil, fmt.Errorf("clone primary data center config: %w", err)
+	}
+	clearDataCenterScopedConfig(derived)
+
+	return derived, nil
+}
+
+// clearDataCenterScopedConfig resets the config fields that are written by the Ensure* functions
 // alongside a data-center-scoped vault secret. Those pairs must always be mutated together: the
 // Ensure* functions are gated on the vault entry, so a config field left in place would keep a
 // stale value paired with a freshly generated key.
-func ClearDataCenterScopedConfig(config *files.RootConfig) {
+func clearDataCenterScopedConfig(config *files.RootConfig) {
 	// Paired with selfSignedCaKeyPem, written by EnsureIngressCA.
 	config.Cluster.Certificates.CA.CertPem = ""
 	// Paired with cephSshPrivateKey, written by EnsureCephSSHKeys.
