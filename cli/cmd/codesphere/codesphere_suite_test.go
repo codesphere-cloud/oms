@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package vault_test
+package codesphere_test
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestVault(t *testing.T) {
+func TestCodesphere(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Vault Suite")
+	RunSpecs(t, "Codesphere Command Suite")
 }

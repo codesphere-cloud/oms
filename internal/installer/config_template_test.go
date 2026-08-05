@@ -128,7 +128,9 @@ codesphere:
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.WriteFile(vaultPath, vaultYaml, 0600)).To(Succeed())
 
-		_, err = vault.LoadVaultData(vaultPath, "")
+		backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultPath, AgeKey: filepath.Join(tempDir, "unused-age-key")})
+		Expect(err).NotTo(HaveOccurred())
+		_, err = backend.Load()
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("is not SOPS-encrypted"))

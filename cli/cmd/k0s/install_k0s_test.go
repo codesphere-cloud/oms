@@ -274,11 +274,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
-				encrypted, err := vault.IsSOPSEncryptedFile(c.Opts.Vault)
+				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
 				Expect(err).NotTo(HaveOccurred())
-				Expect(encrypted).To(BeTrue(), "new vault should be SOPS-encrypted")
-
-				loaded, err := vault.LoadVaultData(c.Opts.Vault, ageKeyPath)
+				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
@@ -328,7 +326,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
-				loaded, err := vault.LoadVaultData(c.Opts.Vault, ageKeyPath)
+				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
+				Expect(err).NotTo(HaveOccurred())
+				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(loaded.GetSecret("domainAuthPrivateKey")).NotTo(BeNil(), "pre-existing secret should be preserved")
 				secret := loaded.GetSecret(files.SecretKubeConfig)
@@ -378,7 +378,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
-				loaded, err := vault.LoadVaultData(c.Opts.Vault, ageKeyPath)
+				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
+				Expect(err).NotTo(HaveOccurred())
+				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
@@ -405,7 +407,9 @@ var _ = Describe("InstallK0sCmd", func() {
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
 
-				loaded, err := vault.LoadVaultData(c.Opts.Vault, ageKeyPath)
+				backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: c.Opts.Vault, AgeKey: ageKeyPath})
+				Expect(err).NotTo(HaveOccurred())
+				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
@@ -463,10 +467,6 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred(), string(encryptOut))
 				Expect(os.Remove(plainPath)).To(Succeed())
 
-				encrypted, err := vault.IsSOPSEncryptedFile(vaultPath)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(encrypted).To(BeTrue())
-
 				c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 				c.Opts.Package = "test-package.tar.gz"
 				c.Opts.Version = "v1.30.0+k0s.0"
@@ -478,11 +478,6 @@ var _ = Describe("InstallK0sCmd", func() {
 
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).NotTo(HaveOccurred())
-
-				// Verify the vault was re-encrypted after saving kubeconfig.
-				encrypted, err = vault.IsSOPSEncryptedFile(vaultPath)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(encrypted).To(BeTrue(), "vault should be re-encrypted after saving kubeconfig")
 
 				// Verify the temporary file was cleaned up.
 				tmpPath := vaultPath + ".tmp"

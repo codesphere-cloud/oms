@@ -34,6 +34,8 @@ type UpdateInstallConfigOpts struct {
 
 	ConfigFile string
 	VaultFile  string
+	VaultType  string
+	AgeKey     string
 
 	WithComments bool
 	Yes          bool
@@ -73,7 +75,10 @@ type UpdateInstallConfigOpts struct {
 }
 
 func (c *UpdateInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
-	icg := installer.NewInstallConfigManager()
+	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
+	}
 
 	return c.UpdateInstallConfig(icg)
 }
@@ -109,6 +114,8 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Path to existing config.yaml file")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Path to existing prod.vault.yaml file")
+	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
+	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 
 	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
 	c.cmd.Flags().BoolVarP(&c.Opts.Yes, "yes", "y", false, "Auto-approve every change to the vault (regenerated certificates and missing secrets)")

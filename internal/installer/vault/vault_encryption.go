@@ -4,8 +4,10 @@
 package vault
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,39 +15,12 @@ import (
 	"strings"
 
 	"filippo.io/age"
+	"github.com/codesphere-cloud/oms/internal/util"
 	sopsage "github.com/getsops/sops/v3/age"
 	"go.yaml.in/yaml/v3"
 )
 
 var xdgConfigHome = "XDG_CONFIG_HOME"
-
-// Encryptor encrypts a plaintext vault for an age recipient.
-//
-//mockery:generate: true
-type Encryptor interface {
-	Encrypt(src, target, recipient string) error
-}
-
-// AgeKeyResolver finds the age recipient used to encrypt a vault.
-//
-//mockery:generate: true
-type AgeKeyResolver interface {
-	Resolve(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error)
-}
-
-// SOPSEncryptor encrypts vaults using SOPS and age.
-type SOPSEncryptor struct{}
-
-func (SOPSEncryptor) Encrypt(src, target, recipient string) error {
-	return EncryptFileWithSOPS(src, target, recipient)
-}
-
-// DefaultAgeKeyResolver resolves age keys from the standard SOPS locations.
-type DefaultAgeKeyResolver struct{}
-
-func (DefaultAgeKeyResolver) Resolve(explicitKeyFile, fallbackDir string) (recipient, keyPath string, err error) {
-	return ResolveAgeKey(explicitKeyFile, fallbackDir)
-}
 
 // ResolveAgeKey resolves an existing age key or generates a new one.
 //
@@ -63,9 +38,13 @@ func (DefaultAgeKeyResolver) Resolve(explicitKeyFile, fallbackDir string) (recip
 // Returns the age public key (recipient) and the path to the key file (empty when
 // the key was supplied via SOPS_AGE_KEY).
 func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
+	return resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir)
+}
+
+func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
 	// 0. Explicit key file – supplied by the caller, takes priority.
 	if explicitKeyFile != "" {
-		recipient, err = readRecipientFromFile(explicitKeyFile)
+		recipient, err = readRecipientFromFile(fileIO, explicitKeyFile)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to read age key from %s: %w", explicitKeyFile, err)
 		}
@@ -83,7 +62,7 @@ func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPa
 
 	// 2. SOPS_AGE_KEY_FILE env var.
 	if keyFile := os.Getenv(sopsage.SopsAgeKeyFileEnv); keyFile != "" {
-		recipient, err = readRecipientFromFile(keyFile)
+		recipient, err = readRecipientFromFile(fileIO, keyFile)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to read age key from %s: %w", keyFile, err)
 		}
@@ -94,23 +73,27 @@ func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPa
 	defaultPath, configErr := getUserConfigDir()
 	if configErr == nil {
 		defaultPath = filepath.Join(defaultPath, sopsage.SopsAgeKeyUserConfigPath)
-		recipient, err = readRecipientFromFile(defaultPath)
+
+		recipient, err = readRecipientFromFile(fileIO, defaultPath)
 		if err == nil {
 			return recipient, defaultPath, nil
 		}
-		if !os.IsNotExist(err) {
+
+		if !errors.Is(err, fs.ErrNotExist) {
 			return "", "", fmt.Errorf("failed to read age key from default location %s: %w", defaultPath, err)
 		}
 	}
 
 	// 4. Generate a new key.
 	keyPath = filepath.Join(fallbackDir, "age_key.txt")
-	recipient, err = readRecipientFromFile(keyPath)
+
+	recipient, err = readRecipientFromFile(fileIO, keyPath)
 	if err != nil {
-		if !os.IsNotExist(err) {
+		if !errors.Is(err, fs.ErrNotExist) {
 			return "", "", fmt.Errorf("failed to read age key from fallback location %s: %w", keyPath, err)
 		}
-		recipient, err = generateAgeKey(keyPath)
+
+		recipient, err = generateAgeKey(fileIO, keyPath)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to generate age key: %w", err)
 		}
@@ -143,15 +126,13 @@ func parseAgeRecipient(reader io.Reader) (string, error) {
 }
 
 // readRecipientFromFile reads an age key file and extracts the public key.
-func readRecipientFromFile(path string) (recipient string, err error) {
-	file, err := os.Open(path)
+func readRecipientFromFile(fileIO util.FileIO, path string) (string, error) {
+	data, err := fileIO.ReadFile(path)
 	if err != nil {
 		return "", err
 	}
-	defer func() {
-		err = file.Close()
-	}()
-	return parseAgeRecipient(file)
+
+	return parseAgeRecipient(strings.NewReader(string(data)))
 }
 
 func getUserConfigDir() (string, error) {
@@ -165,8 +146,8 @@ func getUserConfigDir() (string, error) {
 
 // generateAgeKey generates a new age keypair and writes it to the given path.
 // Returns the public key (recipient).
-func generateAgeKey(keyPath string) (string, error) {
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
+func generateAgeKey(fileIO util.FileIO, keyPath string) (string, error) {
+	if err := fileIO.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
 		return "", fmt.Errorf("failed to create directory for age key: %w", err)
 	}
 
@@ -176,7 +157,7 @@ func generateAgeKey(keyPath string) (string, error) {
 		return "", fmt.Errorf("age-keygen failed: %w: %s", err, out)
 	}
 
-	recipient, err := readRecipientFromFile(keyPath)
+	recipient, err := readRecipientFromFile(fileIO, keyPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read generated age key: %w", err)
 	}

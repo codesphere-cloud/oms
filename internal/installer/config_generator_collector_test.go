@@ -17,7 +17,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 	)
 
 	BeforeEach(func() {
-		manager = installer.NewInstallConfigManager()
+		manager = newPlainInstallConfigManager()
 	})
 
 	Describe("CollectInteractively", func() {

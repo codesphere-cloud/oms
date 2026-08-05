@@ -110,7 +110,9 @@ type vmResult struct {
 
 // EnsureComputeInstances ensures that all required compute instances are present and running.
 func (b *GCPBootstrapper) EnsureComputeInstances() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	sshKeys, err := b.getSSHKeys()
 	if err != nil {

@@ -22,7 +22,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 	)
 
 	BeforeEach(func() {
-		manager = installer.NewInstallConfigManager()
+		manager = newPlainInstallConfigManager()
 
 		tempDir = GinkgoT().TempDir()
 		inventoryFilePath = filepath.Join(tempDir, "inventory.yaml")

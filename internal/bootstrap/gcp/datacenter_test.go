@@ -9,7 +9,6 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
-	"github.com/codesphere-cloud/oms/internal/installer"
 )
 
 var _ = Describe("BuildDataCenters", func() {
@@ -26,7 +25,7 @@ var _ = Describe("BuildDataCenters", func() {
 
 	Context("single data center", func() {
 		It("keeps the paths, secrets dir and domains a single-DC bootstrap has always used", func() {
-			dcs := gcp.BuildDataCenters(newEnv(false), installer.NewInstallConfigManager)
+			dcs := gcp.BuildDataCenters(newEnv(false))
 
 			Expect(dcs).To(HaveLen(1))
 			dc := dcs[0]
@@ -52,7 +51,7 @@ var _ = Describe("BuildDataCenters", func() {
 		var dcs []*datacenter.DataCenter
 
 		BeforeEach(func() {
-			dcs = gcp.BuildDataCenters(newEnv(true), installer.NewInstallConfigManager)
+			dcs = gcp.BuildDataCenters(newEnv(true))
 		})
 
 		It("builds two data centers with the second sharing the first's postgres", func() {
@@ -91,16 +90,12 @@ var _ = Describe("BuildDataCenters", func() {
 			Expect(dcs[1].WorkspaceHostingBaseDomain).To(Equal("2.ws.example.com"))
 			Expect(dcs[1].SSHBaseDomain).To(Equal("2.ssh.cs.example.com"))
 		})
-
-		It("gives each data center its own config manager", func() {
-			Expect(dcs[0].ConfigManager).NotTo(BeIdenticalTo(dcs[1].ConfigManager))
-		})
 	})
 
 	It("falls back to the dev datacenter name", func() {
 		env := newEnv(false)
 		env.DatacenterName = ""
 
-		Expect(gcp.BuildDataCenters(env, installer.NewInstallConfigManager)[0].Name).To(Equal("dev"))
+		Expect(gcp.BuildDataCenters(env)[0].Name).To(Equal("dev"))
 	})
 })

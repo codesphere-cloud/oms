@@ -99,9 +99,6 @@ type GCPBootstrapper struct {
 	NodeClient   node.NodeClient
 	PortalClient portal.Portal
 	GitHubClient github.GitHubClient
-	// NewConfigManager creates the install config manager of a data center. Each data center
-	// owns its own config and vault, so multi-DC bootstraps need more than one.
-	NewConfigManager func() installer.InstallConfigManager
 }
 
 // primaryDC returns the first data center, which owns the shared PostgreSQL server and the
@@ -234,17 +231,16 @@ func NewGCPBootstrapper(
 	gitHubClient github.GitHubClient,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:              ctx,
-		stlog:            stlog,
-		fw:               fw,
-		icg:              icg,
-		GCPClient:        gcpClient,
-		Env:              CodesphereEnv,
-		NodeClient:       sshRunner,
-		PortalClient:     portalClient,
-		Time:             time,
-		GitHubClient:     gitHubClient,
-		NewConfigManager: installer.NewInstallConfigManager,
+		ctx:          ctx,
+		stlog:        stlog,
+		fw:           fw,
+		icg:          icg,
+		GCPClient:    gcpClient,
+		Env:          CodesphereEnv,
+		NodeClient:   sshRunner,
+		PortalClient: portalClient,
+		Time:         time,
+		GitHubClient: gitHubClient,
 	}, nil
 }
 

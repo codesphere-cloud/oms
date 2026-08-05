@@ -54,10 +54,10 @@ $ oms install k0s --no-download
       --ssh-key-path string     SSH private key path for remote installation
       --vault string            Path to prod.vault.yaml to save the kubeconfig into (optional)
       --vault-priv-key string   Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)
-  -v, --version string          Version of k0s to install (default "v1.31.14+k0s.0")
+      --vault-type string       Vault storage type (sops or plain) (default "sops")
+  -v, --version string          Version of k0s to install
 ```
 
 ### SEE ALSO
 
 * [oms install](oms_install.md)	 - Install Codesphere and other components
-

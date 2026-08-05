@@ -13,7 +13,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -22,7 +21,7 @@ import (
 var _ = Describe("ApplyProfile", func() {
 	DescribeTable("profile application",
 		func(profile string, wantErr bool, checkDatacenterName string) {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err := icg.ApplyProfile(profile)
 			if wantErr {
@@ -43,7 +42,7 @@ var _ = Describe("ApplyProfile", func() {
 
 	Context("dev profile details", func() {
 		It("sets correct dev profile configuration", func() {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err := icg.ApplyProfile("dev")
 			Expect(err).NotTo(HaveOccurred())
@@ -296,7 +295,7 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err = c.validateOnly(icg)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -347,7 +346,7 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = c.validateOnly(icg)
 			Expect(err).To(HaveOccurred())
 		})
@@ -409,7 +408,7 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = c.validateOnly(icg)
 			Expect(err).To(HaveOccurred())
 		})

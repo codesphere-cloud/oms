@@ -33,6 +33,9 @@ type InstallCodesphereDepenciesCmd struct {
 }
 
 func (c *InstallCodesphereDepenciesCmd) RunE(_ *cobra.Command, _ []string) error {
+	if err := validateInstallCodesphereVault(c.Opts); err != nil {
+		return err
+	}
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -60,7 +63,7 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 		AutoApprove:      opts.AutoApprove,
 	}
 
-	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, cfg)
+	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to get vault and Kubernetes config: %w", err)
 	}
@@ -110,8 +113,11 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 // before the main dependency steps.
 func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, installVault *files.InstallVault, restConfig *rest.Config, kubeClient ctrlclient.Client, stlog *bootstrap.StepLogger) error {
 	var install *argocdinstaller.AppInstaller
-
-	if err := stlog.Substep("Initialize ArgoCD installer", func() error {
+	if err := stlog.Substep("Load vault data", func() error {
+		installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
+		if err != nil {
+			return err
+		}
 		registryPassword := ""
 		if secret := installVault.GetSecret(files.SecretRegistryPassword); secret != nil && secret.Fields != nil {
 			registryPassword = secret.Fields.Password

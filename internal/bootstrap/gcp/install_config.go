@@ -51,15 +51,9 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 }
 
 func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
-	if !b.fw.Exists(b.Env.SecretsFilePath) {
-		return nil
-	}
-
-	// during bootstrapping, the vault is not yet encrpyted
 	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
-
 	return nil
 }
 
@@ -416,7 +410,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := b.icg.WriteUnencryptedVault(b.Env.SecretsFilePath, true); err != nil {
+	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
@@ -567,11 +561,8 @@ func (b *GCPBootstrapper) EnsureAgeKey() error {
 }
 
 func (b *GCPBootstrapper) EnsureSecrets() error {
-	if b.fw.Exists(b.Env.SecretsFilePath) {
-		err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to load vault file: %w", err)
-		}
+	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 	b.Env.Secrets = b.icg.GetVault()
 	return nil
