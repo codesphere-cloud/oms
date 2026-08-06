@@ -17,6 +17,7 @@ linters:
   enable:
     - revive
     - wsl_v5
+    - wrapcheck
 
 issues:
   # Maximum issues count per one linter.
