@@ -18,7 +18,10 @@ format:
 	go fmt ./...
 
 lint: install-build-deps
-	go tool golangci-lint run
+	go tool golangci-lint run -c .golangci-tmp.yml
+
+lint-changed: install-build-deps
+	go tool golangci-lint run -c .golangci.yml --new-from-merge-base=origin/main 
 
 install-build-deps:
 ifeq (, $(shell which copywrite))
