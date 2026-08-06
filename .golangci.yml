@@ -20,3 +20,14 @@ linters:
   # - `fast`: enables only linters considered as "fast" (`golangci-lint help linters --json | jq '[ .[] | select(.fast==true) ] | map(.name)'`).
   # Default: standard
   default: standard
+
+  # Enable specific linter.
+  enable:
+    - revive
+    - wsl_v5
+
+issues:
+  # Maximum issues count per one linter.
+  # Set to 0 to disable.
+  # Default: 50
+  max-issues-per-linter: 0
