@@ -97,12 +97,11 @@ func ParseMonitorEndpointHost(endpoint string) (string, error) {
 		if host == "" {
 			return "", fmt.Errorf("endpoint %q does not contain a valid host", endpoint)
 		}
+
 		if port == "" {
 			return host, nil
 		}
-		if port == "" {
-			return host, nil
-		}
+
 		return net.JoinHostPort(host, port), nil
 	}
 
