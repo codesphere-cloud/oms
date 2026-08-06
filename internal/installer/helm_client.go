@@ -120,6 +120,7 @@ func (h *helmClient) LoginRegistry(_ context.Context, host, username, password s
 	}
 
 	h.registryClient = registryClient
+
 	return nil
 }
 
@@ -135,6 +136,7 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 	if namespace == "" {
 		namespace = h.defaultNamespace
 	}
+
 	if namespace == "" {
 		return nil, fmt.Errorf("helm namespace is required")
 	}
@@ -168,6 +170,7 @@ func (h *helmClient) newHelmEnv(namespace string) (*helmEnv, error) {
 		if err != nil {
 			return nil, fmt.Errorf("helm registry client init failed: %w", err)
 		}
+
 		actionConfig.RegistryClient = registryClient
 	}
 
@@ -201,6 +204,7 @@ func (g *restConfigGetter) ToDiscoveryClient() (discovery.CachedDiscoveryInterfa
 	if err != nil {
 		return nil, err
 	}
+
 	return memory.NewMemCacheClient(clientset.Discovery()), nil
 }
 
@@ -209,6 +213,7 @@ func (g *restConfigGetter) ToRESTMapper() (meta.RESTMapper, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient), nil
 }
 
@@ -222,6 +227,7 @@ func (g *restConfigGetter) ToRawKubeConfigLoader() clientcmd.ClientConfig {
 	}
 	config.Clusters["in-memory"] = &clientcmdapi.Cluster{Server: g.config.Host}
 	config.AuthInfos["in-memory"] = &clientcmdapi.AuthInfo{}
+
 	return clientcmd.NewDefaultClientConfig(*config, &clientcmd.ConfigOverrides{})
 }
 
@@ -229,6 +235,7 @@ func waitStrategy(s kube.WaitStrategy) kube.WaitStrategy {
 	if s == "" {
 		return kube.StatusWatcherStrategy
 	}
+
 	return s
 }
 
@@ -256,6 +263,7 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 		if err != nil {
 			continue
 		}
+
 		if acc.Name() != releaseName {
 			continue
 		}
@@ -264,6 +272,7 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 		if err != nil {
 			return nil, fmt.Errorf("failed to access chart metadata: %w", err)
 		}
+
 		metadata := chartAcc.MetadataAsMap()
 		version, _ := metadata["Version"].(string)
 
@@ -317,6 +326,7 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 		if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
 			return err
 		}
+
 		if rel == nil {
 			return h.InstallChart(ctx, cfg, InstallChartOptions{ForceConflicts: opts.ForceConflicts})
 		}

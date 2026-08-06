@@ -54,13 +54,16 @@ var _ = Describe("AddRevokeAPIKeyCmd", func() {
 		parent := &cobra.Command{}
 		opts := &util.GlobalOptions{}
 		apikey.AddRevokeCmd(parent, opts)
+
 		found := false
+
 		for _, c := range parent.Commands() {
 			if c.Use == "api-key" {
 				found = true
 				break
 			}
 		}
+
 		Expect(found).To(BeTrue())
 	})
 })

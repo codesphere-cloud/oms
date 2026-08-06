@@ -42,6 +42,7 @@ func NewVaultTemplatingSecretStoreFromFile(vaultPath, ageKeyPath string) (*Vault
 	if err != nil {
 		return nil, err
 	}
+
 	return NewVaultTemplatingSecretStore(vault), nil
 }
 
@@ -68,14 +69,18 @@ func (s *VaultTemplatingSecretStore) ensureVault() error {
 	if s.vault != nil {
 		return nil
 	}
+
 	if s.vaultPath == "" {
 		return errors.New("vaultPath not set")
 	}
+
 	vault, err := LoadVaultData(s.vaultPath, s.ageKeyPath)
 	if err != nil {
 		return err
 	}
+
 	s.vault = vault
+
 	return nil
 }
 
@@ -90,6 +95,7 @@ func selectVaultSecretValue(entry files.SecretEntry, selector ...string) (string
 		if entry.File != nil {
 			return entry.File.Content, nil
 		}
+
 		if entry.Fields != nil {
 			return entry.Fields.Password, nil
 		}
@@ -174,6 +180,7 @@ func IsSOPSEncryptedFile(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+
 	return isSOPSEncryptedYAML(data)
 }
 
@@ -185,6 +192,7 @@ func isSOPSEncryptedYAML(data []byte) (bool, error) {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return false, err
 	}
+
 	if len(doc.Content) == 0 {
 		return false, nil
 	}
@@ -212,5 +220,6 @@ func parseVaultData(data []byte) (*files.InstallVault, error) {
 	if err := vault.Unmarshal(data); err != nil {
 		return nil, err
 	}
+
 	return vault, nil
 }

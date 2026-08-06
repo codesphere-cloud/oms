@@ -46,12 +46,14 @@ func (b *GCPBootstrapper) WriteInfraFile() error {
 	}
 
 	workdir := env.NewEnv().GetOmsWorkdir()
+
 	err = b.fw.MkdirAll(workdir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to create workdir: %w", err)
 	}
 
 	infraFilePath := GetInfraFilePath()
+
 	err = b.fw.WriteFile(infraFilePath, envBytes, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to write gcp bootstrap env file: %w", err)

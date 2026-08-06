@@ -75,6 +75,7 @@ var _ = Describe("Github", func() {
 					for i := 0; i < 100; i++ {
 						membersPage1[i] = &gh.User{Login: gh.Ptr(fmt.Sprintf("user%d", i+1))}
 					}
+
 					membersPage2 := make([]*gh.User, 50)
 					for i := 0; i < 50; i++ {
 						membersPage2[i] = &gh.User{Login: gh.Ptr(fmt.Sprintf("user%d", i+101))}
@@ -89,6 +90,7 @@ var _ = Describe("Github", func() {
 
 					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
 					Expect(err).ToNot(HaveOccurred())
+
 					for i := 1; i <= 150; i++ {
 						Expect(keys).To(ContainSubstring(fmt.Sprintf("root:ssh-rsa AAAUSER%d... user%d", i, i)))
 						Expect(keys).To(ContainSubstring(fmt.Sprintf("ubuntu:ssh-rsa AAAUSER%d... user%d", i, i)))
@@ -110,6 +112,5 @@ var _ = Describe("Github", func() {
 				Expect(keys).To(BeEmpty())
 			})
 		})
-
 	})
 })

@@ -47,6 +47,7 @@ func k8sNodesToStringSlice(nodes []files.K8sNode) []string {
 	for i, node := range nodes {
 		ips[i] = node.IPAddress
 	}
+
 	return ips
 }
 
@@ -55,11 +56,13 @@ func stringSliceToK8sNodes(ips []string) []files.K8sNode {
 	for i, ip := range ips {
 		nodes[i] = files.K8sNode{IPAddress: ip}
 	}
+
 	return nodes
 }
 
 func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter) {
 	log.Println("=== Datacenter Configuration ===")
+
 	g.Config.Datacenter.ID = g.collectInt(prompter, "Datacenter ID", g.Config.Datacenter.ID)
 	g.Config.Datacenter.Name = g.collectString(prompter, "Datacenter name", g.Config.Datacenter.Name)
 	g.Config.Datacenter.City = g.collectString(prompter, "Datacenter city", g.Config.Datacenter.City)
@@ -69,6 +72,7 @@ func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter) {
 
 func (g *InstallConfig) collectRegistryConfig(prompter *Prompter) {
 	log.Println("\n=== Container Registry Configuration ===")
+
 	g.Config.Registry.Server = g.collectString(prompter, "Container registry server (e.g., ghcr.io, leave empty to skip)", "")
 	if g.Config.Registry.Server != "" {
 		g.Config.Registry.ReplaceImagesInBom = prompter.Bool("Replace images in BOM", g.Config.Registry.ReplaceImagesInBom)
@@ -78,20 +82,24 @@ func (g *InstallConfig) collectRegistryConfig(prompter *Prompter) {
 
 func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
 	log.Println("\n=== PostgreSQL Configuration ===")
+
 	g.Config.Postgres.Mode = g.collectChoice(prompter, "PostgreSQL setup", []string{"install", "external"}, "install")
 
 	if g.Config.Postgres.Mode == "install" {
 		if g.Config.Postgres.Primary == nil {
 			g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{}
 		}
+
 		defaultPrimaryIP := g.Config.Postgres.Primary.IP
 		if defaultPrimaryIP == "" {
 			defaultPrimaryIP = "10.50.0.2"
 		}
+
 		defaultPrimaryHostname := g.Config.Postgres.Primary.Hostname
 		if defaultPrimaryHostname == "" {
 			defaultPrimaryHostname = "pg-primary-node"
 		}
+
 		g.Config.Postgres.Primary.IP = g.collectString(prompter, "Primary PostgreSQL server IP", defaultPrimaryIP)
 		g.Config.Postgres.Primary.Hostname = g.collectString(prompter, "Primary PostgreSQL hostname", defaultPrimaryHostname)
 
@@ -100,6 +108,7 @@ func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
 			if g.Config.Postgres.Replica == nil {
 				g.Config.Postgres.Replica = &files.PostgresReplicaConfig{}
 			}
+
 			g.Config.Postgres.Replica.IP = g.collectString(prompter, "Replica PostgreSQL server IP", "10.50.0.3")
 			g.Config.Postgres.Replica.Name = g.collectString(prompter, "Replica name (lowercase alphanumeric + underscore only)", "replica1")
 		} else {
@@ -112,10 +121,12 @@ func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
 
 func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
 	log.Println("\n=== Ceph Configuration ===")
+
 	g.Config.Ceph.NodesSubnet = g.collectString(prompter, "Ceph nodes subnet (CIDR)", "10.53.101.0/24")
 
 	if len(g.Config.Ceph.Hosts) == 0 {
 		numHosts := prompter.Int("Number of Ceph hosts", 3)
+
 		g.Config.Ceph.Hosts = make([]files.CephHost, numHosts)
 		for i := 0; i < numHosts; i++ {
 			log.Printf("\nCeph Host %d:\n", i+1)
@@ -125,6 +136,7 @@ func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
 		}
 	} else {
 		existingHosts := g.Config.Ceph.Hosts
+
 		g.Config.Ceph.Hosts = make([]files.CephHost, len(existingHosts))
 		for i, host := range existingHosts {
 			g.Config.Ceph.Hosts[i] = files.CephHost(host)
@@ -134,6 +146,7 @@ func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
 
 func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
 	log.Println("\n=== Kubernetes Configuration ===")
+
 	g.Config.Kubernetes.ManagedByCodesphere = prompter.Bool("Use Codesphere-managed Kubernetes (k0s)", g.Config.Kubernetes.ManagedByCodesphere)
 
 	if g.Config.Kubernetes.ManagedByCodesphere {
@@ -141,12 +154,14 @@ func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
 		if defaultAPIServerHost == "" {
 			defaultAPIServerHost = "10.50.0.2"
 		}
+
 		g.Config.Kubernetes.APIServerHost = g.collectString(prompter, "Kubernetes API server host (LB/DNS/IP)", defaultAPIServerHost)
 
 		defaultControlPlanes := k8sNodesToStringSlice(g.Config.Kubernetes.ControlPlanes)
 		if len(defaultControlPlanes) == 0 {
 			defaultControlPlanes = []string{"10.50.0.2"}
 		}
+
 		defaultWorkers := k8sNodesToStringSlice(g.Config.Kubernetes.Workers)
 
 		controlPlaneIPs := g.collectStringSlice(prompter, "Control plane IP addresses (comma-separated)", defaultControlPlanes)
@@ -159,12 +174,14 @@ func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
 		g.Config.Kubernetes.PodCIDR = g.collectString(prompter, "Pod CIDR of external cluster", "100.96.0.0/11")
 		g.Config.Kubernetes.ServiceCIDR = g.collectString(prompter, "Service CIDR of external cluster", "100.64.0.0/13")
 		g.Config.Kubernetes.NeedsKubeConfig = true
+
 		log.Println("Note: You'll need to provide kubeconfig in the vault file for external Kubernetes")
 	}
 }
 
 func (g *InstallConfig) collectGatewayConfig(prompter *Prompter) {
 	log.Println("\n=== Cluster Gateway Configuration ===")
+
 	g.Config.Cluster.Gateway.ServiceType = g.collectChoice(prompter, "Gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
 	if g.Config.Cluster.Gateway.ServiceType == "ExternalIP" {
 		g.Config.Cluster.Gateway.IPAddresses = g.collectStringSlice(prompter, "Gateway IP addresses (comma-separated)", []string{"10.51.0.2", "10.51.0.3"})
@@ -186,6 +203,7 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 		if defaultNumPools == 0 {
 			defaultNumPools = 1
 		}
+
 		numPools := prompter.Int("Number of MetalLB IP pools", defaultNumPools)
 
 		g.Config.MetalLB.Pools = make([]files.MetalLBPoolDef, numPools)
@@ -193,11 +211,14 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 			log.Printf("\nMetalLB Pool %d:\n", i+1)
 
 			defaultName := fmt.Sprintf("pool-%d", i+1)
+
 			var defaultIPs []string
+
 			if i < len(g.Config.MetalLB.Pools) {
 				defaultName = g.Config.MetalLB.Pools[i].Name
 				defaultIPs = g.Config.MetalLB.Pools[i].IPAddresses
 			}
+
 			if len(defaultIPs) == 0 {
 				defaultIPs = []string{"10.10.10.100-10.10.10.200"}
 			}
@@ -228,52 +249,62 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 	if !certIssuer.Acme.Enabled {
 		certIssuer.Acme = nil
 		certIssuer.Type = files.CertIssuerTypeSelfSigned
+
 		return
 	}
+
 	certIssuer.Type = files.CertIssuerTypeACME
 
 	defaultIssuerName := certIssuer.Acme.Name
 	if defaultIssuerName == "" {
 		defaultIssuerName = "acme-issuer"
 	}
+
 	certIssuer.Acme.Name = g.collectString(prompter, "ACME issuer name", defaultIssuerName)
 
 	defaultEmail := certIssuer.Acme.Email
 	if defaultEmail == "" {
 		defaultEmail = "admin@example.com"
 	}
+
 	certIssuer.Acme.Email = g.collectString(prompter, "Email address for ACME account registration", defaultEmail)
 
 	defaultServer := certIssuer.Acme.Server
 	if defaultServer == "" {
 		defaultServer = "https://acme-v02.api.letsencrypt.org/directory"
 	}
+
 	certIssuer.Acme.Server = g.collectString(prompter, "ACME server URL", defaultServer)
 
 	// External Account Binding (EAB)
 	log.Println("\n--- External Account Binding (Optional) ---")
+
 	hasEAB := prompter.Bool("Configure External Account Binding (required by some ACME CAs)", certIssuer.Acme.EABKeyID != "")
 
 	certIssuer.Acme.EABKeyID = ""
 	if hasEAB {
 		certIssuer.Acme.EABKeyID = g.collectString(prompter, "EAB Key ID", certIssuer.Acme.EABKeyID)
 		existingEabKey := ""
+
 		if g.Vault != nil {
 			if s := g.Vault.GetSecret(files.SecretAcmeEabMacKey); s != nil && s.Fields != nil {
 				existingEabKey = s.Fields.Password
 			}
 		}
+
 		newEabKey := g.collectString(prompter, "EAB MAC Key", existingEabKey)
 		if newEabKey != "" {
 			if g.Vault == nil {
 				g.Vault = &files.InstallVault{}
 			}
+
 			g.Vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: newEabKey}})
 		}
 	}
 
 	// DNS-01 Challenge Configuration
 	log.Println("\n--- DNS-01 Challenge Configuration (Optional) ---")
+
 	if certIssuer.Acme.Solver.DNS01 == nil {
 		certIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{}
 	}
@@ -283,34 +314,43 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 		certIssuer.Acme.Solver.DNS01 = nil
 		return
 	}
+
 	providerOptions := []string{"route53", "cloudflare", "azure", "gcp", "other"}
+
 	defaultProvider := certIssuer.Acme.Solver.DNS01.Provider
 	if defaultProvider == "" {
 		defaultProvider = "cloudflare"
 	}
+
 	certIssuer.Acme.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
+
 	log.Println("Note: Additional DNS provider configuration will need to be added to the vault file.")
 	log.Println("Provider config and secrets should be added manually after generation.")
 }
 
 func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	log.Println("\n=== Codesphere Application Configuration ===")
+
 	defaultDomain := g.Config.Codesphere.Domain
 	if defaultDomain == "" {
 		defaultDomain = "codesphere.yourcompany.com"
 	}
+
 	defaultWorkspaceDomain := g.Config.Codesphere.WorkspaceHostingBaseDomain
 	if defaultWorkspaceDomain == "" {
 		defaultWorkspaceDomain = "ws.yourcompany.com"
 	}
+
 	defaultCustomDomain := g.Config.Codesphere.CustomDomains.CNameBaseDomain
 	if defaultCustomDomain == "" {
 		defaultCustomDomain = "custom.yourcompany.com"
 	}
+
 	defaultDNSServers := g.Config.Codesphere.DNSServers
 	if len(defaultDNSServers) == 0 {
 		defaultDNSServers = []string{"1.1.1.1", "8.8.8.8"}
 	}
+
 	g.Config.Codesphere.Domain = g.collectString(prompter, "Main Codesphere domain", defaultDomain)
 	g.Config.Codesphere.WorkspaceHostingBaseDomain = g.collectString(prompter, "Workspace base domain (*.domain should point to public gateway)", defaultWorkspaceDomain)
 	g.Config.Codesphere.PublicIP = g.collectString(prompter, "Primary public IP for workspaces", "")
@@ -322,6 +362,7 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	if g.Config.Codesphere.WorkspaceImages == nil {
 		g.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{}
 	}
+
 	if g.Config.Codesphere.WorkspaceImages.Agent == nil {
 		g.Config.Codesphere.WorkspaceImages.Agent = &files.ImageRef{}
 	}
@@ -330,6 +371,7 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	if defaultBomRef == "" {
 		defaultBomRef = "workspace-agent-24.04"
 	}
+
 	g.Config.Codesphere.WorkspaceImages.Agent.BomRef = g.collectString(prompter, "Workspace agent image BOM reference", defaultBomRef)
 	hostingPlan := files.HostingPlan{}
 	hostingPlan.CPUTenth = g.collectInt(prompter, "Hosting plan CPU (tenths, e.g., 10 = 1 core)", 10)
@@ -342,14 +384,17 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	}
 	defaultWorkspacePlanName := "Standard Developer"
 	defaultMaxReplicas := 3
+
 	if existingPlan, ok := g.Config.Codesphere.Plans.WorkspacePlans[1]; ok {
 		if existingPlan.Name != "" {
 			defaultWorkspacePlanName = existingPlan.Name
 		}
+
 		if existingPlan.MaxReplicas > 0 {
 			defaultMaxReplicas = existingPlan.MaxReplicas
 		}
 	}
+
 	workspacePlan.Name = g.collectString(prompter, "Workspace plan name", defaultWorkspacePlanName)
 	workspacePlan.MaxReplicas = g.collectInt(prompter, "Max replicas per workspace", defaultMaxReplicas)
 
@@ -367,6 +412,7 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 
 func (g *InstallConfig) collectOpenBaoConfig(prompter *Prompter) {
 	log.Println("\n=== OpenBao Configuration (Optional) ===")
+
 	hasOpenBao := prompter.Bool("Configure OpenBao integration", g.Config.Codesphere.OpenBao != nil && g.Config.Codesphere.OpenBao.URI != "")
 	if !hasOpenBao {
 		g.Config.Codesphere.OpenBao = nil
@@ -380,11 +426,13 @@ func (g *InstallConfig) collectOpenBaoConfig(prompter *Prompter) {
 	g.Config.Codesphere.OpenBao.URI = g.collectString(prompter, "OpenBao URI (e.g., https://openbao.example.com)", "")
 	g.Config.Codesphere.OpenBao.Engine = g.collectString(prompter, "OpenBao engine name", "cs-secrets-engine")
 	g.Config.Codesphere.OpenBao.User = g.collectString(prompter, "OpenBao username", "admin")
+
 	openBaoPassword := g.collectString(prompter, "OpenBao password", "")
 	if openBaoPassword != "" {
 		if g.Vault == nil {
 			g.Vault = &files.InstallVault{}
 		}
+
 		g.Vault.SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: openBaoPassword}})
 	}
 }

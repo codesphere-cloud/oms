@@ -26,6 +26,7 @@ func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error)
 				if store == nil {
 					return "", fmt.Errorf("secret store is required to render config template")
 				}
+
 				return store.LookupSecret(name, selector...)
 			},
 		}).
@@ -60,6 +61,7 @@ func RenderConfigFileToTemp(configPath string, store SecretStore) (string, func(
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to create temporary rendered config: %w", err)
 	}
+
 	tmpPath := tmp.Name()
 	cleanup := func() {
 		_ = os.Remove(tmpPath)
@@ -67,14 +69,20 @@ func RenderConfigFileToTemp(configPath string, store SecretStore) (string, func(
 
 	if err := tmp.Chmod(0600); err != nil {
 		_ = tmp.Close()
+
 		cleanup()
+
 		return "", nil, fmt.Errorf("failed to restrict temporary rendered config permissions: %w", err)
 	}
+
 	if _, err := tmp.Write(rendered); err != nil {
 		_ = tmp.Close()
+
 		cleanup()
+
 		return "", nil, fmt.Errorf("failed to write temporary rendered config: %w", err)
 	}
+
 	if err := tmp.Close(); err != nil {
 		cleanup()
 		return "", nil, fmt.Errorf("failed to close temporary rendered config: %w", err)

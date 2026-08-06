@@ -90,6 +90,7 @@ var _ = Describe("Package", func() {
 					},
 				})
 				Expect(err).ToNot(HaveOccurred())
+
 				pkg.Filename = packagePath
 			})
 
@@ -172,6 +173,7 @@ var _ = Describe("Package", func() {
 					},
 				})
 				Expect(err).ToNot(HaveOccurred())
+
 				pkg.Filename = packagePath
 			})
 
@@ -519,6 +521,7 @@ var _ = Describe("Package GetBaseimagePath", func() {
 					},
 				})
 				Expect(err).NotTo(HaveOccurred())
+
 				pkg.Filename = packagePath
 			})
 
@@ -729,6 +732,7 @@ func createTar(tarName string, fileName string, fileContent string) error {
 	if err := tw.WriteHeader(header); err != nil {
 		return err
 	}
+
 	if _, err := tw.Write([]byte(fileContent)); err != nil {
 		return err
 	}
@@ -739,6 +743,7 @@ func createTar(tarName string, fileName string, fileContent string) error {
 // createTarGz creates a deps.tar.gz archive content in memory
 func createTarGz(files map[string]string) ([]byte, error) {
 	var buf []byte
+
 	gzw := gzip.NewWriter(&bytesBuffer{data: &buf})
 	tw := tar.NewWriter(gzw)
 
@@ -751,6 +756,7 @@ func createTarGz(files map[string]string) ([]byte, error) {
 		if err := tw.WriteHeader(header); err != nil {
 			return nil, err
 		}
+
 		if _, err := tw.Write([]byte(content)); err != nil {
 			return nil, err
 		}
@@ -759,6 +765,7 @@ func createTarGz(files map[string]string) ([]byte, error) {
 	if err := tw.Close(); err != nil {
 		return nil, err
 	}
+
 	if err := gzw.Close(); err != nil {
 		return nil, err
 	}
@@ -790,6 +797,7 @@ func createTestPackage(filename string, files PackageFiles) error {
 		if err := tw.WriteHeader(header); err != nil {
 			return err
 		}
+
 		if _, err := tw.Write([]byte(content)); err != nil {
 			return err
 		}
@@ -810,6 +818,7 @@ func createTestPackage(filename string, files PackageFiles) error {
 		if err := tw.WriteHeader(depsHeader); err != nil {
 			return err
 		}
+
 		if _, err := tw.Write(depsContent); err != nil {
 			return err
 		}

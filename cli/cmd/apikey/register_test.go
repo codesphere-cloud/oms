@@ -46,6 +46,7 @@ var _ = Describe("RegisterCmd", func() {
 	Context("when valid-for duration is valid", func() {
 		It("registers the API key successfully", func() {
 			start := time.Now()
+
 			mockPortal.EXPECT().RegisterAPIKey(
 				owner,
 				organization,
@@ -110,6 +111,7 @@ var _ = Describe("RegisterCmd", func() {
 	Context("when valid-for duration is not provided", func() {
 		It("passes zero expiration time to portal client", func() {
 			c.Opts.ValidFor = ""
+
 			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, time.Time{}).Return(&portal.ApiKey{}, nil)
 
 			ak, err := c.Register(mockPortal)
@@ -133,13 +135,16 @@ var _ = Describe("AddRegisterCmd", func() {
 		parent := &cobra.Command{}
 		opts := &util.GlobalOptions{}
 		apikey.AddRegisterCmd(parent, opts)
+
 		found := false
+
 		for _, c := range parent.Commands() {
 			if c.Use == "register" {
 				found = true
 				break
 			}
 		}
+
 		Expect(found).To(BeTrue())
 	})
 })

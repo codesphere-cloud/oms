@@ -42,6 +42,7 @@ func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	p := portal.NewPortalClient()
+
 	build, err := p.GetBuild(portal.CodesphereProduct, c.Opts.Version, c.Opts.Hash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
@@ -102,6 +103,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 	}
 
 	fullFilename := build.BuildPackageFilename(filename)
+
 	out, err := c.FileWriter.OpenAppend(fullFilename)
 	if err != nil {
 		out, err = c.FileWriter.Create(fullFilename)
@@ -113,6 +115,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 
 	// get already downloaded file size of fullFilename
 	fileSize := 0
+
 	fileInfo, err := out.Stat()
 	if err == nil {
 		fileSize = int(fileInfo.Size())

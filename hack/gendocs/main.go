@@ -19,6 +19,7 @@ func main() {
 
 	identity := func(s string) string { return s }
 	emptyStr := func(s string) string { return "" }
+
 	err := doc.GenMarkdownTreeCustom(root, "docs", emptyStr, identity)
 	if err != nil {
 		log.Fatal(err)

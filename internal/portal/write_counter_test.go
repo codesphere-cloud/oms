@@ -18,11 +18,14 @@ var _ = Describe("WriteCounter", func() {
 	It("emits progress logs on write", func() {
 		// capture log output
 		var logBuf bytes.Buffer
+
 		prev := log.Writer()
+
 		log.SetOutput(&logBuf)
 		defer log.SetOutput(prev)
 
 		var underlying bytes.Buffer
+
 		wc := portal.NewWriteCounter(&underlying)
 
 		// force an update by setting LastUpdate sufficiently in the past

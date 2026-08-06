@@ -101,6 +101,7 @@ func (c *GCPClient) GetProjectByName(folderID string, displayName string) (*reso
 			// No more results found
 			return nil, fmt.Errorf("project not found: %s", displayName)
 		}
+
 		if err != nil {
 			return nil, fmt.Errorf("error iterating projects: %w", err)
 		}
@@ -231,10 +232,12 @@ func (c *GCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectBilli
 	}
 
 	projectName := getProjectResourceName(projectID)
+
 	billingInfo, err := billingService.Projects.GetBillingInfo(projectName).Do()
 	if err != nil {
 		return nil, err
 	}
+
 	return billingInfo, nil
 }
 
@@ -250,6 +253,7 @@ func (c *GCPClient) EnableBilling(projectID, billingAccount string) error {
 		BillingAccountName: fmt.Sprintf("billingAccounts/%s", billingAccount),
 	}
 	_, err = billingService.Projects.UpdateBillingInfo(projectName, billingInfo).Context(c.ctx).Do()
+
 	return err
 }
 
@@ -262,13 +266,16 @@ func (c *GCPClient) EnableAPIs(projectID string, apis []string) error {
 	defer util.IgnoreError(client.Close)
 	// enable APIs in parallel
 	wg := sync.WaitGroup{}
+
 	errCh := make(chan error, len(apis))
 	for _, api := range apis {
 		serviceName := fmt.Sprintf("projects/%s/services/%s", projectID, api)
+
 		wg.Add(1)
 
 		go func(serviceName, api string) {
 			defer wg.Done()
+
 			c.st.Logf("Enabling API %s", api)
 
 			op, err := client.EnableService(c.ctx, &serviceusagepb.EnableServiceRequest{Name: serviceName})
@@ -276,10 +283,12 @@ func (c *GCPClient) EnableAPIs(projectID string, apis []string) error {
 				c.st.Logf("API %s already enabled", api)
 				return
 			}
+
 			if err != nil {
 				errCh <- fmt.Errorf("failed to enable API %s: %w", api, err)
 				return
 			}
+
 			if _, err := op.Wait(c.ctx); err != nil {
 				errCh <- fmt.Errorf("failed to enable API %s: %w", api, err)
 				return
@@ -291,13 +300,16 @@ func (c *GCPClient) EnableAPIs(projectID string, apis []string) error {
 
 	wg.Wait()
 	close(errCh)
+
 	errStr := ""
 	for err := range errCh {
 		errStr += err.Error() + "; "
 	}
+
 	if len(errStr) > 0 {
 		return fmt.Errorf("errors occurred while enabling APIs: %s", errStr)
 	}
+
 	return nil
 }
 
@@ -318,11 +330,14 @@ func (c *GCPClient) CreateArtifactRegistry(projectID, region, repoName string) (
 			Description: "Codesphere managed registry",
 		},
 	}
+
 	op, err := client.CreateRepository(c.ctx, repoReq)
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return nil, err
 	}
+
 	var repo *artifactpb.Repository
+
 	if err == nil {
 		_, err = op.Wait(c.ctx)
 		if err != nil {
@@ -348,6 +363,7 @@ func (c *GCPClient) GetArtifactRegistry(projectID, region, repoName string) (*ar
 	defer util.IgnoreError(client.Close)
 
 	fullRepoName := fmt.Sprintf("projects/%s/locations/%s/repositories/%s", projectID, region, repoName)
+
 	repo, err := client.GetRepository(c.ctx, &artifactpb.GetRepositoryRequest{
 		Name: fullRepoName,
 	})
@@ -363,6 +379,7 @@ func (c *GCPClient) GetArtifactRegistry(projectID, region, repoName string) (*ar
 // and an error if any occurred during the process.
 func (c *GCPClient) CreateServiceAccount(projectID, name, displayName string) (string, bool, error) {
 	saMail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", name, projectID)
+
 	iamService, err := iam.NewService(c.ctx)
 	if err != nil {
 		return saMail, false, err
@@ -374,10 +391,12 @@ func (c *GCPClient) CreateServiceAccount(projectID, name, displayName string) (s
 			DisplayName: displayName,
 		},
 	}
+
 	_, err = iamService.Projects.ServiceAccounts.Create(fmt.Sprintf("projects/%s", projectID), saReq).Context(c.ctx).Do()
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return saMail, false, err
 	}
+
 	if err != nil && strings.Contains(err.Error(), "already exists") {
 		return saMail, false, nil
 	}
@@ -395,6 +414,7 @@ func (c *GCPClient) CreateServiceAccountKey(projectID, saEmail string) (string, 
 
 	keyReq := &iam.CreateServiceAccountKeyRequest{}
 	saName := fmt.Sprintf("projects/%s/serviceAccounts/%s", projectID, saEmail)
+
 	key, err := iamService.Projects.ServiceAccounts.Keys.Create(saName, keyReq).Context(c.ctx).Do()
 	if err != nil {
 		return "", err
@@ -408,6 +428,7 @@ func (c *GCPClient) AssignIAMRole(projectID, saName string, saProjectID string, 
 	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, saProjectID)
 	member := fmt.Sprintf("serviceAccount:%s", saEmail)
 	resource := fmt.Sprintf("projects/%s", projectID)
+
 	return c.addRoleBindingToProject(member, roles, resource)
 }
 
@@ -429,18 +450,23 @@ func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resou
 
 	// Add role bindings to policy
 	updated := false
+
 	for _, role := range roles {
 		bindingExists := false
+
 		for _, binding := range policy.Bindings {
 			if binding.Role == role {
 				if !slices.Contains(binding.Members, member) {
 					binding.Members = append(binding.Members, member)
 					updated = true
 				}
+
 				bindingExists = true
+
 				break
 			}
 		}
+
 		if bindingExists {
 			continue
 		}
@@ -462,6 +488,7 @@ func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resou
 		Policy:   policy,
 	}
 	_, err = client.SetIamPolicy(c.ctx, setReq)
+
 	return err
 }
 
@@ -470,6 +497,7 @@ func (c *GCPClient) RemoveIAMRoleBinding(projectID, saName string, saProjectID s
 	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", saName, saProjectID)
 	member := fmt.Sprintf("serviceAccount:%s", saEmail)
 	resource := fmt.Sprintf("projects/%s", projectID)
+
 	return c.removeRoleBindingFromProject(member, roles, resource)
 }
 
@@ -486,18 +514,22 @@ func (c *GCPClient) removeRoleBindingFromProject(member string, roles []string, 
 	}
 
 	updated := false
+
 	for _, role := range roles {
 		for i, binding := range policy.Bindings {
 			if binding.Role != role {
 				continue
 			}
+
 			before := len(binding.Members)
+
 			policy.Bindings[i].Members = slices.DeleteFunc(binding.Members, func(m string) bool {
 				return m == member
 			})
 			if len(policy.Bindings[i].Members) != before {
 				updated = true
 			}
+
 			break
 		}
 	}
@@ -507,17 +539,20 @@ func (c *GCPClient) removeRoleBindingFromProject(member string, roles []string, 
 	}
 
 	var validBindings []*iampb.Binding
+
 	for _, b := range policy.Bindings {
 		if len(b.Members) > 0 {
 			validBindings = append(validBindings, b)
 		}
 	}
+
 	policy.Bindings = validBindings
 
 	_, err = client.SetIamPolicy(c.ctx, &iampb.SetIamPolicyRequest{
 		Resource: resource,
 		Policy:   policy,
 	})
+
 	return err
 }
 
@@ -534,6 +569,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 		Name:                  &networkName,
 		AutoCreateSubnetworks: protoBool(false),
 	}
+
 	op, err := networksClient.Insert(c.ctx, &computepb.InsertNetworkRequest{
 		Project:         projectID,
 		NetworkResource: network,
@@ -541,6 +577,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return err
 	}
+
 	if err == nil {
 		if err := op.Wait(c.ctx); err != nil {
 			return err
@@ -562,6 +599,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 		Region:      &region,
 		Network:     protoString(fmt.Sprintf("projects/%s/global/networks/%s", projectID, networkName)),
 	}
+
 	op, err = subnetsClient.Insert(c.ctx, &computepb.InsertSubnetworkRequest{
 		Project:            projectID,
 		Region:             region,
@@ -570,6 +608,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
 		return err
 	}
+
 	if err == nil {
 		if err := op.Wait(c.ctx); err != nil {
 			return err
@@ -590,6 +629,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 		Region:  &region,
 		Network: protoString(fmt.Sprintf("projects/%s/global/networks/%s", projectID, networkName)),
 	}
+
 	op, err = routersClient.Insert(c.ctx, &computepb.InsertRouterRequest{
 		Project:        projectID,
 		Region:         region,
@@ -598,6 +638,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 	if err != nil && !IsAlreadyExistsError(err) {
 		return fmt.Errorf("failed to create router: %w", err)
 	}
+
 	if err == nil {
 		if err := op.Wait(c.ctx); err != nil {
 			return fmt.Errorf("failed to wait for router creation: %w", err)
@@ -731,6 +772,7 @@ func (c *GCPClient) CreateAddress(projectID, region string, address *computepb.A
 	if err != nil {
 		return "", err
 	}
+
 	if err = op.Wait(c.ctx); err != nil {
 		return "", err
 	}
@@ -783,6 +825,7 @@ func (c *GCPClient) EnsureDNSManagedZone(projectID, zoneName, dnsName, descripti
 		DnsName:     dnsName,
 		Description: description,
 	}
+
 	_, err = service.ManagedZones.Create(projectID, zone).Context(c.ctx).Do()
 	if err != nil {
 		return fmt.Errorf("failed to create DNS zone: %w", err)
@@ -811,6 +854,7 @@ func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*d
 		delChange := &dns.Change{
 			Deletions: deletions,
 		}
+
 		_, err = service.Changes.Create(projectID, zoneName, delChange).Context(c.ctx).Do()
 		if err != nil {
 			return fmt.Errorf("failed to delete existing DNS records: %w", err)
@@ -820,6 +864,7 @@ func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*d
 	change := &dns.Change{
 		Additions: records,
 	}
+
 	_, err = service.Changes.Create(projectID, zoneName, change).Context(c.ctx).Do()
 	if err != nil {
 		return fmt.Errorf("failed to create DNS records: %w", err)
@@ -836,14 +881,17 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 	}
 
 	var deletions []*dns.ResourceRecordSet
+
 	for _, record := range GetDNSRecordNames(baseDomain) {
 		existing, err := service.ResourceRecordSets.Get(projectID, zoneName, record.Name, record.Rtype).Context(c.ctx).Do()
 		if IsNotFoundError(err) {
 			continue
 		}
+
 		if err != nil {
 			return fmt.Errorf("failed to get DNS record %s: %w", record.Name, err)
 		}
+
 		deletions = append(deletions, existing)
 	}
 
@@ -854,6 +902,7 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 	if _, err = service.Changes.Create(projectID, zoneName, &dns.Change{Deletions: deletions}).Context(c.ctx).Do(); err != nil {
 		return fmt.Errorf("failed to delete DNS records: %w", err)
 	}
+
 	return nil
 }
 
@@ -866,11 +915,14 @@ func (c *GCPClient) CreatePublicCAExternalAccountKey(projectID string) (string, 
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create publicca client: %w", err)
 	}
+
 	parent := fmt.Sprintf("projects/%s/locations/global", projectID)
+
 	key, err := svc.Projects.Locations.ExternalAccountKeys.Create(parent, &publicca.ExternalAccountKey{}).Context(c.ctx).Do()
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create public CA external account key: %w", err)
 	}
+
 	return key.KeyId, key.B64MacKey, nil
 }
 

@@ -45,6 +45,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 	JustBeforeEach(func() {
 		var err error
+
 		bs, err = gcp.NewGCPBootstrapper(
 			ctx,
 			e,
@@ -313,9 +314,11 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 	Describe("UpdateInstallConfig", func() {
 		var vault *files.InstallVault
+
 		BeforeEach(func() {
 			vault = &files.InstallVault{}
 			icg.EXPECT().GetVault().Return(vault).Maybe()
+
 			csEnv.GitHubAppName = "fake-app-name"
 		})
 		Describe("Valid UpdateInstallConfig", func() {
@@ -1086,6 +1089,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresCaKeyPem, File: &files.SecretFile{Name: "ca.key", Content: caKey}})
 					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPrimaryServerKeyPem, File: &files.SecretFile{Name: "primary.key", Content: key}})
+
 					csEnv.InstallConfig.Postgres.CACertPem = caCert
 					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.1"
 					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
@@ -1119,6 +1123,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresCaKeyPem, File: &files.SecretFile{Name: "ca.key", Content: caKey}})
 					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPrimaryServerKeyPem, File: &files.SecretFile{Name: "primary.key", Content: key}})
+
 					csEnv.InstallConfig.Postgres.CACertPem = caCert
 					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.99"
 					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"
@@ -1156,6 +1161,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresCaKeyPem, File: &files.SecretFile{Name: "ca.key", Content: caKey}})
+
 					csEnv.InstallConfig.Postgres.CACertPem = caCert
 					csEnv.InstallConfig.Postgres.Primary.IP = "10.0.0.1"
 					csEnv.InstallConfig.Postgres.Primary.Hostname = "postgres"

@@ -33,8 +33,8 @@ func GetRootCmd() *cobra.Command {
 				log.Println("Attempting to upgrade to the new format...")
 
 				portalClient := portal.NewPortalClient()
-				keyId, err := portalClient.GetApiKeyId(apiKey)
 
+				keyId, err := portalClient.GetApiKeyId(apiKey)
 				if err != nil {
 					log.Printf("Error: Failed to upgrade old API key: %v\n", err)
 					return
@@ -46,6 +46,7 @@ func GetRootCmd() *cobra.Command {
 					log.Printf("Error: Failed to set environment variable: %v\n", err)
 					return
 				}
+
 				opts.OmsPortalApiKey = newApiKey
 
 				log.Println("Please update your environment variable:")

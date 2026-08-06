@@ -79,6 +79,7 @@ var _ = Describe("K0sConfig", func() {
 
 				// Verify it can be unmarshalled back
 				var parsedConfig installer.K0sConfig
+
 				err = yaml.Unmarshal(yamlData, &parsedConfig)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(parsedConfig.Metadata.Name).To(Equal("codesphere-test-dc"))

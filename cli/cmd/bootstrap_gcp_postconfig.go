@@ -35,13 +35,16 @@ func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, args []string) error 
 	fw := intutil.NewFilesystemWriter()
 
 	infraFilePath := gcp.GetInfraFilePath()
+
 	codesphereEnv, exists, err := gcp.LoadInfraFile(fw, infraFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to load gcp infra file: %w", err)
 	}
+
 	if !exists {
 		return fmt.Errorf("gcp infra file not found at %s", infraFilePath)
 	}
+
 	c.CodesphereEnv = codesphereEnv
 
 	err = icg.LoadInstallConfigFromFile(c.Opts.InstallConfigPath)

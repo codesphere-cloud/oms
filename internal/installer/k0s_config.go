@@ -88,6 +88,7 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 			for _, cp := range installConfig.Kubernetes.ControlPlanes {
 				sans = append(sans, cp.IPAddress)
 			}
+
 			if installConfig.Kubernetes.APIServerHost != "" {
 				sans = append(sans, installConfig.Kubernetes.APIServerHost)
 			}
@@ -135,6 +136,7 @@ func defaultIfEmpty(value, defaultValue string) string {
 	if value != "" {
 		return value
 	}
+
 	return defaultValue
 }
 

@@ -55,6 +55,7 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("determining user config directory: %w", err)
 	}
+
 	fallbackDir := filepath.Join(configDir, "sops", "age")
 
 	// Pass --age-key-file explicitly so ResolveAgeKey prefers it without
@@ -97,13 +98,16 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 		log.Print("Type 'yes' to continue: ")
 
 		reader := bufio.NewReader(os.Stdin)
+
 		input, err := reader.ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
 			return fmt.Errorf("failed to read confirmation: %w", err)
 		}
+
 		if strings.TrimSpace(strings.ToLower(input)) != "yes" {
 			return fmt.Errorf("installation cancelled: confirmation not given (type 'yes' or pass --yes to proceed)")
 		}
+
 		return nil
 	}
 
@@ -160,8 +164,10 @@ func validateOpenBaoPrereqs() error {
 	if _, err := exec.LookPath("sops"); err != nil {
 		return fmt.Errorf("sops not found in PATH — install from https://github.com/getsops/sops")
 	}
+
 	if _, err := exec.LookPath("age-keygen"); err != nil {
 		return fmt.Errorf("age-keygen not found in PATH — install from https://github.com/FiloSottile/age")
 	}
+
 	return nil
 }

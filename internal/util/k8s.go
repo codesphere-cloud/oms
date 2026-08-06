@@ -28,17 +28,21 @@ func DecodeMultiDocYAML(data []byte) ([]*unstructured.Unstructured, error) {
 	var objects []*unstructured.Unstructured
 
 	reader := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
+
 	for {
 		obj := &unstructured.Unstructured{}
 		if err := reader.Decode(obj); err != nil {
 			if err == io.EOF {
 				break
 			}
+
 			return nil, fmt.Errorf("decoding yaml document: %w", err)
 		}
+
 		if obj.Object == nil {
 			continue
 		}
+
 		objects = append(objects, obj)
 	}
 
@@ -51,6 +55,7 @@ func RenderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
 	for key, val := range vars {
 		content = strings.ReplaceAll(content, "${"+key+"}", val)
 	}
+
 	return []byte(content), nil
 }
 
@@ -85,6 +90,7 @@ func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionReso
 	if !ok {
 		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s — add an entry to gvrMappings", gvk)
 	}
+
 	return schema.GroupVersionResource{
 		Group:    gvk.Group,
 		Version:  gvk.Version,
@@ -104,14 +110,17 @@ func ApplyUnstructured(ctx context.Context, dynClient dynamic.Interface, gvr sch
 		if err != nil {
 			return fmt.Errorf("creating %s %s/%s: %w", gvr.Resource, ns, name, err)
 		}
+
 		return nil
 	}
 
 	obj.SetResourceVersion(existing.GetResourceVersion())
+
 	_, err = resource.Update(ctx, obj, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("updating %s %s/%s: %w", gvr.Resource, ns, name, err)
 	}
+
 	return nil
 }
 
@@ -130,14 +139,17 @@ func ApplySecretFromYAML(ctx context.Context, clientset kubernetes.Interface, da
 		if err != nil {
 			return fmt.Errorf("creating secret %s/%s: %w", secret.Namespace, secret.Name, err)
 		}
+
 		return nil
 	}
 
 	secret.ResourceVersion = existing.ResourceVersion
+
 	_, err = secretsClient.Update(ctx, secret, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("updating secret %s/%s: %w", secret.Namespace, secret.Name, err)
 	}
+
 	return nil
 }
 

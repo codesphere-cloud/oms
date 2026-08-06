@@ -23,6 +23,7 @@ var _ = Describe("Bom", func() {
 
 	BeforeEach(func() {
 		var err error
+
 		tempDir, err = os.MkdirTemp("", "bom_test")
 		Expect(err).NotTo(HaveOccurred())
 

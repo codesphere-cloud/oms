@@ -52,6 +52,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
 
 			c.Opts.Version = "" // Test auto-version detection
+
 			mockK0sManager.EXPECT().GetLatestVersion().Return("", errors.New("network error"))
 
 			err := c.DownloadK0s(mockK0sManager)
@@ -64,6 +65,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
 
 			c.Opts.Version = "v1.29.1+k0s.0"
+
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", false, false).Return("", errors.New("download failed"))
 
 			err := c.DownloadK0s(mockK0sManager)
@@ -76,6 +78,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
 
 			c.Opts.Version = "v1.29.1+k0s.0"
+
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", false, false).Return("/test/workdir/k0s", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
@@ -88,6 +91,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 			c.Opts.Version = "" // Test auto-version detection
 			c.Opts.Force = true
 			c.Opts.Quiet = true
+
 			mockK0sManager.EXPECT().GetLatestVersion().Return("v1.29.1+k0s.0", nil)
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", true, true).Return("/test/workdir/k0s", nil)
 

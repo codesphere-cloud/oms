@@ -73,6 +73,7 @@ func (a *argoCDResources) ApplyAll(ctx context.Context) error {
 
 func (a *argoCDResources) applyLocalCluster(ctx context.Context) error {
 	log.Println("Applying local cluster secret... ")
+
 	rendered, err := k8s.RenderTemplate(localClusterTpl, map[string]string{
 		"DC_NUMBER": a.DatacenterId,
 	})
@@ -85,6 +86,7 @@ func (a *argoCDResources) applyLocalCluster(ctx context.Context) error {
 
 func (a *argoCDResources) applyHelmRegistrySecret(ctx context.Context) error {
 	log.Println("Applying helm registry secret... ")
+
 	rendered, err := k8s.RenderTemplate(helmRegistryTpl, map[string]string{
 		"SECRET_CODESPHERE_OCI_READ": a.OciPassword,
 		"OCI_REGISTRY_URL":           a.OciRegistryURL,
@@ -98,6 +100,7 @@ func (a *argoCDResources) applyHelmRegistrySecret(ctx context.Context) error {
 
 func (a *argoCDResources) applyGitRepoSecret(ctx context.Context) error {
 	log.Println("Applying git repo secret... ")
+
 	rendered, err := k8s.RenderTemplate(gitRepoTpl, map[string]string{
 		"SECRET_CODESPHERE_REPOS_READ": a.GitPassword,
 	})

@@ -22,7 +22,6 @@ import (
 )
 
 var _ = Describe("GCE", func() {
-
 	Describe("IsNotFoundError", func() {
 		Context("when error is nil", func() {
 			It("should return false", func() {
@@ -296,6 +295,7 @@ var _ = Describe("GCE", func() {
 			DescribeTable("falls back to standard VM on capacity errors",
 				func(capacityErr error) {
 					instance := spotInstance("test-vm")
+
 					gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).Return(capacityErr).Once()
 					gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).Return(nil).Once()
 
@@ -311,6 +311,7 @@ var _ = Describe("GCE", func() {
 
 			It("clears scheduling config on fallback", func() {
 				instance := spotInstance("test-vm")
+
 				gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).
 					Return(fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED")).Once()
 				gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.MatchedBy(func(inst *computepb.Instance) bool {
@@ -324,6 +325,7 @@ var _ = Describe("GCE", func() {
 
 			It("returns error with context when fallback also fails", func() {
 				instance := spotInstance("test-vm")
+
 				gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).
 					Return(fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED")).Once()
 				gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).
@@ -337,6 +339,7 @@ var _ = Describe("GCE", func() {
 
 			It("does NOT fall back on non-capacity errors", func() {
 				instance := spotInstance("test-vm")
+
 				gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).
 					Return(fmt.Errorf("permission denied")).Once()
 
@@ -349,6 +352,7 @@ var _ = Describe("GCE", func() {
 
 			It("succeeds when fallback retry returns AlreadyExists", func() {
 				instance := spotInstance("test-vm")
+
 				gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).
 					Return(grpcstatus.Errorf(codes.ResourceExhausted, "exhausted")).Once()
 				gc.EXPECT().CreateInstance("test-pid", "us-central1-a", mock.Anything).
@@ -506,6 +510,7 @@ var _ = Describe("GCE", func() {
 
 		It("reads and trims SSH key", func() {
 			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
+
 			key, err := bs.ReadSSHKey("~/.ssh/id_rsa.pub")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(key).To(Equal("ssh-rsa AAAA..."))
@@ -513,6 +518,7 @@ var _ = Describe("GCE", func() {
 
 		It("returns error when file read fails", func() {
 			fw.EXPECT().ReadFile(mock.Anything).Return(nil, fmt.Errorf("no such file"))
+
 			_, err := bs.ReadSSHKey("~/.ssh/missing.pub")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("error reading SSH key"))
@@ -520,6 +526,7 @@ var _ = Describe("GCE", func() {
 
 		It("returns error when key file is empty", func() {
 			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("   \n  "), nil)
+
 			_, err := bs.ReadSSHKey("~/.ssh/empty.pub")
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("is empty"))
@@ -568,8 +575,10 @@ var _ = Describe("GCE", func() {
 
 				It("Sets the root disk size", func() {
 					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+
 					allRootDiskSizesCorrect := true
 					mu := sync.Mutex{}
+
 					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
 						// Testing the disk size like this instead of a matcher
 						// to avoid the test to panic in case of a mismatch in the parallel go funcs
@@ -579,6 +588,7 @@ var _ = Describe("GCE", func() {
 								allRootDiskSizesCorrect = false
 								mu.Unlock()
 							}
+
 							return nil
 						},
 					).Times(8)
@@ -592,6 +602,7 @@ var _ = Describe("GCE", func() {
 			It("creates all instances", func() {
 				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
+
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
@@ -625,20 +636,24 @@ var _ = Describe("GCE", func() {
 					It("fetches GitHub team keys", func() {
 						mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug, mock.Anything).Return([]*gh.User{{Login: gh.Ptr("alice")}}, nil).Maybe()
 						mockGitHubClient.EXPECT().ListUserKeys(mock.Anything, "alice").Return([]*gh.Key{{Key: gh.Ptr("ssh-rsa AAALICE...")}}, nil).Maybe()
+
 						ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 						mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
 						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
 						gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
 							sshMetadata := ""
+
 							for _, item := range instance.GetMetadata().GetItems() {
 								if item.GetKey() == "ssh-keys" {
 									sshMetadata = item.GetValue()
 								}
 							}
+
 							if !strings.Contains(sshMetadata, "AAALICE...") {
 								return fmt.Errorf("expected ssh metadata to include team user key")
 							}
+
 							return nil
 						}).Times(8)
 
@@ -682,15 +697,19 @@ var _ = Describe("GCE", func() {
 
 			It("fails when GetInstance fails after creation", func() {
 				instanceCalls := make(map[string]int)
+
 				var mu sync.Mutex
+
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
 					func(projectID, zone, name string) (*computepb.Instance, error) {
 						mu.Lock()
 						defer mu.Unlock()
+
 						instanceCalls[name]++
 						if instanceCalls[name] == 1 {
 							return nil, notFoundErr
 						}
+
 						return nil, fmt.Errorf("get error")
 					},
 				).Maybe()
@@ -732,15 +751,20 @@ var _ = Describe("GCE", func() {
 				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
 
 				createCalls := make(map[string]int)
+
 				var mu sync.Mutex
+
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
 					mu.Lock()
 					defer mu.Unlock()
+
 					name := *instance.Name
+
 					createCalls[name]++
 					if createCalls[name] == 1 {
 						return fmt.Errorf("ZONE_RESOURCE_POOL_EXHAUSTED")
 					}
+
 					return nil
 				}).Times(16)
 
@@ -750,12 +774,16 @@ var _ = Describe("GCE", func() {
 
 			It("restarts stopped VMs instead of creating new ones", func() {
 				instanceCalls := make(map[string]int)
+
 				var mu sync.Mutex
+
 				stoppedResp := makeStoppedInstance("10.0.0.x", "1.2.3.x")
 				runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
 					mu.Lock()
 					defer mu.Unlock()
+
 					instanceCalls[name]++
 					if instanceCalls[name] == 1 {
 						// First call, VM exists but is stopped
@@ -782,12 +810,16 @@ var _ = Describe("GCE", func() {
 
 			It("handles VMs in intermediate states (STAGING/PROVISIONING)", func() {
 				instanceCalls := make(map[string]int)
+
 				var mu sync.Mutex
+
 				stagingResp := makeInstance("STAGING", "10.0.0.x", "1.2.3.x")
 				runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
 					mu.Lock()
 					defer mu.Unlock()
+
 					instanceCalls[name]++
 					if instanceCalls[name] == 1 {
 						// First call: instance exists but is still staging
@@ -956,11 +988,13 @@ var _ = Describe("GCE", func() {
 			runningInst := makeRunningInstance("10.0.0.1", "1.2.3.4")
 
 			callCounts := map[string]int{}
+
 			gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(_, _, name string) (*computepb.Instance, error) {
 				callCounts[name]++
 				if callCounts[name] == 1 {
 					return stoppedInst, nil
 				}
+
 				return runningInst, nil
 			}).Times(16)
 			gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)

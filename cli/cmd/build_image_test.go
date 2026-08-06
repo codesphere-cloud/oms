@@ -142,6 +142,7 @@ var _ = Describe("AddBuildImageCmd", func() {
 		cmd.AddBuildImageCmd(parentCmd, globalOpts)
 
 		var imageCmd *cobra.Command
+
 		for _, c := range parentCmd.Commands() {
 			if c.Use == "image" {
 				imageCmd = c

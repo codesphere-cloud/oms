@@ -66,6 +66,7 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 	}
 
 	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0s/releases/download/%s/k0s-%s-%s", version, version, k.Goarch)
+
 	path, err := downloadBinary(k.FileWriter, k.Http, cacheDir, "k0s", downloadURL, force, quiet)
 	if err != nil {
 		return "", err

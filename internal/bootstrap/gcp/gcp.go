@@ -42,7 +42,9 @@ func CheckOMSManagedLabel(labels map[string]string) bool {
 	if labels == nil {
 		return false
 	}
+
 	value, exists := labels[OMSManagedLabel]
+
 	return exists && value == "true"
 }
 
@@ -385,10 +387,12 @@ func (b *GCPBootstrapper) createTestUser() error {
 	if b.Env.InstallConfig == nil {
 		return fmt.Errorf("install config not found in bootstrap environment")
 	}
+
 	pgPasswordSecret := b.icg.GetVault().GetSecret(files.SecretPostgresPassword)
 	if pgPasswordSecret == nil || pgPasswordSecret.Fields == nil {
 		return fmt.Errorf("postgres admin password not found in vault")
 	}
+
 	pgPassword := pgPasswordSecret.Fields.Password
 
 	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
@@ -405,6 +409,7 @@ func (b *GCPBootstrapper) createTestUser() error {
 	}
 
 	testuser.LogAndPersistResult(result, b.Env.OmsWorkdir)
+
 	return nil
 }
 func (b *GCPBootstrapper) ValidateInput() error {
@@ -474,6 +479,7 @@ func (b *GCPBootstrapper) validateClusterAdminEmail() error {
 	if err != nil {
 		return fmt.Errorf("invalid cluster admin email: %w", err)
 	}
+
 	b.Env.ClusterAdminEmail = email
 
 	return nil
@@ -485,14 +491,18 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 		if b.Env.InstallVersion != "" || b.Env.InstallHash != "" {
 			return fmt.Errorf("cannot specify both install-local and install-version/install-hash")
 		}
+
 		if !b.fw.Exists(b.Env.InstallLocal) {
 			return fmt.Errorf("local installer package not found at path: %s", b.Env.InstallLocal)
 		}
+
 		return nil
 	}
+
 	if b.Env.InstallVersion == "" {
 		return nil
 	}
+
 	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
@@ -506,6 +516,7 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		requiredFilename = "installer-lite.tar.gz"
 	}
+
 	filenames := []string{}
 	// Validate required file exists in package artifacts
 	for _, artifact := range build.Artifacts {
@@ -553,6 +564,7 @@ func (b *GCPBootstrapper) validateGitProviderParams() error {
 		if p.id != "" && p.secret == "" {
 			return fmt.Errorf("%s client ID is set but client secret is missing", p.name)
 		}
+
 		if p.secret != "" && p.id == "" {
 			return fmt.Errorf("%s client secret is set but client ID is missing", p.name)
 		}
@@ -587,9 +599,11 @@ func (b *GCPBootstrapper) validatePrometheusRemoteWriteParams() error {
 	if b.Env.PrometheusRemoteWriteURL != "" && (b.Env.PrometheusRemoteWriteUser == "" || b.Env.PrometheusRemoteWritePassword == "") {
 		return fmt.Errorf("prometheus remote write username and password must both be set when remote write URL is specified")
 	}
+
 	if (b.Env.PrometheusRemoteWriteUser != "" || b.Env.PrometheusRemoteWritePassword != "") && b.Env.PrometheusRemoteWriteURL == "" {
 		return fmt.Errorf("prometheus remote write URL is required when remote write username or password is set")
 	}
+
 	return nil
 }
 
@@ -601,6 +615,7 @@ func (b *GCPBootstrapper) validateTelemetryExportParams() error {
 	if b.Env.CentralOtelUsername != "" && b.Env.CentralOtelPassword == "" {
 		return fmt.Errorf("central OTel username is set but password is missing")
 	}
+
 	if b.Env.CentralOtelPassword != "" && b.Env.CentralOtelUsername == "" {
 		return fmt.Errorf("central OTel password is set but username is missing")
 	}
@@ -630,10 +645,12 @@ func (b *GCPBootstrapper) ensureDnsPermissions() error {
 	if b.Env.DNSProjectID == "" {
 		dnsProject = b.Env.ProjectID
 	}
+
 	err := b.ensureIAMRoleWithRetry(dnsProject, "cloud-controller", b.Env.ProjectID, []string{"roles/dns.admin"})
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -671,6 +688,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		TargetTags:   []string{"ssh"},
 		Description:  protoString("Allow external SSH to Jumpbox"),
 	}
+
 	err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, sshRule)
 	if err != nil {
 		return fmt.Errorf("failed to create jumpbox ssh firewall rule: %w", err)
@@ -688,6 +706,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		SourceRanges: []string{"10.10.0.0/20"},
 		Description:  protoString("Allow all internal traffic"),
 	}
+
 	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, internalRule)
 	if err != nil {
 		return fmt.Errorf("failed to create internal firewall rule: %w", err)
@@ -705,6 +724,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		DestinationRanges: []string{"0.0.0.0/0"},
 		Description:       protoString("Allow all egress"),
 	}
+
 	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, egressRule)
 	if err != nil {
 		return fmt.Errorf("failed to create egress firewall rule: %w", err)
@@ -722,6 +742,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		SourceRanges: []string{"0.0.0.0/0"},
 		Description:  protoString("Allow HTTP/HTTPS ingress"),
 	}
+
 	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, webRule)
 	if err != nil {
 		return fmt.Errorf("failed to create web firewall rule: %w", err)
@@ -740,6 +761,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		TargetTags:   []string{"postgres"},
 		Description:  protoString("Allow external access to PostgreSQL"),
 	}
+
 	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, postgresRule)
 	if err != nil {
 		return fmt.Errorf("failed to create postgres firewall rule: %w", err)
@@ -752,14 +774,17 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 // controllers of the cluster (gateway and public gateway) and the SSH workspace proxy.
 func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 	var err error
+
 	b.Env.GatewayIP, err = b.EnsureExternalIP("gateway")
 	if err != nil {
 		return fmt.Errorf("failed to ensure gateway IP: %w", err)
 	}
+
 	b.Env.PublicGatewayIP, err = b.EnsureExternalIP("public-gateway")
 	if err != nil {
 		return fmt.Errorf("failed to ensure public gateway IP: %w", err)
 	}
+
 	b.Env.SshProxyIP, err = b.EnsureExternalIP("ssh-proxy")
 	if err != nil {
 		return fmt.Errorf("failed to ensure ssh proxy IP: %w", err)
@@ -836,9 +861,11 @@ func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
 		if err == nil {
 			break
 		}
+
 		if i == 2 {
 			return fmt.Errorf("failed to enable root login on %s: %w", node.GetName(), err)
 		}
+
 		b.stlog.LogRetry()
 		b.Time.Sleep(10 * time.Second)
 	}
@@ -878,6 +905,7 @@ func (b *GCPBootstrapper) EnsureOmsInstalled() (err error) {
 		if err != nil {
 			return fmt.Errorf("failed to make local OMS binary executable on jumpbox: %w", err)
 		}
+
 		return nil
 	}
 
@@ -904,6 +932,7 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 				return fmt.Errorf("failed to configure inotify watches on %s: %w", node.GetName(), err)
 			}
 		}
+
 		if !node.HasMemoryMapConfigured() {
 			err := node.ConfigureMemoryMap()
 			if err != nil {
@@ -921,16 +950,20 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 	// Figure out if registry is already running
 	b.stlog.Logf("Checking if local container registry is already running on postgres node")
+
 	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
 	err := b.Env.PostgreSQLNode.RunSSHCommand("root", checkCommand)
 	registryUsername := ""
 	registryPassword := ""
+
 	if s := b.icg.GetVault().GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
 		registryUsername = s.Fields.Password
 	}
+
 	if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
 		registryPassword = s.Fields.Password
 	}
+
 	if err == nil && b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server == localRegistryServer &&
 		registryUsername != "" && registryPassword != "" {
 		b.stlog.Logf("Local container registry already running on postgres node")
@@ -940,6 +973,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	b.Env.InstallConfig.Registry.Server = localRegistryServer
 	registryUsername = "custom-registry"
 	registryPassword = shortuuid.New()
+
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: registryUsername}})
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
 
@@ -966,6 +1000,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	}
 	for _, cmd := range commands {
 		b.stlog.Logf("Running command on postgres node: %s", util.Truncate(cmd, 12))
+
 		err := b.Env.PostgreSQLNode.RunSSHCommand("root", cmd)
 		if err != nil {
 			return fmt.Errorf("failed to run command on postgres node: %w", err)
@@ -975,14 +1010,17 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	allNodes := append(b.Env.ControlPlaneNodes, b.Env.CephNodes...)
 	for _, node := range allNodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
+
 		err := b.Env.PostgreSQLNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
 		if err != nil {
 			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.GetInternalIP(), err)
 		}
+
 		err = node.RunSSHCommand("root", "update-ca-certificates")
 		if err != nil {
 			return fmt.Errorf("failed to update CA certificates on node %s: %w", node.GetInternalIP(), err)
 		}
+
 		err = node.RunSSHCommand("root", "systemctl restart docker.service || true") // docker is probably not yet installed
 		if err != nil {
 			return fmt.Errorf("failed to restart docker service on node %s: %w", node.GetInternalIP(), err)
@@ -996,11 +1034,13 @@ func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.GitHubPAT == "" {
 		return fmt.Errorf("GitHub PAT is not set")
 	}
+
 	b.Env.InstallConfig.Registry.Server = "ghcr.io"
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
 	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
 	b.Env.InstallConfig.Registry.LoadContainerImages = false
+
 	return nil
 }
 
@@ -1011,6 +1051,7 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 	}
 
 	zoneName := b.Env.DNSZoneName
+
 	err := b.GCPClient.EnsureDNSManagedZone(gcpProject, zoneName, b.Env.BaseDomain+".", "Codesphere DNS zone")
 	if err != nil {
 		return fmt.Errorf("failed to ensure DNS managed zone: %w", err)
@@ -1079,11 +1120,14 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 
 	if b.Env.InstallLocal != "" {
 		b.stlog.Logf("Copying local package %s to jumpbox...", b.Env.InstallLocal)
+
 		fullPackageFilename := fmt.Sprintf("local-%s", packageFilename)
+
 		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallLocal, "/root/"+fullPackageFilename)
 		if err != nil {
 			return "", fmt.Errorf("failed to copy local install package to jumpbox: %w", err)
 		}
+
 		return fullPackageFilename, nil
 	}
 
@@ -1095,9 +1139,11 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
 	if b.Env.InstallHash == "" {
 		return "", fmt.Errorf("install hash must be set when install version is set")
 	}
+
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
 		packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
+
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
@@ -1110,6 +1156,7 @@ func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere...")
 	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s%s",
 		b.Env.SecretsDir, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), packageFilename, b.generateSkipStepsArg())
+
 	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 }
 
@@ -1118,6 +1165,7 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		skipSteps = append(skipSteps, "load-container-images")
 	}
+
 	if len(skipSteps) == 0 {
 		return ""
 	}
@@ -1213,14 +1261,17 @@ systemctl restart k0scontroller
 	if err != nil {
 		return fmt.Errorf("failed to write configure-k0s.sh: %w", err)
 	}
+
 	err = b.Env.ControlPlaneNodes[0].NodeClient.CopyFile(b.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh")
 	if err != nil {
 		return fmt.Errorf("failed to copy configure-k0s.sh to control plane node: %w", err)
 	}
+
 	err = b.Env.ControlPlaneNodes[0].RunSSHCommand("root", "chmod +x /root/configure-k0s.sh")
 	if err != nil {
 		return fmt.Errorf("failed to make configure-k0s.sh executable on control plane node: %w", err)
 	}
+
 	return nil
 }
 

@@ -52,6 +52,7 @@ func installCodesphereInfra(opts *InstallCodesphereOpts, env env.Env) error {
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install infra: %w", err)
 	}
+
 	return nil
 }
 

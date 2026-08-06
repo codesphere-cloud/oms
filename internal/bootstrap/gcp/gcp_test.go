@@ -50,6 +50,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	JustBeforeEach(func() {
 		var err error
+
 		bs, err = gcp.NewGCPBootstrapper(
 			ctx,
 			e,
@@ -168,6 +169,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			icg.EXPECT().GetInstallConfig().RunAndReturn(func() *files.RootConfig {
 				realIcm := installer.NewInstallConfigManager()
 				_ = realIcm.ApplyProfile("minimal")
+
 				return realIcm.GetInstallConfig()
 			})
 
@@ -300,6 +302,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	Describe("ValidateInput", func() {
 		var artifacts []portal.Artifact
+
 		Context("When GitHub team and org is set", func() {
 			BeforeEach(func() {
 				csEnv.GitHubTeamOrg = "codesphere-cloud"
@@ -887,6 +890,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				icg = installer.NewMockInstallConfigManager(GinkgoT())
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
 				gc = gcp.NewMockGCPClientManager(GinkgoT())
 				fw = util.NewMockFileIO(GinkgoT())
 			})
@@ -1380,6 +1384,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
 			csEnv.InstallHash = "abc1234567890"
+
 			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
 		})
 		Describe("Valid InstallCodesphere", func() {

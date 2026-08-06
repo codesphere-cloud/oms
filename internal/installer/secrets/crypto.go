@@ -36,6 +36,7 @@ func GenerateSSHKeyPair() (privateKey string, publicKey string, err error) {
 	if err != nil {
 		return "", "", err
 	}
+
 	pubKeySSH := string(ssh.MarshalAuthorizedKey(sshPubKey))
 
 	return string(privKeyPEM), pubKeySSH, nil
@@ -56,6 +57,7 @@ func GenerateECDSAKeyPair() (privateKey string, publicKey string, err error) {
 	if err != nil {
 		return "", "", err
 	}
+
 	pubKeyPEM := pem.EncodeToMemory(&pem.Block{
 		Type:  "PUBLIC KEY",
 		Bytes: pubBytes,
@@ -100,7 +102,9 @@ func GenerateCA(cn, country, locality, org string) (keyPEM, certPEM string, err 
 	if err != nil {
 		return "", "", err
 	}
+
 	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
+
 	return keyPEM, certPEM, nil
 }
 
@@ -117,6 +121,7 @@ func GenerateServerCertificate(caKeyPEM, caCertPEM, cn string, ipAddresses []str
 	if caCertBlock == nil {
 		return "", "", fmt.Errorf("decode CA cert PEM: empty block")
 	}
+
 	caCert, err := x509.ParseCertificate(caCertBlock.Bytes)
 	if err != nil {
 		return "", "", fmt.Errorf("parse CA cert: %w", err)
@@ -144,6 +149,7 @@ func GenerateServerCertificate(caKeyPEM, caCertPEM, cn string, ipAddresses []str
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 	}
+
 	for _, ip := range ipAddresses {
 		if parsed := net.ParseIP(ip); parsed != nil {
 			tmpl.IPAddresses = append(tmpl.IPAddresses, parsed)
@@ -159,7 +165,9 @@ func GenerateServerCertificate(caKeyPEM, caCertPEM, cn string, ipAddresses []str
 	if err != nil {
 		return "", "", err
 	}
+
 	certPEM = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER}))
+
 	return keyPEM, certPEM, nil
 }
 
@@ -172,6 +180,7 @@ func encodePEMKey(key interface{}, keyType string) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("invalid RSA key type")
 		}
+
 		pemBytes = pem.EncodeToMemory(&pem.Block{
 			Type:  "RSA PRIVATE KEY",
 			Bytes: x509.MarshalPKCS1PrivateKey(rsaKey),
@@ -181,10 +190,12 @@ func encodePEMKey(key interface{}, keyType string) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("invalid EC key type")
 		}
+
 		ecBytes, err := x509.MarshalECPrivateKey(ecKey)
 		if err != nil {
 			return "", err
 		}
+
 		pemBytes = pem.EncodeToMemory(&pem.Block{
 			Type:  "EC PRIVATE KEY",
 			Bytes: ecBytes,
@@ -203,16 +214,19 @@ func ParseRSAPrivateKey(keyPEM string) (*rsa.PrivateKey, error) {
 	if block == nil {
 		return nil, fmt.Errorf("empty PEM block")
 	}
+
 	switch block.Type {
 	case "PRIVATE KEY":
 		raw, err := x509.ParsePKCS8PrivateKey(block.Bytes)
 		if err != nil {
 			return nil, fmt.Errorf("parse PKCS8: %w", err)
 		}
+
 		key, ok := raw.(*rsa.PrivateKey)
 		if !ok {
 			return nil, fmt.Errorf("PKCS8 key is not RSA")
 		}
+
 		return key, nil
 	case "RSA PRIVATE KEY":
 		return x509.ParsePKCS1PrivateKey(block.Bytes)
@@ -226,6 +240,7 @@ func GeneratePassword(length int) (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("read random bytes for password: %w", err)
 	}
+
 	return base64.StdEncoding.EncodeToString(b)[:length], nil
 }
 

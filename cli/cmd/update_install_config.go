@@ -151,12 +151,14 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 
 func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfigManager) error {
 	log.Printf("Loading existing configuration from: %s\n", c.Opts.ConfigFile)
+
 	err := icg.LoadInstallConfigFromFile(c.Opts.ConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to load config file: %w", err)
 	}
 
 	log.Printf("Loading existing vault from: %s\n", c.Opts.VaultFile)
+
 	err = icg.LoadVaultFromFile(c.Opts.VaultFile)
 	if err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
@@ -175,6 +177,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 
 	if tracker.HasChanges() {
 		log.Println("\nRegenerating affected secrets and certificates...")
+
 		if err := c.regenerateSecrets(config, vault, tracker); err != nil {
 			return fmt.Errorf("failed to regenerate secrets: %w", err)
 		}
@@ -217,11 +220,14 @@ func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, 
 			if c.Opts.PostgresPrimaryIP != "" && config.Postgres.Primary.IP != c.Opts.PostgresPrimaryIP {
 				log.Printf("Updating PostgreSQL primary IP: %s -> %s\n", config.Postgres.Primary.IP, c.Opts.PostgresPrimaryIP)
 				config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
+
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
+
 			if primaryHostname != "" && config.Postgres.Primary.Hostname != primaryHostname {
 				log.Printf("Updating PostgreSQL primary hostname: %s -> %s\n", config.Postgres.Primary.Hostname, primaryHostname)
 				config.Postgres.Primary.Hostname = primaryHostname
+
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
 		}
@@ -232,11 +238,14 @@ func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, 
 			if c.Opts.PostgresReplicaIP != "" && config.Postgres.Replica.IP != c.Opts.PostgresReplicaIP {
 				log.Printf("Updating PostgreSQL replica IP: %s -> %s\n", config.Postgres.Replica.IP, c.Opts.PostgresReplicaIP)
 				config.Postgres.Replica.IP = c.Opts.PostgresReplicaIP
+
 				tracker.MarkPostgresReplicaCertNeedsRegen()
 			}
+
 			if c.Opts.PostgresReplicaName != "" && config.Postgres.Replica.Name != c.Opts.PostgresReplicaName {
 				log.Printf("Updating PostgreSQL replica name: %s -> %s\n", config.Postgres.Replica.Name, c.Opts.PostgresReplicaName)
 				config.Postgres.Replica.Name = c.Opts.PostgresReplicaName
+
 				tracker.MarkPostgresReplicaCertNeedsRegen()
 			}
 		}
@@ -280,6 +289,7 @@ func (c *UpdateInstallConfigCmd) applyClusterGatewayUpdates(config *files.RootCo
 
 	if len(c.Opts.ClusterGatewayIPAddresses) > 0 {
 		log.Printf("Updating cluster gateway IP addresses\n")
+
 		config.Cluster.Gateway.IPAddresses = c.Opts.ClusterGatewayIPAddresses
 	}
 
@@ -290,6 +300,7 @@ func (c *UpdateInstallConfigCmd) applyClusterGatewayUpdates(config *files.RootCo
 
 	if len(c.Opts.ClusterPublicGatewayIPAddresses) > 0 {
 		log.Printf("Updating cluster public gateway IP addresses\n")
+
 		config.Cluster.PublicGateway.IPAddresses = c.Opts.ClusterPublicGatewayIPAddresses
 	}
 }
@@ -300,6 +311,7 @@ func (c *UpdateInstallConfigCmd) applyACMEUpdates(config *files.RootConfig, vaul
 	}
 
 	acmeChanged := false
+
 	certIssuer := config.Codesphere.EnsureCertIssuer()
 	if certIssuer.Acme == nil {
 		certIssuer.Acme = &files.ACMEConfig{}
@@ -307,12 +319,14 @@ func (c *UpdateInstallConfigCmd) applyACMEUpdates(config *files.RootConfig, vaul
 
 	if certIssuer.Type != files.CertIssuerTypeACME {
 		log.Printf("Setting cert issuer type to ACME\n")
+
 		certIssuer.Type = files.CertIssuerTypeACME
 		acmeChanged = true
 	}
 
 	if !certIssuer.Acme.Enabled {
 		log.Printf("Enabling ACME certificate issuer\n")
+
 		certIssuer.Acme.Enabled = true
 		acmeChanged = true
 	}
@@ -346,9 +360,11 @@ func (c *UpdateInstallConfigCmd) applyACMEUpdates(config *files.RootConfig, vaul
 		if s := vault.GetSecret(files.SecretAcmeEabMacKey); s != nil && s.Fields != nil {
 			currentKey = s.Fields.Password
 		}
+
 		if currentKey != c.Opts.ACMEEABMacKey {
 			log.Printf("Updating ACME EAB MAC key\n")
 			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMEEABMacKey}})
+
 			acmeChanged = true
 		}
 	}
@@ -358,6 +374,7 @@ func (c *UpdateInstallConfigCmd) applyACMEUpdates(config *files.RootConfig, vaul
 		if certIssuer.Acme.Solver.DNS01 == nil {
 			certIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{}
 		}
+
 		if certIssuer.Acme.Solver.DNS01.Provider != c.Opts.ACMEDNS01Provider {
 			log.Printf("Updating ACME DNS-01 provider: %s -> %s\n",
 				certIssuer.Acme.Solver.DNS01.Provider, c.Opts.ACMEDNS01Provider)
@@ -394,6 +411,7 @@ func (c *UpdateInstallConfigCmd) applyCodesphereUpdates(config *files.RootConfig
 
 	if len(c.Opts.CodesphereDNSServers) > 0 {
 		log.Printf("Updating DNS servers\n")
+
 		config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
 	}
 }
@@ -401,10 +419,12 @@ func (c *UpdateInstallConfigCmd) applyCodesphereUpdates(config *files.RootConfig
 func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vault *files.InstallVault, tracker *SecretDependencyTracker) error {
 	if tracker.NeedsPostgresPrimaryCertRegen() {
 		log.Println("  - Regenerating PostgreSQL primary server certificate...")
+
 		caSecret := vault.GetSecret(files.SecretPostgresCaKeyPem)
 		if caSecret == nil || caSecret.File == nil {
 			return fmt.Errorf("postgres CA key not found in vault")
 		}
+
 		primaryKeyPEM, primaryCertPEM, err := secrets.GenerateServerCertificate(
 			caSecret.File.Content,
 			config.Postgres.CACertPem,
@@ -414,16 +434,20 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vau
 		if err != nil {
 			return fmt.Errorf("failed to regenerate primary PostgreSQL certificate: %w", err)
 		}
+
 		vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPrimaryServerKeyPem, File: &files.SecretFile{Name: "primary.key", Content: primaryKeyPEM}})
+
 		config.Postgres.Primary.SSLConfig.ServerCertPem = primaryCertPEM
 	}
 
 	if tracker.NeedsPostgresReplicaCertRegen() && config.Postgres.Replica != nil {
 		log.Println("  - Regenerating PostgreSQL replica server certificate...")
+
 		caSecret := vault.GetSecret(files.SecretPostgresCaKeyPem)
 		if caSecret == nil || caSecret.File == nil {
 			return fmt.Errorf("postgres CA key not found in vault")
 		}
+
 		replicaKeyPEM, replicaCertPEM, err := secrets.GenerateServerCertificate(
 			caSecret.File.Content,
 			config.Postgres.CACertPem,
@@ -433,7 +457,9 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vau
 		if err != nil {
 			return fmt.Errorf("failed to regenerate replica PostgreSQL certificate: %w", err)
 		}
+
 		vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaServerKeyPem, File: &files.SecretFile{Name: "replica.key", Content: replicaKeyPEM}})
+
 		config.Postgres.Replica.SSLConfig.ServerCertPem = replicaCertPEM
 	}
 
@@ -447,12 +473,15 @@ func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTr
 
 	if tracker.HasChanges() {
 		log.Println("\nRegenerated secrets:")
+
 		if tracker.NeedsPostgresPrimaryCertRegen() {
 			log.Println("  ✓ PostgreSQL primary server certificate")
 		}
+
 		if tracker.NeedsPostgresReplicaCertRegen() {
 			log.Println("  ✓ PostgreSQL replica server certificate")
 		}
+
 		if tracker.ACMEConfigChanged() {
 			log.Println("  ✓ ACME configuration updated")
 		}

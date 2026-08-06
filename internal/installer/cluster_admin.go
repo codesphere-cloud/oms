@@ -85,6 +85,7 @@ func EnsureClusterAdminSecret(ctx context.Context, vaultPath, privKey string, cf
 	if err != nil {
 		return err
 	}
+
 	clientset, _, err := util.NewClientsFromRESTConfig(restConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)

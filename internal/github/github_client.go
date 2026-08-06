@@ -26,6 +26,7 @@ type RealGitHubClient struct {
 func NewGitHubClient(ctx context.Context, token string) *RealGitHubClient {
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 	tc := oauth2.NewClient(ctx, ts)
+
 	return &RealGitHubClient{client: github.NewClient(tc)}
 }
 

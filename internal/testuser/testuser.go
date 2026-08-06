@@ -61,21 +61,27 @@ func New(opts CreateTestUserOpts) (*TestUserCreator, error) {
 	if opts.Port == 0 {
 		opts.Port = DefaultPort
 	}
+
 	if opts.User == "" {
 		opts.User = DefaultUser
 	}
+
 	if opts.DBName == "" {
 		opts.DBName = DefaultDBName
 	}
+
 	if opts.SSLMode == "" {
 		opts.SSLMode = DefaultSSLMode
 	}
+
 	if opts.DatacenterID == 0 {
 		opts.DatacenterID = DefaultDatacenterID
 	}
+
 	if opts.Host == "" {
 		return nil, fmt.Errorf("host is required")
 	}
+
 	if opts.Password == "" {
 		return nil, fmt.Errorf("password is required")
 	}
@@ -105,6 +111,7 @@ func New(opts CreateTestUserOpts) (*TestUserCreator, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to generate email suffix: %w", err)
 	}
+
 	email := fmt.Sprintf("test+%s@codesphere.com", suffix)
 
 	return &TestUserCreator{opts: opts, db: db, email: email}, nil
@@ -115,6 +122,7 @@ func (c *TestUserCreator) close() error {
 	if c.db != nil {
 		return c.db.Close()
 	}
+
 	return nil
 }
 
@@ -124,6 +132,7 @@ func (c *TestUserCreator) Create() (*TestUserResult, error) {
 	if plaintextPassword == "" {
 		return nil, fmt.Errorf("OMS_CS_TEST_USER_PASSWORD environment variable is not set")
 	}
+
 	hashedPassword := os.Getenv("OMS_CS_TEST_USER_PASSWORD_HASHED")
 	if hashedPassword == "" {
 		return nil, fmt.Errorf("OMS_CS_TEST_USER_PASSWORD_HASHED environment variable is not set")
@@ -154,6 +163,7 @@ func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
 		return nil, err
 	}
 	defer func() { _ = creator.close() }()
+
 	return creator.Create()
 }
 
@@ -163,6 +173,7 @@ func (c *TestUserCreator) createInDB(hashedPassword, hashedToken string) (*TestU
 	if err != nil {
 		return nil, err
 	}
+
 	if exists {
 		return nil, fmt.Errorf("test user %s already exists", c.email)
 	}
@@ -206,15 +217,18 @@ func (c *TestUserCreator) createInDB(hashedPassword, hashedToken string) (*TestU
 
 func (c *TestUserCreator) userExists() (bool, error) {
 	var exists bool
+
 	err := c.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM authservice.credentials WHERE email = $1)`, c.email).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("failed to check for existing test user: %w", err)
 	}
+
 	return exists, nil
 }
 
 func (c *TestUserCreator) insertCredentials(tx *sql.Tx, hashedPassword string) (int, error) {
 	var userID int
+
 	err := tx.QueryRow(`
 		INSERT INTO authservice.credentials
 			(user_id, email, password_hash, authentication_method, signed_up, banned)
@@ -225,6 +239,7 @@ func (c *TestUserCreator) insertCredentials(tx *sql.Tx, hashedPassword string) (
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert credentials: %w", err)
 	}
+
 	return userID, nil
 }
 
@@ -238,15 +253,18 @@ func (c *TestUserCreator) insertEmailConfirmation(tx *sql.Tx) error {
 	if err != nil {
 		return fmt.Errorf("failed to insert email confirmation: %w", err)
 	}
+
 	return nil
 }
 
 func (c *TestUserCreator) insertTeam(tx *sql.Tx) (int, error) {
 	var teamID int
+
 	datacenterID := c.opts.DatacenterID
 	if datacenterID == 0 {
 		datacenterID = DefaultDatacenterID
 	}
+
 	err := tx.QueryRow(`
 		INSERT INTO "teamService".teams
 			(id, "name", description, first_team, default_data_center_id, deleted, deletion_pending, created_at)
@@ -257,6 +275,7 @@ func (c *TestUserCreator) insertTeam(tx *sql.Tx) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert team: %w", err)
 	}
+
 	return teamID, nil
 }
 
@@ -270,6 +289,7 @@ func (c *TestUserCreator) insertTeamMember(tx *sql.Tx, userID, teamID int) error
 	if err != nil {
 		return fmt.Errorf("failed to insert team member: %w", err)
 	}
+
 	return nil
 }
 
@@ -283,6 +303,7 @@ func (c *TestUserCreator) insertAPIToken(tx *sql.Tx, hashedToken string, userID 
 	if err != nil {
 		return fmt.Errorf("failed to insert API token: %w", err)
 	}
+
 	return nil
 }
 
@@ -324,6 +345,7 @@ func generateAPIToken() (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
+
 	return tokenPrefix + hex.EncodeToString(b), nil
 }
 
@@ -332,5 +354,6 @@ func generateEmailSuffix() (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
+
 	return hex.EncodeToString(b), nil
 }

@@ -16,7 +16,6 @@ import (
 )
 
 var _ = Describe("UpdateAPIKey", func() {
-
 	var (
 		mockPortal *portal.MockPortal
 		c          apikey.UpdateAPIKeyCmd
@@ -40,6 +39,7 @@ var _ = Describe("UpdateAPIKey", func() {
 				RunAndReturn(func(id string, gotExpiresAt time.Time) error {
 					Expect(id).To(Equal(apiKeyID))
 					Expect(gotExpiresAt).To(BeTemporally("~", expectedExpiresAt, 5*time.Second))
+
 					return nil
 				})
 
@@ -59,6 +59,7 @@ var _ = Describe("UpdateAPIKey", func() {
 				RunAndReturn(func(id string, gotExpiresAt time.Time) error {
 					Expect(id).To(Equal(apiKeyID))
 					Expect(gotExpiresAt).To(BeTemporally("~", expectedExpiresAt, 5*time.Second))
+
 					return fmt.Errorf("invalid api key id format")
 				})
 

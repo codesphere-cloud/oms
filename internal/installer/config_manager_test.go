@@ -38,6 +38,7 @@ func (m *MockFileIO) Create(filename string) (*os.File, error) {
 	if m.createError != nil {
 		return nil, m.createError
 	}
+
 	return nil, nil
 }
 
@@ -45,19 +46,23 @@ func (m *MockFileIO) CreateAndWrite(filePath string, data []byte, fileType strin
 	if m.writeError != nil {
 		return m.writeError
 	}
+
 	m.files[filePath] = data
+
 	return nil
 }
 
 func (m *MockFileIO) CreateTemp(dir, pattern string) (string, error) {
 	path := filepath.Join(dir, pattern+"mock")
 	m.files[path] = nil
+
 	return path, nil
 }
 
 func (m *MockFileIO) Rename(oldPath, newPath string) error {
 	m.files[newPath] = m.files[oldPath]
 	delete(m.files, oldPath)
+
 	return nil
 }
 
@@ -65,6 +70,7 @@ func (m *MockFileIO) Open(filename string) (*os.File, error) {
 	if m.openError != nil {
 		return nil, m.openError
 	}
+
 	return nil, nil
 }
 
@@ -93,7 +99,9 @@ func (m *MockFileIO) WriteFile(filename string, data []byte, perm os.FileMode) e
 	if m.writeError != nil {
 		return m.writeError
 	}
+
 	m.files[filename] = data
+
 	return nil
 }
 
@@ -105,6 +113,7 @@ func (m *MockFileIO) ReadFile(filename string) ([]byte, error) {
 	if data, ok := m.files[filename]; ok {
 		return data, nil
 	}
+
 	return nil, os.ErrNotExist
 }
 
@@ -266,7 +275,6 @@ var _ = Describe("ConfigManager", func() {
 					Expect(errors).To(ContainElement(ContainSubstring("postgres server address is required")))
 				})
 			})
-
 		})
 
 		Context("openBao validation", func() {
@@ -566,6 +574,7 @@ var _ = Describe("ConfigManager", func() {
 			}
 			ageKeyResolver := vault.NewMockAgeKeyResolver(GinkgoT())
 			ageKeyResolver.EXPECT().Resolve("", ".").Return("recipient", "", nil)
+
 			encryptor := vault.NewMockEncryptor(GinkgoT())
 			encryptor.EXPECT().Encrypt(
 				".prod.vault.yaml.plaintext-*mock",
@@ -630,6 +639,7 @@ var _ = Describe("ConfigManager", func() {
 				vault := &files.InstallVault{}
 				err = vault.Unmarshal(firstVaultBytes)
 				Expect(err).ToNot(HaveOccurred())
+
 				configManager.Vault = vault
 
 				// Re-write vault (simulating a second run)
@@ -666,6 +676,7 @@ var _ = Describe("ConfigManager", func() {
 				// Save the original cert and key for later comparison
 				origCert := configManager.Config.Postgres.Primary.SSLConfig.ServerCertPem
 				origKey := primaryKeySecret.File.Content
+
 				Expect(origCert).ToNot(BeEmpty())
 				Expect(origKey).ToNot(BeEmpty())
 
@@ -682,9 +693,11 @@ var _ = Describe("ConfigManager", func() {
 				// Reload config from written YAML
 				configBytes := mockIO.GetFileContent("/tmp/config.yaml")
 				Expect(configBytes).ToNot(BeNil())
+
 				config2 := files.NewRootConfig()
 				err = config2.Unmarshal(configBytes)
 				Expect(err).ToNot(HaveOccurred())
+
 				configManager2.Config = &config2
 
 				Expect(configManager2.Config.Postgres.Primary.SSLConfig.ServerCertPem).To(Equal(origCert),
@@ -693,9 +706,11 @@ var _ = Describe("ConfigManager", func() {
 				// Reload vault from written YAML
 				vaultBytes := mockIO.GetFileContent("/tmp/vault.yaml")
 				Expect(vaultBytes).ToNot(BeNil())
+
 				vault2 := &files.InstallVault{}
 				err = vault2.Unmarshal(vaultBytes)
 				Expect(err).ToNot(HaveOccurred())
+
 				configManager2.Vault = vault2
 
 				// Private key lives in vault, not config
@@ -725,17 +740,20 @@ var _ = Describe("ConfigManager", func() {
 				for _, secret := range vault3.Secrets {
 					nameCount[secret.Name]++
 				}
+
 				for name, count := range nameCount {
 					Expect(count).To(Equal(1), "secret '%s' has %d entries (expected 1) — duplication bug!", name, count)
 				}
 
 				// Verify the key in re-written vault still matches the cert
 				var rewrittenKey string
+
 				for _, secret := range vault3.Secrets {
 					if secret.Name == "postgresPrimaryServerKeyPem" && secret.File != nil {
 						rewrittenKey = secret.File.Content
 					}
 				}
+
 				Expect(rewrittenKey).To(Equal(origKey),
 					"re-written vault should contain the same key")
 				err = secrets.ValidateCertKeyPair(
@@ -745,6 +763,5 @@ var _ = Describe("ConfigManager", func() {
 				Expect(err).ToNot(HaveOccurred(), "cert/key should match in re-written vault")
 			})
 		})
-
 	})
 })

@@ -63,12 +63,16 @@ var _ = Describe("ApplyResourceProfile", func() {
 			deployService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["deployment_service"])
 			AssertZeroRequests(deployService["requests"])
 			Expect(deployService["replicas"]).To(Equal(2))
+
 			authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
 			Expect(authService["replicas"]).To(Equal(2))
+
 			publicAPIService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["public_api_service"])
 			Expect(publicAPIService["replicas"]).To(Equal(2))
+
 			workspaceService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["workspace_service"])
 			Expect(workspaceService["replicas"]).To(Equal(2))
+
 			underprovisionFactors := MustMap[string](MustMap[any](config.Codesphere.Override["global"])["underprovisionFactors"])
 			Expect(underprovisionFactors["cpu"]).To(Equal("0.01"))
 			Expect(underprovisionFactors["memory"]).To(Equal("0.01"))

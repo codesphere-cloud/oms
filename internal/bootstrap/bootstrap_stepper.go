@@ -39,6 +39,7 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 	b.currentStep = name
 
 	fmt.Printf("%s%s%s...", LINE_RESET, RESET_TEXT, name)
+
 	err := fn()
 	if err != nil {
 		fmt.Printf("%s%s%s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
@@ -46,8 +47,10 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 		for i := 0; i < b.subSteps; i++ {
 			fmt.Printf("%s", MOVE_UP_CLEAR_LINE)
 		}
+
 		fmt.Printf("%s%s%s %s✓%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, RESET_TEXT)
 	}
+
 	return err
 }
 
@@ -60,12 +63,14 @@ func (b *StepLogger) Substep(name string, fn func() error) error {
 	b.currentStep = name
 
 	fmt.Printf("%s%s   %s...", LINE_RESET, RESET_TEXT, name)
+
 	err := fn()
 	if err != nil {
 		fmt.Printf("%s%s   %s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
 	} else {
 		fmt.Printf("%s%s   %s %s✓%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, RESET_TEXT)
 	}
+
 	return err
 }
 
@@ -85,5 +90,6 @@ func (b *StepLogger) Logf(message string, args ...interface{}) {
 	}
 
 	b.subSteps += 1
+
 	fmt.Printf("%s%s      %s%s\n", LINE_RESET, RESET_TEXT, fmt.Sprintf(message, args...), RESET_TEXT)
 }

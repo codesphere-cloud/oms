@@ -87,5 +87,6 @@ func (c *HttpWrapper) Download(url string, file io.Writer, quiet bool) error {
 	}
 
 	log.Println("Download finished successfully.")
+
 	return nil
 }

@@ -75,6 +75,7 @@ var _ = Describe("RootCmd", func() {
 							"keyId": keyId,
 						}
 						body, _ := json.Marshal(response)
+
 						return &http.Response{
 							StatusCode: http.StatusOK,
 							Body:       io.NopCloser(bytes.NewReader(body)),

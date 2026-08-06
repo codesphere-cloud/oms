@@ -72,6 +72,7 @@ func (g *InstallConfig) encryptVault(src, target, recipient string) error {
 	if g.vaultEncryptor == nil {
 		return fmt.Errorf("vault encryptor is not configured")
 	}
+
 	return g.vaultEncryptor.Encrypt(src, target, recipient)
 }
 
@@ -79,11 +80,13 @@ func (g *InstallConfig) resolveAgeKey(explicitKeyFile, fallbackDir string) (reci
 	if g.ageKeyResolver == nil {
 		return "", "", fmt.Errorf("age key resolver is not configured")
 	}
+
 	return g.ageKeyResolver.Resolve(explicitKeyFile, fallbackDir)
 }
 
 func NewInstallConfigManager() InstallConfigManager {
 	config := files.NewRootConfig()
+
 	return &InstallConfig{
 		fileIO:         &util.FilesystemWriter{},
 		vaultEncryptor: vault.SOPSEncryptor{},
@@ -100,6 +103,7 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 	}
 
 	store := vault.NewVaultTemplatingSecretStore(g.Vault)
+
 	data, err = configtemplating.RenderInstallConfigTemplate(data, store)
 	if err != nil {
 		return err
@@ -111,6 +115,7 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 	}
 
 	g.Config = &config
+
 	return nil
 }
 
@@ -123,6 +128,7 @@ func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
 	}
 
 	g.Vault = vault
+
 	return nil
 }
 
@@ -134,6 +140,7 @@ func (g *InstallConfig) LoadVaultFromUnecryptedFile(vaultPath string) error {
 	}
 
 	g.Vault = vault
+
 	return nil
 }
 
@@ -147,6 +154,7 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 	if g.Config.Datacenter.ID == 0 {
 		errors = append(errors, "datacenter ID is required")
 	}
+
 	if g.Config.Datacenter.Name == "" {
 		errors = append(errors, "datacenter name is required")
 	}
@@ -162,12 +170,14 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		if err := validatePostgresServerAddress(g.Config.Postgres); err != nil {
 			errors = append(errors, err.Error())
 		}
+
 		if g.Config.Postgres.Primary == nil {
 			errors = append(errors, "postgres primary configuration is required when mode is 'install'")
 		} else {
 			if g.Config.Postgres.Primary.IP == "" {
 				errors = append(errors, "postgres primary IP is required")
 			}
+
 			if g.Config.Postgres.Primary.Hostname == "" {
 				errors = append(errors, "postgres primary hostname is required")
 			}
@@ -181,6 +191,7 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 	if len(g.Config.Ceph.Hosts) == 0 {
 		errors = append(errors, "at least one Ceph host is required")
 	}
+
 	for _, host := range g.Config.Ceph.Hosts {
 		if !IsValidIP(host.IPAddress) {
 			errors = append(errors, fmt.Sprintf("invalid Ceph host IP: %s", host.IPAddress))
@@ -195,6 +206,7 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		if g.Config.Kubernetes.PodCIDR == "" {
 			errors = append(errors, "pod CIDR is required for external Kubernetes")
 		}
+
 		if g.Config.Kubernetes.ServiceCIDR == "" {
 			errors = append(errors, "service CIDR is required for external Kubernetes")
 		}
@@ -208,12 +220,15 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		if g.Config.Codesphere.OpenBao.URI == "" {
 			errors = append(errors, "OpenBao URI is required when OpenBao integration is enabled")
 		}
+
 		if _, err := url.ParseRequestURI(g.Config.Codesphere.OpenBao.URI); err != nil {
 			errors = append(errors, "OpenBao URI must be a valid URL")
 		}
+
 		if g.Config.Codesphere.OpenBao.Engine == "" {
 			errors = append(errors, "OpenBao engine name is required when OpenBao integration is enabled")
 		}
+
 		if g.Config.Codesphere.OpenBao.User == "" {
 			errors = append(errors, "OpenBao username is required when OpenBao integration is enabled")
 		}
@@ -223,6 +238,7 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		if ob.DestinationPath == "" {
 			errors = append(errors, "openfga backups destinationPath is required when openfgaBackups is enabled")
 		}
+
 		if ob.EndpointURL == "" {
 			errors = append(errors, "openfga backups endpointURL is required when openfgaBackups is enabled")
 		}
@@ -335,6 +351,7 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	defer func() {
 		_ = g.fileIO.Remove(plainPath)
 	}()
+
 	if err := g.fileIO.WriteFile(plainPath, vaultYAML, 0600); err != nil {
 		return fmt.Errorf("failed to write temporary plaintext vault: %w", err)
 	}
@@ -354,6 +371,7 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	if err := g.fileIO.Chmod(encryptedPath, 0600); err != nil {
 		return fmt.Errorf("failed to set encrypted vault permissions: %w", err)
 	}
+
 	if err := g.fileIO.Rename(encryptedPath, vaultPath); err != nil {
 		return fmt.Errorf("failed to replace encrypted vault: %w", err)
 	}
@@ -365,6 +383,7 @@ func (g *InstallConfig) marshalVault(vaultPath string, withComments bool) ([]byt
 	if g.Config == nil {
 		return nil, fmt.Errorf("no configuration provided - config is nil")
 	}
+
 	if g.Vault == nil {
 		g.Vault = &files.InstallVault{}
 	}
@@ -391,6 +410,7 @@ func AddConfigComments(yamlData []byte) []byte {
 # For more information, see the installation documentation.
 
 `
+
 	return append([]byte(header), yamlData...)
 }
 
@@ -414,6 +434,7 @@ func AddVaultComments(yamlData []byte) []byte {
 #    sops prod.vault.yaml
 
 `
+
 	return append([]byte(header), yamlData...)
 }
 
@@ -429,5 +450,6 @@ func (g *InstallConfig) ApplyProfile(profile string) error {
 	case PROFILE_MINIMAL:
 		return g.applyProfileMinimal()
 	}
+
 	return fmt.Errorf("unknown profile: %s, available profiles: dev, prod, minimal", profile)
 }

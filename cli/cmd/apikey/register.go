@@ -36,6 +36,7 @@ type RegisterOpts struct {
 
 func (c *RegisterCmd) RunE(_ *cobra.Command, args []string) error {
 	p := portal.NewPortalClient()
+
 	newKey, err := c.Register(p)
 	if err != nil {
 		return err
@@ -73,6 +74,7 @@ func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
 	}
 
 	var expiresAt time.Time
+
 	if c.Opts.ValidFor != "" {
 		validForDuration, err := intutil.GetDurationFromString(c.Opts.ValidFor)
 		if err != nil {

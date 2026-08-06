@@ -68,10 +68,12 @@ func (p *Package) alreadyExtracted(dir string) (bool, error) {
 	if !p.fileIO.Exists(dir) {
 		return false, nil
 	}
+
 	isDir, err := p.fileIO.IsDirectory(dir)
 	if err != nil {
 		return false, fmt.Errorf("failed to determine if %s is a folder: %w", dir, err)
 	}
+
 	return isDir, nil
 }
 
@@ -79,6 +81,7 @@ func (p *Package) alreadyExtracted(dir string) (bool, error) {
 // If force is true, it will overwrite existing files.
 func (p *Package) Extract(force bool) error {
 	workDir := p.GetWorkDir()
+
 	err := os.MkdirAll(p.OmsWorkdir, 0755)
 	if err != nil {
 		return fmt.Errorf("failed to ensure workdir exists: %w", err)
@@ -102,6 +105,7 @@ func (p *Package) Extract(force bool) error {
 	depsArchivePath := path.Join(workDir, depsTar)
 	if p.fileIO.Exists(depsArchivePath) {
 		depsTargetDir := path.Join(workDir, depsDir)
+
 		err = util.ExtractTarGz(p.fileIO, depsArchivePath, depsTargetDir)
 		if err != nil {
 			return fmt.Errorf("failed to extract deps.tar.gz to %s: %w", depsTargetDir, err)
@@ -117,6 +121,7 @@ func (p *Package) ExtractDependency(file string, force bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
 	}
+
 	workDir := p.GetWorkDir()
 
 	if p.fileIO.Exists(p.GetDependencyPath(file)) && !force {
@@ -135,6 +140,7 @@ func (p *Package) ExtractDependency(file string, force bool) error {
 // ExtractOciImageIndex extracts and parses the OCI image index from the given image file path.
 func (p *Package) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error) {
 	var ociImageIndex files.OCIImageIndex
+
 	err := util.ExtractTarSingleFile(p.fileIO, imagefile, "index.json", filepath.Dir(imagefile))
 	if err != nil {
 		return ociImageIndex, fmt.Errorf("failed to extract index.json: %w", err)
@@ -183,6 +189,7 @@ func (p *Package) GetBaseimagePath(baseimage string, force bool) (string, error)
 	}
 
 	baseImageTarPath := path.Join(baseimagePath, baseimage)
+
 	err := p.ExtractDependency(baseImageTarPath, force)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract package to workdir: %w", err)
@@ -205,6 +212,7 @@ func (p *Package) GetCodesphereVersion() (string, error) {
 	}
 
 	containerImage := ""
+
 	for _, image := range containerImages {
 		if strings.Contains(image, ":codesphere") {
 			containerImage = image
