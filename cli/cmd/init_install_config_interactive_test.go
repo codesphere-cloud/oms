@@ -253,6 +253,7 @@ var _ = Describe("Non-interactive Kubernetes CIDR flags", func() {
 		cmd.Flags().BoolVar(&opts.KubernetesManagedByCodesphere, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
 		cmd.Flags().StringVar(&opts.KubernetesPodCIDR, "k8s-pod-cidr", "", "Pod CIDR (required when --k8s-managed=false)")
 		cmd.Flags().StringVar(&opts.KubernetesServiceCIDR, "k8s-service-cidr", "", "Service CIDR (required when --k8s-managed=false)")
+
 		return &InitInstallConfigCmd{cmd: cmd, Opts: opts}
 	}
 

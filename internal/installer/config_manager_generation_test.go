@@ -41,12 +41,14 @@ var _ = Describe("Generated install config round-trip", func() {
 			dir := GinkgoT().TempDir()
 			configPath := filepath.Join(dir, "config.yaml")
 			vaultPath := filepath.Join(dir, "prod.vault.yaml")
+
 			Expect(manager.WriteInstallConfig(configPath, false)).To(Succeed())
 			Expect(manager.WriteUnencryptedVault(vaultPath, false)).To(Succeed())
 
 			// The written config must be valid YAML with cluster.metallb (not root metallb).
 			raw, err := os.ReadFile(configPath)
 			Expect(err).NotTo(HaveOccurred())
+
 			var doc map[string]interface{}
 			Expect(yaml.Unmarshal(raw, &doc)).To(Succeed())
 			Expect(doc).NotTo(HaveKey("metallb"),

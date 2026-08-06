@@ -193,12 +193,14 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 		numPools := prompter.Int("Number of MetalLB IP pools", defaultNumPools)
 
 		existingPools := g.Config.Cluster.MetalLB.Pools
+
 		g.Config.Cluster.MetalLB.Pools = make([]files.MetalLBPoolDef, numPools)
 		for i := 0; i < numPools; i++ {
 			log.Printf("\nMetalLB Pool %d:\n", i+1)
 
 			defaultName := fmt.Sprintf("pool-%d", i+1)
 			var defaultIPs []string
+
 			if i < len(existingPools) {
 				defaultName = existingPools[i].Name
 				defaultIPs = existingPools[i].IPAddresses

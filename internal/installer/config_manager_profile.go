@@ -93,6 +93,7 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Cluster.PublicGateway.ServiceType == "" {
 		g.Config.Cluster.PublicGateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
 	}
+
 	if g.Config.Cluster.MetalLB == nil {
 		g.Config.Cluster.MetalLB = &files.MetalLBConfig{
 			Enabled: false,
@@ -241,6 +242,7 @@ func (g *InstallConfig) applyProfileDev() error {
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "dev"
 	}
+
 	g.ensureMonitoringDefaults("dev", false, false, false)
 	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
@@ -252,6 +254,7 @@ func (g *InstallConfig) applyProfileMinimal() error {
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "dev"
 	}
+
 	g.ensureMonitoringDefaults("dev", true, true, true)
 	g.ensureWorkspacePlans("Standard Developer", 1)
 	if g.Config.Cluster.BarmanCloudPlugin == nil {
@@ -280,6 +283,7 @@ func (g *InstallConfig) applyProfileProd() error {
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "production"
 	}
+
 	g.ensureWorkspacePlans("Standard Developer", 3)
 	g.Config.Cluster.Monitoring = &files.MonitoringConfig{
 		Prometheus: &files.PrometheusConfig{

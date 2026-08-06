@@ -51,8 +51,10 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 			// empty file so every prompt resolves to its default value.
 			stdin, err := os.CreateTemp("", "stdin-*")
 			Expect(err).NotTo(HaveOccurred())
+
 			oldStdin := os.Stdin
 			os.Stdin = stdin
+
 			DeferCleanup(func() { os.Stdin = oldStdin; _ = os.Remove(stdin.Name()) })
 
 			err = manager.CollectInteractively()
