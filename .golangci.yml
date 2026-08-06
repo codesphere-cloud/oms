@@ -28,3 +28,7 @@ issues:
   # Show issues in any part of update files (requires new-from-rev or new-from-patch).
   # Default: false
   whole-files: true
+
+  # Apply the fixes detected by the linters and formatters (if it's supported by the linter).
+  # Default: false
+  fix: true
