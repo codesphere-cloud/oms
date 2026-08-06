@@ -35,12 +35,14 @@ var _ = Describe("Generated install config round-trip", func() {
 			Expect(config.Cluster.MetalLB).NotTo(BeNil(),
 				"profile %s must configure cluster.metallb", profile)
 
-			// Write both files to a temp dir.
+			// Write both files to a temp dir. init install-config produces a
+			// plaintext vault that is SOPS-encrypted later, so use the
+			// unencrypted write path.
 			dir := GinkgoT().TempDir()
 			configPath := filepath.Join(dir, "config.yaml")
 			vaultPath := filepath.Join(dir, "prod.vault.yaml")
 			Expect(manager.WriteInstallConfig(configPath, false)).To(Succeed())
-			Expect(manager.WriteVault(vaultPath, false)).To(Succeed())
+			Expect(manager.WriteUnencryptedVault(vaultPath, false)).To(Succeed())
 
 			// The written config must be valid YAML with cluster.metallb (not root metallb).
 			raw, err := os.ReadFile(configPath)
