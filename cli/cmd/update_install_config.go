@@ -37,6 +37,7 @@ type UpdateInstallConfigOpts struct {
 	PostgresReplicaIP       string
 	PostgresReplicaName     string
 	PostgresServerAddress   string
+	PostgresServer          string
 
 	CephNodesSubnet string
 
@@ -86,6 +87,8 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 			of the PostgreSQL server certificates that include that IP address.`),
 			Example: util.FormatExamples("update install-config", []csio.Example{
 				{Cmd: "--postgres-primary-ip 10.10.0.4 --config config.yaml --vault prod.vault.yaml", Desc: "Update PostgreSQL primary IP and regenerate certificates"},
+				{Cmd: "--postgres-server postgres-1 --config config.yaml --vault prod.vault.yaml", Desc: "Set the primary PostgreSQL hostname when mode is install"},
+				{Cmd: "--postgres-server db.example.com:5432 --config config.yaml --vault prod.vault.yaml", Desc: "Set the PostgreSQL connection address when mode is external"},
 				{Cmd: "--domain new.example.com --config config.yaml --vault prod.vault.yaml", Desc: "Update Codesphere domain"},
 				{Cmd: "--k8s-api-server 10.0.0.10 --config config.yaml --vault prod.vault.yaml", Desc: "Update Kubernetes API server host"},
 			}),
@@ -101,10 +104,13 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 
 	// PostgreSQL update flags
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryHostname, "postgres-primary-hostname", "", "Primary PostgreSQL server hostname")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryHostname, "postgres-primary-hostname", "", "Primary PostgreSQL server hostname (deprecated: use --postgres-server)")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresReplicaIP, "postgres-replica-ip", "", "Replica PostgreSQL server IP")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresReplicaName, "postgres-replica-name", "", "Replica PostgreSQL server name")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server-address", "", "PostgreSQL server address (for external mode)")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server-address", "", "External PostgreSQL connection address (deprecated: use --postgres-server)")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServer, "postgres-server", "", "PostgreSQL server: primary hostname in install mode, connection address in external mode")
+	_ = c.cmd.Flags().MarkDeprecated("postgres-primary-hostname", "use --postgres-server instead")
+	_ = c.cmd.Flags().MarkDeprecated("postgres-server-address", "use --postgres-server instead")
 
 	// Ceph update flags
 	c.cmd.Flags().StringVar(&c.Opts.CephNodesSubnet, "ceph-nodes-subnet", "", "Ceph nodes subnet")
@@ -199,16 +205,23 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, vault *f
 }
 
 func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, tracker *SecretDependencyTracker) {
-	if c.Opts.PostgresPrimaryIP != "" || c.Opts.PostgresPrimaryHostname != "" {
+	primaryHostname, serverAddress := determinePostgresServerConfig(
+		config.Postgres.Mode,
+		c.Opts.PostgresServer,
+		c.Opts.PostgresPrimaryHostname,
+		c.Opts.PostgresServerAddress,
+	)
+
+	if c.Opts.PostgresPrimaryIP != "" || primaryHostname != "" {
 		if config.Postgres.Primary != nil {
 			if c.Opts.PostgresPrimaryIP != "" && config.Postgres.Primary.IP != c.Opts.PostgresPrimaryIP {
 				log.Printf("Updating PostgreSQL primary IP: %s -> %s\n", config.Postgres.Primary.IP, c.Opts.PostgresPrimaryIP)
 				config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
-			if c.Opts.PostgresPrimaryHostname != "" && config.Postgres.Primary.Hostname != c.Opts.PostgresPrimaryHostname {
-				log.Printf("Updating PostgreSQL primary hostname: %s -> %s\n", config.Postgres.Primary.Hostname, c.Opts.PostgresPrimaryHostname)
-				config.Postgres.Primary.Hostname = c.Opts.PostgresPrimaryHostname
+			if primaryHostname != "" && config.Postgres.Primary.Hostname != primaryHostname {
+				log.Printf("Updating PostgreSQL primary hostname: %s -> %s\n", config.Postgres.Primary.Hostname, primaryHostname)
+				config.Postgres.Primary.Hostname = primaryHostname
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
 		}
@@ -229,9 +242,9 @@ func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, 
 		}
 	}
 
-	if c.Opts.PostgresServerAddress != "" && config.Postgres.ServerAddress != c.Opts.PostgresServerAddress {
-		log.Printf("Updating PostgreSQL server address: %s -> %s\n", config.Postgres.ServerAddress, c.Opts.PostgresServerAddress)
-		config.Postgres.ServerAddress = c.Opts.PostgresServerAddress
+	if serverAddress != "" && config.Postgres.ServerAddress != serverAddress {
+		log.Printf("Updating PostgreSQL server address: %s -> %s\n", config.Postgres.ServerAddress, serverAddress)
+		config.Postgres.ServerAddress = serverAddress
 	}
 }
 
@@ -445,8 +458,7 @@ func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTr
 		}
 	}
 
-	log.Println("\nIMPORTANT: The vault file has been updated with new secrets.")
-	log.Println("   Remember to re-encrypt it with SOPS before storing.")
+	log.Println("\nThe vault file has been updated and re-encrypted with SOPS.")
 	log.Println()
 }
 

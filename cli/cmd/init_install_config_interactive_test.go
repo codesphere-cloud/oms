@@ -146,7 +146,7 @@ var _ = Describe("Interactive profile usage", func() {
 			mockIcg.EXPECT().ValidateInstallConfig().Return([]string{"configuration validation failed"})
 			mockIcg.EXPECT().GenerateSecrets().Return(nil)
 			mockIcg.EXPECT().WriteInstallConfig("config.yaml", false).Return(nil)
-			mockIcg.EXPECT().WriteVault("vault.yaml", false).Return(nil)
+			mockIcg.EXPECT().WriteUnencryptedVault("vault.yaml", false).Return(nil)
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{

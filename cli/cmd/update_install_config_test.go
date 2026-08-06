@@ -226,7 +226,7 @@ codesphere:
 	Context("when updating PostgreSQL configuration", func() {
 		It("should update primary IP and hostname, and regenerate certificates", func() {
 			opts.PostgresPrimaryIP = "10.10.0.4"
-			opts.PostgresPrimaryHostname = "new-postgres-primary"
+			opts.PostgresServer = "new-postgres-primary"
 
 			icg := installer.NewInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
@@ -237,6 +237,13 @@ codesphere:
 			Expect(config.Postgres.Primary.Hostname).To(Equal("new-postgres-primary"))
 			Expect(icg.GetVault().GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
 			Expect(config.Postgres.Primary.SSLConfig.ServerCertPem).NotTo(BeEmpty())
+
+			encrypted, err := vault.IsSOPSEncryptedFile(vaultFile.Name())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(encrypted).To(BeTrue())
+			updatedVault, err := vault.LoadVaultData(vaultFile.Name(), "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedVault.GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
 		})
 
 		It("should update replica IP and name, and regenerate certificates", func() {
@@ -393,10 +400,7 @@ codesphere:
 			err = cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedVaultContent, err := os.ReadFile(vaultFile.Name())
-			Expect(err).NotTo(HaveOccurred())
-			updatedVault := &files.InstallVault{}
-			err = updatedVault.Unmarshal(updatedVaultContent)
+			updatedVault, err := vault.LoadVaultData(vaultFile.Name(), "")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify all initial secrets are still present with the same values
@@ -427,10 +431,7 @@ codesphere:
 			err = cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedVaultContent, err := os.ReadFile(vaultFile.Name())
-			Expect(err).NotTo(HaveOccurred())
-			updatedVault := &files.InstallVault{}
-			err = updatedVault.Unmarshal(updatedVaultContent)
+			updatedVault, err := vault.LoadVaultData(vaultFile.Name(), "")
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify all initial secrets are still present with the same values

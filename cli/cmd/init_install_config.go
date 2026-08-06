@@ -163,7 +163,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 
 	// Postgres
 	c.cmd.Flags().StringVar(&c.Opts.PostgresMode, "postgres-mode", "", "PostgreSQL setup mode (install/external)")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server hostname for install mode or address for external mode")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server: primary hostname in install mode, connection address in external mode")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
 
 	// K8s
@@ -246,7 +246,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+	if err := icg.WriteUnencryptedVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
@@ -355,12 +355,14 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		config.Postgres.Mode = c.Opts.PostgresMode
 	}
 
-	postgresPrimaryHostname := determinePostgresPrimaryHostname(config.Postgres.Mode, c.Opts)
+	postgresPrimaryHostname, postgresServerAddress := determinePostgresServerConfig(
+		config.Postgres.Mode,
+		c.Opts.PostgresServerAddress,
+		c.Opts.PostgresPrimaryHostname,
+		config.Postgres.ServerAddress,
+	)
 	if c.Opts.PostgresServerAddress != "" {
-		config.Postgres.ServerAddress = c.Opts.PostgresServerAddress
-	}
-	if c.Opts.PostgresServerAddress != "" && config.Postgres.Mode == "install" {
-		config.Postgres.ServerAddress = ""
+		config.Postgres.ServerAddress = postgresServerAddress
 	}
 
 	if postgresPrimaryHostname != "" || c.Opts.PostgresPrimaryIP != "" {
@@ -570,14 +572,12 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	return config
 }
 
-func determinePostgresPrimaryHostname(postgresMode string, opts *InitInstallConfigOpts) string {
-	if postgresMode != "install" {
-		return opts.PostgresPrimaryHostname
+func determinePostgresServerConfig(postgresMode, postgresServer, primaryHostname, serverAddress string) (string, string) {
+	if postgresServer == "" {
+		return primaryHostname, serverAddress
 	}
-
-	if opts.PostgresServerAddress == "" {
-		return opts.PostgresPrimaryHostname
+	if postgresMode == "install" {
+		return postgresServer, ""
 	}
-
-	return opts.PostgresServerAddress
+	return primaryHostname, postgresServer
 }

@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.18.0
+Version: v1.19.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.18.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.19.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -1157,9 +1157,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260803155441-45c3e3a204a9
+Version: v0.0.0-20260805221411-f5e09c32ef20
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/45c3e3a204a9/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/f5e09c32ef20/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1511,9 +1511,9 @@ License URL: https://github.com/grpc/grpc-go/blob/v1.83.0/LICENSE
  
 ----------
 Module: google.golang.org/protobuf
-Version: v1.36.12-0.20260120151049-f2248ac996af
+Version: v1.36.12-0.20260806062936-644d0267c26e
 License: BSD-3-Clause
-License URL: https://github.com/protocolbuffers/protobuf-go/blob/f2248ac996af/LICENSE
+License URL: https://github.com/protocolbuffers/protobuf-go/blob/644d0267c26e/LICENSE
  
 ----------
 Module: gopkg.in/evanphx/json-patch.v4

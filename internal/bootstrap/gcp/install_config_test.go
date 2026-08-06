@@ -324,7 +324,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+				icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -372,7 +372,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+				icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -388,7 +388,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("uses those internal flags instead of defaults", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -405,7 +405,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("uses those preview flags instead of defaults", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -422,7 +422,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("uses those feature flags", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -439,7 +439,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("writes the email to the install config", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -456,7 +456,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("keeps the value of an existing config", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -473,7 +473,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("skips setting GitHub OAuth configuration", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -492,7 +492,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets GitLab OAuth configuration", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -516,7 +516,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("skips setting GitLab OAuth configuration", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -534,7 +534,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets Bitbucket OAuth configuration", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -558,7 +558,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("skips setting Bitbucket OAuth configuration", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -576,7 +576,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets Azure DevOps OAuth configuration", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -601,7 +601,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("skips setting Azure DevOps OAuth configuration", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -621,7 +621,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets OIDC OAuth configuration", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -648,7 +648,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("defaults OIDC provider name to OIDC", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -662,7 +662,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("skips setting OIDC OAuth configuration", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -680,7 +680,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets CentralOtel credentials in install config with Enabled true", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -696,7 +696,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("stores CentralOtel username and password in the vault", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -718,7 +718,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("skips setting CentralOtel credentials", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -736,7 +736,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("skips setting CentralOtel credentials", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -750,7 +750,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("leaves Monitoring.CentralOtel nil", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -768,7 +768,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-eab-key-id", "fake-eab-mac-key", nil)
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -800,7 +800,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("uses the Let's Encrypt staging directory", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -820,7 +820,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets OpenBao config in install config", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -842,7 +842,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets Grafana Alloy Loki config", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -858,7 +858,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("stores External Loki credentials in the vault", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -877,7 +877,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets Grafana Alloy Loki config without a password secret", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
@@ -900,7 +900,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets Prometheus remote write config", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -920,7 +920,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("leaves Prometheus remote write nil", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -939,7 +939,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets TelemetryExport with RemoteExport true", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -962,7 +962,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets TelemetryExport with Traces true and RemoteExport false", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -987,7 +987,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("sets TelemetryExport with both RemoteExport and Traces true", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -1006,7 +1006,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				It("leaves TelemetryExport nil", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -1035,10 +1035,10 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err.Error()).To(ContainSubstring("failed to write config file"))
 			})
 
-			It("fails when WriteVault fails", func() {
+			It("fails when WriteUnencryptedVault fails", func() {
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-				icg.EXPECT().WriteVault("fake-secret", true).Return(fmt.Errorf("vault write error"))
+				icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(fmt.Errorf("vault write error"))
 
 				err := bs.UpdateInstallConfig()
 				Expect(err).To(HaveOccurred())
@@ -1048,7 +1048,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			It("fails when CopyFile config fails", func() {
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+				icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(fmt.Errorf("copy error")).Once()
 
@@ -1060,7 +1060,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			It("fails when CopyFile secrets fails", func() {
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+				icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-config-file", mock.Anything).Return(nil).Once()
 				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-secret", mock.Anything).Return(fmt.Errorf("copy error")).Once()
@@ -1097,7 +1097,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					origCert := csEnv.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem
 
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -1129,7 +1129,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					origKey := vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem).File.Content
 
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()
@@ -1163,7 +1163,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				It("generates new cert/key pair", func() {
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
-					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
 					err := bs.UpdateInstallConfig()

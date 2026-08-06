@@ -32,7 +32,7 @@ require (
 	filippo.io/age v1.3.1
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.18.0
+	github.com/codesphere-cloud/cs-go v1.19.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/getsops/sops/v3 v3.13.3
 	github.com/jedib0t/go-pretty/v6 v6.8.3
@@ -49,7 +49,7 @@ require (
 	golang.org/x/term v0.45.0
 	google.golang.org/api v0.292.0
 	google.golang.org/grpc v1.83.0
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
+	google.golang.org/protobuf v1.36.12-0.20260806062936-644d0267c26e
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.2.3
 	k8s.io/api v0.36.3
@@ -64,7 +64,7 @@ require (
 	github.com/argoproj/argo-cd/v3 v3.5.0
 	github.com/google/go-github/v74 v74.0.0
 	github.com/lib/pq v1.12.3
-	github.com/rook/rook/pkg/apis v0.0.0-20260803155441-45c3e3a204a9
+	github.com/rook/rook/pkg/apis v0.0.0-20260805221411-f5e09c32ef20
 )
 
 require (
