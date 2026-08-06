@@ -1,0 +1,11 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# This is the default setting for golangci-lint.
+# In OMS we are providing a new config with more linters enabled. 
+# This default settings is a temporary workaround to not change all findings at once but only on changed code.
+
+version: "2"
+
+linters:
+  default: standard
