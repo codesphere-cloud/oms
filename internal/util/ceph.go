@@ -1,6 +1,8 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package util provides several utilities that are used in other packages and tests.
+// This file provides ceph related utility functions.
 package util
 
 import (
@@ -21,7 +23,9 @@ import (
 //	["a=10.0.0.1:6789", "b=[v2:10.0.0.2:3300/0,v1:10.0.0.2:6789/0]"]
 func SplitMonitorEndpointEntries(rawEndpoints string) []string {
 	entries := []string{}
+
 	var current strings.Builder
+
 	bracketDepth := 0
 
 	for _, r := range rawEndpoints {
@@ -36,6 +40,7 @@ func SplitMonitorEndpointEntries(rawEndpoints string) []string {
 			if bracketDepth == 0 {
 				entries = append(entries, current.String())
 				current.Reset()
+
 				continue
 			}
 		}
@@ -76,11 +81,13 @@ func ParseMonitorEndpointHost(endpoint string) (string, error) {
 				return host, nil
 			}
 		}
+
 		return "", fmt.Errorf("no valid monitor host found in %q", endpoint)
 	}
 
 	endpoint = strings.TrimPrefix(endpoint, "v1:")
 	endpoint = strings.TrimPrefix(endpoint, "v2:")
+
 	if slash := strings.Index(endpoint, "/"); slash >= 0 {
 		endpoint = endpoint[:slash]
 	}

@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package version provides functions about the OMS version
+// Package version provides build informations about the OMS version.
 package version
 
 // Variables are injected by goreleaser on release
