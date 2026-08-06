@@ -31,3 +31,7 @@ issues:
   # Set to 0 to disable.
   # Default: 50
   max-issues-per-linter: 0
+
+  # Show issues in any part of update files (requires new-from-rev or new-from-patch).
+  # Default: false
+  whole-files: true
