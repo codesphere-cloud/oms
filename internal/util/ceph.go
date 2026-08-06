@@ -100,6 +100,9 @@ func ParseMonitorEndpointHost(endpoint string) (string, error) {
 		if port == "" {
 			return host, nil
 		}
+		if port == "" {
+			return host, nil
+		}
 		return net.JoinHostPort(host, port), nil
 	}
 
