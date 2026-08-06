@@ -23,8 +23,9 @@ var _ = Describe("Generated install config round-trip", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// A freshly generated config must already pass validation without warnings.
-			Expect(manager.ValidateInstallConfig()).To(BeEmpty(),
-				"profile %s produced an invalid config: %v", profile, manager.ValidateInstallConfig())
+			validationWarnings := manager.ValidateInstallConfig()
+			Expect(validationWarnings).To(BeEmpty(),
+				"profile %s produced an invalid config: %v", profile, validationWarnings)
 
 			// Secrets generation must succeed (pure Go crypto, no external tools).
 			Expect(manager.GenerateSecrets()).To(Succeed())
@@ -56,8 +57,9 @@ var _ = Describe("Generated install config round-trip", func() {
 			// and re-validate: round-trip must be lossless and valid.
 			reloaded := installer.NewInstallConfigManager()
 			Expect(reloaded.LoadInstallConfigFromFile(configPath)).To(Succeed())
-			Expect(reloaded.ValidateInstallConfig()).To(BeEmpty(),
-				"reloaded config for profile %s is invalid: %v", profile, reloaded.ValidateInstallConfig())
+			reloadedWarnings := reloaded.ValidateInstallConfig()
+			Expect(reloadedWarnings).To(BeEmpty(),
+				"reloaded config for profile %s is invalid: %v", profile, reloadedWarnings)
 
 			// Reload the (unencrypted) vault and validate all required secrets exist.
 			Expect(reloaded.LoadVaultFromUnecryptedFile(vaultPath)).To(Succeed())

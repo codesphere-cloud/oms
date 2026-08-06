@@ -207,6 +207,33 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(prodManager.GetInstallConfig().Cluster.Monitoring.GrafanaAlloy.Enabled).To(BeTrue())
 				Expect(prodManager.GetInstallConfig().Codesphere.Override).To(BeNil())
 			})
+
+			It("should have the expected default workspace plans", func() {
+				devManager := installer.NewInstallConfigManager()
+				prodManager := installer.NewInstallConfigManager()
+				minimalManager := installer.NewInstallConfigManager()
+
+				err := devManager.ApplyProfile(installer.PROFILE_DEV)
+				Expect(err).ToNot(HaveOccurred())
+				err = prodManager.ApplyProfile(installer.PROFILE_PROD)
+				Expect(err).ToNot(HaveOccurred())
+				err = minimalManager.ApplyProfile(installer.PROFILE_MINIMAL)
+				Expect(err).ToNot(HaveOccurred())
+
+				plan := func(mgr installer.InstallConfigManager) files.WorkspacePlan {
+					return mgr.GetInstallConfig().Codesphere.Plans.WorkspacePlans[1]
+				}
+
+				// Dev inherits the common default.
+				Expect(plan(devManager).Name).To(Equal("Standard"))
+				Expect(plan(devManager).MaxReplicas).To(Equal(3))
+
+				// Minimal and production override the name and replicas.
+				Expect(plan(minimalManager).Name).To(Equal("Standard Developer"))
+				Expect(plan(minimalManager).MaxReplicas).To(Equal(1))
+				Expect(plan(prodManager).Name).To(Equal("Standard Developer"))
+				Expect(plan(prodManager).MaxReplicas).To(Equal(3))
+			})
 		})
 	})
 
