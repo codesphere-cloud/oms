@@ -669,7 +669,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
+	if err := b.icg.WriteUnencryptedVault(b.Env.SecretsFilePath, true); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 	if err := vault.EncryptFileWithSOPS(b.Env.SecretsFilePath, filepath.Join(b.Env.InstallConfig.Secrets.BaseDir, "prod.vault.yaml"), b.ageRecipient); err != nil {

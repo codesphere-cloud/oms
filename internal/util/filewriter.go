@@ -22,6 +22,8 @@ type FileIO interface {
 	ReadDir(dirname string) ([]os.DirEntry, error)
 	ReadFile(filename string) ([]byte, error)
 	CreateAndWrite(filePath string, data []byte, fileType string) error
+	CreateTemp(dir, pattern string) (string, error)
+	Rename(oldPath, newPath string) error
 	Remove(path string) error
 	Chmod(name string, mode os.FileMode) error
 }
@@ -49,6 +51,23 @@ func (fs *FilesystemWriter) CreateAndWrite(filePath string, data []byte, fileTyp
 
 	log.Printf("\n%s file created: %s", fileType, filePath)
 	return nil
+}
+
+func (fs *FilesystemWriter) CreateTemp(dir, pattern string) (string, error) {
+	file, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return "", err
+	}
+	path := file.Name()
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", err
+	}
+	return path, nil
+}
+
+func (fs *FilesystemWriter) Rename(oldPath, newPath string) error {
+	return os.Rename(oldPath, newPath)
 }
 
 func (fs *FilesystemWriter) Open(filename string) (*os.File, error) {

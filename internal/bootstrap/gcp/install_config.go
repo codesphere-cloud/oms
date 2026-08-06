@@ -414,7 +414,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
+	if err := b.icg.WriteUnencryptedVault(b.Env.SecretsFilePath, true); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 

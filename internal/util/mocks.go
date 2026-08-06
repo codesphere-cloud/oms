@@ -219,6 +219,72 @@ func (_c *MockFileIO_CreateAndWrite_Call) RunAndReturn(run func(filePath string,
 	return _c
 }
 
+// CreateTemp provides a mock function for the type MockFileIO
+func (_mock *MockFileIO) CreateTemp(dir string, pattern string) (string, error) {
+	ret := _mock.Called(dir, pattern)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateTemp")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (string, error)); ok {
+		return returnFunc(dir, pattern)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) string); ok {
+		r0 = returnFunc(dir, pattern)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(dir, pattern)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockFileIO_CreateTemp_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateTemp'
+type MockFileIO_CreateTemp_Call struct {
+	*mock.Call
+}
+
+// CreateTemp is a helper method to define mock.On call
+//   - dir string
+//   - pattern string
+func (_e *MockFileIO_Expecter) CreateTemp(dir any, pattern any) *MockFileIO_CreateTemp_Call {
+	return &MockFileIO_CreateTemp_Call{Call: _e.mock.On("CreateTemp", dir, pattern)}
+}
+
+func (_c *MockFileIO_CreateTemp_Call) Run(run func(dir string, pattern string)) *MockFileIO_CreateTemp_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockFileIO_CreateTemp_Call) Return(s string, err error) *MockFileIO_CreateTemp_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockFileIO_CreateTemp_Call) RunAndReturn(run func(dir string, pattern string) (string, error)) *MockFileIO_CreateTemp_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Exists provides a mock function for the type MockFileIO
 func (_mock *MockFileIO) Exists(filename string) bool {
 	ret := _mock.Called(filename)
@@ -756,6 +822,63 @@ func (_c *MockFileIO_Remove_Call) Return(err error) *MockFileIO_Remove_Call {
 }
 
 func (_c *MockFileIO_Remove_Call) RunAndReturn(run func(path string) error) *MockFileIO_Remove_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Rename provides a mock function for the type MockFileIO
+func (_mock *MockFileIO) Rename(oldPath string, newPath string) error {
+	ret := _mock.Called(oldPath, newPath)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Rename")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(oldPath, newPath)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockFileIO_Rename_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Rename'
+type MockFileIO_Rename_Call struct {
+	*mock.Call
+}
+
+// Rename is a helper method to define mock.On call
+//   - oldPath string
+//   - newPath string
+func (_e *MockFileIO_Expecter) Rename(oldPath any, newPath any) *MockFileIO_Rename_Call {
+	return &MockFileIO_Rename_Call{Call: _e.mock.On("Rename", oldPath, newPath)}
+}
+
+func (_c *MockFileIO_Rename_Call) Run(run func(oldPath string, newPath string)) *MockFileIO_Rename_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockFileIO_Rename_Call) Return(err error) *MockFileIO_Rename_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockFileIO_Rename_Call) RunAndReturn(run func(oldPath string, newPath string) error) *MockFileIO_Rename_Call {
 	_c.Call.Return(run)
 	return _c
 }

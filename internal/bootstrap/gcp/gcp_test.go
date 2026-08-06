@@ -235,7 +235,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 			nodeClient.EXPECT().CopyFile(mock.Anything, "fake-config-file", "/etc/codesphere/config.yaml").Return(nil)
 			nodeClient.EXPECT().CopyFile(mock.Anything, "fake-secret", "/etc/codesphere/secrets/prod.vault.yaml").Return(nil)
-			icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+			icg.EXPECT().WriteUnencryptedVault("fake-secret", true).Return(nil)
 
 			// Enable Root Login
 			nodeClient.EXPECT().WaitReady(mock.Anything, mock.Anything).Return(nil).Return(nil)
