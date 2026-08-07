@@ -29,29 +29,37 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureAuthKeys(vault); err != nil {
 		return fmt.Errorf("ensure auth keys: %w", err)
 	}
+
 	if err := EnsureIngressCA(vault, &config.Cluster); err != nil {
 		return fmt.Errorf("ensure ingress CA: %w", err)
 	}
+
 	if err := EnsureCephSSHKeys(vault, &config.Ceph); err != nil {
 		return fmt.Errorf("ensure ceph SSH keys: %w", err)
 	}
+
 	if err := EnsureSshWorkspaceProxyHostKey(vault); err != nil {
 		return fmt.Errorf("ensure ssh workspace proxy host key: %w", err)
 	}
+
 	if config.Postgres.Primary != nil {
 		if err := EnsurePostgresSecrets(vault, &config.Postgres); err != nil {
 			return fmt.Errorf("ensure postgres secrets: %w", err)
 		}
 	}
+
 	if err := EnsurePostgresUsers(vault); err != nil {
 		return fmt.Errorf("ensure postgres users: %w", err)
 	}
+
 	if err := EnsureMounterHmacSecret(vault); err != nil {
 		return fmt.Errorf("ensure hmac secret: %w", err)
 	}
+
 	if err := EnsureDefaultSecrets(vault); err != nil {
 		return fmt.Errorf("ensure default secrets: %w", err)
 	}
+
 	return nil
 }
 
@@ -109,15 +117,18 @@ func EnsureServiceAccountTokens(vault *files.InstallVault) error {
 			"exp":                  expiresAt.Unix(),
 			"iat":                  time.Now().Unix(),
 		}
+
 		token, err := jwt.NewWithClaims(jwt.SigningMethodRS512, claims).SignedString(rsaKey)
 		if err != nil {
 			return fmt.Errorf("sign token for %s: %w", su.tokenName, err)
 		}
+
 		vault.SetSecret(files.SecretEntry{
 			Name:   su.tokenName,
 			Fields: &files.SecretFields{Password: token},
 		})
 	}
+
 	return nil
 }
 
@@ -129,6 +140,7 @@ func EnsureAuthKeys(vault *files.InstallVault) error {
 		if err != nil {
 			return fmt.Errorf("generate token key pair: %w", err)
 		}
+
 		vault.SetSecret(files.SecretEntry{Name: files.SecretTokenPrivateKey, File: &files.SecretFile{Name: "key.pem", Content: tokenPriv}})
 		vault.SetSecret(files.SecretEntry{Name: files.SecretTokenPublicKey, File: &files.SecretFile{Name: "key.pub", Content: tokenPub}})
 	}
@@ -138,6 +150,7 @@ func EnsureAuthKeys(vault *files.InstallVault) error {
 		if err != nil {
 			return fmt.Errorf("generate domain auth key pair: %w", err)
 		}
+
 		vault.SetSecret(files.SecretEntry{Name: files.SecretDomainAuthPrivateKey, File: &files.SecretFile{Name: "key.pem", Content: domainPriv}})
 		vault.SetSecret(files.SecretEntry{Name: files.SecretDomainAuthPublicKey, File: &files.SecretFile{Name: "key.pub", Content: domainPub}})
 	}
@@ -158,6 +171,7 @@ func EnsureMounterHmacSecret(vault *files.InstallVault) error {
 			Name:   files.SecretMounterHmacSecret,
 			Fields: &files.SecretFields{Password: old.Fields.Password},
 		})
+
 		return nil
 	}
 
@@ -165,10 +179,12 @@ func EnsureMounterHmacSecret(vault *files.InstallVault) error {
 	if _, err := rand.Read(b); err != nil {
 		return fmt.Errorf("read random bytes: %w", err)
 	}
+
 	vault.SetSecret(files.SecretEntry{
 		Name:   files.SecretMounterHmacSecret,
 		Fields: &files.SecretFields{Password: hex.EncodeToString(b)},
 	})
+
 	return nil
 }
 
@@ -183,6 +199,7 @@ func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
 	if err != nil {
 		return fmt.Errorf("generate ed25519 key pair: %w", err)
 	}
+
 	vault.SetSecret(files.SecretEntry{
 		Name:   files.SecretPrivNixSigningKey,
 		Fields: &files.SecretFields{Password: fmt.Sprintf("%s:%s", host, hex.EncodeToString(priv.Seed()))},
@@ -191,6 +208,7 @@ func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
 		Name:   files.SecretPubNixSigningKey,
 		Fields: &files.SecretFields{Password: fmt.Sprintf("%s:%s", host, hex.EncodeToString(pub))},
 	})
+
 	return nil
 }
 
@@ -211,6 +229,7 @@ func EnsureDefaultSecrets(vault *files.InstallVault) error {
 		if _, err := rand.Read(b); err != nil {
 			return fmt.Errorf("generate mongodb encryption key: %w", err)
 		}
+
 		setPassword(vault, files.SecretMongoDbPasswordEncryptionKey, base64.StdEncoding.EncodeToString([]byte(hex.EncodeToString(b))))
 	}
 
@@ -276,6 +295,7 @@ func setPasswordIfAbsent(vault *files.InstallVault, name, password string) {
 	if vault.GetSecret(name) != nil {
 		return
 	}
+
 	setPassword(vault, name, password)
 }
 
@@ -284,16 +304,21 @@ func generateRSAPKCS8KeyPair(bits int) (privatePEM, publicPEM string, err error)
 	if err != nil {
 		return "", "", err
 	}
+
 	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(key)
 	if err != nil {
 		return "", "", err
 	}
+
 	privatePEM = string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes}))
+
 	spkiBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
 	if err != nil {
 		return "", "", err
 	}
+
 	publicPEM = string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: spkiBytes}))
+
 	return privatePEM, publicPEM, nil
 }
 
@@ -303,15 +328,19 @@ func EnsureIngressCA(vault *files.InstallVault, cluster *files.ClusterConfig) er
 	if vault.GetSecret(files.SecretSelfSignedCaKeyPem) != nil {
 		return nil
 	}
+
 	keyPEM, certPEM, err := GenerateCA("Cluster Ingress CA", "DE", "Karlsruhe", "Codesphere")
 	if err != nil {
 		return fmt.Errorf("generate ingress CA: %w", err)
 	}
+
 	vault.SetSecret(files.SecretEntry{
 		Name: files.SecretSelfSignedCaKeyPem,
 		File: &files.SecretFile{Name: "key.pem", Content: keyPEM},
 	})
+
 	cluster.Certificates.CA.CertPem = certPEM
+
 	return nil
 }
 
@@ -321,15 +350,19 @@ func EnsureCephSSHKeys(vault *files.InstallVault, ceph *files.CephConfig) error 
 	if vault.GetSecret(files.SecretCephSshPrivateKey) != nil {
 		return nil
 	}
+
 	privKey, pubKey, err := GenerateSSHKeyPair()
 	if err != nil {
 		return fmt.Errorf("generate ceph SSH keys: %w", err)
 	}
+
 	vault.SetSecret(files.SecretEntry{
 		Name: files.SecretCephSshPrivateKey,
 		File: &files.SecretFile{Name: "id_rsa", Content: privKey},
 	})
+
 	ceph.CephAdmSSHKey.PublicKey = pubKey
+
 	return nil
 }
 
@@ -340,14 +373,17 @@ func EnsureSshWorkspaceProxyHostKey(vault *files.InstallVault) error {
 	if vault.GetSecret(files.SecretSshWorkspaceProxyHostKey) != nil {
 		return nil
 	}
+
 	privKey, _, err := GenerateSSHKeyPair()
 	if err != nil {
 		return fmt.Errorf("generate ssh workspace proxy host key: %w", err)
 	}
+
 	vault.SetSecret(files.SecretEntry{
 		Name: files.SecretSshWorkspaceProxyHostKey,
 		File: &files.SecretFile{Name: "key.pem", Content: privKey},
 	})
+
 	return nil
 }
 
@@ -372,6 +408,7 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 	if err != nil {
 		return fmt.Errorf("generate postgres primary cert: %w", err)
 	}
+
 	if err := ValidateCertKeyPair(primaryCertPEM, primaryKeyPEM); err != nil {
 		return fmt.Errorf("validate postgres primary cert/key: %w", err)
 	}
@@ -380,10 +417,12 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 	if err != nil {
 		return fmt.Errorf("generate postgres admin password: %w", err)
 	}
+
 	replicaPwd, err := GeneratePassword(32)
 	if err != nil {
 		return fmt.Errorf("generate postgres replica password: %w", err)
 	}
+
 	vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresCaKeyPem, File: &files.SecretFile{Name: "ca.key", Content: caKeyPEM}})
 	vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPassword, Fields: &files.SecretFields{Password: adminPwd}})
 	vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaPassword, Fields: &files.SecretFields{Password: replicaPwd}})
@@ -401,10 +440,13 @@ func EnsurePostgresSecrets(vault *files.InstallVault, postgres *files.PostgresCo
 		if err != nil {
 			return fmt.Errorf("generate postgres replica cert: %w", err)
 		}
+
 		if err := ValidateCertKeyPair(replicaCertPEM, replicaKeyPEM); err != nil {
 			return fmt.Errorf("validate postgres replica cert/key: %w", err)
 		}
+
 		vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaServerKeyPem, File: &files.SecretFile{Name: "replica.key", Content: replicaKeyPEM}})
+
 		postgres.Replica.SSLConfig.ServerCertPem = replicaCertPEM
 	} else {
 		// Still set a dummy value to satisfy the private cloud installer
@@ -420,8 +462,10 @@ func EnsurePostgresUsers(vault *files.InstallVault) error {
 		if err != nil {
 			return fmt.Errorf("generate postgres password for %s: %w", svc.Name, err)
 		}
+
 		setPasswordIfAbsent(vault, fmt.Sprintf("postgresUser%s", files.Capitalize(svc.Name)), svc.DBUsername())
 		setPasswordIfAbsent(vault, fmt.Sprintf("postgresPassword%s", files.Capitalize(svc.Name)), svcPwd)
 	}
+
 	return nil
 }

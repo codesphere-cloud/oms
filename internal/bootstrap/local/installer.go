@@ -44,6 +44,7 @@ func (b *LocalBootstrapper) DownloadInstallerPackage() (string, error) {
 	if version == "" {
 		return "", fmt.Errorf("install version is required to download from the portal")
 	}
+
 	if hash == "" {
 		return "", fmt.Errorf("install hash must be set when install version is set")
 	}
@@ -56,6 +57,7 @@ func (b *LocalBootstrapper) DownloadInstallerPackage() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get build from portal: %w", err)
 	}
+
 	fullFilename := build.BuildPackageFilename(installerArtifactFilename)
 	destPath := filepath.Join(b.Env.InstallDir, fullFilename)
 
@@ -80,6 +82,7 @@ func (b *LocalBootstrapper) DownloadInstallerPackage() (string, error) {
 	defer util.CloseFileIgnoreError(out)
 
 	fileSize := 0
+
 	fileInfo, err := out.Stat()
 	if err == nil {
 		fileSize = int(fileInfo.Size())
@@ -119,6 +122,7 @@ func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
 		if err != nil {
 			return "", err
 		}
+
 		bundlePath = downloaded
 
 	case b.Env.InstallLocal != "":
@@ -145,6 +149,7 @@ func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
 	}
 
 	destDir := strings.TrimSuffix(strings.TrimSuffix(bundlePath, ".gz"), ".tar")
+
 	destDir = strings.TrimSuffix(destDir, ".tgz")
 	if destDir == bundlePath {
 		destDir = bundlePath + "-unpacked"
@@ -156,6 +161,7 @@ func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
 	}
 
 	log.Printf("Extracting installer bundle %s → %s", bundlePath, destDir)
+
 	if err := util.ExtractTarGz(b.fw, bundlePath, destDir); err != nil {
 		return "", fmt.Errorf("failed to extract installer bundle: %w", err)
 	}
@@ -239,11 +245,13 @@ func symlinkBinary(name, target string) error {
 	}
 
 	log.Printf("Symlinked %s → %s", target, localPath)
+
 	return nil
 }
 
 func (b *LocalBootstrapper) createTemporaryPostgresNodePortEndpoint() (string, int32, func(), error) {
 	masterdataSvc := &corev1.Service{}
+
 	masterdataSvcKey := types.NamespacedName{Name: "masterdata-rw", Namespace: codesphereNamespace}
 	if err := b.kubeClient.Get(b.ctx, masterdataSvcKey, masterdataSvc); err != nil {
 		return "", 0, nil, fmt.Errorf("failed to get PostgreSQL service %s/%s: %w", codesphereNamespace, "masterdata-rw", err)
@@ -320,9 +328,11 @@ func getPostgresServicePort(svc *corev1.Service) (corev1.ServicePort, error) {
 			if port.TargetPort.Type == intstr.Int && port.TargetPort.IntValue() == 0 {
 				port.TargetPort = intstr.FromInt(5432)
 			}
+
 			if port.TargetPort.Type == intstr.String && port.TargetPort.String() == "" {
 				port.TargetPort = intstr.FromInt(5432)
 			}
+
 			return port, nil
 		}
 	}
@@ -335,6 +345,7 @@ func getPostgresServicePort(svc *corev1.Service) (corev1.ServicePort, error) {
 	if port.TargetPort.Type == intstr.Int && port.TargetPort.IntValue() == 0 {
 		port.TargetPort = intstr.FromInt(int(port.Port))
 	}
+
 	if port.TargetPort.Type == intstr.String && port.TargetPort.String() == "" {
 		port.TargetPort = intstr.FromInt(int(port.Port))
 	}
@@ -358,6 +369,7 @@ func (b *LocalBootstrapper) resolveNodeIPForNodePort() (string, error) {
 				return addr.Address, nil
 			}
 		}
+
 		for _, addr := range node.Status.Addresses {
 			if addr.Type == corev1.NodeExternalIP && addr.Address != "" {
 				return addr.Address, nil
@@ -389,6 +401,7 @@ func (b *LocalBootstrapper) configurePostgresForMigration(host string, port int3
 		if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
 			return fmt.Errorf("failed to restore install config after installer run: %w", err)
 		}
+
 		return nil
 	}, nil
 }
@@ -423,6 +436,7 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 		log.Printf("deps directory already exists at %s, skipping extraction", depsDir)
 	} else {
 		log.Printf("Extracting deps.tar.gz → %s", depsDir)
+
 		if err := util.ExtractTarGz(b.fw, archivePath, depsDir); err != nil {
 			return fmt.Errorf("failed to extract deps.tar.gz: %w", err)
 		}
@@ -432,11 +446,13 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 		if b.argoCDAndAppsInstall == nil {
 			return fmt.Errorf("ArgoCD and apps installer is not initialized")
 		}
+
 		if err := b.stlog.Substep("Sync vault secret", func() error {
 			return b.argoCDAndAppsInstall.SyncVaultSecret(b.ctx)
 		}); err != nil {
 			return err
 		}
+
 		if err := b.stlog.Substep("Register pc-apps app-of-apps", func() error {
 			return b.argoCDAndAppsInstall.InstallPCApps(b.ctx, filepath.Join(depsDir, "bom.json"))
 		}); err != nil {
@@ -469,6 +485,7 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 	if privKeyPath == "" {
 		return fmt.Errorf("age key path is not set; cannot pass private key to installer")
 	}
+
 	privKeyPath, err = filepath.Abs(privKeyPath)
 	if err != nil {
 		return fmt.Errorf("failed to resolve absolute key path: %w", err)
@@ -518,5 +535,6 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 	}
 
 	log.Println("Codesphere installer finished successfully.")
+
 	return nil
 }

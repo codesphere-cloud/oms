@@ -26,6 +26,7 @@ var _ = Describe("ConfigYaml", func() {
 		rootConfig = files.NewRootConfig()
 
 		var err error
+
 		tempDir, err = os.MkdirTemp("", "config_yaml_test")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -369,7 +370,9 @@ cluster:
               api-token: fake-api-token
             name: acme-solver
 `
+
 			var parsed files.RootConfig
+
 			err := parsed.Unmarshal([]byte(acmeYaml))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -384,7 +387,6 @@ cluster:
 			Expect(parsed.Codesphere.CertIssuer.Acme.Solver.DNS01).NotTo(BeNil())
 			Expect(parsed.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider).To(Equal("cloudflare"))
 		})
-
 	})
 
 	Describe("OpenFGA backup config structure", func() {

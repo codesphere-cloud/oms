@@ -63,9 +63,11 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 	if version == "" {
 		return nil, errors.New("version is required")
 	}
+
 	if namespace == "" {
 		return nil, errors.New("namespace is required")
 	}
+
 	if err := checkArgoCDScheme(c); err != nil {
 		return nil, err
 	}
@@ -111,12 +113,14 @@ func checkArgoCDScheme(c client.Client) error {
 	if c == nil || c.Scheme() == nil {
 		return errors.New("kubernetes client is required")
 	}
+
 	if !c.Scheme().Recognizes(argov1alpha1.ApplicationSchemaGroupVersionKind) {
 		return fmt.Errorf(
 			"kubernetes client scheme does not recognize %s; register it with argov1alpha1.AddToScheme",
 			argov1alpha1.ApplicationSchemaGroupVersionKind,
 		)
 	}
+
 	return nil
 }
 
@@ -126,6 +130,7 @@ func checkArgoCDScheme(c client.Client) error {
 // credentials to the repository.
 func (p *PCApps) resolveRepoURL(ctx context.Context) (string, error) {
 	secret := &corev1.Secret{}
+
 	key := client.ObjectKey{Name: ociCredentialSecretName, Namespace: ociCredentialNamespace}
 	if err := p.client.Get(ctx, key, secret); err != nil {
 		return "", fmt.Errorf(
@@ -144,6 +149,7 @@ func (p *PCApps) resolveRepoURL(ctx context.Context) (string, error) {
 	}
 
 	log.Printf("Using OCI registry %q from K8s secret %q\n", baseURL, ociCredentialSecretName)
+
 	return baseURL, nil
 }
 
@@ -153,11 +159,13 @@ func (p *PCApps) createApplication(repoURL string, vals map[string]interface{}) 
 	helm := &argov1alpha1.ApplicationSourceHelm{
 		ReleaseName: pcAppsAppName,
 	}
+
 	if len(vals) > 0 {
 		raw, err := json.Marshal(vals)
 		if err != nil {
 			return nil, fmt.Errorf("marshaling helm values: %w", err)
 		}
+
 		helm.ValuesObject = &runtime.RawExtension{Raw: raw}
 	}
 
@@ -200,10 +208,12 @@ func (p *PCApps) createApplication(repoURL string, vals map[string]interface{}) 
 func (p *PCApps) Install(ctx context.Context) error {
 	// Validate values files before any cluster calls so local errors fail fast.
 	valueOpts := values.Options{ValueFiles: p.valuesFiles}
+
 	fileVals, err := valueOpts.MergeValues(getter.All(cli.New()))
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
 	}
+
 	vals := util.DeepMergeMaps(map[string]any{}, p.valuesOverride)
 	vals = util.DeepMergeMaps(vals, fileVals)
 
@@ -219,6 +229,7 @@ func (p *PCApps) Install(ctx context.Context) error {
 
 	log.Printf("Applying ArgoCD Application %q (chart %s, version %s) in namespace %s\n",
 		pcAppsAppName, pcAppsChartName, p.version, ociCredentialNamespace)
+
 	current := &argov1alpha1.Application{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      app.Name,
@@ -228,12 +239,14 @@ func (p *PCApps) Install(ctx context.Context) error {
 	if _, err := controllerutil.CreateOrUpdate(ctx, p.client, current, func() error {
 		current.TypeMeta = app.TypeMeta
 		current.Spec = app.Spec
+
 		return nil
 	}); err != nil {
 		return fmt.Errorf("applying ArgoCD Application %q failed: %w", pcAppsAppName, err)
 	}
 
 	log.Printf("Successfully applied ArgoCD Application %q; ArgoCD will sync the chart\n", pcAppsAppName)
+
 	return nil
 }
 

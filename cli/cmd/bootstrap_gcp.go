@@ -173,6 +173,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	c.CodesphereEnv.RegistryType = gcp.RegistryType(c.InputRegistryType)
+
 	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
 	if c.CodesphereEnv.GitHubPAT != "" {
 		c.CodesphereEnv.RegistryType = gcp.RegistryTypeGitHub
@@ -200,6 +201,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		if bs.Env.Jumpbox != nil && bs.Env.Jumpbox.GetExternalIP() != "" {
 			log.Printf("To debug on the jumpbox host:\nssh-add $SSH_KEY_PATH; ssh -o StrictHostKeyChecking=no -o ForwardAgent=yes -o SendEnv=OMS_PORTAL_API_KEY root@%s", bs.Env.Jumpbox.GetExternalIP())
 		}
+
 		return fmt.Errorf("failed to bootstrap GCP: %w", err)
 	}
 
@@ -214,11 +216,14 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	packageName := "<package-name>-installer"
 	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml"
+
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
 		log.Printf("You set a GitHub PAT for direct image access. Make sure to use a lite package, as VM root disk sizes are reduced.")
+
 		installCmd += " -s load-container-images"
 		packageName += "-lite"
 	}
+
 	log.Printf("example install command (run from jumpbox):\n%s -p %s.tar.gz", installCmd, packageName)
 
 	return nil

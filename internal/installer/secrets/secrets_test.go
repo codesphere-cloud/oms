@@ -132,6 +132,7 @@ var _ = Describe("EnsureNixSigningKeys", func() {
 
 		priv := vault.GetSecret("privNixSigningKey")
 		pub := vault.GetSecret("pubNixSigningKey")
+
 		Expect(priv).NotTo(BeNil())
 		Expect(pub).NotTo(BeNil())
 
@@ -140,6 +141,7 @@ var _ = Describe("EnsureNixSigningKeys", func() {
 
 		privHex := strings.TrimPrefix(priv.Fields.Password, "myhost:")
 		pubHex := strings.TrimPrefix(pub.Fields.Password, "myhost:")
+
 		Expect(privHex).To(MatchRegexp("^[0-9a-f]{64}$"))
 		Expect(pubHex).To(MatchRegexp("^[0-9a-f]{64}$"))
 	})
@@ -338,6 +340,7 @@ var _ = Describe("EnsurePostgresSecrets", func() {
 
 		admin := vault.GetSecret("postgresPassword")
 		replica := vault.GetSecret("postgresReplicaPassword")
+
 		Expect(admin.Fields.Password).To(HaveLen(32))
 		Expect(replica.Fields.Password).To(HaveLen(32))
 		Expect(admin.Fields.Password).NotTo(Equal(replica.Fields.Password))
@@ -476,6 +479,7 @@ var _ = Describe("EnsureServiceAccountTokens", func() {
 // whose content contains the given PEM header.
 func assertFileSecret(vault *files.InstallVault, name, pemHeader string) {
 	GinkgoHelper()
+
 	secret := vault.GetSecret(name)
 	Expect(secret).NotTo(BeNil(), "vault entry %q not found", name)
 	Expect(secret.File).NotTo(BeNil(), "vault entry %q has no file content", name)

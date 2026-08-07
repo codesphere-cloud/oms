@@ -69,6 +69,7 @@ func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPa
 		if err != nil {
 			return "", "", fmt.Errorf("failed to read age key from %s: %w", explicitKeyFile, err)
 		}
+
 		return recipient, explicitKeyFile, nil
 	}
 
@@ -78,6 +79,7 @@ func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPa
 		if err != nil {
 			return "", "", fmt.Errorf("failed to parse age key from SOPS_AGE_KEY environment variable: %w", err)
 		}
+
 		return recipient, "", nil
 	}
 
@@ -87,6 +89,7 @@ func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPa
 		if err != nil {
 			return "", "", fmt.Errorf("failed to read age key from %s: %w", keyFile, err)
 		}
+
 		return recipient, keyFile, nil
 	}
 
@@ -94,10 +97,12 @@ func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPa
 	defaultPath, configErr := getUserConfigDir()
 	if configErr == nil {
 		defaultPath = filepath.Join(defaultPath, sopsage.SopsAgeKeyUserConfigPath)
+
 		recipient, err = readRecipientFromFile(defaultPath)
 		if err == nil {
 			return recipient, defaultPath, nil
 		}
+
 		if !os.IsNotExist(err) {
 			return "", "", fmt.Errorf("failed to read age key from default location %s: %w", defaultPath, err)
 		}
@@ -105,17 +110,21 @@ func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPa
 
 	// 4. Generate a new key.
 	keyPath = filepath.Join(fallbackDir, "age_key.txt")
+
 	recipient, err = readRecipientFromFile(keyPath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return "", "", fmt.Errorf("failed to read age key from fallback location %s: %w", keyPath, err)
 		}
+
 		recipient, err = generateAgeKey(keyPath)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to generate age key: %w", err)
 		}
+
 		return recipient, keyPath, nil
 	}
+
 	return recipient, keyPath, nil
 }
 
@@ -125,12 +134,15 @@ func parseAgeRecipient(reader io.Reader) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to parse age identities from file: %w", err)
 	}
+
 	if len(ids) == 0 {
 		return "", fmt.Errorf("no age identities found in file")
 	}
+
 	if len(ids) > 1 {
 		return "", fmt.Errorf("multiple age identities found in file, expected only one")
 	}
+
 	id := ids[0]
 	switch id := id.(type) {
 	case *age.X25519Identity:
@@ -151,6 +163,7 @@ func readRecipientFromFile(path string) (recipient string, err error) {
 	defer func() {
 		err = file.Close()
 	}()
+
 	return parseAgeRecipient(file)
 }
 
@@ -160,6 +173,7 @@ func getUserConfigDir() (string, error) {
 			return userConfigDir, nil
 		}
 	}
+
 	return os.UserConfigDir()
 }
 
@@ -171,6 +185,7 @@ func generateAgeKey(keyPath string) (string, error) {
 	}
 
 	cmd := exec.Command("age-keygen", "-o", keyPath)
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("age-keygen failed: %w: %s", err, out)
@@ -180,16 +195,19 @@ func generateAgeKey(keyPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read generated age key: %w", err)
 	}
+
 	return recipient, nil
 }
 
 // EncryptFileWithSOPS encrypts src with SOPS+age and writes ciphertext to target.
 func EncryptFileWithSOPS(src, target, recipient string) error {
 	cmd := exec.Command("sops", "--encrypt", "--input-type", "yaml", "--age", recipient, "--output", target, src)
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("sops encrypt failed: %w: %s", err, out)
 	}
+
 	return nil
 }
 
@@ -206,6 +224,7 @@ func DecryptFileWithSOPS(src, keyPath string) ([]byte, error) {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return nil, fmt.Errorf("sops decrypt failed: %s", string(exitErr.Stderr))
 		}
+
 		return nil, fmt.Errorf("sops decrypt failed: %w", err)
 	}
 
@@ -220,14 +239,18 @@ func unwrapSOPSData(data []byte) []byte {
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return data
 	}
+
 	if len(doc.Content) == 0 {
 		return data
 	}
+
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode || len(root.Content) != 2 {
 		return data
 	}
+
 	keyNode := root.Content[0]
+
 	valNode := root.Content[1]
 	if keyNode.Value != "data" || valNode.Kind != yaml.ScalarNode {
 		return data

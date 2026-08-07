@@ -20,6 +20,7 @@ var _ = Describe("Codesphere installer", func() {
 		}
 		configManager := installer.NewMockConfigManager(GinkgoT())
 		configManager.EXPECT().ParseConfigYaml("config.yaml").Return(config, nil)
+
 		packageManager := installer.NewMockPackageManager(GinkgoT())
 		ci := &installer.CodesphereInstaller{ConfigPath: "config.yaml"}
 

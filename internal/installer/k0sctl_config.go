@@ -138,6 +138,7 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 		if addedIPs[worker.IPAddress] {
 			continue
 		}
+
 		host := createK0sctlHost(worker, "worker", nil, sshKeyPath, k0sBinaryPath)
 		k0sctlConfig.Spec.Hosts = append(k0sctlConfig.Spec.Hosts, host)
 		addedIPs[worker.IPAddress] = true

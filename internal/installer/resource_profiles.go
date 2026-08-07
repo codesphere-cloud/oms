@@ -36,6 +36,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.CertManager == nil {
 		config.Cluster.CertManager = &files.CertManagerConfig{}
 	}
+
 	config.Cluster.CertManager.Override = util.DeepMergeMaps(config.Cluster.CertManager.Override, map[string]any{
 		"cert-manager": map[string]any{
 			"resources": map[string]any{
@@ -63,6 +64,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.TrustManager == nil {
 		config.Cluster.TrustManager = &files.TrustManagerConfig{}
 	}
+
 	config.Cluster.TrustManager.Override = util.DeepMergeMaps(config.Cluster.TrustManager.Override, map[string]any{
 		"trust-manager": map[string]any{
 			"resources": map[string]any{
@@ -74,9 +76,11 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.Monitoring == nil {
 		config.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
+
 	if config.Cluster.Monitoring.Prometheus == nil {
 		config.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
 	}
+
 	config.Cluster.Monitoring.Prometheus.Override = util.DeepMergeMaps(config.Cluster.Monitoring.Prometheus.Override, map[string]any{
 		"kube-prometheus-stack": map[string]any{
 			"prometheusOperator": map[string]any{
@@ -107,6 +111,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.Monitoring.BlackboxExporter == nil {
 		config.Cluster.Monitoring.BlackboxExporter = &files.BlackboxExporterConfig{}
 	}
+
 	config.Cluster.Monitoring.BlackboxExporter.Override = util.DeepMergeMaps(config.Cluster.Monitoring.BlackboxExporter.Override, map[string]any{
 		"prometheus-blackbox-exporter": map[string]any{
 			"replicas": 1,
@@ -119,6 +124,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.Monitoring.Loki == nil {
 		config.Cluster.Monitoring.Loki = &files.LokiConfig{}
 	}
+
 	config.Cluster.Monitoring.Loki.Override = util.DeepMergeMaps(config.Cluster.Monitoring.Loki.Override, map[string]any{
 		"loki": map[string]any{
 			"read":         minimalResourceValues(),
@@ -134,6 +140,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.Monitoring.PushGateway == nil {
 		config.Cluster.Monitoring.PushGateway = &files.PushGatewayConfig{}
 	}
+
 	config.Cluster.Monitoring.PushGateway.Override = util.DeepMergeMaps(config.Cluster.Monitoring.PushGateway.Override, map[string]any{
 		"prometheus-pushgateway": map[string]any{
 			"resources": map[string]any{
@@ -173,6 +180,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.PgOperator == nil {
 		config.Cluster.PgOperator = &files.PgOperatorConfig{}
 	}
+
 	config.Cluster.PgOperator.Override = util.DeepMergeMaps(config.Cluster.PgOperator.Override, map[string]any{
 		"cloudnative-pg": map[string]any{
 			"resources": map[string]any{
@@ -184,6 +192,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.BarmanCloudPlugin == nil {
 		config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{}
 	}
+
 	config.Cluster.BarmanCloudPlugin.Override = util.DeepMergeMaps(config.Cluster.BarmanCloudPlugin.Override, map[string]any{
 		"plugin-barman-cloud": map[string]any{
 			"resources": map[string]any{
@@ -195,6 +204,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.Cluster.RgwLoadBalancer == nil {
 		config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{}
 	}
+
 	config.Cluster.RgwLoadBalancer.Override = util.DeepMergeMaps(config.Cluster.RgwLoadBalancer.Override, map[string]any{
 		"replicas": 1,
 	})
@@ -202,9 +212,11 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.ManagedServiceBackends == nil {
 		config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{}
 	}
+
 	if config.ManagedServiceBackends.Postgres == nil {
 		config.ManagedServiceBackends.Postgres = &files.PgManagedServiceConfig{}
 	}
+
 	config.ManagedServiceBackends.Postgres.Override = util.DeepMergeMaps(config.ManagedServiceBackends.Postgres.Override, map[string]any{
 		"replicas": 1,
 		"resources": map[string]any{
@@ -215,6 +227,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 	if config.ManagedServiceBackends.S3 == nil {
 		config.ManagedServiceBackends.S3 = &files.S3ManagedServiceConfig{}
 	}
+
 	config.ManagedServiceBackends.S3.Override = util.DeepMergeMaps(config.ManagedServiceBackends.S3.Override, map[string]any{
 		"replicas": 1,
 		"resources": map[string]any{
@@ -240,6 +253,7 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 			"requests": zeroRequests(),
 		}
 	}
+
 	serviceProfiles["deployment_service"].(map[string]any)["replicas"] = 2
 	serviceProfiles["public_api_service"].(map[string]any)["replicas"] = 2
 	serviceProfiles["team_service"].(map[string]any)["replicas"] = 2

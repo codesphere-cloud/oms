@@ -56,24 +56,29 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 		if err != nil {
 			return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 		}
+
 		resources, err := NewArgoCDResources(clientset, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 		if err != nil {
 			return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 		}
+
 		return &Installer{
 			InstallerConfig: cfg,
 			Helm:            helm,
 			Resources:       resources,
 		}, nil
 	}
+
 	helm, err := installer.NewHelmClient(DefaultNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
+
 	clientset, _, err := k8s.NewClients()
 	if err != nil {
 		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 	}
+
 	resources, err := NewArgoCDResources(clientset, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
@@ -164,6 +169,7 @@ func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) erro
 	} else {
 		fmt.Println("Successfully installed Argo CD (latest chart version)")
 	}
+
 	return nil
 }
 
@@ -176,6 +182,7 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 		if err != nil {
 			return fmt.Errorf("failed to parse installed version %q: %w", existing.InstalledVersion, err)
 		}
+
 		requestedSemver, err := semver.NewVersion(a.Version)
 		if err != nil {
 			return fmt.Errorf("failed to parse requested version %q: %w", a.Version, err)
@@ -187,6 +194,7 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 				a.Version, existing.InstalledVersion,
 			)
 		}
+
 		log.Printf("Upgrading ArgoCD from %s to %s\n", existing.InstalledVersion, a.Version)
 	} else {
 		log.Printf("Upgrading ArgoCD from %s to latest\n", existing.InstalledVersion)
@@ -201,6 +209,7 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 	} else {
 		fmt.Println("Successfully upgraded Argo CD to the latest chart version")
 	}
+
 	return nil
 }
 
@@ -208,11 +217,13 @@ func (a *Installer) validateRepoURL() error {
 	if a.RepoURL == "" {
 		return nil
 	}
+
 	for _, prefix := range []string{"http://", "https://", "oci://"} {
 		if strings.HasPrefix(a.RepoURL, prefix) {
 			return nil
 		}
 	}
+
 	return fmt.Errorf("invalid repo URL %q: must start with http://, https://, or oci://", a.RepoURL)
 }
 
@@ -221,9 +232,11 @@ func (a *Installer) resolveChartRef(chartName string) (string, string) {
 	if repoURL == "" {
 		repoURL = DefaultRepoURL
 	}
+
 	if strings.HasPrefix(repoURL, "oci://") {
 		return strings.TrimRight(repoURL, "/") + "/" + chartName, ""
 	}
+
 	return chartName, repoURL
 }
 

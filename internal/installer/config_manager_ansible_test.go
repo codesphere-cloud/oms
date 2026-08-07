@@ -41,6 +41,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("returns an error", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				_, err = file.Write([]byte(""))
@@ -56,6 +57,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("returns an error", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				_, err = file.Write([]byte("{"))
@@ -71,6 +73,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("returns an error for missing hosts block", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `ceph:
@@ -90,6 +93,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("returns an error for missing host variables", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `ceph:
@@ -109,6 +113,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("returns an error for typo in internal_ip", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `ceph:
@@ -129,6 +134,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("returns an error for empty internal_ip entry", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `ceph:
@@ -151,6 +157,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("creates a host list in the config", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventory := `ceph:
@@ -191,6 +198,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 
 				actualK8sCPHosts := manager.GetInstallConfig().Kubernetes.ControlPlanes
 				Expect(actualK8sCPHosts).To(BeEmpty())
+
 				actualK8sWorkers := manager.GetInstallConfig().Kubernetes.Workers
 				Expect(actualK8sWorkers).To(BeEmpty())
 			})
@@ -198,6 +206,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("converts any value into string", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `ceph:
@@ -216,6 +225,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("keeps pre-existing control plan config, if inventory has none", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventory := `ceph:
@@ -289,6 +299,7 @@ var _ = Describe("ConfigManagerAnsible", func() {
 			It("creates a host list in the config", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventory := `k8s-cp:
@@ -347,6 +358,7 @@ k8s-workers:
 			It("overwrites previously set kubernetes nodes (from profiles) with inventory values", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventory := `k8s-cp:
@@ -416,6 +428,7 @@ k8s-workers:
 			It("returns an error for missing hosts block", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `k8s-cp:
@@ -435,6 +448,7 @@ k8s-workers:
 			It("returns an error for missing hosts block", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `k8s-workers:
@@ -454,6 +468,7 @@ k8s-workers:
 			It("returns an error for missing host variables", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `k8s-cp:
@@ -473,6 +488,7 @@ k8s-workers:
 			It("returns an error for typo in internal_ip", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `k8s-cp:
@@ -493,6 +509,7 @@ k8s-workers:
 			It("returns an error for empty internal_ip entry", func() {
 				file, err := os.Create(inventoryFilePath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() { _ = os.Remove(inventoryFilePath) }()
 
 				inputInventoryYaml := `k8s-cp:

@@ -43,6 +43,7 @@ var _ = Describe("IAM & Admin", func() {
 
 	JustBeforeEach(func() {
 		var err error
+
 		bs, err = gcp.NewGCPBootstrapper(
 			ctx,
 			e,
@@ -130,6 +131,7 @@ var _ = Describe("IAM & Admin", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when GetProjectByName fails unexpectedly", func() {
 				gc.EXPECT().GetProjectByName("", csEnv.ProjectName).Return(nil, fmt.Errorf("api error"))
+
 				err := bs.EnsureProject()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get project"))
@@ -166,6 +168,7 @@ var _ = Describe("IAM & Admin", func() {
 					BillingAccountName: csEnv.BillingAccount,
 				}
 				gc.EXPECT().GetBillingInfo(csEnv.ProjectID).Return(bi, nil)
+
 				err := bs.EnsureBilling()
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -260,6 +263,7 @@ var _ = Describe("IAM & Admin", func() {
 					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "cloud-controller", "cloud-controller").Return("email@sa", false, nil)
 					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "artifact-registry-writer", "artifact-registry-writer").Return("writer@sa", true, nil)
 					gc.EXPECT().CreateServiceAccountKey(csEnv.ProjectID, "writer@sa").Return("key-content", nil)
+
 					err := bs.EnsureServiceAccounts()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal("key-content"))
@@ -317,5 +321,4 @@ var _ = Describe("IAM & Admin", func() {
 			})
 		})
 	})
-
 })

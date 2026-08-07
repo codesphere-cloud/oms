@@ -43,6 +43,7 @@ var _ = Describe("generateAPIToken", func() {
 	It("contains only hex characters after the prefix", func() {
 		token, err := generateAPIToken()
 		Expect(err).NotTo(HaveOccurred())
+
 		hexPart := token[len(tokenPrefix):]
 		Expect(hexPart).To(MatchRegexp("^[0-9a-f]{32}$"))
 	})
@@ -65,6 +66,7 @@ var _ = Describe("WriteResultToFile", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		var loaded TestUserResult
+
 		err = json.Unmarshal(data, &loaded)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(loaded.Email).To(Equal("test@example.com"))
@@ -111,6 +113,7 @@ var _ = Describe("createInDB", func() {
 	It("creates a test user successfully", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
+
 		defer func() { _ = sqlDB.Close() }()
 
 		// Expect: check if user exists
@@ -158,6 +161,7 @@ var _ = Describe("createInDB", func() {
 	It("returns an error when the test user already exists", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
+
 		defer func() { _ = sqlDB.Close() }()
 
 		m.ExpectQuery(`SELECT EXISTS`).
@@ -173,6 +177,7 @@ var _ = Describe("createInDB", func() {
 	It("rolls back the transaction on credential insert failure", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
+
 		defer func() { _ = sqlDB.Close() }()
 
 		m.ExpectQuery(`SELECT EXISTS`).
@@ -194,6 +199,7 @@ var _ = Describe("createInDB", func() {
 	It("rolls back the transaction on team insert failure", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
+
 		defer func() { _ = sqlDB.Close() }()
 
 		m.ExpectQuery(`SELECT EXISTS`).
@@ -221,6 +227,7 @@ var _ = Describe("createInDB", func() {
 	It("uses a custom datacenter ID for the created team", func() {
 		sqlDB, m, err := sqlmock.New()
 		Expect(err).NotTo(HaveOccurred())
+
 		defer func() { _ = sqlDB.Close() }()
 
 		m.ExpectQuery(`SELECT EXISTS`).

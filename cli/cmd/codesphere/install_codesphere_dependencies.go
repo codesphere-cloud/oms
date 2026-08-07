@@ -63,6 +63,7 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 		if err := ci.ExtractAndValidatePackage(pm); err != nil {
 			return fmt.Errorf("failed to extract and validate package: %w", err)
 		}
+
 		if err := stlog.Step("Install ArgoCD pre-step", func() error {
 			return installArgoCDAndApps(opts, cfg, pm, stlog)
 		}); err != nil {
@@ -73,6 +74,7 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install dependencies: %w", err)
 	}
+
 	return nil
 }
 
@@ -80,33 +82,41 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 // before the main dependency steps.
 func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, stlog *bootstrap.StepLogger) error {
 	var install *argocdinstaller.AppInstaller
+
 	if err := stlog.Substep("Load vault data", func() error {
 		installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, cfg)
 		if err != nil {
 			return err
 		}
+
 		registryPassword := ""
 		if secret := installVault.GetSecret(files.SecretRegistryPassword); secret != nil && secret.Fields != nil {
 			registryPassword = secret.Fields.Password
 		}
+
 		if registryPassword == "" {
 			return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
 		}
+
 		scheme := k8sruntime.NewScheme()
 		if err := k8sscheme.AddToScheme(scheme); err != nil {
 			return fmt.Errorf("failed to add kubernetes core scheme: %w", err)
 		}
+
 		if err := argov1alpha1.AddToScheme(scheme); err != nil {
 			return fmt.Errorf("failed to add ArgoCD scheme: %w", err)
 		}
+
 		kubeClient, err := ctrlclient.New(restConfig, ctrlclient.Options{Scheme: scheme})
 		if err != nil {
 			return fmt.Errorf("failed to create kubernetes client: %w", err)
 		}
+
 		registryURL := opts.ArgoCDRegistryURL
 		if registryURL == "" && cfg.Registry != nil {
 			registryURL = cfg.Registry.Server + "/codesphere-cloud/charts"
 		}
+
 		argoCDInstall, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
 			Version:        opts.ArgoCDVersion,
 			DatacenterId:   fmt.Sprintf("%d", cfg.Datacenter.ID),
@@ -122,6 +132,7 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 		if err != nil {
 			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 		}
+
 		install = argocdinstaller.NewAppInstaller(argocdinstaller.AppInstallerConfig{
 			Config:       cfg,
 			Vault:        installVault,
@@ -130,18 +141,22 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 			Installer:    argoCDInstall,
 			PCAppsValues: opts.PCAppsValues,
 		})
+
 		return nil
 	}); err != nil {
 		return err
 	}
+
 	if err := stlog.Substep("Install ArgoCD", install.InstallArgoCD); err != nil {
 		return err
 	}
+
 	if err := stlog.Substep("Sync vault secret", func() error {
 		return install.SyncVaultSecret(context.Background())
 	}); err != nil {
 		return err
 	}
+
 	if err := stlog.Substep("Install pc-apps", func() error {
 		return install.InstallPCApps(context.Background(), pm.GetDependencyPath("bom.json"))
 	}); err != nil {

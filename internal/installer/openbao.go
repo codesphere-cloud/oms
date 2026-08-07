@@ -154,19 +154,24 @@ func (o *OpenBaoInstaller) validateConfig() error {
 	if o.Config.Namespace == "" {
 		o.Config.Namespace = DefaultOpenBaoNamespace
 	}
+
 	r := o.Config.Replicas
 	if r < 1 {
 		return fmt.Errorf("--replicas must be >= 1, got %d", r)
 	}
+
 	if r > 1 && r%2 == 0 {
 		return fmt.Errorf("--replicas=%d is invalid: Raft requires 1 (single-node) or an odd number >= 3 for HA", r)
 	}
+
 	if o.Config.Timeout <= 0 {
 		o.Config.Timeout = defaultTimeout
 	}
+
 	if o.Config.ReadinessTimeoutPerReplica <= 0 {
 		o.Config.ReadinessTimeoutPerReplica = defaultReadinessTimeoutPerReplica
 	}
+
 	return nil
 }
 
@@ -192,6 +197,7 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 		if checkErr != nil {
 			return fmt.Errorf("checking for existing deployment: %w", checkErr)
 		}
+
 		if exists {
 			if err := o.ConfirmFunc(); err != nil {
 				return err
@@ -256,6 +262,7 @@ func (o *OpenBaoInstaller) Install(ctx context.Context) error {
 	}
 
 	o.Logger.Logf("OpenBao bootstrap complete. DR backup saved to: %s", o.Config.DRBackupPath)
+
 	return nil
 }
 
@@ -273,8 +280,10 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 		if os.IsNotExist(err) {
 			o.Logger.Logf("No existing DR backup found — proceeding with fresh initialization")
 			o.drBackupExists = false
+
 			return nil
 		}
+
 		return fmt.Errorf("checking DR backup file %s: %w", o.Config.DRBackupPath, err)
 	}
 
@@ -304,17 +313,21 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 	if o.Config.Username != backup.Username {
 		o.Logger.Logf("Warning: --bao-user=%q differs from DR backup username %q — using backup value", o.Config.Username, backup.Username)
 	}
+
 	o.password = backup.Password
 	o.Config.Username = backup.Username
 
 	o.drBackupExists = true
+
 	return nil
 }
 
 // GeneratePassword generates a secure password and stores it on the installer.
 func (o *OpenBaoInstaller) GeneratePassword() error {
 	var err error
+
 	o.password, err = GenerateSecurePassword(defaultPasswordLength)
+
 	return err
 }
 
@@ -341,6 +354,7 @@ func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 	if err != nil {
 		return err
 	}
+
 	if exists {
 		return o.Helm.UpgradeChart(o.ctx, cfg, UpgradeChartOptions{})
 	}
@@ -352,6 +366,7 @@ func (o *OpenBaoInstaller) DeployBankVaultsOperator() error {
 	if err != nil {
 		return err
 	}
+
 	if running {
 		o.Logger.Logf("Bank-Vaults Operator already running in the cluster, skipping deployment")
 		return nil
@@ -379,13 +394,16 @@ func (o *OpenBaoInstaller) cleanOrphanedOperatorRBAC() error {
 	if crErr != nil && !k8serrors.IsNotFound(crErr) {
 		return fmt.Errorf("deleting orphaned %s ClusterRole: %w", operatorName, crErr)
 	}
+
 	crbErr := o.Clientset.RbacV1().ClusterRoleBindings().Delete(o.ctx, operatorName, metav1.DeleteOptions{})
 	if crbErr != nil && !k8serrors.IsNotFound(crbErr) {
 		return fmt.Errorf("deleting orphaned %s ClusterRoleBinding: %w", operatorName, crbErr)
 	}
+
 	if crErr == nil || crbErr == nil {
 		o.Logger.Logf("Removed orphaned %s cluster-scoped RBAC left by a prior install", operatorName)
 	}
+
 	return nil
 }
 
@@ -399,6 +417,7 @@ func (o *OpenBaoInstaller) releaseExistsInTargetNamespace(releaseName string) (b
 		if k8serrors.IsNotFound(nsErr) {
 			return false, nil
 		}
+
 		return false, fmt.Errorf("checking namespace %s: %w", o.Config.Namespace, nsErr)
 	}
 
@@ -406,6 +425,7 @@ func (o *OpenBaoInstaller) releaseExistsInTargetNamespace(releaseName string) (b
 	if err != nil {
 		return false, fmt.Errorf("finding release %s in namespace %s: %w", releaseName, o.Config.Namespace, err)
 	}
+
 	return rel != nil, nil
 }
 
@@ -428,11 +448,13 @@ func (o *OpenBaoInstaller) operatorRunningClusterWide() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("listing %s deployments: %w", operatorName, err)
 	}
+
 	for i := range deps.Items {
 		if deps.Items[i].Status.AvailableReplicas > 0 {
 			return true, nil
 		}
 	}
+
 	return false, nil
 }
 
@@ -458,6 +480,7 @@ func buildRetryJoinAddrs(replicas int, namespace string) []string {
 	for i := 0; i < replicas; i++ {
 		addrs = append(addrs, fmt.Sprintf("http://openbao-%d.%s.svc.cluster.local:8200", i, namespace))
 	}
+
 	return addrs
 }
 
@@ -497,6 +520,7 @@ func (o *OpenBaoInstaller) ApplyVaultCR() error {
 		if err != nil {
 			return fmt.Errorf("resolving GVR for %s: %w", obj.GetKind(), err)
 		}
+
 		if err := k8s.ApplyUnstructured(o.ctx, o.DynClient, gvr, obj); err != nil {
 			return fmt.Errorf("applying vault CR: %w", err)
 		}
@@ -529,6 +553,7 @@ func (o *OpenBaoInstaller) WaitForInitialization() error {
 					return false, createErr
 				}
 			}
+
 			return false, nil // Keep polling — sidecar hasn't confirmed unseal yet
 		}
 
@@ -546,6 +571,7 @@ func (o *OpenBaoInstaller) WaitForInitialization() error {
 				return false, updateErr
 			}
 		}
+
 		return false, nil
 	})
 }
@@ -566,10 +592,12 @@ func (o *OpenBaoInstaller) ensureUnsealSecret(secretsClient corev1client.SecretI
 			},
 			Data: o.backupUnsealKeys,
 		}
+
 		_, err = secretsClient.Create(o.ctx, secret, metav1.CreateOptions{})
 		if err == nil {
 			return nil
 		}
+
 		if !k8serrors.IsAlreadyExists(err) {
 			return fmt.Errorf("creating unseal secret from backup: %w", err)
 		}
@@ -584,10 +612,12 @@ func (o *OpenBaoInstaller) ensureUnsealSecret(secretsClient corev1client.SecretI
 
 	// Update existing secret — preserve metadata, only set Data
 	existing.Data = o.backupUnsealKeys
+
 	_, err = secretsClient.Update(o.ctx, existing, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("updating unseal secret from backup: %w", err)
 	}
+
 	return nil
 }
 
@@ -614,17 +644,23 @@ func (o *OpenBaoInstaller) WaitForPodsReady() error {
 			return false, fmt.Errorf("listing vault pods: %w", err)
 		}
 
-		var activePods int
-		var readyCount int
+		var (
+			activePods int
+			readyCount int
+		)
+
 		for i := range list.Items {
 			if list.Items[i].DeletionTimestamp != nil {
 				continue // Skip terminating pods
 			}
+
 			activePods++
+
 			if isPodReady(&list.Items[i]) {
 				readyCount++
 			}
 		}
+
 		return activePods == expected && readyCount == expected, nil
 	})
 }
@@ -634,11 +670,13 @@ func isPodReady(pod *corev1.Pod) bool {
 	if pod.Status.Phase != corev1.PodRunning {
 		return false
 	}
+
 	for _, cond := range pod.Status.Conditions {
 		if cond.Type == corev1.PodReady && cond.Status == corev1.ConditionTrue {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -672,6 +710,7 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 	if err != nil {
 		return fmt.Errorf("creating temp backup file: %w", err)
 	}
+
 	tmpPath := tmpFile.Name()
 	defer func() { _ = os.Remove(tmpPath) }() // clean up temp file on failure or panic
 
@@ -679,10 +718,12 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 		_ = tmpFile.Close()
 		return fmt.Errorf("setting temp file permissions: %w", err)
 	}
+
 	if _, err := tmpFile.Write(plaintext); err != nil {
 		_ = tmpFile.Close()
 		return fmt.Errorf("writing temp backup file: %w", err)
 	}
+
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("closing temp backup file: %w", err)
 	}
@@ -692,6 +733,7 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 	}
 
 	o.Logger.Logf("DR backup encrypted and saved to: %s", o.Config.DRBackupPath)
+
 	return nil
 }
 
@@ -707,6 +749,7 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 //  4. Delete the unseal-keys Secret
 func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	vaultGVR := k8s.VaultGVR()
+
 	var cleaned []string
 
 	// Tolerates NotFound — this may be a first-time install with no prior Vault CR.
@@ -716,6 +759,7 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	if delErr != nil && !k8serrors.IsNotFound(delErr) {
 		return fmt.Errorf("deleting Vault CR: %w", delErr)
 	}
+
 	if delErr == nil {
 		cleaned = append(cleaned, "Vault CR")
 		// Only wait for pods to terminate when we actually deleted a Vault CR —
@@ -737,6 +781,7 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 		// Namespace doesn't exist yet — no stale PVCs to clean.
 		pvcList = &corev1.PersistentVolumeClaimList{}
 	}
+
 	for i := range pvcList.Items {
 		delErr = o.Clientset.CoreV1().PersistentVolumeClaims(o.Config.Namespace).Delete(
 			o.ctx, pvcList.Items[i].Name, metav1.DeleteOptions{},
@@ -745,8 +790,10 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 			return fmt.Errorf("deleting PVC %s: %w", pvcList.Items[i].Name, delErr)
 		}
 	}
+
 	if len(pvcList.Items) > 0 {
 		cleaned = append(cleaned, fmt.Sprintf("%d PVC(s)", len(pvcList.Items)))
+
 		if err := o.waitForPVCsGone(); err != nil {
 			return err
 		}
@@ -759,6 +806,7 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	if delErr != nil && !k8serrors.IsNotFound(delErr) {
 		return fmt.Errorf("deleting stale unseal secret: %w", delErr)
 	}
+
 	if delErr == nil {
 		cleaned = append(cleaned, "unseal secret")
 	}
@@ -768,6 +816,7 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 	} else {
 		o.Logger.Logf("No stale install state found in namespace %q", o.Config.Namespace)
 	}
+
 	return nil
 }
 
@@ -777,12 +826,14 @@ func (o *OpenBaoInstaller) CleanStaleInstallState() error {
 // re-install where the user may have supplied the wrong DR backup path.
 func (o *OpenBaoInstaller) hasExistingDeployment() (bool, error) {
 	vaultGVR := k8s.VaultGVR()
+
 	_, err := o.DynClient.Resource(vaultGVR).Namespace(o.Config.Namespace).Get(
 		o.ctx, "openbao", metav1.GetOptions{},
 	)
 	if err == nil {
 		return true, nil
 	}
+
 	if !k8serrors.IsNotFound(err) {
 		return false, fmt.Errorf("checking Vault CR: %w", err)
 	}
@@ -795,8 +846,10 @@ func (o *OpenBaoInstaller) hasExistingDeployment() (bool, error) {
 		if k8serrors.IsNotFound(err) {
 			return false, nil // Namespace doesn't exist — no prior deployment.
 		}
+
 		return false, fmt.Errorf("listing PVCs: %w", err)
 	}
+
 	return len(pvcList.Items) > 0, nil
 }
 
@@ -813,8 +866,10 @@ func (o *OpenBaoInstaller) waitForVaultPodsGone() error {
 			if k8serrors.IsNotFound(err) {
 				return true, nil
 			}
+
 			return false, fmt.Errorf("listing vault pods: %w", err)
 		}
+
 		return len(list.Items) == 0, nil
 	})
 }
@@ -833,8 +888,10 @@ func (o *OpenBaoInstaller) waitForPVCsGone() error {
 			if k8serrors.IsNotFound(err) {
 				return true, nil
 			}
+
 			return false, fmt.Errorf("listing PVCs: %w", err)
 		}
+
 		return len(list.Items) == 0, nil
 	})
 }
@@ -862,16 +919,19 @@ func (o *OpenBaoInstaller) pollUntilTimeout(timeout time.Duration, timeoutMsg st
 		if err != nil {
 			return err
 		}
+
 		if done {
 			return nil
 		}
 
 		o.Logger.LogRetry()
+
 		select {
 		case <-o.ctx.Done():
 			return o.ctx.Err()
 		case <-time.After(interval):
 		}
+
 		interval = min(interval*2, maxPollInterval)
 	}
 }
@@ -889,11 +949,13 @@ func (o *OpenBaoInstaller) ensureNamespace(ctx context.Context) error {
 		if !k8serrors.IsNotFound(err) {
 			return fmt.Errorf("checking namespace %s: %w", o.Config.Namespace, err)
 		}
+
 		_, err = o.Clientset.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 		if err != nil && !k8serrors.IsAlreadyExists(err) {
 			return fmt.Errorf("creating namespace %s: %w", o.Config.Namespace, err)
 		}
 	}
+
 	return nil
 }
 
@@ -912,5 +974,6 @@ func GenerateSecurePassword(length int) (string, error) {
 	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("generating random bytes: %w", err)
 	}
+
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }

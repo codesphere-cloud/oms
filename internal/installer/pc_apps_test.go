@@ -55,9 +55,11 @@ var _ = Describe("PCApps.Install", func() {
 	// getApp reads back the Application the installer applied.
 	getApp := func() *argov1alpha1.Application {
 		GinkgoHelper()
+
 		app := &argov1alpha1.Application{}
 		err := fakeClient.Get(context.Background(), client.ObjectKey{Name: "pc-applications", Namespace: "argocd"}, app)
 		Expect(err).ToNot(HaveOccurred())
+
 		return app
 	}
 
@@ -67,8 +69,10 @@ var _ = Describe("PCApps.Install", func() {
 		Expect(app.Spec.Source).ToNot(BeNil())
 		Expect(app.Spec.Source.Helm).ToNot(BeNil())
 		Expect(app.Spec.Source.Helm.ValuesObject).ToNot(BeNil())
+
 		vals := map[string]interface{}{}
 		Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &vals)).To(Succeed())
+
 		return vals
 	}
 
@@ -192,6 +196,7 @@ var _ = Describe("PCApps.Install", func() {
 
 		BeforeEach(func() {
 			var err error
+
 			tmpDir, err = os.MkdirTemp("", "pc-apps-test-*")
 			Expect(err).ToNot(HaveOccurred())
 

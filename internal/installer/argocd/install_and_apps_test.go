@@ -88,6 +88,7 @@ users:
 		}
 		vaultYAML, err := installVault.Marshal()
 		Expect(err).ToNot(HaveOccurred())
+
 		plaintextVaultPath := filepath.Join(secretsDir, "prod.vault.plain.yaml")
 		Expect(os.WriteFile(plaintextVaultPath, vaultYAML, 0600)).To(Succeed())
 

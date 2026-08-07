@@ -57,10 +57,12 @@ func Parse(filePath string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read BOM file: %w", err)
 	}
+
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON BOM: %w", err)
 	}
+
 	return &cfg, nil
 }
 
@@ -74,18 +76,22 @@ func (b *Config) GetPCApps() (reference.Tagged, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	chart, ok := comp.Files["chart"]
 	if !ok || chart.OciRef == "" {
 		return nil, false
 	}
+
 	ref, err := reference.ParseNormalizedNamed(chart.OciRef)
 	if err != nil {
 		return nil, false
 	}
+
 	tagged, ok := ref.(reference.Tagged)
 	if !ok {
 		return nil, false
 	}
+
 	return tagged, true
 }
 
@@ -94,9 +100,11 @@ func (b *Config) GetCodesphereContainerImages() (map[string]string, error) {
 	if b.Components == nil {
 		return nil, fmt.Errorf("codesphere component not found in BOM")
 	}
+
 	comp, exists := b.Components["codesphere"]
 	if !exists {
 		return nil, fmt.Errorf("codesphere component not found in BOM")
 	}
+
 	return comp.ContainerImages, nil
 }

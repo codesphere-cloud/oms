@@ -22,9 +22,11 @@ func sopsAndAgeAvailable() bool {
 	if _, err := exec.LookPath("sops"); err != nil {
 		return false
 	}
+
 	if _, err := exec.LookPath("age-keygen"); err != nil {
 		return false
 	}
+
 	return true
 }
 
@@ -100,6 +102,7 @@ codesphere:
     apiToken: "{{ secret "apiToken" }}"
 `, tempDir)
 		Expect(os.WriteFile(configPath, []byte(configYaml), 0644)).To(Succeed())
+
 		vaultYaml, err := installVault.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.WriteFile(plaintextVaultPath, vaultYaml, 0600)).To(Succeed())
@@ -113,6 +116,7 @@ codesphere:
 			vault.NewLazyVaultTemplatingSecretStore(vaultPath, ageKeyPath),
 		)
 		defer cleanup()
+
 		Expect(err).NotTo(HaveOccurred())
 
 		rendered, err := os.ReadFile(renderedPath)

@@ -15,6 +15,7 @@ func GetSSHKeysFromGitHubTeam(client GitHubClient, org, teamSlug string) (string
 	if org == "" || teamSlug == "" {
 		return "", fmt.Errorf("GitHub team slug and org must be specified to fetch SSH keys from GitHub team")
 	}
+
 	allKeys := ""
 
 	allMembers, err := listAllGitHubTeamMembers(client, org, teamSlug)
@@ -26,6 +27,7 @@ func GetSSHKeysFromGitHubTeam(client GitHubClient, org, teamSlug string) (string
 
 	for _, user := range allMembers {
 		username := user.GetLogin()
+
 		keys, err := client.ListUserKeys(context.Background(), username)
 		if err != nil {
 			fmt.Printf("Could not fetch keys for %s: %v\n", username, err)
@@ -44,6 +46,7 @@ func GetSSHKeysFromGitHubTeam(client GitHubClient, org, teamSlug string) (string
 func listAllGitHubTeamMembers(client GitHubClient, org string, teamSlug string) ([]*github.User, error) {
 	perPage := 100
 	page := 1
+
 	var allMembers []*github.User
 
 	for {

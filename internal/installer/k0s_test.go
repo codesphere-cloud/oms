@@ -148,6 +148,7 @@ var _ = Describe("K0s", func() {
 				// Create a real file for the test
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
@@ -164,6 +165,7 @@ var _ = Describe("K0s", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
+
 				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 			})
@@ -187,6 +189,7 @@ var _ = Describe("K0s", func() {
 				// Create a real file for the test
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
@@ -203,6 +206,7 @@ var _ = Describe("K0s", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
+
 				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
@@ -221,6 +225,7 @@ var _ = Describe("K0s", func() {
 				// Create a mock file for the test
 				mockFile, err := os.CreateTemp("", "k0s-test")
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() {
 					_ = os.Remove(mockFile.Name())
 				}()
@@ -242,6 +247,7 @@ var _ = Describe("K0s", func() {
 
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
@@ -257,6 +263,7 @@ var _ = Describe("K0s", func() {
 		Context("URL construction", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
+
 				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 			})
@@ -273,6 +280,7 @@ var _ = Describe("K0s", func() {
 				// Create a real file for the test
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)

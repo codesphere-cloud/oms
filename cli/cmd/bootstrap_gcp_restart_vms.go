@@ -38,21 +38,26 @@ func (c *BootstrapGcpRestartVMsCmd) resolveProjectAndZone(fw intutil.FileIO) (st
 	if (projectID == "") != (zone == "") {
 		return "", "", fmt.Errorf("--project-id and --zone must be provided together")
 	}
+
 	if projectID != "" {
 		return projectID, zone, nil
 	}
 
 	infraFilePath := gcp.GetInfraFilePath()
+
 	infraEnv, exists, err := gcp.LoadInfraFile(fw, infraFilePath)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to load infra file: %w", err)
 	}
+
 	if !exists {
 		return "", "", fmt.Errorf("infra file not found at %s; use --project-id and --zone flags", infraFilePath)
 	}
+
 	if infraEnv.ProjectID == "" || infraEnv.Zone == "" {
 		return "", "", fmt.Errorf("infra file is missing project ID or zone; use --project-id and --zone flags")
 	}
+
 	return infraEnv.ProjectID, infraEnv.Zone, nil
 }
 
@@ -83,15 +88,19 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 
 	if c.Opts.Name != "" {
 		log.Printf("Restarting VM %s in project %s (zone %s)...", c.Opts.Name, projectID, zone)
+
 		if err := bs.RestartVM(c.Opts.Name); err != nil {
 			return fmt.Errorf("failed to restart VM: %w", err)
 		}
+
 		log.Printf("VM %s restarted successfully.", c.Opts.Name)
 	} else {
 		log.Printf("Restarting all VMs in project %s (zone %s)...", projectID, zone)
+
 		if err := bs.RestartVMs(); err != nil {
 			return fmt.Errorf("failed to restart VMs: %w", err)
 		}
+
 		log.Printf("All VMs restarted successfully.")
 	}
 

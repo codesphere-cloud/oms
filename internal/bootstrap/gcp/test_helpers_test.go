@@ -39,6 +39,7 @@ func makeInstance(status, internalIP, externalIP string) *computepb.Instance {
 			{NatIP: protoString(externalIP)},
 		}
 	}
+
 	return inst
 }
 
@@ -57,14 +58,18 @@ func makeStoppedInstance(internalIP, externalIP string) *computepb.Instance {
 // Uses .Times(numVMs * 2) to expect exactly 2 calls per VM (initial check + poll after create).
 func mockGetInstanceNotFoundThenRunning(gc *gcp.MockGCPClientManager, projectID, zone string, runningResp *computepb.Instance, numVMs int) {
 	instanceCalls := make(map[string]int)
+
 	var mu sync.Mutex
+
 	gc.EXPECT().GetInstance(projectID, zone, mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
 		mu.Lock()
 		defer mu.Unlock()
+
 		instanceCalls[name]++
 		if instanceCalls[name] == 1 {
 			return nil, status.Errorf(codes.NotFound, "not found")
 		}
+
 		return runningResp, nil
 	}).Times(numVMs * 2)
 }
@@ -100,5 +105,6 @@ func newTestBootstrapperAll(csEnv *gcp.CodesphereEnvironment, gc gcp.GCPClientMa
 	if err != nil {
 		panic("newTestBootstrapperAll: " + err.Error())
 	}
+
 	return bs
 }

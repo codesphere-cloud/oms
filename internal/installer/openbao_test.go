@@ -46,6 +46,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 		clientset = fake.NewClientset()
 
 		var err error
+
 		tmpDir, err = os.MkdirTemp("", "openbao-test-*")
 		Expect(err).ToNot(HaveOccurred())
 	})
@@ -183,6 +184,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 			cr := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "vault-operator"}}
 			_, err = clientset.RbacV1().ClusterRoles().Create(ctx, cr, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
+
 			crb := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: "vault-operator"}}
 			_, err = clientset.RbacV1().ClusterRoleBindings().Create(ctx, crb, metav1.CreateOptions{})
 			Expect(err).ToNot(HaveOccurred())
@@ -302,6 +304,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 			err = inst.WaitForInitialization()
 			Expect(err).ToNot(HaveOccurred())
+
 			result := inst.GetUnsealSecret()
 			Expect(result.Data).To(HaveKey("vault-unseal-0"))
 		})
@@ -622,6 +625,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 			// Decrypt it back and verify contents
 			cmd := exec.Command("sops", "--decrypt", backupPath)
+
 			cmd.Env = append(os.Environ(), "SOPS_AGE_KEY_FILE="+keyFile)
 			decrypted, err := cmd.Output()
 			Expect(err).ToNot(HaveOccurred())
@@ -685,16 +689,20 @@ var _ = Describe("OpenBaoInstaller", func() {
 
 			// Decode multi-doc YAML into a slice of generic maps
 			decoder := yaml.NewYAMLOrJSONDecoder(&buf, 4096)
+
 			var docs []map[string]interface{}
+
 			for {
 				var doc map[string]interface{}
 				if err := decoder.Decode(&doc); err != nil {
 					break
 				}
+
 				if doc != nil {
 					docs = append(docs, doc)
 				}
 			}
+
 			return docs
 		}
 
@@ -704,6 +712,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 					return doc
 				}
 			}
+
 			return nil
 		}
 
@@ -848,15 +857,18 @@ var _ = Describe("OpenBaoInstaller", func() {
 			Expect(containerSpec).To(HaveKey("env"))
 			envVars := containerSpec["env"].([]interface{})
 			envNames := make([]string, 0, len(envVars))
+
 			envValues := make(map[string]string, len(envVars))
 			for _, e := range envVars {
 				m := e.(map[string]interface{})
 				name := m["name"].(string)
+
 				envNames = append(envNames, name)
 				if v, ok := m["value"].(string); ok {
 					envValues[name] = v
 				}
 			}
+
 			Expect(envNames).To(ContainElements("POD_NAME", "BAO_CLUSTER_ADDR", "BAO_API_ADDR"))
 
 			Expect(envValues["BAO_CLUSTER_ADDR"]).To(Equal("http://$(POD_NAME).vault.svc.cluster.local:8201"))
@@ -1098,6 +1110,7 @@ var _ = Describe("OpenBaoInstaller", func() {
 			}
 			inst.SetCtx(ctx)
 			inst.SetBackupUnsealKeys(backup)
+
 			return inst
 		}
 
@@ -1264,5 +1277,6 @@ func extractAgeRecipient(output string) string {
 			return strings.TrimPrefix(line, "Public key: ")
 		}
 	}
+
 	return ""
 }

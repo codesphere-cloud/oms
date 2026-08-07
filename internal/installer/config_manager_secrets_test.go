@@ -33,6 +33,7 @@ var _ = Describe("GenerateSecrets", func() {
 
 			tokenPriv := mgr.Vault.GetSecret("tokenPrivateKey")
 			tokenPub := mgr.Vault.GetSecret("tokenPublicKey")
+
 			Expect(tokenPriv).NotTo(BeNil())
 			Expect(tokenPub).NotTo(BeNil())
 			Expect(tokenPriv.File.Content).To(ContainSubstring("BEGIN PRIVATE KEY"))
@@ -44,6 +45,7 @@ var _ = Describe("GenerateSecrets", func() {
 
 			priv := mgr.Vault.GetSecret("domainAuthPrivateKey")
 			pub := mgr.Vault.GetSecret("domainAuthPublicKey")
+
 			Expect(priv).NotTo(BeNil())
 			Expect(pub).NotTo(BeNil())
 			Expect(priv.File.Content).To(ContainSubstring("BEGIN EC PRIVATE KEY"))
@@ -102,6 +104,7 @@ var _ = Describe("GenerateSecrets", func() {
 
 			admin := mgr.Vault.GetSecret("postgresPassword")
 			replica := mgr.Vault.GetSecret("postgresReplicaPassword")
+
 			Expect(admin).NotTo(BeNil())
 			Expect(replica).NotTo(BeNil())
 			Expect(admin.Fields.Password).To(HaveLen(32))
@@ -170,7 +173,6 @@ var _ = Describe("GenerateSecrets", func() {
 			Expect(mgr.Vault.GetSecret("tokenPrivateKey").File.Content).To(Equal(firstKey))
 			Expect(mgr.Vault.GetSecret("selfSignedCaKeyPem").File.Content).To(Equal(firstCA))
 		})
-
 	})
 
 	Context("idempotency with postgres", func() {
@@ -182,7 +184,6 @@ var _ = Describe("GenerateSecrets", func() {
 				},
 			}
 		})
-
 	})
 
 	Context("uniqueness", func() {
@@ -191,6 +192,7 @@ var _ = Describe("GenerateSecrets", func() {
 				Config: &files.RootConfig{},
 				Vault:  &files.InstallVault{},
 			}
+
 			Expect(mgr.GenerateSecrets()).To(Succeed())
 			Expect(mgr2.GenerateSecrets()).To(Succeed())
 

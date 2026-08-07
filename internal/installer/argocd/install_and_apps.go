@@ -47,9 +47,11 @@ func (i *AppInstaller) InstallArgoCD() error {
 	if i.cfg.Installer == nil {
 		return fmt.Errorf("ArgoCD installer is required")
 	}
+
 	if err := i.cfg.Installer.Install(); err != nil {
 		return fmt.Errorf("failed to install ArgoCD: %w", err)
 	}
+
 	return nil
 }
 
@@ -59,10 +61,12 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 	if err := secrets.EnsureServiceAccountTokens(i.cfg.Vault); err != nil {
 		return fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
+
 	creator := vault.NewVaultSecretCreator(i.cfg.KubeClient)
 	if err := creator.CreateSecretFromVault(ctx, i.cfg.Vault, vault.VaultSecretNamespace, vault.VaultSecretName); err != nil {
 		return fmt.Errorf("failed to sync vault secret: %w", err)
 	}
+
 	return nil
 }
 
@@ -79,8 +83,10 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomPath string) error 
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
 	}
+
 	if err := pcApps.Install(ctx); err != nil {
 		return fmt.Errorf("failed to install pc-apps: %w", err)
 	}
+
 	return nil
 }
