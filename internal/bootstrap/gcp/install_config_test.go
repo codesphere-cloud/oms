@@ -320,7 +320,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
-				csEnv.SshProxyIP = "3.3.3.3"
+				csEnv.SSHProxyIP = "3.3.3.3"
 
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
