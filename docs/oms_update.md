@@ -12,6 +12,12 @@ Updates resources, e.g. OMS or OMS API keys.
   -h, --help   help for update
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)

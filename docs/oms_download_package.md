@@ -35,6 +35,12 @@ $ oms download package --version codesphere-v1.55.0 --file installer-lite.tar.gz
   -V, --version string   Codesphere version to download
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms download](oms_download.md)	 - Download resources available through OMS

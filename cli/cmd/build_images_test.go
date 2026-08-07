@@ -198,7 +198,7 @@ var _ = Describe("BuildImagesCmd", func() {
 				},
 			}
 			mockConfigManager.EXPECT().ParseConfigYaml("config-without-dockerfile.yaml").Return(configWithoutDockerfile, nil)
-			mockPackageManager.EXPECT().Extract(false).Return(nil)
+			mockPackageManager.EXPECT().Extract(false, false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("1.0.0", nil)
 
 			err := c.BuildAndPushImages(mockPackageManager, mockConfigManager, mockImageManager)
@@ -235,7 +235,7 @@ var _ = Describe("BuildImagesCmd", func() {
 				},
 			}
 			mockConfigManager.EXPECT().ParseConfigYaml("config-with-dockerfile.yaml").Return(configWithDockerfile, nil)
-			mockPackageManager.EXPECT().Extract(false).Return(nil)
+			mockPackageManager.EXPECT().Extract(false, false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("1.0.0", nil)
 			mockImageManager.EXPECT().BuildImage("Dockerfile", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(errors.New("build failed"))
 
@@ -274,7 +274,7 @@ var _ = Describe("BuildImagesCmd", func() {
 				},
 			}
 			mockConfigManager.EXPECT().ParseConfigYaml("config-with-dockerfile.yaml").Return(configWithDockerfile, nil)
-			mockPackageManager.EXPECT().Extract(false).Return(nil)
+			mockPackageManager.EXPECT().Extract(false, false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("1.0.0", nil)
 			mockImageManager.EXPECT().BuildImage("Dockerfile", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(nil)
 			mockImageManager.EXPECT().PushImage("registry.example.com/my-ubuntu-24.04-default:1.0.0").Return(errors.New("push failed"))
@@ -314,7 +314,7 @@ var _ = Describe("BuildImagesCmd", func() {
 				},
 			}
 			mockConfigManager.EXPECT().ParseConfigYaml("config-with-dockerfile.yaml").Return(configWithDockerfile, nil)
-			mockPackageManager.EXPECT().Extract(false).Return(nil)
+			mockPackageManager.EXPECT().Extract(false, false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("1.0.0", nil)
 			mockImageManager.EXPECT().BuildImage("Dockerfile", "registry.example.com/my-ubuntu-24.04-default:1.0.0", ".").Return(nil)
 			mockImageManager.EXPECT().PushImage("registry.example.com/my-ubuntu-24.04-default:1.0.0").Return(nil)
@@ -371,7 +371,7 @@ var _ = Describe("BuildImagesCmd", func() {
 				},
 			}
 			mockConfigManager.EXPECT().ParseConfigYaml("config-with-multiple-images.yaml").Return(configWithMultipleImages, nil)
-			mockPackageManager.EXPECT().Extract(false).Return(nil)
+			mockPackageManager.EXPECT().Extract(false, false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("1.0.0", nil)
 
 			// Expect calls for my-ubuntu-24.04 default flavor
