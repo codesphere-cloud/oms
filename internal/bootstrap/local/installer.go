@@ -110,7 +110,7 @@ func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
 	}
 
 	packageManager := installer.NewPackage(filepath.Dir(bundlePath), bundlePath)
-	if err := packageManager.Extract(false); err != nil {
+	if err := packageManager.Extract(false, false); err != nil {
 		return "", fmt.Errorf("failed to extract installer bundle: %w", err)
 	}
 

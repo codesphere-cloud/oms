@@ -17,6 +17,12 @@ oms list packages [flags]
   -s, --sort string   Sort order: 'semver' (by semantic version) or 'date' (by build date) (default "semver")
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms list](oms_list.md)	 - List resources available through OMS

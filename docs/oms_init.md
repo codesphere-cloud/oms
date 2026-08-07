@@ -12,6 +12,12 @@ Initialize configuration files for Codesphere installation and other components.
   -h, --help   help for init
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)

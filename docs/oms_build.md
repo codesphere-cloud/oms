@@ -12,6 +12,12 @@ Build and push container images to a registry using the provided configuration.
   -h, --help   help for build
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)

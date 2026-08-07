@@ -37,6 +37,12 @@ $ oms download k0s --force
   -v, --version string   Version of k0s to download
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms download](oms_download.md)	 - Download resources available through OMS

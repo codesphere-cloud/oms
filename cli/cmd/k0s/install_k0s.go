@@ -178,7 +178,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 	}
 
 	if c.Opts.Package != "" {
-		if err := pm.ExtractDependency(defaultK0sPath, c.Opts.Force); err != nil {
+		if err := pm.ExtractDependency(defaultK0sPath, c.Opts.Force, c.Opts.Verbose); err != nil {
 			return "", fmt.Errorf("failed to extract k0s from package: %w", err)
 		}
 		return pm.GetDependencyPath(defaultK0sPath), nil

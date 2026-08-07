@@ -58,6 +58,12 @@ $ oms install k0s --no-download
   -v, --version string          Version of k0s to install (default "v1.31.14+k0s.0")
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms install](oms_install.md)	 - Install Codesphere and other components

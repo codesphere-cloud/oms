@@ -13,12 +13,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	csio "github.com/codesphere-cloud/cs-go/pkg/io"
 )
 
 // ExtractTarGz takes a path to a .tar.gz file and extracts its contents
 // to the specified destination directory.
-func ExtractTarGz(fileIo FileIO, filename, destDir string) error {
-	return ExtractTarGzSingleFile(fileIo, filename, "", destDir)
+func ExtractTarGz(fileIo FileIO, filename, destDir string, verbose bool) error {
+	return ExtractTarGzSingleFile(fileIo, filename, "", destDir, verbose)
 }
 
 // getCleanTargetPath constructs a clean target path for extraction and ensures
@@ -105,29 +107,29 @@ func extractEntry(header *tar.Header, targetPath string, fileIo FileIO, tr *tar.
 }
 
 // ExtractTarGzSingleFile extracts a single specified file from a .tar.gz archive to the destination directory.
-func ExtractTarGzSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string) error {
+func ExtractTarGzSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string, verbose bool) error {
 	destDir = filepath.Clean(destDir)
 	tr, err := openTarGz(archiveFile, fileIo)
 	if err != nil {
 		return err
 	}
-	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir)
+	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir, verbose)
 }
 
 // ExtractTarSingleFile extracts a single specified file from a .tar archive to the destination directory.
-func ExtractTarSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string) error {
+func ExtractTarSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string, verbose bool) error {
 	destDir = filepath.Clean(destDir)
 	tr, err := openTar(archiveFile, fileIo)
 	if err != nil {
 		return err
 	}
-	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir)
+	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir, verbose)
 }
 
 // extractTarSingleFile extracts a single specified file from a tar.Reader to the destination directory.
-func extractTarSingleFile(fileIo FileIO, tr *tar.Reader, fileToExtract, destDir string) error {
+func extractTarSingleFile(fileIo FileIO, tr *tar.Reader, fileToExtract, destDir string, verbose bool) error {
 	if fileToExtract != "" {
-		log.Printf("Extracting %s from archive\n", fileToExtract)
+		csio.Verbosef(verbose, "Extracting %s from archive\n", fileToExtract)
 	}
 
 	for {
@@ -155,7 +157,7 @@ func extractTarSingleFile(fileIo FileIO, tr *tar.Reader, fileToExtract, destDir 
 		}
 
 		if fileToExtract != "" {
-			log.Printf("File %s extracted to %s", fileToExtract, targetPath)
+			csio.Verbosef(verbose, "File %s extracted to %s", fileToExtract, targetPath)
 			return nil
 		}
 	}

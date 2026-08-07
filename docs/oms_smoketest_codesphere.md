@@ -52,6 +52,12 @@ $ oms smoketest codesphere --baseurl https://codesphere.example.com/api --token 
       --token string       API token for authentication
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms smoketest](oms_smoketest.md)	 - Run smoke tests for Codesphere components

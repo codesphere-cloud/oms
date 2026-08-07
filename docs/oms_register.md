@@ -20,6 +20,12 @@ oms register [flags]
       --valid-for string      Validity duration of the new API key in days (e.g., 10d)
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)
