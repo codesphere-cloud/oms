@@ -363,6 +363,52 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	}
 
 	g.collectOpenBaoConfig(prompter)
+	g.collectOpenfgaBackupsConfig(prompter)
+}
+
+func (g *InstallConfig) collectOpenfgaBackupsConfig(prompter *Prompter) {
+	log.Println("\n=== OpenFGA Database Backups (Optional) ===")
+	hasBackups := prompter.Bool("Configure OpenFGA database backups", g.Config.Codesphere.OpenfgaBackups != nil && g.Config.Codesphere.OpenfgaBackups.Enabled)
+	if !hasBackups {
+		g.Config.Codesphere.OpenfgaBackups = nil
+		return
+	}
+
+	if g.Config.Codesphere.OpenfgaBackups == nil {
+		g.Config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{}
+	}
+	ob := g.Config.Codesphere.OpenfgaBackups
+	ob.Enabled = true
+
+	ob.DestinationPath = g.collectString(prompter, "Backup destination (S3 URL, e.g. s3://backup-openfga)", ob.DestinationPath)
+	ob.EndpointURL = g.collectString(prompter, "S3-compatible endpoint URL (e.g. https://storage.googleapis.com)", ob.EndpointURL)
+	ob.Schedule = g.collectString(prompter, "Backup schedule (6-field cron, empty for chart default)", ob.Schedule)
+	ob.RetentionPolicy = g.collectString(prompter, "Retention policy (e.g. 7d, empty for chart default)", ob.RetentionPolicy)
+
+	accessKeyID := ""
+	secretAccessKey := ""
+	if g.Vault != nil {
+		if s := g.Vault.GetSecret(files.SecretOpenfgaDbBackupAccessKeyId); s != nil && s.Fields != nil {
+			accessKeyID = s.Fields.Password
+		}
+		if s := g.Vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey); s != nil && s.Fields != nil {
+			secretAccessKey = s.Fields.Password
+		}
+	}
+	accessKeyID = g.collectString(prompter, "S3 access key ID", accessKeyID)
+	secretAccessKey = g.collectString(prompter, "S3 secret access key", secretAccessKey)
+
+	if accessKeyID != "" || secretAccessKey != "" {
+		if g.Vault == nil {
+			g.Vault = &files.InstallVault{}
+		}
+		if accessKeyID != "" {
+			g.Vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupAccessKeyId, Fields: &files.SecretFields{Password: accessKeyID}})
+		}
+		if secretAccessKey != "" {
+			g.Vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: secretAccessKey}})
+		}
+	}
 }
 
 func (g *InstallConfig) collectOpenBaoConfig(prompter *Prompter) {

@@ -97,6 +97,14 @@ type InitInstallConfigOpts struct {
 	CodesphereOpenBaoEngine   string
 	CodesphereOpenBaoUser     string
 	CodesphereOpenBaoPassword string
+
+	OpenfgaBackupsEnabled         bool
+	OpenfgaBackupsDestinationPath string
+	OpenfgaBackupsEndpointURL     string
+	OpenfgaBackupsSchedule        string
+	OpenfgaBackupsRetentionPolicy string
+	OpenfgaBackupsAccessKeyID     string
+	OpenfgaBackupsSecretAccessKey string
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
@@ -190,6 +198,15 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoEngine, "openbao-engine", "cs-secrets-engine", "Engine for OpenBao")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUser, "openbao-user", "admin", "Username for OpenBao authentication")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoPassword, "openbao-password", "", "Password for OpenBao authentication")
+
+	// OpenFGA database backups
+	c.cmd.Flags().BoolVar(&c.Opts.OpenfgaBackupsEnabled, "openfga-backups-enabled", false, "Enable OpenFGA database backups")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsDestinationPath, "openfga-backups-destination", "", "Backup destination (S3 URL, e.g. s3://backup-openfga)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsEndpointURL, "openfga-backups-endpoint", "", "S3-compatible endpoint URL (e.g. https://storage.googleapis.com)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsSchedule, "openfga-backups-schedule", "", "Backup schedule (6-field cron, empty for chart default)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsRetentionPolicy, "openfga-backups-retention", "", "Retention policy (e.g. 7d, empty for chart default)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsAccessKeyID, "openfga-backups-access-key-id", "", "S3 access key ID for OpenFGA backups")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsSecretAccessKey, "openfga-backups-secret-access-key", "", "S3 secret access key for OpenFGA backups")
 
 	util.MarkFlagRequired(c.cmd, "config")
 	util.MarkFlagRequired(c.cmd, "vault")
@@ -533,6 +550,32 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser
 		if c.Opts.CodesphereOpenBaoPassword != "" {
 			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: c.Opts.CodesphereOpenBaoPassword}})
+		}
+	}
+
+	// OpenFGA database backups
+	if c.Opts.OpenfgaBackupsEnabled {
+		if config.Codesphere.OpenfgaBackups == nil {
+			config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{}
+		}
+		config.Codesphere.OpenfgaBackups.Enabled = true
+		if c.Opts.OpenfgaBackupsDestinationPath != "" {
+			config.Codesphere.OpenfgaBackups.DestinationPath = c.Opts.OpenfgaBackupsDestinationPath
+		}
+		if c.Opts.OpenfgaBackupsEndpointURL != "" {
+			config.Codesphere.OpenfgaBackups.EndpointURL = c.Opts.OpenfgaBackupsEndpointURL
+		}
+		if c.Opts.OpenfgaBackupsSchedule != "" {
+			config.Codesphere.OpenfgaBackups.Schedule = c.Opts.OpenfgaBackupsSchedule
+		}
+		if c.Opts.OpenfgaBackupsRetentionPolicy != "" {
+			config.Codesphere.OpenfgaBackups.RetentionPolicy = c.Opts.OpenfgaBackupsRetentionPolicy
+		}
+		if c.Opts.OpenfgaBackupsAccessKeyID != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupAccessKeyId, Fields: &files.SecretFields{Password: c.Opts.OpenfgaBackupsAccessKeyID}})
+		}
+		if c.Opts.OpenfgaBackupsSecretAccessKey != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: c.Opts.OpenfgaBackupsSecretAccessKey}})
 		}
 	}
 

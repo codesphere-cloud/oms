@@ -93,6 +93,47 @@ var _ = Describe("UpdateConfigFromOpts", func() {
 
 		Expect(config.Postgres.ServerAddress).To(Equal("postgres.example.com:5432"))
 	})
+
+	It("sets openfga backups config and vault secrets when enabled", func() {
+		config := &files.RootConfig{}
+		vault := &files.InstallVault{}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			OpenfgaBackupsEnabled:         true,
+			OpenfgaBackupsDestinationPath: "s3://backup-openfga",
+			OpenfgaBackupsEndpointURL:     "https://storage.googleapis.com",
+			OpenfgaBackupsSchedule:        "0 */30 * * * *",
+			OpenfgaBackupsRetentionPolicy: "7d",
+			OpenfgaBackupsAccessKeyID:     "access-id",
+			OpenfgaBackupsSecretAccessKey: "secret-key",
+		}}
+
+		command.updateConfigFromOpts(config, vault)
+
+		Expect(config.Codesphere.OpenfgaBackups).NotTo(BeNil())
+		Expect(config.Codesphere.OpenfgaBackups.Enabled).To(BeTrue())
+		Expect(config.Codesphere.OpenfgaBackups.DestinationPath).To(Equal("s3://backup-openfga"))
+		Expect(config.Codesphere.OpenfgaBackups.EndpointURL).To(Equal("https://storage.googleapis.com"))
+		Expect(config.Codesphere.OpenfgaBackups.Schedule).To(Equal("0 */30 * * * *"))
+		Expect(config.Codesphere.OpenfgaBackups.RetentionPolicy).To(Equal("7d"))
+
+		accessKey := vault.GetSecret(files.SecretOpenfgaDbBackupAccessKeyId)
+		Expect(accessKey).NotTo(BeNil())
+		Expect(accessKey.Fields.Password).To(Equal("access-id"))
+		secretKey := vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey)
+		Expect(secretKey).NotTo(BeNil())
+		Expect(secretKey.Fields.Password).To(Equal("secret-key"))
+	})
+
+	It("does not set openfga backups config when not enabled", func() {
+		config := &files.RootConfig{}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			OpenfgaBackupsDestinationPath: "s3://ignored",
+		}}
+
+		command.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Codesphere.OpenfgaBackups).To(BeNil())
+	})
 })
 
 var _ = Describe("ValidateConfig", func() {

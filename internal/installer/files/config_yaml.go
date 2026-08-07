@@ -341,8 +341,8 @@ type OpenBaoConfig struct {
 }
 
 // OpenfgaBackupsConfig is the friendly representation of the OpenFGA database
-// backup settings. On marshal it is translated into the openfga subchart values
-// under codesphere.override (see buildOpenfgaBackupOverride).
+// backup settings. On marshal it is translated into the openfga application
+// values under pcApps.applications.openfga (see buildOpenfgaBackupValues).
 type OpenfgaBackupsConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// Schedule is an optional 6-field cron expression. When empty the chart default applies.
