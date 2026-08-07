@@ -190,6 +190,44 @@ var _ = Describe("DeriveDataCenterConfig", func() {
 		Expect(derived.Codesphere.CertIssuer.Acme).To(BeNil())
 		Expect(derived.Cluster.Certificates.CA.CertPem).To(BeEmpty())
 	})
+
+	It("points the derived data center at the primary's exposed OpenFGA", func() {
+		primary.Codesphere.OpenFga = &files.OpenFgaConfig{
+			Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "openfga.1.cs.example.com"},
+		}
+
+		derived, err := secrets.DeriveDataCenterConfig(primary)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(derived.Codesphere.OpenFga.DeploysOpenFga()).To(BeFalse())
+		Expect(derived.Codesphere.OpenFga.APIURL).To(Equal("https://openfga.1.cs.example.com"))
+		// The derived data center has nothing of its own to expose.
+		Expect(derived.Codesphere.OpenFga.ExposesOpenFga()).To(BeFalse())
+		// The primary keeps deploying and exposing it.
+		Expect(primary.Codesphere.OpenFga.DeploysOpenFga()).To(BeTrue())
+		Expect(primary.Codesphere.OpenFga.ExposesOpenFga()).To(BeTrue())
+	})
+
+	It("leaves the OpenFGA block alone when the primary does not expose it", func() {
+		primary.Codesphere.OpenFga = &files.OpenFgaConfig{
+			Expose: &files.OpenFgaExposeConfig{Enabled: false},
+		}
+
+		derived, err := secrets.DeriveDataCenterConfig(primary)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(derived.Codesphere.OpenFga.DeploysOpenFga()).To(BeTrue())
+		Expect(derived.Codesphere.OpenFga.APIURL).To(BeEmpty())
+	})
+
+	It("handles a config without an OpenFGA block", func() {
+		primary.Codesphere.OpenFga = nil
+
+		derived, err := secrets.DeriveDataCenterConfig(primary)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(derived.Codesphere.OpenFga).To(BeNil())
+	})
 })
 
 var _ = Describe("secondary data center secret generation", func() {

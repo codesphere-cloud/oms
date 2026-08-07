@@ -49,6 +49,9 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureMounterHmacSecret(vault); err != nil {
 		return fmt.Errorf("ensure hmac secret: %w", err)
 	}
+	if err := EnsureOpenFgaPresharedKey(vault); err != nil {
+		return fmt.Errorf("ensure openfga preshared key: %w", err)
+	}
 	if err := EnsureDefaultSecrets(vault); err != nil {
 		return fmt.Errorf("ensure default secrets: %w", err)
 	}
@@ -167,6 +170,28 @@ func EnsureMounterHmacSecret(vault *files.InstallVault) error {
 	}
 	vault.SetSecret(files.SecretEntry{
 		Name:   files.SecretMounterHmacSecret,
+		Fields: &files.SecretFields{Password: hex.EncodeToString(b)},
+	})
+	return nil
+}
+
+// EnsureOpenFgaPresharedKey generates the preshared key that OpenFGA and the Codesphere
+// services authenticate with, as 64 hex characters. Idempotent.
+//
+// Deliberately *not* a data-center-scoped secret (see datacenter.go): every data center's
+// services talk to the same OpenFGA instance, so DeriveDataCenterVault must carry this key
+// over to derived vaults unchanged. A data center whose vault is not derived from the
+// primary one needs the key copied in by hand.
+func EnsureOpenFgaPresharedKey(vault *files.InstallVault) error {
+	if vault.GetSecret(files.SecretOpenFgaPresharedKey) != nil {
+		return nil
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Errorf("read random bytes: %w", err)
+	}
+	vault.SetSecret(files.SecretEntry{
+		Name:   files.SecretOpenFgaPresharedKey,
 		Fields: &files.SecretFields{Password: hex.EncodeToString(b)},
 	})
 	return nil
