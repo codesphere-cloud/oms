@@ -567,7 +567,7 @@ var _ = Describe("GCE", func() {
 				})
 
 				It("Sets the root disk size", func() {
-					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 					allRootDiskSizesCorrect := true
 					mu := sync.Mutex{}
 					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
@@ -590,7 +590,7 @@ var _ = Describe("GCE", func() {
 			})
 
 			It("creates all instances", func() {
-				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
@@ -612,7 +612,7 @@ var _ = Describe("GCE", func() {
 				It("does not fetch GitHub org keys when GitHub team org is set without slug", func() {
 					ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 					mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
-					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 
 					err := bs.EnsureComputeInstances()
@@ -628,7 +628,7 @@ var _ = Describe("GCE", func() {
 						ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 						mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
-						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 						gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
 							sshMetadata := ""
 							for _, item := range instance.GetMetadata().GetItems() {
@@ -710,7 +710,7 @@ var _ = Describe("GCE", func() {
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
-				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 
 				// Verify CreateInstance is called with SPOT provisioning model
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.MatchedBy(func(instance *computepb.Instance) bool {
@@ -729,7 +729,7 @@ var _ = Describe("GCE", func() {
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
-				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 
 				createCalls := make(map[string]int)
 				var mu sync.Mutex
@@ -764,6 +764,7 @@ var _ = Describe("GCE", func() {
 					// After StartInstance, VM is running
 					return runningResp, nil
 				}).Times(16)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 
 				gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 
@@ -775,6 +776,7 @@ var _ = Describe("GCE", func() {
 				runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				// 8 VMs × 2 GetInstance calls each (initial check + waitForInstanceRunning poll)
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(runningResp, nil).Times(16)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
@@ -785,6 +787,7 @@ var _ = Describe("GCE", func() {
 				var mu sync.Mutex
 				stagingResp := makeInstance("STAGING", "10.0.0.x", "1.2.3.x")
 				runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
 					mu.Lock()
 					defer mu.Unlock()
@@ -806,6 +809,7 @@ var _ = Describe("GCE", func() {
 				// .Maybe() because VMs are created in parallel; not all may reach StartInstance.
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(stoppedResp, nil).Maybe()
 				gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(fmt.Errorf("start error")).Maybe()
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).To(HaveOccurred())
@@ -813,6 +817,7 @@ var _ = Describe("GCE", func() {
 			})
 
 			It("fails when initial GetInstance returns a non-NotFound error", func() {
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("permission denied")).Maybe()
 
 				err := bs.EnsureComputeInstances()

@@ -59,12 +59,16 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	errCh := make(chan error, len(vmDefs))
 	resultCh := make(chan vmResult, len(vmDefs))
 	logCh := make(chan string, len(vmDefs))
+	sshKeys, err := b.getSSHKeys()
+	if err != nil {
+		return fmt.Errorf("failed to determine SSH keys: %w", err)
+	}
 
 	for _, vm := range vmDefs {
 		wg.Add(1)
 		go func(vm VMDef) {
 			defer wg.Done()
-			result, err := b.ensureVM(vm, b.Env.RootDiskSize, logCh)
+			result, err := b.ensureVM(vm, b.Env.RootDiskSize, sshKeys, logCh)
 			if err != nil {
 				errCh <- err
 				return
@@ -122,9 +126,28 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	return nil
 }
 
+func (b *GCPBootstrapper) getSSHKeys() (string, error) {
+	sshKeys := ""
+	if b.Env.GitHubPAT != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubTeamSlug != "" {
+		var err error
+		sshKeys, err = github.GetSSHKeysFromGitHubTeam(b.GitHubClient, b.Env.GitHubTeamOrg, b.Env.GitHubTeamSlug)
+		if err != nil {
+			return "", fmt.Errorf("failed to get SSH keys from GitHub team: %w", err)
+		}
+	}
+
+	pubKey, err := b.ReadSSHKey(b.Env.SSHPublicKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to read SSH public key: %w", err)
+	}
+
+	sshKeys += fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")
+	return sshKeys, nil
+}
+
 // ensureVM handles the full lifecycle of a single VM: check existence, restart if stopped,
 // or create a new instance with spot fallback. Returns the VM result with assigned IPs.
-func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, logCh chan<- string) (vmResult, error) {
+func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, sshKeys string, logCh chan<- string) (vmResult, error) {
 	projectID := b.Env.ProjectID
 	zone := b.Env.Zone
 
@@ -143,7 +166,7 @@ func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, logCh chan<- st
 			return vmResult{}, fmt.Errorf("instance %s is SUSPENDED; manual resume is required", vm.Name)
 		}
 	} else {
-		instance, err := b.buildInstanceSpec(vm, rootDiskSize)
+		instance, err := b.buildInstanceSpec(vm, rootDiskSize, sshKeys)
 		if err != nil {
 			return vmResult{}, err
 		}
@@ -167,7 +190,7 @@ func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, logCh chan<- st
 }
 
 // buildInstanceSpec constructs the full compute instance specification for a VM.
-func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64) (*computepb.Instance, error) {
+func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64, sshKeys string) (*computepb.Instance, error) {
 	projectID := b.Env.ProjectID
 	region := b.Env.Region
 	zone := b.Env.Zone
@@ -199,22 +222,6 @@ func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64) (*comp
 			},
 		})
 	}
-
-	sshKeys := ""
-	if b.Env.GitHubPAT != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubTeamSlug != "" {
-		var err error
-		sshKeys, err = github.GetSSHKeysFromGitHubTeam(b.GitHubClient, b.Env.GitHubTeamOrg, b.Env.GitHubTeamSlug)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get SSH keys from GitHub team: %w", err)
-		}
-	}
-
-	pubKey, err := b.ReadSSHKey(b.Env.SSHPublicKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read SSH public key: %w", err)
-	}
-
-	sshKeys += fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")
 
 	serviceAccount := fmt.Sprintf("cloud-controller@%s.iam.gserviceaccount.com", projectID)
 	instance := &computepb.Instance{

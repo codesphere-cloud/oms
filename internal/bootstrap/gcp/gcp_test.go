@@ -216,7 +216,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// EnsureComputeInstances
 			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
 			mockGetInstanceNotFoundThenRunning(gc, projectId, "us-central1-a", ipResp, 8)
-			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(8)
+			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(1)
 			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(8)
 
 			// EnsureGatewayIPAddresses
