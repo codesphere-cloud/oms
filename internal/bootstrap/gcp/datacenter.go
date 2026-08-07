@@ -69,9 +69,10 @@ func (b *GCPBootstrapper) ensureConfigManagers() {
 	}
 }
 
-// adoptLegacyEnvFields moves state that a caller supplied through the deprecated top-level
-// environment fields into the primary data center. Infra files written before multi-DC support
-// carry the primary data center's nodes and IPs there.
+// adoptLegacyEnvFields moves state that reached the environment through the fields the primary
+// data center's state lived in before multi-DC support into the primary data center itself. This
+// is the only place those fields are still read: infra files written by an earlier OMS carry the
+// nodes and IPs there, and cleanup and restart-vms have to keep working with them.
 func (b *GCPBootstrapper) adoptLegacyEnvFields() {
 	primary := b.Env.DataCenters[0]
 	if len(primary.ControlPlaneNodes) == 0 {
@@ -91,7 +92,7 @@ func (b *GCPBootstrapper) adoptLegacyEnvFields() {
 	}
 
 	if primary.SSHProxyIP == "" {
-		primary.SSHProxyIP = b.Env.SshProxyIP
+		primary.SSHProxyIP = b.Env.SSHProxyIP
 	}
 
 	if primary.InstallConfig == nil {
@@ -102,25 +103,6 @@ func (b *GCPBootstrapper) adoptLegacyEnvFields() {
 	if b.Env.ExistingConfigUsed {
 		primary.ExistingConfigUsed = true
 	}
-}
-
-// mirrorPrimaryDataCenter projects the primary data center's state back onto the top-level
-// environment fields it lived in before multi-DC support. The steps that still read those fields
-// keep working while they are migrated one by one, and the infra file keeps the shape an earlier
-// OMS wrote. The projection is one-way and never read back into a DataCenter.
-func (b *GCPBootstrapper) mirrorPrimaryDataCenter() {
-	if len(b.Env.DataCenters) == 0 {
-		return
-	}
-
-	primary := b.primaryDC()
-	b.Env.ControlPlaneNodes = primary.ControlPlaneNodes
-	b.Env.CephNodes = primary.CephNodes
-	b.Env.GatewayIP = primary.GatewayIP
-	b.Env.PublicGatewayIP = primary.PublicGatewayIP
-	b.Env.SshProxyIP = primary.SSHProxyIP
-	b.Env.InstallConfig = primary.InstallConfig
-	b.Env.ExistingConfigUsed = primary.ExistingConfigUsed
 }
 
 // newDataCenter builds one data center, deriving its resource names, file paths and domains

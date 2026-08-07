@@ -271,8 +271,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// Verify nodes are properly set in the environment
 			Expect(bs.Env.Jumpbox).NotTo(BeNil())
 			Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
-			Expect(bs.Env.CephNodes).To(HaveLen(3))
-			Expect(bs.Env.ControlPlaneNodes).To(HaveLen(3))
+			primary := bs.Env.DataCenters[0]
+			Expect(primary.CephNodes).To(HaveLen(3))
+			Expect(primary.ControlPlaneNodes).To(HaveLen(3))
 
 			// Verify mock returns expected values
 			Expect(bs.Env.Jumpbox.GetName()).To(Equal("jumpbox"))
@@ -283,19 +284,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Expect(bs.Env.PostgreSQLNode.GetExternalIP()).To(Equal("1.2.3.4"))
 			Expect(bs.Env.PostgreSQLNode.GetInternalIP()).To(Equal("10.0.0.1"))
 
-			for _, cephNode := range bs.Env.CephNodes {
+			for _, cephNode := range primary.CephNodes {
 				Expect(cephNode.GetName()).To(MatchRegexp("ceph-\\d+"))
 				Expect(cephNode.GetExternalIP()).To(Equal("1.2.3.4"))
 				Expect(cephNode.GetInternalIP()).To(Equal("10.0.0.1"))
 			}
 
-			for _, cpNode := range bs.Env.ControlPlaneNodes {
+			for _, cpNode := range primary.ControlPlaneNodes {
 				Expect(cpNode.GetName()).To(MatchRegexp("k0s-\\d+"))
 				Expect(cpNode.GetExternalIP()).To(Equal("1.2.3.4"))
 				Expect(cpNode.GetInternalIP()).To(Equal("10.0.0.1"))
 			}
 
-			Expect(len(bs.Env.InstallConfig.Codesphere.ManagedServices)).To(Equal(5))
+			Expect(len(primary.InstallConfig.Codesphere.ManagedServices)).To(Equal(5))
 		})
 	})
 
@@ -1142,9 +1143,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.EnsureGatewayIPAddresses()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(bs.Env.GatewayIP).To(Equal("1.1.1.1"))
-				Expect(bs.Env.PublicGatewayIP).To(Equal("2.2.2.2"))
-				Expect(bs.Env.SshProxyIP).To(Equal("3.3.3.3"))
+
+				primary := bs.Env.DataCenters[0]
+				Expect(primary.GatewayIP).To(Equal("1.1.1.1"))
+				Expect(primary.PublicGatewayIP).To(Equal("2.2.2.2"))
+				Expect(primary.SSHProxyIP).To(Equal("3.3.3.3"))
 			})
 		})
 

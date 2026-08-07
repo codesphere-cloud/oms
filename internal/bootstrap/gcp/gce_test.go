@@ -652,8 +652,8 @@ var _ = Describe("GCE", func() {
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(len(bs.Env.ControlPlaneNodes)).To(Equal(3))
-				Expect(len(bs.Env.CephNodes)).To(Equal(3))
+				Expect(len(bs.Env.DataCenters[0].ControlPlaneNodes)).To(Equal(3))
+				Expect(len(bs.Env.DataCenters[0].CephNodes)).To(Equal(3))
 				Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
 				Expect(bs.Env.Jumpbox).NotTo(BeNil())
 			})
