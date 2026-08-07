@@ -208,8 +208,6 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		})
 	}
 
-	b.mirrorPrimaryDataCenter()
-
 	return nil
 }
 
