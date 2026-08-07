@@ -32,6 +32,8 @@ var _ = Describe("InstallCodesphereCmd", func() {
 			GlobalOptions: globalOpts,
 			Package:       "codesphere-v1.66.0-installer-lite.tar.gz",
 			Force:         false,
+			VaultType:     "sops",
+			PrivKey:       "age-key.txt",
 		}
 		c = codesphere.InstallCodesphereCmd{
 			Opts: opts,
@@ -124,6 +126,7 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 		vaultFlag := codesphereCmd.PersistentFlags().Lookup("vault")
 		Expect(vaultFlag).NotTo(BeNil())
 		Expect(vaultFlag.DefValue).To(Equal(""))
+		Expect(codesphereCmd.PersistentFlags().Lookup("vault-type")).To(BeNil())
 
 		skipStepFlag := codesphereCmd.PersistentFlags().Lookup("skip-steps")
 		Expect(skipStepFlag).NotTo(BeNil())

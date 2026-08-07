@@ -141,7 +141,11 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	}
 
 	stlog := bootstrap.NewStepLogger(false)
-	icg := installer.NewInstallConfigManager()
+
+	icg, err := installer.NewInstallConfigManager("plain", "")
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
+	}
 	fw := intutil.NewFilesystemWriter()
 	kubeClient, restConfig, err := c.GetKubeClient(ctx)
 	if err != nil {

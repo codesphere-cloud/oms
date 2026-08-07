@@ -15,7 +15,6 @@ import (
 
 	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
@@ -228,7 +227,7 @@ codesphere:
 			opts.PostgresPrimaryIP = "10.10.0.4"
 			opts.PostgresServer = "new-postgres-primary"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -238,10 +237,9 @@ codesphere:
 			Expect(icg.GetVault().GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
 			Expect(config.Postgres.Primary.SSLConfig.ServerCertPem).NotTo(BeEmpty())
 
-			encrypted, err := vault.IsSOPSEncryptedFile(vaultFile.Name())
+			backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultFile.Name()})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(encrypted).To(BeTrue())
-			updatedVault, err := vault.LoadVaultData(vaultFile.Name(), "")
+			updatedVault, err := backend.Load()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(updatedVault.GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
 		})
@@ -250,7 +248,7 @@ codesphere:
 			opts.PostgresReplicaIP = "10.10.0.7"
 			opts.PostgresReplicaName = "new_replica"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -270,7 +268,7 @@ codesphere:
 			opts.CodespherePublicIP = "203.0.113.100"
 			opts.KubernetesPodCIDR = "10.244.0.0/16"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -292,7 +290,7 @@ codesphere:
 			opts.KubernetesPodCIDR = "100.96.0.0/11"
 			opts.KubernetesServiceCIDR = "100.64.0.0/13"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -308,7 +306,7 @@ codesphere:
 			opts.ClusterGatewayServiceType = "NodePort"
 			opts.ClusterGatewayIPAddresses = []string{"192.168.1.200", "192.168.1.201"}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -324,7 +322,7 @@ codesphere:
 			opts.CodesphereDNSServers = []string{"1.1.1.1", "1.0.0.1"}
 			opts.CodesphereWorkspaceHostingBaseDomain = "workspaces.updated.example.com"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -339,7 +337,7 @@ codesphere:
 		It("should update Ceph nodes subnet", func() {
 			opts.CephNodesSubnet = "10.53.102.0/24"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -359,7 +357,7 @@ codesphere:
 		It("should return an error", func() {
 			opts.ConfigFile = "/nonexistent/config.yaml"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load config file"))
@@ -370,7 +368,7 @@ codesphere:
 		It("should return an error", func() {
 			opts.VaultFile = "/nonexistent/vault.yaml"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load vault file"))
@@ -396,11 +394,13 @@ codesphere:
 			}
 
 			opts.CodesphereDomain = "updated.example.com"
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err = cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedVault, err := vault.LoadVaultData(vaultFile.Name(), "")
+			backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultFile.Name()})
+			Expect(err).NotTo(HaveOccurred())
+			updatedVault, err := backend.Load()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify all initial secrets are still present with the same values
@@ -427,11 +427,13 @@ codesphere:
 			}
 
 			opts.PostgresPrimaryIP = "10.20.0.10"
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err = cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedVault, err := vault.LoadVaultData(vaultFile.Name(), "")
+			backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultFile.Name()})
+			Expect(err).NotTo(HaveOccurred())
+			updatedVault, err := backend.Load()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify all initial secrets are still present with the same values

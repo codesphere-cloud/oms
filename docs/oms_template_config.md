@@ -37,10 +37,11 @@ $ oms template config --config config.yaml --vault prod.vault.yaml --age-key age
 ### Options
 
 ```
-  -k, --age-key string   Path to the age key file used to decrypt the vault (required)
-  -c, --config string    Path to the config.yaml template to render (required)
-  -h, --help             help for config
-  -v, --vault string     Path to the SOPS-encrypted prod.vault.yaml file (required)
+  -k, --age-key string      Path to the age key file (required for sops unless an age key environment variable is set)
+  -c, --config string       Path to the config.yaml template to render (required)
+  -h, --help                help for config
+  -v, --vault string        Path to the prod.vault.yaml file (required)
+      --vault-type string   Vault storage type (sops or plain) (default "sops")
 ```
 
 ### SEE ALSO

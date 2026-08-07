@@ -105,7 +105,7 @@ users:
 			},
 		}
 
-		loadedVault, restConfig, err := installer.VaultAndRESTConfig("", ageKeyPath, config)
+		loadedVault, restConfig, err := installer.VaultAndRESTConfig("", ageKeyPath, string(vault.TypeSOPS), config)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(loadedVault).ToNot(BeNil())
 		Expect(restConfig).ToNot(BeNil())

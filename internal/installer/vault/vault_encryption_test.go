@@ -161,54 +161,7 @@ var _ = Describe("VaultEncryption", func() {
 		})
 	})
 
-	Describe("IsSOPSEncryptedFile", func() {
-		var tmpDir string
-
-		BeforeEach(func() {
-			var err error
-			tmpDir, err = os.MkdirTemp("", "sops-detect-test-*")
-			Expect(err).ToNot(HaveOccurred())
-		})
-
-		AfterEach(func() {
-			Expect(os.RemoveAll(tmpDir)).To(Succeed())
-		})
-
-		It("returns false for a file without sops metadata", func() {
-			path := filepath.Join(tmpDir, "plain.yaml")
-			Expect(os.WriteFile(path, []byte("key: value\n"), 0644)).To(Succeed())
-
-			encrypted, err := vault.IsSOPSEncryptedFile(path)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(encrypted).To(BeFalse())
-		})
-
-		It("returns true for a file with sops top-level key", func() {
-			path := filepath.Join(tmpDir, "sops.yaml")
-			Expect(os.WriteFile(path, []byte("sops:\n  age: age1abc\n"), 0644)).To(Succeed())
-
-			encrypted, err := vault.IsSOPSEncryptedFile(path)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(encrypted).To(BeTrue())
-		})
-
-		It("returns false for an empty file", func() {
-			path := filepath.Join(tmpDir, "empty.yaml")
-			Expect(os.WriteFile(path, []byte{}, 0644)).To(Succeed())
-
-			encrypted, err := vault.IsSOPSEncryptedFile(path)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(encrypted).To(BeFalse())
-		})
-
-		It("returns an error for a non-existent file", func() {
-			path := filepath.Join(tmpDir, "missing.yaml")
-			_, err := vault.IsSOPSEncryptedFile(path)
-			Expect(err).To(HaveOccurred())
-		})
-	})
-
-	Describe("LoadVaultData", func() {
+	Describe("file-backed vault loading", func() {
 		var tmpDir string
 
 		BeforeEach(func() {
@@ -226,11 +179,13 @@ var _ = Describe("VaultEncryption", func() {
 			plainYAML := "secrets:\n    - name: test-secret\n      fields:\n        password: hunter2\n"
 			Expect(os.WriteFile(vaultPath, []byte(plainYAML), 0644)).To(Succeed())
 
-			vault, err := vault.LoadVaultData(vaultPath, "")
+			backend, err := vault.New(vault.TypePlain, vault.Options{Path: vaultPath})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(vault.Secrets).To(HaveLen(1))
-			Expect(vault.Secrets[0].Name).To(Equal("test-secret"))
-			Expect(vault.Secrets[0].Fields.Password).To(Equal("hunter2"))
+			loaded, err := backend.Load()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(loaded.Secrets).To(HaveLen(1))
+			Expect(loaded.Secrets[0].Name).To(Equal("test-secret"))
+			Expect(loaded.Secrets[0].Fields.Password).To(Equal("hunter2"))
 		})
 
 		It("unwraps a plain file with data: | wrapper (SOPS whole-file format edge case)", func() {
@@ -238,11 +193,13 @@ var _ = Describe("VaultEncryption", func() {
 			wrappedYAML := "data: |\n    secrets:\n        - name: test-secret\n          fields:\n            password: hunter2\n"
 			Expect(os.WriteFile(vaultPath, []byte(wrappedYAML), 0644)).To(Succeed())
 
-			vault, err := vault.LoadVaultData(vaultPath, "")
+			backend, err := vault.New(vault.TypePlain, vault.Options{Path: vaultPath})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(vault.Secrets).To(HaveLen(1))
-			Expect(vault.Secrets[0].Name).To(Equal("test-secret"))
-			Expect(vault.Secrets[0].Fields.Password).To(Equal("hunter2"))
+			loaded, err := backend.Load()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(loaded.Secrets).To(HaveLen(1))
+			Expect(loaded.Secrets[0].Name).To(Equal("test-secret"))
+			Expect(loaded.Secrets[0].Fields.Password).To(Equal("hunter2"))
 		})
 
 		It("loads and decrypts a SOPS-encrypted vault end-to-end", func() {
@@ -271,16 +228,19 @@ var _ = Describe("VaultEncryption", func() {
 			encOut, err := encryptCmd.CombinedOutput()
 			Expect(err).ToNot(HaveOccurred(), string(encOut))
 
-			// LoadVaultData should detect SOPS, decrypt, unwrap data: |, and parse.
-			vault, err := vault.LoadVaultData(vaultPath, ageKeyPath)
+			backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultPath, AgeKey: ageKeyPath})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(vault.Secrets).To(HaveLen(1))
-			Expect(vault.Secrets[0].Name).To(Equal("sops-secret"))
-			Expect(vault.Secrets[0].Fields.Password).To(Equal("s3cr3t"))
+			loaded, err := backend.Load()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(loaded.Secrets).To(HaveLen(1))
+			Expect(loaded.Secrets[0].Name).To(Equal("sops-secret"))
+			Expect(loaded.Secrets[0].Fields.Password).To(Equal("s3cr3t"))
 		})
 
 		It("returns an error for a non-existent file", func() {
-			_, err := vault.LoadVaultData(filepath.Join(tmpDir, "missing.yaml"), "")
+			backend, err := vault.New(vault.TypePlain, vault.Options{Path: filepath.Join(tmpDir, "missing.yaml")})
+			Expect(err).ToNot(HaveOccurred())
+			_, err = backend.Load()
 			Expect(err).To(HaveOccurred())
 		})
 	})

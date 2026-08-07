@@ -5,7 +5,6 @@ package installer_test
 
 import (
 	"bytes"
-	"errors"
 	"os"
 	"path/filepath"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 type MockFileIO struct {
@@ -137,14 +135,13 @@ var _ = Describe("ConfigManager", func() {
 	)
 
 	BeforeEach(func() {
-		configManager = &installer.InstallConfig{
-			Config: &files.RootConfig{},
-		}
+		manager := newPlainInstallConfigManager()
+		configManager = manager.(*installer.InstallConfig)
 	})
 
 	Describe("NewInstallConfigManager", func() {
 		It("should create a new config manager", func() {
-			manager := installer.NewInstallConfigManager()
+			manager := newPlainInstallConfigManager()
 			Expect(manager).ToNot(BeNil())
 		})
 	})
@@ -546,39 +543,11 @@ var _ = Describe("ConfigManager", func() {
 	})
 
 	Describe("WriteVault", func() {
-		It("should return error if config is nil", func() {
+		It("writes independently of the install config", func() {
 			configManager.Config = nil
-			err := configManager.WriteVault("/tmp/vault.yaml", false)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no configuration provided"))
-		})
-	})
-
-	Describe("WriteVault", func() {
-		It("should preserve the existing vault when encryption fails", func() {
-			vaultPath := "prod.vault.yaml"
-			original := []byte("existing encrypted content")
-			mockIO := NewMockFileIO()
-			mockIO.files[vaultPath] = original
-			manager := &installer.InstallConfig{
-				Config: &files.RootConfig{},
-				Vault:  &files.InstallVault{},
-			}
-			ageKeyResolver := vault.NewMockAgeKeyResolver(GinkgoT())
-			ageKeyResolver.EXPECT().Resolve("", ".").Return("recipient", "", nil)
-			encryptor := vault.NewMockEncryptor(GinkgoT())
-			encryptor.EXPECT().Encrypt(
-				".prod.vault.yaml.plaintext-*mock",
-				".prod.vault.yaml.encrypted-*mock",
-				"recipient",
-			).Return(errors.New("encryption failed"))
-			manager.SetFileIO(mockIO)
-			manager.SetAgeKeyResolver(ageKeyResolver)
-			manager.SetVaultEncryptor(encryptor)
-
-			err := manager.WriteVault(vaultPath, false)
-			Expect(err).To(HaveOccurred())
-			Expect(mockIO.GetFileContent(vaultPath)).To(Equal(original))
+			vaultPath := filepath.Join(GinkgoT().TempDir(), "vault.yaml")
+			Expect(configManager.WriteVault(vaultPath, false)).To(Succeed())
+			Expect(vaultPath).To(BeAnExistingFile())
 		})
 	})
 
@@ -609,9 +578,8 @@ var _ = Describe("ConfigManager", func() {
 		})
 
 		Context("vault deduplication on re-write", func() {
-			It("should not produce duplicate vault entries when WriteUnencryptedVault is called after loading existing vault", func() {
-				mockIO := NewMockFileIO()
-				configManager.SetFileIO(mockIO)
+			It("should not produce duplicate vault entries when WriteVault is called after loading existing vault", func() {
+				vaultPath := filepath.Join(GinkgoT().TempDir(), "vault.yaml")
 
 				err := configManager.ApplyProfile("prod")
 				Expect(err).ToNot(HaveOccurred())
@@ -619,11 +587,12 @@ var _ = Describe("ConfigManager", func() {
 				err = configManager.GenerateSecrets()
 				Expect(err).ToNot(HaveOccurred())
 
-				// First write via WriteUnencryptedVault
-				err = configManager.WriteUnencryptedVault("/tmp/vault.yaml", false)
+				// First write via WriteVault
+				err = configManager.WriteVault(vaultPath, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				firstVaultBytes := mockIO.GetFileContent("/tmp/vault.yaml")
+				firstVaultBytes, err := os.ReadFile(vaultPath)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(firstVaultBytes).ToNot(BeEmpty())
 
 				// Load the written vault back
@@ -633,10 +602,11 @@ var _ = Describe("ConfigManager", func() {
 				configManager.Vault = vault
 
 				// Re-write vault (simulating a second run)
-				err = configManager.WriteUnencryptedVault("/tmp/vault.yaml", false)
+				err = configManager.WriteVault(vaultPath, false)
 				Expect(err).ToNot(HaveOccurred())
 
-				secondVaultBytes := mockIO.GetFileContent("/tmp/vault.yaml")
+				secondVaultBytes, err := os.ReadFile(vaultPath)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(secondVaultBytes).To(Equal(firstVaultBytes),
 					"serialized vault should be identical after load and re-write")
 			})
@@ -646,6 +616,9 @@ var _ = Describe("ConfigManager", func() {
 			It("should preserve matching cert/key pairs across write → load → merge → re-write cycle", func() {
 				mockIO := NewMockFileIO()
 				configManager.SetFileIO(mockIO)
+
+				vaultPath := filepath.Join(GinkgoT().TempDir(), "vault.yaml")
+				vaultPath2 := filepath.Join(GinkgoT().TempDir(), "vault2.yaml")
 
 				// --- First run: generate everything from scratch ---
 				err := configManager.ApplyProfile("prod")
@@ -672,11 +645,11 @@ var _ = Describe("ConfigManager", func() {
 				// Write config and vault
 				err = configManager.WriteInstallConfig("/tmp/config.yaml", false)
 				Expect(err).ToNot(HaveOccurred())
-				err = configManager.WriteUnencryptedVault("/tmp/vault.yaml", false)
+				err = configManager.WriteVault(vaultPath, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				// --- Second run: simulate loading existing files ---
-				configManager2 := &installer.InstallConfig{}
+				configManager2 := newPlainInstallConfigManager().(*installer.InstallConfig)
 				configManager2.SetFileIO(mockIO)
 
 				// Reload config from written YAML
@@ -691,7 +664,8 @@ var _ = Describe("ConfigManager", func() {
 					"cert should be in config.yaml")
 
 				// Reload vault from written YAML
-				vaultBytes := mockIO.GetFileContent("/tmp/vault.yaml")
+				vaultBytes, err := mockIO.ReadFile(vaultPath)
+				Expect(err).NotTo(HaveOccurred())
 				Expect(vaultBytes).ToNot(BeNil())
 				vault2 := &files.InstallVault{}
 				err = vault2.Unmarshal(vaultBytes)
@@ -712,12 +686,13 @@ var _ = Describe("ConfigManager", func() {
 				Expect(err).ToNot(HaveOccurred(), "cert/key should match after load from vault")
 
 				// Write vault again
-				err = configManager2.WriteUnencryptedVault("/tmp/vault2.yaml", false)
+				err = configManager2.WriteVault(vaultPath2, false)
 				Expect(err).ToNot(HaveOccurred())
 
 				// Verify no duplicates in re-written vault
 				vault3 := &files.InstallVault{}
-				vaultBytes2 := mockIO.GetFileContent("/tmp/vault2.yaml")
+				vaultBytes2, err := mockIO.ReadFile(vaultPath2)
+				Expect(err).NotTo(HaveOccurred())
 				err = vault3.Unmarshal(vaultBytes2)
 				Expect(err).ToNot(HaveOccurred())
 

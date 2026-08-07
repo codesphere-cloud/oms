@@ -21,9 +21,10 @@ type TemplateConfigCmd struct {
 
 type TemplateConfigOpts struct {
 	*util.GlobalOptions
-	Config string
-	Vault  string
-	AgeKey string
+	Config    string
+	Vault     string
+	AgeKey    string
+	VaultType string
 }
 
 func (c *TemplateConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -77,12 +78,12 @@ Secret names and selectors must match entries in the prod.vault.yaml file.`),
 	}
 
 	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.Config, "config", "c", "", "Path to the config.yaml template to render (required)")
-	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.Vault, "vault", "v", "", "Path to the SOPS-encrypted prod.vault.yaml file (required)")
-	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.AgeKey, "age-key", "k", "", "Path to the age key file used to decrypt the vault (required)")
+	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.Vault, "vault", "v", "", "Path to the prod.vault.yaml file (required)")
+	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.AgeKey, "age-key", "k", "", "Path to the age key file (required for sops unless an age key environment variable is set)")
+	configCmd.cmd.Flags().StringVar(&configCmd.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
 
 	util.MarkFlagRequired(configCmd.cmd, "config")
 	util.MarkFlagRequired(configCmd.cmd, "vault")
-	util.MarkFlagRequired(configCmd.cmd, "age-key")
 
 	util.AddCmd(parentCmd, configCmd.cmd)
 
@@ -95,7 +96,12 @@ func (c *TemplateConfigCmd) Render() ([]byte, error) {
 		return nil, fmt.Errorf("failed to read config file %s: %w", c.Opts.Config, err)
 	}
 
-	store := vault.NewLazyVaultTemplatingSecretStore(c.Opts.Vault, c.Opts.AgeKey)
+	backend, err := vault.NewFromString(c.Opts.VaultType, vault.Options{Path: c.Opts.Vault, AgeKey: c.Opts.AgeKey})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load vault: %w", err)
+	}
+
+	store := vault.NewLazyVaultTemplatingSecretStoreWithVault(backend)
 	rendered, err := configtemplating.RenderInstallConfigTemplate(data, store)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render config template: %w", err)

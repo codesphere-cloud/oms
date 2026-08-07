@@ -25,6 +25,9 @@ type InstallCodespherePlatformCmd struct {
 }
 
 func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) error {
+	if err := validateInstallCodesphereVault(c.Opts); err != nil {
+		return err
+	}
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -35,7 +38,7 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 }
 
 func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
-	if err := installer.EnsureClusterAdminSecret(ctx, opts.Vault, opts.PrivKey, cfg); err != nil {
+	if err := installer.EnsureClusterAdminSecret(ctx, opts.Vault, opts.PrivKey, opts.VaultType, cfg); err != nil {
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 

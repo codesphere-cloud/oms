@@ -24,6 +24,9 @@ type InstallCodesphereInfraCmd struct {
 }
 
 func (c *InstallCodesphereInfraCmd) RunE(_ *cobra.Command, _ []string) error {
+	if err := validateInstallCodesphereVault(c.Opts); err != nil {
+		return err
+	}
 	effectiveOpts, _, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err

@@ -40,6 +40,7 @@ type InstallK0sOpts struct {
 	NoDownload    bool
 	Vault         string
 	VaultPrivKey  string
+	VaultType     string
 }
 
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
@@ -88,6 +89,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 
 	k0s.cmd.Flags().StringVar(&k0s.Opts.Vault, "vault", "", "Path to prod.vault.yaml to save the kubeconfig into (optional)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.VaultPrivKey, "vault-priv-key", "", "Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
 
 	_ = k0s.cmd.MarkFlagRequired("install-config")
 
@@ -145,18 +147,16 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 }
 
 func (c *InstallK0sCmd) loadInstallConfig() (*files.RootConfig, error) {
-	icg := installer.NewInstallConfigManager()
-	if err := icg.LoadInstallConfigFromFile(c.Opts.InstallConfig); err != nil {
+	config, err := installer.NewConfig().ParseConfigYaml(c.Opts.InstallConfig)
+	if err != nil {
 		return nil, fmt.Errorf("failed to load install-config: %w", err)
 	}
-
-	config := icg.GetInstallConfig()
 
 	if !config.Kubernetes.ManagedByCodesphere {
 		return nil, fmt.Errorf("install-config specifies external Kubernetes, k0s installation is only supported for Codesphere-managed Kubernetes")
 	}
 
-	return config, nil
+	return &config, nil
 }
 
 func (c *InstallK0sCmd) determineK0sVersion(k0s installer.K0sManager) (string, error) {
@@ -261,12 +261,12 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 		},
 	})
 
-	vaultYAML, err := vault.Marshal()
+	store, err := c.vaultStore()
 	if err != nil {
-		return fmt.Errorf("failed to marshal vault: %w", err)
+		return err
 	}
 
-	if err := c.writeEncryptedVault(vaultYAML); err != nil {
+	if err := store.Save(vault); err != nil {
 		return err
 	}
 
@@ -274,39 +274,24 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	return nil
 }
 
-// writeEncryptedVault writes vaultYAML to the vault path, encrypting it with SOPS.
-// Uses a temporary file so the original vault is left untouched on failure.
-func (c *InstallK0sCmd) writeEncryptedVault(vaultYAML []byte) error {
-	tmpPath := c.Opts.Vault + ".tmp"
-
-	if err := c.FileWriter.WriteFile(tmpPath, vaultYAML, 0600); err != nil {
-		return fmt.Errorf("failed to write temporary vault file: %w", err)
-	}
-
-	recipient, _, err := vault.ResolveAgeKey(c.Opts.VaultPrivKey, "")
-	if err != nil {
-		_ = c.FileWriter.Remove(tmpPath)
-		return fmt.Errorf("failed to resolve age key for vault rencryption: %w", err)
-	}
-
-	if err := vault.EncryptFileWithSOPS(tmpPath, c.Opts.Vault, recipient); err != nil {
-		_ = c.FileWriter.Remove(tmpPath)
-		return fmt.Errorf("failed to encrypt vault file: %w", err)
-	}
-
-	_ = c.FileWriter.Remove(tmpPath)
-	return nil
-}
-
 func (c *InstallK0sCmd) loadOrCreateVault() (*files.InstallVault, error) {
-	if !c.FileWriter.Exists(c.Opts.Vault) {
-		return &files.InstallVault{}, nil
+	store, err := c.vaultStore()
+	if err != nil {
+		return nil, err
 	}
 
-	vault, err := vault.LoadVaultData(c.Opts.Vault, c.Opts.VaultPrivKey)
+	data, err := store.LoadOrCreate()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}
 
+	return data, nil
+}
+
+func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
+	vault, err := vault.NewFromString(c.Opts.VaultType, vault.Options{Path: c.Opts.Vault, AgeKey: c.Opts.VaultPrivKey})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load vault: %w", err)
+	}
 	return vault, nil
 }
