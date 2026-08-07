@@ -861,7 +861,10 @@ func (b *GCPBootstrapper) verifySecondaryDataCenterSecrets(primary, dc *DataCent
 	primaryVault := primary.icg.GetVault()
 	vault := dc.icg.GetVault()
 
-	shared := []string{files.SecretTokenPrivateKey, files.SecretPostgresPassword}
+	// openFgaPresharedKey is in here because a secondary data center that already has a vault is
+	// not re-derived, but GenerateSecrets still runs for it — so a vault predating the key gets a
+	// freshly generated one that the shared OpenFGA instance rejects.
+	shared := []string{files.SecretTokenPrivateKey, files.SecretPostgresPassword, files.SecretOpenFgaPresharedKey}
 	for _, svc := range codesphere.PostgresServices {
 		shared = append(shared, files.PostgresUserSecretName(svc.Name), files.PostgresPasswordSecretName(svc.Name))
 	}
@@ -871,7 +874,7 @@ func (b *GCPBootstrapper) verifySecondaryDataCenterSecrets(primary, dc *DataCent
 			continue
 		}
 		if !reflect.DeepEqual(vault.GetSecret(name), expected) {
-			return fmt.Errorf("secret %q of data center %d differs from the primary data center, but both use the same database", name, dc.ID)
+			return fmt.Errorf("secret %q of data center %d differs from the primary data center, but both data centers share it", name, dc.ID)
 		}
 	}
 

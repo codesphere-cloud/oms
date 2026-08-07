@@ -360,6 +360,7 @@ type CodesphereConfig struct {
 	OAuth                      *OAuthProvidersConfig  `yaml:"oauth,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
+	OpenFga                    *OpenFgaConfig         `yaml:"openFga,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
 	TelemetryExport            *TelemetryExport       `yaml:"telemetryExport,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
@@ -380,6 +381,38 @@ type OpenBaoConfig struct {
 	Engine string `yaml:"engine,omitempty"`
 	URI    string `yaml:"uri,omitempty"`
 	User   string `yaml:"user,omitempty"`
+}
+
+// OpenFgaConfig configures the authorization store. One OpenFGA instance serves a whole
+// installation, so in a multi-data-center setup exactly one data center deploys and exposes
+// it (Deploy + Expose) and every other one only points at it (APIURL).
+type OpenFgaConfig struct {
+	// Deploy controls whether pc-applications deploys OpenFGA in this data center.
+	// Defaults to true when unset, matching the pc-applications chart.
+	Deploy *bool `yaml:"deploy,omitempty"`
+	// APIURL is the URL the Codesphere services reach OpenFGA at. Defaults to the
+	// in-cluster service of a locally deployed OpenFGA; required when Deploy is false.
+	APIURL string `yaml:"apiUrl,omitempty"`
+	// Expose publishes the deployed OpenFGA through the Codesphere gateway so the other
+	// data centers can reach it.
+	Expose *OpenFgaExposeConfig `yaml:"expose,omitempty"`
+}
+
+type OpenFgaExposeConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Host OpenFGA is served under. Must resolve to this data center's public IP and
+	// is what the other data centers put in their APIURL.
+	Host string `yaml:"host,omitempty"`
+}
+
+// DeploysOpenFga reports whether pc-applications should deploy OpenFGA in this data center.
+func (c *OpenFgaConfig) DeploysOpenFga() bool {
+	return c == nil || c.Deploy == nil || *c.Deploy
+}
+
+// ExposesOpenFga reports whether the deployed OpenFGA is published through the gateway.
+func (c *OpenFgaConfig) ExposesOpenFga() bool {
+	return c != nil && c.Expose != nil && c.Expose.Enabled
 }
 
 type OAuthProvidersConfig struct {

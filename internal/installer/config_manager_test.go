@@ -298,6 +298,55 @@ var _ = Describe("ConfigManager", func() {
 			})
 		})
 
+		Context("openFga validation", func() {
+			It("should accept an absent openFga block", func() {
+				configManager.Config.Codesphere.OpenFga = nil
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).NotTo(ContainElement(ContainSubstring("OpenFGA")))
+			})
+
+			It("should require an apiUrl when the data center does not deploy OpenFGA", func() {
+				deploy := false
+				configManager.Config.Codesphere.OpenFga = &files.OpenFgaConfig{Deploy: &deploy}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("OpenFGA apiUrl is required")))
+			})
+
+			It("should validate the apiUrl format", func() {
+				configManager.Config.Codesphere.OpenFga = &files.OpenFgaConfig{APIURL: "not-a-valid-url"}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("OpenFGA apiUrl must be a valid URL")))
+			})
+
+			It("should require a host when exposing OpenFGA", func() {
+				configManager.Config.Codesphere.OpenFga = &files.OpenFgaConfig{
+					Expose: &files.OpenFgaExposeConfig{Enabled: true},
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("OpenFGA expose host is required")))
+			})
+
+			It("should reject exposing an OpenFGA the data center does not deploy", func() {
+				deploy := false
+				configManager.Config.Codesphere.OpenFga = &files.OpenFgaConfig{
+					Deploy: &deploy,
+					APIURL: "https://openfga.1.cs.example.com",
+					Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "openfga.2.cs.example.com"},
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("cannot be exposed by a data center that does not deploy it")))
+			})
+
+			It("should accept a data center that deploys and exposes OpenFGA", func() {
+				configManager.Config.Codesphere.OpenFga = &files.OpenFgaConfig{
+					APIURL: "https://openfga.1.cs.example.com",
+					Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "openfga.1.cs.example.com"},
+				}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).NotTo(ContainElement(ContainSubstring("OpenFGA")))
+			})
+		})
+
 		Context("ceph validation", func() {
 			It("should require at least one Ceph host", func() {
 				configManager.Config.Ceph.Hosts = []files.CephHost{}
@@ -424,6 +473,7 @@ var _ = Describe("ConfigManager", func() {
 						{Name: "selfSignedCaKeyPem"},
 						{Name: "domainAuthPrivateKey"},
 						{Name: "domainAuthPublicKey"},
+						{Name: "openFgaPresharedKey"},
 					},
 				}
 			})
@@ -443,9 +493,10 @@ var _ = Describe("ConfigManager", func() {
 					},
 				}
 				errors := configManager.ValidateVault()
-				Expect(errors).To(HaveLen(4))
+				Expect(errors).To(HaveLen(5))
 				Expect(errors).To(ContainElement(ContainSubstring("domainAuthPrivateKey")))
 				Expect(errors).To(ContainElement(ContainSubstring("domainAuthPublicKey")))
+				Expect(errors).To(ContainElement(ContainSubstring("openFgaPresharedKey")))
 			})
 		})
 	})

@@ -87,8 +87,29 @@ func DeriveDataCenterConfig(primary *files.RootConfig) (*files.RootConfig, error
 		return nil, fmt.Errorf("clone primary data center config: %w", err)
 	}
 	clearDataCenterScopedConfig(derived)
+	deriveOpenFgaConfig(primary, derived)
 
 	return derived, nil
+}
+
+// deriveOpenFgaConfig points the derived data center at the primary's OpenFGA instead of letting
+// it deploy one of its own. An installation has a single authorization store, so a second
+// deployment would mean a second, empty set of permissions.
+//
+// Only possible when the primary exposes OpenFGA — that exposed host is the derived data center's
+// only route to it. When it does not, the block is left as the primary wrote it, and completing it
+// (exposing the primary, or pointing this data center at some other reachable instance) is up to
+// whoever set up the config.
+func deriveOpenFgaConfig(primary, derived *files.RootConfig) {
+	if !primary.Codesphere.OpenFga.ExposesOpenFga() {
+		return
+	}
+
+	deploy := false
+	derived.Codesphere.OpenFga = &files.OpenFgaConfig{
+		Deploy: &deploy,
+		APIURL: "https://" + primary.Codesphere.OpenFga.Expose.Host,
+	}
 }
 
 // clearDataCenterScopedConfig resets the config fields that are written by the Ensure* functions
