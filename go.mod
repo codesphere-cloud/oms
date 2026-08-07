@@ -7,7 +7,7 @@ replace (
 	// which imports github.com/Azure/azure-sdk-for-go/version. Azure SDK
 	// v68 removed that package, so keep the legacy monorepo on the version
 	// requested by the credential helper, which still provides it.
-	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v46.4.0+incompatible
+	github.com/Azure/azure-sdk-for-go => github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	// argo-cd's go.mod resolves its nested gitops-engine module through a local
 	// directory replace, which does not carry over to consumers, so pin it here.
 	// The commit tagged for argo-cd v3.4.6 still imports the autoscaling v2beta*
