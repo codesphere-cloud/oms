@@ -26,6 +26,9 @@ $ oms beta bootstrap-gcp restart-vms --name jumpbox
 # Restart a specific k0s node
 $ oms beta bootstrap-gcp restart-vms --name k0s-1
 
+# Restart a node of the second data center of a --multi-dc bootstrap
+$ oms beta bootstrap-gcp restart-vms --name k0s-1-dc2
+
 # Restart all VMs with explicit project and zone
 $ oms beta bootstrap-gcp restart-vms --project-id my-project --zone us-central1-a
 

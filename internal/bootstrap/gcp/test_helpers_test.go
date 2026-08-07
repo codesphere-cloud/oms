@@ -24,6 +24,15 @@ import (
 
 func protoString(s string) *string { return &s }
 
+// vmNames returns the names of the given VM definitions, in order.
+func vmNames(defs []gcp.VMDef) []string {
+	names := make([]string, len(defs))
+	for i, def := range defs {
+		names[i] = def.Name
+	}
+	return names
+}
+
 // makeInstance creates a computepb.Instance with the given status and IPs.
 func makeInstance(status, internalIP, externalIP string) *computepb.Instance {
 	inst := &computepb.Instance{
