@@ -14,8 +14,19 @@ on:
 
 jobs:
 
-  build:
+  build-test:
+    name: ${{ matrix.label }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - task: build
+            label: Build
+          - task: test
+            label: Test
+          - task: install-config
+            label: Install-Config
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -24,42 +35,38 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Build
+      - name: Build CLI
+        if: ${{ matrix.task == 'build' || matrix.task == 'install-config' }}
         run: make build-cli
 
-      - name: Slack Notification on Failure
-        if: ${{ failure() && github.ref == 'refs/heads/main' }}
-        run: |
-          curl -X POST \
-            -H 'Content-type: application/json' \
-            --data '{
-              "channel": "#team-oms-sdk",
-              "icon_emoji": ":siren:",
-              "text": "🚨 Build Job Failure 🚨\nRepository: ${{ github.repository }}\nBranch/Ref: `${{ github.ref }}`\nRun url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            }' \
-            ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-      - name: Set up Go
-        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5 # v6
-        with:
-          go-version-file: 'go.mod'
-
       - name: Test
+        if: ${{ matrix.task == 'test' }}
         run: make test
 
+      - name: Generate and validate install configs
+        if: ${{ matrix.task == 'install-config' }}
+        run: |
+          set -euo pipefail
+          for profile in dev minimal production; do
+            echo "==> Generating install config for profile: ${profile}"
+            ./oms init install-config \
+              --profile "${profile}" \
+              --interactive=false \
+              -c "config-${profile}.yaml" \
+              --vault "prod-${profile}.vault.yaml"
+
+            echo "==> Validating generated install config for profile: ${profile}"
+            # Validate the config only; the freshly generated vault is plaintext and
+            # --validate requires a SOPS-encrypted vault to validate vault contents.
+            ./oms init install-config \
+              --validate \
+              -c "config-${profile}.yaml" \
+              --vault ""
+          done
+
       - name: Slack Notification on Failure
         if: ${{ failure() && github.ref == 'refs/heads/main' }}
-        run: |
-          curl -X POST \
-            -H 'Content-type: application/json' \
-            --data '{
-              "channel": "#team-oms-sdk",
-              "icon_emoji": ":siren:",
-              "text": "🚨 Build Job Failure 🚨\nRepository: ${{ github.repository }}\nBranch/Ref: `${{ github.ref }}`\nRun url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-            }' \
-            ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}
+        uses: ./.github/actions/slack-notify
+        with:
+          job-name: ${{ matrix.label }}
+          webhook: ${{ secrets.PACKAGE_JOB_SLACK_WEBHOOK }}

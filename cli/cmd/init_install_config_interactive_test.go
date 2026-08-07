@@ -5,12 +5,15 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/codesphere-cloud/oms/internal/util/testing"
 )
@@ -85,23 +88,13 @@ var _ = Describe("Interactive profile usage", func() {
 		})
 
 		It("should generate valid config files with profile", func() {
-			configFile, err := os.CreateTemp("", "config-*.yaml")
-			Expect(err).NotTo(HaveOccurred())
-			defer func() { _ = os.Remove(configFile.Name()) }()
-			err = configFile.Close()
-			Expect(err).NotTo(HaveOccurred())
-
-			vaultFile, err := os.CreateTemp("", "vault-*.yaml")
-			Expect(err).NotTo(HaveOccurred())
-			defer func() { _ = os.Remove(vaultFile.Name()) }()
-			err = vaultFile.Close()
-			Expect(err).NotTo(HaveOccurred())
+			configPath, vaultPath := newTempConfigVaultPair()
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{
 					GlobalOptions: &util.GlobalOptions{},
-					ConfigFile:    configFile.Name(),
-					VaultFile:     vaultFile.Name(),
+					ConfigFile:    configPath,
+					VaultFile:     vaultPath,
 					Profile:       "dev",
 					Interactive:   false, // Non-interactive to avoid stdin issues
 				},
@@ -109,18 +102,18 @@ var _ = Describe("Interactive profile usage", func() {
 			}
 
 			icg := installer.NewInstallConfigManager()
-			err = c.InitInstallConfig(icg)
+			err := c.InitInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify files were created
-			_, err = os.Stat(configFile.Name())
+			_, err = os.Stat(configPath)
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = os.Stat(vaultFile.Name())
+			_, err = os.Stat(vaultPath)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify config content
-			err = icg.LoadInstallConfigFromFile(configFile.Name())
+			err = icg.LoadInstallConfigFromFile(configPath)
 			Expect(err).NotTo(HaveOccurred())
 
 			config := icg.GetInstallConfig()
@@ -171,23 +164,13 @@ var _ = Describe("Interactive profile usage", func() {
 		})
 
 		It("should still fail in non-interactive mode with validation errors", func() {
-			configFile, err := os.CreateTemp("", "config-*.yaml")
-			Expect(err).NotTo(HaveOccurred())
-			defer func() { _ = os.Remove(configFile.Name()) }()
-			err = configFile.Close()
-			Expect(err).NotTo(HaveOccurred())
-
-			vaultFile, err := os.CreateTemp("", "vault-*.yaml")
-			Expect(err).NotTo(HaveOccurred())
-			defer func() { _ = os.Remove(vaultFile.Name()) }()
-			err = vaultFile.Close()
-			Expect(err).NotTo(HaveOccurred())
+			configPath, vaultPath := newTempConfigVaultPair()
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{
 					GlobalOptions:        &util.GlobalOptions{},
-					ConfigFile:           configFile.Name(),
-					VaultFile:            vaultFile.Name(),
+					ConfigFile:           configPath,
+					VaultFile:            vaultPath,
 					Profile:              "dev",
 					Interactive:          false,
 					CodesphereOpenBaoUri: "not-a-valid-url",
@@ -197,9 +180,129 @@ var _ = Describe("Interactive profile usage", func() {
 
 			icg := installer.NewInstallConfigManager()
 
-			err = c.InitInstallConfig(icg)
+			err := c.InitInstallConfig(icg)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("configuration validation failed"))
 		})
+	})
+})
+
+var _ = Describe("Non-interactive install-config generation", func() {
+	DescribeTable("generates and validates the config for each profile",
+		func(profile string) {
+			configPath, vaultPath := newTempConfigVaultPair()
+
+			c := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					GlobalOptions: &util.GlobalOptions{},
+					ConfigFile:    configPath,
+					VaultFile:     vaultPath,
+					Profile:       profile,
+					Interactive:   false,
+				},
+				FileWriter: intutil.NewFilesystemWriter(),
+			}
+
+			icg := installer.NewInstallConfigManager()
+			err := c.InitInstallConfig(icg)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Both files must have been written.
+			_, err = os.Stat(configPath)
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Stat(vaultPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The generated config must round-trip through the full load path and validate.
+			err = icg.LoadInstallConfigFromFile(configPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(icg.ValidateInstallConfig()).To(BeEmpty())
+
+			// The --validate CLI path must pass. The vault is skipped because the freshly
+			// generated vault is plaintext and LoadVaultFromFile requires SOPS encryption.
+			validateCmd := &InitInstallConfigCmd{
+				Opts: &InitInstallConfigOpts{
+					GlobalOptions: &util.GlobalOptions{},
+					ConfigFile:    configPath,
+					VaultFile:     "",
+					ValidateOnly:  true,
+				},
+				FileWriter: intutil.NewFilesystemWriter(),
+			}
+			validateIcg := installer.NewInstallConfigManager()
+			Expect(validateCmd.validateOnly(validateIcg)).To(Succeed())
+		},
+		Entry("dev profile", "dev"),
+		Entry("minimal profile", "minimal"),
+		Entry("production profile", "production"),
+	)
+})
+
+// newTempConfigVaultPair returns paths to fresh config/vault files inside an
+// auto-cleaned temp directory.
+func newTempConfigVaultPair() (configPath, vaultPath string) {
+	dir := GinkgoT().TempDir()
+	return filepath.Join(dir, "config.yaml"), filepath.Join(dir, "prod.vault.yaml")
+}
+
+var _ = Describe("Non-interactive Kubernetes CIDR flags", func() {
+	// buildCmd returns a command wired to a real cobra.Command registering the
+	// k8s flags (mirroring AddInitInstallConfigCmd), so Flags().Changed works.
+	buildCmd := func(opts *InitInstallConfigOpts) *InitInstallConfigCmd {
+		cmd := &cobra.Command{Use: "install-config"}
+		cmd.Flags().BoolVar(&opts.KubernetesManagedByCodesphere, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
+		cmd.Flags().StringVar(&opts.KubernetesPodCIDR, "k8s-pod-cidr", "", "Pod CIDR (required when --k8s-managed=false)")
+		cmd.Flags().StringVar(&opts.KubernetesServiceCIDR, "k8s-service-cidr", "", "Service CIDR (required when --k8s-managed=false)")
+
+		return &InitInstallConfigCmd{cmd: cmd, Opts: opts}
+	}
+
+	It("applies --k8s-managed=false with both CIDRs", func() {
+		c := buildCmd(&InitInstallConfigOpts{GlobalOptions: &util.GlobalOptions{}})
+		Expect(c.cmd.Flags().Set("k8s-managed", "false")).To(Succeed())
+		Expect(c.cmd.Flags().Set("k8s-pod-cidr", "10.200.0.0/16")).To(Succeed())
+		Expect(c.cmd.Flags().Set("k8s-service-cidr", "10.100.0.0/16")).To(Succeed())
+
+		root := files.NewRootConfig()
+		config := &root
+		c.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Kubernetes.ManagedByCodesphere).To(BeFalse())
+		Expect(config.Kubernetes.PodCIDR).To(Equal("10.200.0.0/16"))
+		Expect(config.Kubernetes.ServiceCIDR).To(Equal("10.100.0.0/16"))
+	})
+
+	It("does not override managed Kubernetes when --k8s-managed is not set", func() {
+		c := buildCmd(&InitInstallConfigOpts{GlobalOptions: &util.GlobalOptions{}})
+
+		// The flag is not passed, so its default (true) must not overwrite an
+		// existing value on the config, e.g. one loaded from disk.
+		root := files.NewRootConfig()
+		config := &root
+		config.Kubernetes.ManagedByCodesphere = false
+
+		c.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Kubernetes.ManagedByCodesphere).To(BeFalse())
+		Expect(config.Kubernetes.PodCIDR).To(BeEmpty())
+		Expect(config.Kubernetes.ServiceCIDR).To(BeEmpty())
+	})
+
+	It("fails when --k8s-managed=false and the pod CIDR is missing", func() {
+		configPath, vaultPath := newTempConfigVaultPair()
+		opts := &InitInstallConfigOpts{
+			GlobalOptions: &util.GlobalOptions{},
+			ConfigFile:    configPath,
+			VaultFile:     vaultPath,
+			Profile:       "dev",
+			Interactive:   false,
+		}
+		c := buildCmd(opts)
+		Expect(c.cmd.Flags().Set("k8s-managed", "false")).To(Succeed())
+
+		icg := installer.NewInstallConfigManager()
+		err := c.InitInstallConfig(icg)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("pod CIDR is required"))
 	})
 })

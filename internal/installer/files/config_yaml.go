@@ -68,7 +68,6 @@ type RootConfig struct {
 	Ceph                   CephConfig                    `yaml:"ceph"`
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
 	Cluster                ClusterConfig                 `yaml:"cluster"`
-	MetalLB                *MetalLBConfig                `yaml:"metallb,omitempty"`
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
 	PcApps                 ChartValues                   `yaml:"pcApps,omitempty"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
@@ -185,6 +184,7 @@ type ClusterConfig struct {
 	Monitoring          *MonitoringConfig          `yaml:"monitoring,omitempty"`
 	Gateway             GatewayConfig              `yaml:"gateway"`
 	PublicGateway       GatewayConfig              `yaml:"publicGateway"`
+	MetalLB             *MetalLBConfig             `yaml:"metallb,omitempty"`
 	RookExternalCluster *RookExternalClusterConfig `yaml:"rookExternalCluster,omitempty"`
 	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
 	BarmanCloudPlugin   *BarmanCloudPluginConfig   `yaml:"BarmanCloudPluginConfig,omitempty"`
@@ -657,7 +657,6 @@ func (c *RootConfig) Unmarshal(data []byte) error {
 func NewRootConfig() RootConfig {
 	return RootConfig{
 		Registry:               &RegistryConfig{},
-		MetalLB:                &MetalLBConfig{},
 		PcApps:                 ChartValues{},
 		ManagedServiceBackends: &ManagedServiceBackendsConfig{},
 	}

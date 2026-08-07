@@ -179,24 +179,31 @@ func (g *InstallConfig) collectGatewayConfig(prompter *Prompter) {
 func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 	log.Println("\n=== MetalLB Configuration (Optional) ===")
 
-	g.Config.MetalLB.Enabled = prompter.Bool("Enable MetalLB", g.Config.MetalLB.Enabled)
+	if g.Config.Cluster.MetalLB == nil {
+		g.Config.Cluster.MetalLB = &files.MetalLBConfig{}
+	}
 
-	if g.Config.MetalLB.Enabled {
-		defaultNumPools := len(g.Config.MetalLB.Pools)
+	g.Config.Cluster.MetalLB.Enabled = prompter.Bool("Enable MetalLB", g.Config.Cluster.MetalLB.Enabled)
+
+	if g.Config.Cluster.MetalLB.Enabled {
+		defaultNumPools := len(g.Config.Cluster.MetalLB.Pools)
 		if defaultNumPools == 0 {
 			defaultNumPools = 1
 		}
 		numPools := prompter.Int("Number of MetalLB IP pools", defaultNumPools)
 
-		g.Config.MetalLB.Pools = make([]files.MetalLBPoolDef, numPools)
+		existingPools := g.Config.Cluster.MetalLB.Pools
+
+		g.Config.Cluster.MetalLB.Pools = make([]files.MetalLBPoolDef, numPools)
 		for i := 0; i < numPools; i++ {
 			log.Printf("\nMetalLB Pool %d:\n", i+1)
 
 			defaultName := fmt.Sprintf("pool-%d", i+1)
 			var defaultIPs []string
-			if i < len(g.Config.MetalLB.Pools) {
-				defaultName = g.Config.MetalLB.Pools[i].Name
-				defaultIPs = g.Config.MetalLB.Pools[i].IPAddresses
+
+			if i < len(existingPools) {
+				defaultName = existingPools[i].Name
+				defaultIPs = existingPools[i].IPAddresses
 			}
 			if len(defaultIPs) == 0 {
 				defaultIPs = []string{"10.10.10.100-10.10.10.200"}
@@ -204,7 +211,7 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 
 			poolName := prompter.String("  Pool name", defaultName)
 			poolIPs := prompter.StringSlice("  IP addresses/ranges (comma-separated)", defaultIPs)
-			g.Config.MetalLB.Pools[i] = files.MetalLBPoolDef{
+			g.Config.Cluster.MetalLB.Pools[i] = files.MetalLBPoolDef{
 				Name:        poolName,
 				IPAddresses: poolIPs,
 			}
