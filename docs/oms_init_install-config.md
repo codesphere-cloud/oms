@@ -84,7 +84,7 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --openfga-backups-secret-access-key string   S3 secret access key for OpenFGA backups
       --postgres-mode string                       PostgreSQL setup mode (install/external)
       --postgres-primary-ip string                 Primary PostgreSQL server IP
-      --postgres-server string                     PostgreSQL server hostname for install mode or address for external mode
+      --postgres-server string                     PostgreSQL server: primary hostname in install mode, connection address in external mode
       --profile string                             Use a predefined configuration profile (dev, production, minimal)
       --registry-server string                     Server for container registry
       --secrets-dir string                         Secrets base directory (default "/root/secrets")
