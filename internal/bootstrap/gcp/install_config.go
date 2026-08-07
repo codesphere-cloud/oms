@@ -74,8 +74,6 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 	// A secondary data center without a config of its own is left unset here, so
 	// seedSecondaryDataCenter can derive it from the primary data center instead of the profile.
 
-	b.mirrorPrimaryDataCenter()
-
 	return nil
 }
 
@@ -489,8 +487,6 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}
 
-	b.mirrorPrimaryDataCenter()
-
 	return nil
 }
 
@@ -757,7 +753,6 @@ func (b *GCPBootstrapper) ensureSecrets(dc *datacenter.DataCenter) error {
 	if dc.IsPrimary() {
 		b.Env.Secrets = dc.ConfigManager.GetVault()
 	}
-	b.mirrorPrimaryDataCenter()
 	return nil
 }
 

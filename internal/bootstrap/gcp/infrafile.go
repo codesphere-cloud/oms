@@ -44,7 +44,6 @@ func (b *GCPBootstrapper) WriteInfraFile() error {
 
 	// The steps that still write the top-level node and IP fields are migrated to DataCenters
 	// one by one, so keep both in sync until the last one is.
-	b.mirrorPrimaryDataCenter()
 
 	envBytes, err := json.MarshalIndent(b.Env, "", "  ")
 	if err != nil {

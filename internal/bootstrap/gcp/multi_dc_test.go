@@ -276,19 +276,6 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		}
 	})
 
-	It("mirrors the primary data center onto the legacy infra file fields", func() {
-		expectBootstrapMocks("test-project-12345")
-
-		Expect(bs.Bootstrap()).To(Succeed())
-
-		primary := bs.Env.DataCenters[0]
-		Expect(bs.Env.ControlPlaneNodes).To(Equal(primary.ControlPlaneNodes))
-		Expect(bs.Env.CephNodes).To(Equal(primary.CephNodes))
-		Expect(bs.Env.GatewayIP).To(Equal(primary.GatewayIP))
-		Expect(bs.Env.PublicGatewayIP).To(Equal(primary.PublicGatewayIP))
-		Expect(bs.Env.SshProxyIP).To(Equal(primary.SshProxyIP))
-	})
-
 	Describe("validateMultiDC", func() {
 		DescribeTable("rejects flag combinations it cannot satisfy",
 			func(mutate func(), wantErr string) {
