@@ -226,7 +226,7 @@ var _ = Describe("VaultEncryption", func() {
 			plainYAML := "secrets:\n    - name: test-secret\n      fields:\n        password: hunter2\n"
 			Expect(os.WriteFile(vaultPath, []byte(plainYAML), 0644)).To(Succeed())
 
-			vault, err := vault.LoadVaultData(vaultPath, "")
+			vault, err := vault.LoadUnencryptedVaultData(vaultPath)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(vault.Secrets).To(HaveLen(1))
 			Expect(vault.Secrets[0].Name).To(Equal("test-secret"))
@@ -238,7 +238,7 @@ var _ = Describe("VaultEncryption", func() {
 			wrappedYAML := "data: |\n    secrets:\n        - name: test-secret\n          fields:\n            password: hunter2\n"
 			Expect(os.WriteFile(vaultPath, []byte(wrappedYAML), 0644)).To(Succeed())
 
-			vault, err := vault.LoadVaultData(vaultPath, "")
+			vault, err := vault.LoadUnencryptedVaultData(vaultPath)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(vault.Secrets).To(HaveLen(1))
 			Expect(vault.Secrets[0].Name).To(Equal("test-secret"))

@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -59,13 +60,42 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 		AutoApprove:      opts.AutoApprove,
 	}
 
+	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to get vault and Kubernetes config: %w", err)
+	}
+
+	scheme := k8sruntime.NewScheme()
+	if err := k8sscheme.AddToScheme(scheme); err != nil {
+		return fmt.Errorf("failed to add Kubernetes core scheme: %w", err)
+	}
+
+	if err := argov1alpha1.AddToScheme(scheme); err != nil {
+		return fmt.Errorf("failed to add ArgoCD scheme: %w", err)
+	}
+
+	kubeClient, err := ctrlclient.New(restConfig, ctrlclient.Options{Scheme: scheme})
+	if err != nil {
+		return fmt.Errorf("failed to create Kubernetes client: %w", err)
+	}
+
+	err = stlog.Step("Ensure Codesphere prerequisites", func() error {
+		return installer.EnsureCodespherePrerequisites(context.Background(), kubeClient)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to ensure Codesphere prerequisites: %w", err)
+	}
+
 	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.ArgoCDStep) {
-		if err := ci.ExtractAndValidatePackage(pm); err != nil {
+		err = ci.ExtractAndValidatePackage(pm)
+		if err != nil {
 			return fmt.Errorf("failed to extract and validate package: %w", err)
 		}
-		if err := stlog.Step("Install ArgoCD pre-step", func() error {
-			return installArgoCDAndApps(opts, cfg, pm, stlog)
-		}); err != nil {
+
+		err = stlog.Step("Install ArgoCD pre-step", func() error {
+			return installArgoCDAndApps(opts, cfg, pm, installVault, restConfig, kubeClient, stlog)
+		})
+		if err != nil {
 			return err
 		}
 	}
@@ -78,30 +108,16 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
 // before the main dependency steps.
-func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, stlog *bootstrap.StepLogger) error {
+func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, installVault *files.InstallVault, restConfig *rest.Config, kubeClient ctrlclient.Client, stlog *bootstrap.StepLogger) error {
 	var install *argocdinstaller.AppInstaller
-	if err := stlog.Substep("Load vault data", func() error {
-		installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, cfg)
-		if err != nil {
-			return err
-		}
+
+	if err := stlog.Substep("Initialize ArgoCD installer", func() error {
 		registryPassword := ""
 		if secret := installVault.GetSecret(files.SecretRegistryPassword); secret != nil && secret.Fields != nil {
 			registryPassword = secret.Fields.Password
 		}
 		if registryPassword == "" {
 			return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
-		}
-		scheme := k8sruntime.NewScheme()
-		if err := k8sscheme.AddToScheme(scheme); err != nil {
-			return fmt.Errorf("failed to add kubernetes core scheme: %w", err)
-		}
-		if err := argov1alpha1.AddToScheme(scheme); err != nil {
-			return fmt.Errorf("failed to add ArgoCD scheme: %w", err)
-		}
-		kubeClient, err := ctrlclient.New(restConfig, ctrlclient.Options{Scheme: scheme})
-		if err != nil {
-			return fmt.Errorf("failed to create kubernetes client: %w", err)
 		}
 		registryURL := opts.ArgoCDRegistryURL
 		if registryURL == "" && cfg.Registry != nil {
