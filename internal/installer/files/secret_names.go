@@ -44,6 +44,7 @@ const (
 	SecretOpenBaoPassword = "openBaoPassword"
 
 	// OpenFGA
+	SecretOpenFgaPresharedKey            = "openFgaPresharedKey"
 	SecretOpenfgaDbBackupAccessKeyId     = "openfgaDbBackupAccessKeyId"
 	SecretOpenfgaDbBackupSecretAccessKey = "openfgaDbBackupSecretAccessKey"
 

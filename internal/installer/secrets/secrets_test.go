@@ -125,6 +125,29 @@ var _ = Describe("EnsureMounterHmacSecret", func() {
 	})
 })
 
+var _ = Describe("EnsureOpenFgaPresharedKey", func() {
+	It("creates a 64-character hex secret", func() {
+		vault := newVault()
+		Expect(secrets.EnsureOpenFgaPresharedKey(vault)).To(Succeed())
+
+		secret := vault.GetSecret("openFgaPresharedKey")
+		Expect(secret).NotTo(BeNil())
+		Expect(secret.Fields).NotTo(BeNil())
+		Expect(secret.Fields.Password).To(HaveLen(64))
+		Expect(secret.Fields.Password).To(MatchRegexp("^[0-9a-f]+$"))
+	})
+
+	It("is idempotent", func() {
+		vault := newVault()
+		Expect(secrets.EnsureOpenFgaPresharedKey(vault)).To(Succeed())
+		original := vault.GetSecret("openFgaPresharedKey").Fields.Password
+
+		Expect(secrets.EnsureOpenFgaPresharedKey(vault)).To(Succeed())
+		Expect(vault.GetSecret("openFgaPresharedKey").Fields.Password).To(Equal(original))
+	})
+
+})
+
 var _ = Describe("EnsureNixSigningKeys", func() {
 	It("creates priv/pub keys in host:hexKey format", func() {
 		vault := newVault()

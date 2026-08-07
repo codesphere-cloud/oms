@@ -11,6 +11,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/util"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -69,12 +70,16 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomPath string) error {
+	// Values derived from the install config form the base; an explicit pcApps block in
+	// config.yaml wins over them, and the --pc-apps-values files win over both.
+	values := util.DeepMergeMaps(installer.OpenFgaPcAppsValues(&i.cfg.Config), i.cfg.Config.PcApps)
+
 	pcApps, err := installer.NewPcAppsFromBom(
 		i.cfg.KubeClient,
 		bomPath,
 		DefaultNamespace,
 		i.cfg.PCAppsValues,
-		i.cfg.Config.PcApps,
+		values,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
