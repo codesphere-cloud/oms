@@ -188,7 +188,6 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 			return dc.ControlPlaneNodes[i].GetName() < dc.ControlPlaneNodes[j].GetName()
 		})
 	}
-	b.mirrorPrimaryDataCenter()
 
 	return nil
 }

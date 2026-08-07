@@ -195,11 +195,12 @@ type CodesphereEnvironment struct {
 	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
 	// those instead of recomputing the list.
 	DNSRecords []DNSRecordName `json:"dns_records,omitempty"`
-	// ControlPlaneNodes and CephNodes are where the primary data center's nodes lived before
-	// multi-DC support. The steps that have not been migrated to DataCenters yet still use
-	// them, and infra files written by an earlier OMS carry the nodes here.
-	ControlPlaneNodes []*node.Node `json:"control_plane_nodes"`
-	CephNodes         []*node.Node `json:"ceph_nodes"`
+	// ControlPlaneNodes, CephNodes, GatewayIP, PublicGatewayIP and SshProxyIP are where the
+	// primary data center's nodes and addresses lived before multi-DC support. Nothing writes
+	// them any more; they are only read, by ensureDataCenters, so an infra file written by an
+	// earlier OMS still yields a usable primary data center.
+	ControlPlaneNodes []*node.Node `json:"control_plane_nodes,omitempty"`
+	CephNodes         []*node.Node `json:"ceph_nodes,omitempty"`
 	// ContainerRegistryURL is the resolved registry server all data centers pull images from.
 	ContainerRegistryURL          string       `json:"container_registry_url,omitempty"`
 	RegistryUsername              string       `json:"-"`
@@ -213,9 +214,9 @@ type CodesphereEnvironment struct {
 	SpotVMs                       bool         `json:"spot_vms"`
 	WriteConfig                   bool         `json:"-"`
 	RecoverConfig                 bool         `json:"-"`
-	GatewayIP                     string       `json:"gateway_ip"`
-	PublicGatewayIP               string       `json:"public_gateway_ip"`
-	SshProxyIP                    string       `json:"ssh_proxy_ip"`
+	GatewayIP                     string       `json:"gateway_ip,omitempty"`
+	PublicGatewayIP               string       `json:"public_gateway_ip,omitempty"`
+	SshProxyIP                    string       `json:"ssh_proxy_ip,omitempty"`
 	RegistryType                  RegistryType `json:"registry_type"`
 	GitHubPAT                     string       `json:"-"`
 	GitHubAppName                 string       `json:"-"`
@@ -928,7 +929,6 @@ func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 			return err
 		}
 	}
-	b.mirrorPrimaryDataCenter()
 
 	return nil
 }
