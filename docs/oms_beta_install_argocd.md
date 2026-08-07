@@ -53,6 +53,12 @@ $ oms beta install argocd --deploy-dc-config --dc-id 0
   -v, --version string        Version of the ArgoCD helm chart to install
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta install](oms_beta_install.md)	 - Install beta components

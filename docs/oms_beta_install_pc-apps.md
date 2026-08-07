@@ -45,6 +45,12 @@ $ oms beta install pc-apps --version 1.0.0 --force-conflicts
       --version string       Chart version to reference as the Application target revision (required)
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta install](oms_beta_install.md)	 - Install beta components

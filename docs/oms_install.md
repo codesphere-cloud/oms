@@ -12,6 +12,12 @@ Install Codesphere and other components like Ceph and PostgreSQL.
   -h, --help   help for install
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)

@@ -179,7 +179,7 @@ func (ci *CodesphereInstaller) warnIfVaultDirDiffersFromSecretsDir(config files.
 }
 
 func (ci *CodesphereInstaller) ExtractAndValidatePackage(pm PackageManager) error {
-	if err := pm.Extract(ci.Force); err != nil {
+	if err := pm.Extract(ci.Force, false); err != nil {
 		return fmt.Errorf("failed to extract package to workdir: %w", err)
 	}
 
@@ -198,7 +198,7 @@ func (ci *CodesphereInstaller) ExtractAndValidatePackage(pm PackageManager) erro
 		return fmt.Errorf("node executable not found in package")
 	}
 
-	if err := pm.ExtractDependency("bom.json", ci.Force); err != nil {
+	if err := pm.ExtractDependency("bom.json", ci.Force, false); err != nil {
 		return fmt.Errorf("failed to extract package to workdir: %w", err)
 	}
 
@@ -309,7 +309,7 @@ func splitImageTag(fullImageTag string) (string, string, error) {
 
 func (ci *CodesphereInstaller) extractAndLoadRootImage(pm PackageManager, im system.ImageManager, rootImageName, dockerfile string) error {
 	imagePath := filepath.Join("codesphere", "images", fmt.Sprintf("%s.tar", rootImageName))
-	if err := pm.ExtractDependency(imagePath, ci.Force); err != nil {
+	if err := pm.ExtractDependency(imagePath, ci.Force, false); err != nil {
 		return fmt.Errorf("failed to extract root image %s: %w", imagePath, err)
 	}
 

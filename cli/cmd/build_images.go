@@ -76,7 +76,7 @@ func (c *BuildImagesCmd) BuildAndPushImages(pm installer.PackageManager, cm inst
 		return fmt.Errorf("registry server (property registry.server) not defined in the config, please specify a valid registry to which the image shall be pushed")
 	}
 
-	err = pm.Extract(c.Opts.Force)
+	err = pm.Extract(c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
 	}
