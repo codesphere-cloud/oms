@@ -378,12 +378,14 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.applyExternalLokiConfig()
 	b.applyPrometheusRemoteWriteConfig()
 
-	if !b.Env.ExistingConfigUsed {
-		err := b.icg.GenerateSecrets()
-		if err != nil {
-			return fmt.Errorf("failed to generate secrets: %w", err)
-		}
-	} else {
+	// Secret generation is idempotent and also backfills secrets introduced
+	// after an existing vault was created (for example the auth keys required by
+	// the ArgoCD pre-step).
+	if err := b.icg.GenerateSecrets(); err != nil {
+		return fmt.Errorf("failed to generate secrets: %w", err)
+	}
+
+	if b.Env.ExistingConfigUsed {
 		if err := b.regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname); err != nil {
 			return err
 		}

@@ -5,24 +5,13 @@ package installer
 
 import (
 	"fmt"
-	"path/filepath"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// downloadBinary downloads a binary from downloadURL into workdir/binaryName.
-// It handles workdir creation, existing binary checks, file creation, download, and chmod.
-func downloadBinary(fw util.FileIO, http portal.Http, workdir, binaryName, downloadURL string, force bool, quiet bool) (string, error) {
-	if err := fw.MkdirAll(workdir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create workdir: %w", err)
-	}
-
-	binaryPath := filepath.Join(workdir, binaryName)
-	if fw.Exists(binaryPath) && !force {
-		return "", fmt.Errorf("%s binary already exists at %s. Use --force to overwrite", binaryName, binaryPath)
-	}
-
+func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, binaryName, downloadURL string, quiet bool) (string, error) {
 	dstFile, err := fw.Create(binaryPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to create %s binary file: %w", binaryName, err)
@@ -38,4 +27,24 @@ func downloadBinary(fw util.FileIO, http portal.Http, workdir, binaryName, downl
 	}
 
 	return binaryPath, nil
+}
+
+func localBinaryVersion(binaryPath string) (string, error) {
+	output, err := util.RunCommandWithOutput(binaryPath, []string{"version"}, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to get version of application %s: %w", binaryPath, err)
+	}
+
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if version, found := strings.CutPrefix(line, "version:"); found {
+			return strings.TrimSpace(version), nil
+		}
+
+		if line != "" {
+			return line, nil
+		}
+	}
+
+	return "", fmt.Errorf("version output is empty")
 }
