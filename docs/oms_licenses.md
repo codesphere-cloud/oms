@@ -16,6 +16,12 @@ oms licenses [flags]
   -h, --help   help for licenses
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)

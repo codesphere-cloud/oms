@@ -43,6 +43,12 @@ $ oms template config --config config.yaml --vault prod.vault.yaml --age-key age
   -v, --vault string     Path to the SOPS-encrypted prod.vault.yaml file (required)
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms template](oms_template.md)	 - Render OMS configuration templates

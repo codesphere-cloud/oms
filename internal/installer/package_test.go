@@ -96,7 +96,7 @@ var _ = Describe("Package", func() {
 			Context("when package doesn't exist", func() {
 				It("returns an error", func() {
 					pkg.Filename = "/nonexistent/package.tar.gz"
-					err := pkg.Extract(false)
+					err := pkg.Extract(false, false)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to extract package"))
 				})
@@ -104,7 +104,7 @@ var _ = Describe("Package", func() {
 
 			Context("when package exists and workdir doesn't exist", func() {
 				It("successfully extracts the package", func() {
-					err := pkg.Extract(false)
+					err := pkg.Extract(false, false)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Verify that the workdir was created
@@ -120,17 +120,17 @@ var _ = Describe("Package", func() {
 			Context("when package is already extracted", func() {
 				BeforeEach(func() {
 					// First extraction
-					err := pkg.Extract(false)
+					err := pkg.Extract(false, false)
 					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("skips extraction without force", func() {
-					err := pkg.Extract(false)
+					err := pkg.Extract(false, false)
 					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("re-extracts with force", func() {
-					err := pkg.Extract(true)
+					err := pkg.Extract(true, false)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Verify content still exists
@@ -148,7 +148,7 @@ var _ = Describe("Package", func() {
 					Expect(err).ToNot(HaveOccurred())
 
 					pkg.OmsWorkdir = invalidWorkdir
-					err = pkg.Extract(false)
+					err = pkg.Extract(false, false)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to ensure workdir exists"))
 				})
@@ -177,7 +177,7 @@ var _ = Describe("Package", func() {
 
 			Context("when dependency file exists in deps.tar.gz", func() {
 				It("successfully extracts the dependency", func() {
-					err := pkg.ExtractDependency("test-dep.txt", false)
+					err := pkg.ExtractDependency("test-dep.txt", false, false)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Verify that the dependency was extracted
@@ -189,17 +189,17 @@ var _ = Describe("Package", func() {
 			Context("when dependency is already extracted", func() {
 				BeforeEach(func() {
 					// First extraction
-					err := pkg.ExtractDependency("test-dep.txt", false)
+					err := pkg.ExtractDependency("test-dep.txt", false, false)
 					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("skips extraction without force", func() {
-					err := pkg.ExtractDependency("test-dep.txt", false)
+					err := pkg.ExtractDependency("test-dep.txt", false, false)
 					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("re-extracts with force", func() {
-					err := pkg.ExtractDependency("test-dep.txt", true)
+					err := pkg.ExtractDependency("test-dep.txt", true, false)
 					Expect(err).ToNot(HaveOccurred())
 
 					// Verify dependency still exists
@@ -211,7 +211,7 @@ var _ = Describe("Package", func() {
 			Context("when package extraction fails", func() {
 				It("returns an error", func() {
 					pkg.Filename = "/nonexistent/package.tar.gz"
-					err := pkg.ExtractDependency("test-dep.txt", false)
+					err := pkg.ExtractDependency("test-dep.txt", false, false)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to extract package"))
 				})
@@ -219,7 +219,7 @@ var _ = Describe("Package", func() {
 
 			Context("when dependency doesn't exist in deps.tar.gz", func() {
 				It("returns an error", func() {
-					err := pkg.ExtractDependency("nonexistent-dep.txt", false)
+					err := pkg.ExtractDependency("nonexistent-dep.txt", false, false)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to extract dependency"))
 				})

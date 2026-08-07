@@ -21,6 +21,12 @@ oms beta bootstrap-gcp postconfig [flags]
       --private-key-path string      Path to the GCP service account private key file (optional)
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta bootstrap-gcp](oms_beta_bootstrap-gcp.md)	 - Bootstrap GCP infrastructure for Codesphere

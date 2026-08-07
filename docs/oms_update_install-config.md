@@ -72,6 +72,12 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
   -y, --yes                                          Auto-approve every change to the vault (regenerated certificates and missing secrets)
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms update](oms_update.md)	 - Update OMS related resources

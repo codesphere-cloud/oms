@@ -76,7 +76,7 @@ func AddExtendBaseimageCmd(extend *cobra.Command, opts *util.GlobalOptions) {
 }
 
 func (c *ExtendBaseimageCmd) ExtendBaseimage(pm installer.PackageManager, im system.ImageManager) error {
-	err := pm.Extract(c.Opts.Force)
+	err := pm.Extract(c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
 	}

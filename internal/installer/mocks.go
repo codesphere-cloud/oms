@@ -1755,16 +1755,16 @@ func (_m *MockPackageManager) EXPECT() *MockPackageManager_Expecter {
 }
 
 // Extract provides a mock function for the type MockPackageManager
-func (_mock *MockPackageManager) Extract(force bool) error {
-	ret := _mock.Called(force)
+func (_mock *MockPackageManager) Extract(force bool, verbose bool) error {
+	ret := _mock.Called(force, verbose)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Extract")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(bool) error); ok {
-		r0 = returnFunc(force)
+	if returnFunc, ok := ret.Get(0).(func(bool, bool) error); ok {
+		r0 = returnFunc(force, verbose)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -1778,18 +1778,24 @@ type MockPackageManager_Extract_Call struct {
 
 // Extract is a helper method to define mock.On call
 //   - force bool
-func (_e *MockPackageManager_Expecter) Extract(force any) *MockPackageManager_Extract_Call {
-	return &MockPackageManager_Extract_Call{Call: _e.mock.On("Extract", force)}
+//   - verbose bool
+func (_e *MockPackageManager_Expecter) Extract(force any, verbose any) *MockPackageManager_Extract_Call {
+	return &MockPackageManager_Extract_Call{Call: _e.mock.On("Extract", force, verbose)}
 }
 
-func (_c *MockPackageManager_Extract_Call) Run(run func(force bool)) *MockPackageManager_Extract_Call {
+func (_c *MockPackageManager_Extract_Call) Run(run func(force bool, verbose bool)) *MockPackageManager_Extract_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 bool
 		if args[0] != nil {
 			arg0 = args[0].(bool)
 		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
 		run(
 			arg0,
+			arg1,
 		)
 	})
 	return _c
@@ -1800,22 +1806,22 @@ func (_c *MockPackageManager_Extract_Call) Return(err error) *MockPackageManager
 	return _c
 }
 
-func (_c *MockPackageManager_Extract_Call) RunAndReturn(run func(force bool) error) *MockPackageManager_Extract_Call {
+func (_c *MockPackageManager_Extract_Call) RunAndReturn(run func(force bool, verbose bool) error) *MockPackageManager_Extract_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ExtractDependency provides a mock function for the type MockPackageManager
-func (_mock *MockPackageManager) ExtractDependency(file string, force bool) error {
-	ret := _mock.Called(file, force)
+func (_mock *MockPackageManager) ExtractDependency(file string, force bool, verbose bool) error {
+	ret := _mock.Called(file, force, verbose)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ExtractDependency")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, bool) error); ok {
-		r0 = returnFunc(file, force)
+	if returnFunc, ok := ret.Get(0).(func(string, bool, bool) error); ok {
+		r0 = returnFunc(file, force, verbose)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -1830,11 +1836,12 @@ type MockPackageManager_ExtractDependency_Call struct {
 // ExtractDependency is a helper method to define mock.On call
 //   - file string
 //   - force bool
-func (_e *MockPackageManager_Expecter) ExtractDependency(file any, force any) *MockPackageManager_ExtractDependency_Call {
-	return &MockPackageManager_ExtractDependency_Call{Call: _e.mock.On("ExtractDependency", file, force)}
+//   - verbose bool
+func (_e *MockPackageManager_Expecter) ExtractDependency(file any, force any, verbose any) *MockPackageManager_ExtractDependency_Call {
+	return &MockPackageManager_ExtractDependency_Call{Call: _e.mock.On("ExtractDependency", file, force, verbose)}
 }
 
-func (_c *MockPackageManager_ExtractDependency_Call) Run(run func(file string, force bool)) *MockPackageManager_ExtractDependency_Call {
+func (_c *MockPackageManager_ExtractDependency_Call) Run(run func(file string, force bool, verbose bool)) *MockPackageManager_ExtractDependency_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -1844,9 +1851,14 @@ func (_c *MockPackageManager_ExtractDependency_Call) Run(run func(file string, f
 		if args[1] != nil {
 			arg1 = args[1].(bool)
 		}
+		var arg2 bool
+		if args[2] != nil {
+			arg2 = args[2].(bool)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -1857,7 +1869,7 @@ func (_c *MockPackageManager_ExtractDependency_Call) Return(err error) *MockPack
 	return _c
 }
 
-func (_c *MockPackageManager_ExtractDependency_Call) RunAndReturn(run func(file string, force bool) error) *MockPackageManager_ExtractDependency_Call {
+func (_c *MockPackageManager_ExtractDependency_Call) RunAndReturn(run func(file string, force bool, verbose bool) error) *MockPackageManager_ExtractDependency_Call {
 	_c.Call.Return(run)
 	return _c
 }
