@@ -482,3 +482,56 @@ var _ = Describe("SecretDependencyTracker", func() {
 		Expect(tracker.NeedsPostgresReplicaCertRegen()).To(BeTrue())
 	})
 })
+
+var _ = Describe("addMissingSecrets", func() {
+	var config *files.RootConfig
+
+	BeforeEach(func() {
+		config = &files.RootConfig{}
+	})
+
+	It("adds the openfga preshared key to a vault that predates it", func() {
+		vault := &files.InstallVault{}
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).To(ContainElement(files.SecretOpenFgaPresharedKey))
+		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey)).ToNot(BeNil())
+		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey).Fields.Password).To(HaveLen(64))
+	})
+
+	It("reports nothing on a second run and keeps the generated value", func() {
+		vault := &files.InstallVault{}
+		_, err := addMissingSecrets(config, vault)
+		Expect(err).ToNot(HaveOccurred())
+		key := vault.GetSecret(files.SecretOpenFgaPresharedKey).Fields.Password
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).To(BeEmpty())
+		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey).Fields.Password).To(Equal(key))
+	})
+
+	It("never modifies a secret the vault already holds", func() {
+		vault := &files.InstallVault{}
+		vault.SetSecret(files.SecretEntry{
+			Name:   files.SecretOpenFgaPresharedKey,
+			Fields: &files.SecretFields{Password: "operator-supplied-key"},
+		})
+		// EnsureDefaultSecrets overwrites this one unconditionally when it runs directly.
+		vault.SetSecret(files.SecretEntry{
+			Name:   files.SecretDigitalOceanApiToken,
+			Fields: &files.SecretFields{Password: "a-real-token"},
+		})
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).ToNot(ContainElement(files.SecretOpenFgaPresharedKey))
+		Expect(added).ToNot(ContainElement(files.SecretDigitalOceanApiToken))
+		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey).Fields.Password).To(Equal("operator-supplied-key"))
+		Expect(vault.GetSecret(files.SecretDigitalOceanApiToken).Fields.Password).To(Equal("a-real-token"))
+	})
+})

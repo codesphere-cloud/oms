@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -180,6 +181,14 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		}
 	} else {
 		log.Println("\nNo changes detected that require secret regeneration.")
+	}
+
+	added, err := addMissingSecrets(config, vault)
+	if err != nil {
+		return fmt.Errorf("failed to add missing secrets: %w", err)
+	}
+	if len(added) > 0 {
+		log.Printf("\nAdded %d secret(s) missing from the vault: %s\n", len(added), strings.Join(added, ", "))
 	}
 
 	if err := icg.WriteInstallConfig(c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
@@ -396,6 +405,38 @@ func (c *UpdateInstallConfigCmd) applyCodesphereUpdates(config *files.RootConfig
 		log.Printf("Updating DNS servers\n")
 		config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
 	}
+}
+
+// addMissingSecrets fills in the secrets an existing vault does not have yet and returns
+// their names. A vault written by an older oms predates whatever the current one requires —
+// openFgaPresharedKey, for instance — and nothing else on the upgrade path generates them:
+// `oms install` never touches secrets, and `oms init install-config` writes a fresh vault
+// rather than extending one.
+//
+// Strictly additive. EnsureSecrets is idempotent except for EnsureDefaultSecrets, which
+// always overwrites digitalOceanApiToken with a dummy value, so every entry that was already
+// in the vault is restored afterwards — an operator's own values are never modified here.
+func addMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+	existing := make(map[string]files.SecretEntry, len(vault.Secrets))
+	for _, secret := range vault.Secrets {
+		existing[secret.Name] = secret
+	}
+
+	if err := secrets.EnsureSecrets(vault, config); err != nil {
+		return nil, err
+	}
+
+	added := []string{}
+	for i, secret := range vault.Secrets {
+		if before, ok := existing[secret.Name]; ok {
+			vault.Secrets[i] = before
+			continue
+		}
+		added = append(added, secret.Name)
+	}
+	sort.Strings(added)
+
+	return added, nil
 }
 
 func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vault *files.InstallVault, tracker *SecretDependencyTracker) error {
