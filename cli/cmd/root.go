@@ -80,7 +80,26 @@ func GetRootCmd() *cobra.Command {
 	// Cluster administration commands
 	AddAddClusterAdminCmd(rootCmd, opts)
 
+	silenceUsageOnRunErrors(rootCmd)
+
 	return rootCmd
+}
+
+// silenceUsageOnRunErrors prevents Cobra from printing command usage for
+// operational errors returned by RunE. Argument, flag, and required-flag
+// validation happens before RunE, so those errors still include usage.
+func silenceUsageOnRunErrors(command *cobra.Command) {
+	if command.RunE != nil {
+		runE := command.RunE
+		command.RunE = func(cmd *cobra.Command, args []string) error {
+			cmd.Root().SilenceUsage = true
+			return runE(cmd, args)
+		}
+	}
+
+	for _, child := range command.Commands() {
+		silenceUsageOnRunErrors(child)
+	}
 }
 
 // Execute executes the root command. This is called by main.main(). It only needs to happen once to the rootCmd.
