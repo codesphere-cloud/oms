@@ -245,15 +245,18 @@ func validateOpenFga(config *files.OpenFgaConfig) []string {
 	if !config.DeploysOpenFga() && config.APIURL == "" {
 		errors = append(errors, "OpenFGA apiUrl is required when codesphere.openFga.deploy is false")
 	}
+
 	if config.APIURL != "" {
 		if _, err := url.ParseRequestURI(config.APIURL); err != nil {
 			errors = append(errors, "OpenFGA apiUrl must be a valid URL")
 		}
 	}
+
 	if config.ExposesOpenFga() {
 		if config.Expose.Host == "" {
 			errors = append(errors, "OpenFGA expose host is required when codesphere.openFga.expose.enabled is true")
 		}
+
 		if !config.DeploysOpenFga() {
 			errors = append(errors, "OpenFGA cannot be exposed by a data center that does not deploy it")
 		}

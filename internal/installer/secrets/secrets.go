@@ -49,6 +49,7 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureMounterHmacSecret(vault); err != nil {
 		return fmt.Errorf("ensure hmac secret: %w", err)
 	}
+
 	if err := EnsureOpenFgaPresharedKey(vault); err != nil {
 		return fmt.Errorf("ensure openfga preshared key: %w", err)
 	}
@@ -185,14 +186,17 @@ func EnsureOpenFgaPresharedKey(vault *files.InstallVault) error {
 	if vault.GetSecret(files.SecretOpenFgaPresharedKey) != nil {
 		return nil
 	}
+
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return fmt.Errorf("read random bytes: %w", err)
 	}
+
 	vault.SetSecret(files.SecretEntry{
 		Name:   files.SecretOpenFgaPresharedKey,
 		Fields: &files.SecretFields{Password: hex.EncodeToString(b)},
 	})
+
 	return nil
 }
 

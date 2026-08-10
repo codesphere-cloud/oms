@@ -55,5 +55,6 @@ func certIssuerName(config *files.RootConfig) string {
 	if issuer := config.Codesphere.CertIssuer; issuer != nil && issuer.Type != "" {
 		return string(issuer.Type)
 	}
+
 	return string(files.CertIssuerTypeSelfSigned)
 }

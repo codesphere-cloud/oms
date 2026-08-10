@@ -145,7 +145,6 @@ var _ = Describe("EnsureOpenFgaPresharedKey", func() {
 		Expect(secrets.EnsureOpenFgaPresharedKey(vault)).To(Succeed())
 		Expect(vault.GetSecret("openFgaPresharedKey").Fields.Password).To(Equal(original))
 	})
-
 })
 
 var _ = Describe("EnsureNixSigningKeys", func() {

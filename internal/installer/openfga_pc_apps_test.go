@@ -16,6 +16,7 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 		config := &files.RootConfig{}
 		config.Codesphere.OpenFga = fga
 		config.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: issuer}
+
 		return config
 	}
 
@@ -23,6 +24,7 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 	openfgaValues := func(values files.ChartValues) files.ChartValues {
 		apps, ok := values["applications"].(files.ChartValues)
 		Expect(ok).To(BeTrue(), "expected an applications map")
+
 		return apps["openfga"].(files.ChartValues)
 	}
 

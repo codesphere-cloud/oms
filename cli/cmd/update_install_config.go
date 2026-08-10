@@ -187,6 +187,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 	if err != nil {
 		return fmt.Errorf("failed to add missing secrets: %w", err)
 	}
+
 	if len(added) > 0 {
 		log.Printf("\nAdded %d secret(s) missing from the vault: %s\n", len(added), strings.Join(added, ", "))
 	}
@@ -423,17 +424,20 @@ func addMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]s
 	}
 
 	if err := secrets.EnsureSecrets(vault, config); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ensure secrets: %w", err)
 	}
 
 	added := []string{}
+
 	for i, secret := range vault.Secrets {
 		if before, ok := existing[secret.Name]; ok {
 			vault.Secrets[i] = before
 			continue
 		}
+
 		added = append(added, secret.Name)
 	}
+
 	sort.Strings(added)
 
 	return added, nil

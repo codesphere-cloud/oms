@@ -505,6 +505,7 @@ var _ = Describe("addMissingSecrets", func() {
 		vault := &files.InstallVault{}
 		_, err := addMissingSecrets(config, vault)
 		Expect(err).ToNot(HaveOccurred())
+
 		key := vault.GetSecret(files.SecretOpenFgaPresharedKey).Fields.Password
 
 		added, err := addMissingSecrets(config, vault)

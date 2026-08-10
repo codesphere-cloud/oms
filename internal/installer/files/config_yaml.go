@@ -371,6 +371,7 @@ type OpenFgaConfig struct {
 	Expose *OpenFgaExposeConfig `yaml:"expose,omitempty"`
 }
 
+// OpenFgaExposeConfig publishes a locally deployed OpenFGA through the Codesphere gateway.
 type OpenFgaExposeConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// Host OpenFGA is served under. Must resolve to this data center's public IP and
