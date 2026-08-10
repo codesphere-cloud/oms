@@ -35,6 +35,8 @@ type InstallConfigManager interface {
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
 	GetVault() *files.InstallVault
+	SetInstallConfig(config *files.RootConfig)
+	SetVault(vault *files.InstallVault)
 	GetSecretFilePath() string
 	CollectInteractively() error
 
@@ -277,6 +279,18 @@ func (g *InstallConfig) GetInstallConfig() *files.RootConfig {
 
 func (g *InstallConfig) GetVault() *files.InstallVault {
 	return g.Vault
+}
+
+// SetInstallConfig replaces the managed config, so a caller can seed it from another source
+// instead of a profile or a file.
+func (g *InstallConfig) SetInstallConfig(config *files.RootConfig) {
+	g.Config = config
+}
+
+// SetVault replaces the managed vault, so a caller can seed it from another source instead of a
+// file. GenerateSecrets then fills in whatever the seed is missing.
+func (g *InstallConfig) SetVault(vault *files.InstallVault) {
+	g.Vault = vault
 }
 
 func (g *InstallConfig) GetSecretFilePath() string {
