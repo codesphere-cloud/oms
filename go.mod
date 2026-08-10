@@ -49,7 +49,7 @@ require (
 	golang.org/x/term v0.45.0
 	google.golang.org/api v0.292.0
 	google.golang.org/grpc v1.83.0
-	google.golang.org/protobuf v1.36.12-0.20260810121128-40223a3a698d
+	google.golang.org/protobuf v1.36.12-0.20260810132945-cdd4c5f7406e
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.2.3
 	k8s.io/api v0.36.3
