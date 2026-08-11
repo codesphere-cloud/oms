@@ -72,7 +72,7 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomPath string) error {
 	// Values derived from the install config form the base; an explicit pcApps block in
 	// config.yaml wins over them, and the --pc-apps-values files win over both.
-	values := util.DeepMergeMaps(installer.OpenFgaPcAppsValues(&i.cfg.Config), i.cfg.Config.PcApps)
+	values := util.DeepMergeMaps(installer.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault), i.cfg.Config.PcApps)
 
 	pcApps, err := installer.NewPcAppsFromBom(
 		i.cfg.KubeClient,

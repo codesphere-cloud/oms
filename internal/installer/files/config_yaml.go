@@ -4,6 +4,7 @@
 package files
 
 import (
+	"fmt"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -37,6 +38,13 @@ func (v *InstallVault) SetSecret(entry SecretEntry) {
 		}
 	}
 	v.Secrets = append(v.Secrets, entry)
+}
+
+// Clone returns a copy that shares nothing with v, so it can be handed to code that
+// modifies it — e.g. to find out what a generator would add — without the original
+// being touched.
+func (v *InstallVault) Clone() (*InstallVault, error) {
+	return cloneYaml(v)
 }
 
 func (v *InstallVault) Unmarshal(data []byte) error {
@@ -677,6 +685,27 @@ func (c *RootConfig) Marshal() ([]byte, error) {
 	c.buildACMEOverride()
 	c.buildOpenfgaBackupValues()
 	return yaml.Marshal(c)
+}
+
+// Clone returns a copy that shares nothing with c. Uses the YAML representation the
+// config file has, so everything that survives a write/read round-trip survives this.
+func (c *RootConfig) Clone() (*RootConfig, error) {
+	return cloneYaml(c)
+}
+
+// cloneYaml deep-copies a value through its YAML representation.
+func cloneYaml[T any](value *T) (*T, error) {
+	data, err := yaml.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %w", err)
+	}
+
+	clone := new(T)
+	if err := yaml.Unmarshal(data, clone); err != nil {
+		return nil, fmt.Errorf("unmarshal: %w", err)
+	}
+
+	return clone, nil
 }
 
 // Unmarshal deserializes YAML data into the RootConfig
