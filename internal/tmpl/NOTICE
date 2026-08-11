@@ -11,9 +11,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry
  
 ----------
 Module: cloud.google.com/go/auth
-Version: v0.22.0
+Version: v0.23.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/auth/v0.22.0/auth/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/auth/v0.23.0/auth/LICENSE
  
 ----------
 Module: cloud.google.com/go/auth/oauth2adapt
@@ -701,9 +701,9 @@ License URL: https://github.com/google/uuid/blob/2d3c2a9cc518/LICENSE
  
 ----------
 Module: github.com/googleapis/enterprise-certificate-proxy/client
-Version: v0.3.19
+Version: v0.3.20
 License: Apache-2.0
-License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.19/LICENSE
+License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.20/LICENSE
  
 ----------
 Module: github.com/googleapis/gax-go/v2
@@ -1475,15 +1475,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.292.0
+Version: v0.293.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.292.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.293.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.292.0
+Version: v0.293.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.292.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.293.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1499,9 +1499,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/e059f2f05d78/googlea
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20260803160001-6ac0973c030d
+Version: v0.0.0-20260807164820-c8921c73eeea
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/6ac0973c030d/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/c8921c73eeea/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc
