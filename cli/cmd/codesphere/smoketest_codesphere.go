@@ -40,14 +40,15 @@ type SmoketestCodesphereCmd struct {
 	Opts *teststeps.SmoketestCodesphereOpts
 }
 
-func (c *SmoketestCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE runs the smoke test against the configured Codesphere installation.
+func (c *SmoketestCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	client, err := codesphere.NewClient(c.Opts.BaseURL, c.Opts.Token)
 	if err != nil {
 		return fmt.Errorf("failed to create Codesphere client: %w", err)
 	}
 	c.Opts.Client = client
 
-	return c.RunSmoketest()
+	return c.RunSmoketest(cmd.Context())
 }
 
 func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
@@ -113,8 +114,11 @@ func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	util.AddCmd(parent, c.cmd)
 }
 
-func (c *SmoketestCodesphereCmd) RunSmoketest() (err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Opts.Timeout)
+// RunSmoketest runs the selected smoke test steps. The passed context bounds
+// the run in addition to the configured timeout, so callers that orchestrate
+// several tests (see the test command) can cancel it.
+func (c *SmoketestCodesphereCmd) RunSmoketest(ctx context.Context) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, c.Opts.Timeout)
 	defer cancel()
 
 	availableStepsMap := make(map[string]teststeps.SmokeTestStep)
