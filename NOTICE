@@ -167,9 +167,9 @@ License URL: https://github.com/argoproj/argo-cd/blob/7660efb23b2d/gitops-engine
  
 ----------
 Module: github.com/argoproj/argo-cd/v3
-Version: v3.5.0
+Version: v3.5.1
 License: Apache-2.0
-License URL: https://github.com/argoproj/argo-cd/blob/v3.5.0/LICENSE
+License URL: https://github.com/argoproj/argo-cd/blob/v3.5.1/LICENSE
  
 ----------
 Module: github.com/argoproj/pkg/v2
