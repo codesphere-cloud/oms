@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+package prompt
 
 import (
 	"bufio"
@@ -243,6 +243,27 @@ var _ = Describe("Prompter", func() {
 				result := p.Bool("Enable feature", true)
 				Expect(result).To(BeTrue())
 			})
+		})
+	})
+
+	Describe("Confirm", func() {
+		DescribeTable("only an explicit yes confirms",
+			func(input string, expected bool) {
+				p := &Prompter{
+					reader:      bufio.NewReader(strings.NewReader(input)),
+					interactive: true,
+				}
+				Expect(p.Confirm("Delete everything")).To(Equal(expected))
+			},
+			Entry("'y' confirms", "y\n", true),
+			Entry("'yes' confirms", "yes\n", true),
+			Entry("'n' declines", "n\n", false),
+			Entry("an empty line declines", "\n", false),
+			Entry("a closed stdin declines", "", false),
+		)
+
+		It("declines without prompting when not interactive", func() {
+			Expect(NewPrompter(false).Confirm("Delete everything")).To(BeFalse())
 		})
 	})
 

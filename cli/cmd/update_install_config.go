@@ -4,12 +4,8 @@
 package cmd
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
-	"io"
 	"log"
-	"os"
 	"sort"
 	"strings"
 
@@ -18,6 +14,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -29,7 +26,7 @@ type UpdateInstallConfigCmd struct {
 
 	// Confirm asks the operator whether to go ahead with a change to the vault. Replaced in
 	// tests; --yes short-circuits it.
-	Confirm func(question string) (bool, error)
+	Confirm func(question string) bool
 }
 
 type UpdateInstallConfigOpts struct {
@@ -105,7 +102,9 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 		},
 		Opts:       &UpdateInstallConfigOpts{GlobalOptions: opts},
 		FileWriter: intutil.NewFilesystemWriter(),
-		Confirm:    confirmOnStdin,
+		// One prompter for the whole command: it buffers stdin, so a fresh one per
+		// question could drop what the operator already typed.
+		Confirm: prompt.NewPrompter(true).Confirm,
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Path to existing config.yaml file")
@@ -186,12 +185,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 	}
 
 	if tracker.HasChanges() {
-		approved, err := c.approve("Regenerate them?", "The changes above require these secrets to be regenerated:", tracker.Regenerates())
-		if err != nil {
-			return err
-		}
-
-		if !approved {
+		if !c.approve("Regenerate them?", "The changes above require these secrets to be regenerated:", tracker.Regenerates()) {
 			// The regenerated certificates cover values that were just written to the config,
 			// so keeping the old ones would leave the two inconsistent. Nothing has been
 			// written yet, so stopping here leaves the installation as it was.
@@ -428,10 +422,11 @@ func (c *UpdateInstallConfigCmd) applyCodesphereUpdates(config *files.RootConfig
 }
 
 // approve prints what is about to change and asks the operator to confirm it. --yes approves
-// without asking; anything else routes through c.Confirm, which reads stdin.
-func (c *UpdateInstallConfigCmd) approve(question, intro string, items []string) (bool, error) {
+// without asking; anything else goes to the prompter, where only an explicit yes counts — a
+// run without a terminal declines.
+func (c *UpdateInstallConfigCmd) approve(question, intro string, items []string) bool {
 	if c.Opts.Yes {
-		return true, nil
+		return true
 	}
 
 	log.Printf("\n%s\n", intro)
@@ -440,27 +435,7 @@ func (c *UpdateInstallConfigCmd) approve(question, intro string, items []string)
 		log.Printf("  - %s\n", item)
 	}
 
-	approved, err := c.Confirm(question)
-	if err != nil {
-		return false, fmt.Errorf("failed to read confirmation: %w", err)
-	}
-
-	return approved, nil
-}
-
-// confirmOnStdin asks a yes/no question on stdin. A closed stdin (a pipeline, a CI job) reads
-// as "no": an unattended run must not change secrets by default, that is what --yes is for.
-func confirmOnStdin(question string) (bool, error) {
-	log.Printf("%s [y/N]: ", question)
-
-	answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		return false, fmt.Errorf("read stdin: %w", err)
-	}
-
-	answer = strings.TrimSpace(strings.ToLower(answer))
-
-	return answer == "y" || answer == "yes", nil
+	return c.Confirm(question)
 }
 
 // maybeAddMissingSecrets asks about the secrets the vault is missing and adds them if the
@@ -475,16 +450,7 @@ func (c *UpdateInstallConfigCmd) maybeAddMissingSecrets(config *files.RootConfig
 		return nil, nil
 	}
 
-	approved, err := c.approve(
-		"Generate them?",
-		"The vault does not have these secrets yet:",
-		missing,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	if !approved {
+	if !c.approve("Generate them?", "The vault does not have these secrets yet:", missing) {
 		log.Printf("\nSkipped %d missing secret(s): %s\n", len(missing), strings.Join(missing, ", "))
 
 		return nil, nil

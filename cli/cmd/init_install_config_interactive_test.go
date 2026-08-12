@@ -11,6 +11,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/codesphere-cloud/oms/internal/util/testing"
 )
@@ -74,7 +75,7 @@ var _ = Describe("Interactive profile usage", func() {
 			// In non-interactive mode, CollectInteractively would use defaults
 			// We simulate this by checking that the prompter returns defaults
 			// when interactive=false
-			prompter := installer.NewPrompter(false)
+			prompter := prompt.NewPrompter(false)
 
 			// Test that prompter returns defaults when not interactive
 			Expect(prompter.String("Test", "default-value")).To(Equal("default-value"))

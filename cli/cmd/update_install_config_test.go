@@ -223,10 +223,10 @@ codesphere:
 			Opts: opts,
 			// These specs are about what ends up in the files; the confirmation flow
 			// has its own context below.
-			Confirm: func(question string) (bool, error) {
+			Confirm: func(question string) bool {
 				confirmations = append(confirmations, question)
 
-				return approveConfirmations, nil
+				return approveConfirmations
 			},
 		}
 	})

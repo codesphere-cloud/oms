@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
@@ -401,9 +402,9 @@ func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config fi
 
 	sort.Strings(executedSteps)
 
-	prompt := NewPrompter(!ci.AutoApprove)
+	prompter := prompt.NewPrompter(!ci.AutoApprove)
 	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
-	if prompt.String(msg, "yes") != "yes" {
+	if prompter.String(msg, "yes") != "yes" {
 		return nil, fmt.Errorf("installation aborted")
 	}
 

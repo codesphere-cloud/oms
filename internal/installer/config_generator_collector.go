@@ -8,10 +8,11 @@ import (
 	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 )
 
 func (g *InstallConfig) CollectInteractively() error {
-	prompter := NewPrompter(true)
+	prompter := prompt.NewPrompter(true)
 
 	g.collectDatacenterConfig(prompter)
 	g.collectRegistryConfig(prompter)
@@ -26,20 +27,20 @@ func (g *InstallConfig) CollectInteractively() error {
 	return nil
 }
 
-func (g *InstallConfig) collectString(prompter *Prompter, prompt, defaultVal string) string {
-	return prompter.String(prompt, defaultVal)
+func (g *InstallConfig) collectString(prompter *prompt.Prompter, question, defaultVal string) string {
+	return prompter.String(question, defaultVal)
 }
 
-func (g *InstallConfig) collectInt(prompter *Prompter, prompt string, defaultVal int) int {
-	return prompter.Int(prompt, defaultVal)
+func (g *InstallConfig) collectInt(prompter *prompt.Prompter, question string, defaultVal int) int {
+	return prompter.Int(question, defaultVal)
 }
 
-func (g *InstallConfig) collectStringSlice(prompter *Prompter, prompt string, defaultVal []string) []string {
-	return prompter.StringSlice(prompt, defaultVal)
+func (g *InstallConfig) collectStringSlice(prompter *prompt.Prompter, question string, defaultVal []string) []string {
+	return prompter.StringSlice(question, defaultVal)
 }
 
-func (g *InstallConfig) collectChoice(prompter *Prompter, prompt string, options []string, defaultVal string) string {
-	return prompter.Choice(prompt, options, defaultVal)
+func (g *InstallConfig) collectChoice(prompter *prompt.Prompter, question string, options []string, defaultVal string) string {
+	return prompter.Choice(question, options, defaultVal)
 }
 
 func k8sNodesToStringSlice(nodes []files.K8sNode) []string {
@@ -58,7 +59,7 @@ func stringSliceToK8sNodes(ips []string) []files.K8sNode {
 	return nodes
 }
 
-func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter) {
+func (g *InstallConfig) collectDatacenterConfig(prompter *prompt.Prompter) {
 	log.Println("=== Datacenter Configuration ===")
 	g.Config.Datacenter.ID = g.collectInt(prompter, "Datacenter ID", g.Config.Datacenter.ID)
 	g.Config.Datacenter.Name = g.collectString(prompter, "Datacenter name", g.Config.Datacenter.Name)
@@ -67,7 +68,7 @@ func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter) {
 	g.Config.Secrets.BaseDir = g.collectString(prompter, "Secrets base directory", "/root/secrets")
 }
 
-func (g *InstallConfig) collectRegistryConfig(prompter *Prompter) {
+func (g *InstallConfig) collectRegistryConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== Container Registry Configuration ===")
 	g.Config.Registry.Server = g.collectString(prompter, "Container registry server (e.g., ghcr.io, leave empty to skip)", "")
 	if g.Config.Registry.Server != "" {
@@ -76,7 +77,7 @@ func (g *InstallConfig) collectRegistryConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
+func (g *InstallConfig) collectPostgresConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== PostgreSQL Configuration ===")
 	g.Config.Postgres.Mode = g.collectChoice(prompter, "PostgreSQL setup", []string{"install", "external"}, "install")
 
@@ -110,7 +111,7 @@ func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
+func (g *InstallConfig) collectCephConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== Ceph Configuration ===")
 	g.Config.Ceph.NodesSubnet = g.collectString(prompter, "Ceph nodes subnet (CIDR)", "10.53.101.0/24")
 
@@ -132,7 +133,7 @@ func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
+func (g *InstallConfig) collectK8sConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== Kubernetes Configuration ===")
 	g.Config.Kubernetes.ManagedByCodesphere = prompter.Bool("Use Codesphere-managed Kubernetes (k0s)", g.Config.Kubernetes.ManagedByCodesphere)
 
@@ -163,7 +164,7 @@ func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectGatewayConfig(prompter *Prompter) {
+func (g *InstallConfig) collectGatewayConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== Cluster Gateway Configuration ===")
 	g.Config.Cluster.Gateway.ServiceType = g.collectChoice(prompter, "Gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
 	if g.Config.Cluster.Gateway.ServiceType == "ExternalIP" {
@@ -176,7 +177,7 @@ func (g *InstallConfig) collectGatewayConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
+func (g *InstallConfig) collectMetalLBConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== MetalLB Configuration (Optional) ===")
 
 	g.Config.MetalLB.Enabled = prompter.Bool("Enable MetalLB", g.Config.MetalLB.Enabled)
@@ -212,7 +213,7 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
+func (g *InstallConfig) collectACMEConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== ACME Certificate Configuration (Optional) ===")
 
 	certIssuer := g.Config.Codesphere.EnsureCertIssuer()
@@ -293,7 +294,7 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 	log.Println("Provider config and secrets should be added manually after generation.")
 }
 
-func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
+func (g *InstallConfig) collectCodesphereConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== Codesphere Application Configuration ===")
 	defaultDomain := g.Config.Codesphere.Domain
 	if defaultDomain == "" {
@@ -366,7 +367,7 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	g.collectOpenfgaBackupsConfig(prompter)
 }
 
-func (g *InstallConfig) collectOpenfgaBackupsConfig(prompter *Prompter) {
+func (g *InstallConfig) collectOpenfgaBackupsConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== OpenFGA Database Backups (Optional) ===")
 	hasBackups := prompter.Bool("Configure OpenFGA database backups", g.Config.Codesphere.OpenfgaBackups != nil && g.Config.Codesphere.OpenfgaBackups.Enabled)
 	if !hasBackups {
@@ -411,7 +412,7 @@ func (g *InstallConfig) collectOpenfgaBackupsConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectOpenBaoConfig(prompter *Prompter) {
+func (g *InstallConfig) collectOpenBaoConfig(prompter *prompt.Prompter) {
 	log.Println("\n=== OpenBao Configuration (Optional) ===")
 	hasOpenBao := prompter.Bool("Configure OpenBao integration", g.Config.Codesphere.OpenBao != nil && g.Config.Codesphere.OpenBao.URI != "")
 	if !hasOpenBao {

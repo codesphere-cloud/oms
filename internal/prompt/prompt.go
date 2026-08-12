@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+package prompt
 
 import (
 	"bufio"
@@ -118,6 +118,13 @@ func (p *Prompter) Bool(prompt string, defaultValue bool) bool {
 	}
 
 	return input == "y" || input == "yes"
+}
+
+// Confirm asks a yes/no question that has to be answered with an explicit yes. Anything
+// else — an empty line, a closed stdin, a non-interactive prompter — counts as no, so a
+// caller can use it to guard a change that must not happen by accident.
+func (p *Prompter) Confirm(prompt string) bool {
+	return p.Bool(prompt, false)
 }
 
 func (p *Prompter) Choice(prompt string, choices []string, defaultValue string) string {
