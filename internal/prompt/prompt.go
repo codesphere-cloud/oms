@@ -1,6 +1,9 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package prompt asks the operator questions on stdin. A prompter can be non-interactive,
+// in which case every question is answered with its default instead of being asked — that is
+// what unattended runs (CI, --yes style flags) use.
 package prompt
 
 import (
