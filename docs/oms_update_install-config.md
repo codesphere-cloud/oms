@@ -69,6 +69,7 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --vault string                                 Path to existing prod.vault.yaml file (default "prod.vault.yaml")
       --with-comments                                Add helpful comments to the generated YAML files
       --workspace-hosting-base-domain string         Workspace hosting base domain
+  -y, --yes                                          Auto-approve every change to the vault (regenerated certificates and missing secrets)
 ```
 
 ### SEE ALSO
