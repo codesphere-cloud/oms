@@ -37,14 +37,19 @@ var _ = Describe("UpdateInstallConfig", func() {
 		initialVault  string
 		cmd           *UpdateInstallConfigCmd
 		opts          *UpdateInstallConfigOpts
-		testCAKeyPem  string
-		testCACertPem string
+		confirmations []string
+		// Answer the stubbed prompts with. Reset to true for every spec.
+		approveConfirmations bool
+		testCAKeyPem         string
+		testCACertPem        string
 	)
 
 	BeforeEach(func() {
 		if !testutil.SopsAndAgeAvailable() {
 			Skip("sops and age-keygen not available")
 		}
+
+		approveConfirmations = true
 
 		var err error
 		configFile, err = os.CreateTemp("", "config-*.yaml")
@@ -213,8 +218,16 @@ codesphere:
 			VaultFile:     vaultFile.Name(),
 		}
 
+		confirmations = nil
 		cmd = &UpdateInstallConfigCmd{
 			Opts: opts,
+			// These specs are about what ends up in the files; the confirmation flow
+			// has its own context below.
+			Confirm: func(question string) (bool, error) {
+				confirmations = append(confirmations, question)
+
+				return approveConfirmations, nil
+			},
 		}
 	})
 
@@ -355,6 +368,67 @@ codesphere:
 		})
 	})
 
+	Context("confirming changes to the vault", func() {
+		// The fixture vault holds only some of the secrets EnsureSecrets knows about,
+		// so every run of the command finds something to generate.
+		It("asks before generating a secret the vault does not have", func() {
+			icg := installer.NewInstallConfigManager()
+			Expect(cmd.UpdateInstallConfig(icg)).To(Succeed())
+
+			Expect(confirmations).To(HaveLen(1))
+			Expect(icg.GetVault().GetSecret(files.SecretMounterHmacSecret)).ToNot(BeNil())
+		})
+
+		It("leaves the vault alone when the operator declines", func() {
+			approveConfirmations = false
+
+			icg := installer.NewInstallConfigManager()
+			Expect(cmd.UpdateInstallConfig(icg)).To(Succeed())
+
+			Expect(icg.GetVault().GetSecret(files.SecretMounterHmacSecret)).To(BeNil())
+
+			writtenVault, err := vault.LoadVaultData(vaultFile.Name(), "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writtenVault.GetSecret(files.SecretMounterHmacSecret)).To(BeNil())
+		})
+
+		It("asks nothing with --yes", func() {
+			opts.Yes = true
+
+			icg := installer.NewInstallConfigManager()
+			Expect(cmd.UpdateInstallConfig(icg)).To(Succeed())
+
+			Expect(confirmations).To(BeEmpty())
+			Expect(icg.GetVault().GetSecret(files.SecretMounterHmacSecret)).ToNot(BeNil())
+		})
+
+		It("asks before regenerating certificates an update invalidates", func() {
+			opts.PostgresPrimaryIP = "10.10.0.4"
+
+			icg := installer.NewInstallConfigManager()
+			Expect(cmd.UpdateInstallConfig(icg)).To(Succeed())
+
+			Expect(confirmations).To(HaveLen(2))
+		})
+
+		// A declined regeneration would leave the config pointing at an IP the
+		// certificate does not cover, so the whole update is dropped instead.
+		It("writes nothing when the operator declines a regeneration", func() {
+			opts.PostgresPrimaryIP = "10.10.0.4"
+			approveConfirmations = false
+
+			icg := installer.NewInstallConfigManager()
+			err := cmd.UpdateInstallConfig(icg)
+
+			Expect(err).To(MatchError(ContainSubstring("aborted")))
+
+			written := installer.NewInstallConfigManager()
+			Expect(written.LoadInstallConfigFromFile(configFile.Name())).To(Succeed())
+			Expect(written.GetInstallConfig().Postgres.Primary.IP).To(Equal("10.0.0.5"))
+			Expect(confirmations).To(HaveLen(1))
+		})
+	})
+
 	Context("when loading invalid config file", func() {
 		It("should return an error", func() {
 			opts.ConfigFile = "/nonexistent/config.yaml"
@@ -480,5 +554,81 @@ var _ = Describe("SecretDependencyTracker", func() {
 
 		tracker.MarkPostgresReplicaCertNeedsRegen()
 		Expect(tracker.NeedsPostgresReplicaCertRegen()).To(BeTrue())
+	})
+})
+
+var _ = Describe("missingSecrets", func() {
+	It("reports what is missing without changing config or vault", func() {
+		config := &files.RootConfig{}
+		vault := &files.InstallVault{}
+
+		missing, err := missingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(missing).To(ContainElement(files.SecretMounterHmacSecret))
+		Expect(vault.Secrets).To(BeEmpty())
+		Expect(config.Cluster.Certificates.CA.CertPem).To(BeEmpty())
+	})
+
+	It("reports nothing once the secrets are there", func() {
+		config := &files.RootConfig{}
+		vault := &files.InstallVault{}
+		_, err := addMissingSecrets(config, vault)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(missingSecrets(config, vault)).To(BeEmpty())
+	})
+})
+
+var _ = Describe("addMissingSecrets", func() {
+	var config *files.RootConfig
+
+	BeforeEach(func() {
+		config = &files.RootConfig{}
+	})
+
+	It("adds a secret the vault does not have", func() {
+		vault := &files.InstallVault{}
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).To(ContainElement(files.SecretMounterHmacSecret))
+		Expect(vault.GetSecret(files.SecretMounterHmacSecret)).ToNot(BeNil())
+	})
+
+	It("reports nothing on a second run and keeps the generated value", func() {
+		vault := &files.InstallVault{}
+		_, err := addMissingSecrets(config, vault)
+		Expect(err).ToNot(HaveOccurred())
+
+		secret := vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).To(BeEmpty())
+		Expect(vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password).To(Equal(secret))
+	})
+
+	It("never modifies a secret the vault already holds", func() {
+		vault := &files.InstallVault{}
+		vault.SetSecret(files.SecretEntry{
+			Name:   files.SecretMounterHmacSecret,
+			Fields: &files.SecretFields{Password: "operator-supplied-secret"},
+		})
+		// EnsureDefaultSecrets overwrites this one unconditionally when it runs directly.
+		vault.SetSecret(files.SecretEntry{
+			Name:   files.SecretDigitalOceanApiToken,
+			Fields: &files.SecretFields{Password: "a-real-token"},
+		})
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).ToNot(ContainElement(files.SecretMounterHmacSecret))
+		Expect(added).ToNot(ContainElement(files.SecretDigitalOceanApiToken))
+		Expect(vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password).To(Equal("operator-supplied-secret"))
+		Expect(vault.GetSecret(files.SecretDigitalOceanApiToken).Fields.Password).To(Equal("a-real-token"))
 	})
 })
