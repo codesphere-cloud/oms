@@ -186,6 +186,12 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 		return err
 	}
 
+	// Dedicated service account for OpenFGA database backups. Its storage role is
+	// assigned in EnsureIAMRoles and its HMAC key created in EnsureOpenfgaBackupBucket.
+	if _, _, err := b.GCPClient.CreateServiceAccount(b.Env.ProjectID, openfgaBackupSAName, openfgaBackupSAName); err != nil {
+		return fmt.Errorf("failed to ensure openfga backup service account: %w", err)
+	}
+
 	if b.Env.RegistryType == RegistryTypeArtifactRegistry {
 		sa, newSa, err := b.GCPClient.CreateServiceAccount(b.Env.ProjectID, "artifact-registry-writer", "artifact-registry-writer")
 		if err != nil {
@@ -232,6 +238,11 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 	err = b.ensureDnsPermissions()
 	if err != nil {
 		return fmt.Errorf("failed to ensure DNS permissions: %w", err)
+	}
+
+	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, openfgaBackupSAName, b.Env.ProjectID, []string{"roles/storage.objectAdmin"})
+	if err != nil {
+		return fmt.Errorf("failed to ensure openfga backup role bindings: %w", err)
 	}
 
 	if b.Env.RegistryType != RegistryTypeArtifactRegistry {
