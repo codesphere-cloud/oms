@@ -310,13 +310,11 @@ var _ = Describe("Installconfig & Secrets", func() {
 	})
 
 	Describe("EnsureOpenfgaBackupBucket", func() {
-		It("creates the bucket, service account and HMAC key", func() {
+		It("creates the bucket and HMAC key", func() {
 			vault := &files.InstallVault{}
 			icg.EXPECT().GetVault().Return(vault)
 
 			gc.EXPECT().EnsureStorageBucket("pid", "pid-openfga-backup", "us-central1").Return(nil)
-			gc.EXPECT().CreateServiceAccount("pid", "openfga-backup", "openfga-backup").Return("openfga-backup@pid.iam.gserviceaccount.com", true, nil)
-			gc.EXPECT().AssignIAMRole("pid", "openfga-backup", "pid", []string{"roles/storage.objectAdmin"}).Return(nil)
 			gc.EXPECT().CreateHMACKey("pid", "openfga-backup@pid.iam.gserviceaccount.com").Return("access-id", "secret-key", nil)
 
 			err := bs.EnsureOpenfgaBackupBucket()
@@ -335,8 +333,6 @@ var _ = Describe("Installconfig & Secrets", func() {
 			icg.EXPECT().GetVault().Return(vault)
 
 			gc.EXPECT().EnsureStorageBucket("pid", "pid-openfga-backup", "us-central1").Return(nil)
-			gc.EXPECT().CreateServiceAccount("pid", "openfga-backup", "openfga-backup").Return("openfga-backup@pid.iam.gserviceaccount.com", false, nil)
-			gc.EXPECT().AssignIAMRole("pid", "openfga-backup", "pid", []string{"roles/storage.objectAdmin"}).Return(nil)
 			// CreateHMACKey must not be called.
 
 			err := bs.EnsureOpenfgaBackupBucket()
