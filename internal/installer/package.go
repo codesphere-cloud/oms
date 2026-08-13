@@ -102,6 +102,7 @@ func (p *Package) Extract(force bool, verbose bool) error {
 	depsArchivePath := path.Join(workDir, depsTar)
 	if p.fileIO.Exists(depsArchivePath) {
 		depsTargetDir := path.Join(workDir, depsDir)
+
 		err = util.ExtractTarGz(p.fileIO, depsArchivePath, depsTargetDir, verbose)
 		if err != nil {
 			return fmt.Errorf("failed to extract deps.tar.gz to %s: %w", depsTargetDir, err)
@@ -135,6 +136,7 @@ func (p *Package) ExtractDependency(file string, force bool, verbose bool) error
 // ExtractOciImageIndex extracts and parses the OCI image index from the given image file path.
 func (p *Package) ExtractOciImageIndex(imagefile string, verbose bool) (files.OCIImageIndex, error) {
 	var ociImageIndex files.OCIImageIndex
+
 	err := util.ExtractTarSingleFile(p.fileIO, imagefile, "index.json", filepath.Dir(imagefile), verbose)
 	if err != nil {
 		return ociImageIndex, fmt.Errorf("failed to extract index.json: %w", err)
@@ -173,6 +175,7 @@ func (p *Package) GetFullImageTag(baseimage string) (string, error) {
 
 const baseimagePath = "./codesphere/images"
 
+// GetBaseimagePath extracts the selected base image and returns its local path.
 func (p *Package) GetBaseimagePath(baseimage string, force bool, verbose bool) (string, error) {
 	if baseimage == "" {
 		return "", fmt.Errorf("baseimage not specified")
@@ -183,6 +186,7 @@ func (p *Package) GetBaseimagePath(baseimage string, force bool, verbose bool) (
 	}
 
 	baseImageTarPath := path.Join(baseimagePath, baseimage)
+
 	err := p.ExtractDependency(baseImageTarPath, force, verbose)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract package to workdir: %w", err)

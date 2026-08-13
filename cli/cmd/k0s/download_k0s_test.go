@@ -63,6 +63,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
 
 			c.Opts.Version = "v1.29.1+k0s.0"
+
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", false, true).Return("", errors.New("download failed"))
 
 			err := c.DownloadK0s(mockK0sManager)
@@ -75,6 +76,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
 
 			c.Opts.Version = "v1.29.1+k0s.0"
+
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", false, true).Return("/test/workdir/k0s", nil)
 
 			err := c.DownloadK0s(mockK0sManager)

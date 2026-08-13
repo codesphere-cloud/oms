@@ -108,20 +108,24 @@ func extractEntry(header *tar.Header, targetPath string, fileIo FileIO, tr *tar.
 // ExtractTarGzSingleFile extracts a single specified file from a .tar.gz archive to the destination directory.
 func ExtractTarGzSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string, verbose bool) error {
 	destDir = filepath.Clean(destDir)
+
 	tr, err := openTarGz(archiveFile, fileIo, verbose)
 	if err != nil {
 		return err
 	}
+
 	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir, verbose)
 }
 
 // ExtractTarSingleFile extracts a single specified file from a .tar archive to the destination directory.
 func ExtractTarSingleFile(fileIo FileIO, archiveFile, fileToExtract, destDir string, verbose bool) error {
 	destDir = filepath.Clean(destDir)
+
 	tr, err := openTar(archiveFile, fileIo, verbose)
 	if err != nil {
 		return err
 	}
+
 	return extractTarSingleFile(fileIo, tr, fileToExtract, destDir, verbose)
 }
 

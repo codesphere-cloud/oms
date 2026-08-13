@@ -127,6 +127,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
 			c.Opts.Force = true
+
 			mockPackageManager.EXPECT().Extract(true, false).Return(nil)
 			mockPackageManager.EXPECT().GetFullImageTag("").Return("", errors.New("failed to extract package to workdir: extraction failed"))
 
