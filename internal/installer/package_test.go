@@ -250,7 +250,7 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 
 			Context("when image file does not exist", func() {
 				It("returns an error", func() {
-					_, err := pkg.ExtractOciImageIndex(imageFile)
+					_, err := pkg.ExtractOciImageIndex(imageFile, false)
 
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
@@ -263,7 +263,7 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 					err := os.WriteFile(imageFile, []byte(""), 0644)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, err = pkg.ExtractOciImageIndex(imageFile)
+					_, err = pkg.ExtractOciImageIndex(imageFile, false)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
 				})
@@ -275,7 +275,7 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 					err := os.Mkdir(imageFile, 0755)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, err = pkg.ExtractOciImageIndex(imageFile)
+					_, err = pkg.ExtractOciImageIndex(imageFile, false)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
 				})
@@ -287,7 +287,7 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 					err := createTar(imageFile, "not_index.json", "fake content")
 					Expect(err).ToNot(HaveOccurred())
 
-					_, err = pkg.ExtractOciImageIndex(imageFile)
+					_, err = pkg.ExtractOciImageIndex(imageFile, false)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to extract index.json"))
 				})
@@ -310,7 +310,7 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 					err := createTar(imageFile, "index.json", validIndex)
 					Expect(err).ToNot(HaveOccurred())
 
-					ociImageIndex, err := pkg.ExtractOciImageIndex(imageFile)
+					ociImageIndex, err := pkg.ExtractOciImageIndex(imageFile, false)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(ociImageIndex.SchemaVersion).To(Equal(2))
 					Expect(ociImageIndex.MediaType).To(Equal("application/vnd.oci.image.index.v1+json"))
@@ -332,7 +332,7 @@ var _ = Describe("Package ExtractOciImageIndex", func() {
 					err := createTar(imageFile, "index.json", invalidIndex)
 					Expect(err).ToNot(HaveOccurred())
 
-					_, err = pkg.ExtractOciImageIndex(imageFile)
+					_, err = pkg.ExtractOciImageIndex(imageFile, false)
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to parse OCI image config"))
 				})
@@ -491,7 +491,7 @@ var _ = Describe("Package GetBaseimagePath", func() {
 	Describe("GetBaseimagePath", func() {
 		Context("when baseimage parameter is empty", func() {
 			It("returns an error", func() {
-				_, err := pkg.GetBaseimagePath("", false)
+				_, err := pkg.GetBaseimagePath("", false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("baseimage not specified"))
 			})
@@ -500,7 +500,7 @@ var _ = Describe("Package GetBaseimagePath", func() {
 		Context("when ExtractDependency fails", func() {
 			It("returns an error", func() {
 				// Try to extract non-existent dependency
-				_, err := pkg.GetBaseimagePath("nonexistent-image", false)
+				_, err := pkg.GetBaseimagePath("nonexistent-image", false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to extract package to workdir"))
 			})
@@ -523,7 +523,7 @@ var _ = Describe("Package GetBaseimagePath", func() {
 			})
 
 			It("returns correct path for baseimage without .tar extension", func() {
-				path, err := pkg.GetBaseimagePath("workspace-agent-24.04", false)
+				path, err := pkg.GetBaseimagePath("workspace-agent-24.04", false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				expectedPath := pkg.GetDependencyPath("./codesphere/images/workspace-agent-24.04.tar")
@@ -531,7 +531,7 @@ var _ = Describe("Package GetBaseimagePath", func() {
 			})
 
 			It("returns correct path for baseimage with .tar extension", func() {
-				path, err := pkg.GetBaseimagePath("workspace-agent-24.04.tar", false)
+				path, err := pkg.GetBaseimagePath("workspace-agent-24.04.tar", false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				expectedPath := pkg.GetDependencyPath("./codesphere/images/workspace-agent-24.04.tar")
@@ -540,11 +540,11 @@ var _ = Describe("Package GetBaseimagePath", func() {
 
 			It("uses force parameter correctly", func() {
 				// First extraction
-				_, err := pkg.GetBaseimagePath("workspace-agent-24.04", false)
+				_, err := pkg.GetBaseimagePath("workspace-agent-24.04", false, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Second extraction with force
-				path, err := pkg.GetBaseimagePath("workspace-agent-24.04", true)
+				path, err := pkg.GetBaseimagePath("workspace-agent-24.04", true, false)
 				Expect(err).NotTo(HaveOccurred())
 
 				expectedPath := pkg.GetDependencyPath("./codesphere/images/workspace-agent-24.04.tar")

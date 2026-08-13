@@ -1875,8 +1875,8 @@ func (_c *MockPackageManager_ExtractDependency_Call) RunAndReturn(run func(file 
 }
 
 // ExtractOciImageIndex provides a mock function for the type MockPackageManager
-func (_mock *MockPackageManager) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error) {
-	ret := _mock.Called(imagefile)
+func (_mock *MockPackageManager) ExtractOciImageIndex(imagefile string, verbose bool) (files.OCIImageIndex, error) {
+	ret := _mock.Called(imagefile, verbose)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ExtractOciImageIndex")
@@ -1884,16 +1884,16 @@ func (_mock *MockPackageManager) ExtractOciImageIndex(imagefile string) (files.O
 
 	var r0 files.OCIImageIndex
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string) (files.OCIImageIndex, error)); ok {
-		return returnFunc(imagefile)
+	if returnFunc, ok := ret.Get(0).(func(string, bool) (files.OCIImageIndex, error)); ok {
+		return returnFunc(imagefile, verbose)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string) files.OCIImageIndex); ok {
-		r0 = returnFunc(imagefile)
+	if returnFunc, ok := ret.Get(0).(func(string, bool) files.OCIImageIndex); ok {
+		r0 = returnFunc(imagefile, verbose)
 	} else {
 		r0 = ret.Get(0).(files.OCIImageIndex)
 	}
-	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
-		r1 = returnFunc(imagefile)
+	if returnFunc, ok := ret.Get(1).(func(string, bool) error); ok {
+		r1 = returnFunc(imagefile, verbose)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -1907,18 +1907,24 @@ type MockPackageManager_ExtractOciImageIndex_Call struct {
 
 // ExtractOciImageIndex is a helper method to define mock.On call
 //   - imagefile string
-func (_e *MockPackageManager_Expecter) ExtractOciImageIndex(imagefile any) *MockPackageManager_ExtractOciImageIndex_Call {
-	return &MockPackageManager_ExtractOciImageIndex_Call{Call: _e.mock.On("ExtractOciImageIndex", imagefile)}
+//   - verbose bool
+func (_e *MockPackageManager_Expecter) ExtractOciImageIndex(imagefile any, verbose any) *MockPackageManager_ExtractOciImageIndex_Call {
+	return &MockPackageManager_ExtractOciImageIndex_Call{Call: _e.mock.On("ExtractOciImageIndex", imagefile, verbose)}
 }
 
-func (_c *MockPackageManager_ExtractOciImageIndex_Call) Run(run func(imagefile string)) *MockPackageManager_ExtractOciImageIndex_Call {
+func (_c *MockPackageManager_ExtractOciImageIndex_Call) Run(run func(imagefile string, verbose bool)) *MockPackageManager_ExtractOciImageIndex_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
 			arg0 = args[0].(string)
 		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
 		run(
 			arg0,
+			arg1,
 		)
 	})
 	return _c
@@ -1929,7 +1935,7 @@ func (_c *MockPackageManager_ExtractOciImageIndex_Call) Return(oCIImageIndex fil
 	return _c
 }
 
-func (_c *MockPackageManager_ExtractOciImageIndex_Call) RunAndReturn(run func(imagefile string) (files.OCIImageIndex, error)) *MockPackageManager_ExtractOciImageIndex_Call {
+func (_c *MockPackageManager_ExtractOciImageIndex_Call) RunAndReturn(run func(imagefile string, verbose bool) (files.OCIImageIndex, error)) *MockPackageManager_ExtractOciImageIndex_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1981,8 +1987,8 @@ func (_c *MockPackageManager_FileIO_Call) RunAndReturn(run func() util.FileIO) *
 }
 
 // GetBaseimagePath provides a mock function for the type MockPackageManager
-func (_mock *MockPackageManager) GetBaseimagePath(baseimage string, force bool) (string, error) {
-	ret := _mock.Called(baseimage, force)
+func (_mock *MockPackageManager) GetBaseimagePath(baseimage string, force bool, verbose bool) (string, error) {
+	ret := _mock.Called(baseimage, force, verbose)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetBaseimagePath")
@@ -1990,16 +1996,16 @@ func (_mock *MockPackageManager) GetBaseimagePath(baseimage string, force bool) 
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(string, bool) (string, error)); ok {
-		return returnFunc(baseimage, force)
+	if returnFunc, ok := ret.Get(0).(func(string, bool, bool) (string, error)); ok {
+		return returnFunc(baseimage, force, verbose)
 	}
-	if returnFunc, ok := ret.Get(0).(func(string, bool) string); ok {
-		r0 = returnFunc(baseimage, force)
+	if returnFunc, ok := ret.Get(0).(func(string, bool, bool) string); ok {
+		r0 = returnFunc(baseimage, force, verbose)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(string, bool) error); ok {
-		r1 = returnFunc(baseimage, force)
+	if returnFunc, ok := ret.Get(1).(func(string, bool, bool) error); ok {
+		r1 = returnFunc(baseimage, force, verbose)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -2014,11 +2020,12 @@ type MockPackageManager_GetBaseimagePath_Call struct {
 // GetBaseimagePath is a helper method to define mock.On call
 //   - baseimage string
 //   - force bool
-func (_e *MockPackageManager_Expecter) GetBaseimagePath(baseimage any, force any) *MockPackageManager_GetBaseimagePath_Call {
-	return &MockPackageManager_GetBaseimagePath_Call{Call: _e.mock.On("GetBaseimagePath", baseimage, force)}
+//   - verbose bool
+func (_e *MockPackageManager_Expecter) GetBaseimagePath(baseimage any, force any, verbose any) *MockPackageManager_GetBaseimagePath_Call {
+	return &MockPackageManager_GetBaseimagePath_Call{Call: _e.mock.On("GetBaseimagePath", baseimage, force, verbose)}
 }
 
-func (_c *MockPackageManager_GetBaseimagePath_Call) Run(run func(baseimage string, force bool)) *MockPackageManager_GetBaseimagePath_Call {
+func (_c *MockPackageManager_GetBaseimagePath_Call) Run(run func(baseimage string, force bool, verbose bool)) *MockPackageManager_GetBaseimagePath_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -2028,9 +2035,14 @@ func (_c *MockPackageManager_GetBaseimagePath_Call) Run(run func(baseimage strin
 		if args[1] != nil {
 			arg1 = args[1].(bool)
 		}
+		var arg2 bool
+		if args[2] != nil {
+			arg2 = args[2].(bool)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -2041,7 +2053,7 @@ func (_c *MockPackageManager_GetBaseimagePath_Call) Return(s string, err error) 
 	return _c
 }
 
-func (_c *MockPackageManager_GetBaseimagePath_Call) RunAndReturn(run func(baseimage string, force bool) (string, error)) *MockPackageManager_GetBaseimagePath_Call {
+func (_c *MockPackageManager_GetBaseimagePath_Call) RunAndReturn(run func(baseimage string, force bool, verbose bool) (string, error)) *MockPackageManager_GetBaseimagePath_Call {
 	_c.Call.Return(run)
 	return _c
 }

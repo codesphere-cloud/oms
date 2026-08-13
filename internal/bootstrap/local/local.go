@@ -59,6 +59,7 @@ type LocalBootstrapper struct {
 	fw         util.FileIO
 	icg        installer.InstallConfigManager
 	helm       installer.HelmClient
+	Verbose    bool
 	// Environment
 	Env *CodesphereEnvironment
 	// cephCredentials holds the Ceph auth credentials read after setup.
@@ -99,7 +100,7 @@ type CodesphereEnvironment struct {
 	ArgoCDRegistryURL string `json:"-"`
 }
 
-func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, helm installer.HelmClient, env *CodesphereEnvironment) *LocalBootstrapper {
+func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, helm installer.HelmClient, env *CodesphereEnvironment, verbose bool) *LocalBootstrapper {
 	return &LocalBootstrapper{
 		ctx:        ctx,
 		stlog:      stlog,
@@ -109,6 +110,7 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 		icg:        icg,
 		helm:       helm,
 		Env:        env,
+		Verbose:    verbose,
 	}
 }
 

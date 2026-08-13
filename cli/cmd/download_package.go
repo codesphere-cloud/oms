@@ -27,7 +27,6 @@ type DownloadPackageOpts struct {
 	Version  string
 	Hash     string
 	Filename string
-	Quiet    bool
 }
 
 func (c *DownloadPackageCmd) RunE(_ *cobra.Command, args []string) error {
@@ -83,13 +82,13 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *util.GlobalOptions) {
 				return nil
 			},
 		},
+		Opts:       DownloadPackageOpts{GlobalOptions: opts},
 		FileWriter: intutil.NewFilesystemWriter(),
 	}
 
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Version, "version", "V", "", "Codesphere version to download")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Hash, "hash", "H", "", "Hash of the version to download if multiple builds exist for the same version")
 	pkg.cmd.Flags().StringVarP(&pkg.Opts.Filename, "file", "f", "installer-lite.tar.gz", "Specify artifact to download")
-	pkg.cmd.Flags().BoolVarP(&pkg.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
 	util.AddCmd(download, pkg.cmd)
 
 	pkg.cmd.RunE = pkg.RunE
@@ -118,7 +117,7 @@ func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, 
 		fileSize = int(fileInfo.Size())
 	}
 
-	err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet)
+	err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, !c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to download build: %w", err)
 	}

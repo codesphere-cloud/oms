@@ -26,9 +26,9 @@ type PackageManager interface {
 	GetDependencyPath(filename string) string
 	Extract(force bool, verbose bool) error
 	ExtractDependency(file string, force bool, verbose bool) error
-	ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error)
+	ExtractOciImageIndex(imagefile string, verbose bool) (files.OCIImageIndex, error)
 	GetFullImageTag(baseimage string) (string, error)
-	GetBaseimagePath(baseimage string, force bool) (string, error)
+	GetBaseimagePath(baseimage string, force bool, verbose bool) (string, error)
 	GetCodesphereVersion() (string, error)
 }
 
@@ -133,9 +133,9 @@ func (p *Package) ExtractDependency(file string, force bool, verbose bool) error
 }
 
 // ExtractOciImageIndex extracts and parses the OCI image index from the given image file path.
-func (p *Package) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error) {
+func (p *Package) ExtractOciImageIndex(imagefile string, verbose bool) (files.OCIImageIndex, error) {
 	var ociImageIndex files.OCIImageIndex
-	err := util.ExtractTarSingleFile(p.fileIO, imagefile, "index.json", filepath.Dir(imagefile), false)
+	err := util.ExtractTarSingleFile(p.fileIO, imagefile, "index.json", filepath.Dir(imagefile), verbose)
 	if err != nil {
 		return ociImageIndex, fmt.Errorf("failed to extract index.json: %w", err)
 	}
@@ -173,7 +173,7 @@ func (p *Package) GetFullImageTag(baseimage string) (string, error) {
 
 const baseimagePath = "./codesphere/images"
 
-func (p *Package) GetBaseimagePath(baseimage string, force bool) (string, error) {
+func (p *Package) GetBaseimagePath(baseimage string, force bool, verbose bool) (string, error) {
 	if baseimage == "" {
 		return "", fmt.Errorf("baseimage not specified")
 	}
@@ -183,7 +183,7 @@ func (p *Package) GetBaseimagePath(baseimage string, force bool) (string, error)
 	}
 
 	baseImageTarPath := path.Join(baseimagePath, baseimage)
-	err := p.ExtractDependency(baseImageTarPath, force, false)
+	err := p.ExtractDependency(baseImageTarPath, force, verbose)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract package to workdir: %w", err)
 	}

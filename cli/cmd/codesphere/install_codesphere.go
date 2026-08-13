@@ -65,14 +65,17 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	infraInstaller := &installer.CodesphereInstaller{
 		SkipSteps:    c.Opts.SkipSteps,
 		AllowedSteps: installer.InfraSteps,
+		Verbose:      c.Opts.Verbose,
 	}
 	dependenciesInstaller := &installer.CodesphereInstaller{
 		SkipSteps:    append(sharedInstallCodesphereSteps(), c.Opts.SkipSteps...),
 		AllowedSteps: installer.DependenciesSteps,
+		Verbose:      c.Opts.Verbose,
 	}
 	platformInstaller := &installer.CodesphereInstaller{
 		SkipSteps:    append(sharedInstallCodesphereSteps(), c.Opts.SkipSteps...),
 		AllowedSteps: installer.PlatformSteps,
+		Verbose:      c.Opts.Verbose,
 	}
 
 	if c.Opts.CodesphereOnly {
