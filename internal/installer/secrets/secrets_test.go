@@ -177,9 +177,19 @@ var _ = Describe("EnsureNixSigningKeys", func() {
 })
 
 var _ = Describe("EnsureDefaultSecrets", func() {
-	It("always overwrites digitalOceanApiToken", func() {
+	It("keeps a digitalOceanApiToken the vault already holds", func() {
 		vault := newVault()
 		vault.SetSecret(files.SecretEntry{Name: "digitalOceanApiToken", Fields: &files.SecretFields{Password: "real-token"}})
+
+		Expect(secrets.EnsureDefaultSecrets(vault)).To(Succeed())
+		Expect(vault.GetSecret("digitalOceanApiToken").Fields.Password).To(Equal("real-token"))
+	})
+
+	// The chart does not render without a value, so an entry that is there but empty is
+	// filled in like a missing one.
+	It("fills in an empty digitalOceanApiToken", func() {
+		vault := newVault()
+		vault.SetSecret(files.SecretEntry{Name: "digitalOceanApiToken", Fields: &files.SecretFields{Password: ""}})
 
 		Expect(secrets.EnsureDefaultSecrets(vault)).To(Succeed())
 		Expect(vault.GetSecret("digitalOceanApiToken").Fields.Password).To(Equal("dummy"))

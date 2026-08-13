@@ -1,7 +1,10 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+// Package prompt asks the operator questions on stdin. A prompter can be non-interactive,
+// in which case every question is answered with its default instead of being asked, which is
+// what unattended runs (CI, --yes style flags) use.
+package prompt
 
 import (
 	"bufio"
@@ -11,19 +14,36 @@ import (
 	"strings"
 )
 
-type Prompter struct {
+// Prompter asks the operator a question and returns their answer, falling back to the
+// default whenever there is none: an empty line, a closed stdin, or a prompter that was
+// created non-interactive.
+//
+//mockery:generate: true
+type Prompter interface {
+	String(prompt, defaultValue string) string
+	Int(prompt string, defaultValue int) int
+	StringSlice(prompt string, defaultValue []string) []string
+	Bool(prompt string, defaultValue bool) bool
+	Choice(prompt string, choices []string, defaultValue string) string
+}
+
+// StdinPrompter is the Prompter that asks on stdin.
+type StdinPrompter struct {
 	reader      *bufio.Reader
 	interactive bool
 }
 
-func NewPrompter(interactive bool) *Prompter {
-	return &Prompter{
+// NewPrompter returns a prompter reading from stdin. A non-interactive one never asks
+// and answers every question with its default.
+func NewPrompter(interactive bool) *StdinPrompter {
+	return &StdinPrompter{
 		reader:      bufio.NewReader(os.Stdin),
 		interactive: interactive,
 	}
 }
 
-func (p *Prompter) String(prompt, defaultValue string) string {
+// String asks for a line of text.
+func (p *StdinPrompter) String(prompt, defaultValue string) string {
 	if !p.interactive {
 		return defaultValue
 	}
@@ -43,7 +63,8 @@ func (p *Prompter) String(prompt, defaultValue string) string {
 	return input
 }
 
-func (p *Prompter) Int(prompt string, defaultValue int) int {
+// Int asks for a number, falling back to the default when the answer is not one.
+func (p *StdinPrompter) Int(prompt string, defaultValue int) int {
 	if !p.interactive {
 		return defaultValue
 	}
@@ -65,7 +86,8 @@ func (p *Prompter) Int(prompt string, defaultValue int) int {
 	return value
 }
 
-func (p *Prompter) StringSlice(prompt string, defaultValue []string) []string {
+// StringSlice asks for a comma-separated list.
+func (p *StdinPrompter) StringSlice(prompt string, defaultValue []string) []string {
 	if !p.interactive {
 		return defaultValue
 	}
@@ -99,7 +121,9 @@ func (p *Prompter) StringSlice(prompt string, defaultValue []string) []string {
 	return result
 }
 
-func (p *Prompter) Bool(prompt string, defaultValue bool) bool {
+// Bool asks a yes/no question. Only "y" and "yes" are a yes, only "n" and "no" a no;
+// anything else falls back to the default.
+func (p *StdinPrompter) Bool(prompt string, defaultValue bool) bool {
 	if !p.interactive {
 		return defaultValue
 	}
@@ -120,7 +144,9 @@ func (p *Prompter) Bool(prompt string, defaultValue bool) bool {
 	return input == "y" || input == "yes"
 }
 
-func (p *Prompter) Choice(prompt string, choices []string, defaultValue string) string {
+// Choice asks for one of the given options, falling back to the default when the answer
+// is not among them.
+func (p *StdinPrompter) Choice(prompt string, choices []string, defaultValue string) string {
 	if !p.interactive {
 		return defaultValue
 	}

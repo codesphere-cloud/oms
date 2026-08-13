@@ -223,11 +223,10 @@ func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
 }
 
 // EnsureDefaultSecrets sets dummy defaults for all Helm chart secrets not managed by
-// the installer config. Always overwrites digitalOceanApiToken; all others are only
-// set when absent.
+// the installer config. Idempotent: a value the vault already holds is kept.
 func EnsureDefaultSecrets(vault *files.InstallVault) error {
-	// Always overwrite — not used in private cloud but must not be empty.
-	setPassword(vault, files.SecretDigitalOceanApiToken, "dummy")
+	// Unused in private cloud, but the chart does not render without a value.
+	setPasswordIfEmpty(vault, files.SecretDigitalOceanApiToken, "dummy")
 
 	for _, name := range optionalPasswordSecrets {
 		setPasswordIfAbsent(vault, name, "dummy")
@@ -298,6 +297,16 @@ func setPassword(vault *files.InstallVault, name, password string) {
 		Name:   name,
 		Fields: &files.SecretFields{Password: password},
 	})
+}
+
+// setPasswordIfEmpty fills in a secret the vault does not have, or has without a value.
+// Used for secrets the Helm chart needs a value for, where an empty entry is as good as none.
+func setPasswordIfEmpty(vault *files.InstallVault, name, password string) {
+	if secret := vault.GetSecret(name); secret != nil && secret.Fields != nil && secret.Fields.Password != "" {
+		return
+	}
+
+	setPassword(vault, name, password)
 }
 
 func setPasswordIfAbsent(vault *files.InstallVault, name, password string) {
