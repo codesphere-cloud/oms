@@ -39,9 +39,9 @@ var _ = Describe("DownloadPackages", func() {
 	JustBeforeEach(func() {
 		c = cmd.DownloadPackageCmd{
 			Opts: cmd.DownloadPackageOpts{
-				Version:  version,
-				Filename: filename,
-				Quiet:    false,
+				GlobalOptions: &util.GlobalOptions{},
+				Version:       version,
+				Filename:      filename,
 			},
 			FileWriter: mockFileWriter,
 		}
@@ -182,7 +182,7 @@ var _ = Describe("DownloadPackages", func() {
 			fakeFile := os.NewFile(uintptr(0), filename)
 			mockFileWriter.EXPECT().OpenAppend(version+"-"+hash+"-"+filename).Return(fakeFile, nil)
 			mockFileWriter.EXPECT().Open(version+"-"+hash+"-"+filename).Return(fakeFile, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, true).Return(nil)
 			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
 			err := c.DownloadBuild(mockPortal, build, filename)
 			Expect(err).NotTo(HaveOccurred())
@@ -209,7 +209,7 @@ var _ = Describe("DownloadPackages", func() {
 			fakeFile := os.NewFile(uintptr(0), filename)
 			mockFileWriter.EXPECT().OpenAppend(version+"-"+longHash+"-"+filename).Return(fakeFile, nil)
 			mockFileWriter.EXPECT().Open(version+"-"+longHash+"-"+filename).Return(fakeFile, nil)
-			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, true).Return(nil)
 			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
 			err := c.DownloadBuild(mockPortal, buildWithLongHash, filename)
 			Expect(err).NotTo(HaveOccurred())
@@ -231,7 +231,7 @@ var _ = Describe("DownloadPackages", func() {
 				fakeFile := os.NewFile(uintptr(0), filename)
 				mockFileWriter.EXPECT().OpenAppend("other-version-v1.42.0-"+hash+"-"+filename).Return(fakeFile, nil)
 				mockFileWriter.EXPECT().Open("other-version-v1.42.0-"+hash+"-"+filename).Return(fakeFile, nil)
-				mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
+				mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, true).Return(nil)
 				mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
 				err := c.DownloadBuild(mockPortal, build, filename)
 				Expect(err).NotTo(HaveOccurred())

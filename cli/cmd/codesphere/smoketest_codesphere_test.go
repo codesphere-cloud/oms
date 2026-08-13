@@ -100,7 +100,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			Token:   "test-token",
 			TeamID:  teamId,
 			PlanID:  planId,
-			Quiet:   true, // Suppress log output in tests
+			Verbose: false, // Suppress log output in tests
 			Timeout: 10 * time.Minute,
 			Profile: "ci.yml",
 			Steps:   []string{},

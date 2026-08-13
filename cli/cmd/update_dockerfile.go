@@ -92,7 +92,7 @@ func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im s
 		return fmt.Errorf("failed to get image name: %w", err)
 	}
 
-	imagePath, err := pm.GetBaseimagePath(c.Opts.Baseimage, c.Opts.Force)
+	imagePath, err := pm.GetBaseimagePath(c.Opts.Baseimage, c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to get image path: %w", err)
 	}
