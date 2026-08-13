@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package prompt asks the operator questions on stdin. A prompter can be non-interactive,
-// in which case every question is answered with its default instead of being asked — that is
+// in which case every question is answered with its default instead of being asked, which is
 // what unattended runs (CI, --yes style flags) use.
 package prompt
 
@@ -15,7 +15,7 @@ import (
 )
 
 // Prompter asks the operator a question and returns their answer, falling back to the
-// default whenever there is none — an empty line, a closed stdin, or a prompter that was
+// default whenever there is none: an empty line, a closed stdin, or a prompter that was
 // created non-interactive.
 //
 //mockery:generate: true

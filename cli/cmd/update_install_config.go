@@ -422,8 +422,8 @@ func (c *UpdateInstallConfigCmd) applyCodesphereUpdates(config *files.RootConfig
 }
 
 // approve prints what is about to change and asks the operator to confirm it. --yes approves
-// without asking; otherwise only an explicit yes counts, so a run without a terminal — an
-// empty answer — declines.
+// without asking; otherwise only an explicit yes counts, so a run without a terminal (an
+// empty answer) declines.
 func (c *UpdateInstallConfigCmd) approve(question, intro string, items []string) bool {
 	if c.Opts.Yes {
 		return true
@@ -467,9 +467,8 @@ func (c *UpdateInstallConfigCmd) confirmAndAddMissingSecrets(config *files.RootC
 	return added, nil
 }
 
-// missingSecrets reports which secrets addMissingSecrets would generate, without changing
-// anything: the generators run against copies, so the keys they produce here are thrown away
-// and only the names are kept.
+// missingSecrets reports what addMissingSecrets would generate, without changing anything:
+// it runs against copies, so only the names survive.
 func missingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
 	configCopy, err := config.Clone()
 	if err != nil {
@@ -479,19 +478,12 @@ func missingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]stri
 	return addMissingSecrets(configCopy, vault.Clone())
 }
 
-// addMissingSecrets fills in the secrets an existing vault does not have yet and returns
-// their names. A vault written by an older oms predates whatever the current one requires,
-// and nothing else on the upgrade path generates the difference:
-// `oms install` never touches secrets, and `oms init install-config` writes a fresh vault
-// rather than extending one.
-//
-// Strictly additive. EnsureSecrets is idempotent except for EnsureDefaultSecrets, which
-// always overwrites digitalOceanApiToken with a dummy value, so every entry that was already
-// in the vault is restored afterwards — an operator's own values are never modified here.
+// addMissingSecrets generates the secrets the vault does not have yet and returns their
+// names. EnsureSecrets keeps what is already there, so this only ever adds.
 func addMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
-	existing := make(map[string]files.SecretEntry, len(vault.Secrets))
+	existing := make(map[string]bool, len(vault.Secrets))
 	for _, secret := range vault.Secrets {
-		existing[secret.Name] = secret
+		existing[secret.Name] = true
 	}
 
 	if err := secrets.EnsureSecrets(vault, config); err != nil {
@@ -500,13 +492,10 @@ func addMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]s
 
 	added := []string{}
 
-	for i, secret := range vault.Secrets {
-		if before, ok := existing[secret.Name]; ok {
-			vault.Secrets[i] = before
-			continue
+	for _, secret := range vault.Secrets {
+		if !existing[secret.Name] {
+			added = append(added, secret.Name)
 		}
-
-		added = append(added, secret.Name)
 	}
 
 	sort.Strings(added)
