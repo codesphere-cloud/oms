@@ -4,6 +4,8 @@
 package installer
 
 import (
+	"log"
+
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
@@ -12,62 +14,67 @@ import (
 // oms only has to name it.
 const openFgaPresharedKeysSecret = "openfga-preshared-keys"
 
-// OpenFgaPcAppsValues translates the customer-facing codesphere.openFga block of the install
-// config into pc-applications values.
-//
-// OpenFGA is deployed by pc-applications, but whether a data center runs its own instance and
-// whether that instance is published is an installation-level decision, not a chart detail — so
-// operators configure it in config.yaml and this derives the chart values from it. The result is
-// the *base* of the pc-apps values: an explicit `pcApps` block in config.yaml and any
-// --pc-apps-values file still override it.
-//
-// Authentication follows the vault rather than the config: OpenFGA requires the preshared key
-// exactly when the installation has one, which keeps it in step with the Codesphere services
-// (they take the same key from the same vault entry, and treat it as optional). Pods that were
-// started before the key existed keep running without it until the release rolls out, so an
-// installation that adds the key mid-life restarts its Codesphere services.
-//
-// Returns nil when neither the config nor the vault says anything about OpenFGA, leaving the
-// pc-applications chart defaults untouched.
+// OpenFgaPcAppsValues derives the pc-applications values for OpenFGA. They are the *base* of
+// the pc-apps values: an explicit `pcApps` block in config.yaml and any --pc-apps-values file
+// still override them. Returns nil when there is nothing to say, leaving the chart defaults
+// untouched.
 func OpenFgaPcAppsValues(config *files.RootConfig, vault *files.InstallVault) files.ChartValues {
-	openfga := files.ChartValues{}
+	application := files.ChartValues{}
 	chartValues := files.ChartValues{}
 
 	if fga := config.Codesphere.OpenFga; fga != nil {
-		openfga["enabled"] = fga.DeploysOpenFga()
+		application["enabled"] = fga.DeploysOpenFga()
 
 		if fga.Expose != nil {
 			chartValues["gateway"] = gatewayValues(config, fga.Expose)
 		}
 	}
 
-	if hasOpenFgaPresharedKey(vault) {
-		chartValues["openfga"] = files.ChartValues{
-			"authn": files.ChartValues{
-				"method": "preshared",
-				"preshared": files.ChartValues{
-					"keysSecret": openFgaPresharedKeysSecret,
-				},
-			},
-		}
+	if authn := authnValues(vault); authn != nil {
+		chartValues["openfga"] = files.ChartValues{"authn": authn}
 	}
 
 	if len(chartValues) > 0 {
-		openfga["valuesObject"] = chartValues
+		application["valuesObject"] = chartValues
 	}
 
-	if len(openfga) == 0 {
+	if len(application) == 0 {
 		return nil
 	}
 
 	return files.ChartValues{
 		"applications": files.ChartValues{
-			"openfga": openfga,
+			"openfga": application,
 		},
 	}
 }
 
-// gatewayValues publishes a locally deployed OpenFGA through the Codesphere gateway.
+// authnValues makes OpenFGA require the preshared key exactly when the installation has one,
+// so it stays in step with the Codesphere services: they read the same vault entry and treat
+// it as optional too. Returns nil for an installation without the key, which runs an
+// unauthenticated OpenFGA. Services that started before the key existed only send it once
+// their pods roll.
+func authnValues(vault *files.InstallVault) files.ChartValues {
+	if !hasOpenFgaPresharedKey(vault) {
+		log.Printf(
+			"OpenFGA: %s is not in the vault, deploying OpenFGA without authentication."+
+				" Add the key with `oms update install-config` — a future version will require it.\n",
+			files.SecretOpenFgaPresharedKey,
+		)
+
+		return nil
+	}
+
+	return files.ChartValues{
+		"method": "preshared",
+		"preshared": files.ChartValues{
+			"keysSecret": openFgaPresharedKeysSecret,
+		},
+	}
+}
+
+// gatewayValues publishes a locally deployed OpenFGA through the Codesphere gateway, so the
+// Codesphere services of the other data centers can reach it.
 func gatewayValues(config *files.RootConfig, expose *files.OpenFgaExposeConfig) files.ChartValues {
 	gateway := files.ChartValues{"enabled": expose.Enabled}
 	if expose.Host != "" {
