@@ -35,7 +35,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 	})
 
 	Describe("Prompter", func() {
-		var prompter *prompt.Prompter
+		var prompter prompt.Prompter
 
 		Context("Non-interactive mode", func() {
 			BeforeEach(func() {

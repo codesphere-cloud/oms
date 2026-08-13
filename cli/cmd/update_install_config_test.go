@@ -12,6 +12,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -19,6 +20,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 )
 
 func quoteYAMLString(s string) string {
@@ -219,15 +221,19 @@ codesphere:
 		}
 
 		confirmations = nil
-		cmd = &UpdateInstallConfigCmd{
-			Opts: opts,
-			// These specs are about what ends up in the files; the confirmation flow
-			// has its own context below.
-			Confirm: func(question string) bool {
+		prompter := prompt.NewMockPrompter(GinkgoT())
+		// Records what was asked and answers it the way the spec asked for. Optional,
+		// because a spec that passes --yes never gets to ask.
+		prompter.EXPECT().Bool(mock.Anything, false).
+			RunAndReturn(func(question string, _ bool) bool {
 				confirmations = append(confirmations, question)
 
 				return approveConfirmations
-			},
+			}).Maybe()
+
+		cmd = &UpdateInstallConfigCmd{
+			Opts:     opts,
+			Prompter: prompter,
 		}
 	})
 

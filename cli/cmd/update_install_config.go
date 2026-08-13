@@ -24,9 +24,9 @@ type UpdateInstallConfigCmd struct {
 	Opts       *UpdateInstallConfigOpts
 	FileWriter intutil.FileIO
 
-	// Confirm asks the operator whether to go ahead with a change to the vault. Replaced in
-	// tests; --yes short-circuits it.
-	Confirm func(question string) bool
+	// Prompter asks the operator whether to go ahead with a change to the vault.
+	// --yes short-circuits it.
+	Prompter prompt.Prompter
 }
 
 type UpdateInstallConfigOpts struct {
@@ -104,7 +104,7 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 		FileWriter: intutil.NewFilesystemWriter(),
 		// One prompter for the whole command: it buffers stdin, so a fresh one per
 		// question could drop what the operator already typed.
-		Confirm: prompt.NewPrompter(true).Confirm,
+		Prompter: prompt.NewPrompter(true),
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Path to existing config.yaml file")
@@ -200,7 +200,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		log.Println("\nNo changes detected that require secret regeneration.")
 	}
 
-	added, err := c.maybeAddMissingSecrets(config, vault)
+	added, err := c.confirmAndAddMissingSecrets(config, vault)
 	if err != nil {
 		return err
 	}
@@ -422,8 +422,8 @@ func (c *UpdateInstallConfigCmd) applyCodesphereUpdates(config *files.RootConfig
 }
 
 // approve prints what is about to change and asks the operator to confirm it. --yes approves
-// without asking; anything else goes to the prompter, where only an explicit yes counts — a
-// run without a terminal declines.
+// without asking; otherwise only an explicit yes counts, so a run without a terminal — an
+// empty answer — declines.
 func (c *UpdateInstallConfigCmd) approve(question, intro string, items []string) bool {
 	if c.Opts.Yes {
 		return true
@@ -435,12 +435,13 @@ func (c *UpdateInstallConfigCmd) approve(question, intro string, items []string)
 		log.Printf("  - %s\n", item)
 	}
 
-	return c.Confirm(question)
+	return c.Prompter.Bool(question, false)
 }
 
-// maybeAddMissingSecrets asks about the secrets the vault is missing and adds them if the
-// operator agrees. Returns the names of the ones that were added.
-func (c *UpdateInstallConfigCmd) maybeAddMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+// confirmAndAddMissingSecrets asks about the secrets the vault is missing and adds them if
+// the operator agrees. Returns the names of the ones that were added, none if the operator
+// declined.
+func (c *UpdateInstallConfigCmd) confirmAndAddMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
 	missing, err := missingSecrets(config, vault)
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine missing secrets: %w", err)

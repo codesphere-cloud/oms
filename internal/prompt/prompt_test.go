@@ -46,7 +46,7 @@ var _ = Describe("Prompter", func() {
 		Context("interactive mode", func() {
 			It("returns user input when provided", func() {
 				input := "user-value\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -56,7 +56,7 @@ var _ = Describe("Prompter", func() {
 
 			It("returns default when input is empty", func() {
 				input := "\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -66,7 +66,7 @@ var _ = Describe("Prompter", func() {
 
 			It("trims whitespace from input", func() {
 				input := "  value with spaces  \n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -88,7 +88,7 @@ var _ = Describe("Prompter", func() {
 		Context("interactive mode", func() {
 			It("returns parsed integer when valid input provided", func() {
 				input := "123\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -98,7 +98,7 @@ var _ = Describe("Prompter", func() {
 
 			It("returns default when input is empty", func() {
 				input := "\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -108,7 +108,7 @@ var _ = Describe("Prompter", func() {
 
 			It("returns default when input is invalid", func() {
 				input := "not-a-number\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -118,7 +118,7 @@ var _ = Describe("Prompter", func() {
 
 			It("handles negative numbers", func() {
 				input := "-100\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -147,7 +147,7 @@ var _ = Describe("Prompter", func() {
 		Context("interactive mode", func() {
 			It("parses comma-separated values", func() {
 				input := "one, two, three\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -158,7 +158,7 @@ var _ = Describe("Prompter", func() {
 			It("returns default when input is empty", func() {
 				input := "\n"
 				defaultVal := []string{"default1", "default2"}
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -168,7 +168,7 @@ var _ = Describe("Prompter", func() {
 
 			It("trims whitespace from each value", func() {
 				input := "  one  ,  two  ,  three  \n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -178,7 +178,7 @@ var _ = Describe("Prompter", func() {
 
 			It("handles single value", func() {
 				input := "single\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -188,7 +188,7 @@ var _ = Describe("Prompter", func() {
 
 			It("filters out empty values", func() {
 				input := "one, , two, , three\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -216,7 +216,7 @@ var _ = Describe("Prompter", func() {
 		Context("interactive mode", func() {
 			DescribeTable("boolean parsing",
 				func(input string, expected bool) {
-					p := &Prompter{
+					p := &StdinPrompter{
 						reader:      bufio.NewReader(strings.NewReader(input + "\n")),
 						interactive: true,
 					}
@@ -236,34 +236,13 @@ var _ = Describe("Prompter", func() {
 
 			It("returns default when input is empty", func() {
 				input := "\n"
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
 				result := p.Bool("Enable feature", true)
 				Expect(result).To(BeTrue())
 			})
-		})
-	})
-
-	Describe("Confirm", func() {
-		DescribeTable("only an explicit yes confirms",
-			func(input string, expected bool) {
-				p := &Prompter{
-					reader:      bufio.NewReader(strings.NewReader(input)),
-					interactive: true,
-				}
-				Expect(p.Confirm("Delete everything")).To(Equal(expected))
-			},
-			Entry("'y' confirms", "y\n", true),
-			Entry("'yes' confirms", "yes\n", true),
-			Entry("'n' declines", "n\n", false),
-			Entry("an empty line declines", "\n", false),
-			Entry("a closed stdin declines", "", false),
-		)
-
-		It("declines without prompting when not interactive", func() {
-			Expect(NewPrompter(false).Confirm("Delete everything")).To(BeFalse())
 		})
 	})
 
@@ -281,7 +260,7 @@ var _ = Describe("Prompter", func() {
 			It("returns matching choice case-insensitively", func() {
 				input := "OPTION2\n"
 				choices := []string{"option1", "option2", "option3"}
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -292,7 +271,7 @@ var _ = Describe("Prompter", func() {
 			It("returns default when input is empty", func() {
 				input := "\n"
 				choices := []string{"option1", "option2", "option3"}
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -303,7 +282,7 @@ var _ = Describe("Prompter", func() {
 			It("returns default when input is invalid", func() {
 				input := "invalid-option\n"
 				choices := []string{"option1", "option2", "option3"}
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
@@ -314,7 +293,7 @@ var _ = Describe("Prompter", func() {
 			It("handles exact match", func() {
 				input := "option2\n"
 				choices := []string{"option1", "option2", "option3"}
-				p := &Prompter{
+				p := &StdinPrompter{
 					reader:      bufio.NewReader(strings.NewReader(input)),
 					interactive: true,
 				}
