@@ -57,6 +57,7 @@ func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
+// AddBootstrapLocalCmd adds the local bootstrap command to parent.
 func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	bootstrapLocalCmd := BootstrapLocalCmd{
 		cmd: &cobra.Command{

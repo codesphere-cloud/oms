@@ -20,17 +20,20 @@ var _ = Describe("Codesphere installer", func() {
 		for _, name := range []string{"deps.tar.gz", "private-cloud-installer.js", "node"} {
 			Expect(os.WriteFile(filepath.Join(packageDir, name), nil, 0600)).To(Succeed())
 		}
+
 		entries, err := os.ReadDir(packageDir)
 		Expect(err).NotTo(HaveOccurred())
 
 		fileIO := util.NewMockFileIO(GinkgoT())
 		fileIO.EXPECT().Exists(packageDir).Return(true)
 		fileIO.EXPECT().ReadDir(packageDir).Return(entries, nil)
+
 		packageManager := installer.NewMockPackageManager(GinkgoT())
 		packageManager.EXPECT().Extract(false, true).Return(nil)
 		packageManager.EXPECT().GetWorkDir().Return(packageDir)
 		packageManager.EXPECT().FileIO().Return(fileIO).Twice()
 		packageManager.EXPECT().ExtractDependency("bom.json", false, true).Return(nil)
+
 		ci := &installer.CodesphereInstaller{Verbose: true}
 
 		err = ci.ExtractAndValidatePackage(packageManager)

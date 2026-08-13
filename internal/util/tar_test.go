@@ -96,9 +96,11 @@ var _ = Describe("Tar", func() {
 			tempDir := GinkgoT().TempDir()
 			archivePath = filepath.Join(tempDir, "test.tar.gz")
 			destination = filepath.Join(tempDir, "extracted")
+
 			Expect(os.WriteFile(archivePath, archiveData, 0600)).To(Succeed())
 
 			previousLogWriter := log.Writer()
+
 			log.SetOutput(&logOutput)
 			DeferCleanup(func() { log.SetOutput(previousLogWriter) })
 		})
