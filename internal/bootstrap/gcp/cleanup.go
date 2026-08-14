@@ -180,7 +180,27 @@ func (e *CleanupExecutor) CleanupDNSRecords() error {
 		log.Printf("Skipping DNS cleanup: missing base domain or DNS zone name (provide --base-domain/--dns-zone-name or use --skip-dns-cleanup)")
 		return nil
 	}
-	return e.Deps.GCPClient.DeleteDNSRecordSets(e.DNSProjectID, e.DNSZoneName, e.BaseDomain)
+
+	if err := e.Deps.GCPClient.DeleteDNSRecordSets(e.DNSProjectID, e.DNSZoneName, e.dnsRecords()); err != nil {
+		return fmt.Errorf("failed to delete DNS record sets: %w", err)
+	}
+
+	return nil
+}
+
+// dnsRecords returns the DNS records to delete. The bootstrap records what it created in the
+// infra file, which is authoritative. Older infra files predate that, and a cleanup driven only
+// by --project-id has no infra file at all, so both fall back to deriving the names.
+func (e *CleanupExecutor) dnsRecords() []DNSRecordName {
+	if len(e.InfraEnv.DNSRecords) > 0 {
+		return e.InfraEnv.DNSRecords
+	}
+
+	if len(e.InfraEnv.DataCenters) > 0 {
+		return DataCenterDNSRecordNames(e.BaseDomain, e.InfraEnv.DataCenters)
+	}
+
+	return GetDNSRecordNames(e.BaseDomain)
 }
 
 // RemoveDNSIAMBinding removes the cloud-controller service account's IAM binding

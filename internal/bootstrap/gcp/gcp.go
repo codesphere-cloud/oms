@@ -64,21 +64,47 @@ func CheckOMSManagedLabel(labels map[string]string) bool {
 	return exists && value == "true"
 }
 
-// GetDNSRecordNames returns the DNS record names that OMS creates for a given base domain.
-func GetDNSRecordNames(baseDomain string) []struct {
-	Name  string
-	Rtype string
-} {
-	return []struct {
-		Name  string
-		Rtype string
-	}{
+// DNSRecordName identifies a DNS record set that OMS manages.
+type DNSRecordName struct {
+	Name  string `json:"name"`
+	Rtype string `json:"rtype"`
+}
+
+// GetDNSRecordNames returns the DNS record names a single-data-center bootstrap creates for a
+// given base domain. It is the fallback for infra files written before multi-DC support, which
+// do not record the created records.
+func GetDNSRecordNames(baseDomain string) []DNSRecordName {
+	return []DNSRecordName{
 		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
 		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
 		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
 		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
 		{fmt.Sprintf("*.ssh.cs.%s.", baseDomain), "A"},
 	}
+}
+
+// DataCenterDNSRecordNames returns every DNS record OMS creates for the given data center
+// layout: the shared platform gateway names plus each data center's workspace and SSH names.
+func DataCenterDNSRecordNames(baseDomain string, dcs []*datacenter.DataCenter) []DNSRecordName {
+	records := []DNSRecordName{
+		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
+	}
+	for _, dc := range dcs {
+		records = append(records,
+			DNSRecordName{fmt.Sprintf("%s.", dc.WorkspaceHostingBaseDomain), "A"},
+			DNSRecordName{fmt.Sprintf("*.%s.", dc.WorkspaceHostingBaseDomain), "A"},
+			DNSRecordName{fmt.Sprintf("*.%s.", dc.SSHBaseDomain), "A"},
+		)
+		if len(dcs) > 1 {
+			records = append(records,
+				DNSRecordName{fmt.Sprintf("%s.", dc.PlatformDomain(baseDomain)), "A"},
+				DNSRecordName{fmt.Sprintf("*.%s.", dc.PlatformDomain(baseDomain)), "A"},
+			)
+		}
+	}
+
+	return records
 }
 
 // This should ALWAYS be empty. Internal flags are for internal feature
@@ -163,6 +189,9 @@ type CodesphereEnvironment struct {
 	MultiDC bool `json:"multi_dc"`
 	// DataCenters holds the per-data-center state. It always has at least one entry.
 	DataCenters []*datacenter.DataCenter `json:"datacenters"`
+	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
+	// those instead of recomputing the list.
+	DNSRecords []DNSRecordName `json:"dns_records,omitempty"`
 	// ControlPlaneNodes and CephNodes are where the primary data center's nodes lived before
 	// multi-DC support. The steps that have not been migrated to DataCenters yet still use
 	// them, and infra files written by an earlier OMS carry the nodes here.
@@ -1126,6 +1155,8 @@ func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 }
 
 func (b *GCPBootstrapper) EnsureDNSRecords() error {
+	b.ensureDataCenters()
+
 	gcpProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
 		gcpProject = b.Env.ProjectID
@@ -1137,37 +1168,30 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 		return fmt.Errorf("failed to ensure DNS managed zone: %w", err)
 	}
 
+	// The platform is served from one domain shared by all data centers, pointing at the
+	// primary data center's gateway.
 	records := []*dns.ResourceRecordSet{
-		{
-			Name:    fmt.Sprintf("cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.ssh.cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.SshProxyIP},
-		},
+		dnsARecord(fmt.Sprintf("cs.%s.", b.Env.BaseDomain), b.primaryDC().GatewayIP),
+		dnsARecord(fmt.Sprintf("*.cs.%s.", b.Env.BaseDomain), b.primaryDC().GatewayIP),
+	}
+	// Workspaces and their SSH endpoints resolve per data center, so each one gets its own
+	// names pointing at its own public gateway and SSH proxy.
+	for _, dc := range b.Env.DataCenters {
+		records = append(records,
+			dnsARecord(fmt.Sprintf("%s.", dc.WorkspaceHostingBaseDomain), dc.PublicGatewayIP),
+			dnsARecord(fmt.Sprintf("*.%s.", dc.WorkspaceHostingBaseDomain), dc.PublicGatewayIP),
+			dnsARecord(fmt.Sprintf("*.%s.", dc.SSHBaseDomain), dc.SSHProxyIP),
+		)
+		// The platform calls each data center's own services at <dc-id>.cs.<base-domain>, which
+		// the wildcard above would send to the primary data center's gateway. A single data
+		// center is that primary, so it needs no record of its own.
+		if len(b.Env.DataCenters) > 1 {
+			platformDomain := dc.PlatformDomain(b.Env.BaseDomain)
+			records = append(records,
+				dnsARecord(fmt.Sprintf("%s.", platformDomain), dc.GatewayIP),
+				dnsARecord(fmt.Sprintf("*.%s.", platformDomain), dc.GatewayIP),
+			)
+		}
 	}
 
 	err = b.GCPClient.EnsureDNSRecordSets(gcpProject, zoneName, records)
@@ -1175,7 +1199,21 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 		return fmt.Errorf("failed to ensure DNS record sets: %w", err)
 	}
 
+	// Record what was created so cleanup deletes exactly these records instead of recomputing
+	// the list from the base domain.
+	b.Env.DNSRecords = DataCenterDNSRecordNames(b.Env.BaseDomain, b.Env.DataCenters)
+
 	return nil
+}
+
+// dnsARecord builds a short-TTL A record set, as used during initial setup.
+func dnsARecord(name, ip string) *dns.ResourceRecordSet {
+	return &dns.ResourceRecordSet{
+		Name:    name,
+		Type:    "A",
+		Ttl:     300,
+		Rrdatas: []string{ip},
+	}
 }
 
 // InstallCodesphere installs Codesphere into every data center from the shared jumpbox, in
