@@ -74,6 +74,10 @@ func GetRootCmd() *cobra.Command {
 	// Smoke test commands
 	AddSmoketestCmd(rootCmd, opts)
 
+	// Status and test commands
+	AddStatusCmd(rootCmd, opts)
+	AddTestCmd(rootCmd, opts)
+
 	// Resource creation commands
 	AddCreateCmd(rootCmd, opts)
 

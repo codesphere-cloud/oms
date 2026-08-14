@@ -29,7 +29,9 @@ like downloading new versions.
 * [oms register](oms_register.md)	 - Register a new API key
 * [oms revoke](oms_revoke.md)	 - Revoke resources available through OMS
 * [oms smoketest](oms_smoketest.md)	 - Run smoke tests for Codesphere components
+* [oms status](oms_status.md)	 - Check the status of Codesphere components
 * [oms template](oms_template.md)	 - Render OMS configuration templates
+* [oms test](oms_test.md)	 - Run playlists of tests against Codesphere components
 * [oms update](oms_update.md)	 - Update OMS related resources
 * [oms version](oms_version.md)	 - Print version
 
