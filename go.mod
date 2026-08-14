@@ -64,7 +64,7 @@ require (
 	github.com/argoproj/argo-cd/v3 v3.5.1
 	github.com/google/go-github/v74 v74.0.0
 	github.com/lib/pq v1.12.3
-	github.com/rook/rook/pkg/apis v0.0.0-20260814134912-5f86a7d01c22
+	github.com/rook/rook/pkg/apis v0.0.0-20260814182029-b9e4772d8417
 )
 
 require (
