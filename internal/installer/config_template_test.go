@@ -16,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 )
 
 func sopsAndAgeAvailable() bool {
@@ -106,7 +107,7 @@ codesphere:
 		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
+		Expect(sops.EncryptFile(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 		renderedPath, cleanup, err := configtemplating.RenderConfigFileToTemp(
 			configPath,

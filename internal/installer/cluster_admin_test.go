@@ -16,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 )
 
 const testKubeConfig = `apiVersion: v1
@@ -56,7 +57,7 @@ func writeVaultFile(dir string, installVault *files.InstallVault) (vaultPath, ag
 	Expect(err).ToNot(HaveOccurred())
 
 	vaultPath = filepath.Join(dir, "prod.vault.yaml")
-	Expect(vault.EncryptFileWithSOPS(plaintextPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
+	Expect(sops.EncryptFile(plaintextPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 	return vaultPath, ageKeyPath
 }

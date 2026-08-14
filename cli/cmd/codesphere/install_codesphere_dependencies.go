@@ -113,10 +113,11 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 // before the main dependency steps.
 func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, installVault *files.InstallVault, restConfig *rest.Config, kubeClient ctrlclient.Client, stlog *bootstrap.StepLogger) error {
 	var install *argocdinstaller.AppInstaller
+
 	if err := stlog.Substep("Load vault data", func() error {
 		installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to load vault data and REST config: %w", err)
 		}
 		registryPassword := ""
 		if secret := installVault.GetSecret(files.SecretRegistryPassword); secret != nil && secret.Fields != nil {

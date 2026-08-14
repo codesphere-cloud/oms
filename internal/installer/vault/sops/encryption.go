@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package vault
+package sops
 
 import (
 	"errors"
@@ -17,59 +17,43 @@ import (
 	"filippo.io/age"
 	"github.com/codesphere-cloud/oms/internal/util"
 	sopsage "github.com/getsops/sops/v3/age"
-	"go.yaml.in/yaml/v3"
 )
 
 var xdgConfigHome = "XDG_CONFIG_HOME"
 
-// ResolveAgeKey resolves an existing age key or generates a new one.
-//
-// When explicitKeyFile is non-empty it takes priority over everything else: the
-// recipient is read directly from that file and it is returned as the key path.
-// This lets callers thread an explicit --age-key-file through without mutating
-// the process environment.
-//
-// Otherwise it checks (in order):
-//  1. SOPS_AGE_KEY environment variable (raw key content)
-//  2. SOPS_AGE_KEY_FILE environment variable (path to key file)
-//  3. Default location: ~/.config/sops/age/keys.txt
-//  4. Generate a new key and write it to <fallbackDir>/age_key.txt
-//
-// Returns the age public key (recipient) and the path to the key file (empty when
-// the key was supplied via SOPS_AGE_KEY).
+// ResolveAgeKey resolves an existing age key or generates one in fallbackDir.
 func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
 	return resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir)
 }
 
 func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
-	// 0. Explicit key file – supplied by the caller, takes priority.
 	if explicitKeyFile != "" {
 		recipient, err = readRecipientFromFile(fileIO, explicitKeyFile)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to read age key from %s: %w", explicitKeyFile, err)
 		}
+
 		return recipient, explicitKeyFile, nil
 	}
 
-	// 1. SOPS_AGE_KEY env var – contains raw key content.
 	if raw := os.Getenv(sopsage.SopsAgeKeyEnv); raw != "" {
 		recipient, err = parseAgeRecipient(strings.NewReader(raw))
 		if err != nil {
 			return "", "", fmt.Errorf("failed to parse age key from SOPS_AGE_KEY environment variable: %w", err)
 		}
+
 		return recipient, "", nil
 	}
 
-	// 2. SOPS_AGE_KEY_FILE env var.
 	if keyFile := os.Getenv(sopsage.SopsAgeKeyFileEnv); keyFile != "" {
 		recipient, err = readRecipientFromFile(fileIO, keyFile)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to read age key from %s: %w", keyFile, err)
 		}
+
 		return recipient, keyFile, nil
 	}
 
-	// 3. Default location: ~/.config/sops/age/keys.txt.
 	defaultPath, configErr := getUserConfigDir()
 	if configErr == nil {
 		defaultPath = filepath.Join(defaultPath, sopsage.SopsAgeKeyUserConfigPath)
@@ -84,7 +68,6 @@ func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string) (rec
 		}
 	}
 
-	// 4. Generate a new key.
 	keyPath = filepath.Join(fallbackDir, "age_key.txt")
 
 	recipient, err = readRecipientFromFile(fileIO, keyPath)
@@ -97,25 +80,26 @@ func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string) (rec
 		if err != nil {
 			return "", "", fmt.Errorf("failed to generate age key: %w", err)
 		}
-		return recipient, keyPath, nil
 	}
+
 	return recipient, keyPath, nil
 }
 
-// parseAgeRecipient extracts the public key from age key given by reader.
 func parseAgeRecipient(reader io.Reader) (string, error) {
 	ids, err := age.ParseIdentities(reader)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse age identities from file: %w", err)
 	}
+
 	if len(ids) == 0 {
 		return "", fmt.Errorf("no age identities found in file")
 	}
+
 	if len(ids) > 1 {
 		return "", fmt.Errorf("multiple age identities found in file, expected only one")
 	}
-	id := ids[0]
-	switch id := id.(type) {
+
+	switch id := ids[0].(type) {
 	case *age.X25519Identity:
 		return id.Recipient().String(), nil
 	case *age.HybridIdentity:
@@ -125,11 +109,10 @@ func parseAgeRecipient(reader io.Reader) (string, error) {
 	}
 }
 
-// readRecipientFromFile reads an age key file and extracts the public key.
 func readRecipientFromFile(fileIO util.FileIO, path string) (string, error) {
 	data, err := fileIO.ReadFile(path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read age key file %s: %w", path, err)
 	}
 
 	return parseAgeRecipient(strings.NewReader(string(data)))
@@ -141,17 +124,22 @@ func getUserConfigDir() (string, error) {
 			return userConfigDir, nil
 		}
 	}
-	return os.UserConfigDir()
+
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve user config directory: %w", err)
+	}
+
+	return configDir, nil
 }
 
-// generateAgeKey generates a new age keypair and writes it to the given path.
-// Returns the public key (recipient).
 func generateAgeKey(fileIO util.FileIO, keyPath string) (string, error) {
 	if err := fileIO.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
 		return "", fmt.Errorf("failed to create directory for age key: %w", err)
 	}
 
 	cmd := exec.Command("age-keygen", "-o", keyPath)
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("age-keygen failed: %w: %s", err, out)
@@ -161,22 +149,24 @@ func generateAgeKey(fileIO util.FileIO, keyPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read generated age key: %w", err)
 	}
+
 	return recipient, nil
 }
 
-// EncryptFileWithSOPS encrypts src with SOPS+age and writes ciphertext to target.
-func EncryptFileWithSOPS(src, target, recipient string) error {
+// EncryptFile encrypts src with SOPS and age and writes ciphertext to target.
+func EncryptFile(src, target, recipient string) error {
 	cmd := exec.Command("sops", "--encrypt", "--input-type", "yaml", "--age", recipient, "--output", target, src)
+
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("sops encrypt failed: %w: %s", err, out)
 	}
+
 	return nil
 }
 
-// DecryptFileWithSOPS decrypts a SOPS-encrypted file and returns the plaintext bytes.
-// If keyPath is non-empty, SOPS_AGE_KEY_FILE is set for the sops process.
-func DecryptFileWithSOPS(src, keyPath string) ([]byte, error) {
+// DecryptFile decrypts a SOPS-encrypted file and returns its plaintext.
+func DecryptFile(src, keyPath string) ([]byte, error) {
 	cmd := exec.Command("sops", "--decrypt", "--input-type", "yaml", src)
 	if keyPath != "" {
 		cmd.Env = append(os.Environ(), "SOPS_AGE_KEY_FILE="+keyPath)
@@ -187,32 +177,9 @@ func DecryptFileWithSOPS(src, keyPath string) ([]byte, error) {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return nil, fmt.Errorf("sops decrypt failed: %s", string(exitErr.Stderr))
 		}
+
 		return nil, fmt.Errorf("sops decrypt failed: %w", err)
 	}
 
 	return out, nil
-}
-
-// unwrapSOPSData strips a top-level "data" literal block scalar wrapper if
-// present. When SOPS encrypts with --input-type yaml, it
-// wraps the entire document under a data: | key.
-func unwrapSOPSData(data []byte) []byte {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return data
-	}
-	if len(doc.Content) == 0 {
-		return data
-	}
-	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode || len(root.Content) != 2 {
-		return data
-	}
-	keyNode := root.Content[0]
-	valNode := root.Content[1]
-	if keyNode.Value != "data" || valNode.Kind != yaml.ScalarNode {
-		return data
-	}
-	// The scalar value is the inner YAML content.
-	return []byte(valNode.Value)
 }

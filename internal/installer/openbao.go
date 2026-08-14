@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	k8s "github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -280,7 +280,7 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 
 	o.Logger.Logf("Found existing DR backup at %s", o.Config.DRBackupPath)
 
-	decrypted, err := vault.DecryptFileWithSOPS(o.Config.DRBackupPath, o.Config.AgeKeyPath)
+	decrypted, err := sops.DecryptFile(o.Config.DRBackupPath, o.Config.AgeKeyPath)
 	if err != nil {
 		return err
 	}
@@ -687,7 +687,7 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 		return fmt.Errorf("closing temp backup file: %w", err)
 	}
 
-	if err := vault.EncryptFileWithSOPS(tmpPath, o.Config.DRBackupPath, o.Config.AgeRecipient); err != nil {
+	if err := sops.EncryptFile(tmpPath, o.Config.DRBackupPath, o.Config.AgeRecipient); err != nil {
 		return fmt.Errorf("encrypting DR backup: %w", err)
 	}
 

@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 )
 
 func sopsAndAgeAvailable() bool {
@@ -73,14 +74,14 @@ var _ = Describe("VaultEncryption", func() {
 				// Set conflicting env vars to prove the explicit file takes priority.
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", filepath.Join(tmpDir, "ignored.txt"))).To(Succeed())
 
-				recipient, keyPath, err := vault.ResolveAgeKey(keyFile, tmpDir)
+				recipient, keyPath, err := sops.ResolveAgeKey(keyFile, tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(Equal(keyFile))
 			})
 
 			It("returns an error if the explicit file does not exist", func() {
-				_, _, err := vault.ResolveAgeKey(filepath.Join(tmpDir, "missing.txt"), tmpDir)
+				_, _, err := sops.ResolveAgeKey(filepath.Join(tmpDir, "missing.txt"), tmpDir)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to read age key"))
 			})
@@ -111,7 +112,7 @@ var _ = Describe("VaultEncryption", func() {
 
 				Expect(os.Setenv("SOPS_AGE_KEY", privKeyLine)).To(Succeed())
 
-				recipient, keyPath, err := vault.ResolveAgeKey("", tmpDir)
+				recipient, keyPath, err := sops.ResolveAgeKey("", tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(BeEmpty())
@@ -129,7 +130,7 @@ var _ = Describe("VaultEncryption", func() {
 
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", keyFile)).To(Succeed())
 
-				recipient, keyPath, err := vault.ResolveAgeKey("", tmpDir)
+				recipient, keyPath, err := sops.ResolveAgeKey("", tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(Equal(keyFile))
@@ -138,7 +139,7 @@ var _ = Describe("VaultEncryption", func() {
 			It("should return error if the file does not exist", func() {
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", filepath.Join(tmpDir, "nonexistent.txt"))).To(Succeed())
 
-				_, _, err := vault.ResolveAgeKey("", tmpDir)
+				_, _, err := sops.ResolveAgeKey("", tmpDir)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to read age key"))
 			})
@@ -150,7 +151,7 @@ var _ = Describe("VaultEncryption", func() {
 					Skip("age-keygen not available")
 				}
 
-				recipient, keyPath, err := vault.ResolveAgeKey("", tmpDir)
+				recipient, keyPath, err := sops.ResolveAgeKey("", tmpDir)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(recipient).To(HavePrefix("age1"))
 				Expect(keyPath).To(Equal(filepath.Join(tmpDir, "age_key.txt")))
@@ -213,7 +214,7 @@ var _ = Describe("VaultEncryption", func() {
 			Expect(err).ToNot(HaveOccurred(), string(out))
 
 			// Extract the public key (recipient).
-			recipient, _, err := vault.ResolveAgeKey(ageKeyPath, tmpDir)
+			recipient, _, err := sops.ResolveAgeKey(ageKeyPath, tmpDir)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Write a plain vault file.

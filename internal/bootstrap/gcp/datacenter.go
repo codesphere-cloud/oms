@@ -43,6 +43,7 @@ func (b *GCPBootstrapper) ensureDataCenters() error {
 
 	b.Env.DataCenters = BuildDataCenters(b.Env)
 	b.adoptLegacyEnvFields()
+
 	return b.ensureConfigManagers()
 }
 
@@ -64,6 +65,7 @@ func (b *GCPBootstrapper) ensureConfigManagers() error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize config manager for data center %d: %w", dc.ID, err)
 		}
+
 		dc.ConfigManager = manager
 	}
 

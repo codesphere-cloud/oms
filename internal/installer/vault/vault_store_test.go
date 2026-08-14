@@ -10,6 +10,8 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/plain"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -17,7 +19,7 @@ import (
 var _ = Describe("Vault stores", func() {
 	It("round-trips secrets and secret files through a plain vault", func() {
 		path := filepath.Join(GinkgoT().TempDir(), "prod.vault.yaml")
-		store, err := vault.New(vault.TypePlain, vault.Options{Path: path})
+		store, err := plain.New(plain.Options{Path: path})
 		Expect(err).NotTo(HaveOccurred())
 
 		want := &files.InstallVault{Secrets: []files.SecretEntry{
@@ -57,7 +59,7 @@ var _ = Describe("Vault stores", func() {
 		Expect(err).NotTo(HaveOccurred(), string(output))
 
 		path := filepath.Join(dir, "prod.vault.yaml")
-		store, err := vault.New(vault.TypeSOPS, vault.Options{Path: path, AgeKey: keyPath})
+		store, err := sops.New(sops.Options{Path: path, AgeKey: keyPath})
 		Expect(err).NotTo(HaveOccurred())
 
 		want := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "token", Fields: &files.SecretFields{Password: "secret"}}}}
@@ -79,16 +81,16 @@ var _ = Describe("Vault stores", func() {
 	})
 
 	It("validates file paths in the file-backed implementations", func() {
-		_, err := vault.NewPlainFileVault(vault.FileOptions{})
+		_, err := plain.New(plain.Options{})
 		Expect(err).To(HaveOccurred())
 		GinkgoT().Setenv("SOPS_AGE_KEY", "test-key-is-present")
 
-		_, err = vault.NewSOPSVault(vault.SOPSOptions{})
+		_, err = sops.New(sops.Options{})
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("handles a missing plain file inside the plain vault", func() {
-		store, err := vault.NewPlainFileVault(vault.FileOptions{Path: filepath.Join(GinkgoT().TempDir(), "missing.yaml")})
+		store, err := plain.New(plain.Options{Path: filepath.Join(GinkgoT().TempDir(), "missing.yaml")})
 		Expect(err).NotTo(HaveOccurred())
 		data, err := store.LoadOrCreate()
 		Expect(err).NotTo(HaveOccurred())

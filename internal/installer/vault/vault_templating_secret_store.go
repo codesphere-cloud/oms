@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"go.yaml.in/yaml/v3"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 )
 
 // VaultTemplatingSecretStore resolves secrets referenced from config templates
@@ -27,7 +27,7 @@ func NewVaultTemplatingSecretStore(vault *files.InstallVault) *VaultTemplatingSe
 // NewLazyVaultTemplatingSecretStore returns a store that decrypts and loads the
 // vault from vaultPath using ageKeyPath on the first secret lookup.
 func NewLazyVaultTemplatingSecretStore(vaultPath, ageKeyPath string) *VaultTemplatingSecretStore {
-	backend := &SOPSVault{options: SOPSOptions{File: FileOptions{Path: vaultPath, FileIO: fileIOOrDefault(nil)}, AgeKey: ageKeyPath}}
+	backend := sops.NewLazy(sops.Options{Path: vaultPath, AgeKey: ageKeyPath})
 	return &VaultTemplatingSecretStore{
 		backend: backend,
 	}
@@ -121,42 +121,4 @@ func selectVaultSecretValue(entry files.SecretEntry, selector ...string) (string
 	}
 
 	return "", fmt.Errorf("selector %q is not available on secret %q", field, entry.Name)
-}
-
-// isSOPSEncryptedYAML checks whether the YAML document contains SOPS metadata.
-// SOPS-encrypted YAML files have a top-level "sops" mapping that stores
-// encryption metadata such as age recipients, encrypted data keys, and MACs.
-func isSOPSEncryptedYAML(data []byte) (bool, error) {
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return false, err
-	}
-	if len(doc.Content) == 0 {
-		return false, nil
-	}
-
-	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return false, nil
-	}
-
-	// A mapping node stores its keys and values as a flat list alternating
-	// key, value, key, value, ... so we step by 2 to visit each key/value pair.
-	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == "sops" && root.Content[i+1].Kind == yaml.MappingNode {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func parseVaultData(data []byte) (*files.InstallVault, error) {
-	data = unwrapSOPSData(data)
-
-	vault := &files.InstallVault{}
-	if err := vault.Unmarshal(data); err != nil {
-		return nil, err
-	}
-	return vault, nil
 }

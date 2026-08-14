@@ -13,7 +13,7 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd"
 	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -64,7 +64,7 @@ postgres:
 		Expect(os.WriteFile(plaintextVaultPath, vaultYaml, 0600)).To(Succeed())
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
+		Expect(sops.EncryptFile(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 		rootCmd := cmd.GetRootCmd()
 		var output bytes.Buffer
