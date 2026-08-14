@@ -26,7 +26,7 @@ var _ = Describe("GCE", func() {
 	Describe("VMDefsForEnv", func() {
 		It("keeps the names a single-data-center bootstrap has always used", func() {
 			env := &gcp.CodesphereEnvironment{}
-			env.DataCenters = gcp.BuildDataCenters(env, nil)
+			env.DataCenters = gcp.BuildDataCenters(env)
 
 			defs := gcp.VMDefsForEnv(env)
 
@@ -39,7 +39,7 @@ var _ = Describe("GCE", func() {
 
 		It("adds suffixed ceph and k0s nodes per additional data center", func() {
 			env := &gcp.CodesphereEnvironment{MultiDC: true}
-			env.DataCenters = gcp.BuildDataCenters(env, nil)
+			env.DataCenters = gcp.BuildDataCenters(env)
 
 			defs := gcp.VMDefsForEnv(env)
 
@@ -54,7 +54,7 @@ var _ = Describe("GCE", func() {
 
 		It("assigns the shared VMs to no data center and the rest to theirs", func() {
 			env := &gcp.CodesphereEnvironment{MultiDC: true}
-			env.DataCenters = gcp.BuildDataCenters(env, nil)
+			env.DataCenters = gcp.BuildDataCenters(env)
 
 			byName := map[string]int{}
 			for _, def := range gcp.VMDefsForEnv(env) {

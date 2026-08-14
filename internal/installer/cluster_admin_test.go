@@ -16,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 )
 
 const testKubeConfig = `apiVersion: v1
@@ -56,7 +57,7 @@ func writeVaultFile(dir string, installVault *files.InstallVault) (vaultPath, ag
 	Expect(err).ToNot(HaveOccurred())
 
 	vaultPath = filepath.Join(dir, "prod.vault.yaml")
-	Expect(vault.EncryptFileWithSOPS(plaintextPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
+	Expect(sops.EncryptFile(plaintextPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 	return vaultPath, ageKeyPath
 }
@@ -110,7 +111,7 @@ var _ = Describe("VaultAndRESTConfig", func() {
 	It("loads the vault and builds a REST config from the kubeconfig secret", func() {
 		vaultPath, ageKeyPath := writeVaultFile(GinkgoT().TempDir(), vaultWithKubeConfig())
 
-		vault, restConfig, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, files.RootConfig{})
+		vault, restConfig, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, string(vault.TypeSOPS), files.RootConfig{})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(vault).ToNot(BeNil())
 		Expect(vault.GetSecret(files.SecretKubeConfig)).ToNot(BeNil())
@@ -123,7 +124,7 @@ var _ = Describe("VaultAndRESTConfig", func() {
 		secretsDir := GinkgoT().TempDir()
 		_, ageKeyPath := writeVaultFile(secretsDir, vaultWithKubeConfig())
 
-		vault, restConfig, err := installer.VaultAndRESTConfig("", ageKeyPath, files.RootConfig{
+		vault, restConfig, err := installer.VaultAndRESTConfig("", ageKeyPath, string(vault.TypeSOPS), files.RootConfig{
 			Secrets: files.SecretsConfig{BaseDir: secretsDir},
 		})
 		Expect(err).ToNot(HaveOccurred())
@@ -132,14 +133,15 @@ var _ = Describe("VaultAndRESTConfig", func() {
 	})
 
 	It("fails when the vault path cannot be resolved", func() {
-		_, _, err := installer.VaultAndRESTConfig("", "", files.RootConfig{})
+		_, _, err := installer.VaultAndRESTConfig("", "", string(vault.TypeSOPS), files.RootConfig{})
 		Expect(err).To(MatchError(ContainSubstring("vault path is not set")))
 	})
 
 	It("fails when the vault file does not exist", func() {
-		vaultPath := filepath.Join(GinkgoT().TempDir(), "missing.vault.yaml")
+		tempDir := GinkgoT().TempDir()
+		vaultPath := filepath.Join(tempDir, "missing.vault.yaml")
 
-		_, _, err := installer.VaultAndRESTConfig(vaultPath, "", files.RootConfig{})
+		_, _, err := installer.VaultAndRESTConfig(vaultPath, filepath.Join(tempDir, "unused-age-key"), string(vault.TypeSOPS), files.RootConfig{})
 		Expect(err).To(MatchError(ContainSubstring("failed to load vault")))
 	})
 
@@ -153,7 +155,7 @@ var _ = Describe("VaultAndRESTConfig", func() {
 			},
 		})
 
-		_, _, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, files.RootConfig{})
+		_, _, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, string(vault.TypeSOPS), files.RootConfig{})
 		Expect(err).To(MatchError(ContainSubstring("kubeconfig not found in vault")))
 	})
 
@@ -167,7 +169,7 @@ var _ = Describe("VaultAndRESTConfig", func() {
 			},
 		})
 
-		_, _, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, files.RootConfig{})
+		_, _, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, string(vault.TypeSOPS), files.RootConfig{})
 		Expect(err).To(MatchError(ContainSubstring("kubeconfig not found in vault")))
 	})
 
@@ -181,7 +183,7 @@ var _ = Describe("VaultAndRESTConfig", func() {
 			},
 		})
 
-		_, _, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, files.RootConfig{})
+		_, _, err := installer.VaultAndRESTConfig(vaultPath, ageKeyPath, string(vault.TypeSOPS), files.RootConfig{})
 		Expect(err).To(MatchError(ContainSubstring("failed to load kubernetes config from vault")))
 	})
 })
@@ -190,7 +192,7 @@ var _ = Describe("EnsureClusterAdminSecret", func() {
 	It("is a no-op when the config does not set a cluster admin email", func() {
 		// No vault path or secrets baseDir: reaching the vault loading would fail,
 		// so a nil result proves the email check short-circuits first.
-		err := installer.EnsureClusterAdminSecret(context.Background(), "", "", files.RootConfig{})
+		err := installer.EnsureClusterAdminSecret(context.Background(), "", "", string(vault.TypeSOPS), files.RootConfig{})
 		Expect(err).ToNot(HaveOccurred())
 	})
 
@@ -199,17 +201,18 @@ var _ = Describe("EnsureClusterAdminSecret", func() {
 			Codesphere: files.CodesphereConfig{ClusterAdminEmail: "admin@codesphere.com"},
 		}
 
-		err := installer.EnsureClusterAdminSecret(context.Background(), "", "", cfg)
+		err := installer.EnsureClusterAdminSecret(context.Background(), "", "", string(vault.TypeSOPS), cfg)
 		Expect(err).To(MatchError(ContainSubstring("vault path is not set")))
 	})
 
 	It("fails when the vault file does not exist", func() {
-		vaultPath := filepath.Join(GinkgoT().TempDir(), "missing.vault.yaml")
+		tempDir := GinkgoT().TempDir()
+		vaultPath := filepath.Join(tempDir, "missing.vault.yaml")
 		cfg := files.RootConfig{
 			Codesphere: files.CodesphereConfig{ClusterAdminEmail: "admin@codesphere.com"},
 		}
 
-		err := installer.EnsureClusterAdminSecret(context.Background(), vaultPath, "", cfg)
+		err := installer.EnsureClusterAdminSecret(context.Background(), vaultPath, filepath.Join(tempDir, "unused-age-key"), string(vault.TypeSOPS), cfg)
 		Expect(err).To(MatchError(ContainSubstring("failed to load vault")))
 	})
 })

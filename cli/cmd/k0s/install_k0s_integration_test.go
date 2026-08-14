@@ -80,7 +80,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			err = os.WriteFile(configPath, configData, 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = icg.LoadInstallConfigFromFile(configPath)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -254,7 +254,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 	Describe("Error Handling", func() {
 		It("should fail when loading non-existent file", func() {
 			nonExistentPath := filepath.Join(tempDir, "does-not-exist.yaml")
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err := icg.LoadInstallConfigFromFile(nonExistentPath)
 			Expect(err).To(HaveOccurred())
 		})
@@ -270,7 +270,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			err := os.WriteFile(configPath, invalidYAML, 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = icg.LoadInstallConfigFromFile(configPath)
 			Expect(err).To(HaveOccurred())
 		})
@@ -279,7 +279,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			err := os.WriteFile(configPath, []byte{}, 0644)
 			Expect(err).NotTo(HaveOccurred())
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = icg.LoadInstallConfigFromFile(configPath)
 			// Empty file loads successfully but returns empty config
 			Expect(err).NotTo(HaveOccurred())
@@ -386,7 +386,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Reload install-config
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = icg.LoadInstallConfigFromFile(configPath)
 			Expect(err).NotTo(HaveOccurred())
 			reloadedInstallConfig := icg.GetInstallConfig()

@@ -41,6 +41,7 @@ type InstallCodesphereOpts struct {
 	ConfigPath       string
 	Vault            string
 	PrivKey          string
+	VaultType        string
 	SkipSteps        []string
 	CodesphereOnly   bool
 	DirectConnection bool
@@ -55,6 +56,9 @@ type InstallCodesphereOpts struct {
 }
 
 func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
+	if err := validateInstallCodesphereVault(c.Opts); err != nil {
+		return err
+	}
 	ctx := cmd.Context()
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
@@ -116,14 +120,14 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 				},
 			}),
 		},
-		Opts: &InstallCodesphereOpts{GlobalOptions: opts},
+		Opts: &InstallCodesphereOpts{GlobalOptions: opts, VaultType: string(vault.TypeSOPS)},
 		Env:  env.NewEnv(),
 	}
 	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load binaries, installer etc. from")
 	codesphere.cmd.PersistentFlags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
 	codesphere.cmd.PersistentFlags().StringArrayVarP(&codesphere.Opts.Configs, "config", "c", nil, "Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order")
-	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.Vault, "vault", "", "Path to the SOPS-encrypted prod.vault.yaml file used for config templating")
-	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Path to the private key to encrypt/decrypt secrets")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.Vault, "vault", "", "Path to the prod.vault.yaml file used for config templating")
+	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.PrivKey, "priv-key", "k", "", "Path to the age private key (required for sops unless an age key environment variable is set)")
 	codesphere.cmd.PersistentFlags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
@@ -137,7 +141,6 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 
 	util.MarkPersistentFlagRequired(codesphere.cmd, "package")
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
-	util.MarkPersistentFlagRequired(codesphere.cmd, "priv-key")
 
 	util.AddCmd(install, codesphere.cmd)
 
@@ -146,6 +149,21 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	AddInstallCodesphereInfraCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodesphereDepenciesCmd(codesphere.cmd, codesphere.Opts)
 	AddInstallCodespherePlatformCmd(codesphere.cmd, codesphere.Opts)
+}
+
+// validateInstallCodesphereVault enforces the current TypeScript installer
+// contract without changing the selected type on the command options.
+func validateInstallCodesphereVault(opts *InstallCodesphereOpts) error {
+	if opts.VaultType != string(vault.TypeSOPS) {
+		return fmt.Errorf("install codesphere requires vault type %q", vault.TypeSOPS)
+	}
+
+	err := vault.ValidateConfiguration(vault.TypeSOPS, opts.PrivKey)
+	if err != nil {
+		return fmt.Errorf("failed to validate install config: %w", err)
+	}
+
+	return nil
 }
 
 func sharedInstallCodesphereSteps() []string {
@@ -168,7 +186,16 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		return nil, files.RootConfig{}, func() {}, fmt.Errorf("no config.yaml input provided: at least one config file is required")
 	}
 
-	store := vault.NewLazyVaultTemplatingSecretStore(opts.Vault, opts.PrivKey)
+	var store *vault.VaultTemplatingSecretStore
+
+	if opts.Vault != "" {
+		backend, err := vault.NewFromString(opts.VaultType, vault.Options{Path: opts.Vault, AgeKey: opts.PrivKey})
+		if err != nil {
+			return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to load vault: %w", err)
+		}
+
+		store = vault.NewLazyVaultTemplatingSecretStoreWithVault(backend)
+	}
 	cleanupFns := []func(){}
 	cleanup := func() {
 		for i := len(cleanupFns) - 1; i >= 0; i-- {

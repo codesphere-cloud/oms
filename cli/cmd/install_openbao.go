@@ -23,7 +23,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 )
 
 // InstallOpenBaoCmd wraps the cobra command and options for 'oms install openbao'.
@@ -60,7 +60,7 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	// Pass --age-key-file explicitly so ResolveAgeKey prefers it without
 	// mutating the process environment. When empty, the normal
 	// auto-discovery chain (env vars, default location, generation) applies.
-	recipient, keyPath, err := vault.ResolveAgeKey(c.Opts.AgeKeyFile, fallbackDir)
+	recipient, keyPath, err := sops.ResolveAgeKey(c.Opts.AgeKeyFile, fallbackDir)
 	if err != nil {
 		return fmt.Errorf("resolving age key: %w", err)
 	}

@@ -8,12 +8,13 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 // BuildDataCenters derives the data center layout from the bootstrap environment: a single
 // entry in single-DC mode, and two entries in multi-DC mode where the second one shares the
 // first one's PostgreSQL server.
-func BuildDataCenters(env *CodesphereEnvironment, newICG func() installer.InstallConfigManager) []*datacenter.DataCenter {
+func BuildDataCenters(env *CodesphereEnvironment) []*datacenter.DataCenter {
 	if !env.MultiDC {
 		// A single data center keeps honouring --datacenter-id. In multi-DC mode the IDs are
 		// derived instead, because they drive the per-data-center domains; validateMultiDC
@@ -23,38 +24,33 @@ func BuildDataCenters(env *CodesphereEnvironment, newICG func() installer.Instal
 			id = datacenter.PrimaryID
 		}
 
-		return []*datacenter.DataCenter{newDataCenter(env, id, "", newICG)}
+		return []*datacenter.DataCenter{newDataCenter(env, id, "")}
 	}
 
 	return []*datacenter.DataCenter{
-		newDataCenter(env, datacenter.PrimaryID, "", newICG),
-		newDataCenter(env, datacenter.PrimaryID+1, "-dc2", newICG),
+		newDataCenter(env, datacenter.PrimaryID, ""),
+		newDataCenter(env, datacenter.PrimaryID+1, "-dc2"),
 	}
 }
 
 // ensureDataCenters makes sure the environment has a usable data center layout. It derives the
 // layout on first use and gives every data center an install config manager, so any entry point
 // works whether or not Bootstrap ran first.
-func (b *GCPBootstrapper) ensureDataCenters() {
+func (b *GCPBootstrapper) ensureDataCenters() error {
 	if len(b.Env.DataCenters) > 0 {
-		b.ensureConfigManagers()
-		return
+		return b.ensureConfigManagers()
 	}
 
-	b.Env.DataCenters = BuildDataCenters(b.Env, nil)
+	b.Env.DataCenters = BuildDataCenters(b.Env)
 	b.adoptLegacyEnvFields()
-	b.ensureConfigManagers()
+
+	return b.ensureConfigManagers()
 }
 
 // ensureConfigManagers gives every data center an install config manager. The primary one reuses
 // the bootstrapper's, so a single-DC bootstrap behaves exactly as it did before multi-DC support.
 // Data centers restored from an infra file arrive without a manager, since it is not serialised.
-func (b *GCPBootstrapper) ensureConfigManagers() {
-	newICG := b.NewConfigManager
-	if newICG == nil {
-		newICG = installer.NewInstallConfigManager
-	}
-
+func (b *GCPBootstrapper) ensureConfigManagers() error {
 	for i, dc := range b.Env.DataCenters {
 		if dc.ConfigManager != nil {
 			continue
@@ -65,8 +61,15 @@ func (b *GCPBootstrapper) ensureConfigManagers() {
 			continue
 		}
 
-		dc.ConfigManager = newICG()
+		manager, err := installer.NewInstallConfigManager(string(vault.TypePlain), "")
+		if err != nil {
+			return fmt.Errorf("failed to initialize config manager for data center %d: %w", dc.ID, err)
+		}
+
+		dc.ConfigManager = manager
 	}
+
+	return nil
 }
 
 // adoptLegacyEnvFields moves state that a caller supplied through the deprecated top-level
@@ -125,7 +128,7 @@ func (b *GCPBootstrapper) mirrorPrimaryDataCenter() {
 
 // newDataCenter builds one data center, deriving its resource names, file paths and domains
 // from the environment and the data-center suffix.
-func newDataCenter(env *CodesphereEnvironment, id int, suffix string, newICG func() installer.InstallConfigManager) *datacenter.DataCenter {
+func newDataCenter(env *CodesphereEnvironment, id int, suffix string) *datacenter.DataCenter {
 	name := env.DatacenterName
 	if name == "" {
 		name = "dev"
@@ -148,10 +151,6 @@ func newDataCenter(env *CodesphereEnvironment, id int, suffix string, newICG fun
 		SSHBaseDomain:              sshBaseDomain(env, id),
 		ExternalPostgres:           suffix != "",
 	}
-	if newICG != nil {
-		dc.ConfigManager = newICG()
-	}
-
 	return dc
 }
 

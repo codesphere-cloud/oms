@@ -13,16 +13,15 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("ApplyProfile", func() {
 	DescribeTable("profile application",
 		func(profile string, wantErr bool, checkDatacenterName string) {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err := icg.ApplyProfile(profile)
 			if wantErr {
@@ -43,7 +42,7 @@ var _ = Describe("ApplyProfile", func() {
 
 	Context("dev profile details", func() {
 		It("sets correct dev profile configuration", func() {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err := icg.ApplyProfile("dev")
 			Expect(err).NotTo(HaveOccurred())
@@ -276,7 +275,7 @@ codesphere:
 			Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 			recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
+			Expect(sops.EncryptFile(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
 			previousAgeKeyFile, hadPreviousAgeKeyFile := os.LookupEnv("SOPS_AGE_KEY_FILE")
 			Expect(os.Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)).To(Succeed())
 			DeferCleanup(func() {
@@ -296,7 +295,7 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err = c.validateOnly(icg)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -347,7 +346,7 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = c.validateOnly(icg)
 			Expect(err).To(HaveOccurred())
 		})
@@ -409,7 +408,7 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = c.validateOnly(icg)
 			Expect(err).To(HaveOccurred())
 		})

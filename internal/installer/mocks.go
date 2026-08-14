@@ -833,63 +833,6 @@ func (_c *MockInstallConfigManager_WriteInstallConfig_Call) RunAndReturn(run fun
 	return _c
 }
 
-// WriteUnencryptedVault provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) WriteUnencryptedVault(vaultPath string, withComments bool) error {
-	ret := _mock.Called(vaultPath, withComments)
-
-	if len(ret) == 0 {
-		panic("no return value specified for WriteUnencryptedVault")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, bool) error); ok {
-		r0 = returnFunc(vaultPath, withComments)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockInstallConfigManager_WriteUnencryptedVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WriteUnencryptedVault'
-type MockInstallConfigManager_WriteUnencryptedVault_Call struct {
-	*mock.Call
-}
-
-// WriteUnencryptedVault is a helper method to define mock.On call
-//   - vaultPath string
-//   - withComments bool
-func (_e *MockInstallConfigManager_Expecter) WriteUnencryptedVault(vaultPath any, withComments any) *MockInstallConfigManager_WriteUnencryptedVault_Call {
-	return &MockInstallConfigManager_WriteUnencryptedVault_Call{Call: _e.mock.On("WriteUnencryptedVault", vaultPath, withComments)}
-}
-
-func (_c *MockInstallConfigManager_WriteUnencryptedVault_Call) Run(run func(vaultPath string, withComments bool)) *MockInstallConfigManager_WriteUnencryptedVault_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 string
-		if args[0] != nil {
-			arg0 = args[0].(string)
-		}
-		var arg1 bool
-		if args[1] != nil {
-			arg1 = args[1].(bool)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockInstallConfigManager_WriteUnencryptedVault_Call) Return(err error) *MockInstallConfigManager_WriteUnencryptedVault_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockInstallConfigManager_WriteUnencryptedVault_Call) RunAndReturn(run func(vaultPath string, withComments bool) error) *MockInstallConfigManager_WriteUnencryptedVault_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // WriteVault provides a mock function for the type MockInstallConfigManager
 func (_mock *MockInstallConfigManager) WriteVault(vaultPath string, withComments bool) error {
 	ret := _mock.Called(vaultPath, withComments)
