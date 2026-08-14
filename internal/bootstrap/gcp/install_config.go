@@ -143,7 +143,19 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	// secrets.baseDir, so sharing a directory would let one data center's ceph and kubernetes
 	// steps overwrite another's credentials.
 	dc.InstallConfig.Secrets.BaseDir = dc.SecretsDir
-	if b.Env.RegistryType != RegistryTypeGitHub {
+	if b.Env.ContainerRegistryURL != "" {
+		dc.InstallConfig.Registry.Server = b.Env.ContainerRegistryURL
+	}
+
+	if b.Env.RegistryUsername != "" || b.Env.RegistryPassword != "" {
+		dc.ConfigManager.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUsername}})
+		dc.ConfigManager.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.RegistryPassword}})
+	}
+
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		dc.InstallConfig.Registry.ReplaceImagesInBom = false
+		dc.InstallConfig.Registry.LoadContainerImages = false
+	} else {
 		dc.InstallConfig.Registry.ReplaceImagesInBom = true
 		dc.InstallConfig.Registry.LoadContainerImages = true
 	}

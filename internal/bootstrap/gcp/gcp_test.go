@@ -852,8 +852,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureLocalContainerRegistry", func() {
 		Describe("Valid EnsureLocalContainerRegistry", func() {
 			It("installs local registry", func() {
-				vault := &files.InstallVault{}
-				icg.EXPECT().GetVault().Return(vault)
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				// Setup mocked node
 				// Check if running - return error to simulate not running
@@ -869,7 +868,57 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.EnsureLocalContainerRegistry()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal("custom-registry"))
+				Expect(bs.Env.RegistryUsername).To(Equal("custom-registry"))
+				Expect(bs.Env.RegistryPassword).NotTo(BeEmpty())
+				Expect(bs.Env.ContainerRegistryURL).To(Equal(bs.Env.PostgreSQLNode.GetInternalIP() + ":5000"))
+			})
+
+			// A re-run that adds a data center finds the registry already up. Its nodes still
+			// need the registry's self-signed certificate, or every image pull fails.
+			It("distributes the registry certificate even when the registry is already running", func() {
+				vault := &files.InstallVault{}
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "custom-registry"}})
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "existing-password"}})
+				icg.EXPECT().GetVault().Return(vault)
+
+				bs.Env.MultiDC = true
+				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
+				bs.Env.CephNodes = []*node.Node{fakeNode("ceph-1", nodeClient)}
+				secondary := &datacenter.DataCenter{ID: 2, Suffix: "-dc2"}
+				secondary.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1-dc2", nodeClient)}
+				secondary.CephNodes = []*node.Node{fakeNode("ceph-1-dc2", nodeClient)}
+
+				// Registry is already running with credentials in the vault.
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(nil)
+
+				scpTargets := []string{}
+
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.HasPrefix(cmd, "scp ")
+				})).RunAndReturn(func(_ *node.Node, _ string, cmd string) error {
+					scpTargets = append(scpTargets, cmd)
+					return nil
+				}).Times(4)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "update-ca-certificates").Return(nil).Times(4)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "systemctl restart docker.service || true").Return(nil).Times(4)
+
+				// Register the second data center only after ensureDataCenters would have run,
+				// mirroring what EnsureComputeInstances produces for a --multi-dc bootstrap.
+				bs.Env.DataCenters = []*datacenter.DataCenter{
+					{
+						ID:                1,
+						ControlPlaneNodes: bs.Env.ControlPlaneNodes,
+						CephNodes:         bs.Env.CephNodes,
+					},
+					secondary,
+				}
+				bs.Env.DataCenters[0].ConfigManager = icg
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(scpTargets).To(HaveLen(4))
+				Expect(bs.Env.RegistryPassword).To(Equal("existing-password"))
 			})
 		})
 
@@ -989,17 +1038,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.GitHubPAT = "fake-pat"
 			csEnv.RegistryUser = "custom-registry"
 		})
-		It("sets configuration options in installconfig", func() {
-			vault := &files.InstallVault{}
-			icg.EXPECT().GetVault().Return(vault)
-
+		// The resolved registry and its credentials live on the environment; every data center's
+		// config picks them up in updateInstallConfig.
+		It("resolves ghcr.io as the registry for all data centers", func() {
 			err := bs.EnsureGitHubAccessConfigured()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
-			Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal(csEnv.RegistryUser))
-			Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal(csEnv.GitHubPAT))
-			Expect(bs.Env.InstallConfig.Registry.LoadContainerImages).To(BeFalse())
-			Expect(bs.Env.InstallConfig.Registry.ReplaceImagesInBom).To(BeFalse())
+			Expect(bs.Env.ContainerRegistryURL).To(Equal("ghcr.io"))
+			Expect(bs.Env.RegistryUsername).To(Equal(csEnv.RegistryUser))
+			Expect(bs.Env.RegistryPassword).To(Equal(csEnv.GitHubPAT))
 		})
 
 		Context("When GitHub PAT is missing", func() {
