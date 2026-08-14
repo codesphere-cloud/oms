@@ -194,6 +194,13 @@ type CodesphereEnvironment struct {
 	RootDiskSize   int64  `json:"root_disk_size"`
 	// Local OMS binary copied to the jumpbox instead of installing a release.
 	RemoteOmsBinaryPath string `json:"-"`
+
+	// OpenFGA database backups. The bucket lives in the project and is removed
+	// together with the project on cleanup. Access key/secret are populated only
+	// when a new HMAC key is created.
+	OpenfgaBackupBucket      string `json:"openfga_backup_bucket"`
+	OpenfgaBackupAccessKeyID string `json:"-"`
+	OpenfgaBackupSecret      string `json:"-"`
 }
 
 func NewGCPBootstrapper(
@@ -274,6 +281,11 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	err = b.stlog.Step("Ensure IAM roles", b.EnsureIAMRoles)
 	if err != nil {
 		return fmt.Errorf("failed to ensure IAM roles: %w", err)
+	}
+
+	err = b.stlog.Step("Ensure openfga backup bucket", b.EnsureOpenfgaBackupBucket)
+	if err != nil {
+		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
 	}
 
 	err = b.stlog.Step("Ensure VPC", b.EnsureVPC)

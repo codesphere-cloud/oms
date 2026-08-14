@@ -199,6 +199,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			// EnsureServiceAccounts
 			gc.EXPECT().CreateServiceAccount(projectId, "cloud-controller", "cloud-controller").Return("cloud-controller@p.iam.gserviceaccount.com", false, nil)
+			gc.EXPECT().CreateServiceAccount(projectId, "openfga-backup", "openfga-backup").Return("openfga-backup@"+projectId+".iam.gserviceaccount.com", true, nil)
 			gc.EXPECT().CreateServiceAccount(projectId, "artifact-registry-writer", "artifact-registry-writer").Return("writer@p.iam.gserviceaccount.com", true, nil)
 			gc.EXPECT().CreateServiceAccountKey(projectId, "writer@p.iam.gserviceaccount.com").Return("fake-key", nil)
 
@@ -206,6 +207,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().AssignIAMRole(projectId, "artifact-registry-writer", projectId, []string{"roles/artifactregistry.writer"}).Return(nil)
 			gc.EXPECT().AssignIAMRole(projectId, "cloud-controller", projectId, []string{"roles/compute.admin"}).Return(nil)
 			gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", projectId, []string{"roles/dns.admin"}).Return(nil)
+			gc.EXPECT().AssignIAMRole(projectId, "openfga-backup", projectId, []string{"roles/storage.objectAdmin"}).Return(nil)
+
+			// EnsureOpenfgaBackupBucket
+			gc.EXPECT().EnsureStorageBucket(projectId, projectId+"-openfga-backup", "us-central1").Return(nil)
+			gc.EXPECT().CreateHMACKey(projectId, "openfga-backup@"+projectId+".iam.gserviceaccount.com").Return("fake-access-id", "fake-secret", nil)
 
 			// EnsureVPC
 			gc.EXPECT().CreateVPC(projectId, "us-central1", projectId+"-vpc", projectId+"-us-central1-subnet", projectId+"-router", projectId+"-nat-gateway").Return(nil)
