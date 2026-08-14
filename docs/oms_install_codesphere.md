@@ -43,6 +43,12 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
       --vault string                 Path to the SOPS-encrypted prod.vault.yaml file used for config templating
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms install](oms_install.md)	 - Install Codesphere and other components

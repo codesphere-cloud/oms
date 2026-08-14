@@ -46,6 +46,12 @@ $ oms beta bootstrap-gcp restart-vms --project-id my-project --zone us-central1-
       --zone string         GCP Zone (optional, will use infra file if not provided)
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta bootstrap-gcp](oms_beta_bootstrap-gcp.md)	 - Bootstrap GCP infrastructure for Codesphere

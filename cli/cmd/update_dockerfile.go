@@ -82,7 +82,7 @@ in the specified Dockerfile to use that base image. The base image is loaded int
 }
 
 func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im system.ImageManager, args []string) error {
-	err := pm.Extract(c.Opts.Force)
+	err := pm.Extract(c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
 	}
@@ -92,7 +92,7 @@ func (c *UpdateDockerfileCmd) UpdateDockerfile(pm installer.PackageManager, im s
 		return fmt.Errorf("failed to get image name: %w", err)
 	}
 
-	imagePath, err := pm.GetBaseimagePath(c.Opts.Baseimage, c.Opts.Force)
+	imagePath, err := pm.GetBaseimagePath(c.Opts.Baseimage, c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to get image path: %w", err)
 	}

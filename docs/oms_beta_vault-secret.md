@@ -33,6 +33,12 @@ $ oms vault-secret --vault-file prod.vault.yaml --age-key /path/to/age_key.txt -
       --vault-file string    Path to the SOPS-encrypted vault file (required)
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta](oms_beta.md)	 - Commands for early testing

@@ -49,6 +49,12 @@ $ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --timeout 10
   -y, --yes                     Auto-approve re-initialization of an existing deployment when no DR backup is found
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms install](oms_install.md)	 - Install Codesphere and other components

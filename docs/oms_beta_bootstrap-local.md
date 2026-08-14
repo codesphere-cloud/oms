@@ -37,6 +37,12 @@ oms beta bootstrap-local [flags]
   -y, --yes                          Auto-approve the local bootstrapping warning prompt
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta](oms_beta.md)	 - Commands for early testing

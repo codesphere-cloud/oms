@@ -39,6 +39,7 @@ import (
 
 type BootstrapLocalCmd struct {
 	cmd           *cobra.Command
+	Opts          *util.GlobalOptions
 	CodesphereEnv *local.CodesphereEnvironment
 	Yes           bool
 	// Experiments backs the deprecated --experiments flag; its values
@@ -56,7 +57,8 @@ func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddBootstrapLocalCmd(parent *cobra.Command) {
+// AddBootstrapLocalCmd adds the local bootstrap command to parent.
+func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	bootstrapLocalCmd := BootstrapLocalCmd{
 		cmd: &cobra.Command{
 			Use:   "bootstrap-local",
@@ -66,6 +68,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 				For local setups, use Minikube with a virtual machine on Linux.
 				Not for production use.`),
 		},
+		Opts:          opts,
 		CodesphereEnv: &local.CodesphereEnvironment{},
 	}
 
@@ -153,7 +156,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 		return fmt.Errorf("failed to initialize Helm client: %w", err)
 	}
 
-	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, helmClient, c.CodesphereEnv)
+	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, helmClient, c.CodesphereEnv, c.Opts.Verbose)
 	return bs.Bootstrap()
 }
 

@@ -44,6 +44,7 @@ func installCodesphereInfra(opts *InstallCodesphereOpts, env env.Env) error {
 		VaultPath:        opts.Vault,
 		PrivKey:          opts.PrivKey,
 		Force:            opts.Force,
+		Verbose:          opts.Verbose,
 		SkipSteps:        opts.SkipSteps,
 		AllowedSteps:     installer.InfraSteps,
 		DirectConnection: opts.DirectConnection,

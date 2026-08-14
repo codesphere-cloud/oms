@@ -156,7 +156,8 @@ func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
 	}
 
 	log.Printf("Extracting installer bundle %s → %s", bundlePath, destDir)
-	if err := util.ExtractTarGz(b.fw, bundlePath, destDir); err != nil {
+
+	if err := util.ExtractTarGz(b.fw, bundlePath, destDir, b.Verbose); err != nil {
 		return "", fmt.Errorf("failed to extract installer bundle: %w", err)
 	}
 
@@ -423,7 +424,8 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 		log.Printf("deps directory already exists at %s, skipping extraction", depsDir)
 	} else {
 		log.Printf("Extracting deps.tar.gz → %s", depsDir)
-		if err := util.ExtractTarGz(b.fw, archivePath, depsDir); err != nil {
+
+		if err := util.ExtractTarGz(b.fw, archivePath, depsDir, b.Verbose); err != nil {
 			return fmt.Errorf("failed to extract deps.tar.gz: %w", err)
 		}
 	}

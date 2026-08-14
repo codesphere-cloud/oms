@@ -93,6 +93,12 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --with-comments                              Add helpful comments to the generated YAML files
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms init](oms_init.md)	 - Initialize configuration files

@@ -24,11 +24,11 @@ type PackageManager interface {
 	FileIO() util.FileIO
 	GetWorkDir() string
 	GetDependencyPath(filename string) string
-	Extract(force bool) error
-	ExtractDependency(file string, force bool) error
-	ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error)
+	Extract(force bool, verbose bool) error
+	ExtractDependency(file string, force bool, verbose bool) error
+	ExtractOciImageIndex(imagefile string, verbose bool) (files.OCIImageIndex, error)
 	GetFullImageTag(baseimage string) (string, error)
-	GetBaseimagePath(baseimage string, force bool) (string, error)
+	GetBaseimagePath(baseimage string, force bool, verbose bool) (string, error)
 	GetCodesphereVersion() (string, error)
 }
 
@@ -77,7 +77,7 @@ func (p *Package) alreadyExtracted(dir string) (bool, error) {
 
 // Extract extracts the package tar.gz file into its working directory.
 // If force is true, it will overwrite existing files.
-func (p *Package) Extract(force bool) error {
+func (p *Package) Extract(force bool, verbose bool) error {
 	workDir := p.GetWorkDir()
 	err := os.MkdirAll(p.OmsWorkdir, 0755)
 	if err != nil {
@@ -94,7 +94,7 @@ func (p *Package) Extract(force bool) error {
 		return nil
 	}
 
-	err = util.ExtractTarGz(p.fileIO, p.Filename, workDir)
+	err = util.ExtractTarGz(p.fileIO, p.Filename, workDir, verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract package %s to %s: %w", p.Filename, workDir, err)
 	}
@@ -102,7 +102,8 @@ func (p *Package) Extract(force bool) error {
 	depsArchivePath := path.Join(workDir, depsTar)
 	if p.fileIO.Exists(depsArchivePath) {
 		depsTargetDir := path.Join(workDir, depsDir)
-		err = util.ExtractTarGz(p.fileIO, depsArchivePath, depsTargetDir)
+
+		err = util.ExtractTarGz(p.fileIO, depsArchivePath, depsTargetDir, verbose)
 		if err != nil {
 			return fmt.Errorf("failed to extract deps.tar.gz to %s: %w", depsTargetDir, err)
 		}
@@ -112,8 +113,8 @@ func (p *Package) Extract(force bool) error {
 }
 
 // ExtractDependency extracts a specific dependency file from the deps.tar.gz archive within the package.
-func (p *Package) ExtractDependency(file string, force bool) error {
-	err := p.Extract(force)
+func (p *Package) ExtractDependency(file string, force bool, verbose bool) error {
+	err := p.Extract(force, verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
 	}
@@ -124,7 +125,7 @@ func (p *Package) ExtractDependency(file string, force bool) error {
 		return nil
 	}
 
-	err = util.ExtractTarGzSingleFile(p.fileIO, path.Join(workDir, "deps.tar.gz"), file, path.Join(workDir, depsDir))
+	err = util.ExtractTarGzSingleFile(p.fileIO, path.Join(workDir, "deps.tar.gz"), file, path.Join(workDir, depsDir), verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract dependency %s from deps archive to %s: %w", file, workDir, err)
 	}
@@ -133,9 +134,10 @@ func (p *Package) ExtractDependency(file string, force bool) error {
 }
 
 // ExtractOciImageIndex extracts and parses the OCI image index from the given image file path.
-func (p *Package) ExtractOciImageIndex(imagefile string) (files.OCIImageIndex, error) {
+func (p *Package) ExtractOciImageIndex(imagefile string, verbose bool) (files.OCIImageIndex, error) {
 	var ociImageIndex files.OCIImageIndex
-	err := util.ExtractTarSingleFile(p.fileIO, imagefile, "index.json", filepath.Dir(imagefile))
+
+	err := util.ExtractTarSingleFile(p.fileIO, imagefile, "index.json", filepath.Dir(imagefile), verbose)
 	if err != nil {
 		return ociImageIndex, fmt.Errorf("failed to extract index.json: %w", err)
 	}
@@ -173,7 +175,8 @@ func (p *Package) GetFullImageTag(baseimage string) (string, error) {
 
 const baseimagePath = "./codesphere/images"
 
-func (p *Package) GetBaseimagePath(baseimage string, force bool) (string, error) {
+// GetBaseimagePath extracts the selected base image and returns its local path.
+func (p *Package) GetBaseimagePath(baseimage string, force bool, verbose bool) (string, error) {
 	if baseimage == "" {
 		return "", fmt.Errorf("baseimage not specified")
 	}
@@ -183,7 +186,8 @@ func (p *Package) GetBaseimagePath(baseimage string, force bool) (string, error)
 	}
 
 	baseImageTarPath := path.Join(baseimagePath, baseimage)
-	err := p.ExtractDependency(baseImageTarPath, force)
+
+	err := p.ExtractDependency(baseImageTarPath, force, verbose)
 	if err != nil {
 		return "", fmt.Errorf("failed to extract package to workdir: %w", err)
 	}

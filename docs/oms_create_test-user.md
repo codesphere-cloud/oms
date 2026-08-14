@@ -33,6 +33,12 @@ oms create test-user [flags]
       --ssl-mode string            PostgreSQL SSL mode (default "disable")
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms create](oms_create.md)	 - Create resources for Codesphere
