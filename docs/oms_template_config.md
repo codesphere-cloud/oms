@@ -18,7 +18,7 @@ Template syntax in config.yaml:
   password: '{{ secret "mySecret" "fields.password" }}'
 
   # Inject a file secret's content
-  caCert: "{{ secret "caCert" "file.content" }}"
+  caCert: '{{ secret "caCert" "file.content" }}'
 
 Secret names and selectors must match entries in the prod.vault.yaml file.
 
