@@ -11,11 +11,11 @@ This command prints the rendered configuration to stdout so templating can be te
 Template syntax in config.yaml:
 
   # Inject a secret value (defaults to the "content"/"password" field)
-  someKey: "{{ secret "mySecret" }}"
+  someKey: '{{ secret "mySecret" }}'
 
   # Select a specific field
-  username: "{{ secret "mySecret" "fields.username" }}"
-  password: "{{ secret "mySecret" "fields.password" }}"
+  username: '{{ secret "mySecret" "fields.username" }}'
+  password: '{{ secret "mySecret" "fields.password" }}'
 
   # Inject a file secret's content
   caCert: "{{ secret "caCert" "file.content" }}"
