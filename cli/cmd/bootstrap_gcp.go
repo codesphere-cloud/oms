@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -18,17 +19,19 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 type BootstrapGcpCmd struct {
 	cmd               *cobra.Command
-	Opts              *GlobalOptions
+	Opts              *util.GlobalOptions
 	Env               env.Env
 	CodesphereEnv     *gcp.CodesphereEnvironment
 	InputRegistryType string
 	SSHQuiet          bool
-	FeatureFlagList   []string
+	// experiments backs the deprecated --experiments flag; its values
+	// are folded into the internal bucket for backwards compatibility.
+	experiments []string
 }
 
 func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
@@ -40,7 +43,7 @@ func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
+func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	bootstrapGcpCmd := BootstrapGcpCmd{
 		cmd: &cobra.Command{
 			Use:   "bootstrap-gcp",
@@ -53,7 +56,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 		},
 		Opts:          opts,
 		Env:           env.NewEnv(),
-		CodesphereEnv: &gcp.CodesphereEnvironment{FeatureFlags: map[string]bool{}},
+		CodesphereEnv: &gcp.CodesphereEnvironment{},
 	}
 	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
 
@@ -95,16 +98,21 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (default: none)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: local-container)")
-	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapGcpCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapGcpCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
+	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
+	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiEndpoint, "external-loki-endpoint", "", "External Loki endpoint for Grafana Alloy log forwarding (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiSecret, "external-loki-secret", "", "External Loki password stored in the generated vault (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiUser, "external-loki-user", "", "External Loki username for Grafana Alloy log forwarding (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.PrometheusRemoteWriteURL, "prometheus-remote-write-url", "", "Prometheus remote write URL (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.PrometheusRemoteWriteUser, "prometheus-remote-write-user", "", "Prometheus remote write username (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.PrometheusRemoteWritePassword, "prometheus-remote-write-password", "", "Prometheus remote write password stored in the generated vault (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ClusterAdminEmail, "cluster-admin-email", "", "Email address of the initial cluster admin. Written to the install config and applied as the cluster-admin-email secret before the Codesphere platform is installed (optional)")
 
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallConfigPath, "install-config", "config.yaml", "Path to install config file (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "prod.vault.yaml", "Path to secrets files (optional)")
@@ -115,6 +123,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	flags.Int64Var(&bootstrapGcpCmd.CodesphereEnv.RootDiskSize, "root-disk-size", 50, "Instance root disk size in GB (default: 50)")
 
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.GoogleACMEIssuer, "google-acme-issuer", false, "Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.ACMEStaging, "acme-staging", false, "Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)")
 
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoURI, "openbao-uri", "", "URI for OpenBao (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")
@@ -131,7 +140,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
 
-	AddCmd(parent, bootstrapGcpCmd.cmd)
+	util.AddCmd(parent, bootstrapGcpCmd.cmd)
 	AddBootstrapGcpPostconfigCmd(bootstrapGcpCmd.cmd, opts)
 	AddBootstrapGcpCleanupCmd(bootstrapGcpCmd.cmd, opts)
 	AddBootstrapGcpRestartVMsCmd(bootstrapGcpCmd.cmd, opts)
@@ -140,9 +149,13 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *GlobalOptions) {
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false)
-	icg := installer.NewInstallConfigManager()
+
+	icg, err := installer.NewInstallConfigManager("plain", "")
+	if err != nil {
+		return fmt.Errorf("failed to initialize conig manager: %w", err)
+	}
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-	fw := util.NewFilesystemWriter()
+	fw := intutil.NewFilesystemWriter()
 	portalClient := portal.NewPortalClient()
 	githubClient := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)
 
@@ -156,7 +169,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		fw,
 		node.NewSSHNodeClient(c.SSHQuiet),
 		portalClient,
-		util.NewTime(),
+		intutil.NewTime(),
 		githubClient,
 	)
 	if err != nil {
@@ -172,8 +185,12 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		}
 	}
 
-	for _, flag := range c.FeatureFlagList {
-		c.CodesphereEnv.FeatureFlags[flag] = true
+	if c.cmd.Flags().Changed("experiments") {
+		if c.cmd.Flags().Changed("internal-flags") {
+			log.Printf("Warning: both --experiments and --internal-flags were set; ignoring deprecated --experiments values %v", c.experiments)
+		} else {
+			c.CodesphereEnv.InternalFlags = c.experiments
+		}
 	}
 
 	err = bs.Bootstrap()

@@ -12,23 +12,24 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("ExtendBaseimageCmd", func() {
 	var (
 		c          cmd.ExtendBaseimageCmd
 		opts       *cmd.ExtendBaseimageOpts
-		globalOpts *cmd.GlobalOptions
+		globalOpts *util.GlobalOptions
 		mockEnv    *env.MockEnv
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = &util.GlobalOptions{}
 		opts = &cmd.ExtendBaseimageOpts{
 			GlobalOptions: globalOpts,
 			Dockerfile:    "Dockerfile",
@@ -101,7 +102,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 		It("fails when image manager fails to load image", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
+			mockFileIO := intutil.NewMockFileIO(GinkgoT())
 
 			// Create a temporary file for the Dockerfile generation to work with
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
@@ -137,7 +138,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 		It("successfully completes workflow until dockerfile generation", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
+			mockFileIO := intutil.NewMockFileIO(GinkgoT())
 
 			// Create a temporary file for the Dockerfile generation to work with
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
@@ -161,12 +162,12 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 var _ = Describe("AddExtendBaseimageCmd", func() {
 	var (
 		parentCmd  *cobra.Command
-		globalOpts *cmd.GlobalOptions
+		globalOpts *util.GlobalOptions
 	)
 
 	BeforeEach(func() {
 		parentCmd = &cobra.Command{Use: "extend"}
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = &util.GlobalOptions{}
 	})
 
 	It("adds the baseimage command with correct properties and flags", func() {

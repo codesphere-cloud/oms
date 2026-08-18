@@ -11,8 +11,9 @@ import (
 	"strings"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
-	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -20,7 +21,7 @@ import (
 
 var _ = Describe("TemplateConfigCmd", func() {
 	It("renders config templates with secrets from a vault file", func() {
-		if !sopsAndAgeAvailable() {
+		if !testutil.SopsAndAgeAvailable() {
 			Skip("sops and age-keygen not available")
 		}
 
@@ -43,7 +44,7 @@ postgres:
 `), 0644)).To(Succeed())
 		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 
-		vault := &files.InstallVault{
+		testVault := &files.InstallVault{
 			Secrets: []files.SecretEntry{
 				{
 					Name: "codesphereLicenseKey",
@@ -58,12 +59,12 @@ postgres:
 				},
 			},
 		}
-		vaultYaml, err := vault.Marshal()
+		vaultYaml, err := testVault.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.WriteFile(plaintextVaultPath, vaultYaml, 0600)).To(Succeed())
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(installer.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
+		Expect(sops.EncryptFile(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 		rootCmd := cmd.GetRootCmd()
 		var output bytes.Buffer
@@ -102,13 +103,3 @@ postgres:
 		Expect(configCmd.Flags().Lookup("age-key")).NotTo(BeNil())
 	})
 })
-
-func sopsAndAgeAvailable() bool {
-	if _, err := exec.LookPath("sops"); err != nil {
-		return false
-	}
-	if _, err := exec.LookPath("age-keygen"); err != nil {
-		return false
-	}
-	return true
-}

@@ -23,6 +23,61 @@ import (
 
 var _ = Describe("GCE", func() {
 
+	Describe("VMDefsForEnv", func() {
+		It("keeps the names a single-data-center bootstrap has always used", func() {
+			env := &gcp.CodesphereEnvironment{}
+			env.DataCenters = gcp.BuildDataCenters(env)
+
+			defs := gcp.VMDefsForEnv(env)
+
+			Expect(vmNames(defs)).To(Equal([]string{
+				"jumpbox", "postgres",
+				"ceph-1", "ceph-2", "ceph-3",
+				"k0s-1", "k0s-2", "k0s-3",
+			}))
+		})
+
+		It("adds suffixed ceph and k0s nodes per additional data center", func() {
+			env := &gcp.CodesphereEnvironment{MultiDC: true}
+			env.DataCenters = gcp.BuildDataCenters(env)
+
+			defs := gcp.VMDefsForEnv(env)
+
+			Expect(vmNames(defs)).To(Equal([]string{
+				"jumpbox", "postgres",
+				"ceph-1", "ceph-2", "ceph-3",
+				"k0s-1", "k0s-2", "k0s-3",
+				"ceph-1-dc2", "ceph-2-dc2", "ceph-3-dc2",
+				"k0s-1-dc2", "k0s-2-dc2", "k0s-3-dc2",
+			}))
+		})
+
+		It("assigns the shared VMs to no data center and the rest to theirs", func() {
+			env := &gcp.CodesphereEnvironment{MultiDC: true}
+			env.DataCenters = gcp.BuildDataCenters(env)
+
+			byName := map[string]int{}
+			for _, def := range gcp.VMDefsForEnv(env) {
+				byName[def.Name] = def.DataCenterID
+			}
+
+			Expect(byName["jumpbox"]).To(BeZero())
+			Expect(byName["postgres"]).To(BeZero())
+			Expect(byName["ceph-1"]).To(Equal(1))
+			Expect(byName["k0s-3"]).To(Equal(1))
+			Expect(byName["ceph-1-dc2"]).To(Equal(2))
+			Expect(byName["k0s-3-dc2"]).To(Equal(2))
+		})
+
+		// Infra files written before multi-DC support carry no data center list.
+		It("falls back to a single unsuffixed data center when the environment has none", func() {
+			defs := gcp.VMDefsForEnv(&gcp.CodesphereEnvironment{})
+
+			Expect(vmNames(defs)).To(ContainElement("k0s-1"))
+			Expect(vmNames(defs)).To(HaveLen(8))
+		})
+	})
+
 	Describe("IsNotFoundError", func() {
 		Context("when error is nil", func() {
 			It("should return false", func() {
@@ -145,15 +200,16 @@ var _ = Describe("GCE", func() {
 
 		BeforeEach(func() {
 			csEnv = &gcp.CodesphereEnvironment{
-				ProjectName:  "test",
-				Region:       "us-central1",
-				Zone:         "us-central1-a",
-				BaseDomain:   "example.com",
-				DNSProjectID: "dns-project",
-				DNSZoneName:  "test-zone",
-				SecretsDir:   "/etc/codesphere/secrets",
-				DatacenterID: 1,
-				Experiments:  gcp.DefaultExperiments,
+				ProjectName:   "test",
+				Region:        "us-central1",
+				Zone:          "us-central1-a",
+				BaseDomain:    "example.com",
+				DNSProjectID:  "dns-project",
+				DNSZoneName:   "test-zone",
+				SecretsDir:    "/etc/codesphere/secrets",
+				DatacenterID:  1,
+				InternalFlags: gcp.DefaultInternalFlags,
+				PreviewFlags:  gcp.DefaultPreviewFlags,
 			}
 			gc := gcp.NewMockGCPClientManager(GinkgoT())
 			bs = newTestBootstrapper(csEnv, gc)
@@ -202,7 +258,8 @@ var _ = Describe("GCE", func() {
 				DNSZoneName:           "test-zone",
 				SecretsDir:            "/etc/codesphere/secrets",
 				DatacenterID:          1,
-				Experiments:           gcp.DefaultExperiments,
+				InternalFlags:         gcp.DefaultInternalFlags,
+				PreviewFlags:          gcp.DefaultPreviewFlags,
 				InstallConfigPath:     "fake-config",
 				SecretsFilePath:       "fake-secrets",
 				GitHubAppName:         "fake-app",
@@ -248,16 +305,17 @@ var _ = Describe("GCE", func() {
 		BeforeEach(func() {
 			gc = gcp.NewMockGCPClientManager(GinkgoT())
 			csEnv = &gcp.CodesphereEnvironment{
-				ProjectName:  "test",
-				ProjectID:    "test-pid",
-				Region:       "us-central1",
-				Zone:         "us-central1-a",
-				BaseDomain:   "example.com",
-				DNSProjectID: "dns-project",
-				DNSZoneName:  "test-zone",
-				SecretsDir:   "/etc/codesphere/secrets",
-				DatacenterID: 1,
-				Experiments:  gcp.DefaultExperiments,
+				ProjectName:   "test",
+				ProjectID:     "test-pid",
+				Region:        "us-central1",
+				Zone:          "us-central1-a",
+				BaseDomain:    "example.com",
+				DNSProjectID:  "dns-project",
+				DNSZoneName:   "test-zone",
+				SecretsDir:    "/etc/codesphere/secrets",
+				DatacenterID:  1,
+				InternalFlags: gcp.DefaultInternalFlags,
+				PreviewFlags:  gcp.DefaultPreviewFlags,
 			}
 			logCh = make(chan string, 10)
 			bs = newTestBootstrapper(csEnv, gc)
@@ -487,15 +545,16 @@ var _ = Describe("GCE", func() {
 			gc := gcp.NewMockGCPClientManager(GinkgoT())
 			fw = util.NewMockFileIO(GinkgoT())
 			csEnv := &gcp.CodesphereEnvironment{
-				ProjectName:  "test",
-				Region:       "us-central1",
-				Zone:         "us-central1-a",
-				BaseDomain:   "example.com",
-				DNSProjectID: "dns-project",
-				DNSZoneName:  "test-zone",
-				SecretsDir:   "/etc/codesphere/secrets",
-				DatacenterID: 1,
-				Experiments:  gcp.DefaultExperiments,
+				ProjectName:   "test",
+				Region:        "us-central1",
+				Zone:          "us-central1-a",
+				BaseDomain:    "example.com",
+				DNSProjectID:  "dns-project",
+				DNSZoneName:   "test-zone",
+				SecretsDir:    "/etc/codesphere/secrets",
+				DatacenterID:  1,
+				InternalFlags: gcp.DefaultInternalFlags,
+				PreviewFlags:  gcp.DefaultPreviewFlags,
 			}
 			bs = newTestBootstrapperWithFileIO(csEnv, gc, fw)
 		})
@@ -546,8 +605,9 @@ var _ = Describe("GCE", func() {
 				SecretsDir:       "/etc/codesphere/secrets",
 				DatacenterID:     1,
 				SSHPublicKeyPath: "key.pub",
-				Experiments:      gcp.DefaultExperiments,
-				FeatureFlags:     map[string]bool{},
+				InternalFlags:    gcp.DefaultInternalFlags,
+				PreviewFlags:     gcp.DefaultPreviewFlags,
+				FeatureFlags:     gcp.DefaultFeatureFlags,
 				RootDiskSize:     50,
 			}
 			bs = newTestBootstrapperAll(csEnv, gc, fw, mockGitHubClient)
@@ -562,7 +622,7 @@ var _ = Describe("GCE", func() {
 				})
 
 				It("Sets the root disk size", func() {
-					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 					allRootDiskSizesCorrect := true
 					mu := sync.Mutex{}
 					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
@@ -585,7 +645,7 @@ var _ = Describe("GCE", func() {
 			})
 
 			It("creates all instances", func() {
-				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
@@ -607,7 +667,7 @@ var _ = Describe("GCE", func() {
 				It("does not fetch GitHub org keys when GitHub team org is set without slug", func() {
 					ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 					mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
-					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 
 					err := bs.EnsureComputeInstances()
@@ -623,7 +683,7 @@ var _ = Describe("GCE", func() {
 						ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 						mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
-						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+						fw.EXPECT().ReadFile(csEnv.SSHPublicKeyPath).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 						gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone string, instance *computepb.Instance) error {
 							sshMetadata := ""
 							for _, item := range instance.GetMetadata().GetItems() {
@@ -705,7 +765,7 @@ var _ = Describe("GCE", func() {
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
-				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 
 				// Verify CreateInstance is called with SPOT provisioning model
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.MatchedBy(func(instance *computepb.Instance) bool {
@@ -724,7 +784,7 @@ var _ = Describe("GCE", func() {
 				ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
-				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(8)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 
 				createCalls := make(map[string]int)
 				var mu sync.Mutex
@@ -759,6 +819,7 @@ var _ = Describe("GCE", func() {
 					// After StartInstance, VM is running
 					return runningResp, nil
 				}).Times(16)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 
 				gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
 
@@ -770,6 +831,7 @@ var _ = Describe("GCE", func() {
 				runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 				// 8 VMs × 2 GetInstance calls each (initial check + waitForInstanceRunning poll)
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(runningResp, nil).Times(16)
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).NotTo(HaveOccurred())
@@ -780,6 +842,7 @@ var _ = Describe("GCE", func() {
 				var mu sync.Mutex
 				stagingResp := makeInstance("STAGING", "10.0.0.x", "1.2.3.x")
 				runningResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(func(projectID, zone, name string) (*computepb.Instance, error) {
 					mu.Lock()
 					defer mu.Unlock()
@@ -801,6 +864,7 @@ var _ = Describe("GCE", func() {
 				// .Maybe() because VMs are created in parallel; not all may reach StartInstance.
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(stoppedResp, nil).Maybe()
 				gc.EXPECT().StartInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(fmt.Errorf("start error")).Maybe()
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 
 				err := bs.EnsureComputeInstances()
 				Expect(err).To(HaveOccurred())
@@ -808,6 +872,7 @@ var _ = Describe("GCE", func() {
 			})
 
 			It("fails when initial GetInstance returns a non-NotFound error", func() {
+				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAAA...  \n"), nil)
 				gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, fmt.Errorf("permission denied")).Maybe()
 
 				err := bs.EnsureComputeInstances()

@@ -1,0 +1,45 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+version: "2"
+
+linters:
+  # Default set of linters.
+  # The value can be:
+  # - `standard`: the "Default" linters https://golangci-lint.run/docs/linters/#all-linters
+  # - `all`: enables all linters by default.
+  # - `none`: disables all linters by default.
+  # - `fast`: enables only linters considered as "fast" (`golangci-lint help linters --json | jq '[ .[] | select(.fast==true) ] | map(.name)'`).
+  # Default: standard
+  default: standard
+
+  # Enable specific linter.
+  enable:
+    - revive
+    - wsl_v5
+    - wrapcheck
+
+  settings:
+    revive:
+      enable-default-rules: true
+
+      rules:
+        - name: dot-imports
+          arguments:
+            - allowed-packages:
+                - github.com/onsi/ginkgo/v2
+                - github.com/onsi/gomega
+
+issues:
+  # Maximum issues count per one linter.
+  # Set to 0 to disable.
+  # Default: 50
+  max-issues-per-linter: 0
+
+  # Show issues in any part of update files (requires new-from-rev or new-from-patch).
+  # Default: false
+  whole-files: false
+
+  # Apply the fixes detected by the linters and formatters (if it's supported by the linter).
+  # Default: false
+  fix: true

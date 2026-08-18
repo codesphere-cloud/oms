@@ -50,40 +50,49 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
 ### Options
 
 ```
-      --acme-dns01-provider string    DNS provider for DNS-01 solver (e.g., cloudflare)
-      --acme-eab-key-id string        External Account Binding key ID (required by some ACME providers)
-      --acme-eab-mac-key string       External Account Binding MAC key (required by some ACME providers)
-      --acme-email string             Email address for ACME account registration
-      --acme-enabled                  Enable ACME certificate issuer
-      --acme-issuer-name string       Name for the ACME ClusterIssuer (default "acme-issuer")
-      --acme-server string            ACME server URL (default "https://acme-v02.api.letsencrypt.org/directory")
-      --ansible-inventory string      Path to Ansible inventory file to import host information from
-      --ceph-csi-kubelet-dir string   Directory of kubelet for ceph csi. Required for some cloud providers
-      --ceph-nodes-subnet string      CIDR subnet for ceph nodes
-  -c, --config string                 Output file path for config.yaml (default "config.yaml")
-      --dc-city string                Datacenter city
-      --dc-country-code string        Datacenter country code
-      --dc-id int                     Datacenter ID
-      --dc-name string                Datacenter name
-      --domain string                 Main Codesphere domain
-      --generate-keys                 Generate SSH keys and certificates (default true)
-  -h, --help                          help for install-config
-      --interactive                   Enable interactive prompting (when true, other config flags are ignored) (default true)
-      --k8s-control-plane strings     K8s control plane IPs (comma-separated)
-      --k8s-managed                   Use Codesphere-managed Kubernetes (default true)
-      --openbao-engine string         Engine for OpenBao (default "cs-secrets-engine")
-      --openbao-password string       Password for OpenBao authentication
-      --openbao-uri string            URI for OpenBao (e.g., https://openbao.example.com)
-      --openbao-user string           Username for OpenBao authentication (default "admin")
-      --postgres-mode string          PostgreSQL setup mode (install/external)
-      --postgres-primary-ip string    Primary PostgreSQL server IP
-      --postgres-server string        PostgreSQL server address. Required when using external mode.
-      --profile string                Use a predefined configuration profile (dev, production, minimal)
-      --registry-server string        Server for container registry
-      --secrets-dir string            Secrets base directory (default "/root/secrets")
-      --validate                      Validate existing config files instead of creating new ones
-      --vault string                  Output file path for prod.vault.yaml (default "prod.vault.yaml")
-      --with-comments                 Add helpful comments to the generated YAML files
+      --acme-dns01-provider string                 DNS provider for DNS-01 solver (e.g., cloudflare)
+      --acme-eab-key-id string                     External Account Binding key ID (required by some ACME providers)
+      --acme-eab-mac-key string                    External Account Binding MAC key (required by some ACME providers)
+      --acme-email string                          Email address for ACME account registration
+      --acme-enabled                               Enable ACME certificate issuer
+      --acme-issuer-name string                    Name for the ACME ClusterIssuer (default "acme-issuer")
+      --acme-server string                         ACME server URL (default "https://acme-v02.api.letsencrypt.org/directory")
+      --age-key string                             Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
+      --ansible-inventory string                   Path to Ansible inventory file to import host information from
+      --ceph-csi-kubelet-dir string                Directory of kubelet for ceph csi. Required for some cloud providers
+      --ceph-nodes-subnet string                   CIDR subnet for ceph nodes
+  -c, --config string                              Output file path for config.yaml (default "config.yaml")
+      --dc-city string                             Datacenter city
+      --dc-country-code string                     Datacenter country code
+      --dc-id int                                  Datacenter ID
+      --dc-name string                             Datacenter name
+      --domain string                              Main Codesphere domain
+      --generate-keys                              Generate SSH keys and certificates (default true)
+  -h, --help                                       help for install-config
+      --interactive                                Enable interactive prompting (when true, other config flags are ignored) (default true)
+      --k8s-control-plane strings                  K8s control plane IPs (comma-separated)
+      --k8s-managed                                Use Codesphere-managed Kubernetes (default true)
+      --openbao-engine string                      Engine for OpenBao (default "cs-secrets-engine")
+      --openbao-password string                    Password for OpenBao authentication
+      --openbao-uri string                         URI for OpenBao (e.g., https://openbao.example.com)
+      --openbao-user string                        Username for OpenBao authentication (default "admin")
+      --openfga-backups-access-key-id string       S3 access key ID for OpenFGA backups
+      --openfga-backups-destination string         Backup destination (S3 URL, e.g. s3://backup-openfga)
+      --openfga-backups-enabled                    Enable OpenFGA database backups
+      --openfga-backups-endpoint string            S3-compatible endpoint URL (e.g. https://storage.googleapis.com)
+      --openfga-backups-retention string           Retention policy (e.g. 7d, empty for chart default)
+      --openfga-backups-schedule string            Backup schedule (6-field cron, empty for chart default)
+      --openfga-backups-secret-access-key string   S3 secret access key for OpenFGA backups
+      --postgres-mode string                       PostgreSQL setup mode (install/external)
+      --postgres-primary-ip string                 Primary PostgreSQL server IP
+      --postgres-server string                     PostgreSQL server: primary hostname in install mode, connection address in external mode
+      --profile string                             Use a predefined configuration profile (dev, production, minimal)
+      --registry-server string                     Server for container registry
+      --secrets-dir string                         Secrets base directory (default "/root/secrets")
+      --validate                                   Validate existing config files instead of creating new ones
+      --vault string                               Output file path for prod.vault.yaml (default "prod.vault.yaml")
+      --vault-type string                          Vault storage type (sops or plain) (default "sops")
+      --with-comments                              Add helpful comments to the generated YAML files
 ```
 
 ### SEE ALSO

@@ -75,6 +75,8 @@ The OMS CLI organizes its functionality into several top-level commands, each wi
 
 See our [Usage Documentation](docs) for usage information about the specific subcommands.
 
+For the complete infrastructure preparation and installation workflow, see [Prepare infrastructure and install Codesphere](docs/install-codesphere-on-any-infrastructure.md).
+
 ### How to Build?
 
 ```shell

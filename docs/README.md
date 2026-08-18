@@ -17,6 +17,7 @@ like downloading new versions.
 
 ### SEE ALSO
 
+* [oms add-cluster-admin](oms_add-cluster-admin.md)	 - Set the cluster admin email in a Kubernetes secret
 * [oms beta](oms_beta.md)	 - Commands for early testing
 * [oms build](oms_build.md)	 - Build and push images to a registry
 * [oms create](oms_create.md)	 - Create resources for Codesphere

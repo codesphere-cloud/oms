@@ -8,9 +8,9 @@ import (
 	"os"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
-	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/util"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/spf13/cobra"
 )
 
@@ -20,10 +20,11 @@ type TemplateConfigCmd struct {
 }
 
 type TemplateConfigOpts struct {
-	*GlobalOptions
-	Config string
-	Vault  string
-	AgeKey string
+	*util.GlobalOptions
+	Config    string
+	Vault     string
+	AgeKey    string
+	VaultType string
 }
 
 func (c *TemplateConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -43,7 +44,7 @@ func (c *TemplateConfigCmd) RunE(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func AddTemplateConfigCmd(parentCmd *cobra.Command, opts *GlobalOptions) {
+func AddTemplateConfigCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 	configCmd := &TemplateConfigCmd{
 		cmd: &cobra.Command{
 			Use:   "config",
@@ -65,7 +66,7 @@ Template syntax in config.yaml:
   caCert: "{{ secret "caCert" "file.content" }}"
 
 Secret names and selectors must match entries in the prod.vault.yaml file.`),
-			Example: formatExamples("template config", []io.Example{
+			Example: util.FormatExamples("template config", []io.Example{
 				{
 					Cmd:  "--config config.yaml --vault prod.vault.yaml --age-key age_key.txt",
 					Desc: "Render config.yaml with secrets from prod.vault.yaml",
@@ -77,14 +78,14 @@ Secret names and selectors must match entries in the prod.vault.yaml file.`),
 	}
 
 	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.Config, "config", "c", "", "Path to the config.yaml template to render (required)")
-	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.Vault, "vault", "v", "", "Path to the SOPS-encrypted prod.vault.yaml file (required)")
-	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.AgeKey, "age-key", "k", "", "Path to the age key file used to decrypt the vault (required)")
+	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.Vault, "vault", "v", "", "Path to the prod.vault.yaml file (required)")
+	configCmd.cmd.Flags().StringVarP(&configCmd.Opts.AgeKey, "age-key", "k", "", "Path to the age key file (required for sops unless an age key environment variable is set)")
+	configCmd.cmd.Flags().StringVar(&configCmd.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
 
 	util.MarkFlagRequired(configCmd.cmd, "config")
 	util.MarkFlagRequired(configCmd.cmd, "vault")
-	util.MarkFlagRequired(configCmd.cmd, "age-key")
 
-	AddCmd(parentCmd, configCmd.cmd)
+	util.AddCmd(parentCmd, configCmd.cmd)
 
 	configCmd.cmd.RunE = configCmd.RunE
 }
@@ -95,7 +96,12 @@ func (c *TemplateConfigCmd) Render() ([]byte, error) {
 		return nil, fmt.Errorf("failed to read config file %s: %w", c.Opts.Config, err)
 	}
 
-	store := installer.NewLazyVaultTemplatingSecretStore(c.Opts.Vault, c.Opts.AgeKey)
+	backend, err := vault.NewFromString(c.Opts.VaultType, vault.Options{Path: c.Opts.Vault, AgeKey: c.Opts.AgeKey})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load vault: %w", err)
+	}
+
+	store := vault.NewLazyVaultTemplatingSecretStoreWithVault(backend)
 	rendered, err := configtemplating.RenderInstallConfigTemplate(data, store)
 	if err != nil {
 		return nil, fmt.Errorf("failed to render config template: %w", err)

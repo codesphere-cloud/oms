@@ -24,6 +24,12 @@ oms update install-config [flags]
 # Update PostgreSQL primary IP and regenerate certificates
 $ oms update install-config --postgres-primary-ip 10.10.0.4 --config config.yaml --vault prod.vault.yaml
 
+# Set the primary PostgreSQL hostname when mode is install
+$ oms update install-config --postgres-server postgres-1 --config config.yaml --vault prod.vault.yaml
+
+# Set the PostgreSQL connection address when mode is external
+$ oms update install-config --postgres-server db.example.com:5432 --config config.yaml --vault prod.vault.yaml
+
 # Update Codesphere domain
 $ oms update install-config --domain new.example.com --config config.yaml --vault prod.vault.yaml
 
@@ -42,6 +48,7 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --acme-enabled                                 Enable ACME certificate issuer
       --acme-issuer-name string                      Name for the ACME ClusterIssuer
       --acme-server string                           ACME server URL
+      --age-key string                               Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
       --ceph-nodes-subnet string                     Ceph nodes subnet
       --cluster-gateway-ips strings                  Cluster gateway IP addresses (comma-separated)
       --cluster-gateway-service-type string          Cluster gateway service type
@@ -55,15 +62,16 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --k8s-api-server string                        Kubernetes API server host
       --k8s-pod-cidr string                          Kubernetes Pod CIDR
       --k8s-service-cidr string                      Kubernetes Service CIDR
-      --postgres-primary-hostname string             Primary PostgreSQL server hostname
       --postgres-primary-ip string                   Primary PostgreSQL server IP
       --postgres-replica-ip string                   Replica PostgreSQL server IP
       --postgres-replica-name string                 Replica PostgreSQL server name
-      --postgres-server-address string               PostgreSQL server address (for external mode)
+      --postgres-server string                       PostgreSQL server: primary hostname in install mode, connection address in external mode
       --public-ip string                             Codesphere public IP address
       --vault string                                 Path to existing prod.vault.yaml file (default "prod.vault.yaml")
+      --vault-type string                            Vault storage type (sops or plain) (default "sops")
       --with-comments                                Add helpful comments to the generated YAML files
       --workspace-hosting-base-domain string         Workspace hosting base domain
+  -y, --yes                                          Auto-approve every change to the vault (regenerated certificates and missing secrets)
 ```
 
 ### SEE ALSO

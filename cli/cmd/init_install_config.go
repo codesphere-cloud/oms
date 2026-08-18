@@ -9,23 +9,26 @@ import (
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
 type InitInstallConfigCmd struct {
 	cmd        *cobra.Command
 	Opts       *InitInstallConfigOpts
-	FileWriter util.FileIO
+	FileWriter intutil.FileIO
 }
 
 type InitInstallConfigOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 
 	ConfigFile string
 	VaultFile  string
+	VaultType  string
+	AgeKey     string
 
 	Profile              string
 	AnsibleInventoryFile string
@@ -96,15 +99,26 @@ type InitInstallConfigOpts struct {
 	CodesphereOpenBaoEngine   string
 	CodesphereOpenBaoUser     string
 	CodesphereOpenBaoPassword string
+
+	OpenfgaBackupsEnabled         bool
+	OpenfgaBackupsDestinationPath string
+	OpenfgaBackupsEndpointURL     string
+	OpenfgaBackupsSchedule        string
+	OpenfgaBackupsRetentionPolicy string
+	OpenfgaBackupsAccessKeyID     string
+	OpenfgaBackupsSecretAccessKey string
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
-	icg := installer.NewInstallConfigManager()
+	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
+	}
 
 	return c.InitInstallConfig(icg)
 }
 
-func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
+func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c := InitInstallConfigCmd{
 		cmd: &cobra.Command{
 			Use:   "install-config",
@@ -127,7 +141,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 			- production: HA multi-node setup
 			- minimal: Minimal testing setup
 			`),
-			Example: formatExamples("init install-config", []csio.Example{
+			Example: util.FormatExamples("init install-config", []csio.Example{
 				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
 				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
 				{Cmd: "--profile production -c config.yaml --vault prod.vault.yaml", Desc: "Use production profile"},
@@ -136,11 +150,13 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 			}),
 		},
 		Opts:       &InitInstallConfigOpts{GlobalOptions: opts},
-		FileWriter: util.NewFilesystemWriter(),
+		FileWriter: intutil.NewFilesystemWriter(),
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
+	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
+	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
 	c.cmd.Flags().StringVar(&c.Opts.AnsibleInventoryFile, "ansible-inventory", "", "Path to Ansible inventory file to import host information from")
@@ -162,7 +178,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 
 	// Postgres
 	c.cmd.Flags().StringVar(&c.Opts.PostgresMode, "postgres-mode", "", "PostgreSQL setup mode (install/external)")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server address. Required when using external mode.")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server", "", "PostgreSQL server: primary hostname in install mode, connection address in external mode")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
 
 	// K8s
@@ -190,11 +206,20 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUser, "openbao-user", "admin", "Username for OpenBao authentication")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoPassword, "openbao-password", "", "Password for OpenBao authentication")
 
+	// OpenFGA database backups
+	c.cmd.Flags().BoolVar(&c.Opts.OpenfgaBackupsEnabled, "openfga-backups-enabled", false, "Enable OpenFGA database backups")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsDestinationPath, "openfga-backups-destination", "", "Backup destination (S3 URL, e.g. s3://backup-openfga)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsEndpointURL, "openfga-backups-endpoint", "", "S3-compatible endpoint URL (e.g. https://storage.googleapis.com)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsSchedule, "openfga-backups-schedule", "", "Backup schedule (6-field cron, empty for chart default)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsRetentionPolicy, "openfga-backups-retention", "", "Retention policy (e.g. 7d, empty for chart default)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsAccessKeyID, "openfga-backups-access-key-id", "", "S3 access key ID for OpenFGA backups")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsSecretAccessKey, "openfga-backups-secret-access-key", "", "S3 secret access key for OpenFGA backups")
+
 	util.MarkFlagRequired(c.cmd, "config")
 	util.MarkFlagRequired(c.cmd, "vault")
 
 	c.cmd.RunE = c.RunE
-	AddCmd(init, c.cmd)
+	util.AddCmd(init, c.cmd)
 }
 
 func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {
@@ -279,16 +304,7 @@ func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println(strings.Repeat("=", 70))
 
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
-	log.Println("   Keep the vault file secure and encrypt it with SOPS before storing.")
-
-	log.Println("\nNext steps:")
-	log.Println("1. Review the generated config.yaml and prod.vault.yaml")
-	log.Println("2. Install SOPS and Age: brew install sops age")
-	log.Println("3. Generate an Age keypair: age-keygen -o age_key.txt")
-	log.Println("4. Encrypt the vault file:")
-	log.Printf("   age-keygen -y age_key.txt  # Get public key\n")
-	log.Printf("   sops --encrypt --age <PUBLIC_KEY> --in-place %s\n", c.Opts.VaultFile)
-	log.Println("5. Run the Codesphere installer with these configuration files")
+	log.Println("   Keep the vault file and its decryption key secure.")
 	log.Println()
 }
 
@@ -308,6 +324,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 
 	if c.Opts.VaultFile != "" {
 		log.Printf("Reading vault file: %s\n", c.Opts.VaultFile)
+
 		err := icg.LoadVaultFromFile(c.Opts.VaultFile)
 		if err != nil {
 			return fmt.Errorf("failed to load vault file: %w", err)
@@ -320,6 +337,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	}
 
 	log.Println("Configuration is valid!")
+
 	return nil
 }
 
@@ -350,18 +368,24 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		config.Postgres.Mode = c.Opts.PostgresMode
 	}
 
+	postgresPrimaryHostname, postgresServerAddress := determinePostgresServerConfig(
+		config.Postgres.Mode,
+		c.Opts.PostgresServerAddress,
+		c.Opts.PostgresPrimaryHostname,
+		config.Postgres.ServerAddress,
+	)
 	if c.Opts.PostgresServerAddress != "" {
-		config.Postgres.ServerAddress = c.Opts.PostgresServerAddress
+		config.Postgres.ServerAddress = postgresServerAddress
 	}
 
-	if c.Opts.PostgresPrimaryHostname != "" && c.Opts.PostgresPrimaryIP != "" {
+	if postgresPrimaryHostname != "" || c.Opts.PostgresPrimaryIP != "" {
 		if config.Postgres.Primary == nil {
-			config.Postgres.Primary = &files.PostgresPrimaryConfig{
-				Hostname: c.Opts.PostgresPrimaryHostname,
-				IP:       c.Opts.PostgresPrimaryIP,
-			}
-		} else {
-			config.Postgres.Primary.Hostname = c.Opts.PostgresPrimaryHostname
+			config.Postgres.Primary = &files.PostgresPrimaryConfig{}
+		}
+		if postgresPrimaryHostname != "" {
+			config.Postgres.Primary.Hostname = postgresPrimaryHostname
+		}
+		if c.Opts.PostgresPrimaryIP != "" {
 			config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
 		}
 	}
@@ -461,24 +485,25 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 
 	// ACME configuration
 	if c.Opts.ACMEEnabled {
-		if config.Codesphere.CertIssuer.Acme == nil {
-			config.Codesphere.CertIssuer.Acme = &files.ACMEConfig{}
+		certIssuer := config.Codesphere.EnsureCertIssuer()
+		if certIssuer.Acme == nil {
+			certIssuer.Acme = &files.ACMEConfig{}
 		}
-		config.Codesphere.CertIssuer.Type = files.CertIssuerTypeACME
-		config.Codesphere.CertIssuer.Acme.Enabled = true
+		certIssuer.Type = files.CertIssuerTypeACME
+		certIssuer.Acme.Enabled = true
 
 		if c.Opts.ACMEIssuerName != "" {
-			config.Codesphere.CertIssuer.Acme.Name = c.Opts.ACMEIssuerName
+			certIssuer.Acme.Name = c.Opts.ACMEIssuerName
 		}
 		if c.Opts.ACMEEmail != "" {
-			config.Codesphere.CertIssuer.Acme.Email = c.Opts.ACMEEmail
+			certIssuer.Acme.Email = c.Opts.ACMEEmail
 		}
 		if c.Opts.ACMEServer != "" {
-			config.Codesphere.CertIssuer.Acme.Server = c.Opts.ACMEServer
+			certIssuer.Acme.Server = c.Opts.ACMEServer
 		}
 
 		if c.Opts.ACMEEABKeyID != "" {
-			config.Codesphere.CertIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
+			certIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
 		}
 		if c.Opts.ACMEEABMacKey != "" {
 			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMEEABMacKey}})
@@ -486,7 +511,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 
 		// Configure DNS-01 solver
 		if c.Opts.ACMEDNS01Provider != "" {
-			config.Codesphere.CertIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{
+			certIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{
 				Provider: c.Opts.ACMEDNS01Provider,
 			}
 		}
@@ -530,6 +555,32 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		}
 	}
 
+	// OpenFGA database backups
+	if c.Opts.OpenfgaBackupsEnabled {
+		if config.Codesphere.OpenfgaBackups == nil {
+			config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{}
+		}
+		config.Codesphere.OpenfgaBackups.Enabled = true
+		if c.Opts.OpenfgaBackupsDestinationPath != "" {
+			config.Codesphere.OpenfgaBackups.DestinationPath = c.Opts.OpenfgaBackupsDestinationPath
+		}
+		if c.Opts.OpenfgaBackupsEndpointURL != "" {
+			config.Codesphere.OpenfgaBackups.EndpointURL = c.Opts.OpenfgaBackupsEndpointURL
+		}
+		if c.Opts.OpenfgaBackupsSchedule != "" {
+			config.Codesphere.OpenfgaBackups.Schedule = c.Opts.OpenfgaBackupsSchedule
+		}
+		if c.Opts.OpenfgaBackupsRetentionPolicy != "" {
+			config.Codesphere.OpenfgaBackups.RetentionPolicy = c.Opts.OpenfgaBackupsRetentionPolicy
+		}
+		if c.Opts.OpenfgaBackupsAccessKeyID != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupAccessKeyId, Fields: &files.SecretFields{Password: c.Opts.OpenfgaBackupsAccessKeyID}})
+		}
+		if c.Opts.OpenfgaBackupsSecretAccessKey != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: c.Opts.OpenfgaBackupsSecretAccessKey}})
+		}
+	}
+
 	// Plans
 	if c.Opts.CodesphereHostingPlanCPUTenth != 0 || c.Opts.CodesphereHostingPlanMemoryMb != 0 ||
 		c.Opts.CodesphereHostingPlanStorageMb != 0 || c.Opts.CodesphereHostingPlanTempStorageMb != 0 {
@@ -559,4 +610,14 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	}
 
 	return config
+}
+
+func determinePostgresServerConfig(postgresMode, postgresServer, primaryHostname, serverAddress string) (string, string) {
+	if postgresServer == "" {
+		return primaryHostname, serverAddress
+	}
+	if postgresMode == "install" {
+		return postgresServer, ""
+	}
+	return primaryHostname, postgresServer
 }

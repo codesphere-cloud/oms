@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +13,7 @@ type InitCmd struct {
 	cmd *cobra.Command
 }
 
-func AddInitCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddInitCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	init := InitCmd{
 		cmd: &cobra.Command{
 			Use:   "init",
@@ -20,6 +21,6 @@ func AddInitCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Long:  io.Long(`Initialize configuration files for Codesphere installation and other components.`),
 		},
 	}
-	AddCmd(rootCmd, init.cmd)
+	util.AddCmd(rootCmd, init.cmd)
 	AddInitInstallConfigCmd(init.cmd, opts)
 }

@@ -5,6 +5,8 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +14,7 @@ type RevokeCmd struct {
 	cmd *cobra.Command
 }
 
-func AddRevokeCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddRevokeCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	revoke := RevokeCmd{
 		cmd: &cobra.Command{
 			Use:   "revoke",
@@ -21,6 +23,6 @@ func AddRevokeCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 				eg. api keys.`),
 		},
 	}
-	AddCmd(rootCmd, revoke.cmd)
-	AddRevokeAPIKeyCmd(revoke.cmd, opts)
+	util.AddCmd(rootCmd, revoke.cmd)
+	apikey.AddRevokeCmd(revoke.cmd, opts)
 }

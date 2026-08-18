@@ -8,26 +8,15 @@ import (
 	"os"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/spf13/cobra"
 )
 
-type GlobalOptions struct {
-	OmsPortalApiKey string
-}
-
-// AddCmd adds a command, inheriting the parent's Args validator if not explicitly set.
-// Individual commands that need different argument rules can override this by setting their own Args validator.
-func AddCmd(parent *cobra.Command, cmd *cobra.Command) {
-	if cmd.Args == nil {
-		cmd.Args = parent.Args
-	}
-	parent.AddCommand(cmd)
-}
-
 // GetRootCmd adds all child commands to the root command and sets flags appropriately.
 func GetRootCmd() *cobra.Command {
-	opts := &GlobalOptions{}
+	opts := &util.GlobalOptions{}
 	rootCmd := &cobra.Command{
 		Use:   "oms",
 		Short: "Codesphere Operations Management System (OMS)",
@@ -79,7 +68,7 @@ func GetRootCmd() *cobra.Command {
 	AddLicensesCmd(rootCmd)
 
 	// OMS API key management commands
-	AddRegisterCmd(rootCmd, opts)
+	apikey.AddRegisterCmd(rootCmd, opts)
 	AddRevokeCmd(rootCmd, opts)
 
 	// Smoke test commands
@@ -88,7 +77,29 @@ func GetRootCmd() *cobra.Command {
 	// Resource creation commands
 	AddCreateCmd(rootCmd, opts)
 
+	// Cluster administration commands
+	AddAddClusterAdminCmd(rootCmd, opts)
+
+	silenceUsageOnRunErrors(rootCmd)
+
 	return rootCmd
+}
+
+// silenceUsageOnRunErrors prevents Cobra from printing command usage for
+// operational errors returned by RunE. Argument, flag, and required-flag
+// validation happens before RunE, so those errors still include usage.
+func silenceUsageOnRunErrors(command *cobra.Command) {
+	if command.RunE != nil {
+		runE := command.RunE
+		command.RunE = func(cmd *cobra.Command, args []string) error {
+			cmd.Root().SilenceUsage = true
+			return runE(cmd, args)
+		}
+	}
+
+	for _, child := range command.Commands() {
+		silenceUsageOnRunErrors(child)
+	}
 }
 
 // Execute executes the root command. This is called by main.main(). It only needs to happen once to the rootCmd.

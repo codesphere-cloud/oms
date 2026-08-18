@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
@@ -20,13 +21,13 @@ var _ = Describe("BuildImageCmd", func() {
 	var (
 		c          cmd.BuildImageCmd
 		opts       cmd.BuildImageOpts
-		globalOpts *cmd.GlobalOptions
+		globalOpts *util.GlobalOptions
 		mockEnv    *env.MockEnv
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = &util.GlobalOptions{}
 		opts = cmd.BuildImageOpts{
 			GlobalOptions: globalOpts,
 			Dockerfile:    "Dockerfile",
@@ -129,12 +130,12 @@ var _ = Describe("BuildImageCmd", func() {
 var _ = Describe("AddBuildImageCmd", func() {
 	var (
 		parentCmd  *cobra.Command
-		globalOpts *cmd.GlobalOptions
+		globalOpts *util.GlobalOptions
 	)
 
 	BeforeEach(func() {
 		parentCmd = &cobra.Command{Use: "build"}
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = &util.GlobalOptions{}
 	})
 
 	It("adds the image command with correct properties and flags", func() {

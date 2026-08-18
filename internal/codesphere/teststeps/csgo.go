@@ -69,7 +69,7 @@ func getTeamID(c *SmoketestCodesphereOpts) (int, error) {
 	if c.TeamID != "" {
 		return strconv.Atoi(c.TeamID)
 	}
-	teams, err := c.Client.ListTeams()
+	teams, err := c.Client.ListTeams("")
 	if err != nil {
 		return 0, fmt.Errorf("failed to get teams: %w", err)
 	}

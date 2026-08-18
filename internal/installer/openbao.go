@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	k8s "github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,8 +35,8 @@ var vaultCRTemplate []byte
 const (
 	openBaoUnsealSecretName = "openbao-unseal-keys"
 	DefaultOpenBaoNamespace = "vault"
-	openBaoImage            = "quay.io/openbao/openbao:2.1.0"
-	bankVaultsImage         = "ghcr.io/bank-vaults/bank-vaults:v1.31.3"
+	openBaoImage            = "ghcr.io/codesphere-cloud/docker/quay.io/openbao/openbao-cs-patched:2.5.4"
+	bankVaultsImage         = "ghcr.io/codesphere-cloud/docker/banzaicloud/bank-vaults:1.19.0"
 	bankVaultsChartRepo     = "oci://ghcr.io/bank-vaults/helm-charts"
 	bankVaultsChartName     = "vault-operator"
 	bankVaultsChartVersion  = "1.22.5"
@@ -279,7 +280,7 @@ func (o *OpenBaoInstaller) PreFlightDRCheck() error {
 
 	o.Logger.Logf("Found existing DR backup at %s", o.Config.DRBackupPath)
 
-	decrypted, err := DecryptFileWithSOPS(o.Config.DRBackupPath, o.Config.AgeKeyPath)
+	decrypted, err := sops.DecryptFile(o.Config.DRBackupPath, o.Config.AgeKeyPath)
 	if err != nil {
 		return err
 	}
@@ -686,7 +687,7 @@ func (o *OpenBaoInstaller) ExtractAndEncrypt() error {
 		return fmt.Errorf("closing temp backup file: %w", err)
 	}
 
-	if err := EncryptFileWithSOPS(tmpPath, o.Config.DRBackupPath, o.Config.AgeRecipient); err != nil {
+	if err := sops.EncryptFile(tmpPath, o.Config.DRBackupPath, o.Config.AgeRecipient); err != nil {
 		return fmt.Errorf("encrypting DR backup: %w", err)
 	}
 

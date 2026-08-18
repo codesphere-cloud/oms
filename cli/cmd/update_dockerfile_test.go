@@ -12,10 +12,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/system"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 const sampleDockerfileContent = `FROM workspace-agent:20.04
@@ -28,13 +29,13 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 	var (
 		c          cmd.UpdateDockerfileCmd
 		opts       cmd.UpdateDockerfileOpts
-		globalOpts *cmd.GlobalOptions
+		globalOpts *util.GlobalOptions
 		mockEnv    *env.MockEnv
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = &util.GlobalOptions{}
 		opts = cmd.UpdateDockerfileOpts{
 			GlobalOptions: globalOpts,
 			Package:       "codesphere-v1.68.0.tar.gz",
@@ -98,7 +99,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("fails when dockerfile cannot be opened", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
+			mockFileIO := intutil.NewMockFileIO(GinkgoT())
 
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Baseimage = ""
@@ -137,7 +138,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("fails when writing updated dockerfile fails", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
+			mockFileIO := intutil.NewMockFileIO(GinkgoT())
 
 			pr, pw, err := os.Pipe()
 			Expect(err).To(BeNil())
@@ -166,7 +167,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("successfully updates dockerfile and loads image", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
+			mockFileIO := intutil.NewMockFileIO(GinkgoT())
 
 			pr, pw, err := os.Pipe()
 			Expect(err).To(BeNil())
@@ -194,7 +195,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("uses force flag when extracting dependencies", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
+			mockFileIO := intutil.NewMockFileIO(GinkgoT())
 
 			pr, pw, err := os.Pipe()
 			Expect(err).To(BeNil())
@@ -222,7 +223,7 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 		It("handles different base image names correctly", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
-			mockFileIO := util.NewMockFileIO(GinkgoT())
+			mockFileIO := intutil.NewMockFileIO(GinkgoT())
 
 			pr, pw, err := os.Pipe()
 			Expect(err).To(BeNil())
@@ -252,12 +253,12 @@ var _ = Describe("UpdateDockerfileCmd", func() {
 var _ = Describe("AddUpdateDockerfileCmd", func() {
 	var (
 		parentCmd  *cobra.Command
-		globalOpts *cmd.GlobalOptions
+		globalOpts *util.GlobalOptions
 	)
 
 	BeforeEach(func() {
 		parentCmd = &cobra.Command{Use: "update"}
-		globalOpts = &cmd.GlobalOptions{}
+		globalOpts = &util.GlobalOptions{}
 	})
 
 	It("adds the dockerfile command with correct properties and flags", func() {

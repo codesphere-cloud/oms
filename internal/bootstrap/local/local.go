@@ -16,6 +16,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	"github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -66,13 +68,16 @@ type LocalBootstrapper struct {
 	ageRecipient string
 	// ageKeyPath is the filesystem path to the age private key file.
 	ageKeyPath string
+	// argoCDAndAppsInstall is reused for the ArgoCD, vault, and pc-apps stages.
+	argoCDAndAppsInstall *argocd.AppInstaller
 }
 
 type CodesphereEnvironment struct {
-	BaseDomain   string          `json:"base_domain"`
-	Experiments  []string        `json:"experiments"`
-	FeatureFlags map[string]bool `json:"feature_flags"`
-	Profile      string          `json:"profile"`
+	BaseDomain    string   `json:"base_domain"`
+	InternalFlags []string `json:"internal"`
+	PreviewFlags  []string `json:"preview"`
+	FeatureFlags  []string `json:"feature_flags"`
+	Profile       string   `json:"profile"`
 	// Installer
 	InstallVersion string `json:"install_version"`
 	InstallHash    string `json:"install_hash"`
@@ -225,21 +230,35 @@ func (b *LocalBootstrapper) Bootstrap() error {
 	return nil
 }
 
-func (b *LocalBootstrapper) BootstrapArgoCD() error {
+func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*argocd.AppInstaller, error) {
 	// renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
-	install, err := argocd.NewInstaller(argocd.InstallerConfig{
+	argoCDInstall, err := argocd.NewInstaller(argocd.InstallerConfig{
 		Version:        "9.5.21",
 		OciPassword:    b.Env.RegistryPassword,
 		OciRegistryURL: strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://"),
 		FullInstall:    true,
+		ForceConflicts: true,
+		RESTConfig:     b.restConfig,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
+		return nil, fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 	}
-	if err := install.Install(); err != nil {
-		return fmt.Errorf("failed to install chart ArgoCD: %w", err)
+	return argocd.NewAppInstaller(argocd.AppInstallerConfig{
+		Config:     *b.Env.InstallConfig,
+		Vault:      b.icg.GetVault(),
+		RESTConfig: b.restConfig,
+		KubeClient: b.kubeClient,
+		Installer:  argoCDInstall,
+	}), nil
+}
+
+func (b *LocalBootstrapper) BootstrapArgoCD() error {
+	install, err := b.newArgoCDAndAppsInstall()
+	if err != nil {
+		return err
 	}
-	return nil
+	b.argoCDAndAppsInstall = install
+	return install.InstallArgoCD()
 }
 
 func (b *LocalBootstrapper) EnsureNamespaces() error {
@@ -383,7 +402,6 @@ func (b *LocalBootstrapper) ReadClusterCIDRs() (podCIDR string, serviceCIDR stri
 		log.Printf("can't read service CIDR from cluster, trying proc filesystem next: %s", err)
 
 		serviceCIDR, err = b.readServiceCIDRFromProc()
-
 		if err != nil {
 			err = fmt.Errorf("failed to determine service CIDR: %w", err)
 		}
@@ -492,32 +510,22 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 }
 
 func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
-	if !b.fw.Exists(b.Env.SecretsFilePath) {
-		return nil
-	}
-
-	if err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file for config templating: %w", err)
 	}
-
 	return nil
 }
 
 func (b *LocalBootstrapper) EnsureSecrets() error {
-	if b.fw.Exists(b.Env.SecretsFilePath) {
-		err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to load vault file: %w", err)
-		}
+	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+		return fmt.Errorf("failed to load vault file: %w", err)
 	}
-
 	b.Env.Vault = b.icg.GetVault()
-
 	return nil
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	recipient, keyPath, err := installer.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
+	recipient, keyPath, err := sops.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
@@ -611,8 +619,10 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	b.Env.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
 
 	// TODO: certificates
-	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
-		Type: "self-signed",
+	if b.Env.InstallConfig.Codesphere.CertIssuer == nil {
+		b.Env.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
+			Type: "self-signed",
+		}
 	}
 
 	b.Env.InstallConfig.Codesphere.Domain = b.Env.BaseDomain
@@ -636,14 +646,12 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	}
 	b.Env.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
 
-	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
-	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
+	b.Env.InstallConfig.Codesphere.Internal = b.Env.InternalFlags
+	b.Env.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
+	b.Env.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
 
-	if !b.Env.ExistingConfigUsed {
-		err := b.icg.GenerateSecrets()
-		if err != nil {
-			return fmt.Errorf("failed to generate secrets: %w", err)
-		}
+	if err := b.icg.GenerateSecrets(); err != nil {
+		return fmt.Errorf("failed to generate secrets: %w", err)
 	}
 
 	if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
@@ -653,13 +661,18 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
-	if err := installer.EncryptFileWithSOPS(b.Env.SecretsFilePath, filepath.Join(b.Env.InstallConfig.Secrets.BaseDir, "prod.vault.yaml"), b.ageRecipient); err != nil {
-		return fmt.Errorf("failed to encrypt vault file: %w", err)
+
+	installerVault, err := vault.New(vault.TypeSOPS, vault.Options{
+		Path:         filepath.Join(b.Env.InstallConfig.Secrets.BaseDir, "prod.vault.yaml"),
+		AgeKey:       b.ageKeyPath,
+		WithComments: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to load installer vault: %w", err)
 	}
 
-	creator := installer.NewVaultSecretCreator(b.kubeClient)
-	if err := creator.CreateSecretFromVault(b.ctx, b.icg.GetVault(), installer.VaultSecretNamespace, installer.VaultSecretName); err != nil {
-		return fmt.Errorf("failed to create vault secret: %w", err)
+	if err := installerVault.Save(b.Env.Vault); err != nil {
+		return fmt.Errorf("failed to save installer vault: %w", err)
 	}
 
 	return nil

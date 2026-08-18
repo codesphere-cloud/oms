@@ -92,8 +92,9 @@ var _ = Describe("Installconfig & Secrets", func() {
 			DNSZoneName:           "test-zone",
 			SSHPublicKeyPath:      "key.pub",
 			ProjectID:             "pid",
-			Experiments:           gcp.DefaultExperiments,
-			FeatureFlags:          map[string]bool{},
+			InternalFlags:         gcp.DefaultInternalFlags,
+			PreviewFlags:          gcp.DefaultPreviewFlags,
+			FeatureFlags:          gcp.DefaultFeatureFlags,
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{
@@ -114,7 +115,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			})
 			It("uses existing when config file exists", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -124,8 +125,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 			It("loads existing vault before existing config for templating", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
-				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -157,7 +157,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				It("overwrites an existing config", func() {
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-					fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+					icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 					icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -170,7 +170,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 				err := bs.EnsureInstallConfig()
@@ -265,7 +265,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-					fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+					icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 					err := bs.EnsureInstallConfig()
@@ -280,8 +280,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 	Describe("EnsureSecrets", func() {
 		Describe("Valid EnsureSecrets", func() {
 			It("loads existing secrets file", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
-				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -289,7 +288,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			})
 
 			It("skips when secrets file missing", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -299,8 +298,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 		Describe("Invalid cases", func() {
 			It("returns error when secrets file load fails", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
-				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
 
 				err := bs.EnsureSecrets()
 				Expect(err).To(HaveOccurred())
@@ -319,6 +317,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 		})
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
+				csEnv.SshProxyIP = "3.3.3.3"
+
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -328,11 +328,23 @@ var _ = Describe("Installconfig & Secrets", func() {
 				err := bs.UpdateInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
 
+				applications := bs.Env.InstallConfig.PcApps["applications"].(map[string]interface{})
+				sshProxy := applications["ssh-workspace-proxy"].(map[string]interface{})
+				Expect(sshProxy["enabled"]).To(Equal(true))
+				sshProxyValues := sshProxy["valuesObject"].(map[string]interface{})
+				sshProxyService := sshProxyValues["service"].(map[string]interface{})
+				Expect(sshProxyService["enabled"]).To(Equal(true))
+				Expect(sshProxyService["type"]).To(Equal("LoadBalancer"))
+				Expect(sshProxyService["loadBalancerIP"]).To(Equal("3.3.3.3"))
+				sshProxyAnnotations := sshProxyService["annotations"].(map[string]interface{})
+				Expect(sshProxyAnnotations["cloud.google.com/load-balancer-ipv4"]).To(Equal("3.3.3.3"))
+
 				Expect(bs.Env.InstallConfig.Datacenter.ID).To(Equal(1))
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("dev"))
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(map[string]bool{}))
-				Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(gcp.DefaultExperiments))
+				Expect(bs.Env.InstallConfig.Codesphere.Internal).To(Equal(gcp.DefaultInternalFlags))
+				Expect(bs.Env.InstallConfig.Codesphere.Preview).To(Equal(util.StringSliceToBoolMap(gcp.DefaultPreviewFlags)))
 
 				expectedInstallURI := "https://github.com/apps/" + bs.Env.GitHubAppName + "/installations/new"
 				Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub.OAuth.InstallationURI).To(Equal(expectedInstallURI))
@@ -366,11 +378,11 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("staging"))
 			})
-			Context("When Experiments are set in CodesphereEnvironment", func() {
+			Context("When internal flags are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
-					csEnv.Experiments = []string{"fake-exp1", "fake-exp2"}
+					csEnv.InternalFlags = []string{"fake-exp1", "fake-exp2"}
 				})
-				It("uses those experiments instead of defaults", func() {
+				It("uses those internal flags instead of defaults", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -380,12 +392,29 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.Experiments).To(Equal(csEnv.Experiments))
+					Expect(bs.Env.InstallConfig.Codesphere.Internal).To(Equal(csEnv.InternalFlags))
+				})
+			})
+			Context("When preview flags are set in CodesphereEnvironment", func() {
+				BeforeEach(func() {
+					csEnv.PreviewFlags = []string{"fake-preview1", "fake-preview2"}
+				})
+				It("uses those preview flags instead of defaults", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.Preview).To(Equal(util.StringSliceToBoolMap(csEnv.PreviewFlags)))
 				})
 			})
 			Context("When feature flags are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
-					csEnv.FeatureFlags = map[string]bool{"fake-flag1": true, "fake-flag2": true}
+					csEnv.FeatureFlags = []string{"fake-flag1", "fake-flag2"}
 				})
 				It("uses those feature flags", func() {
 					icg.EXPECT().GenerateSecrets().Return(nil)
@@ -397,7 +426,41 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(csEnv.FeatureFlags))
+					Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(util.StringSliceToBoolMap(csEnv.FeatureFlags)))
+				})
+			})
+			Context("When cluster admin email is set", func() {
+				BeforeEach(func() {
+					csEnv.ClusterAdminEmail = "admin@codesphere.com"
+				})
+				It("writes the email to the install config", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.ClusterAdminEmail).To(Equal("admin@codesphere.com"))
+				})
+			})
+			Context("When cluster admin email is not set", func() {
+				BeforeEach(func() {
+					csEnv.InstallConfig.Codesphere.ClusterAdminEmail = "existing@codesphere.com"
+				})
+				It("keeps the value of an existing config", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(bs.Env.InstallConfig.Codesphere.ClusterAdminEmail).To(Equal("existing@codesphere.com"))
 				})
 			})
 			Context("When GitHub App name is not set ", func() {
@@ -708,6 +771,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer).NotTo(BeNil())
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.Server).To(Equal("https://dv.acme-v02.api.pki.goog/directory"))
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.EABKeyID).To(Equal("fake-eab-key-id"))
 					Expect(vault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password).To(Equal("fake-eab-mac-key"))
@@ -722,6 +786,24 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to obtain Google Public CA EAB credentials"))
+				})
+			})
+
+			Context("When ACME staging is enabled", func() {
+				BeforeEach(func() {
+					csEnv.ACMEStaging = true
+				})
+
+				It("uses the Let's Encrypt staging directory", func() {
+					icg.EXPECT().GenerateSecrets().Return(nil)
+					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+					nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).NotTo(HaveOccurred())
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer).NotTo(BeNil())
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.Server).To(Equal("https://acme-staging-v02.api.letsencrypt.org/directory"))
 				})
 			})
 
@@ -1059,6 +1141,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("ExistingConfigUsed", func() {
 			BeforeEach(func() {
 				csEnv.ExistingConfigUsed = true
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
 			})
 
 			Context("with unchanged IP and existing key", func() {
@@ -1088,7 +1172,6 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					icg.AssertNotCalled(GinkgoT(), "GenerateSecrets")
 					Expect(vault.GetSecret(files.SecretPostgresPrimaryServerKeyPem).File.Content).To(Equal(origKey))
 					Expect(bs.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem).To(Equal(origCert))
 				})

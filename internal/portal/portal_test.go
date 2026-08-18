@@ -118,7 +118,7 @@ var _ = Describe("PortalClient", func() {
 		Context("HTTP Request has Status: TooManyRequests", func() {
 			BeforeEach(func() {
 				mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
-					func(req *http.Request) (*http.Response, error) {
+					func(_ *http.Request) (*http.Response, error) {
 						return &http.Response{
 							StatusCode: http.StatusTooManyRequests,
 						}, nil

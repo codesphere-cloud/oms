@@ -18,7 +18,10 @@ format:
 	go fmt ./...
 
 lint: install-build-deps
-	go tool golangci-lint run
+	go tool golangci-lint run -c .golangci-tmp.yml
+
+lint-changed: install-build-deps
+	go tool golangci-lint run -c .golangci.yml --new-from-merge-base=origin/main 
 
 install-build-deps:
 ifeq (, $(shell which copywrite))
@@ -40,6 +43,7 @@ docs:
 	mkdir docs
 	go run -ldflags="-X 'github.com/codesphere-cloud/oms/internal/version.binName=oms'" hack/gendocs/main.go
 	cp docs/oms.md docs/README.md
+	cp hack/gendocs/static/*.md docs/
 
 generate-license: generate
 	go tool go-licenses report --template .NOTICE.template ./... > NOTICE

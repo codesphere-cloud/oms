@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	stdio "io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,13 +17,15 @@ import (
 
 	"golang.org/x/term"
 
+	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
@@ -35,10 +38,12 @@ import (
 )
 
 type BootstrapLocalCmd struct {
-	cmd             *cobra.Command
-	CodesphereEnv   *local.CodesphereEnvironment
-	Yes             bool
-	FeatureFlagList []string
+	cmd           *cobra.Command
+	CodesphereEnv *local.CodesphereEnvironment
+	Yes           bool
+	// Experiments backs the deprecated --experiments flag; its values
+	// are folded into the internal bucket for backwards compatibility.
+	experiments []string
 }
 
 func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, args []string) error {
@@ -71,12 +76,15 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash (required when install-version is set)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallLocal, "install-local", "", "Path to a local installer package (tar.gz or unpacked directory)")
 	// Registry
-	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (optional)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username")
 
 	// Codesphere Environment
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.BaseDomain, "base-domain", "cs.local", "Base domain for Codesphere")
-	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.Experiments, "experiments", gcp.DefaultExperiments, "Experiments to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapLocalCmd.FeatureFlagList, "feature-flags", []string{}, "Feature flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapLocalCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
+	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
+	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapLocalCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.Profile, "profile", installer.PROFILE_DEV, "Profile to apply to the install config like resources (supported: dev, minimal, prod)")
 	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.K0s, "k0s", false, "Use k0s-specific configuration (required to deploy to k0s clusters)")
 
@@ -88,13 +96,13 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallConfigPath, "install-config", "", "Path to install config file (default: <install-dir>/config.yaml)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "", "Path to secrets file (default: <install-dir>/prod.vault.yaml)")
 	// ArgoCD integration
-	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.UseArgoCD, "argocd", false, "After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version")
+	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.UseArgoCD, "argocd", true, "After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDRegistryURL, "registry-url", "oci://ghcr.io/codesphere-cloud/charts", "OCI registry URL used for the ArgoCD helm pull secret (only relevant with --argocd)")
 	bootstrapLocalCmd.cmd.RunE = bootstrapLocalCmd.RunE
 
 	util.MarkFlagRequired(bootstrapLocalCmd.cmd, "registry-user")
 
-	AddCmd(parent, bootstrapLocalCmd.cmd)
+	util.AddCmd(parent, bootstrapLocalCmd.cmd)
 }
 
 func (c *BootstrapLocalCmd) BootstrapLocal() error {
@@ -124,13 +132,21 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 		return err
 	}
 
-	for _, flag := range c.FeatureFlagList {
-		c.CodesphereEnv.FeatureFlags[flag] = true
+	if c.cmd.Flags().Changed("experiments") {
+		if c.cmd.Flags().Changed("internal-flags") {
+			log.Printf("Warning: both --experiments and --internal-flags were set; ignoring deprecated --experiments values %v", c.experiments)
+		} else {
+			c.CodesphereEnv.InternalFlags = c.experiments
+		}
 	}
 
 	stlog := bootstrap.NewStepLogger(false)
-	icg := installer.NewInstallConfigManager()
-	fw := util.NewFilesystemWriter()
+
+	icg, err := installer.NewInstallConfigManager("plain", "")
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
+	}
+	fw := intutil.NewFilesystemWriter()
 	kubeClient, restConfig, err := c.GetKubeClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize Kubernetes client: %w", err)
@@ -221,6 +237,10 @@ func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Clien
 
 	if err := rookcephv1.AddToScheme(scheme); err != nil {
 		return nil, nil, fmt.Errorf("failed to add Rook Ceph scheme: %w", err)
+	}
+
+	if err := argov1alpha1.AddToScheme(scheme); err != nil {
+		return nil, nil, fmt.Errorf("failed to add ArgoCD scheme: %w", err)
 	}
 
 	kubeClient, err := ctrlclient.New(kubeConfig, ctrlclient.Options{Scheme: scheme})

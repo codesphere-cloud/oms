@@ -5,6 +5,7 @@ package files
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -40,6 +41,40 @@ func (v *InstallVault) SetSecret(entry SecretEntry) {
 	v.Secrets = append(v.Secrets, entry)
 }
 
+// RemoveSecret deletes the entry with the given name and reports whether one was removed.
+func (v *InstallVault) RemoveSecret(name string) bool {
+	before := len(v.Secrets)
+	v.Secrets = slices.DeleteFunc(v.Secrets, func(s SecretEntry) bool {
+		return s.Name == name
+	})
+	return len(v.Secrets) != before
+}
+
+// Clone returns a deep copy of the vault, so callers can derive a new vault without
+// aliasing the original's secret entries. A nil vault clones to nil, so a caller can pass
+// on a vault that was never loaded instead of guarding every call site.
+func (v *InstallVault) Clone() *InstallVault {
+	if v == nil {
+		return nil
+	}
+
+	clone := &InstallVault{Secrets: make([]SecretEntry, 0, len(v.Secrets))}
+	for _, entry := range v.Secrets {
+		copied := SecretEntry{Name: entry.Name}
+		if entry.File != nil {
+			file := *entry.File
+			copied.File = &file
+		}
+		if entry.Fields != nil {
+			fields := *entry.Fields
+			copied.Fields = &fields
+		}
+		clone.Secrets = append(clone.Secrets, copied)
+	}
+
+	return clone
+}
+
 func (v *InstallVault) Unmarshal(data []byte) error {
 	return yaml.Unmarshal(data, v)
 }
@@ -64,6 +99,8 @@ type SecretFields struct {
 type RootConfig struct {
 	GeneratedForVersion    string                        `yaml:"generatedForVersion,omitempty"`
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
+	DataCenters            []DatacenterConfig            `yaml:"dataCenters,omitempty"`
+	DefaultDataCenterID    int                           `yaml:"defaultDataCenterId,omitempty"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
@@ -83,6 +120,11 @@ type OperationsConfig struct {
 	Skip []string `yaml:"skip"`
 }
 
+// DatacenterConfig describes one data center. RootConfig.Datacenter is the data center an installer
+// run installs; RootConfig.DataCenters lists every data center of the installation, which the
+// installer needs to render the platform's data center picker. Both are the same in a
+// single-data-center installation, where DataCenters may be left empty: the installer then defaults
+// it to the local data center. DefaultDataCenterID likewise defaults to Datacenter.ID.
 type DatacenterConfig struct {
 	ID          int    `yaml:"id"`
 	Name        string `yaml:"name"`
@@ -309,11 +351,14 @@ type CodesphereConfig struct {
 	Domain                     string                 `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                 `yaml:"workspaceHostingBaseDomain"`
 	PublicIP                   string                 `yaml:"publicIp"`
-	CertIssuer                 CertIssuerConfig       `yaml:"certIssuer"`
+	CertIssuer                 *CertIssuerConfig      `yaml:"certIssuer,omitempty"`
 	CustomDomains              CustomDomainsConfig    `yaml:"customDomains"`
 	DNSServers                 []string               `yaml:"dnsServers"`
-	Experiments                []string               `yaml:"experiments"`
+	Experiments                []string               `yaml:"experiments,omitempty"`
+	Internal                   []string               `yaml:"internal"`
+	Preview                    map[string]bool        `yaml:"preview"`
 	Features                   map[string]bool        `yaml:"features"`
+	ClusterAdminEmail          string                 `yaml:"clusterAdminEmail,omitempty"`
 	ExtraCAPem                 string                 `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars      map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
 	ExtraWorkspaceFiles        []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
@@ -325,6 +370,8 @@ type CodesphereConfig struct {
 	OAuth                      *OAuthProvidersConfig  `yaml:"oauth,omitempty"`
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
+	OpenfgaBackups             *OpenfgaBackupsConfig  `yaml:"openfgaBackups,omitempty"`
+	OpenFga                    *OpenFgaConfig         `yaml:"openFga,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
 	TelemetryExport            *TelemetryExport       `yaml:"telemetryExport,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
@@ -345,6 +392,54 @@ type OpenBaoConfig struct {
 	Engine string `yaml:"engine,omitempty"`
 	URI    string `yaml:"uri,omitempty"`
 	User   string `yaml:"user,omitempty"`
+}
+
+// OpenfgaBackupsConfig is the friendly representation of the OpenFGA database
+// backup settings. On marshal it is translated into the openfga application
+// values under pcApps.applications.openfga (see buildOpenfgaBackupValues).
+type OpenfgaBackupsConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Schedule is an optional 6-field cron expression. When empty the chart default applies.
+	Schedule string `yaml:"schedule,omitempty"`
+	// DestinationPath is the S3-style backup target (e.g. s3://backup-openfga-dev). Required when enabled.
+	DestinationPath string `yaml:"destinationPath,omitempty"`
+	// EndpointURL is the S3-compatible endpoint (e.g. https://s3.de.io.cloud.ovh.net). Required when enabled.
+	EndpointURL string `yaml:"endpointURL,omitempty"`
+	// RetentionPolicy is optional (e.g. "7d"). When empty the chart default of "7d" applies.
+	RetentionPolicy string `yaml:"retentionPolicy,omitempty"`
+}
+
+// OpenFgaConfig configures the authorization store. One OpenFGA instance serves a whole
+// installation, so in a multi-data-center setup exactly one data center deploys and exposes
+// it (Deploy + Expose) and every other one only points at it (APIURL).
+type OpenFgaConfig struct {
+	// Deploy controls whether pc-applications deploys OpenFGA in this data center.
+	// Defaults to true when unset, matching the pc-applications chart.
+	Deploy *bool `yaml:"deploy,omitempty"`
+	// APIURL is the URL the Codesphere services reach OpenFGA at. Defaults to the
+	// in-cluster service of a locally deployed OpenFGA; required when Deploy is false.
+	APIURL string `yaml:"apiUrl,omitempty"`
+	// Expose publishes the deployed OpenFGA through the Codesphere gateway so the other
+	// data centers can reach it.
+	Expose *OpenFgaExposeConfig `yaml:"expose,omitempty"`
+}
+
+// OpenFgaExposeConfig publishes a locally deployed OpenFGA through the Codesphere gateway.
+type OpenFgaExposeConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Host OpenFGA is served under. Must resolve to this data center's public IP and
+	// is what the other data centers put in their APIURL.
+	Host string `yaml:"host,omitempty"`
+}
+
+// DeploysOpenFga reports whether pc-applications should deploy OpenFGA in this data center.
+func (c *OpenFgaConfig) DeploysOpenFga() bool {
+	return c == nil || c.Deploy == nil || *c.Deploy
+}
+
+// ExposesOpenFga reports whether the deployed OpenFGA is published through the gateway.
+func (c *OpenFgaConfig) ExposesOpenFga() bool {
+	return c != nil && c.Expose != nil && c.Expose.Enabled
 }
 
 type OAuthProvidersConfig struct {
@@ -532,15 +627,18 @@ type ManagedServiceConfig struct {
 	Capabilities  *ManagedServiceCapabilities `yaml:"capabilities,omitempty"`
 }
 
+// ManagedServiceBackend describes how a managed service is reached at runtime.
 type ManagedServiceBackend struct {
 	API ManagedServiceAPI `yaml:"api"`
 }
 
+// ManagedServiceBackups holds the schemas used to configure backups for a managed service.
 type ManagedServiceBackups struct {
 	ConfigSchema  map[string]any `yaml:"configSchema"`
 	SecretsSchema map[string]any `yaml:"secretsSchema"`
 }
 
+// ManagedServiceCapabilities declares which optional features a managed service supports.
 type ManagedServiceCapabilities struct {
 	Pause               bool `yaml:"pause"`
 	Backups             bool `yaml:"backups"`
@@ -661,21 +759,23 @@ const OmitCodesphereSentinel = "-"
 // is removed from the output entirely.
 func (c *RootConfig) Marshal() ([]byte, error) {
 	c.buildACMEOverride()
-	if c.CodesphereConfigPath == "" {
-		return yaml.Marshal(c)
-	}
+	c.buildOpenfgaBackupValues()
 
 	// Marshal normally first —> yaml.Marshal uses struct field tags and does NOT
 	// call this Marshal() method.
 	data, err := yaml.Marshal(c)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if c.CodesphereConfigPath == "" {
+		return data, nil
 	}
 
 	// Parse into a node tree so we can manipulate the codesphere value.
 	var root yaml.Node
 	if err := yaml.Unmarshal(data, &root); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse marshaled config: %w", err)
 	}
 
 	if c.CodesphereConfigPath == OmitCodesphereSentinel {
@@ -688,7 +788,12 @@ func (c *RootConfig) Marshal() ([]byte, error) {
 		}
 	}
 
-	return yaml.Marshal(&root)
+	out, err := yaml.Marshal(&root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	return out, nil
 }
 
 // replaceYAMLMappingValue replaces the value of a top-level mapping key with a plain string scalar.
@@ -697,9 +802,11 @@ func replaceYAMLMappingValue(root *yaml.Node, key, value string) error {
 	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
 		mapping = root.Content[0]
 	}
+
 	if mapping.Kind != yaml.MappingNode {
 		return fmt.Errorf("expected a YAML mapping node, got kind %d", mapping.Kind)
 	}
+
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
 		if mapping.Content[i].Value == key {
 			mapping.Content[i+1] = &yaml.Node{
@@ -707,9 +814,11 @@ func replaceYAMLMappingValue(root *yaml.Node, key, value string) error {
 				Tag:   "!!str",
 				Value: value,
 			}
+
 			return nil
 		}
 	}
+
 	return fmt.Errorf("key %q not found in YAML mapping", key)
 }
 
@@ -719,25 +828,46 @@ func removeYAMLMappingKey(root *yaml.Node, key string) error {
 	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
 		mapping = root.Content[0]
 	}
+
 	if mapping.Kind != yaml.MappingNode {
 		return fmt.Errorf("expected a YAML mapping node, got kind %d", mapping.Kind)
 	}
+
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
 		if mapping.Content[i].Value == key {
 			mapping.Content = append(mapping.Content[:i], mapping.Content[i+2:]...)
 			return nil
 		}
 	}
+
 	return fmt.Errorf("key %q not found in YAML mapping", key)
 }
 
-// Unmarshal deserializes YAML data into the RootConfig.
+// Clone returns a deep copy of the config, so a caller can derive a new config without sharing
+// the original's maps, slices and pointers. It round-trips through YAML, so — like any other
+// load of this config — keys the struct does not model are not carried over.
+func (c *RootConfig) Clone() (*RootConfig, error) {
+	data, err := c.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("marshal config for cloning: %w", err)
+	}
+
+	clone := NewRootConfig()
+	if err := clone.Unmarshal(data); err != nil {
+		return nil, fmt.Errorf("unmarshal cloned config: %w", err)
+	}
+
+	return &clone, nil
+}
+
+// Unmarshal deserializes YAML data into the RootConfig
 func (c *RootConfig) Unmarshal(data []byte) error {
 	// Parse the document into a raw node first so we can inspect the codesphere field.
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return err
+		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+
 	if doc.Kind == yaml.DocumentNode && len(doc.Content) > 0 {
 		mapping := doc.Content[0]
 		if mapping.Kind == yaml.MappingNode {
@@ -745,13 +875,15 @@ func (c *RootConfig) Unmarshal(data []byte) error {
 				if mapping.Content[i].Value == "codesphere" && mapping.Content[i+1].Kind == yaml.ScalarNode {
 					c.CodesphereConfigPath = mapping.Content[i+1].Value
 					mapping.Content = append(mapping.Content[:i], mapping.Content[i+2:]...)
+
 					break
 				}
 			}
 		}
 	}
+
 	if err := doc.Decode(c); err != nil {
-		return err
+		return fmt.Errorf("failed to decode config: %w", err)
 	}
 	c.extractACMESolverFromOverride()
 	return nil
@@ -764,6 +896,13 @@ func NewRootConfig() RootConfig {
 		PcApps:                 ChartValues{},
 		ManagedServiceBackends: &ManagedServiceBackendsConfig{},
 	}
+}
+
+func (c *CodesphereConfig) EnsureCertIssuer() *CertIssuerConfig {
+	if c.CertIssuer == nil {
+		c.CertIssuer = &CertIssuerConfig{}
+	}
+	return c.CertIssuer
 }
 
 func (c *RootConfig) ExtractBomRefs() []string {
@@ -791,7 +930,7 @@ func Capitalize(s string) string {
 // configuration from codesphere.certIssuer.acme.solver, matching the documented
 // config.yaml structure.
 func (c *RootConfig) buildACMEOverride() {
-	if c.Codesphere.CertIssuer.Acme == nil || c.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
+	if c.Codesphere.CertIssuer == nil || c.Codesphere.CertIssuer.Acme == nil || c.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
 		return
 	}
 
@@ -834,10 +973,74 @@ func (c *RootConfig) buildACMEOverride() {
 	c.Cluster.Certificates.Override["issuers"] = issuers
 }
 
+// buildOpenfgaBackupValues translates codesphere.openfgaBackups into the openfga
+// application values under pcApps.applications.openfga.valuesObject.postgres.backup.
+// OpenFGA is deployed via the pc-apps app-of-apps (ArgoCD), not the codesphere
+// umbrella chart, so this is where its Helm values belong. Optional fields
+// (schedule, retentionPolicy) are only emitted when set so the chart defaults
+// apply otherwise. Existing pcApps entries (e.g. other applications) are preserved.
+func (c *RootConfig) buildOpenfgaBackupValues() {
+	ob := c.Codesphere.OpenfgaBackups
+	if ob == nil {
+		return
+	}
+
+	backup := map[string]interface{}{
+		"enabled": ob.Enabled,
+	}
+	if ob.Schedule != "" {
+		backup["schedule"] = ob.Schedule
+	}
+	if ob.DestinationPath != "" {
+		backup["destinationPath"] = ob.DestinationPath
+	}
+	if ob.EndpointURL != "" {
+		backup["endpointURL"] = ob.EndpointURL
+	}
+	if ob.RetentionPolicy != "" {
+		backup["retentionPolicy"] = ob.RetentionPolicy
+	}
+
+	if c.PcApps == nil {
+		c.PcApps = ChartValues{}
+	}
+
+	applications, ok := c.PcApps["applications"].(map[string]interface{})
+	if !ok {
+		applications = map[string]interface{}{}
+	}
+
+	openfga, ok := applications["openfga"].(map[string]interface{})
+	if !ok {
+		openfga = map[string]interface{}{}
+	}
+	// Only enable the openfga application when backups are on; never emit
+	// enabled:false here, as that would disable the whole openfga application
+	// (a core component) rather than just its backups.
+	if ob.Enabled {
+		openfga["enabled"] = true
+	}
+
+	valuesObject, ok := openfga["valuesObject"].(map[string]interface{})
+	if !ok {
+		valuesObject = map[string]interface{}{}
+	}
+	postgres, ok := valuesObject["postgres"].(map[string]interface{})
+	if !ok {
+		postgres = map[string]interface{}{}
+	}
+
+	postgres["backup"] = backup
+	valuesObject["postgres"] = postgres
+	openfga["valuesObject"] = valuesObject
+	applications["openfga"] = openfga
+	c.PcApps["applications"] = applications
+}
+
 // extractACMESolverFromOverride populates the ACMEConfig.Solver from
 // cluster.certificates.override.issuers.acme.dnsSolver after unmarshaling.
 func (c *RootConfig) extractACMESolverFromOverride() {
-	if c.Codesphere.CertIssuer.Acme == nil {
+	if c.Codesphere.CertIssuer == nil || c.Codesphere.CertIssuer.Acme == nil {
 		return
 	}
 

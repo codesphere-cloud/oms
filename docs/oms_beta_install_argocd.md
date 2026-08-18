@@ -8,7 +8,6 @@ Install or upgrade the ArgoCD helm release.
 
 When --deploy-dc-config is set, Codesphere-managed resources are applied after
 the chart install/upgrade:
-  - AppProjects (always)
   - Helm OCI registry secret (always, requires OMS_REGISTRY_PASSWORD)
   - Local cluster secret (only if --dc-id is provided)
   - Git repo credentials (only if OMS_GIT_PASSWORD env var is set)
@@ -45,7 +44,7 @@ $ oms beta install argocd --deploy-dc-config --dc-id 0
 
 ```
       --dc-id string          Codesphere Datacenter ID (optional, registers local cluster in ArgoCD)
-      --deploy-dc-config      Apply Codesphere-managed resources (AppProjects, Repo Creds, ...) after installing the chart
+      --deploy-dc-config      Apply Codesphere-managed resources (Repo Creds, ...) after installing the chart
       --force-conflicts       Force field ownership conflicts during upgrade (sets server-side apply ForceConflicts)
   -h, --help                  help for argocd
       --registry-url string   OCI registry URL for the Helm chart repository (default "ghcr.io/codesphere-cloud/charts")

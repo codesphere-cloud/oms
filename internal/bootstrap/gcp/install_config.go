@@ -9,6 +9,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 const (
@@ -28,7 +29,7 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 
 	if b.fw.Exists(b.Env.InstallConfigPath) {
 		if err := b.loadVaultForConfigTemplating(); err != nil {
-			return err
+			return fmt.Errorf("failed to load vault templating: %w", err)
 		}
 
 		err := b.icg.LoadInstallConfigFromFile(b.Env.InstallConfigPath)
@@ -50,14 +51,9 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 }
 
 func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
-	if !b.fw.Exists(b.Env.SecretsFilePath) {
-		return nil
+	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
-
-	if err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath); err != nil {
-		return fmt.Errorf("failed to load vault file for config templating: %w", err)
-	}
-
 	return nil
 }
 
@@ -215,6 +211,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
 	}
 
+	b.applySshProxyConfig()
+
 	dnsProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
 		dnsProject = b.Env.ProjectID
@@ -235,10 +233,14 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
+	acmeServer := "https://acme-v02.api.letsencrypt.org/directory"
+	if b.Env.ACMEStaging {
+		acmeServer = "https://acme-staging-v02.api.letsencrypt.org/directory"
+	}
 	acmeConfig := &files.ACMEConfig{
 		Enabled: true,
 		Email:   "oms-testing@" + b.Env.BaseDomain,
-		Server:  "https://acme-v02.api.letsencrypt.org/directory",
+		Server:  acmeServer,
 	}
 	if b.Env.GoogleACMEIssuer {
 		keyID, b64MacKey, err := b.GCPClient.CreatePublicCAExternalAccountKey(b.Env.ProjectID)
@@ -249,7 +251,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		acmeConfig.EABKeyID = keyID
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: b64MacKey}})
 	}
-	b.Env.InstallConfig.Codesphere.CertIssuer = files.CertIssuerConfig{
+	b.Env.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
 		Type: "acme",
 		Acme: acmeConfig,
 	}
@@ -367,8 +369,15 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		}
 	}
 
+	b.Env.InstallConfig.Codesphere.Internal = b.Env.InternalFlags
+	b.Env.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
+	b.Env.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
+	// Only set when the flag is provided so a recovered config keeps its value on re-runs.
+	if b.Env.ClusterAdminEmail != "" {
+		b.Env.InstallConfig.Codesphere.ClusterAdminEmail = b.Env.ClusterAdminEmail
+	}
+
 	b.Env.InstallConfig.Codesphere.Experiments = b.Env.Experiments
-	b.Env.InstallConfig.Codesphere.Features = b.Env.FeatureFlags
 
 	if ltsSpec := FindLTSSpec(b.Env.InstallVersion); ltsSpec != nil {
 		if UserSpecifiedExperiments(b.Env.InstallConfig.Codesphere.Experiments) {
@@ -383,12 +392,14 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	b.Env.InstallConfig.GeneratedForVersion = b.Env.InstallVersion
 
-	if !b.Env.ExistingConfigUsed {
-		err := b.icg.GenerateSecrets()
-		if err != nil {
-			return fmt.Errorf("failed to generate secrets: %w", err)
-		}
-	} else {
+	// Secret generation is idempotent and also backfills secrets introduced
+	// after an existing vault was created (for example the auth keys required by
+	// the ArgoCD pre-step).
+	if err := b.icg.GenerateSecrets(); err != nil {
+		return fmt.Errorf("failed to generate secrets: %w", err)
+	}
+
+	if b.Env.ExistingConfigUsed {
 		if err := b.regeneratePostgresCerts(previousPrimaryIP, previousPrimaryHostname); err != nil {
 			return err
 		}
@@ -442,6 +453,26 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 
 	return nil
+}
+
+func (b *GCPBootstrapper) applySshProxyConfig() {
+	b.Env.InstallConfig.PcApps = util.DeepMergeMaps(b.Env.InstallConfig.PcApps, files.ChartValues{
+		"applications": map[string]any{
+			"ssh-workspace-proxy": map[string]any{
+				"enabled": true,
+				"valuesObject": map[string]any{
+					"service": map[string]any{
+						"enabled":        true,
+						"type":           "LoadBalancer",
+						"loadBalancerIP": b.Env.SshProxyIP,
+						"annotations": map[string]any{
+							"cloud.google.com/load-balancer-ipv4": b.Env.SshProxyIP,
+						},
+					},
+				},
+			},
+		},
+	})
 }
 
 func (b *GCPBootstrapper) applyExternalLokiConfig() {
@@ -558,11 +589,8 @@ func (b *GCPBootstrapper) EnsureAgeKey() error {
 }
 
 func (b *GCPBootstrapper) EnsureSecrets() error {
-	if b.fw.Exists(b.Env.SecretsFilePath) {
-		err := b.icg.LoadVaultFromFile(b.Env.SecretsFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to load vault file: %w", err)
-		}
+	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 	b.Env.Secrets = b.icg.GetVault()
 	return nil

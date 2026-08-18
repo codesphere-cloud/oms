@@ -8,10 +8,11 @@ import (
 	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 )
 
 func (g *InstallConfig) CollectInteractively() error {
-	prompter := NewPrompter(true)
+	prompter := prompt.NewPrompter(true)
 
 	g.collectDatacenterConfig(prompter)
 	g.collectRegistryConfig(prompter)
@@ -26,20 +27,20 @@ func (g *InstallConfig) CollectInteractively() error {
 	return nil
 }
 
-func (g *InstallConfig) collectString(prompter *Prompter, prompt, defaultVal string) string {
-	return prompter.String(prompt, defaultVal)
+func (g *InstallConfig) collectString(prompter prompt.Prompter, question, defaultVal string) string {
+	return prompter.String(question, defaultVal)
 }
 
-func (g *InstallConfig) collectInt(prompter *Prompter, prompt string, defaultVal int) int {
-	return prompter.Int(prompt, defaultVal)
+func (g *InstallConfig) collectInt(prompter prompt.Prompter, question string, defaultVal int) int {
+	return prompter.Int(question, defaultVal)
 }
 
-func (g *InstallConfig) collectStringSlice(prompter *Prompter, prompt string, defaultVal []string) []string {
-	return prompter.StringSlice(prompt, defaultVal)
+func (g *InstallConfig) collectStringSlice(prompter prompt.Prompter, question string, defaultVal []string) []string {
+	return prompter.StringSlice(question, defaultVal)
 }
 
-func (g *InstallConfig) collectChoice(prompter *Prompter, prompt string, options []string, defaultVal string) string {
-	return prompter.Choice(prompt, options, defaultVal)
+func (g *InstallConfig) collectChoice(prompter prompt.Prompter, question string, options []string, defaultVal string) string {
+	return prompter.Choice(question, options, defaultVal)
 }
 
 func k8sNodesToStringSlice(nodes []files.K8sNode) []string {
@@ -58,7 +59,7 @@ func stringSliceToK8sNodes(ips []string) []files.K8sNode {
 	return nodes
 }
 
-func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter) {
+func (g *InstallConfig) collectDatacenterConfig(prompter prompt.Prompter) {
 	log.Println("=== Datacenter Configuration ===")
 	g.Config.Datacenter.ID = g.collectInt(prompter, "Datacenter ID", g.Config.Datacenter.ID)
 	g.Config.Datacenter.Name = g.collectString(prompter, "Datacenter name", g.Config.Datacenter.Name)
@@ -67,7 +68,7 @@ func (g *InstallConfig) collectDatacenterConfig(prompter *Prompter) {
 	g.Config.Secrets.BaseDir = g.collectString(prompter, "Secrets base directory", "/root/secrets")
 }
 
-func (g *InstallConfig) collectRegistryConfig(prompter *Prompter) {
+func (g *InstallConfig) collectRegistryConfig(prompter prompt.Prompter) {
 	log.Println("\n=== Container Registry Configuration ===")
 	g.Config.Registry.Server = g.collectString(prompter, "Container registry server (e.g., ghcr.io, leave empty to skip)", "")
 	if g.Config.Registry.Server != "" {
@@ -76,7 +77,7 @@ func (g *InstallConfig) collectRegistryConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
+func (g *InstallConfig) collectPostgresConfig(prompter prompt.Prompter) {
 	log.Println("\n=== PostgreSQL Configuration ===")
 	g.Config.Postgres.Mode = g.collectChoice(prompter, "PostgreSQL setup", []string{"install", "external"}, "install")
 
@@ -110,7 +111,7 @@ func (g *InstallConfig) collectPostgresConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
+func (g *InstallConfig) collectCephConfig(prompter prompt.Prompter) {
 	log.Println("\n=== Ceph Configuration ===")
 	g.Config.Ceph.NodesSubnet = g.collectString(prompter, "Ceph nodes subnet (CIDR)", "10.53.101.0/24")
 
@@ -132,7 +133,7 @@ func (g *InstallConfig) collectCephConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
+func (g *InstallConfig) collectK8sConfig(prompter prompt.Prompter) {
 	log.Println("\n=== Kubernetes Configuration ===")
 	g.Config.Kubernetes.ManagedByCodesphere = prompter.Bool("Use Codesphere-managed Kubernetes (k0s)", g.Config.Kubernetes.ManagedByCodesphere)
 
@@ -163,7 +164,7 @@ func (g *InstallConfig) collectK8sConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectGatewayConfig(prompter *Prompter) {
+func (g *InstallConfig) collectGatewayConfig(prompter prompt.Prompter) {
 	log.Println("\n=== Cluster Gateway Configuration ===")
 	g.Config.Cluster.Gateway.ServiceType = g.collectChoice(prompter, "Gateway service type", []string{"LoadBalancer", "ExternalIP"}, "LoadBalancer")
 	if g.Config.Cluster.Gateway.ServiceType == "ExternalIP" {
@@ -176,7 +177,7 @@ func (g *InstallConfig) collectGatewayConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
+func (g *InstallConfig) collectMetalLBConfig(prompter prompt.Prompter) {
 	log.Println("\n=== MetalLB Configuration (Optional) ===")
 
 	g.Config.MetalLB.Enabled = prompter.Bool("Enable MetalLB", g.Config.MetalLB.Enabled)
@@ -212,49 +213,51 @@ func (g *InstallConfig) collectMetalLBConfig(prompter *Prompter) {
 	}
 }
 
-func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
+func (g *InstallConfig) collectACMEConfig(prompter prompt.Prompter) {
 	log.Println("\n=== ACME Certificate Configuration (Optional) ===")
 
+	certIssuer := g.Config.Codesphere.EnsureCertIssuer()
+
 	// Initialize ACME config if it doesn't exist
-	if g.Config.Codesphere.CertIssuer.Acme == nil {
-		g.Config.Codesphere.CertIssuer.Acme = &files.ACMEConfig{}
+	if certIssuer.Acme == nil {
+		certIssuer.Acme = &files.ACMEConfig{}
 	}
 
-	g.Config.Codesphere.CertIssuer.Acme.Enabled = prompter.Bool("Enable ACME certificate issuer (e.g., Let's Encrypt)", g.Config.Codesphere.CertIssuer.Acme.Enabled)
+	certIssuer.Acme.Enabled = prompter.Bool("Enable ACME certificate issuer (e.g., Let's Encrypt)", certIssuer.Acme.Enabled)
 
 	// Early exit if ACME is disabled
-	if !g.Config.Codesphere.CertIssuer.Acme.Enabled {
-		g.Config.Codesphere.CertIssuer.Acme = nil
-		g.Config.Codesphere.CertIssuer.Type = files.CertIssuerTypeSelfSigned
+	if !certIssuer.Acme.Enabled {
+		certIssuer.Acme = nil
+		certIssuer.Type = files.CertIssuerTypeSelfSigned
 		return
 	}
-	g.Config.Codesphere.CertIssuer.Type = files.CertIssuerTypeACME
+	certIssuer.Type = files.CertIssuerTypeACME
 
-	defaultIssuerName := g.Config.Codesphere.CertIssuer.Acme.Name
+	defaultIssuerName := certIssuer.Acme.Name
 	if defaultIssuerName == "" {
 		defaultIssuerName = "acme-issuer"
 	}
-	g.Config.Codesphere.CertIssuer.Acme.Name = g.collectString(prompter, "ACME issuer name", defaultIssuerName)
+	certIssuer.Acme.Name = g.collectString(prompter, "ACME issuer name", defaultIssuerName)
 
-	defaultEmail := g.Config.Codesphere.CertIssuer.Acme.Email
+	defaultEmail := certIssuer.Acme.Email
 	if defaultEmail == "" {
 		defaultEmail = "admin@example.com"
 	}
-	g.Config.Codesphere.CertIssuer.Acme.Email = g.collectString(prompter, "Email address for ACME account registration", defaultEmail)
+	certIssuer.Acme.Email = g.collectString(prompter, "Email address for ACME account registration", defaultEmail)
 
-	defaultServer := g.Config.Codesphere.CertIssuer.Acme.Server
+	defaultServer := certIssuer.Acme.Server
 	if defaultServer == "" {
 		defaultServer = "https://acme-v02.api.letsencrypt.org/directory"
 	}
-	g.Config.Codesphere.CertIssuer.Acme.Server = g.collectString(prompter, "ACME server URL", defaultServer)
+	certIssuer.Acme.Server = g.collectString(prompter, "ACME server URL", defaultServer)
 
 	// External Account Binding (EAB)
 	log.Println("\n--- External Account Binding (Optional) ---")
-	hasEAB := prompter.Bool("Configure External Account Binding (required by some ACME CAs)", g.Config.Codesphere.CertIssuer.Acme.EABKeyID != "")
+	hasEAB := prompter.Bool("Configure External Account Binding (required by some ACME CAs)", certIssuer.Acme.EABKeyID != "")
 
-	g.Config.Codesphere.CertIssuer.Acme.EABKeyID = ""
+	certIssuer.Acme.EABKeyID = ""
 	if hasEAB {
-		g.Config.Codesphere.CertIssuer.Acme.EABKeyID = g.collectString(prompter, "EAB Key ID", g.Config.Codesphere.CertIssuer.Acme.EABKeyID)
+		certIssuer.Acme.EABKeyID = g.collectString(prompter, "EAB Key ID", certIssuer.Acme.EABKeyID)
 		existingEabKey := ""
 		if g.Vault != nil {
 			if s := g.Vault.GetSecret(files.SecretAcmeEabMacKey); s != nil && s.Fields != nil {
@@ -272,26 +275,26 @@ func (g *InstallConfig) collectACMEConfig(prompter *Prompter) {
 
 	// DNS-01 Challenge Configuration
 	log.Println("\n--- DNS-01 Challenge Configuration (Optional) ---")
-	if g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
-		g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{}
+	if certIssuer.Acme.Solver.DNS01 == nil {
+		certIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{}
 	}
 
-	useDNS01 := prompter.Bool("Configure DNS-01 challenge solver", g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider != "")
+	useDNS01 := prompter.Bool("Configure DNS-01 challenge solver", certIssuer.Acme.Solver.DNS01.Provider != "")
 	if !useDNS01 {
-		g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01 = nil
+		certIssuer.Acme.Solver.DNS01 = nil
 		return
 	}
 	providerOptions := []string{"route53", "cloudflare", "azure", "gcp", "other"}
-	defaultProvider := g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider
+	defaultProvider := certIssuer.Acme.Solver.DNS01.Provider
 	if defaultProvider == "" {
 		defaultProvider = "cloudflare"
 	}
-	g.Config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
+	certIssuer.Acme.Solver.DNS01.Provider = g.collectChoice(prompter, "DNS provider", providerOptions, defaultProvider)
 	log.Println("Note: Additional DNS provider configuration will need to be added to the vault file.")
 	log.Println("Provider config and secrets should be added manually after generation.")
 }
 
-func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
+func (g *InstallConfig) collectCodesphereConfig(prompter prompt.Prompter) {
 	log.Println("\n=== Codesphere Application Configuration ===")
 	defaultDomain := g.Config.Codesphere.Domain
 	if defaultDomain == "" {
@@ -361,9 +364,55 @@ func (g *InstallConfig) collectCodesphereConfig(prompter *Prompter) {
 	}
 
 	g.collectOpenBaoConfig(prompter)
+	g.collectOpenfgaBackupsConfig(prompter)
 }
 
-func (g *InstallConfig) collectOpenBaoConfig(prompter *Prompter) {
+func (g *InstallConfig) collectOpenfgaBackupsConfig(prompter prompt.Prompter) {
+	log.Println("\n=== OpenFGA Database Backups (Optional) ===")
+	hasBackups := prompter.Bool("Configure OpenFGA database backups", g.Config.Codesphere.OpenfgaBackups != nil && g.Config.Codesphere.OpenfgaBackups.Enabled)
+	if !hasBackups {
+		g.Config.Codesphere.OpenfgaBackups = nil
+		return
+	}
+
+	if g.Config.Codesphere.OpenfgaBackups == nil {
+		g.Config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{}
+	}
+	ob := g.Config.Codesphere.OpenfgaBackups
+	ob.Enabled = true
+
+	ob.DestinationPath = g.collectString(prompter, "Backup destination (S3 URL, e.g. s3://backup-openfga)", ob.DestinationPath)
+	ob.EndpointURL = g.collectString(prompter, "S3-compatible endpoint URL (e.g. https://storage.googleapis.com)", ob.EndpointURL)
+	ob.Schedule = g.collectString(prompter, "Backup schedule (6-field cron, empty for chart default)", ob.Schedule)
+	ob.RetentionPolicy = g.collectString(prompter, "Retention policy (e.g. 7d, empty for chart default)", ob.RetentionPolicy)
+
+	accessKeyID := ""
+	secretAccessKey := ""
+	if g.Vault != nil {
+		if s := g.Vault.GetSecret(files.SecretOpenfgaDbBackupAccessKeyId); s != nil && s.Fields != nil {
+			accessKeyID = s.Fields.Password
+		}
+		if s := g.Vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey); s != nil && s.Fields != nil {
+			secretAccessKey = s.Fields.Password
+		}
+	}
+	accessKeyID = g.collectString(prompter, "S3 access key ID", accessKeyID)
+	secretAccessKey = g.collectString(prompter, "S3 secret access key", secretAccessKey)
+
+	if accessKeyID != "" || secretAccessKey != "" {
+		if g.Vault == nil {
+			g.Vault = &files.InstallVault{}
+		}
+		if accessKeyID != "" {
+			g.Vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupAccessKeyId, Fields: &files.SecretFields{Password: accessKeyID}})
+		}
+		if secretAccessKey != "" {
+			g.Vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: secretAccessKey}})
+		}
+	}
+}
+
+func (g *InstallConfig) collectOpenBaoConfig(prompter prompt.Prompter) {
 	log.Println("\n=== OpenBao Configuration (Optional) ===")
 	hasOpenBao := prompter.Bool("Configure OpenBao integration", g.Config.Codesphere.OpenBao != nil && g.Config.Codesphere.OpenBao.URI != "")
 	if !hasOpenBao {

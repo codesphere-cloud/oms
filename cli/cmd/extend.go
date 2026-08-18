@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +14,7 @@ type ExtendCmd struct {
 	cmd *cobra.Command
 }
 
-func AddExtendCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddExtendCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	extend := ExtendCmd{
 		cmd: &cobra.Command{
 			Use:   "extend",
@@ -21,7 +22,7 @@ func AddExtendCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 			Long:  io.Long(`Extend Codesphere ressources such as base images to customize them for your needs.`),
 		},
 	}
-	AddCmd(rootCmd, extend.cmd)
+	util.AddCmd(rootCmd, extend.cmd)
 
 	AddExtendBaseimageCmd(extend.cmd, opts)
 }

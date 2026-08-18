@@ -6,29 +6,39 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
-	"github.com/codesphere-cloud/oms/internal/util"
+	"github.com/codesphere-cloud/oms/internal/prompt"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
 type UpdateInstallConfigCmd struct {
 	cmd        *cobra.Command
 	Opts       *UpdateInstallConfigOpts
-	FileWriter util.FileIO
+	FileWriter intutil.FileIO
+
+	// Prompter asks the operator whether to go ahead with a change to the vault.
+	// --yes short-circuits it.
+	Prompter prompt.Prompter
 }
 
 type UpdateInstallConfigOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 
 	ConfigFile string
 	VaultFile  string
+	VaultType  string
+	AgeKey     string
 
 	WithComments bool
+	Yes          bool
 
 	// Fields that can be updated
 	PostgresPrimaryIP       string
@@ -36,6 +46,7 @@ type UpdateInstallConfigOpts struct {
 	PostgresReplicaIP       string
 	PostgresReplicaName     string
 	PostgresServerAddress   string
+	PostgresServer          string
 
 	CephNodesSubnet string
 
@@ -64,12 +75,15 @@ type UpdateInstallConfigOpts struct {
 }
 
 func (c *UpdateInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
-	icg := installer.NewInstallConfigManager()
+	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
+	}
 
 	return c.UpdateInstallConfig(icg)
 }
 
-func AddUpdateInstallConfigCmd(update *cobra.Command, opts *GlobalOptions) {
+func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) {
 	c := UpdateInstallConfigCmd{
 		cmd: &cobra.Command{
 			Use:   "install-config",
@@ -83,27 +97,38 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *GlobalOptions) {
 			
 			For example, updating the PostgreSQL primary IP will trigger regeneration
 			of the PostgreSQL server certificates that include that IP address.`),
-			Example: formatExamples("update install-config", []csio.Example{
+			Example: util.FormatExamples("update install-config", []csio.Example{
 				{Cmd: "--postgres-primary-ip 10.10.0.4 --config config.yaml --vault prod.vault.yaml", Desc: "Update PostgreSQL primary IP and regenerate certificates"},
+				{Cmd: "--postgres-server postgres-1 --config config.yaml --vault prod.vault.yaml", Desc: "Set the primary PostgreSQL hostname when mode is install"},
+				{Cmd: "--postgres-server db.example.com:5432 --config config.yaml --vault prod.vault.yaml", Desc: "Set the PostgreSQL connection address when mode is external"},
 				{Cmd: "--domain new.example.com --config config.yaml --vault prod.vault.yaml", Desc: "Update Codesphere domain"},
 				{Cmd: "--k8s-api-server 10.0.0.10 --config config.yaml --vault prod.vault.yaml", Desc: "Update Kubernetes API server host"},
 			}),
 		},
 		Opts:       &UpdateInstallConfigOpts{GlobalOptions: opts},
-		FileWriter: util.NewFilesystemWriter(),
+		FileWriter: intutil.NewFilesystemWriter(),
+		// One prompter for the whole command: it buffers stdin, so a fresh one per
+		// question could drop what the operator already typed.
+		Prompter: prompt.NewPrompter(true),
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Path to existing config.yaml file")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Path to existing prod.vault.yaml file")
+	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
+	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 
 	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
+	c.cmd.Flags().BoolVarP(&c.Opts.Yes, "yes", "y", false, "Auto-approve every change to the vault (regenerated certificates and missing secrets)")
 
 	// PostgreSQL update flags
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryHostname, "postgres-primary-hostname", "", "Primary PostgreSQL server hostname")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryHostname, "postgres-primary-hostname", "", "Primary PostgreSQL server hostname (deprecated: use --postgres-server)")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresReplicaIP, "postgres-replica-ip", "", "Replica PostgreSQL server IP")
 	c.cmd.Flags().StringVar(&c.Opts.PostgresReplicaName, "postgres-replica-name", "", "Replica PostgreSQL server name")
-	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server-address", "", "PostgreSQL server address (for external mode)")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServerAddress, "postgres-server-address", "", "External PostgreSQL connection address (deprecated: use --postgres-server)")
+	c.cmd.Flags().StringVar(&c.Opts.PostgresServer, "postgres-server", "", "PostgreSQL server: primary hostname in install mode, connection address in external mode")
+	_ = c.cmd.Flags().MarkDeprecated("postgres-primary-hostname", "use --postgres-server instead")
+	_ = c.cmd.Flags().MarkDeprecated("postgres-server-address", "use --postgres-server instead")
 
 	// Ceph update flags
 	c.cmd.Flags().StringVar(&c.Opts.CephNodesSubnet, "ceph-nodes-subnet", "", "Ceph nodes subnet")
@@ -139,7 +164,7 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *GlobalOptions) {
 	util.MarkFlagRequired(c.cmd, "vault")
 
 	c.cmd.RunE = c.RunE
-	AddCmd(update, c.cmd)
+	util.AddCmd(update, c.cmd)
 }
 
 func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfigManager) error {
@@ -167,12 +192,24 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 	}
 
 	if tracker.HasChanges() {
+		if !c.approve("Regenerate them?", "The changes above require these secrets to be regenerated:", tracker.Regenerates()) {
+			// The regenerated certificates cover values that were just written to the config,
+			// so keeping the old ones would leave the two inconsistent. Nothing has been
+			// written yet, so stopping here leaves the installation as it was.
+			return fmt.Errorf("aborted: the requested changes cannot be applied without regenerating the secrets above (pass --yes to approve up front)")
+		}
+
 		log.Println("\nRegenerating affected secrets and certificates...")
 		if err := c.regenerateSecrets(config, vault, tracker); err != nil {
 			return fmt.Errorf("failed to regenerate secrets: %w", err)
 		}
 	} else {
 		log.Println("\nNo changes detected that require secret regeneration.")
+	}
+
+	added, err := c.confirmAndAddMissingSecrets(config, vault)
+	if err != nil {
+		return err
 	}
 
 	if err := icg.WriteInstallConfig(c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
@@ -183,7 +220,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	c.printSuccessMessage(tracker)
+	c.printSuccessMessage(tracker, added)
 
 	return nil
 }
@@ -198,16 +235,23 @@ func (c *UpdateInstallConfigCmd) applyUpdates(config *files.RootConfig, vault *f
 }
 
 func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, tracker *SecretDependencyTracker) {
-	if c.Opts.PostgresPrimaryIP != "" || c.Opts.PostgresPrimaryHostname != "" {
+	primaryHostname, serverAddress := determinePostgresServerConfig(
+		config.Postgres.Mode,
+		c.Opts.PostgresServer,
+		c.Opts.PostgresPrimaryHostname,
+		c.Opts.PostgresServerAddress,
+	)
+
+	if c.Opts.PostgresPrimaryIP != "" || primaryHostname != "" {
 		if config.Postgres.Primary != nil {
 			if c.Opts.PostgresPrimaryIP != "" && config.Postgres.Primary.IP != c.Opts.PostgresPrimaryIP {
 				log.Printf("Updating PostgreSQL primary IP: %s -> %s\n", config.Postgres.Primary.IP, c.Opts.PostgresPrimaryIP)
 				config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
-			if c.Opts.PostgresPrimaryHostname != "" && config.Postgres.Primary.Hostname != c.Opts.PostgresPrimaryHostname {
-				log.Printf("Updating PostgreSQL primary hostname: %s -> %s\n", config.Postgres.Primary.Hostname, c.Opts.PostgresPrimaryHostname)
-				config.Postgres.Primary.Hostname = c.Opts.PostgresPrimaryHostname
+			if primaryHostname != "" && config.Postgres.Primary.Hostname != primaryHostname {
+				log.Printf("Updating PostgreSQL primary hostname: %s -> %s\n", config.Postgres.Primary.Hostname, primaryHostname)
+				config.Postgres.Primary.Hostname = primaryHostname
 				tracker.MarkPostgresPrimaryCertNeedsRegen()
 			}
 		}
@@ -228,9 +272,9 @@ func (c *UpdateInstallConfigCmd) applyPostgresUpdates(config *files.RootConfig, 
 		}
 	}
 
-	if c.Opts.PostgresServerAddress != "" && config.Postgres.ServerAddress != c.Opts.PostgresServerAddress {
-		log.Printf("Updating PostgreSQL server address: %s -> %s\n", config.Postgres.ServerAddress, c.Opts.PostgresServerAddress)
-		config.Postgres.ServerAddress = c.Opts.PostgresServerAddress
+	if serverAddress != "" && config.Postgres.ServerAddress != serverAddress {
+		log.Printf("Updating PostgreSQL server address: %s -> %s\n", config.Postgres.ServerAddress, serverAddress)
+		config.Postgres.ServerAddress = serverAddress
 	}
 }
 
@@ -286,43 +330,44 @@ func (c *UpdateInstallConfigCmd) applyACMEUpdates(config *files.RootConfig, vaul
 	}
 
 	acmeChanged := false
-	if config.Codesphere.CertIssuer.Acme == nil {
-		config.Codesphere.CertIssuer.Acme = &files.ACMEConfig{}
+	certIssuer := config.Codesphere.EnsureCertIssuer()
+	if certIssuer.Acme == nil {
+		certIssuer.Acme = &files.ACMEConfig{}
 	}
 
-	if config.Codesphere.CertIssuer.Type != files.CertIssuerTypeACME {
+	if certIssuer.Type != files.CertIssuerTypeACME {
 		log.Printf("Setting cert issuer type to ACME\n")
-		config.Codesphere.CertIssuer.Type = files.CertIssuerTypeACME
+		certIssuer.Type = files.CertIssuerTypeACME
 		acmeChanged = true
 	}
 
-	if !config.Codesphere.CertIssuer.Acme.Enabled {
+	if !certIssuer.Acme.Enabled {
 		log.Printf("Enabling ACME certificate issuer\n")
-		config.Codesphere.CertIssuer.Acme.Enabled = true
+		certIssuer.Acme.Enabled = true
 		acmeChanged = true
 	}
 
-	if c.Opts.ACMEIssuerName != "" && config.Codesphere.CertIssuer.Acme.Name != c.Opts.ACMEIssuerName {
-		log.Printf("Updating ACME issuer name: %s -> %s\n", config.Codesphere.CertIssuer.Acme.Name, c.Opts.ACMEIssuerName)
-		config.Codesphere.CertIssuer.Acme.Name = c.Opts.ACMEIssuerName
+	if c.Opts.ACMEIssuerName != "" && certIssuer.Acme.Name != c.Opts.ACMEIssuerName {
+		log.Printf("Updating ACME issuer name: %s -> %s\n", certIssuer.Acme.Name, c.Opts.ACMEIssuerName)
+		certIssuer.Acme.Name = c.Opts.ACMEIssuerName
 		acmeChanged = true
 	}
 
-	if c.Opts.ACMEEmail != "" && config.Codesphere.CertIssuer.Acme.Email != c.Opts.ACMEEmail {
-		log.Printf("Updating ACME email: %s -> %s\n", config.Codesphere.CertIssuer.Acme.Email, c.Opts.ACMEEmail)
-		config.Codesphere.CertIssuer.Acme.Email = c.Opts.ACMEEmail
+	if c.Opts.ACMEEmail != "" && certIssuer.Acme.Email != c.Opts.ACMEEmail {
+		log.Printf("Updating ACME email: %s -> %s\n", certIssuer.Acme.Email, c.Opts.ACMEEmail)
+		certIssuer.Acme.Email = c.Opts.ACMEEmail
 		acmeChanged = true
 	}
 
-	if c.Opts.ACMEServer != "" && config.Codesphere.CertIssuer.Acme.Server != c.Opts.ACMEServer {
-		log.Printf("Updating ACME server: %s -> %s\n", config.Codesphere.CertIssuer.Acme.Server, c.Opts.ACMEServer)
-		config.Codesphere.CertIssuer.Acme.Server = c.Opts.ACMEServer
+	if c.Opts.ACMEServer != "" && certIssuer.Acme.Server != c.Opts.ACMEServer {
+		log.Printf("Updating ACME server: %s -> %s\n", certIssuer.Acme.Server, c.Opts.ACMEServer)
+		certIssuer.Acme.Server = c.Opts.ACMEServer
 		acmeChanged = true
 	}
 
-	if c.Opts.ACMEEABKeyID != "" && config.Codesphere.CertIssuer.Acme.EABKeyID != c.Opts.ACMEEABKeyID {
-		log.Printf("Updating ACME EAB key ID: %s -> %s\n", config.Codesphere.CertIssuer.Acme.EABKeyID, c.Opts.ACMEEABKeyID)
-		config.Codesphere.CertIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
+	if c.Opts.ACMEEABKeyID != "" && certIssuer.Acme.EABKeyID != c.Opts.ACMEEABKeyID {
+		log.Printf("Updating ACME EAB key ID: %s -> %s\n", certIssuer.Acme.EABKeyID, c.Opts.ACMEEABKeyID)
+		certIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
 		acmeChanged = true
 	}
 
@@ -340,13 +385,13 @@ func (c *UpdateInstallConfigCmd) applyACMEUpdates(config *files.RootConfig, vaul
 
 	// Update DNS-01 solver configuration
 	if c.Opts.ACMEDNS01Provider != "" {
-		if config.Codesphere.CertIssuer.Acme.Solver.DNS01 == nil {
-			config.Codesphere.CertIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{}
+		if certIssuer.Acme.Solver.DNS01 == nil {
+			certIssuer.Acme.Solver.DNS01 = &files.ACMEDNS01Solver{}
 		}
-		if config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider != c.Opts.ACMEDNS01Provider {
+		if certIssuer.Acme.Solver.DNS01.Provider != c.Opts.ACMEDNS01Provider {
 			log.Printf("Updating ACME DNS-01 provider: %s -> %s\n",
-				config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider, c.Opts.ACMEDNS01Provider)
-			config.Codesphere.CertIssuer.Acme.Solver.DNS01.Provider = c.Opts.ACMEDNS01Provider
+				certIssuer.Acme.Solver.DNS01.Provider, c.Opts.ACMEDNS01Provider)
+			certIssuer.Acme.Solver.DNS01.Provider = c.Opts.ACMEDNS01Provider
 			acmeChanged = true
 		}
 	}
@@ -381,6 +426,88 @@ func (c *UpdateInstallConfigCmd) applyCodesphereUpdates(config *files.RootConfig
 		log.Printf("Updating DNS servers\n")
 		config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
 	}
+}
+
+// approve prints what is about to change and asks the operator to confirm it. --yes approves
+// without asking; otherwise only an explicit yes counts, so a run without a terminal (an
+// empty answer) declines.
+func (c *UpdateInstallConfigCmd) approve(question, intro string, items []string) bool {
+	if c.Opts.Yes {
+		return true
+	}
+
+	log.Printf("\n%s\n", intro)
+
+	for _, item := range items {
+		log.Printf("  - %s\n", item)
+	}
+
+	return c.Prompter.Bool(question, false)
+}
+
+// confirmAndAddMissingSecrets asks about the secrets the vault is missing and adds them if
+// the operator agrees. Returns the names of the ones that were added, none if the operator
+// declined.
+func (c *UpdateInstallConfigCmd) confirmAndAddMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+	missing, err := missingSecrets(config, vault)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine missing secrets: %w", err)
+	}
+
+	if len(missing) == 0 {
+		return nil, nil
+	}
+
+	if !c.approve("Generate them?", "The vault does not have these secrets yet:", missing) {
+		log.Printf("\nSkipped %d missing secret(s): %s\n", len(missing), strings.Join(missing, ", "))
+
+		return nil, nil
+	}
+
+	added, err := addMissingSecrets(config, vault)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add missing secrets: %w", err)
+	}
+
+	log.Printf("\nAdded %d secret(s) missing from the vault: %s\n", len(added), strings.Join(added, ", "))
+
+	return added, nil
+}
+
+// missingSecrets reports what addMissingSecrets would generate, without changing anything:
+// it runs against copies, so only the names survive.
+func missingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+	configCopy, err := config.Clone()
+	if err != nil {
+		return nil, fmt.Errorf("copy config: %w", err)
+	}
+
+	return addMissingSecrets(configCopy, vault.Clone())
+}
+
+// addMissingSecrets generates the secrets the vault does not have yet and returns their
+// names. EnsureSecrets keeps what is already there, so this only ever adds.
+func addMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+	existing := make(map[string]bool, len(vault.Secrets))
+	for _, secret := range vault.Secrets {
+		existing[secret.Name] = true
+	}
+
+	if err := secrets.EnsureSecrets(vault, config); err != nil {
+		return nil, fmt.Errorf("ensure secrets: %w", err)
+	}
+
+	added := []string{}
+
+	for _, secret := range vault.Secrets {
+		if !existing[secret.Name] {
+			added = append(added, secret.Name)
+		}
+	}
+
+	sort.Strings(added)
+
+	return added, nil
 }
 
 func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vault *files.InstallVault, tracker *SecretDependencyTracker) error {
@@ -425,26 +552,28 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vau
 	return nil
 }
 
-func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTracker) {
+func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTracker, added []string) {
 	log.Println("\n" + strings.Repeat("=", 70))
 	log.Println("Configuration successfully updated!")
 	log.Println(strings.Repeat("=", 70))
 
 	if tracker.HasChanges() {
 		log.Println("\nRegenerated secrets:")
-		if tracker.NeedsPostgresPrimaryCertRegen() {
-			log.Println("  ✓ PostgreSQL primary server certificate")
-		}
-		if tracker.NeedsPostgresReplicaCertRegen() {
-			log.Println("  ✓ PostgreSQL replica server certificate")
-		}
-		if tracker.ACMEConfigChanged() {
-			log.Println("  ✓ ACME configuration updated")
+
+		for _, change := range tracker.Regenerates() {
+			log.Printf("  ✓ %s\n", change)
 		}
 	}
 
-	log.Println("\nIMPORTANT: The vault file has been updated with new secrets.")
-	log.Println("   Remember to re-encrypt it with SOPS before storing.")
+	if len(added) > 0 {
+		log.Println("\nGenerated missing secrets:")
+
+		for _, name := range added {
+			log.Printf("  ✓ %s\n", name)
+		}
+	}
+
+	log.Println("\nThe vault file has been updated and re-encrypted with SOPS.")
 	log.Println()
 }
 
@@ -480,6 +609,26 @@ func (t *SecretDependencyTracker) NeedsPostgresReplicaCertRegen() bool {
 
 func (t *SecretDependencyTracker) ACMEConfigChanged() bool {
 	return t.acmeConfigChanged
+}
+
+// Regenerates describes, in operator-facing terms, what the tracked changes cause to be
+// regenerated. Drives both the confirmation prompt and the summary, so the two cannot drift.
+func (t *SecretDependencyTracker) Regenerates() []string {
+	changes := []string{}
+
+	if t.postgresPrimaryCertNeedsRegen {
+		changes = append(changes, "PostgreSQL primary server certificate")
+	}
+
+	if t.postgresReplicaCertNeedsRegen {
+		changes = append(changes, "PostgreSQL replica server certificate")
+	}
+
+	if t.acmeConfigChanged {
+		changes = append(changes, "ACME configuration")
+	}
+
+	return changes
 }
 
 func (t *SecretDependencyTracker) HasChanges() bool {

@@ -52,11 +52,11 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 			return nil, fmt.Errorf("init helm client failed: %w", err)
 		}
 
-		clientset, dynClient, err := k8s.NewClientsFromRESTConfig(cfg.RESTConfig)
+		clientset, _, err := k8s.NewClientsFromRESTConfig(cfg.RESTConfig)
 		if err != nil {
 			return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 		}
-		resources, err := NewArgoCDResources(clientset, dynClient, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+		resources, err := NewArgoCDResources(clientset, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 		if err != nil {
 			return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 		}
@@ -70,11 +70,11 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
-	clientset, dynClient, err := k8s.NewClients()
+	clientset, _, err := k8s.NewClients()
 	if err != nil {
 		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 	}
-	resources, err := NewArgoCDResources(clientset, dynClient, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+	resources, err := NewArgoCDResources(clientset, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}

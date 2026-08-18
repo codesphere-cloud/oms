@@ -11,7 +11,6 @@ import (
 	"log"
 
 	k8s "github.com/codesphere-cloud/oms/internal/util"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -22,7 +21,6 @@ type ArgoCDResources interface {
 
 type argoCDResources struct {
 	clientset kubernetes.Interface
-	dynClient dynamic.Interface
 
 	DatacenterId   string
 	OciPassword    string
@@ -30,19 +28,15 @@ type argoCDResources struct {
 	GitPassword    string
 }
 
-func NewArgoCDResources(clientset kubernetes.Interface, dynClient dynamic.Interface, dataCenterId string, ociPassword string, ociRegistryURL string, gitPassword string) (ArgoCDResources, error) {
+func NewArgoCDResources(clientset kubernetes.Interface, dataCenterId string, ociPassword string, ociRegistryURL string, gitPassword string) (ArgoCDResources, error) {
 	return &argoCDResources{
 		clientset:      clientset,
-		dynClient:      dynClient,
 		DatacenterId:   dataCenterId,
 		OciPassword:    ociPassword,
 		OciRegistryURL: ociRegistryURL,
 		GitPassword:    gitPassword,
 	}, nil
 }
-
-//go:embed manifests/app-projects.yaml
-var appProjectsYAML []byte
 
 //go:embed manifests/cluster-local.yaml.tpl
 var localClusterTpl []byte
@@ -54,10 +48,6 @@ var helmRegistryTpl []byte
 var gitRepoTpl []byte
 
 func (a *argoCDResources) ApplyAll(ctx context.Context) error {
-	if err := a.applyAppProjects(ctx); err != nil {
-		return fmt.Errorf("applying app projects: %w", err)
-	}
-
 	if a.DatacenterId != "" {
 		if err := a.applyLocalCluster(ctx); err != nil {
 			return fmt.Errorf("applying local cluster secret: %w", err)
@@ -78,25 +68,6 @@ func (a *argoCDResources) ApplyAll(ctx context.Context) error {
 		}
 	}
 
-	return nil
-}
-
-func (a *argoCDResources) applyAppProjects(ctx context.Context) error {
-	log.Println("Applying AppProjects... ")
-	objects, err := k8s.DecodeMultiDocYAML(appProjectsYAML)
-	if err != nil {
-		return fmt.Errorf("decoding app projects yaml: %w", err)
-	}
-
-	for _, obj := range objects {
-		gvr, err := k8s.GvrForUnstructured(obj)
-		if err != nil {
-			return err
-		}
-		if err := k8s.ApplyUnstructured(ctx, a.dynClient, gvr, obj); err != nil {
-			return fmt.Errorf("applying app project %q: %w", obj.GetName(), err)
-		}
-	}
 	return nil
 }
 

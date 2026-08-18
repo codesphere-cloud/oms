@@ -6,6 +6,7 @@ package cmd
 import (
 	"log"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	v "github.com/codesphere-cloud/oms/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -33,6 +34,6 @@ func AddVersionCmd(rootCmd *cobra.Command) {
 			Long:  `Print current version of OMS.`,
 		},
 	}
-	AddCmd(rootCmd, version.cmd)
+	util.AddCmd(rootCmd, version.cmd)
 	version.cmd.RunE = version.RunE
 }

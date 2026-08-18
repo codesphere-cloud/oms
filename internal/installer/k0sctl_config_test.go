@@ -69,7 +69,7 @@ var _ = Describe("K0sctlConfig", func() {
 				Expect(k0sctlConfig.Spec.Hosts[2].Role).To(Equal("worker"))
 			})
 
-			It("should skip duplicate IPs between control planes and workers", func() {
+			It("should enable the worker role on control planes also listed as workers", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 				installConfig.Kubernetes.Workers = []files.K8sNode{
 					{IPAddress: "10.0.1.10"}, // Duplicate
@@ -79,10 +79,12 @@ var _ = Describe("K0sctlConfig", func() {
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
 				Expect(err).ToNot(HaveOccurred())
 
-				// Should only have 2 hosts: 1 control plane + 1 unique worker
+				// The overlapping node is emitted once, but retains both roles in
+				// the same way as the TypeScript installer.
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(2))
 				Expect(k0sctlConfig.Spec.Hosts[0].SSH.Address).To(Equal("10.0.1.10"))
 				Expect(k0sctlConfig.Spec.Hosts[0].Role).To(Equal("controller"))
+				Expect(k0sctlConfig.Spec.Hosts[0].InstallFlags).To(Equal([]string{"--enable-worker", "--no-taints=true"}))
 				Expect(k0sctlConfig.Spec.Hosts[1].SSH.Address).To(Equal("10.0.2.10"))
 				Expect(k0sctlConfig.Spec.Hosts[1].Role).To(Equal("worker"))
 			})

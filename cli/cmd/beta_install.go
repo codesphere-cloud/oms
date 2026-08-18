@@ -4,6 +4,7 @@
 package cmd
 
 import (
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -12,14 +13,14 @@ type BetaInstallCmd struct {
 	cmd *cobra.Command
 }
 
-func AddBetaInstallCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddBetaInstallCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	install := BetaInstallCmd{
 		cmd: &cobra.Command{
 			Use:   "install",
 			Short: "Install beta components",
 		},
 	}
-	AddCmd(rootCmd, install.cmd)
+	util.AddCmd(rootCmd, install.cmd)
 	AddArgoCDCmd(install.cmd, opts)
 	AddPCAppsCmd(install.cmd, opts)
 }

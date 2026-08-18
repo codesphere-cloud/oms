@@ -16,6 +16,8 @@ import (
 
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
+	"github.com/codesphere-cloud/oms/internal/clusteradmin"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer"
@@ -61,10 +63,36 @@ func GetDNSRecordNames(baseDomain string) []struct {
 		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
 		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
 		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
+		{fmt.Sprintf("*.ssh.cs.%s.", baseDomain), "A"},
 	}
 }
 
-var DefaultExperiments []string = []string{
+// This should ALWAYS be empty. Internal flags are for internal feature
+// development and not intended for customer use.
+// Atm. it's not empty as the internal flags below are likely preview or
+// feature flags, but are still in the internal bucket for historical
+// reasons (before we only had one "experiments" bucket).
+var DefaultInternalFlags []string = []string{
+	"headless-services",
+	"vcluster",
+	"custom-service-image",
+	"ms-in-ls",
+}
+
+var DefaultPreviewFlags []string = []string{
+	"openfga-authz",
+	"cluster-admin",
+	"secret-management",
+	"sub-path-mount",
+	"workspace-ssh",
+}
+
+var DefaultFeatureFlags []string = []string{}
+
+// DefaultExperiments is the legacy "experiments" bucket, kept for LTS
+// compatibility. main split these values across DefaultInternalFlags and
+// DefaultPreviewFlags; UserSpecifiedExperiments compares against this list.
+var DefaultExperiments = []string{
 	"headless-services",
 	"vcluster",
 	"custom-service-image",
@@ -89,44 +117,66 @@ type GCPBootstrapper struct {
 	OmsBinaryBuilder func() (string, func(), error)
 }
 
+// primaryDC returns the first data center, which owns the shared PostgreSQL server and the
+// platform gateway that codesphere.domain resolves to.
+func (b *GCPBootstrapper) primaryDC() *datacenter.DataCenter {
+	return b.Env.DataCenters[0]
+}
+
 type CodesphereEnvironment struct {
-	ProjectID                     string          `json:"project_id"`
-	ProjectTTL                    string          `json:"project_ttl"`
-	ProjectName                   string          `json:"project_name"`
-	DNSProjectID                  string          `json:"dns_project_id"`
-	Jumpbox                       *node.Node      `json:"jumpbox"`
-	PostgreSQLNode                *node.Node      `json:"postgres_node"`
-	ControlPlaneNodes             []*node.Node    `json:"control_plane_nodes"`
-	CephNodes                     []*node.Node    `json:"ceph_nodes"`
-	ContainerRegistryURL          string          `json:"-"`
-	ExistingConfigUsed            bool            `json:"-"`
-	InstallVersion                string          `json:"install_version"`
-	InstallLocal                  string          `json:"install_local"`
-	InstallHash                   string          `json:"install_hash"`
-	InstallSkipSteps              []string        `json:"install_skip_steps"`
-	Preemptible                   bool            `json:"preemptible"`
-	SpotVMs                       bool            `json:"spot_vms"`
-	WriteConfig                   bool            `json:"-"`
-	RecoverConfig                 bool            `json:"-"`
-	GatewayIP                     string          `json:"gateway_ip"`
-	PublicGatewayIP               string          `json:"public_gateway_ip"`
-	RegistryType                  RegistryType    `json:"registry_type"`
-	GitHubPAT                     string          `json:"-"`
-	GitHubAppName                 string          `json:"-"`
-	GitHubTeamOrg                 string          `json:"github_team_org"`
-	GitHubTeamSlug                string          `json:"github_team_slug"`
-	RegistryUser                  string          `json:"-"`
-	Experiments                   []string        `json:"experiments"`
-	FeatureFlags                  map[string]bool `json:"feature_flags"`
-	ExternalLokiEndpoint          string          `json:"external_loki_endpoint,omitempty"`
-	ExternalLokiSecret            string          `json:"-"`
-	ExternalLokiUser              string          `json:"external_loki_user,omitempty"`
-	PrometheusRemoteWriteUser     string          `json:"prometheus_remote_write_user,omitempty"`
-	PrometheusRemoteWritePassword string          `json:"-"`
-	PrometheusRemoteWriteURL      string          `json:"prometheus_remote_write_url,omitempty"`
+	ProjectID      string     `json:"project_id"`
+	ProjectTTL     string     `json:"project_ttl"`
+	ProjectName    string     `json:"project_name"`
+	DNSProjectID   string     `json:"dns_project_id"`
+	Jumpbox        *node.Node `json:"jumpbox"`
+	PostgreSQLNode *node.Node `json:"postgres_node"`
+	// MultiDC bootstraps two data centers that share the PostgreSQL server but run separate
+	// Kubernetes and Ceph clusters.
+	MultiDC bool `json:"multi_dc"`
+	// DataCenters holds the per-data-center state. It always has at least one entry.
+	DataCenters []*datacenter.DataCenter `json:"datacenters"`
+	// ControlPlaneNodes and CephNodes are where the primary data center's nodes lived before
+	// multi-DC support. The steps that have not been migrated to DataCenters yet still use
+	// them, and infra files written by an earlier OMS carry the nodes here.
+	ControlPlaneNodes []*node.Node `json:"control_plane_nodes"`
+	CephNodes         []*node.Node `json:"ceph_nodes"`
+	// ContainerRegistryURL is the resolved registry server all data centers pull images from.
+	ContainerRegistryURL          string       `json:"container_registry_url,omitempty"`
+	RegistryUsername              string       `json:"-"`
+	RegistryPassword              string       `json:"-"`
+	ExistingConfigUsed            bool         `json:"-"`
+	InstallVersion                string       `json:"install_version"`
+	InstallLocal                  string       `json:"install_local"`
+	InstallHash                   string       `json:"install_hash"`
+	InstallSkipSteps              []string     `json:"install_skip_steps"`
+	Preemptible                   bool         `json:"preemptible"`
+	SpotVMs                       bool         `json:"spot_vms"`
+	WriteConfig                   bool         `json:"-"`
+	RecoverConfig                 bool         `json:"-"`
+	GatewayIP                     string       `json:"gateway_ip"`
+	PublicGatewayIP               string       `json:"public_gateway_ip"`
+	SshProxyIP                    string       `json:"ssh_proxy_ip"`
+	RegistryType                  RegistryType `json:"registry_type"`
+	GitHubPAT                     string       `json:"-"`
+	GitHubAppName                 string       `json:"-"`
+	GitHubTeamOrg                 string       `json:"github_team_org"`
+	GitHubTeamSlug                string       `json:"github_team_slug"`
+	RegistryUser                  string       `json:"-"`
+	InternalFlags                 []string     `json:"internal"`
+	PreviewFlags                  []string     `json:"preview"`
+	FeatureFlags                  []string     `json:"feature_flags"`
+	Experiments                   []string     `json:"experiments,omitempty"`
+	ExternalLokiEndpoint          string       `json:"external_loki_endpoint,omitempty"`
+	ExternalLokiSecret            string       `json:"-"`
+	ExternalLokiUser              string       `json:"external_loki_user,omitempty"`
+	PrometheusRemoteWriteUser     string       `json:"prometheus_remote_write_user,omitempty"`
+	PrometheusRemoteWritePassword string       `json:"-"`
+	PrometheusRemoteWriteURL      string       `json:"prometheus_remote_write_url,omitempty"`
+	ClusterAdminEmail             string       `json:"cluster_admin_email,omitempty"`
 
 	// ACME Issuer
 	GoogleACMEIssuer bool `json:"google_acme_issuer,omitempty"`
+	ACMEStaging      bool `json:"acme_staging,omitempty"`
 
 	// OpenBao
 	OpenBaoURI      string `json:"-"`
@@ -168,15 +218,20 @@ type CodesphereEnvironment struct {
 	SSHPrivateKeyPath          string `json:"-"`
 	DatacenterID               int    `json:"-"`
 	DatacenterName             string `json:"-"`
-	CustomPgIP                 string `json:"custom_pg_ip"`
-	Region                     string `json:"region"`
-	Zone                       string `json:"zone"`
-	DNSZoneName                string `json:"dns_zone_name"`
+	// DatacenterIDExplicit records whether --datacenter-id was set on the command line. The
+	// value alone cannot distinguish the default 1 from an explicit 1.
+	DatacenterIDExplicit bool   `json:"-"`
+	CustomPgIP           string `json:"custom_pg_ip"`
+	Region               string `json:"region"`
+	Zone                 string `json:"zone"`
+	DNSZoneName          string `json:"dns_zone_name"`
 
 	// Test user creation
 	CreateTestUser bool   `json:"-"`
 	OmsWorkdir     string `json:"-"`
 	RootDiskSize   int64  `json:"root_disk_size"`
+	// Local OMS binary copied to the jumpbox instead of installing a release.
+	RemoteOmsBinaryPath string `json:"-"`
 }
 
 func NewGCPBootstrapper(
@@ -337,6 +392,16 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
+		err = b.stlog.Step("Install k0s", b.InstallK0s)
+		if err != nil {
+			return fmt.Errorf("failed to install k0s: %w", err)
+		}
+
+		err = b.stlog.Step("Wait for k0s nodes", b.WaitForK0sNodes)
+		if err != nil {
+			return fmt.Errorf("failed waiting for k0s nodes: %w", err)
+		}
+
 		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
 		if err != nil {
 			return fmt.Errorf("failed to install Codesphere: %w", err)
@@ -394,6 +459,14 @@ func (b *GCPBootstrapper) createTestUser() error {
 	return nil
 }
 func (b *GCPBootstrapper) ValidateInput() error {
+	if b.Env.GoogleACMEIssuer && b.Env.ACMEStaging {
+		return fmt.Errorf("acme-staging cannot be combined with google-acme-issuer")
+	}
+
+	if b.Env.RemoteOmsBinaryPath != "" && !b.fw.Exists(b.Env.RemoteOmsBinaryPath) {
+		return fmt.Errorf("remote OMS binary not found at path: %s", b.Env.RemoteOmsBinaryPath)
+	}
+
 	err := b.validateInstallVersion()
 	if err != nil {
 		return err
@@ -429,7 +502,32 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
+	err = b.validateClusterAdminEmail()
+	if err != nil {
+		return err
+	}
+
 	return b.validateTelemetryExportParams()
+}
+
+func (b *GCPBootstrapper) validateClusterAdminEmail() error {
+	if b.Env.ClusterAdminEmail == "" {
+		return nil
+	}
+
+	// The email reaches the cluster via the install config, which is only
+	// updated when the config is written.
+	if !b.Env.WriteConfig {
+		return fmt.Errorf("cluster admin email requires write-config to be enabled")
+	}
+
+	email, err := clusteradmin.NormalizeEmail(b.Env.ClusterAdminEmail)
+	if err != nil {
+		return fmt.Errorf("invalid cluster admin email: %w", err)
+	}
+	b.Env.ClusterAdminEmail = email
+
+	return nil
 }
 
 // validateInstallVersion checks if the specified install version exists and contains the required installer artifact
@@ -701,8 +799,8 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 	return nil
 }
 
-// EnsureGatewayIPAddresses reserves 2 static external IP addresses for the ingress
-// controllers of the cluster.
+// EnsureGatewayIPAddresses reserves the static external IP addresses for the ingress
+// controllers of the cluster (gateway and public gateway) and the SSH workspace proxy.
 func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 	var err error
 	b.Env.GatewayIP, err = b.EnsureExternalIP("gateway")
@@ -712,6 +810,10 @@ func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 	b.Env.PublicGatewayIP, err = b.EnsureExternalIP("public-gateway")
 	if err != nil {
 		return fmt.Errorf("failed to ensure public gateway IP: %w", err)
+	}
+	b.Env.SshProxyIP, err = b.EnsureExternalIP("ssh-proxy")
+	if err != nil {
+		return fmt.Errorf("failed to ensure ssh proxy IP: %w", err)
 	}
 
 	return nil
@@ -803,12 +905,38 @@ func (b *GCPBootstrapper) EnsureJumpboxConfigured() error {
 		}
 	}
 
-	hasOms := b.Env.Jumpbox.HasCommand("oms")
-	if hasOms {
+	err := b.EnsureOmsInstalled()
+	if err != nil {
+		return fmt.Errorf("failed to ensure OMS is present on jumpbox: %w", err)
+	}
+
+	err = b.Env.Jumpbox.EnsureOmsDependencies()
+	if err != nil {
+		return fmt.Errorf("failed to ensure OMS dependencies on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) EnsureOmsInstalled() (err error) {
+	if b.Env.RemoteOmsBinaryPath != "" {
+		err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.RemoteOmsBinaryPath, "/usr/local/bin/oms")
+		if err != nil {
+			return fmt.Errorf("failed to copy local OMS binary to jumpbox: %w", err)
+		}
+
+		err = b.Env.Jumpbox.RunSSHCommand("root", "chmod 0755 /usr/local/bin/oms")
+		if err != nil {
+			return fmt.Errorf("failed to make local OMS binary executable on jumpbox: %w", err)
+		}
 		return nil
 	}
 
-	err := b.Env.Jumpbox.InstallOms()
+	if b.Env.Jumpbox.HasCommand("oms") {
+		return nil
+	}
+
+	err = b.Env.Jumpbox.InstallOms()
 	if err != nil {
 		return fmt.Errorf("failed to install OMS on jumpbox: %w", err)
 	}
@@ -964,6 +1092,12 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 			Ttl:     300,
 			Rrdatas: []string{b.Env.PublicGatewayIP},
 		},
+		{
+			Name:    fmt.Sprintf("*.ssh.cs.%s.", b.Env.BaseDomain),
+			Type:    "A",
+			Ttl:     300,
+			Rrdatas: []string{b.Env.SshProxyIP},
+		},
 	}
 
 	err = b.GCPClient.EnsureDNSRecordSets(gcpProject, zoneName, records)
@@ -975,8 +1109,7 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 }
 
 func (b *GCPBootstrapper) InstallCodesphere() error {
-	fullPackageFilename, err := b.ensureCodespherePackageOnJumpbox()
-	if err != nil {
+	if err := b.ensureCodespherePackageOnJumpbox(); err != nil {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
@@ -986,15 +1119,16 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 				return fmt.Errorf("failed to update OMS binary on jumpbox for %s: %w", b.Env.InstallVersion, err)
 			}
 		}
+
 		if ltsSpec.RequiresCephMasterWatcher {
 			b.startLTSCephMasterWatcher()
 			defer b.stopLTSCephMasterWatcher()
 		}
-		return b.runLTSInstallPhases(fullPackageFilename, ltsSpec)
+
+		return b.runLTSInstallPhases(b.codespherePackageFilename(), ltsSpec)
 	}
 
-	err = b.runInstallCommand(fullPackageFilename)
-	if err != nil {
+	if err := b.runInstallCommand(b.codespherePackageFilename()); err != nil {
 		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
 	}
 
@@ -1014,6 +1148,7 @@ func (b *GCPBootstrapper) runLTSInstallPhases(packageFilename string, ltsSpec *L
 
 	// Phase 1: Infrastructure (docker, postgres, ceph, kubernetes) — no SSH needed.
 	b.stlog.Logf("Running infrastructure phase (Phase 1)...")
+
 	infraSkips := append([]string{"codesphere"}, ltsSkips...)
 	if err := b.runInstallPhase(packageFilename, "infra", infraSkips); err != nil {
 		return fmt.Errorf("infra phase failed: %w", err)
@@ -1021,6 +1156,7 @@ func (b *GCPBootstrapper) runLTSInstallPhases(packageFilename string, ltsSpec *L
 
 	// Phase 2: Dependencies (copy/extract) — skip SSH-needing steps.
 	b.stlog.Logf("Running dependencies phase (Phase 2)...")
+
 	if err := b.runInstallPhase(packageFilename, "dependencies", ltsSkips); err != nil {
 		return fmt.Errorf("dependencies phase failed: %w", err)
 	}
@@ -1036,6 +1172,7 @@ func (b *GCPBootstrapper) runLTSInstallPhases(packageFilename string, ltsSpec *L
 	// Phase 3: Deploy Codesphere via helm directly (bypasses the old LTS
 	// private-cloud-installer.js which can't handle the codesphere component).
 	b.stlog.Logf("Deploying Codesphere platform via helm (Phase 3)...")
+
 	if err := b.installCodesphereViaHelm(packageFilename); err != nil {
 		return fmt.Errorf("platform phase (helm) failed: %w", err)
 	}
@@ -1043,21 +1180,25 @@ func (b *GCPBootstrapper) runLTSInstallPhases(packageFilename string, ltsSpec *L
 	return nil
 }
 
-func (b *GCPBootstrapper) installCodesphereViaHelm(packageFilename string) error {
+func (b *GCPBootstrapper) installCodesphereViaHelm(_ string) error {
 	if len(b.Env.ControlPlaneNodes) == 0 {
 		return fmt.Errorf("no control plane nodes available for kubeconfig")
 	}
+
 	cpIP := b.Env.ControlPlaneNodes[0].GetInternalIP()
 
 	b.stlog.Logf("Copying kubeconfig from control plane (%s)...", cpIP)
+
 	mkdirCmd := "mkdir -p /var/lib/k0s/pki"
 	if err := b.Env.Jumpbox.RunSSHCommand("root", mkdirCmd); err != nil {
 		return fmt.Errorf("failed to create k0s dir on jumpbox: %w", err)
 	}
+
 	scpCmd := fmt.Sprintf("scp -o StrictHostKeyChecking=no root@%s:/var/lib/k0s/pki/admin.conf /var/lib/k0s/pki/admin.conf", cpIP)
 	if err := b.Env.Jumpbox.RunSSHCommand("root", scpCmd); err != nil {
 		return fmt.Errorf("failed to copy kubeconfig from control plane: %w", err)
 	}
+
 	sedCmd := fmt.Sprintf("sed -i 's|server: https://127.0.0.1:6443|server: https://%s:6443|; s|server: https://localhost:6443|server: https://%s:6443|' /var/lib/k0s/pki/admin.conf", cpIP, cpIP)
 	if err := b.Env.Jumpbox.RunSSHCommand("root", sedCmd); err != nil {
 		return fmt.Errorf("failed to update kubeconfig server address: %w", err)
@@ -1067,16 +1208,19 @@ func (b *GCPBootstrapper) installCodesphereViaHelm(packageFilename string) error
 	if err != nil {
 		return fmt.Errorf("failed to marshal codesphere config for helm: %w", err)
 	}
+
 	writeValuesCmd := fmt.Sprintf("cat > /etc/codesphere/codesphere-values.yaml << 'OMSEOF'\n%s\nOMSEOF", string(csValues))
 	if err := b.Env.Jumpbox.RunSSHCommand("root", writeValuesCmd); err != nil {
 		return fmt.Errorf("failed to write codesphere values on jumpbox: %w", err)
 	}
 
 	globalVals := b.buildGlobalHelmValues()
+
 	globalYAML, err := yaml.Marshal(map[string]interface{}{"global": globalVals})
 	if err != nil {
 		return fmt.Errorf("failed to marshal global helm values: %w", err)
 	}
+
 	writeGlobalCmd := fmt.Sprintf("cat > /etc/codesphere/global-values.yaml << 'OMSEOF'\n%s\nOMSEOF", string(globalYAML))
 	if err := b.Env.Jumpbox.RunSSHCommand("root", writeGlobalCmd); err != nil {
 		return fmt.Errorf("failed to write global values on jumpbox: %w", err)
@@ -1195,7 +1339,12 @@ echo "Codesphere platform deployed successfully."
   --docker-password=%s \
   -n codesphere`, b.Env.RegistryUser, b.Env.GitHubPAT)
 	}
-	return b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf(script, regCredSnippet))
+
+	if err := b.Env.Jumpbox.RunSSHCommand("root", fmt.Sprintf(script, regCredSnippet)); err != nil {
+		return fmt.Errorf("failed to run helm install script on jumpbox: %w", err)
+	}
+
+	return nil
 }
 
 // buildGlobalHelmValues constructs the global.* helm values from the OMS
@@ -1208,6 +1357,7 @@ func (b *GCPBootstrapper) buildGlobalHelmValues() map[string]interface{} {
 	tokenVault := &files.InstallVault{}
 	// Errors are non-fatal here; we proceed with whatever is generated.
 	_ = secrets.EnsureAuthKeys(tokenVault)
+
 	_ = secrets.EnsureServiceAccountTokens(tokenVault)
 	for _, s := range tokenVault.Secrets {
 		if s.File != nil {
@@ -1263,19 +1413,23 @@ func (b *GCPBootstrapper) buildGlobalHelmValues() map[string]interface{} {
 	for _, e := range cs.Experiments {
 		expMap[e] = []string{"prod"}
 	}
+
 	g["experiments"] = expMap
 
 	// Features: same transformation
 	featMap := map[string][]string{}
+
 	for k, v := range cs.Features {
 		if v {
 			featMap[k] = []string{"prod"}
 		}
 	}
+
 	g["features"] = featMap
 
 	g["deployConfig"] = cs.DeployConfig
 	g["plans"] = cs.Plans
+
 	g["gitProviders"] = cs.GitProviders
 	if g["gitProviders"] == nil {
 		g["gitProviders"] = map[string]interface{}{}
@@ -1291,6 +1445,7 @@ func (b *GCPBootstrapper) buildGlobalHelmValues() map[string]interface{} {
 		},
 		"additionalProviders": map[string]interface{}{},
 	}
+
 	g["customDomains"] = cs.CustomDomains
 	if cs.OpenBao != nil {
 		g["openBao"] = cs.OpenBao
@@ -1300,6 +1455,7 @@ func (b *GCPBootstrapper) buildGlobalHelmValues() map[string]interface{} {
 			"user":   "admin",
 		}
 	}
+
 	g["managedServices"] = cs.ManagedServices
 	g["extraCaPem"] = cs.ExtraCAPem
 	g["extraWorkspaceEnvVars"] = cs.ExtraWorkspaceEnvVars
@@ -1314,10 +1470,12 @@ func (b *GCPBootstrapper) buildGlobalHelmValues() map[string]interface{} {
 		"userActivityDatabase": "user_activity",
 		"ssl":                  map[string]interface{}{"rejectUnauthorized": false},
 	}
+
 	if cfg.Postgres.Primary != nil {
 		if cfg.Postgres.Primary.IP != "" {
 			g["postgres"].(map[string]interface{})["host"] = cfg.Postgres.Primary.IP
 		}
+
 		if cfg.Postgres.Primary.Hostname != "" {
 			g["postgres"].(map[string]interface{})["host"] = cfg.Postgres.Primary.Hostname
 		}
@@ -1395,10 +1553,11 @@ func (b *GCPBootstrapper) buildGlobalHelmValues() map[string]interface{} {
 	g["namespace"] = "codesphere"
 	g["mounterHmacSecret"] = "" // filled by vault if present
 
-	// Cert issuer from config
+	// Cert issuer from config (CertIssuer is a pointer; EnsureCertIssuer guards against nil)
+	certIssuer := cs.EnsureCertIssuer()
 	g["certIssuer"] = map[string]interface{}{
-		"type": cs.CertIssuer.Type,
-		"acme": cs.CertIssuer.Acme,
+		"type": certIssuer.Type,
+		"acme": certIssuer.Acme,
 	}
 	g["deployCert"] = cfg.Cluster.Certificates.CA
 
@@ -1468,10 +1627,12 @@ func (b *GCPBootstrapper) buildGlobalHelmValues() map[string]interface{} {
 	g["logAsJson"] = true
 	g["customDomainIngressClass"] = "nginx"
 	g["allowWorkspacesOnControlPlane"] = cfg.Kubernetes.ManagedByCodesphere
+
 	g["imageTag"] = cfg.GeneratedForVersion
 	if g["imageTag"] == "" {
 		g["imageTag"] = "v1.77.2"
 	}
+
 	g["freeWorkspaceTeamLimit"] = 5
 	g["freeWorkspaceClusterLimit"] = 3
 	g["freeGpuWsTeamLimit"] = 0
@@ -1510,7 +1671,12 @@ func (b *GCPBootstrapper) runInstallPhase(packageFilename, phase string, extraSk
 	if len(skipSteps) > 0 {
 		cmd += " -s " + strings.Join(skipSteps, ",")
 	}
-	return b.Env.Jumpbox.RunSSHCommand("root", cmd)
+
+	if err := b.Env.Jumpbox.RunSSHCommand("root", cmd); err != nil {
+		return fmt.Errorf("failed to run install phase %q on jumpbox: %w", phase, err)
+	}
+
+	return nil
 }
 
 // ensureNewOmsBinaryOnJumpbox copies a freshly-built linux/amd64 OMS binary to
@@ -1567,6 +1733,7 @@ func (b *GCPBootstrapper) ensureSSHKeyOnJumpbox() error {
 	// Write an SSH config that explicitly uses this identity file so the
 	// LTS installer's ssh child process always finds it.
 	sshConfig := "Host *\n  IdentityFile /root/.ssh/id_rsa\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n"
+
 	writeConfigCmd := fmt.Sprintf("cat > /root/.ssh/config << 'OMSEOF'\n%sOMSEOF\nchmod 600 /root/.ssh/config", sshConfig)
 	if err := b.Env.Jumpbox.RunSSHCommand("root", writeConfigCmd); err != nil {
 		return fmt.Errorf("failed to write SSH config on jumpbox: %w", err)
@@ -1584,6 +1751,7 @@ func (b *GCPBootstrapper) startLTSCephMasterWatcher() {
 	if len(b.Env.CephNodes) == 0 || len(b.Env.InstallConfig.Ceph.Hosts) == 0 {
 		return
 	}
+
 	masterHost := b.Env.InstallConfig.Ceph.Hosts[0]
 	// Use cephadm shell (same as the installer) so the command runs inside the ceph container,
 	// bypassing any standalone-binary or keyring availability issues on the host.
@@ -1603,42 +1771,83 @@ func (b *GCPBootstrapper) stopLTSCephMasterWatcher() {
 	if len(b.Env.CephNodes) == 0 || len(b.Env.InstallConfig.Ceph.Hosts) == 0 {
 		return
 	}
+
 	cmd := `kill $(cat /tmp/ceph-host-watcher.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/ceph-host-watcher.pid /tmp/ceph-host-watcher.log`
 	_ = b.Env.CephNodes[0].RunSSHCommand("root", cmd)
 }
 
-func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() (string, error) {
-	packageFilename := "installer.tar.gz"
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		packageFilename = "installer-lite.tar.gz"
+// InstallK0s deploys k0s with the native OMS installer and stores its
+// kubeconfig in the encrypted install vault for the remaining installer steps.
+func (b *GCPBootstrapper) InstallK0s() error {
+	// Reuse matching cached binaries and let k0sctl reconcile normally. Without
+	// --force, an unchanged cluster remains untouched on bootstrap retries.
+	installCmd := fmt.Sprintf("oms install k0s --version %s --install-config /etc/codesphere/config.yaml --vault %s --vault-priv-key %s/age_key.txt",
+		installer.DefaultK0sVersion, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), b.Env.SecretsDir)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", installCmd); err != nil {
+		return fmt.Errorf("failed to install k0s from jumpbox: %w", err)
 	}
 
+	return nil
+}
+
+// WaitForK0sNodes restores the readiness barrier from the TypeScript
+// Kubernetes setup. k0sctl apply completing is not sufficient for the
+// Codesphere charts: all schedulable nodes must be Ready before gateway
+// controllers and their admission webhooks are installed.
+func (b *GCPBootstrapper) WaitForK0sNodes() error {
+	const command = "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m"
+	if err := b.Env.ControlPlaneNodes[0].RunSSHCommand("root", command); err != nil {
+		return fmt.Errorf("k0s nodes did not become ready: %w", err)
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) codespherePackageFilename() string {
+	packageFilename := b.codespherePackageArchiveName()
+	if b.Env.InstallLocal != "" {
+		return "local-" + packageFilename
+	}
+
+	return portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFilename)
+}
+
+func (b *GCPBootstrapper) codespherePackageArchiveName() string {
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		return "installer-lite.tar.gz"
+	}
+
+	return "installer.tar.gz"
+}
+
+func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 	if b.Env.InstallLocal != "" {
 		b.stlog.Logf("Copying local package %s to jumpbox...", b.Env.InstallLocal)
-		fullPackageFilename := fmt.Sprintf("local-%s", packageFilename)
-		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallLocal, "/root/"+fullPackageFilename)
+
+		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallLocal, "/root/"+b.codespherePackageFilename())
 		if err != nil {
-			return "", fmt.Errorf("failed to copy local install package to jumpbox: %w", err)
+			return fmt.Errorf("failed to copy local install package to jumpbox: %w", err)
 		}
-		return fullPackageFilename, nil
+
+		return nil
 	}
 
 	if b.Env.InstallVersion == "" {
-		return "", errors.New("either install version or a local package must be specified to install Codesphere")
+		return errors.New("either install version or a local package must be specified to install Codesphere")
 	}
 
-	fullPackageFilename := portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFilename)
 	if b.Env.InstallHash == "" {
-		return "", fmt.Errorf("install hash must be set when install version is set")
+		return fmt.Errorf("install hash must be set when install version is set")
 	}
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
-		packageFilename, b.Env.InstallHash, b.Env.InstallVersion)
-	if err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd); err != nil {
-		return "", fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
+		b.codespherePackageArchiveName(), b.Env.InstallHash, b.Env.InstallVersion)
+	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
+	if err != nil {
+		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
 	}
 
-	return fullPackageFilename, nil
+	return nil
 }
 
 func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
@@ -1650,6 +1859,7 @@ func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 		if ltsSpec.SkipPcApps {
 			b.Env.InstallSkipSteps = append(b.Env.InstallSkipSteps, "argocd")
 		}
+
 		if ltsSpec.SkipSetupCluster {
 			b.Env.InstallSkipSteps = append(b.Env.InstallSkipSteps, "set-up-cluster", "ms-backends", "codesphere")
 		}
@@ -1661,9 +1871,13 @@ func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 }
 
 func (b *GCPBootstrapper) generateSkipStepsArg() string {
-	skipSteps := b.Env.InstallSkipSteps
+	// k0s is installed by OMS before the TypeScript installer runs, so the
+	// TypeScript Kubernetes step must never run during GCP bootstrapping.
+	skipSteps := []string{"kubernetes"}
+	skipSteps = util.AppendUnique(skipSteps, b.Env.InstallSkipSteps...)
+
 	if b.Env.RegistryType == RegistryTypeGitHub {
-		skipSteps = append(skipSteps, "load-container-images")
+		skipSteps = util.AppendUnique(skipSteps, "load-container-images")
 	}
 	if len(skipSteps) == 0 {
 		return ""
@@ -1671,7 +1885,6 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 
 	return " -s " + strings.Join(skipSteps, ",")
 }
-
 func (b *GCPBootstrapper) GenerateK0sConfigScript() error {
 	script := `#!/bin/bash
 

@@ -24,7 +24,7 @@ type Client interface {
 	GetPipelineState(workspaceID int, stage string) ([]api.PipelineStatus, error)
 	DeleteWorkspace(workspaceID int) error
 	ListWorkspacePlans() ([]api.WorkspacePlan, error)
-	ListTeams() ([]api.Team, error)
+	ListTeams(orgId string) ([]api.Team, error)
 }
 
 // APIClient wraps the cs-go API client
@@ -128,8 +128,8 @@ func (c *APIClient) DeleteWorkspace(workspaceID int) error {
 }
 
 // ListTeams lists the teams available
-func (c *APIClient) ListTeams() ([]api.Team, error) {
-	teams, err := c.client.ListTeams()
+func (c *APIClient) ListTeams(orgId string) ([]api.Team, error) {
+	teams, err := c.client.ListTeams(orgId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list teams: %w", err)
 	}

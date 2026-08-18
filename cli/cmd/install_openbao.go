@@ -21,8 +21,9 @@ import (
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/util"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 )
 
 // InstallOpenBaoCmd wraps the cobra command and options for 'oms install openbao'.
@@ -33,7 +34,7 @@ type InstallOpenBaoCmd struct {
 
 // InstallOpenBaoOpts holds the CLI flags for the OpenBao installer.
 type InstallOpenBaoOpts struct {
-	*GlobalOptions
+	*util.GlobalOptions
 	Namespace         string
 	SecretsEngineName string
 	BaoUsername       string
@@ -59,7 +60,7 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	// Pass --age-key-file explicitly so ResolveAgeKey prefers it without
 	// mutating the process environment. When empty, the normal
 	// auto-discovery chain (env vars, default location, generation) applies.
-	recipient, keyPath, err := installer.ResolveAgeKey(c.Opts.AgeKeyFile, fallbackDir)
+	recipient, keyPath, err := sops.ResolveAgeKey(c.Opts.AgeKeyFile, fallbackDir)
 	if err != nil {
 		return fmt.Errorf("resolving age key: %w", err)
 	}
@@ -113,7 +114,7 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 }
 
 // AddInstallOpenBaoCmd registers the openbao subcommand under install.
-func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
+func AddInstallOpenBaoCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	openbao := InstallOpenBaoCmd{
 		cmd: &cobra.Command{
 			Use:   "openbao",
@@ -129,7 +130,7 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 				6. Extract and encrypt unseal keys + password as SOPS DR backup
 
 				The command is idempotent and safe to re-run.`),
-			Example: formatExamples("install openbao", []packageio.Example{
+			Example: util.FormatExamples("install openbao", []packageio.Example{
 				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json", Desc: "Fresh bootstrap with DR backup saved locally"},
 				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json --secrets-engine my-engine --bao-user myuser", Desc: "Custom engine and user"},
 				{Cmd: "--dr-backup-path ./backups/cluster-1.enc.json --timeout 10m", Desc: "Extended timeout for slower clusters"},
@@ -149,7 +150,7 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *GlobalOptions) {
 
 	util.MarkFlagRequired(openbao.cmd, "dr-backup-path")
 
-	AddCmd(install, openbao.cmd)
+	util.AddCmd(install, openbao.cmd)
 
 	openbao.cmd.RunE = openbao.RunE
 }

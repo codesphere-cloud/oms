@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 	"runtime"
 	"strings"
 
+	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -66,42 +68,55 @@ func (k *K0sctl) GetLatestVersion() (string, error) {
 }
 
 func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error) {
+	cacheDir, err := k.Env.GetOmsCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to determine cache directory: %w", err)
+	}
+
+	if err := k.FileWriter.MkdirAll(cacheDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create workdir: %w", err)
+	}
+
 	if version == "" {
 		var err error
 		version, err = k.GetLatestVersion()
 		if err != nil {
 			return "", fmt.Errorf("failed to get latest version: %w", err)
 		}
-		if !quiet {
-			log.Printf("Using latest k0sctl version: %s", version)
-		}
+		io.Verbosef(!quiet, "Using latest k0sctl version: %s", version)
 	}
 
-	// Ensure version has v prefix for GitHub URL
 	if !strings.HasPrefix(version, "v") {
 		version = "v" + version
+	}
+
+	cachePath := filepath.Join(cacheDir, "k0sctl")
+	if k.FileWriter.Exists(cachePath) && !force {
+		cachedVersion, versionErr := localBinaryVersion(cachePath)
+		if versionErr == nil && cachedVersion == version {
+			io.Verbosef(!quiet, "Using cached k0sctl %s at %s", version, cachePath)
+
+			return cachePath, nil
+		}
+
+		if versionErr != nil {
+			io.Verbosef(!quiet, "Cached k0sctl version could not be determined; replacing it: %v", versionErr)
+		} else {
+			io.Verbosef(!quiet, "Cached k0sctl version %s does not match requested version %s; replacing it", cachedVersion, version)
+		}
 	}
 
 	binaryName := fmt.Sprintf("k0sctl-%s-%s", k.Goos, k.Goarch)
 	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0sctl/releases/download/%s/%s", version, binaryName)
 
-	if !quiet {
-		log.Printf("Downloading k0sctl %s from %s", version, downloadURL)
-	}
+	io.Verbosef(!quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 
-	cacheDir, err := k.Env.GetOmsCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to determine cache directory: %w", err)
-	}
-
-	path, err := downloadBinary(k.FileWriter, k.Http, cacheDir, "k0sctl", downloadURL, force, quiet)
+	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, "k0sctl", downloadURL, quiet)
 	if err != nil {
 		return "", err
 	}
 
-	if !quiet {
-		log.Printf("k0sctl downloaded successfully to %s", path)
-	}
+	io.Verbosef(!quiet, "k0sctl downloaded successfully to %s", path)
 
 	return path, nil
 }

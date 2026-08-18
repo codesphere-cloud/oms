@@ -125,6 +125,28 @@ var _ = Describe("EnsureMounterHmacSecret", func() {
 	})
 })
 
+var _ = Describe("EnsureOpenFgaPresharedKey", func() {
+	It("creates a 64-character hex secret", func() {
+		vault := newVault()
+		Expect(secrets.EnsureOpenFgaPresharedKey(vault)).To(Succeed())
+
+		secret := vault.GetSecret("openFgaPresharedKey")
+		Expect(secret).NotTo(BeNil())
+		Expect(secret.Fields).NotTo(BeNil())
+		Expect(secret.Fields.Password).To(HaveLen(64))
+		Expect(secret.Fields.Password).To(MatchRegexp("^[0-9a-f]+$"))
+	})
+
+	It("is idempotent", func() {
+		vault := newVault()
+		Expect(secrets.EnsureOpenFgaPresharedKey(vault)).To(Succeed())
+		original := vault.GetSecret("openFgaPresharedKey").Fields.Password
+
+		Expect(secrets.EnsureOpenFgaPresharedKey(vault)).To(Succeed())
+		Expect(vault.GetSecret("openFgaPresharedKey").Fields.Password).To(Equal(original))
+	})
+})
+
 var _ = Describe("EnsureNixSigningKeys", func() {
 	It("creates priv/pub keys in host:hexKey format", func() {
 		vault := newVault()
@@ -155,9 +177,19 @@ var _ = Describe("EnsureNixSigningKeys", func() {
 })
 
 var _ = Describe("EnsureDefaultSecrets", func() {
-	It("always overwrites digitalOceanApiToken", func() {
+	It("keeps a digitalOceanApiToken the vault already holds", func() {
 		vault := newVault()
 		vault.SetSecret(files.SecretEntry{Name: "digitalOceanApiToken", Fields: &files.SecretFields{Password: "real-token"}})
+
+		Expect(secrets.EnsureDefaultSecrets(vault)).To(Succeed())
+		Expect(vault.GetSecret("digitalOceanApiToken").Fields.Password).To(Equal("real-token"))
+	})
+
+	// The chart does not render without a value, so an entry that is there but empty is
+	// filled in like a missing one.
+	It("fills in an empty digitalOceanApiToken", func() {
+		vault := newVault()
+		vault.SetSecret(files.SecretEntry{Name: "digitalOceanApiToken", Fields: &files.SecretFields{Password: ""}})
 
 		Expect(secrets.EnsureDefaultSecrets(vault)).To(Succeed())
 		Expect(vault.GetSecret("digitalOceanApiToken").Fields.Password).To(Equal("dummy"))
@@ -171,6 +203,7 @@ var _ = Describe("EnsureDefaultSecrets", func() {
 			"githubAppsClientId", "githubAppsClientSecret",
 			"gitlabAppClientId", "gitlabAppClientSecret",
 			"stripeSecretKey", "sendGridApiKey", "openBaoPassword",
+			"openfgaDbBackupAccessKeyId", "openfgaDbBackupSecretAccessKey",
 		} {
 			secret := vault.GetSecret(name)
 			Expect(secret).NotTo(BeNil(), "missing %s", name)

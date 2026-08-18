@@ -1,0 +1,342 @@
+// Copyright (c) Codesphere Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//go:build integration
+// +build integration
+
+package apikey_test
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
+	"github.com/codesphere-cloud/oms/internal/portal"
+)
+
+var _ = Describe("API Key Integration Tests", func() {
+	var (
+		portalClient     portal.Portal
+		testOwner        string
+		testOrg          string
+		testRole         string
+		registeredKey    *portal.ApiKey
+		originalAdminKey string
+		extendDays       int
+	)
+
+	BeforeEach(func() {
+		apiKey := os.Getenv("OMS_PORTAL_API_KEY")
+		apiURL := os.Getenv("OMS_PORTAL_API")
+		if apiKey == "" || apiURL == "" {
+			Fail("Integration tests require OMS_PORTAL_API_KEY and OMS_PORTAL_API environment variables")
+		}
+
+		originalAdminKey = apiKey
+
+		portalClient = portal.NewPortalClient()
+		// test env wrapper
+		portalClient.(*portal.PortalClient).Env = NewTestEnv(apiKey, os.Getenv("OMS_PORTAL_API"), "")
+
+		// test data
+		testOwner = fmt.Sprintf("integration-test-%d@test.com", time.Now().Unix())
+		testOrg = "IntegrationTestOrg"
+		testRole = "Ext"
+		extendDays = 2
+	})
+
+	Describe("Standalone created-key behavior", func() {
+		It("created API key can list builds when used", func() {
+			registerCmd := apikey.RegisterCmd{
+				Opts: apikey.RegisterOpts{
+					Owner:        fmt.Sprintf("standalone-test-%d@test.com", time.Now().Unix()),
+					Organization: "StandaloneTestOrg",
+					Role:         "Ext",
+					ValidFor:     "1d",
+				},
+			}
+
+			GinkgoWriter.Printf("Attempting to register API key for owner: %s at API: %s\n", registerCmd.Opts.Owner, os.Getenv("OMS_PORTAL_API"))
+			newKey, err := registerCmd.Register(portalClient)
+			if err != nil {
+				GinkgoWriter.Printf("Registration failed: %v\n", err)
+			}
+			Expect(err).To(BeNil(), "API key registration should succeed")
+			Expect(newKey).NotTo(BeNil(), "Register should return the created API key")
+
+			keys, err := portalClient.ListAPIKeys()
+			Expect(err).To(BeNil(), "Listing API keys should succeed")
+
+			var created *portal.ApiKey
+			for i := range keys {
+				if keys[i].Owner == registerCmd.Opts.Owner {
+					created = &keys[i]
+					break
+				}
+			}
+			Expect(created).NotTo(BeNil(), "Should find the created API key")
+			Expect(newKey.ApiKey).NotTo(BeEmpty(), "Created API key must include secret value")
+
+			client := portal.NewPortalClient()
+			client.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
+
+			builds, err := client.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
+			Expect(err).To(BeNil(), "Listing builds with created key should succeed")
+			Expect(builds.Builds).NotTo(BeEmpty(), "Created key should be able to see builds")
+		})
+	})
+
+	Describe("Complete API Key Flow", func() {
+		It("should successfully complete the full API key lifecycle", func() {
+			By("Registering a new customer API key")
+			registerCmd := apikey.RegisterCmd{
+				Opts: apikey.RegisterOpts{
+					Owner:        testOwner,
+					Organization: testOrg,
+					Role:         testRole,
+					ValidFor:     "1d",
+				},
+			}
+
+			GinkgoWriter.Printf("[DEBUG] Attempting to register API key for owner: %s, org: %s at API: %s\n",
+				testOwner, testOrg, os.Getenv("OMS_PORTAL_API"))
+			newKey, err := registerCmd.Register(portalClient)
+			if err != nil {
+				GinkgoWriter.Printf("[ERROR] Registration failed: %v\n", err)
+			}
+			Expect(err).To(BeNil(), "API key registration should succeed")
+			Expect(newKey).NotTo(BeNil(), "Register should return the created API key")
+
+			By("Listing API keys to get the newly registered key")
+			keys, err := portalClient.ListAPIKeys()
+			Expect(err).To(BeNil(), "Listing API keys should succeed")
+			Expect(keys).NotTo(BeEmpty(), "Should have at least one API key")
+
+			// Find the new key
+			for i := range keys {
+				if keys[i].Owner == testOwner {
+					registeredKey = &keys[i]
+					break
+				}
+			}
+			Expect(registeredKey).NotTo(BeNil(), "Should find the registered API key")
+			Expect(registeredKey.Owner).To(Equal(testOwner))
+			Expect(registeredKey.Organization).To(Equal(testOrg))
+			Expect(registeredKey.Role).To(Equal(testRole))
+
+			By("Ensuring the customer can see builds")
+			Expect(newKey.ApiKey).NotTo(BeEmpty(), "Registered key must include the API key value")
+
+			p := portal.NewPortalClient()
+			// switch to the new key
+			p.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
+
+			builds, err := p.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
+			Expect(err).To(BeNil(), "Listing builds with new key should succeed")
+			Expect(builds.Builds).NotTo(BeEmpty(), "Should have at least one build available")
+
+			// restore admin key
+			portalClient.(*portal.PortalClient).Env = NewTestEnv(originalAdminKey, os.Getenv("OMS_PORTAL_API"), "")
+
+			By("Extending the API Key to a future date")
+			beforeUpdate := time.Now()
+			updateCmd := apikey.UpdateAPIKeyCmd{
+				Opts: apikey.UpdateAPIKeyOpts{
+					APIKeyID: registeredKey.KeyID,
+					ValidFor: fmt.Sprintf("%dd", extendDays),
+				},
+			}
+
+			err = updateCmd.UpdateAPIKey(portalClient)
+			Expect(err).To(BeNil(), "API key update should succeed")
+			afterUpdate := time.Now()
+
+			By("Verifying the API key was updated")
+			keys, err = portalClient.ListAPIKeys()
+			Expect(err).To(BeNil(), "Listing API keys should succeed")
+
+			// Find the updated key
+			var updatedKey *portal.ApiKey
+			for i := range keys {
+				if keys[i].KeyID == registeredKey.KeyID {
+					updatedKey = &keys[i]
+					break
+				}
+			}
+			Expect(updatedKey).NotTo(BeNil(), "Should find the updated API key")
+			minExpected := beforeUpdate.AddDate(0, 0, extendDays)
+			maxExpected := afterUpdate.AddDate(0, 0, extendDays)
+			Expect(updatedKey.ExpiresAt.After(minExpected) || updatedKey.ExpiresAt.Equal(minExpected)).To(BeTrue())
+			Expect(updatedKey.ExpiresAt.Before(maxExpected) || updatedKey.ExpiresAt.Equal(maxExpected)).To(BeTrue())
+
+			By("Revoking the API Key")
+			revokeCmd := apikey.RevokeAPIKeyCmd{
+				Opts: apikey.RevokeAPIKeyOpts{
+					ID: registeredKey.KeyID,
+				},
+			}
+
+			err = revokeCmd.Revoke(portalClient)
+			Expect(err).To(BeNil(), "API key revocation should succeed")
+
+			By("Ensuring the API Key is not valid anymore")
+
+			keyFound := true
+			for attempt := 0; attempt < 5; attempt++ {
+				keys, err = portalClient.ListAPIKeys()
+				if err != nil {
+					GinkgoWriter.Printf("[WARN] ListAPIKeys attempt %d failed: %v\n", attempt+1, err)
+					time.Sleep(1 * time.Second)
+					continue
+				}
+
+				keyFound = false
+				for i := range keys {
+					if keys[i].KeyID == registeredKey.KeyID {
+						keyFound = true
+						break
+					}
+				}
+
+				if !keyFound {
+					break
+				}
+				time.Sleep(1 * time.Second)
+			}
+			Expect(err).To(BeNil(), "Listing API keys should succeed after retries")
+
+			if keyFound {
+				revokedClient := portal.NewPortalClient()
+				revokedClient.Env = NewTestEnv(newKey.ApiKey, os.Getenv("OMS_PORTAL_API"), "")
+				_, useErr := revokedClient.ListBuilds(portal.CodesphereProduct, portal.SortSemver)
+				Expect(useErr).NotTo(BeNil(), "Using a revoked API key should fail")
+			} else {
+				Expect(keyFound).To(BeFalse(), "Revoked API key should not be in the list")
+			}
+		})
+	})
+
+	Describe("API Key Update With Wrong Input", func() {
+		It("should handle update with invalid valid-for format", func() {
+			updateCmd := apikey.UpdateAPIKeyCmd{
+				Opts: apikey.UpdateAPIKeyOpts{
+					APIKeyID: "test-key-id",
+					ValidFor: "invalid-date",
+				},
+			}
+
+			err := updateCmd.UpdateAPIKey(portalClient)
+			Expect(err).NotTo(BeNil(), "Should fail with invalid valid-for duration")
+			Expect(err.Error()).To(ContainSubstring("failed to parse valid-for duration"))
+		})
+	})
+
+	Describe("Old API Key Detection and Warning", func() {
+		var (
+			cliPath = "../../oms"
+		)
+
+		Context("when using a 25-character old API key format", func() {
+			It("should detect the old format and attempt to upgrade", func() {
+				cmd := exec.Command(cliPath, "version")
+				cmd.Env = append(os.Environ(),
+					"OMS_PORTAL_API_KEY=fakeapikeywith25character", // 25 characters
+					"OMS_PORTAL_API=http://localhost:3000/api",
+				)
+
+				output, err := cmd.CombinedOutput()
+				outputStr := string(output)
+				if err != nil {
+					GinkgoWriter.Printf("Command error: %v, Output: %s\n", err, outputStr)
+				}
+
+				Expect(outputStr).To(ContainSubstring("OMS CLI version"))
+			})
+		})
+
+		Context("when using a new long-format API key", func() {
+			It("should not show any warning", func() {
+				cmd := exec.Command(cliPath, "version")
+				cmd.Env = append(os.Environ(),
+					"OMS_PORTAL_API_KEY=fake-api-key",
+					"OMS_PORTAL_API=http://localhost:3000/api",
+				)
+
+				output, err := cmd.CombinedOutput()
+				outputStr := string(output)
+				if err != nil {
+					GinkgoWriter.Printf("Command error: %v, Output: %s\n", err, outputStr)
+				}
+
+				Expect(outputStr).To(ContainSubstring("OMS CLI version"))
+				Expect(outputStr).NotTo(ContainSubstring("old API key"))
+				Expect(outputStr).NotTo(ContainSubstring("Failed to upgrade"))
+			})
+		})
+
+		Context("when using a 25-character key with list api-keys command", func() {
+			It("should attempt the upgrade and handle the error gracefully", func() {
+				cmd := exec.Command(cliPath, "list", "api-keys")
+				cmd.Env = append(os.Environ(),
+					"OMS_PORTAL_API_KEY=fakeapikeywith25character", // 25 characters (old format)
+					"OMS_PORTAL_API=http://localhost:3000/api",
+				)
+
+				output, err := cmd.CombinedOutput()
+				outputStr := string(output)
+
+				Expect(err).To(HaveOccurred())
+
+				hasWarning := strings.Contains(outputStr, "old API key") ||
+					strings.Contains(outputStr, "Failed to upgrade") ||
+					strings.Contains(outputStr, "Unauthorized")
+
+				Expect(hasWarning).To(BeTrue(),
+					"Should contain warning about old key or auth failure. Got: "+outputStr)
+			})
+		})
+
+		Context("when checking key length detection", func() {
+			It("should correctly identify 25-character old format", func() {
+				oldKey := "fakeapikeywith25character"
+				Expect(len(oldKey)).To(Equal(25))
+			})
+
+			It("should correctly identify new long format", func() {
+				newKey := "4hBieJRj2pWeB9qKJ9wQGE3CrcldLnLwP8fz6qutMjkf1n1"
+				Expect(len(newKey)).NotTo(Equal(25))
+				Expect(len(newKey)).To(BeNumerically(">", 25))
+			})
+		})
+	})
+
+	Describe("PreRun Hook Execution", func() {
+		var (
+			cliPath = "../../oms"
+		)
+
+		Context("when running any OMS command", func() {
+			It("should execute the PreRun hook", func() {
+				cmd := exec.Command(cliPath, "version")
+				cmd.Env = append(os.Environ(),
+					"OMS_PORTAL_API_KEY=valid-key-format-short",
+					"OMS_PORTAL_API=http://localhost:3000/api",
+				)
+
+				output, err := cmd.CombinedOutput()
+				outputStr := string(output)
+				if err != nil {
+					GinkgoWriter.Printf("Command error: %v, Output: %s\n", err, outputStr)
+				}
+
+				Expect(outputStr).To(ContainSubstring("OMS CLI version"))
+			})
+		})
+	})
+})

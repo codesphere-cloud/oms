@@ -22,13 +22,13 @@ oms install k0s [flags]
 # Path to Codesphere install-config file to generate k0s config from
 $ oms install k0s --install-config <path>
 
-# Version of k0s to install (e.g., v1.30.0+k0s.0)
+# Version of k0s to install (e.g., v1.31.14+k0s.0)
 $ oms install k0s --version <version>
 
 # Version of k0sctl to use (e.g., v0.17.4)
 $ oms install k0s --k0sctl-version <version>
 
-# Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from
+# Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
 $ oms install k0s --package <file>
 
 # SSH private key path for remote installation
@@ -50,11 +50,12 @@ $ oms install k0s --no-download
       --install-config string   Path to Codesphere install-config file (required)
       --k0sctl-version string   Version of k0sctl to use
       --no-download             Skip downloading k0s binary
-  -p, --package string          Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load k0s from
+  -p, --package string          Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
       --ssh-key-path string     SSH private key path for remote installation
       --vault string            Path to prod.vault.yaml to save the kubeconfig into (optional)
       --vault-priv-key string   Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)
-  -v, --version string          Version of k0s to install
+      --vault-type string       Vault storage type (sops or plain) (default "sops")
+  -v, --version string          Version of k0s to install (default "v1.31.14+k0s.0")
 ```
 
 ### SEE ALSO

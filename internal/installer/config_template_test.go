@@ -14,15 +14,26 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 )
 
+func sopsAndAgeAvailable() bool {
+	if _, err := exec.LookPath("sops"); err != nil {
+		return false
+	}
+	if _, err := exec.LookPath("age-keygen"); err != nil {
+		return false
+	}
+	return true
+}
+
 var _ = Describe("Config templating", func() {
-	var vault *files.InstallVault
+	var installVault *files.InstallVault
 
 	BeforeEach(func() {
-		vault = &files.InstallVault{
+		installVault = &files.InstallVault{
 			Secrets: []files.SecretEntry{
 				{
 					Name: "apiToken",
@@ -45,7 +56,7 @@ var _ = Describe("Config templating", func() {
 	It("renders secret values from the vault dynamically", func() {
 		rendered, err := configtemplating.RenderInstallConfigTemplate(
 			[]byte(`password: "{{ secret "apiToken" }}"`),
-			installer.NewVaultTemplatingSecretStore(vault),
+			vault.NewVaultTemplatingSecretStore(installVault),
 		)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -55,7 +66,7 @@ var _ = Describe("Config templating", func() {
 	It("supports selecting specific secret fields", func() {
 		rendered, err := configtemplating.RenderInstallConfigTemplate(
 			[]byte(`username: "{{ secret "apiToken" "fields.username" }}"`),
-			installer.NewVaultTemplatingSecretStore(vault),
+			vault.NewVaultTemplatingSecretStore(installVault),
 		)
 
 		Expect(err).NotTo(HaveOccurred())
@@ -65,7 +76,7 @@ var _ = Describe("Config templating", func() {
 	It("returns an error for missing secrets", func() {
 		_, err := configtemplating.RenderInstallConfigTemplate(
 			[]byte(`password: "{{ secret "missing" }}"`),
-			installer.NewVaultTemplatingSecretStore(vault),
+			vault.NewVaultTemplatingSecretStore(installVault),
 		)
 
 		Expect(err).To(HaveOccurred())
@@ -90,17 +101,17 @@ codesphere:
     apiToken: "{{ secret "apiToken" }}"
 `, tempDir)
 		Expect(os.WriteFile(configPath, []byte(configYaml), 0644)).To(Succeed())
-		vaultYaml, err := vault.Marshal()
+		vaultYaml, err := installVault.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.WriteFile(plaintextVaultPath, vaultYaml, 0600)).To(Succeed())
 		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(installer.EncryptFileWithSOPS(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
+		Expect(sops.EncryptFile(plaintextVaultPath, vaultPath, strings.TrimSpace(string(recipient)))).To(Succeed())
 
 		renderedPath, cleanup, err := configtemplating.RenderConfigFileToTemp(
 			configPath,
-			installer.NewLazyVaultTemplatingSecretStore(vaultPath, ageKeyPath),
+			vault.NewLazyVaultTemplatingSecretStore(vaultPath, ageKeyPath),
 		)
 		defer cleanup()
 		Expect(err).NotTo(HaveOccurred())
@@ -110,16 +121,19 @@ codesphere:
 		Expect(string(rendered)).To(ContainSubstring(`apiToken: "super-secret-token"`))
 	})
 
-	It("supports unencrypted prod.vault.yaml files", func() {
+	It("rejects unencrypted prod.vault.yaml files", func() {
 		tempDir := GinkgoT().TempDir()
 		vaultPath := filepath.Join(tempDir, "prod.vault.yaml")
 
-		vaultYaml, err := vault.Marshal()
+		vaultYaml, err := installVault.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.WriteFile(vaultPath, vaultYaml, 0600)).To(Succeed())
 
-		_, err = installer.LoadVaultData(vaultPath, "")
+		backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultPath, AgeKey: filepath.Join(tempDir, "unused-age-key")})
+		Expect(err).NotTo(HaveOccurred())
+		_, err = backend.Load()
 
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("is not SOPS-encrypted"))
 	})
 })

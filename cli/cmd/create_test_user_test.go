@@ -9,16 +9,17 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 )
 
 var _ = Describe("CreateTestUser", func() {
 	Context("AddCreateTestUserCmd", func() {
 		var createCmd cobra.Command
-		var opts *cmd.GlobalOptions
+		var opts *util.GlobalOptions
 
 		BeforeEach(func() {
 			createCmd = cobra.Command{}
-			opts = &cmd.GlobalOptions{}
+			opts = &util.GlobalOptions{}
 		})
 
 		It("accepts valid flags with all required flags set", func() {

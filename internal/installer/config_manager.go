@@ -11,6 +11,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -29,10 +30,13 @@ type InstallConfigManager interface {
 	// Configuration management
 	LoadInstallConfigFromFile(configPath string) error
 	LoadVaultFromFile(vaultPath string) error
+	LoadVaultFromUnecryptedFile(vaultPath string) error
 	ValidateInstallConfig() []string
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
 	GetVault() *files.InstallVault
+	SetInstallConfig(config *files.RootConfig)
+	SetVault(vault *files.InstallVault)
 	GetSecretFilePath() string
 	CollectInteractively() error
 
@@ -43,9 +47,11 @@ type InstallConfigManager interface {
 }
 
 type InstallConfig struct {
-	fileIO util.FileIO
-	Config *files.RootConfig
-	Vault  *files.InstallVault
+	fileIO      util.FileIO
+	Config      *files.RootConfig
+	Vault       *files.InstallVault
+	vaultType   vault.Type
+	vaultAgeKey string
 }
 
 // SetFileIO overrides the file I/O implementation (useful for testing).
@@ -53,13 +59,41 @@ func (g *InstallConfig) SetFileIO(fio util.FileIO) {
 	g.fileIO = fio
 }
 
-func NewInstallConfigManager() InstallConfigManager {
-	config := files.NewRootConfig()
-	return &InstallConfig{
-		fileIO: &util.FilesystemWriter{},
-		Config: &config,
-		Vault:  &files.InstallVault{},
+// NewInstallConfigManager configures all vault reads and writes to go through
+// the selected vault implementation.
+func NewInstallConfigManager(vaultType string, ageKey string) (InstallConfigManager, error) {
+	t, err := vault.ParseType(vaultType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse vault type %s: %w", vaultType, err)
 	}
+
+	if err := vault.ValidateConfiguration(t, ageKey); err != nil {
+		return nil, fmt.Errorf("failed to validate install config: %w", err)
+	}
+
+	config := files.NewRootConfig()
+
+	return &InstallConfig{
+		fileIO:      &util.FilesystemWriter{},
+		Config:      &config,
+		Vault:       &files.InstallVault{},
+		vaultType:   t,
+		vaultAgeKey: ageKey,
+	}, nil
+}
+
+func (g *InstallConfig) vaultStore(path string, comments bool, forcedType ...vault.Type) (vault.Vault, error) {
+	t := g.vaultType
+	if len(forcedType) > 0 {
+		t = forcedType[0]
+	}
+
+	vault, err := vault.New(t, vault.Options{Path: path, AgeKey: g.vaultAgeKey, WithComments: comments, FileIO: g.fileIO})
+	if err != nil {
+		return nil, fmt.Errorf("failed to read vault: %w", err)
+	}
+
+	return vault, nil
 }
 
 func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
@@ -68,7 +102,7 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 		return fmt.Errorf("failed to read %s: %w", configPath, err)
 	}
 
-	store := NewVaultTemplatingSecretStore(g.Vault)
+	store := vault.NewVaultTemplatingSecretStore(g.Vault)
 	data, err = configtemplating.RenderInstallConfigTemplate(data, store)
 	if err != nil {
 		return err
@@ -83,13 +117,34 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 	return nil
 }
 
+// LoadVaultFromFile loads vault content using the manager's configured backend.
+// An empty type selects the default SOPS backend.
 func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
-	vault, err := LoadVaultData(vaultPath, "")
+	store, err := g.vaultStore(vaultPath, false)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to initialize vault backend: %w", err)
 	}
 
-	g.Vault = vault
+	loaded, err := store.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load vault: %w", err)
+	}
+
+	g.Vault = loaded
+	return nil
+}
+
+// LoadVaultFromUnecryptedFile loads the vault content from an unencrypted file into the installConfig
+func (g *InstallConfig) LoadVaultFromUnecryptedFile(vaultPath string) error {
+	store, err := g.vaultStore(vaultPath, false, vault.TypePlain)
+	if err != nil {
+		return fmt.Errorf("failed to initialize vault backend: %w", err)
+	}
+
+	g.Vault, err = store.LoadOrCreate()
+	if err != nil {
+		return fmt.Errorf("failed to load vault: %w", err)
+	}
 	return nil
 }
 
@@ -115,6 +170,9 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 
 	switch g.Config.Postgres.Mode {
 	case "install":
+		if err := validatePostgresServerAddress(g.Config.Postgres); err != nil {
+			errors = append(errors, err.Error())
+		}
 		if g.Config.Postgres.Primary == nil {
 			errors = append(errors, "postgres primary configuration is required when mode is 'install'")
 		} else {
@@ -172,7 +230,61 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		}
 	}
 
+	if ob := g.Config.Codesphere.OpenfgaBackups; ob != nil && ob.Enabled {
+		if ob.DestinationPath == "" {
+			errors = append(errors, "openfga backups destinationPath is required when openfgaBackups is enabled")
+		}
+		if ob.EndpointURL == "" {
+			errors = append(errors, "openfga backups endpointURL is required when openfgaBackups is enabled")
+		}
+	}
+
+	errors = append(errors, validateOpenFga(g.Config.Codesphere.OpenFga)...)
+
 	return errors
+}
+
+// validateOpenFga checks the codesphere.openFga block. A data center that does not deploy
+// OpenFGA has nowhere to fall back to, so it must name the instance it uses; a data center that
+// exposes one must say under which host.
+func validateOpenFga(config *files.OpenFgaConfig) []string {
+	if config == nil {
+		return nil
+	}
+
+	errors := []string{}
+	if !config.DeploysOpenFga() && config.APIURL == "" {
+		errors = append(errors, "OpenFGA apiUrl is required when codesphere.openFga.deploy is false")
+	}
+
+	if config.APIURL != "" {
+		if _, err := url.ParseRequestURI(config.APIURL); err != nil {
+			errors = append(errors, "OpenFGA apiUrl must be a valid URL")
+		}
+	}
+
+	if config.ExposesOpenFga() {
+		if config.Expose.Host == "" {
+			errors = append(errors, "OpenFGA expose host is required when codesphere.openFga.expose.enabled is true")
+		}
+
+		if !config.DeploysOpenFga() {
+			errors = append(errors, "OpenFGA cannot be exposed by a data center that does not deploy it")
+		}
+	}
+	return errors
+}
+
+func validatePostgresServerAddress(config files.PostgresConfig) error {
+	if config.Mode != "install" {
+		return nil
+	}
+
+	if config.ServerAddress == "" {
+		return nil
+	}
+
+	return fmt.Errorf("postgres.serverAddress must not be set when postgres.mode is 'install'")
 }
 
 func (g *InstallConfig) ValidateVault() []string {
@@ -211,6 +323,18 @@ func (g *InstallConfig) GetVault() *files.InstallVault {
 	return g.Vault
 }
 
+// SetInstallConfig replaces the managed config, so a caller can seed it from another source
+// instead of a profile or a file.
+func (g *InstallConfig) SetInstallConfig(config *files.RootConfig) {
+	g.Config = config
+}
+
+// SetVault replaces the managed vault, so a caller can seed it from another source instead of a
+// file. GenerateSecrets then fills in whatever the seed is missing.
+func (g *InstallConfig) SetVault(vault *files.InstallVault) {
+	g.Vault = vault
+}
+
 func (g *InstallConfig) GetSecretFilePath() string {
 	return filepath.Join(g.Config.Secrets.BaseDir, "prod.vault.yaml")
 }
@@ -237,26 +361,15 @@ func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool)
 }
 
 func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
-	if g.Config == nil {
-		return fmt.Errorf("no configuration provided - config is nil")
-	}
-	if g.Vault == nil {
-		g.Vault = &files.InstallVault{}
-	}
-
-	vaultYAML, err := g.Vault.Marshal()
+	store, err := g.vaultStore(vaultPath, withComments)
 	if err != nil {
-		return fmt.Errorf("failed to marshal vault.yaml: %w", err)
+		return fmt.Errorf("failed to initialize vault backend: %w", err)
 	}
 
-	if withComments {
-		vaultYAML = AddVaultComments(vaultYAML)
+	err = store.Save(g.Vault)
+	if err != nil {
+		return fmt.Errorf("failed to write vault: %w", err)
 	}
-
-	if err := g.fileIO.CreateAndWrite(vaultPath, vaultYAML, "Secrets"); err != nil {
-		return err
-	}
-
 	return nil
 }
 

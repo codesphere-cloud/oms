@@ -1,11 +1,11 @@
 ## oms beta vault-secret
 
-Create a Kubernetes secret from a SOPS-encrypted vault file
+Create a Kubernetes secret from a vault file
 
 ### Synopsis
 
-Create a Kubernetes secret from a SOPS-encrypted prod.vault.yaml file.
-Reads the encrypted vault file, decrypts it using the age key, and creates a Kubernetes secret
+Create a Kubernetes secret from a prod.vault.yaml file.
+Loads the selected vault type and creates a Kubernetes secret
 with all the vault entries as key-value pairs in the target cluster.
 
 ```
@@ -26,11 +26,12 @@ $ oms vault-secret --vault-file prod.vault.yaml --age-key /path/to/age_key.txt -
 ### Options
 
 ```
-      --age-key string       Path to the age key file (optional, will use defaults if not provided)
+      --age-key string       Path to the age key file (required for sops unless an age key environment variable is set)
   -h, --help                 help for vault-secret
       --namespace string     Kubernetes namespace where the secret will be created (default "codesphere")
       --secret-name string   Name of the Kubernetes secret to create (default "cs-vault")
-      --vault-file string    Path to the SOPS-encrypted vault file (required)
+      --vault-file string    Path to the vault file (required)
+      --vault-type string    Vault storage type (sops or plain) (default "sops")
 ```
 
 ### SEE ALSO

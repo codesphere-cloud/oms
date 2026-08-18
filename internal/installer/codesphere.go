@@ -15,8 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
@@ -93,8 +93,7 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 		return fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", goos, goarch)
 	}
 
-	config, cleanup, err := ci.prepareConfig(cm)
-	defer cleanup()
+	config, err := ci.loadConfig(cm)
 	if err != nil {
 		return err
 	}
@@ -114,33 +113,17 @@ func (ci *CodesphereInstaller) Install(pm PackageManager, cm ConfigManager, im s
 	return ci.runInstaller(pm, config)
 }
 
-func (ci *CodesphereInstaller) prepareConfig(cm ConfigManager) (files.RootConfig, func(), error) {
-	originalConfig := ci.ConfigPath
-	cleanup := func() {
-		ci.ConfigPath = originalConfig
-	}
-
-	if ci.VaultPath != "" {
-		store := NewLazyVaultTemplatingSecretStore(ci.VaultPath, ci.PrivKey)
-		renderedConfig, renderCleanup, err := configtemplating.RenderConfigFileToTemp(ci.ConfigPath, store)
-		if err != nil {
-			return files.RootConfig{}, cleanup, fmt.Errorf("failed to render config template: %w", err)
-		}
-
-		cleanup = func() {
-			ci.ConfigPath = originalConfig
-			renderCleanup()
-		}
-		ci.ConfigPath = renderedConfig
-	}
-
+func (ci *CodesphereInstaller) loadConfig(cm ConfigManager) (files.RootConfig, error) {
 	config, err := cm.ParseConfigYaml(ci.ConfigPath)
 	if err != nil {
-		return files.RootConfig{}, cleanup, fmt.Errorf("failed to extract config.yaml: %w", err)
+		return files.RootConfig{}, fmt.Errorf("failed to extract config.yaml: %w", err)
+	}
+	if err := validatePostgresServerAddress(config.Postgres); err != nil {
+		return files.RootConfig{}, fmt.Errorf("invalid postgres configuration: %w", err)
 	}
 
 	ci.warnIfVaultDirDiffersFromSecretsDir(config)
-	return config, cleanup, nil
+	return config, nil
 }
 
 // IsStepSkipped reports whether step is present in persisted or CLI skip steps.
@@ -419,9 +402,9 @@ func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config fi
 
 	sort.Strings(executedSteps)
 
-	prompt := NewPrompter(!ci.AutoApprove)
+	prompter := prompt.NewPrompter(!ci.AutoApprove)
 	msg := fmt.Sprintf("The following steps will be executed: %s. Type \"yes\" to continue.", strings.Join(executedSteps, ", "))
-	if prompt.String(msg, "yes") != "yes" {
+	if prompter.String(msg, "yes") != "yes" {
 		return nil, fmt.Errorf("installation aborted")
 	}
 

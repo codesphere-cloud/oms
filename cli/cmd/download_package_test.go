@@ -12,8 +12,9 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("DownloadPackages", func() {
@@ -25,7 +26,7 @@ var _ = Describe("DownloadPackages", func() {
 		hash           string
 		build          portal.Build
 		mockPortal     *portal.MockPortal
-		mockFileWriter *util.MockFileIO
+		mockFileWriter *intutil.MockFileIO
 	)
 
 	BeforeEach(func() {
@@ -33,7 +34,7 @@ var _ = Describe("DownloadPackages", func() {
 		version = "codesphere-1.42.0"
 		hash = "abc1234567"
 		mockPortal = portal.NewMockPortal(GinkgoT())
-		mockFileWriter = util.NewMockFileIO(GinkgoT())
+		mockFileWriter = intutil.NewMockFileIO(GinkgoT())
 	})
 	JustBeforeEach(func() {
 		c = cmd.DownloadPackageCmd{
@@ -60,11 +61,11 @@ var _ = Describe("DownloadPackages", func() {
 
 	Context("AddDownloadPackageCmd", func() {
 		var downloadCmd cobra.Command
-		var opts *cmd.GlobalOptions
+		var opts *util.GlobalOptions
 
 		BeforeEach(func() {
 			downloadCmd = cobra.Command{}
-			opts = &cmd.GlobalOptions{}
+			opts = &util.GlobalOptions{}
 		})
 
 		It("valid package with version as flag", func() {

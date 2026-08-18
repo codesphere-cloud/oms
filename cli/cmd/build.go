@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +14,7 @@ type BuildCmd struct {
 	cmd *cobra.Command
 }
 
-func AddBuildCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddBuildCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	build := BuildCmd{
 		cmd: &cobra.Command{
 			Use:   "build",
@@ -24,5 +25,5 @@ func AddBuildCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	AddBuildImagesCmd(build.cmd, opts)
 	AddBuildImageCmd(build.cmd, opts)
 
-	AddCmd(rootCmd, build.cmd)
+	util.AddCmd(rootCmd, build.cmd)
 }

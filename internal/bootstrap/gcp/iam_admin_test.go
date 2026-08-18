@@ -88,8 +88,9 @@ var _ = Describe("IAM & Admin", func() {
 			DNSZoneName:           "test-zone",
 			SSHPublicKeyPath:      "key.pub",
 			ProjectID:             "pid",
-			Experiments:           gcp.DefaultExperiments,
-			FeatureFlags:          map[string]bool{},
+			InternalFlags:         gcp.DefaultInternalFlags,
+			PreviewFlags:          gcp.DefaultPreviewFlags,
+			FeatureFlags:          gcp.DefaultFeatureFlags,
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{

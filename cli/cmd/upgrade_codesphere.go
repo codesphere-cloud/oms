@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -21,5 +22,5 @@ func AddUpgradeCodesphereCmd(upgrade *cobra.Command) {
 			Long:  io.Long(`Coming soon: Upgrade Codesphere to the latest or a specific version`),
 		},
 	}
-	AddCmd(upgrade, codesphere.cmd)
+	util.AddCmd(upgrade, codesphere.cmd)
 }

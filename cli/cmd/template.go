@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +13,7 @@ type TemplateCmd struct {
 	cmd *cobra.Command
 }
 
-func AddTemplateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
+func AddTemplateCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	template := TemplateCmd{
 		cmd: &cobra.Command{
 			Use:   "template",
@@ -22,5 +23,5 @@ func AddTemplateCmd(rootCmd *cobra.Command, opts *GlobalOptions) {
 	}
 
 	AddTemplateConfigCmd(template.cmd, opts)
-	AddCmd(rootCmd, template.cmd)
+	util.AddCmd(rootCmd, template.cmd)
 }

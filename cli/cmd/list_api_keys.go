@@ -6,8 +6,9 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -16,7 +17,7 @@ import (
 
 type ListAPIKeysCmd struct {
 	cmd         *cobra.Command
-	TableWriter util.TableWriter
+	TableWriter intutil.TableWriter
 }
 
 func (c *ListAPIKeysCmd) RunE(_ *cobra.Command, args []string) error {
@@ -30,19 +31,19 @@ func (c *ListAPIKeysCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-func AddListAPIKeysCmd(list *cobra.Command, opts *GlobalOptions) {
+func AddListAPIKeysCmd(list *cobra.Command, opts *util.GlobalOptions) {
 	c := ListAPIKeysCmd{
 		cmd: &cobra.Command{
 			Use:   "api-keys",
 			Short: "List API keys",
 			Long:  io.Long(`List API keys registered in the OMS portal.`),
 		},
-		TableWriter: util.GetTableWriter(),
+		TableWriter: intutil.GetTableWriter(),
 	}
 
 	c.cmd.RunE = c.RunE
 
-	AddCmd(list, c.cmd)
+	util.AddCmd(list, c.cmd)
 }
 
 func (c *ListAPIKeysCmd) PrintKeysTable(keys []portal.ApiKey) {

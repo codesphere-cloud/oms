@@ -12,10 +12,15 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 
-	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 )
 
 func quoteYAMLString(s string) string {
@@ -34,14 +39,19 @@ var _ = Describe("UpdateInstallConfig", func() {
 		initialVault  string
 		cmd           *UpdateInstallConfigCmd
 		opts          *UpdateInstallConfigOpts
-		testCAKeyPem  string
-		testCACertPem string
+		confirmations []string
+		// Answer the stubbed prompts with. Reset to true for every spec.
+		approveConfirmations bool
+		testCAKeyPem         string
+		testCACertPem        string
 	)
 
 	BeforeEach(func() {
-		if !sopsAndAgeAvailableForUpdateInstallConfig() {
+		if !testutil.SopsAndAgeAvailable() {
 			Skip("sops and age-keygen not available")
 		}
+
+		approveConfirmations = true
 
 		var err error
 		configFile, err = os.CreateTemp("", "config-*.yaml")
@@ -126,7 +136,9 @@ codesphere:
   dnsServers:
     - 8.8.8.8
     - 8.8.4.4
-  experiments: []
+  internal: []
+  preview: {}
+  features: {}
   deployConfig:
     images: {}
   plans:
@@ -191,7 +203,7 @@ codesphere:
 		Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(installer.EncryptFileWithSOPS(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
+		Expect(sops.EncryptFile(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
 		previousAgeKeyFile, hadPreviousAgeKeyFile := os.LookupEnv("SOPS_AGE_KEY_FILE")
 		Expect(os.Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)).To(Succeed())
 		DeferCleanup(func() {
@@ -203,13 +215,25 @@ codesphere:
 		})
 
 		opts = &UpdateInstallConfigOpts{
-			GlobalOptions: &GlobalOptions{},
+			GlobalOptions: &util.GlobalOptions{},
 			ConfigFile:    configFile.Name(),
 			VaultFile:     vaultFile.Name(),
 		}
 
+		confirmations = nil
+		prompter := prompt.NewMockPrompter(GinkgoT())
+		// Records what was asked and answers it the way the spec asked for. Optional,
+		// because a spec that passes --yes never gets to ask.
+		prompter.EXPECT().Bool(mock.Anything, false).
+			RunAndReturn(func(question string, _ bool) bool {
+				confirmations = append(confirmations, question)
+
+				return approveConfirmations
+			}).Maybe()
+
 		cmd = &UpdateInstallConfigCmd{
-			Opts: opts,
+			Opts:     opts,
+			Prompter: prompter,
 		}
 	})
 
@@ -221,9 +245,9 @@ codesphere:
 	Context("when updating PostgreSQL configuration", func() {
 		It("should update primary IP and hostname, and regenerate certificates", func() {
 			opts.PostgresPrimaryIP = "10.10.0.4"
-			opts.PostgresPrimaryHostname = "new-postgres-primary"
+			opts.PostgresServer = "new-postgres-primary"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -232,13 +256,19 @@ codesphere:
 			Expect(config.Postgres.Primary.Hostname).To(Equal("new-postgres-primary"))
 			Expect(icg.GetVault().GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
 			Expect(config.Postgres.Primary.SSLConfig.ServerCertPem).NotTo(BeEmpty())
+
+			backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultFile.Name()})
+			Expect(err).NotTo(HaveOccurred())
+			updatedVault, err := backend.Load()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updatedVault.GetSecret(files.SecretPostgresPrimaryServerKeyPem)).NotTo(BeNil())
 		})
 
 		It("should update replica IP and name, and regenerate certificates", func() {
 			opts.PostgresReplicaIP = "10.10.0.7"
 			opts.PostgresReplicaName = "new_replica"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -258,7 +288,7 @@ codesphere:
 			opts.CodespherePublicIP = "203.0.113.100"
 			opts.KubernetesPodCIDR = "10.244.0.0/16"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -280,7 +310,7 @@ codesphere:
 			opts.KubernetesPodCIDR = "100.96.0.0/11"
 			opts.KubernetesServiceCIDR = "100.64.0.0/13"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -296,7 +326,7 @@ codesphere:
 			opts.ClusterGatewayServiceType = "NodePort"
 			opts.ClusterGatewayIPAddresses = []string{"192.168.1.200", "192.168.1.201"}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -312,7 +342,7 @@ codesphere:
 			opts.CodesphereDNSServers = []string{"1.1.1.1", "1.0.0.1"}
 			opts.CodesphereWorkspaceHostingBaseDomain = "workspaces.updated.example.com"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -327,7 +357,7 @@ codesphere:
 		It("should update Ceph nodes subnet", func() {
 			opts.CephNodesSubnet = "10.53.102.0/24"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -343,11 +373,74 @@ codesphere:
 		})
 	})
 
+	Context("confirming changes to the vault", func() {
+		// The fixture vault holds only some of the secrets EnsureSecrets knows about,
+		// so every run of the command finds something to generate.
+		It("asks before generating a secret the vault does not have", func() {
+			icg := newSOPSInstallConfigManager()
+			Expect(cmd.UpdateInstallConfig(icg)).To(Succeed())
+
+			Expect(confirmations).To(HaveLen(1))
+			Expect(icg.GetVault().GetSecret(files.SecretMounterHmacSecret)).ToNot(BeNil())
+		})
+
+		It("leaves the vault alone when the operator declines", func() {
+			approveConfirmations = false
+
+			icg := newSOPSInstallConfigManager()
+			Expect(cmd.UpdateInstallConfig(icg)).To(Succeed())
+
+			Expect(icg.GetVault().GetSecret(files.SecretMounterHmacSecret)).To(BeNil())
+
+			backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultFile.Name()})
+			Expect(err).NotTo(HaveOccurred())
+			writtenVault, err := backend.Load()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(writtenVault.GetSecret(files.SecretMounterHmacSecret)).To(BeNil())
+		})
+
+		It("asks nothing with --yes", func() {
+			opts.Yes = true
+
+			icg := newSOPSInstallConfigManager()
+			Expect(cmd.UpdateInstallConfig(icg)).To(Succeed())
+
+			Expect(confirmations).To(BeEmpty())
+			Expect(icg.GetVault().GetSecret(files.SecretMounterHmacSecret)).ToNot(BeNil())
+		})
+
+		It("asks before regenerating certificates an update invalidates", func() {
+			opts.PostgresPrimaryIP = "10.10.0.4"
+
+			icg := newSOPSInstallConfigManager()
+			Expect(cmd.UpdateInstallConfig(icg)).To(Succeed())
+
+			Expect(confirmations).To(HaveLen(2))
+		})
+
+		// A declined regeneration would leave the config pointing at an IP the
+		// certificate does not cover, so the whole update is dropped instead.
+		It("writes nothing when the operator declines a regeneration", func() {
+			opts.PostgresPrimaryIP = "10.10.0.4"
+			approveConfirmations = false
+
+			icg := newSOPSInstallConfigManager()
+			err := cmd.UpdateInstallConfig(icg)
+
+			Expect(err).To(MatchError(ContainSubstring("aborted")))
+
+			written := newSOPSInstallConfigManager()
+			Expect(written.LoadInstallConfigFromFile(configFile.Name())).To(Succeed())
+			Expect(written.GetInstallConfig().Postgres.Primary.IP).To(Equal("10.0.0.5"))
+			Expect(confirmations).To(HaveLen(1))
+		})
+	})
+
 	Context("when loading invalid config file", func() {
 		It("should return an error", func() {
 			opts.ConfigFile = "/nonexistent/config.yaml"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load config file"))
@@ -358,7 +451,7 @@ codesphere:
 		It("should return an error", func() {
 			opts.VaultFile = "/nonexistent/vault.yaml"
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err := cmd.UpdateInstallConfig(icg)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load vault file"))
@@ -384,14 +477,13 @@ codesphere:
 			}
 
 			opts.CodesphereDomain = "updated.example.com"
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err = cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedVaultContent, err := os.ReadFile(vaultFile.Name())
+			backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultFile.Name()})
 			Expect(err).NotTo(HaveOccurred())
-			updatedVault := &files.InstallVault{}
-			err = updatedVault.Unmarshal(updatedVaultContent)
+			updatedVault, err := backend.Load()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify all initial secrets are still present with the same values
@@ -418,14 +510,13 @@ codesphere:
 			}
 
 			opts.PostgresPrimaryIP = "10.20.0.10"
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err = cmd.UpdateInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedVaultContent, err := os.ReadFile(vaultFile.Name())
+			backend, err := vault.New(vault.TypeSOPS, vault.Options{Path: vaultFile.Name()})
 			Expect(err).NotTo(HaveOccurred())
-			updatedVault := &files.InstallVault{}
-			err = updatedVault.Unmarshal(updatedVaultContent)
+			updatedVault, err := backend.Load()
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify all initial secrets are still present with the same values
@@ -453,16 +544,6 @@ codesphere:
 	})
 })
 
-func sopsAndAgeAvailableForUpdateInstallConfig() bool {
-	if _, err := exec.LookPath("sops"); err != nil {
-		return false
-	}
-	if _, err := exec.LookPath("age-keygen"); err != nil {
-		return false
-	}
-	return true
-}
-
 var _ = Describe("SecretDependencyTracker", func() {
 	var tracker *SecretDependencyTracker
 
@@ -484,5 +565,81 @@ var _ = Describe("SecretDependencyTracker", func() {
 
 		tracker.MarkPostgresReplicaCertNeedsRegen()
 		Expect(tracker.NeedsPostgresReplicaCertRegen()).To(BeTrue())
+	})
+})
+
+var _ = Describe("missingSecrets", func() {
+	It("reports what is missing without changing config or vault", func() {
+		config := &files.RootConfig{}
+		vault := &files.InstallVault{}
+
+		missing, err := missingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(missing).To(ContainElement(files.SecretMounterHmacSecret))
+		Expect(vault.Secrets).To(BeEmpty())
+		Expect(config.Cluster.Certificates.CA.CertPem).To(BeEmpty())
+	})
+
+	It("reports nothing once the secrets are there", func() {
+		config := &files.RootConfig{}
+		vault := &files.InstallVault{}
+		_, err := addMissingSecrets(config, vault)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(missingSecrets(config, vault)).To(BeEmpty())
+	})
+})
+
+var _ = Describe("addMissingSecrets", func() {
+	var config *files.RootConfig
+
+	BeforeEach(func() {
+		config = &files.RootConfig{}
+	})
+
+	It("adds a secret the vault does not have", func() {
+		vault := &files.InstallVault{}
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).To(ContainElement(files.SecretMounterHmacSecret))
+		Expect(vault.GetSecret(files.SecretMounterHmacSecret)).ToNot(BeNil())
+	})
+
+	It("reports nothing on a second run and keeps the generated value", func() {
+		vault := &files.InstallVault{}
+		_, err := addMissingSecrets(config, vault)
+		Expect(err).ToNot(HaveOccurred())
+
+		secret := vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).To(BeEmpty())
+		Expect(vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password).To(Equal(secret))
+	})
+
+	It("never modifies a secret the vault already holds", func() {
+		vault := &files.InstallVault{}
+		vault.SetSecret(files.SecretEntry{
+			Name:   files.SecretMounterHmacSecret,
+			Fields: &files.SecretFields{Password: "operator-supplied-secret"},
+		})
+		// EnsureDefaultSecrets overwrites this one unconditionally when it runs directly.
+		vault.SetSecret(files.SecretEntry{
+			Name:   files.SecretDigitalOceanApiToken,
+			Fields: &files.SecretFields{Password: "a-real-token"},
+		})
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).ToNot(ContainElement(files.SecretMounterHmacSecret))
+		Expect(added).ToNot(ContainElement(files.SecretDigitalOceanApiToken))
+		Expect(vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password).To(Equal("operator-supplied-secret"))
+		Expect(vault.GetSecret(files.SecretDigitalOceanApiToken).Fields.Password).To(Equal("a-real-token"))
 	})
 })

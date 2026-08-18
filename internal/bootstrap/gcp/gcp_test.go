@@ -95,8 +95,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			DNSZoneName:           "test-zone",
 			SSHPublicKeyPath:      "key.pub",
 			ProjectID:             "pid",
-			Experiments:           gcp.DefaultExperiments,
-			FeatureFlags:          map[string]bool{},
+			InternalFlags:         gcp.DefaultInternalFlags,
+			PreviewFlags:          gcp.DefaultPreviewFlags,
+			FeatureFlags:          gcp.DefaultFeatureFlags,
 			RootDiskSize:          50,
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
@@ -119,6 +120,33 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput ACME issuer", func() {
+		It("rejects selecting Let's Encrypt staging and Google Public CA together", func() {
+			csEnv.ACMEStaging = true
+			csEnv.GoogleACMEIssuer = true
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("acme-staging cannot be combined with google-acme-issuer")))
+		})
+	})
+
+	Describe("ValidateInput remote OMS binary", func() {
+		BeforeEach(func() {
+			csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
+		})
+
+		It("accepts an existing local binary", func() {
+			fw.EXPECT().Exists(csEnv.RemoteOmsBinaryPath).Return(true)
+
+			Expect(bs.ValidateInput()).To(Succeed())
+		})
+
+		It("rejects a missing local binary", func() {
+			fw.EXPECT().Exists(csEnv.RemoteOmsBinaryPath).Return(false)
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("remote OMS binary not found")))
+		})
+	})
+
 	Describe("Bootstrap", func() {
 		BeforeEach(func() {
 			csEnv.InstallConfig = &files.RootConfig{Registry: &files.RegistryConfig{}}
@@ -138,7 +166,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			icg.EXPECT().ApplyProfile("minimal").Return(nil)
 			// Returning a real install config to avoid nil pointer dereferences later
 			icg.EXPECT().GetInstallConfig().RunAndReturn(func() *files.RootConfig {
-				realIcm := installer.NewInstallConfigManager()
+				realIcm := newPlainInstallConfigManager()
 				_ = realIcm.ApplyProfile("minimal")
 				return realIcm.GetInstallConfig()
 			})
@@ -146,7 +174,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			projectId := "test-project-12345"
 
 			// EnsureSecrets
-			fw.EXPECT().Exists("fake-secret").Return(false)
+			icg.EXPECT().LoadVaultFromUnecryptedFile("fake-secret").Return(nil)
 			icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 			// EnsureProject
@@ -188,7 +216,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// EnsureComputeInstances
 			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
 			mockGetInstanceNotFoundThenRunning(gc, projectId, "us-central1-a", ipResp, 8)
-			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(8)
+			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(1)
 			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(8)
 
 			// EnsureGatewayIPAddresses
@@ -198,6 +226,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().GetAddress(projectId, "us-central1", "public-gateway").Return(nil, fmt.Errorf("not found"))
 			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "public-gateway" })).Return("2.2.2.2", nil)
 			gc.EXPECT().GetAddress(projectId, "us-central1", "public-gateway").Return(&computepb.Address{Address: protoString("2.2.2.2")}, nil)
+			gc.EXPECT().GetAddress(projectId, "us-central1", "ssh-proxy").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "ssh-proxy" })).Return("3.3.3.3", nil)
+			gc.EXPECT().GetAddress(projectId, "us-central1", "ssh-proxy").Return(&computepb.Address{Address: protoString("3.3.3.3")}, nil)
 
 			// UpdateInstallConfig
 			icg.EXPECT().GenerateSecrets().Return(nil)
@@ -223,7 +254,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// EnsureDNSRecords
 			gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, "test-zone", "example.com.", mock.Anything).Return(nil)
 			gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, "test-zone", mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
-				return len(records) == 4
+				return len(records) == 5
 			})).Return(nil)
 
 			// GenerateK0sConfigScript
@@ -301,6 +332,37 @@ var _ = Describe("GCP Bootstrapper", func() {
 				It("fails", func() {
 					err := bs.ValidateInput()
 					Expect(err).To(MatchError(MatchRegexp("GitHub PAT is required to extract public keys of GitHub team members")))
+				})
+			})
+		})
+		Context("When a cluster admin email is set", func() {
+			BeforeEach(func() {
+				csEnv.ClusterAdminEmail = "Admin@Codesphere.com"
+				csEnv.WriteConfig = true
+			})
+			It("passes validation and normalizes the email", func() {
+				err := bs.ValidateInput()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(bs.Env.ClusterAdminEmail).To(Equal("admin@codesphere.com"))
+			})
+
+			Context("when the email is invalid", func() {
+				BeforeEach(func() {
+					csEnv.ClusterAdminEmail = "not-an-email"
+				})
+				It("fails", func() {
+					err := bs.ValidateInput()
+					Expect(err).To(MatchError(MatchRegexp("invalid cluster admin email")))
+				})
+			})
+
+			Context("when write-config is disabled", func() {
+				BeforeEach(func() {
+					csEnv.WriteConfig = false
+				})
+				It("fails", func() {
+					err := bs.ValidateInput()
+					Expect(err).To(MatchError(MatchRegexp("cluster admin email requires write-config")))
 				})
 			})
 		})
@@ -665,7 +727,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 			It("uses existing when config file exists", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -675,8 +737,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("loads existing vault before existing config for templating", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
-				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -698,7 +759,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 				err := bs.EnsureInstallConfig()
@@ -722,8 +783,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("EnsureSecrets", func() {
 		Describe("Valid EnsureSecrets", func() {
 			It("loads existing secrets file", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
-				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -731,7 +791,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("skips when secrets file missing", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(false)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -741,8 +801,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		Describe("Invalid cases", func() {
 			It("returns error when secrets file load fails", func() {
-				fw.EXPECT().Exists(csEnv.SecretsFilePath).Return(true)
-				icg.EXPECT().LoadVaultFromFile(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
 
 				err := bs.EnsureSecrets()
 				Expect(err).To(HaveOccurred())
@@ -1012,7 +1071,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	Describe("EnsureGatewayIPAddresses", func() {
 		Describe("Valid EnsureGatewayIPAddresses", func() {
-			It("creates two addresses", func() {
+			It("creates three addresses", func() {
 				// Gateway
 				gc.EXPECT().GetAddress(csEnv.ProjectID, csEnv.Region, "gateway").Return(nil, fmt.Errorf("not found"))
 				gc.EXPECT().CreateAddress(csEnv.ProjectID, csEnv.Region, mock.MatchedBy(func(a *computepb.Address) bool {
@@ -1025,10 +1084,17 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return *a.Name == "public-gateway"
 				})).Return("2.2.2.2", nil)
 
+				// SSH workspace proxy
+				gc.EXPECT().GetAddress(csEnv.ProjectID, csEnv.Region, "ssh-proxy").Return(nil, fmt.Errorf("not found"))
+				gc.EXPECT().CreateAddress(csEnv.ProjectID, csEnv.Region, mock.MatchedBy(func(a *computepb.Address) bool {
+					return *a.Name == "ssh-proxy"
+				})).Return("3.3.3.3", nil)
+
 				err := bs.EnsureGatewayIPAddresses()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(bs.Env.GatewayIP).To(Equal("1.1.1.1"))
 				Expect(bs.Env.PublicGatewayIP).To(Equal("2.2.2.2"))
+				Expect(bs.Env.SshProxyIP).To(Equal("3.3.3.3"))
 			})
 		})
 
@@ -1103,6 +1169,18 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureJumpboxConfigured()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It("copies and uses a requested local OMS binary even when OMS is already installed", func() {
+				csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "ubuntu", mock.Anything).Return(nil)
+				nodeClient.EXPECT().CopyFile(csEnv.Jumpbox, csEnv.RemoteOmsBinaryPath, "/usr/local/bin/oms").Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", "chmod 0755 /usr/local/bin/oms").Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(command string) bool {
+					return strings.HasPrefix(command, "command -v ")
+				})).Return(nil).Twice()
+
+				Expect(bs.EnsureJumpboxConfigured()).To(Succeed())
+			})
 		})
 
 		Describe("Invalid cases", func() {
@@ -1122,6 +1200,26 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureJumpboxConfigured()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install OMS"))
+			})
+
+			It("fails when the local OMS binary cannot be copied", func() {
+				csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "ubuntu", mock.Anything).Return(nil)
+				nodeClient.EXPECT().CopyFile(csEnv.Jumpbox, csEnv.RemoteOmsBinaryPath, "/usr/local/bin/oms").Return(fmt.Errorf("copy error"))
+
+				Expect(bs.EnsureJumpboxConfigured()).To(MatchError(ContainSubstring("failed to copy local OMS binary")))
+			})
+
+			It("fails when an OMS dependency cannot be installed", func() {
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "ubuntu", mock.Anything).Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", "command -v oms >/dev/null 2>&1").Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", "command -v sops >/dev/null 2>&1").Return(nil)
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", "command -v age-keygen >/dev/null 2>&1").Return(fmt.Errorf("missing"))
+				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(command string) bool {
+					return strings.Contains(command, "dl.filippo.io/age")
+				})).Return(fmt.Errorf("download error"))
+
+				Expect(bs.EnsureJumpboxConfigured()).To(MatchError(ContainSubstring("failed to ensure OMS dependencies")))
 			})
 		})
 	})
@@ -1246,8 +1344,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("ensures DNS records", func() {
 				gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, csEnv.DNSZoneName, csEnv.BaseDomain+".", mock.Anything).Return(nil)
 				gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, csEnv.DNSZoneName, mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
-					// Expect 4 records: *.ws, *.cs, cs, ws
-					return len(records) == 4
+					// Expect 5 records: cs, *.cs, ws, *.ws, *.ssh.cs
+					return len(records) == 5
 				})).Return(nil)
 
 				err := bs.EnsureDNSRecords()
@@ -1294,7 +1392,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 					// Expect install codesphere
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s load-container-images").Return(nil)
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes,load-container-images").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1311,7 +1409,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H def9876543210 v1.2.3").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer.tar.gz").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer.tar.gz -s kubernetes").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1320,7 +1418,17 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("downloads and installs codesphere with hash", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz -s kubernetes").Return(nil)
+
+				err := bs.InstallCodesphere()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("preserves requested skip steps without duplicating kubernetes", func() {
+				csEnv.InstallSkipSteps = []string{"postgres", "kubernetes"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz -s kubernetes,postgres").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1420,7 +1528,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer-lite.tar.gz").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz -s load-container-images").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz -s kubernetes,load-container-images").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -1434,7 +1542,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					It("installs codesphere from local package", func() {
 						nodeClient.EXPECT().CopyFile(mock.Anything, csEnv.InstallLocal, "/root/local-installer.tar.gz").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer.tar.gz").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer.tar.gz -s kubernetes").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -1479,12 +1587,52 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when install codesphere fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz").Return(fmt.Errorf("install error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer.tar.gz -s kubernetes").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install Codesphere from jumpbox"))
 			})
+		})
+	})
+
+	Describe("InstallK0s", func() {
+		BeforeEach(func() {
+			csEnv.InstallVersion = "v1.2.3"
+			csEnv.InstallHash = "abc1234567890"
+		})
+
+		It("downloads k0s and lets k0sctl distribute it independently of the Codesphere package", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
+
+			err := bs.InstallK0s()
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("reports a native k0s installation failure", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
+				return strings.HasPrefix(command, "oms install k0s ")
+			})).Return(fmt.Errorf("k0s error"))
+
+			err := bs.InstallK0s()
+			Expect(err).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
+		})
+	})
+
+	Describe("WaitForK0sNodes", func() {
+		const command = "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m"
+
+		It("waits for every node before installing cluster components", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", command).Return(nil)
+
+			Expect(bs.WaitForK0sNodes()).To(Succeed())
+		})
+
+		It("reports nodes that fail to become ready", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", command).Return(fmt.Errorf("timeout"))
+
+			Expect(bs.WaitForK0sNodes()).To(MatchError(ContainSubstring("k0s nodes did not become ready")))
 		})
 	})
 

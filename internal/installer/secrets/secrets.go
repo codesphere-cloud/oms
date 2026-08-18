@@ -49,6 +49,10 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureMounterHmacSecret(vault); err != nil {
 		return fmt.Errorf("ensure hmac secret: %w", err)
 	}
+
+	if err := EnsureOpenFgaPresharedKey(vault); err != nil {
+		return fmt.Errorf("ensure openfga preshared key: %w", err)
+	}
 	if err := EnsureDefaultSecrets(vault); err != nil {
 		return fmt.Errorf("ensure default secrets: %w", err)
 	}
@@ -172,6 +176,30 @@ func EnsureMounterHmacSecret(vault *files.InstallVault) error {
 	return nil
 }
 
+// EnsureOpenFgaPresharedKey generates the preshared key that OpenFGA and the Codesphere
+// services authenticate with, as 64 hex characters. Idempotent.
+//
+// One OpenFGA instance serves a whole installation, so this key is shared rather than
+// per-data-center: every data center's vault must hold the same value, copied over from
+// the one that deploys OpenFGA.
+func EnsureOpenFgaPresharedKey(vault *files.InstallVault) error {
+	if vault.GetSecret(files.SecretOpenFgaPresharedKey) != nil {
+		return nil
+	}
+
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Errorf("read random bytes: %w", err)
+	}
+
+	vault.SetSecret(files.SecretEntry{
+		Name:   files.SecretOpenFgaPresharedKey,
+		Fields: &files.SecretFields{Password: hex.EncodeToString(b)},
+	})
+
+	return nil
+}
+
 // EnsureNixSigningKeys generates an Ed25519 signing key pair for nix-cache in the
 // format "host:hexKey" if not already present. Idempotent.
 func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
@@ -195,11 +223,10 @@ func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
 }
 
 // EnsureDefaultSecrets sets dummy defaults for all Helm chart secrets not managed by
-// the installer config. Always overwrites digitalOceanApiToken; all others are only
-// set when absent.
+// the installer config. Idempotent: a value the vault already holds is kept.
 func EnsureDefaultSecrets(vault *files.InstallVault) error {
-	// Always overwrite — not used in private cloud but must not be empty.
-	setPassword(vault, files.SecretDigitalOceanApiToken, "dummy")
+	// Unused in private cloud, but the chart does not render without a value.
+	setPasswordIfEmpty(vault, files.SecretDigitalOceanApiToken, "dummy")
 
 	for _, name := range optionalPasswordSecrets {
 		setPasswordIfAbsent(vault, name, "dummy")
@@ -261,6 +288,8 @@ var optionalPasswordSecrets = []string{
 	files.SecretStripeSecretKey,
 	files.SecretSendGridApiKey,
 	files.SecretOpenBaoPassword,
+	files.SecretOpenfgaDbBackupAccessKeyId,
+	files.SecretOpenfgaDbBackupSecretAccessKey,
 }
 
 func setPassword(vault *files.InstallVault, name, password string) {
@@ -268,6 +297,16 @@ func setPassword(vault *files.InstallVault, name, password string) {
 		Name:   name,
 		Fields: &files.SecretFields{Password: password},
 	})
+}
+
+// setPasswordIfEmpty fills in a secret the vault does not have, or has without a value.
+// Used for secrets the Helm chart needs a value for, where an empty entry is as good as none.
+func setPasswordIfEmpty(vault *files.InstallVault, name, password string) {
+	if secret := vault.GetSecret(name); secret != nil && secret.Fields != nil && secret.Fields.Password != "" {
+		return
+	}
+
+	setPassword(vault, name, password)
 }
 
 func setPasswordIfAbsent(vault *files.InstallVault, name, password string) {
@@ -418,8 +457,8 @@ func EnsurePostgresUsers(vault *files.InstallVault) error {
 		if err != nil {
 			return fmt.Errorf("generate postgres password for %s: %w", svc.Name, err)
 		}
-		setPasswordIfAbsent(vault, fmt.Sprintf("postgresUser%s", files.Capitalize(svc.Name)), svc.DBUsername())
-		setPasswordIfAbsent(vault, fmt.Sprintf("postgresPassword%s", files.Capitalize(svc.Name)), svcPwd)
+		setPasswordIfAbsent(vault, files.PostgresUserSecretName(svc.Name), svc.DBUsername())
+		setPasswordIfAbsent(vault, files.PostgresPasswordSecretName(svc.Name), svcPwd)
 	}
 	return nil
 }
