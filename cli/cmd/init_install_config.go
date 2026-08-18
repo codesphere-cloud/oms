@@ -270,6 +270,8 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
+	// The freshly generated vault is SOPS-encrypted automatically with the
+	// configured age key (--age-key or SOPS_AGE_KEY[_FILE]).
 	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
@@ -306,6 +308,7 @@ func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println(strings.Repeat("=", 70))
 
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
+	log.Println("   The vault file has been encrypted with SOPS automatically.")
 	log.Println("   Keep the vault file and its decryption key secure.")
 	log.Println()
 }

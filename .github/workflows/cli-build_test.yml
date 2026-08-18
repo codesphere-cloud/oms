@@ -43,6 +43,14 @@ jobs:
         if: ${{ matrix.task == 'test' }}
         run: make test
 
+      - name: Setup SOPS and age for vault encryption
+        if: ${{ matrix.task == 'install-config' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age sops
+          age-keygen -o age_key.txt
+          echo "SOPS_AGE_KEY_FILE=${GITHUB_WORKSPACE}/age_key.txt" >> "$GITHUB_ENV"
+
       - name: Generate and validate install configs
         if: ${{ matrix.task == 'install-config' }}
         run: |
@@ -56,8 +64,9 @@ jobs:
               --vault "prod-${profile}.vault.yaml"
 
             echo "==> Validating generated install config for profile: ${profile}"
-            # Validate the config only; the freshly generated vault is plaintext and
-            # --validate requires a SOPS-encrypted vault to validate vault contents.
+            # Validate the config only. The generated vault is SOPS-encrypted and
+            # its contents are covered by the round-trip unit tests, so this step
+            # stays focused on the config (--vault "" skips vault loading).
             ./oms init install-config \
               --validate \
               -c "config-${profile}.yaml" \
