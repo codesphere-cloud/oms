@@ -48,6 +48,7 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --acme-enabled                                 Enable ACME certificate issuer
       --acme-issuer-name string                      Name for the ACME ClusterIssuer
       --acme-server string                           ACME server URL
+      --age-key string                               Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
       --ceph-nodes-subnet string                     Ceph nodes subnet
       --cluster-gateway-ips strings                  Cluster gateway IP addresses (comma-separated)
       --cluster-gateway-service-type string          Cluster gateway service type
@@ -67,8 +68,10 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --postgres-server string                       PostgreSQL server: primary hostname in install mode, connection address in external mode
       --public-ip string                             Codesphere public IP address
       --vault string                                 Path to existing prod.vault.yaml file (default "prod.vault.yaml")
+      --vault-type string                            Vault storage type (sops or plain) (default "sops")
       --with-comments                                Add helpful comments to the generated YAML files
       --workspace-hosting-base-domain string         Workspace hosting base domain
+  -y, --yes                                          Auto-approve every change to the vault (regenerated certificates and missing secrets)
 ```
 
 ### SEE ALSO

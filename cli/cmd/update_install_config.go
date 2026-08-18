@@ -6,6 +6,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 
 	csio "github.com/codesphere-cloud/cs-go/pkg/io"
@@ -13,6 +14,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +23,10 @@ type UpdateInstallConfigCmd struct {
 	cmd        *cobra.Command
 	Opts       *UpdateInstallConfigOpts
 	FileWriter intutil.FileIO
+
+	// Prompter asks the operator whether to go ahead with a change to the vault.
+	// --yes short-circuits it.
+	Prompter prompt.Prompter
 }
 
 type UpdateInstallConfigOpts struct {
@@ -28,8 +34,11 @@ type UpdateInstallConfigOpts struct {
 
 	ConfigFile string
 	VaultFile  string
+	VaultType  string
+	AgeKey     string
 
 	WithComments bool
+	Yes          bool
 
 	// Fields that can be updated
 	PostgresPrimaryIP       string
@@ -66,7 +75,10 @@ type UpdateInstallConfigOpts struct {
 }
 
 func (c *UpdateInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
-	icg := installer.NewInstallConfigManager()
+	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
+	}
 
 	return c.UpdateInstallConfig(icg)
 }
@@ -95,12 +107,18 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 		},
 		Opts:       &UpdateInstallConfigOpts{GlobalOptions: opts},
 		FileWriter: intutil.NewFilesystemWriter(),
+		// One prompter for the whole command: it buffers stdin, so a fresh one per
+		// question could drop what the operator already typed.
+		Prompter: prompt.NewPrompter(true),
 	}
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Path to existing config.yaml file")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Path to existing prod.vault.yaml file")
+	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
+	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 
 	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
+	c.cmd.Flags().BoolVarP(&c.Opts.Yes, "yes", "y", false, "Auto-approve every change to the vault (regenerated certificates and missing secrets)")
 
 	// PostgreSQL update flags
 	c.cmd.Flags().StringVar(&c.Opts.PostgresPrimaryIP, "postgres-primary-ip", "", "Primary PostgreSQL server IP")
@@ -174,12 +192,24 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 	}
 
 	if tracker.HasChanges() {
+		if !c.approve("Regenerate them?", "The changes above require these secrets to be regenerated:", tracker.Regenerates()) {
+			// The regenerated certificates cover values that were just written to the config,
+			// so keeping the old ones would leave the two inconsistent. Nothing has been
+			// written yet, so stopping here leaves the installation as it was.
+			return fmt.Errorf("aborted: the requested changes cannot be applied without regenerating the secrets above (pass --yes to approve up front)")
+		}
+
 		log.Println("\nRegenerating affected secrets and certificates...")
 		if err := c.regenerateSecrets(config, vault, tracker); err != nil {
 			return fmt.Errorf("failed to regenerate secrets: %w", err)
 		}
 	} else {
 		log.Println("\nNo changes detected that require secret regeneration.")
+	}
+
+	added, err := c.confirmAndAddMissingSecrets(config, vault)
+	if err != nil {
+		return err
 	}
 
 	if err := icg.WriteInstallConfig(c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
@@ -190,7 +220,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	c.printSuccessMessage(tracker)
+	c.printSuccessMessage(tracker, added)
 
 	return nil
 }
@@ -398,6 +428,88 @@ func (c *UpdateInstallConfigCmd) applyCodesphereUpdates(config *files.RootConfig
 	}
 }
 
+// approve prints what is about to change and asks the operator to confirm it. --yes approves
+// without asking; otherwise only an explicit yes counts, so a run without a terminal (an
+// empty answer) declines.
+func (c *UpdateInstallConfigCmd) approve(question, intro string, items []string) bool {
+	if c.Opts.Yes {
+		return true
+	}
+
+	log.Printf("\n%s\n", intro)
+
+	for _, item := range items {
+		log.Printf("  - %s\n", item)
+	}
+
+	return c.Prompter.Bool(question, false)
+}
+
+// confirmAndAddMissingSecrets asks about the secrets the vault is missing and adds them if
+// the operator agrees. Returns the names of the ones that were added, none if the operator
+// declined.
+func (c *UpdateInstallConfigCmd) confirmAndAddMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+	missing, err := missingSecrets(config, vault)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine missing secrets: %w", err)
+	}
+
+	if len(missing) == 0 {
+		return nil, nil
+	}
+
+	if !c.approve("Generate them?", "The vault does not have these secrets yet:", missing) {
+		log.Printf("\nSkipped %d missing secret(s): %s\n", len(missing), strings.Join(missing, ", "))
+
+		return nil, nil
+	}
+
+	added, err := addMissingSecrets(config, vault)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add missing secrets: %w", err)
+	}
+
+	log.Printf("\nAdded %d secret(s) missing from the vault: %s\n", len(added), strings.Join(added, ", "))
+
+	return added, nil
+}
+
+// missingSecrets reports what addMissingSecrets would generate, without changing anything:
+// it runs against copies, so only the names survive.
+func missingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+	configCopy, err := config.Clone()
+	if err != nil {
+		return nil, fmt.Errorf("copy config: %w", err)
+	}
+
+	return addMissingSecrets(configCopy, vault.Clone())
+}
+
+// addMissingSecrets generates the secrets the vault does not have yet and returns their
+// names. EnsureSecrets keeps what is already there, so this only ever adds.
+func addMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+	existing := make(map[string]bool, len(vault.Secrets))
+	for _, secret := range vault.Secrets {
+		existing[secret.Name] = true
+	}
+
+	if err := secrets.EnsureSecrets(vault, config); err != nil {
+		return nil, fmt.Errorf("ensure secrets: %w", err)
+	}
+
+	added := []string{}
+
+	for _, secret := range vault.Secrets {
+		if !existing[secret.Name] {
+			added = append(added, secret.Name)
+		}
+	}
+
+	sort.Strings(added)
+
+	return added, nil
+}
+
 func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vault *files.InstallVault, tracker *SecretDependencyTracker) error {
 	if tracker.NeedsPostgresPrimaryCertRegen() {
 		log.Println("  - Regenerating PostgreSQL primary server certificate...")
@@ -440,21 +552,24 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vau
 	return nil
 }
 
-func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTracker) {
+func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTracker, added []string) {
 	log.Println("\n" + strings.Repeat("=", 70))
 	log.Println("Configuration successfully updated!")
 	log.Println(strings.Repeat("=", 70))
 
 	if tracker.HasChanges() {
 		log.Println("\nRegenerated secrets:")
-		if tracker.NeedsPostgresPrimaryCertRegen() {
-			log.Println("  ✓ PostgreSQL primary server certificate")
+
+		for _, change := range tracker.Regenerates() {
+			log.Printf("  ✓ %s\n", change)
 		}
-		if tracker.NeedsPostgresReplicaCertRegen() {
-			log.Println("  ✓ PostgreSQL replica server certificate")
-		}
-		if tracker.ACMEConfigChanged() {
-			log.Println("  ✓ ACME configuration updated")
+	}
+
+	if len(added) > 0 {
+		log.Println("\nGenerated missing secrets:")
+
+		for _, name := range added {
+			log.Printf("  ✓ %s\n", name)
 		}
 	}
 
@@ -494,6 +609,26 @@ func (t *SecretDependencyTracker) NeedsPostgresReplicaCertRegen() bool {
 
 func (t *SecretDependencyTracker) ACMEConfigChanged() bool {
 	return t.acmeConfigChanged
+}
+
+// Regenerates describes, in operator-facing terms, what the tracked changes cause to be
+// regenerated. Drives both the confirmation prompt and the summary, so the two cannot drift.
+func (t *SecretDependencyTracker) Regenerates() []string {
+	changes := []string{}
+
+	if t.postgresPrimaryCertNeedsRegen {
+		changes = append(changes, "PostgreSQL primary server certificate")
+	}
+
+	if t.postgresReplicaCertNeedsRegen {
+		changes = append(changes, "PostgreSQL replica server certificate")
+	}
+
+	if t.acmeConfigChanged {
+		changes = append(changes, "ACME configuration")
+	}
+
+	return changes
 }
 
 func (t *SecretDependencyTracker) HasChanges() bool {

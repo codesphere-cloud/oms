@@ -44,6 +44,7 @@ const (
 	SecretOpenBaoPassword = "openBaoPassword"
 
 	// OpenFGA
+	SecretOpenFgaPresharedKey            = "openFgaPresharedKey"
 	SecretOpenfgaDbBackupAccessKeyId     = "openfgaDbBackupAccessKeyId"
 	SecretOpenfgaDbBackupSecretAccessKey = "openfgaDbBackupSecretAccessKey"
 
@@ -105,3 +106,15 @@ const (
 	SecretStripeSecretKey               = "stripeSecretKey"
 	SecretSendGridApiKey                = "sendGridApiKey"
 )
+
+// PostgresUserSecretName returns the vault secret name holding the postgres username of the
+// service with the given name, e.g. "auth" -> "postgresUserAuth".
+func PostgresUserSecretName(serviceName string) string {
+	return "postgresUser" + Capitalize(serviceName)
+}
+
+// PostgresPasswordSecretName returns the vault secret name holding the postgres password of the
+// service with the given name, e.g. "auth" -> "postgresPasswordAuth".
+func PostgresPasswordSecretName(serviceName string) string {
+	return "postgresPassword" + Capitalize(serviceName)
+}

@@ -28,32 +28,49 @@ type BootstrapGcpRestartVMsOpts struct {
 	Name      string
 }
 
-// resolveProjectAndZone returns the project ID and zone from flags or the infra file.
-// If both flags are set they are used directly; if neither is set, the infra file is read.
-// Providing only one of --project-id / --zone is an error.
-func (c *BootstrapGcpRestartVMsCmd) resolveProjectAndZone(fw intutil.FileIO) (string, string, error) {
+// resolveEnvironment returns the environment to restart VMs in. Project ID and zone come from
+// the flags or, when neither is set, from the infra file. Providing only one of
+// --project-id / --zone is an error.
+//
+// The data center layout always comes from the infra file, since it determines the VM names. It
+// is read best-effort when the flags supply project and zone, in which case a missing file just
+// means single-data-center names.
+func (c *BootstrapGcpRestartVMsCmd) resolveEnvironment(fw intutil.FileIO) (*gcp.CodesphereEnvironment, error) {
 	projectID := c.Opts.ProjectID
 	zone := c.Opts.Zone
 
 	if (projectID == "") != (zone == "") {
-		return "", "", fmt.Errorf("--project-id and --zone must be provided together")
-	}
-	if projectID != "" {
-		return projectID, zone, nil
+		return nil, fmt.Errorf("--project-id and --zone must be provided together")
 	}
 
 	infraFilePath := gcp.GetInfraFilePath()
 	infraEnv, exists, err := gcp.LoadInfraFile(fw, infraFilePath)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to load infra file: %w", err)
+		if projectID == "" {
+			return nil, fmt.Errorf("failed to load infra file: %w", err)
+		}
+
+		log.Printf("Warning: %v", err)
 	}
-	if !exists {
-		return "", "", fmt.Errorf("infra file not found at %s; use --project-id and --zone flags", infraFilePath)
+
+	if projectID == "" {
+		if !exists {
+			return nil, fmt.Errorf("infra file not found at %s; use --project-id and --zone flags", infraFilePath)
+		}
+
+		if infraEnv.ProjectID == "" || infraEnv.Zone == "" {
+			return nil, fmt.Errorf("infra file is missing project ID or zone; use --project-id and --zone flags")
+		}
+
+		projectID, zone = infraEnv.ProjectID, infraEnv.Zone
 	}
-	if infraEnv.ProjectID == "" || infraEnv.Zone == "" {
-		return "", "", fmt.Errorf("infra file is missing project ID or zone; use --project-id and --zone flags")
-	}
-	return infraEnv.ProjectID, infraEnv.Zone, nil
+
+	return &gcp.CodesphereEnvironment{
+		ProjectID:   projectID,
+		Zone:        zone,
+		MultiDC:     infraEnv.MultiDC,
+		DataCenters: infraEnv.DataCenters,
+	}, nil
 }
 
 func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
@@ -61,17 +78,14 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 	stlog := bootstrap.NewStepLogger(false)
 	fw := intutil.NewFilesystemWriter()
 
-	projectID, zone, err := c.resolveProjectAndZone(fw)
+	csEnv, err := c.resolveEnvironment(fw)
 	if err != nil {
 		return err
 	}
 
-	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	projectID, zone := csEnv.ProjectID, csEnv.Zone
 
-	csEnv := &gcp.CodesphereEnvironment{
-		ProjectID: projectID,
-		Zone:      zone,
-	}
+	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 
 	bs, err := gcp.NewGCPBootstrapper(
 		ctx,
@@ -112,6 +126,7 @@ func AddBootstrapGcpRestartVMsCmd(bootstrapGcp *cobra.Command, opts *util.Global
 				{Desc: "Restart all VMs using project info from the local infra file"},
 				{Cmd: "--name jumpbox", Desc: "Restart only the jumpbox VM"},
 				{Cmd: "--name k0s-1", Desc: "Restart a specific k0s node"},
+				{Cmd: "--name k0s-1-dc2", Desc: "Restart a node of the second data center of a --multi-dc bootstrap"},
 				{Cmd: "--project-id my-project --zone us-central1-a", Desc: "Restart all VMs with explicit project and zone"},
 				{Cmd: "--project-id my-project --zone us-central1-a --name ceph-1", Desc: "Restart a specific VM with explicit project and zone"},
 			}),

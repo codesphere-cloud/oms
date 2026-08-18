@@ -4,6 +4,8 @@
 package files
 
 import (
+	"fmt"
+	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
@@ -39,6 +41,40 @@ func (v *InstallVault) SetSecret(entry SecretEntry) {
 	v.Secrets = append(v.Secrets, entry)
 }
 
+// RemoveSecret deletes the entry with the given name and reports whether one was removed.
+func (v *InstallVault) RemoveSecret(name string) bool {
+	before := len(v.Secrets)
+	v.Secrets = slices.DeleteFunc(v.Secrets, func(s SecretEntry) bool {
+		return s.Name == name
+	})
+	return len(v.Secrets) != before
+}
+
+// Clone returns a deep copy of the vault, so callers can derive a new vault without
+// aliasing the original's secret entries. A nil vault clones to nil, so a caller can pass
+// on a vault that was never loaded instead of guarding every call site.
+func (v *InstallVault) Clone() *InstallVault {
+	if v == nil {
+		return nil
+	}
+
+	clone := &InstallVault{Secrets: make([]SecretEntry, 0, len(v.Secrets))}
+	for _, entry := range v.Secrets {
+		copied := SecretEntry{Name: entry.Name}
+		if entry.File != nil {
+			file := *entry.File
+			copied.File = &file
+		}
+		if entry.Fields != nil {
+			fields := *entry.Fields
+			copied.Fields = &fields
+		}
+		clone.Secrets = append(clone.Secrets, copied)
+	}
+
+	return clone
+}
+
 func (v *InstallVault) Unmarshal(data []byte) error {
 	return yaml.Unmarshal(data, v)
 }
@@ -62,6 +98,8 @@ type SecretFields struct {
 // RootConfig represents the relevant parts of the configuration file
 type RootConfig struct {
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
+	DataCenters            []DatacenterConfig            `yaml:"dataCenters,omitempty"`
+	DefaultDataCenterID    int                           `yaml:"defaultDataCenterId,omitempty"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
@@ -78,6 +116,11 @@ type OperationsConfig struct {
 	Skip []string `yaml:"skip"`
 }
 
+// DatacenterConfig describes one data center. RootConfig.Datacenter is the data center an installer
+// run installs; RootConfig.DataCenters lists every data center of the installation, which the
+// installer needs to render the platform's data center picker. Both are the same in a
+// single-data-center installation, where DataCenters may be left empty: the installer then defaults
+// it to the local data center. DefaultDataCenterID likewise defaults to Datacenter.ID.
 type DatacenterConfig struct {
 	ID          int    `yaml:"id"`
 	Name        string `yaml:"name"`
@@ -318,6 +361,7 @@ type CodesphereConfig struct {
 	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
 	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
 	OpenfgaBackups             *OpenfgaBackupsConfig  `yaml:"openfgaBackups,omitempty"`
+	OpenFga                    *OpenFgaConfig         `yaml:"openFga,omitempty"`
 	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
 	TelemetryExport            *TelemetryExport       `yaml:"telemetryExport,omitempty"`
 	Override                   ChartOverride          `yaml:"override,omitempty"`
@@ -341,8 +385,8 @@ type OpenBaoConfig struct {
 }
 
 // OpenfgaBackupsConfig is the friendly representation of the OpenFGA database
-// backup settings. On marshal it is translated into the openfga subchart values
-// under codesphere.override (see buildOpenfgaBackupOverride).
+// backup settings. On marshal it is translated into the openfga application
+// values under pcApps.applications.openfga (see buildOpenfgaBackupValues).
 type OpenfgaBackupsConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// Schedule is an optional 6-field cron expression. When empty the chart default applies.
@@ -353,6 +397,39 @@ type OpenfgaBackupsConfig struct {
 	EndpointURL string `yaml:"endpointURL,omitempty"`
 	// RetentionPolicy is optional (e.g. "7d"). When empty the chart default of "7d" applies.
 	RetentionPolicy string `yaml:"retentionPolicy,omitempty"`
+}
+
+// OpenFgaConfig configures the authorization store. One OpenFGA instance serves a whole
+// installation, so in a multi-data-center setup exactly one data center deploys and exposes
+// it (Deploy + Expose) and every other one only points at it (APIURL).
+type OpenFgaConfig struct {
+	// Deploy controls whether pc-applications deploys OpenFGA in this data center.
+	// Defaults to true when unset, matching the pc-applications chart.
+	Deploy *bool `yaml:"deploy,omitempty"`
+	// APIURL is the URL the Codesphere services reach OpenFGA at. Defaults to the
+	// in-cluster service of a locally deployed OpenFGA; required when Deploy is false.
+	APIURL string `yaml:"apiUrl,omitempty"`
+	// Expose publishes the deployed OpenFGA through the Codesphere gateway so the other
+	// data centers can reach it.
+	Expose *OpenFgaExposeConfig `yaml:"expose,omitempty"`
+}
+
+// OpenFgaExposeConfig publishes a locally deployed OpenFGA through the Codesphere gateway.
+type OpenFgaExposeConfig struct {
+	Enabled bool `yaml:"enabled"`
+	// Host OpenFGA is served under. Must resolve to this data center's public IP and
+	// is what the other data centers put in their APIURL.
+	Host string `yaml:"host,omitempty"`
+}
+
+// DeploysOpenFga reports whether pc-applications should deploy OpenFGA in this data center.
+func (c *OpenFgaConfig) DeploysOpenFga() bool {
+	return c == nil || c.Deploy == nil || *c.Deploy
+}
+
+// ExposesOpenFga reports whether the deployed OpenFGA is published through the gateway.
+func (c *OpenFgaConfig) ExposesOpenFga() bool {
+	return c != nil && c.Expose != nil && c.Expose.Enabled
 }
 
 type OAuthProvidersConfig struct {
@@ -643,6 +720,23 @@ func (c *RootConfig) Marshal() ([]byte, error) {
 	c.buildACMEOverride()
 	c.buildOpenfgaBackupValues()
 	return yaml.Marshal(c)
+}
+
+// Clone returns a deep copy of the config, so a caller can derive a new config without sharing
+// the original's maps, slices and pointers. It round-trips through YAML, so — like any other
+// load of this config — keys the struct does not model are not carried over.
+func (c *RootConfig) Clone() (*RootConfig, error) {
+	data, err := c.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("marshal config for cloning: %w", err)
+	}
+
+	clone := NewRootConfig()
+	if err := clone.Unmarshal(data); err != nil {
+		return nil, fmt.Errorf("unmarshal cloned config: %w", err)
+	}
+
+	return &clone, nil
 }
 
 // Unmarshal deserializes YAML data into the RootConfig

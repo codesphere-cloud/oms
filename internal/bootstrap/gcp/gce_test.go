@@ -23,6 +23,61 @@ import (
 
 var _ = Describe("GCE", func() {
 
+	Describe("VMDefsForEnv", func() {
+		It("keeps the names a single-data-center bootstrap has always used", func() {
+			env := &gcp.CodesphereEnvironment{}
+			env.DataCenters = gcp.BuildDataCenters(env)
+
+			defs := gcp.VMDefsForEnv(env)
+
+			Expect(vmNames(defs)).To(Equal([]string{
+				"jumpbox", "postgres",
+				"ceph-1", "ceph-2", "ceph-3",
+				"k0s-1", "k0s-2", "k0s-3",
+			}))
+		})
+
+		It("adds suffixed ceph and k0s nodes per additional data center", func() {
+			env := &gcp.CodesphereEnvironment{MultiDC: true}
+			env.DataCenters = gcp.BuildDataCenters(env)
+
+			defs := gcp.VMDefsForEnv(env)
+
+			Expect(vmNames(defs)).To(Equal([]string{
+				"jumpbox", "postgres",
+				"ceph-1", "ceph-2", "ceph-3",
+				"k0s-1", "k0s-2", "k0s-3",
+				"ceph-1-dc2", "ceph-2-dc2", "ceph-3-dc2",
+				"k0s-1-dc2", "k0s-2-dc2", "k0s-3-dc2",
+			}))
+		})
+
+		It("assigns the shared VMs to no data center and the rest to theirs", func() {
+			env := &gcp.CodesphereEnvironment{MultiDC: true}
+			env.DataCenters = gcp.BuildDataCenters(env)
+
+			byName := map[string]int{}
+			for _, def := range gcp.VMDefsForEnv(env) {
+				byName[def.Name] = def.DataCenterID
+			}
+
+			Expect(byName["jumpbox"]).To(BeZero())
+			Expect(byName["postgres"]).To(BeZero())
+			Expect(byName["ceph-1"]).To(Equal(1))
+			Expect(byName["k0s-3"]).To(Equal(1))
+			Expect(byName["ceph-1-dc2"]).To(Equal(2))
+			Expect(byName["k0s-3-dc2"]).To(Equal(2))
+		})
+
+		// Infra files written before multi-DC support carry no data center list.
+		It("falls back to a single unsuffixed data center when the environment has none", func() {
+			defs := gcp.VMDefsForEnv(&gcp.CodesphereEnvironment{})
+
+			Expect(vmNames(defs)).To(ContainElement("k0s-1"))
+			Expect(vmNames(defs)).To(HaveLen(8))
+		})
+	})
+
 	Describe("IsNotFoundError", func() {
 		Context("when error is nil", func() {
 			It("should return false", func() {

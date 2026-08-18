@@ -36,22 +36,28 @@ func NewVaultSecretCreator(c client.Client) *VaultSecretCreator {
 //   - File entries produce a single key equal to the entry name.
 //   - Field entries produce "entryName.password" and, when present, "entryName.username".
 func (v *VaultSecretCreator) CreateSecretFromFile(ctx context.Context, vaultFile, ageKeyPath, namespace, secretName string) error {
-	decrypted, err := DecryptFileWithSOPS(vaultFile, ageKeyPath)
+	backend, err := New(TypeSOPS, Options{Path: vaultFile, AgeKey: ageKeyPath})
 	if err != nil {
-		return fmt.Errorf("failed to decrypt vault file: %w", err)
+		return err
 	}
 
-	vault := &files.InstallVault{}
-	if err := vault.Unmarshal(decrypted); err != nil {
-		return fmt.Errorf("failed to parse vault file: %w", err)
+	return v.CreateSecretFromStore(ctx, backend, namespace, secretName)
+}
+
+// CreateSecretFromStore loads secrets through the abstract vault and syncs them
+// to a Kubernetes secret.
+func (v *VaultSecretCreator) CreateSecretFromStore(ctx context.Context, store Vault, namespace, secretName string) error {
+	data, err := store.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load vault: %w", err)
 	}
 
 	// Always create new service accounts tokens during creation to ensure they are always valid and updated.
-	if err := secrets.EnsureServiceAccountTokens(vault); err != nil {
+	if err := secrets.EnsureServiceAccountTokens(data); err != nil {
 		return fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 
-	return v.CreateSecretFromVault(ctx, vault, namespace, secretName)
+	return v.CreateSecretFromVault(ctx, data, namespace, secretName)
 }
 
 // CreateSecretFromVault creates or updates a Kubernetes secret with the contents of a Vault in the target cluster.

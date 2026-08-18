@@ -16,7 +16,7 @@ var _ = Describe("ConfigManagerProfile", func() {
 	var manager installer.InstallConfigManager
 
 	BeforeEach(func() {
-		manager = installer.NewInstallConfigManager()
+		manager = newPlainInstallConfigManager()
 	})
 
 	Describe("ApplyProfile", func() {
@@ -161,9 +161,9 @@ var _ = Describe("ConfigManagerProfile", func() {
 
 		Context("profile-specific differences", func() {
 			It("should have the expected datacenter names", func() {
-				devManager := installer.NewInstallConfigManager()
-				prodManager := installer.NewInstallConfigManager()
-				minimalManager := installer.NewInstallConfigManager()
+				devManager := newPlainInstallConfigManager()
+				prodManager := newPlainInstallConfigManager()
+				minimalManager := newPlainInstallConfigManager()
 
 				err := devManager.ApplyProfile(installer.PROFILE_DEV)
 				Expect(err).ToNot(HaveOccurred())
@@ -178,9 +178,9 @@ var _ = Describe("ConfigManagerProfile", func() {
 			})
 
 			It("should have different resource profiles", func() {
-				devManager := installer.NewInstallConfigManager()
-				prodManager := installer.NewInstallConfigManager()
-				minimalManager := installer.NewInstallConfigManager()
+				devManager := newPlainInstallConfigManager()
+				prodManager := newPlainInstallConfigManager()
+				minimalManager := newPlainInstallConfigManager()
 
 				err := devManager.ApplyProfile(installer.PROFILE_DEV)
 				Expect(err).ToNot(HaveOccurred())
@@ -209,9 +209,9 @@ var _ = Describe("ConfigManagerProfile", func() {
 			})
 
 			It("should have the expected default workspace plans", func() {
-				devManager := installer.NewInstallConfigManager()
-				prodManager := installer.NewInstallConfigManager()
-				minimalManager := installer.NewInstallConfigManager()
+				devManager := newPlainInstallConfigManager()
+				prodManager := newPlainInstallConfigManager()
+				minimalManager := newPlainInstallConfigManager()
 
 				err := devManager.ApplyProfile(installer.PROFILE_DEV)
 				Expect(err).ToNot(HaveOccurred())

@@ -14,6 +14,7 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/codesphere-cloud/oms/internal/util/testing"
 )
@@ -21,7 +22,7 @@ import (
 var _ = Describe("Interactive profile usage", func() {
 	Context("when using profile with interactive mode", func() {
 		It("should use profile values as defaults", func() {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			// Apply dev profile first (like the command does)
 			err := icg.ApplyProfile("dev")
@@ -68,7 +69,7 @@ var _ = Describe("Interactive profile usage", func() {
 		})
 
 		It("should allow non-interactive collection to use profile defaults", func() {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			// Apply dev profile
 			err := icg.ApplyProfile("dev")
@@ -77,7 +78,7 @@ var _ = Describe("Interactive profile usage", func() {
 			// In non-interactive mode, CollectInteractively would use defaults
 			// We simulate this by checking that the prompter returns defaults
 			// when interactive=false
-			prompter := installer.NewPrompter(false)
+			prompter := prompt.NewPrompter(false)
 
 			// Test that prompter returns defaults when not interactive
 			Expect(prompter.String("Test", "default-value")).To(Equal("default-value"))
@@ -101,7 +102,7 @@ var _ = Describe("Interactive profile usage", func() {
 				FileWriter: intutil.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err := c.InitInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -124,7 +125,7 @@ var _ = Describe("Interactive profile usage", func() {
 
 	Context("when using production profile", func() {
 		It("should set production-specific defaults", func() {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err := icg.ApplyProfile("production")
 			Expect(err).NotTo(HaveOccurred())
@@ -146,7 +147,7 @@ var _ = Describe("Interactive profile usage", func() {
 			mockIcg.EXPECT().ValidateInstallConfig().Return([]string{"configuration validation failed"})
 			mockIcg.EXPECT().GenerateSecrets().Return(nil)
 			mockIcg.EXPECT().WriteInstallConfig("config.yaml", false).Return(nil)
-			mockIcg.EXPECT().WriteUnencryptedVault("vault.yaml", false).Return(nil)
+			mockIcg.EXPECT().WriteVault("vault.yaml", false).Return(nil)
 
 			c := &InitInstallConfigCmd{
 				Opts: &InitInstallConfigOpts{
@@ -178,7 +179,7 @@ var _ = Describe("Interactive profile usage", func() {
 				FileWriter: intutil.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err := c.InitInstallConfig(icg)
 			Expect(err).To(HaveOccurred())
@@ -203,7 +204,7 @@ var _ = Describe("Non-interactive install-config generation", func() {
 				FileWriter: intutil.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err := c.InitInstallConfig(icg)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -229,7 +230,7 @@ var _ = Describe("Non-interactive install-config generation", func() {
 				},
 				FileWriter: intutil.NewFilesystemWriter(),
 			}
-			validateIcg := installer.NewInstallConfigManager()
+			validateIcg := newPlainInstallConfigManager()
 			Expect(validateCmd.validateOnly(validateIcg)).To(Succeed())
 		},
 		Entry("dev profile", "dev"),
@@ -300,7 +301,7 @@ var _ = Describe("Non-interactive Kubernetes CIDR flags", func() {
 		c := buildCmd(opts)
 		Expect(c.cmd.Flags().Set("k8s-managed", "false")).To(Succeed())
 
-		icg := installer.NewInstallConfigManager()
+		icg := newPlainInstallConfigManager()
 		err := c.InitInstallConfig(icg)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("pod CIDR is required"))

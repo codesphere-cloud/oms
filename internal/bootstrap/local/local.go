@@ -17,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	"github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -509,34 +510,22 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 }
 
 func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
-	if !b.fw.Exists(b.Env.SecretsFilePath) {
-		return nil
-	}
-
-	// The local prod.vault.yaml file itn eh secrets dir is always unecrpyted.
-	// The encrypted version is in the "secrets" dir.
 	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file for config templating: %w", err)
 	}
-
 	return nil
 }
 
 func (b *LocalBootstrapper) EnsureSecrets() error {
-	if b.fw.Exists(b.Env.SecretsFilePath) {
-		err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to load vault file: %w", err)
-		}
+	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+		return fmt.Errorf("failed to load vault file: %w", err)
 	}
-
 	b.Env.Vault = b.icg.GetVault()
-
 	return nil
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	recipient, keyPath, err := vault.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
+	recipient, keyPath, err := sops.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
@@ -669,11 +658,21 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := b.icg.WriteUnencryptedVault(b.Env.SecretsFilePath, true); err != nil {
+	if err := b.icg.WriteVault(b.Env.SecretsFilePath, true); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
-	if err := vault.EncryptFileWithSOPS(b.Env.SecretsFilePath, filepath.Join(b.Env.InstallConfig.Secrets.BaseDir, "prod.vault.yaml"), b.ageRecipient); err != nil {
-		return fmt.Errorf("failed to encrypt vault file: %w", err)
+
+	installerVault, err := vault.New(vault.TypeSOPS, vault.Options{
+		Path:         filepath.Join(b.Env.InstallConfig.Secrets.BaseDir, "prod.vault.yaml"),
+		AgeKey:       b.ageKeyPath,
+		WithComments: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to load installer vault: %w", err)
+	}
+
+	if err := installerVault.Save(b.Env.Vault); err != nil {
+		return fmt.Errorf("failed to save installer vault: %w", err)
 	}
 
 	return nil

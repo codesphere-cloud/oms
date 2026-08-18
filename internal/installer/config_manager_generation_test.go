@@ -17,7 +17,7 @@ import (
 var _ = Describe("Generated install config round-trip", func() {
 	DescribeTable("profiles generate a valid, reloadable install config",
 		func(profile string) {
-			manager := installer.NewInstallConfigManager()
+			manager := newPlainInstallConfigManager()
 
 			err := manager.ApplyProfile(profile)
 			Expect(err).NotTo(HaveOccurred())
@@ -43,7 +43,7 @@ var _ = Describe("Generated install config round-trip", func() {
 			vaultPath := filepath.Join(dir, "prod.vault.yaml")
 
 			Expect(manager.WriteInstallConfig(configPath, false)).To(Succeed())
-			Expect(manager.WriteUnencryptedVault(vaultPath, false)).To(Succeed())
+			Expect(manager.WriteVault(vaultPath, false)).To(Succeed())
 
 			// The written config must be valid YAML with cluster.metallb (not root metallb).
 			raw, err := os.ReadFile(configPath)
@@ -59,7 +59,7 @@ var _ = Describe("Generated install config round-trip", func() {
 
 			// Reload the config from disk through the full render+unmarshal path
 			// and re-validate: round-trip must be lossless and valid.
-			reloaded := installer.NewInstallConfigManager()
+			reloaded := newPlainInstallConfigManager()
 			Expect(reloaded.LoadInstallConfigFromFile(configPath)).To(Succeed())
 			reloadedWarnings := reloaded.ValidateInstallConfig()
 			Expect(reloadedWarnings).To(BeEmpty(),

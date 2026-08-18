@@ -13,16 +13,15 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("ApplyProfile", func() {
 	DescribeTable("profile application",
 		func(profile string, wantErr bool, checkDatacenterName string) {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err := icg.ApplyProfile(profile)
 			if wantErr {
@@ -43,7 +42,7 @@ var _ = Describe("ApplyProfile", func() {
 
 	Context("dev profile details", func() {
 		It("sets correct dev profile configuration", func() {
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 
 			err := icg.ApplyProfile("dev")
 			Expect(err).NotTo(HaveOccurred())
@@ -92,6 +91,47 @@ var _ = Describe("UpdateConfigFromOpts", func() {
 		command.updateConfigFromOpts(config, &files.InstallVault{})
 
 		Expect(config.Postgres.ServerAddress).To(Equal("postgres.example.com:5432"))
+	})
+
+	It("sets openfga backups config and vault secrets when enabled", func() {
+		config := &files.RootConfig{}
+		vault := &files.InstallVault{}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			OpenfgaBackupsEnabled:         true,
+			OpenfgaBackupsDestinationPath: "s3://backup-openfga",
+			OpenfgaBackupsEndpointURL:     "https://storage.googleapis.com",
+			OpenfgaBackupsSchedule:        "0 */30 * * * *",
+			OpenfgaBackupsRetentionPolicy: "7d",
+			OpenfgaBackupsAccessKeyID:     "access-id",
+			OpenfgaBackupsSecretAccessKey: "secret-key",
+		}}
+
+		command.updateConfigFromOpts(config, vault)
+
+		Expect(config.Codesphere.OpenfgaBackups).NotTo(BeNil())
+		Expect(config.Codesphere.OpenfgaBackups.Enabled).To(BeTrue())
+		Expect(config.Codesphere.OpenfgaBackups.DestinationPath).To(Equal("s3://backup-openfga"))
+		Expect(config.Codesphere.OpenfgaBackups.EndpointURL).To(Equal("https://storage.googleapis.com"))
+		Expect(config.Codesphere.OpenfgaBackups.Schedule).To(Equal("0 */30 * * * *"))
+		Expect(config.Codesphere.OpenfgaBackups.RetentionPolicy).To(Equal("7d"))
+
+		accessKey := vault.GetSecret(files.SecretOpenfgaDbBackupAccessKeyId)
+		Expect(accessKey).NotTo(BeNil())
+		Expect(accessKey.Fields.Password).To(Equal("access-id"))
+		secretKey := vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey)
+		Expect(secretKey).NotTo(BeNil())
+		Expect(secretKey.Fields.Password).To(Equal("secret-key"))
+	})
+
+	It("does not set openfga backups config when not enabled", func() {
+		config := &files.RootConfig{}
+		command := &InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			OpenfgaBackupsDestinationPath: "s3://ignored",
+		}}
+
+		command.updateConfigFromOpts(config, &files.InstallVault{})
+
+		Expect(config.Codesphere.OpenfgaBackups).To(BeNil())
 	})
 })
 
@@ -235,7 +275,7 @@ codesphere:
 			Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
 			recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(vault.EncryptFileWithSOPS(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
+			Expect(sops.EncryptFile(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
 			previousAgeKeyFile, hadPreviousAgeKeyFile := os.LookupEnv("SOPS_AGE_KEY_FILE")
 			Expect(os.Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)).To(Succeed())
 			DeferCleanup(func() {
@@ -255,7 +295,7 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newSOPSInstallConfigManager()
 			err = c.validateOnly(icg)
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -306,7 +346,7 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = c.validateOnly(icg)
 			Expect(err).To(HaveOccurred())
 		})
@@ -368,7 +408,7 @@ codesphere:
 				FileWriter: util.NewFilesystemWriter(),
 			}
 
-			icg := installer.NewInstallConfigManager()
+			icg := newPlainInstallConfigManager()
 			err = c.validateOnly(icg)
 			Expect(err).To(HaveOccurred())
 		})

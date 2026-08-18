@@ -11,6 +11,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 )
 
 var _ = Describe("ConfigGeneratorCollector", func() {
@@ -19,7 +20,7 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 	)
 
 	BeforeEach(func() {
-		manager = installer.NewInstallConfigManager()
+		manager = newPlainInstallConfigManager()
 	})
 
 	Describe("CollectInteractively", func() {
@@ -70,11 +71,11 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 	})
 
 	Describe("Prompter", func() {
-		var prompter *installer.Prompter
+		var prompter prompt.Prompter
 
 		Context("Non-interactive mode", func() {
 			BeforeEach(func() {
-				prompter = installer.NewPrompter(false)
+				prompter = prompt.NewPrompter(false)
 			})
 
 			It("should return default string value", func() {

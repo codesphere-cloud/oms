@@ -27,6 +27,8 @@ type InitInstallConfigOpts struct {
 
 	ConfigFile string
 	VaultFile  string
+	VaultType  string
+	AgeKey     string
 
 	Profile              string
 	AnsibleInventoryFile string
@@ -97,10 +99,21 @@ type InitInstallConfigOpts struct {
 	CodesphereOpenBaoEngine   string
 	CodesphereOpenBaoUser     string
 	CodesphereOpenBaoPassword string
+
+	OpenfgaBackupsEnabled         bool
+	OpenfgaBackupsDestinationPath string
+	OpenfgaBackupsEndpointURL     string
+	OpenfgaBackupsSchedule        string
+	OpenfgaBackupsRetentionPolicy string
+	OpenfgaBackupsAccessKeyID     string
+	OpenfgaBackupsSecretAccessKey string
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
-	icg := installer.NewInstallConfigManager()
+	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
+	if err != nil {
+		return fmt.Errorf("failed to initialize config manager: %w", err)
+	}
 
 	return c.InitInstallConfig(icg)
 }
@@ -142,6 +155,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
+	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
+	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
 	c.cmd.Flags().StringVar(&c.Opts.AnsibleInventoryFile, "ansible-inventory", "", "Path to Ansible inventory file to import host information from")
@@ -192,6 +207,15 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoEngine, "openbao-engine", "cs-secrets-engine", "Engine for OpenBao")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoUser, "openbao-user", "admin", "Username for OpenBao authentication")
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereOpenBaoPassword, "openbao-password", "", "Password for OpenBao authentication")
+
+	// OpenFGA database backups
+	c.cmd.Flags().BoolVar(&c.Opts.OpenfgaBackupsEnabled, "openfga-backups-enabled", false, "Enable OpenFGA database backups")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsDestinationPath, "openfga-backups-destination", "", "Backup destination (S3 URL, e.g. s3://backup-openfga)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsEndpointURL, "openfga-backups-endpoint", "", "S3-compatible endpoint URL (e.g. https://storage.googleapis.com)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsSchedule, "openfga-backups-schedule", "", "Backup schedule (6-field cron, empty for chart default)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsRetentionPolicy, "openfga-backups-retention", "", "Retention policy (e.g. 7d, empty for chart default)")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsAccessKeyID, "openfga-backups-access-key-id", "", "S3 access key ID for OpenFGA backups")
+	c.cmd.Flags().StringVar(&c.Opts.OpenfgaBackupsSecretAccessKey, "openfga-backups-secret-access-key", "", "S3 secret access key for OpenFGA backups")
 
 	util.MarkFlagRequired(c.cmd, "config")
 	util.MarkFlagRequired(c.cmd, "vault")
@@ -246,7 +270,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	if err := icg.WriteUnencryptedVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
+	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
@@ -282,16 +306,7 @@ func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println(strings.Repeat("=", 70))
 
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
-	log.Println("   Keep the vault file secure and encrypt it with SOPS before storing.")
-
-	log.Println("\nNext steps:")
-	log.Println("1. Review the generated config.yaml and prod.vault.yaml")
-	log.Println("2. Install SOPS and Age: brew install sops age")
-	log.Println("3. Generate an Age keypair: age-keygen -o age_key.txt")
-	log.Println("4. Encrypt the vault file:")
-	log.Printf("   age-keygen -y age_key.txt  # Get public key\n")
-	log.Printf("   sops --encrypt --age <PUBLIC_KEY> --in-place %s\n", c.Opts.VaultFile)
-	log.Println("5. Run the Codesphere installer with these configuration files")
+	log.Println("   Keep the vault file and its decryption key secure.")
 	log.Println()
 }
 
@@ -538,6 +553,32 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser
 		if c.Opts.CodesphereOpenBaoPassword != "" {
 			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: c.Opts.CodesphereOpenBaoPassword}})
+		}
+	}
+
+	// OpenFGA database backups
+	if c.Opts.OpenfgaBackupsEnabled {
+		if config.Codesphere.OpenfgaBackups == nil {
+			config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{}
+		}
+		config.Codesphere.OpenfgaBackups.Enabled = true
+		if c.Opts.OpenfgaBackupsDestinationPath != "" {
+			config.Codesphere.OpenfgaBackups.DestinationPath = c.Opts.OpenfgaBackupsDestinationPath
+		}
+		if c.Opts.OpenfgaBackupsEndpointURL != "" {
+			config.Codesphere.OpenfgaBackups.EndpointURL = c.Opts.OpenfgaBackupsEndpointURL
+		}
+		if c.Opts.OpenfgaBackupsSchedule != "" {
+			config.Codesphere.OpenfgaBackups.Schedule = c.Opts.OpenfgaBackupsSchedule
+		}
+		if c.Opts.OpenfgaBackupsRetentionPolicy != "" {
+			config.Codesphere.OpenfgaBackups.RetentionPolicy = c.Opts.OpenfgaBackupsRetentionPolicy
+		}
+		if c.Opts.OpenfgaBackupsAccessKeyID != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupAccessKeyId, Fields: &files.SecretFields{Password: c.Opts.OpenfgaBackupsAccessKeyID}})
+		}
+		if c.Opts.OpenfgaBackupsSecretAccessKey != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: c.Opts.OpenfgaBackupsSecretAccessKey}})
 		}
 	}
 
