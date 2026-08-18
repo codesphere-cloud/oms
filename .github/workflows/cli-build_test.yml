@@ -47,7 +47,11 @@ jobs:
         if: ${{ matrix.task == 'install-config' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y age sops
+          sudo apt-get install -y age
+          # sops is not packaged in Ubuntu's repos, so fetch the pinned release binary.
+          curl -fsSL -o /tmp/sops \
+            https://github.com/getsops/sops/releases/download/v3.13.3/sops-v3.13.3.linux.amd64
+          sudo install -m 0755 /tmp/sops /usr/local/bin/sops
           age-keygen -o age_key.txt
           echo "SOPS_AGE_KEY_FILE=${GITHUB_WORKSPACE}/age_key.txt" >> "$GITHUB_ENV"
 
