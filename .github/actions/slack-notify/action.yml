@@ -1,0 +1,31 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Posts a failure notification to the #team-oms-sdk Slack channel.
+name: Slack Notification on Failure
+description: Notify #team-oms-sdk on job failure
+
+inputs:
+  job-name:
+    description: Display name of the failing job (e.g. "Build", "Test", "Install-Config")
+    required: true
+  webhook:
+    description: Slack webhook URL for the notification
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Post failure to Slack
+      shell: bash
+      env:
+        SLACK_WEBHOOK: ${{ inputs.webhook }}
+      run: |
+        curl -X POST \
+          -H 'Content-type: application/json' \
+          --data "{
+            \"channel\": \"#team-oms-sdk\",
+            \"icon_emoji\": \":siren:\",
+            \"text\": \"🚨 ${{ inputs.job-name }} Job Failure 🚨\nRepository: ${{ github.repository }}\nBranch/Ref: \`${{ github.ref }}\`\nRun url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+          }" \
+          "${SLACK_WEBHOOK}"

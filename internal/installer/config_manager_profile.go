@@ -93,8 +93,9 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Cluster.PublicGateway.ServiceType == "" {
 		g.Config.Cluster.PublicGateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
 	}
-	if g.Config.MetalLB == nil {
-		g.Config.MetalLB = &files.MetalLBConfig{
+
+	if g.Config.Cluster.MetalLB == nil {
+		g.Config.Cluster.MetalLB = &files.MetalLBConfig{
 			Enabled: false,
 			Pools:   []files.MetalLBPoolDef{},
 		}
@@ -103,6 +104,10 @@ func (g *InstallConfig) applyCommonProperties() {
 		g.Config.Registry = &files.RegistryConfig{}
 	}
 
+	certIssuer := g.Config.Codesphere.EnsureCertIssuer()
+	if certIssuer.Type == "" {
+		certIssuer.Type = files.CertIssuerTypeSelfSigned
+	}
 	if g.Config.Codesphere.Domain == "" {
 		g.Config.Codesphere.Domain = "codesphere.local"
 	}
@@ -195,10 +200,9 @@ func (g *InstallConfig) applyCommonProperties() {
 	}
 }
 
-func (g *InstallConfig) applyProfileDev() error {
-	if g.Config.Datacenter.Name == "" {
-		g.Config.Datacenter.Name = "dev"
-	}
+// ensureMonitoringDefaults populates the monitoring stack with the given enabled
+// states, preserving any explicitly configured values.
+func (g *InstallConfig) ensureMonitoringDefaults(clusterName string, loki, grafana, alloy bool) {
 	if g.Config.Cluster.Monitoring == nil {
 		g.Config.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
@@ -208,18 +212,38 @@ func (g *InstallConfig) applyProfileDev() error {
 	if g.Config.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
 		g.Config.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{
 			Enabled:     false,
-			ClusterName: "dev",
+			ClusterName: clusterName,
 		}
 	}
 	if g.Config.Cluster.Monitoring.Loki == nil {
-		g.Config.Cluster.Monitoring.Loki = &files.LokiConfig{Enabled: false}
+		g.Config.Cluster.Monitoring.Loki = &files.LokiConfig{Enabled: loki}
 	}
 	if g.Config.Cluster.Monitoring.Grafana == nil {
-		g.Config.Cluster.Monitoring.Grafana = &files.GrafanaConfig{Enabled: false}
+		g.Config.Cluster.Monitoring.Grafana = &files.GrafanaConfig{Enabled: grafana}
 	}
 	if g.Config.Cluster.Monitoring.GrafanaAlloy == nil {
-		g.Config.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{Enabled: false}
+		g.Config.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{Enabled: alloy}
 	}
+}
+
+// ensureWorkspacePlans sets the default workspace plan for plan ID 1.
+func (g *InstallConfig) ensureWorkspacePlans(name string, maxReplicas int) {
+	g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
+		1: {
+			Name:          name,
+			HostingPlanID: 1,
+			MaxReplicas:   maxReplicas,
+			OnDemand:      true,
+		},
+	}
+}
+
+func (g *InstallConfig) applyProfileDev() error {
+	if g.Config.Datacenter.Name == "" {
+		g.Config.Datacenter.Name = "dev"
+	}
+
+	g.ensureMonitoringDefaults("dev", false, false, false)
 	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
 	}
@@ -230,37 +254,9 @@ func (g *InstallConfig) applyProfileMinimal() error {
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "dev"
 	}
-	if g.Config.Cluster.Monitoring == nil {
-		g.Config.Cluster.Monitoring = &files.MonitoringConfig{}
-	}
-	if g.Config.Cluster.Monitoring.Prometheus == nil {
-		g.Config.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
-	}
-	if g.Config.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
-		g.Config.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{
-			Enabled:     false,
-			ClusterName: "dev",
-		}
-	}
-	if g.Config.Cluster.Monitoring.Loki == nil {
-		g.Config.Cluster.Monitoring.Loki = &files.LokiConfig{Enabled: true}
-	}
-	if g.Config.Cluster.Monitoring.Grafana == nil {
-		g.Config.Cluster.Monitoring.Grafana = &files.GrafanaConfig{Enabled: true}
-	}
-	if g.Config.Cluster.Monitoring.GrafanaAlloy == nil {
-		g.Config.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{Enabled: true}
-	}
-	if g.Config.Codesphere.Plans.WorkspacePlans == nil {
-		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
-			1: {
-				Name:          "Standard Developer",
-				HostingPlanID: 1,
-				MaxReplicas:   1,
-				OnDemand:      true,
-			},
-		}
-	}
+
+	g.ensureMonitoringDefaults("dev", true, true, true)
+	g.ensureWorkspacePlans("Standard Developer", 1)
 	if g.Config.Cluster.BarmanCloudPlugin == nil {
 		g.Config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
 			Enabled: true,
@@ -287,16 +283,8 @@ func (g *InstallConfig) applyProfileProd() error {
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "production"
 	}
-	if g.Config.Codesphere.Plans.WorkspacePlans == nil {
-		g.Config.Codesphere.Plans.WorkspacePlans = map[int]files.WorkspacePlan{
-			1: {
-				Name:          "Standard Developer",
-				HostingPlanID: 1,
-				MaxReplicas:   3,
-				OnDemand:      true,
-			},
-		}
-	}
+
+	g.ensureWorkspacePlans("Standard Developer", 3)
 	g.Config.Cluster.Monitoring = &files.MonitoringConfig{
 		Prometheus: &files.PrometheusConfig{
 			RemoteWrite: &files.RemoteWriteConfig{

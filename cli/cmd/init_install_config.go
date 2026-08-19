@@ -184,6 +184,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	// K8s
 	c.cmd.Flags().BoolVar(&c.Opts.KubernetesManagedByCodesphere, "k8s-managed", true, "Use Codesphere-managed Kubernetes")
 	c.cmd.Flags().StringSliceVar(&c.Opts.KubernetesControlPlanes, "k8s-control-plane", []string{}, "K8s control plane IPs (comma-separated)")
+	c.cmd.Flags().StringVar(&c.Opts.KubernetesPodCIDR, "k8s-pod-cidr", "", "Pod CIDR (required when --k8s-managed=false)")
+	c.cmd.Flags().StringVar(&c.Opts.KubernetesServiceCIDR, "k8s-service-cidr", "", "Service CIDR (required when --k8s-managed=false)")
 
 	// Ceph
 	c.cmd.Flags().StringVar(&c.Opts.CephCsiKubeletDir, "ceph-csi-kubelet-dir", "", "Directory of kubelet for ceph csi. Required for some cloud providers")
@@ -268,6 +270,8 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
+	// The freshly generated vault is SOPS-encrypted automatically with the
+	// configured age key (--age-key or SOPS_AGE_KEY[_FILE]).
 	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
@@ -304,6 +308,7 @@ func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println(strings.Repeat("=", 70))
 
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
+	log.Println("   The vault file has been encrypted with SOPS automatically.")
 	log.Println("   Keep the vault file and its decryption key secure.")
 	log.Println()
 }
@@ -418,6 +423,9 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	}
 
 	// Kubernetes settings
+	if c.cmd != nil && c.cmd.Flags().Changed("k8s-managed") {
+		config.Kubernetes.ManagedByCodesphere = c.Opts.KubernetesManagedByCodesphere
+	}
 	if c.Opts.KubernetesAPIServerHost != "" {
 		config.Kubernetes.APIServerHost = c.Opts.KubernetesAPIServerHost
 	}
@@ -464,18 +472,18 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 
 	// MetalLB settings
 	if c.Opts.MetalLBEnabled {
-		if config.MetalLB == nil {
-			config.MetalLB = &files.MetalLBConfig{
+		if config.Cluster.MetalLB == nil {
+			config.Cluster.MetalLB = &files.MetalLBConfig{
 				Enabled: c.Opts.MetalLBEnabled,
 				Pools:   []files.MetalLBPoolDef{},
 			}
 		} else {
-			config.MetalLB.Enabled = c.Opts.MetalLBEnabled
-			config.MetalLB.Pools = []files.MetalLBPoolDef{}
+			config.Cluster.MetalLB.Enabled = c.Opts.MetalLBEnabled
+			config.Cluster.MetalLB.Pools = []files.MetalLBPoolDef{}
 		}
 
 		for _, pool := range c.Opts.MetalLBPools {
-			config.MetalLB.Pools = append(config.MetalLB.Pools, files.MetalLBPoolDef(pool))
+			config.Cluster.MetalLB.Pools = append(config.Cluster.MetalLB.Pools, files.MetalLBPoolDef(pool))
 		}
 	}
 

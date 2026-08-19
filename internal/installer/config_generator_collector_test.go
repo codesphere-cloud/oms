@@ -4,10 +4,13 @@
 package installer_test
 
 import (
+	"os"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/prompt"
 )
 
@@ -31,6 +34,39 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 			config := manager.GetInstallConfig()
 			Expect(config).ToNot(BeNil())
 			Expect(config.Datacenter.Name).ToNot(BeEmpty())
+		})
+
+		It("should preserve existing MetalLB pools as prompt defaults", func() {
+			err := manager.ApplyProfile(installer.PROFILE_DEV)
+			Expect(err).ToNot(HaveOccurred())
+
+			config := manager.GetInstallConfig()
+			config.Cluster.MetalLB = &files.MetalLBConfig{
+				Enabled: true,
+				Pools: []files.MetalLBPoolDef{
+					{Name: "existing-pool", IPAddresses: []string{"10.0.0.1-10.0.0.5"}},
+				},
+			}
+
+			// CollectInteractively uses an interactive prompter; point stdin at an
+			// empty file so every prompt resolves to its default value.
+			stdin, err := os.CreateTemp("", "stdin-*")
+			Expect(err).NotTo(HaveOccurred())
+
+			oldStdin := os.Stdin
+			os.Stdin = stdin
+
+			DeferCleanup(func() { os.Stdin = oldStdin; _ = os.Remove(stdin.Name()) })
+
+			err = manager.CollectInteractively()
+			Expect(err).ToNot(HaveOccurred())
+
+			config = manager.GetInstallConfig()
+			Expect(config.Cluster.MetalLB).ToNot(BeNil())
+			Expect(config.Cluster.MetalLB.Enabled).To(BeTrue())
+			Expect(config.Cluster.MetalLB.Pools).To(HaveLen(1))
+			Expect(config.Cluster.MetalLB.Pools[0].Name).To(Equal("existing-pool"))
+			Expect(config.Cluster.MetalLB.Pools[0].IPAddresses).To(Equal([]string{"10.0.0.1-10.0.0.5"}))
 		})
 	})
 
