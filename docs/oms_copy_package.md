@@ -5,7 +5,7 @@ Copy all images and Helm charts from an installer package
 ### Synopsis
 
 Read all container images and OCI Helm charts from an installer package BOM
-and copy them to another registry using crane.
+and copy them to another registry.
 
 Use --package for a local installer package or --version to download one
 from the OMS portal. The source repository paths are preserved below --dest.

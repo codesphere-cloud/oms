@@ -358,6 +358,18 @@ License: MIT
 License URL: https://github.com/dlclark/regexp2/blob/v1.12.0/LICENSE
  
 ----------
+Module: github.com/docker/cli/cli/config
+Version: v29.6.2
+License: Apache-2.0
+License URL: https://github.com/docker/cli/blob/v29.6.2/LICENSE
+ 
+----------
+Module: github.com/docker/docker-credential-helpers
+Version: v0.9.8
+License: MIT
+License URL: https://github.com/docker/docker-credential-helpers/blob/v0.9.8/LICENSE
+ 
+----------
 Module: github.com/dylibso/observe-sdk/go
 Version: v0.0.0-20240828172851-9145d8ad07e1
 License: Apache-2.0
@@ -652,6 +664,12 @@ License: BSD-3-Clause
 License URL: https://github.com/google/go-cmp/blob/v0.7.0/LICENSE
  
 ----------
+Module: github.com/google/go-containerregistry
+Version: v0.21.7
+License: Apache-2.0
+License URL: https://github.com/google/go-containerregistry/blob/v0.21.7/LICENSE
+ 
+----------
 Module: github.com/google/go-github/v69/github
 Version: v69.2.0
 License: BSD-3-Clause
@@ -868,28 +886,40 @@ License: MIT
 License URL: https://github.com/kevinburke/ssh_config/blob/v1.6.0/LICENSE
  
 ----------
-Module: github.com/klauspost/compress/internal
+Module: github.com/klauspost/compress
 Version: v1.19.1
 License: MIT
 License URL: https://github.com/klauspost/compress/blob/v1.19.1/LICENSE
  
 ----------
-Module: github.com/klauspost/compress/internal
+Module: github.com/klauspost/compress
 Version: v1.19.1
 License: Apache-2.0
 License URL: https://github.com/klauspost/compress/blob/v1.19.1/LICENSE
  
 ----------
-Module: github.com/klauspost/compress/internal
+Module: github.com/klauspost/compress
 Version: v1.19.1
 License: BSD-3-Clause
 License URL: https://github.com/klauspost/compress/blob/v1.19.1/LICENSE
+ 
+----------
+Module: github.com/klauspost/compress/internal/snapref
+Version: v1.19.1
+License: BSD-3-Clause
+License URL: https://github.com/klauspost/compress/blob/v1.19.1/internal/snapref/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/s2
 Version: v1.19.1
 License: BSD-3-Clause
 License URL: https://github.com/klauspost/compress/blob/v1.19.1/s2/LICENSE
+ 
+----------
+Module: github.com/klauspost/compress/zstd/internal/xxhash
+Version: v1.19.1
+License: MIT
+License URL: https://github.com/klauspost/compress/blob/v1.19.1/zstd/internal/xxhash/LICENSE.txt
  
 ----------
 Module: github.com/klauspost/cpuid/v2

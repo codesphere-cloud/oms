@@ -166,33 +166,10 @@ func (c *CopyPackageCmd) resolvePackage(portalClient portal.Portal) (string, err
 		return "", fmt.Errorf("failed to get upstream package: %w", err)
 	}
 
-	download, err := build.GetBuildForDownload(c.Opts.Filename)
-	if err != nil {
-		return "", fmt.Errorf("failed to find artifact in upstream package: %w", err)
-	}
-
 	destination := filepath.Join(workdir, build.BuildPackageFilename(c.Opts.Filename))
 
-	out, err := c.FileWriter.Create(destination)
-	if err != nil {
-		return "", fmt.Errorf("failed to create package file %s: %w", destination, err)
-	}
-
-	if err := portalClient.DownloadBuildArtifact(portal.CodesphereProduct, download, out, 0, false); err != nil {
-		intutil.CloseFileIgnoreError(out)
+	if err := portal.DownloadAndVerifyBuild(portalClient, c.FileWriter, portal.CodesphereProduct, build, c.Opts.Filename, destination, portal.DownloadOptions{}); err != nil {
 		return "", fmt.Errorf("failed to download upstream package: %w", err)
-	}
-
-	intutil.CloseFileIgnoreError(out)
-
-	verifyFile, err := c.FileWriter.Open(destination)
-	if err != nil {
-		return "", fmt.Errorf("failed to open downloaded package for verification: %w", err)
-	}
-	defer intutil.CloseFileIgnoreError(verifyFile)
-
-	if err := portalClient.VerifyBuildArtifactDownload(verifyFile, download); err != nil {
-		return "", fmt.Errorf("failed to verify upstream package: %w", err)
 	}
 
 	return destination, nil

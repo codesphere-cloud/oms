@@ -5,13 +5,18 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/prompt"
+	intutil "github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 )
 
 type commandRecordingCopier struct {
@@ -101,5 +106,59 @@ var _ = Describe("CopyPackageCmd", func() {
 
 		root.SetArgs([]string{"copy", "package", "--dest", "registry.example.com", "--yes"})
 		Expect(root.Execute()).To(MatchError("exactly one of --package or --version must be specified"))
+	})
+
+	Describe("resolvePackage with --version", func() {
+		var (
+			mockEnv        *env.MockEnv
+			mockPortal     *portal.MockPortal
+			mockFileWriter *intutil.MockFileIO
+			workdir        string
+			build          portal.Build
+			command        *CopyPackageCmd
+		)
+
+		BeforeEach(func() {
+			workdir = GinkgoT().TempDir()
+			mockEnv = env.NewMockEnv(GinkgoT())
+			mockEnv.EXPECT().GetOmsWorkdir().Return(workdir)
+
+			mockPortal = portal.NewMockPortal(GinkgoT())
+			mockFileWriter = intutil.NewMockFileIO(GinkgoT())
+
+			build = portal.Build{
+				Version:   "codesphere-v1.70.0",
+				Hash:      "abc1234567",
+				Artifacts: []portal.Artifact{{Filename: defaultInstallerPackageArtifact}},
+			}
+
+			command = &CopyPackageCmd{
+				Opts:       CopyPackageOpts{Version: build.Version, Filename: defaultInstallerPackageArtifact},
+				Env:        mockEnv,
+				FileWriter: mockFileWriter,
+			}
+		})
+
+		It("downloads and verifies the upstream package", func() {
+			mockPortal.EXPECT().GetBuild(portal.CodesphereProduct, build.Version, "").Return(build, nil)
+
+			destination := filepath.Join(workdir, build.BuildPackageFilename(defaultInstallerPackageArtifact))
+			fakeFile := os.NewFile(uintptr(0), destination)
+			mockFileWriter.EXPECT().Create(destination).Return(fakeFile, nil)
+			mockFileWriter.EXPECT().Open(destination).Return(fakeFile, nil)
+			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, mock.Anything, mock.Anything, 0, false).Return(nil)
+			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, mock.Anything).Return(nil)
+
+			path, err := command.resolvePackage(mockPortal)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(path).To(Equal(destination))
+		})
+
+		It("returns an error when the upstream package cannot be found", func() {
+			mockPortal.EXPECT().GetBuild(portal.CodesphereProduct, build.Version, "").Return(portal.Build{}, fmt.Errorf("build not found"))
+
+			_, err := command.resolvePackage(mockPortal)
+			Expect(err).To(MatchError(ContainSubstring("failed to get upstream package")))
+		})
 	})
 })

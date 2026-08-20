@@ -96,43 +96,10 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *util.GlobalOptions) {
 }
 
 func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, filename string) error {
-	download, err := build.GetBuildForDownload(filename)
-	if err != nil {
-		return fmt.Errorf("failed to find artifact in package: %w", err)
-	}
-
 	fullFilename := build.BuildPackageFilename(filename)
-	out, err := c.FileWriter.OpenAppend(fullFilename)
-	if err != nil {
-		out, err = c.FileWriter.Create(fullFilename)
-		if err != nil {
-			return fmt.Errorf("failed to create file %s: %w", fullFilename, err)
-		}
-	}
-	defer intutil.CloseFileIgnoreError(out)
 
-	// get already downloaded file size of fullFilename
-	fileSize := 0
-	fileInfo, err := out.Stat()
-	if err == nil {
-		fileSize = int(fileInfo.Size())
-	}
-
-	err = p.DownloadBuildArtifact("codesphere", download, out, fileSize, c.Opts.Quiet)
-	if err != nil {
-		return fmt.Errorf("failed to download build: %w", err)
-	}
-
-	verifyFile, err := c.FileWriter.Open(fullFilename)
-	if err != nil {
-		return err
-	}
-	defer intutil.CloseFileIgnoreError(verifyFile)
-
-	err = p.VerifyBuildArtifactDownload(verifyFile, download)
-	if err != nil {
-		return fmt.Errorf("failed to verify artifact: %w", err)
-	}
-
-	return nil
+	return portal.DownloadAndVerifyBuild(p, c.FileWriter, portal.CodesphereProduct, build, filename, fullFilename, portal.DownloadOptions{
+		Resume: true,
+		Quiet:  c.Opts.Quiet,
+	})
 }

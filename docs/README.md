@@ -33,3 +33,4 @@ like downloading new versions.
 * [oms template](oms_template.md)	 - Render OMS configuration templates
 * [oms update](oms_update.md)	 - Update OMS related resources
 * [oms version](oms_version.md)	 - Print version
+
