@@ -1187,9 +1187,9 @@ License URL: https://github.com/ryanuber/go-glob/blob/v1.0.0/LICENSE
  
 ----------
 Module: github.com/santhosh-tekuri/jsonschema/v6
-Version: v6.0.2
+Version: v6.0.3
 License: Apache-2.0
-License URL: https://github.com/santhosh-tekuri/jsonschema/blob/v6.0.2/LICENSE
+License URL: https://github.com/santhosh-tekuri/jsonschema/blob/v6.0.3/LICENSE
  
 ----------
 Module: github.com/sergi/go-diff/diffmatchpatch
@@ -1205,9 +1205,9 @@ License URL: https://github.com/shopspring/decimal/blob/v1.4.0/LICENSE
  
 ----------
 Module: github.com/sirupsen/logrus
-Version: v1.9.4
+Version: v1.10.1
 License: MIT
-License URL: https://github.com/sirupsen/logrus/blob/v1.9.4/LICENSE
+License URL: https://github.com/sirupsen/logrus/blob/v1.10.1/LICENSE
  
 ----------
 Module: github.com/skeema/knownhosts
@@ -1241,21 +1241,21 @@ License URL: https://github.com/stretchr/objx/blob/v0.5.3/LICENSE
  
 ----------
 Module: github.com/stretchr/testify
-Version: v1.12.0
+Version: v1.12.1
 License: MIT
-License URL: https://github.com/stretchr/testify/blob/v1.12.0/LICENSE
+License URL: https://github.com/stretchr/testify/blob/v1.12.1/LICENSE
  
 ----------
 Module: github.com/stretchr/testify/internal/difflib
-Version: v1.12.0
+Version: v1.12.1
 License: BSD-3-Clause
-License URL: https://github.com/stretchr/testify/blob/v1.12.0/internal/difflib/LICENSE
+License URL: https://github.com/stretchr/testify/blob/v1.12.1/internal/difflib/LICENSE
  
 ----------
 Module: github.com/stretchr/testify/internal/spew
-Version: v1.12.0
+Version: v1.12.1
 License: ISC
-License URL: https://github.com/stretchr/testify/blob/v1.12.0/internal/spew/LICENSE
+License URL: https://github.com/stretchr/testify/blob/v1.12.1/internal/spew/LICENSE
  
 ----------
 Module: github.com/tetratelabs/wabin
