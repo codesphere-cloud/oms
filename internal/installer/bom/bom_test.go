@@ -213,4 +213,34 @@ var _ = Describe("Bom", func() {
 			Expect(images).To(BeEmpty())
 		})
 	})
+
+	Describe("GetOCIArtifacts", func() {
+		It("returns sorted unique container images and OCI Helm charts from all components", func() {
+			cfg := &bom.Config{Components: map[string]bom.ComponentConfig{
+				"codesphere": {
+					ContainerImages: map[string]string{
+						"api": "ghcr.io/codesphere/api:v1",
+					},
+					Files: map[string]bom.FileRef{
+						"chart": {OciRef: "oci://ghcr.io/codesphere/charts/codesphere:v1"},
+					},
+				},
+				"dependency": {
+					ContainerImages: map[string]string{
+						"duplicate": "ghcr.io/codesphere/api:v1",
+						"redis":     "docker.io/library/redis:7",
+					},
+					Files: map[string]bom.FileRef{
+						"not-oci": {SrcUrl: "https://example.com/file.tgz"},
+					},
+				},
+			}}
+
+			Expect(cfg.GetOCIArtifacts()).To(Equal([]string{
+				"docker.io/library/redis:7",
+				"ghcr.io/codesphere/api:v1",
+				"oci://ghcr.io/codesphere/charts/codesphere:v1",
+			}))
+		})
+	})
 })

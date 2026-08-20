@@ -38,7 +38,7 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 	b.subSteps = 0
 	b.currentStep = name
 
-	fmt.Printf("%s%s%s...", LINE_RESET, RESET_TEXT, name)
+	fmt.Printf("%s%s%s...\n", LINE_RESET, RESET_TEXT, name)
 	err := fn()
 	if err != nil {
 		fmt.Printf("%s%s%s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
@@ -59,7 +59,7 @@ func (b *StepLogger) Substep(name string, fn func() error) error {
 	b.subSteps += 1
 	b.currentStep = name
 
-	fmt.Printf("%s%s   %s...", LINE_RESET, RESET_TEXT, name)
+	fmt.Printf("%s%s   %s...\n", LINE_RESET, RESET_TEXT, name)
 	err := fn()
 	if err != nil {
 		fmt.Printf("%s%s   %s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
