@@ -1571,75 +1571,75 @@ License URL: https://github.com/helm/helm/blob/v4.2.4/LICENSE
  
 ----------
 Module: k8s.io/api
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/api/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/api/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/apiextensions-apiserver/pkg
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/apiextensions-apiserver/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/apiextensions-apiserver/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/apimachinery/pkg
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/apimachinery/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/apimachinery/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/apimachinery/third_party/forked/golang
-Version: v0.36.3
+Version: v0.36.4
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/apimachinery/blob/v0.36.3/third_party/forked/golang/LICENSE
+License URL: https://github.com/kubernetes/apimachinery/blob/v0.36.4/third_party/forked/golang/LICENSE
  
 ----------
 Module: k8s.io/apiserver/pkg
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/apiserver/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/apiserver/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/cli-runtime/pkg
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/cli-runtime/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/cli-runtime/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/client-go
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/client-go/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/client-go/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/client-go/third_party/forked/golang/template
-Version: v0.36.3
+Version: v0.36.4
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/client-go/blob/v0.36.3/third_party/forked/golang/LICENSE
+License URL: https://github.com/kubernetes/client-go/blob/v0.36.4/third_party/forked/golang/LICENSE
  
 ----------
 Module: k8s.io/client-go/third_party/forked/httpcache
-Version: v0.36.3
+Version: v0.36.4
 License: MIT
-License URL: https://github.com/kubernetes/client-go/blob/v0.36.3/third_party/forked/httpcache/LICENSE
+License URL: https://github.com/kubernetes/client-go/blob/v0.36.4/third_party/forked/httpcache/LICENSE
  
 ----------
 Module: k8s.io/component-base
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/component-base/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/component-base/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/component-helpers
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/component-helpers/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/component-helpers/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/controller-manager/pkg/features
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/controller-manager/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/controller-manager/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/klog/v2
@@ -1649,9 +1649,9 @@ License URL: https://github.com/kubernetes/klog/blob/v2.140.0/LICENSE
  
 ----------
 Module: k8s.io/kube-aggregator/pkg/apis/apiregistration
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/kube-aggregator/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/kube-aggregator/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/kube-openapi/pkg
@@ -1673,9 +1673,9 @@ License URL: https://github.com/kubernetes/kube-openapi/blob/865597e52e25/pkg/va
  
 ----------
 Module: k8s.io/kubectl/pkg
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/kubectl/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/kubectl/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/kubernetes/pkg
