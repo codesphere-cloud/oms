@@ -28,6 +28,12 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
+// maxReleaseHistory caps how many revisions Helm keeps per release. The Helm
+// SDK defaults to 0 (unlimited), unlike the CLI which defaults to 10. Every
+// upgrade stores the full chart in a Secret, so an uncapped release grows
+// without bound and eventually makes listing releases too large to transfer.
+const maxReleaseHistory = 10
+
 // ReleaseInfo holds the details of an existing Helm release that the rest of
 // the application cares about — completely decoupled from the Helm SDK types.
 type ReleaseInfo struct {
@@ -333,6 +339,7 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 	upgradeClient.Version = cfg.Version
 	upgradeClient.RepoURL = cfg.RepoURL
 	upgradeClient.Timeout = 5 * time.Minute
+	upgradeClient.MaxHistory = maxReleaseHistory
 	upgradeClient.ForceConflicts = opts.ForceConflicts
 	upgradeClient.TakeOwnership = opts.TakeOwnership
 
