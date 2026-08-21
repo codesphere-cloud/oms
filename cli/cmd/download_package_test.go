@@ -242,7 +242,7 @@ var _ = Describe("DownloadPackages", func() {
 	Context("File doesn't exist in build", func() {
 		It("Returns an error", func() {
 			err := c.DownloadBuild(mockPortal, build, "installer-lite.tar.gz")
-			Expect(err).To(MatchError("failed to find artifact in package: artifact not found: installer-lite.tar.gz"))
+			Expect(err).To(MatchError("failed to download and verify build: failed to find artifact in package: artifact not found: installer-lite.tar.gz"))
 		})
 	})
 })
