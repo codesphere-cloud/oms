@@ -1685,9 +1685,9 @@ License URL: https://github.com/kubernetes/kubernetes/blob/v1.36.4/LICENSE
  
 ----------
 Module: k8s.io/streaming/pkg
-Version: v0.36.3
+Version: v0.36.4
 License: Apache-2.0
-License URL: https://github.com/kubernetes/streaming/blob/v0.36.3/LICENSE
+License URL: https://github.com/kubernetes/streaming/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/utils
