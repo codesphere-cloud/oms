@@ -30,7 +30,7 @@ func DownloadAndVerifyBuild(p Portal, fileWriter intutil.FileIO, product Product
 
 	out, err := openDestination(fileWriter, destination, opts.Resume)
 	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", destination, err)
+		return fmt.Errorf("failed to open pckage destination file: %w", err)
 	}
 	defer intutil.CloseFileIgnoreError(out)
 
@@ -47,7 +47,7 @@ func DownloadAndVerifyBuild(p Portal, fileWriter intutil.FileIO, product Product
 
 	verifyFile, err := fileWriter.Open(destination)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open %q: %w", destination, err)
 	}
 	defer intutil.CloseFileIgnoreError(verifyFile)
 
@@ -65,5 +65,9 @@ func openDestination(fileWriter intutil.FileIO, destination string, resume bool)
 		}
 	}
 
-	return fileWriter.Create(destination)
+	file, err := fileWriter.Create(destination)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file at %q: %w", destination, err)
+	}
+	return file, nil
 }

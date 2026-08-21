@@ -98,8 +98,11 @@ func AddDownloadPackageCmd(download *cobra.Command, opts *util.GlobalOptions) {
 func (c *DownloadPackageCmd) DownloadBuild(p portal.Portal, build portal.Build, filename string) error {
 	fullFilename := build.BuildPackageFilename(filename)
 
-	return portal.DownloadAndVerifyBuild(p, c.FileWriter, portal.CodesphereProduct, build, filename, fullFilename, portal.DownloadOptions{
+	if err := portal.DownloadAndVerifyBuild(p, c.FileWriter, portal.CodesphereProduct, build, filename, fullFilename, portal.DownloadOptions{
 		Resume: true,
 		Quiet:  c.Opts.Quiet,
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to download and verify build: %w", err)
+	}
+	return nil
 }
