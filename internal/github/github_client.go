@@ -10,15 +10,20 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"golang.org/x/oauth2"
 )
 
 const githubGraphQLEndpoint = "https://api.github.com/graphql"
 
+// publicKeysPageSize is how many public SSH keys we request per team member. A user is very
+// unlikely to have this many keys; totalCount lets us detect and log the rare case where they do.
+const publicKeysPageSize = 20
+
 // teamMemberSSHKeysQuery fetches every member of a team together with their public SSH keys in a
-// single request. Members are paginated with the $after cursor; publicKeys are assumed to fit in
-// the first page (a user is extremely unlikely to have more than 20 keys).
+// single request. Members are paginated with the $after cursor; publicKeys are fetched in a single
+// page of publicKeysPageSize and totalCount is used to detect truncation.
 const teamMemberSSHKeysQuery = `query($org: String!, $team: String!, $after: String) {
   organization(login: $org) {
     team(slug: $team) {
@@ -26,7 +31,7 @@ const teamMemberSSHKeysQuery = `query($org: String!, $team: String!, $after: Str
         pageInfo { hasNextPage endCursor }
         nodes {
           login
-          publicKeys(first: 20) { nodes { key } }
+          publicKeys(first: 20) { totalCount nodes { key } }
         }
       }
     }
@@ -73,7 +78,8 @@ type graphQLResponse struct {
 					Nodes []struct {
 						Login      string `json:"login"`
 						PublicKeys struct {
-							Nodes []struct {
+							TotalCount int `json:"totalCount"`
+							Nodes      []struct {
 								Key string `json:"key"`
 							} `json:"nodes"`
 						} `json:"publicKeys"`
@@ -101,6 +107,10 @@ func (c *RealGitHubClient) GetTeamMemberSSHKeys(ctx context.Context, org, teamSl
 
 		team := resp.Data.Organization.Team
 		for _, node := range team.Members.Nodes {
+			if node.PublicKeys.TotalCount > publicKeysPageSize {
+				fmt.Printf("User %s has %d public keys but only the first %d were fetched\n",
+					node.Login, node.PublicKeys.TotalCount, publicKeysPageSize)
+			}
 			keys := make([]string, 0, len(node.PublicKeys.Nodes))
 			for _, k := range node.PublicKeys.Nodes {
 				keys = append(keys, k.Key)
@@ -140,7 +150,7 @@ func (c *RealGitHubClient) queryTeamMembers(ctx context.Context, org, teamSlug s
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute GraphQL request: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }()
 
 	respBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -156,7 +166,11 @@ func (c *RealGitHubClient) queryTeamMembers(ctx context.Context, org, teamSlug s
 		return nil, fmt.Errorf("failed to unmarshal GraphQL response: %w", err)
 	}
 	if len(result.Errors) > 0 {
-		return nil, fmt.Errorf("GraphQL query returned errors: %s", result.Errors[0].Message)
+		msgs := make([]string, len(result.Errors))
+		for i, e := range result.Errors {
+			msgs[i] = e.Message
+		}
+		return nil, fmt.Errorf("GraphQL query returned errors: %s", strings.Join(msgs, "; "))
 	}
 
 	return &result, nil
