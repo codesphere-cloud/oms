@@ -658,12 +658,6 @@ License: BSD-3-Clause
 License URL: https://github.com/google/go-github/blob/v69.2.0/LICENSE
  
 ----------
-Module: github.com/google/go-github/v74/github
-Version: v74.0.0
-License: BSD-3-Clause
-License URL: https://github.com/google/go-github/blob/v74.0.0/LICENSE
- 
-----------
 Module: github.com/google/go-github/v86/github
 Version: v86.0.0
 License: BSD-3-Clause
