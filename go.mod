@@ -39,7 +39,7 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/getsops/sops/v3 v3.13.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/google/go-containerregistry v0.21.7
+	github.com/google/go-containerregistry v0.21.9
 	github.com/google/go-github/v74 v74.0.0
 	github.com/jedib0t/go-pretty/v6 v6.8.3
 	github.com/lib/pq v1.12.3
@@ -470,7 +470,7 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/moby/api v1.55.0 // indirect
-	github.com/moby/moby/client v0.5.0 // indirect
+	github.com/moby/moby/client v0.5.1 // indirect
 	github.com/moby/spdystream v0.5.1 // indirect
 	github.com/moby/term v0.5.2 // indirect
 	github.com/modelcontextprotocol/registry v1.8.0 // indirect
