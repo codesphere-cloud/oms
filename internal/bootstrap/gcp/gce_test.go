@@ -12,7 +12,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/util"
-	gh "github.com/google/go-github/v74/github"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -678,8 +677,7 @@ var _ = Describe("GCE", func() {
 						csEnv.GitHubTeamSlug = "dev"
 					})
 					It("fetches GitHub team keys", func() {
-						mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug, mock.Anything).Return([]*gh.User{{Login: gh.Ptr("alice")}}, nil).Maybe()
-						mockGitHubClient.EXPECT().ListUserKeys(mock.Anything, "alice").Return([]*gh.Key{{Key: gh.Ptr("ssh-rsa AAALICE...")}}, nil).Maybe()
+						mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug).Return([]github.TeamMemberKeys{{Login: "alice", Keys: []string{"ssh-rsa AAALICE..."}}}, nil).Maybe()
 						ipResp := makeRunningInstance("10.0.0.x", "1.2.3.x")
 						mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, ipResp, 8)
 
@@ -703,7 +701,7 @@ var _ = Describe("GCE", func() {
 
 					It("fails when GitHub client fails to list team members", func() {
 						gc.EXPECT().GetInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil, grpcstatus.Errorf(codes.NotFound, "not found")).Maybe()
-						mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug, mock.Anything).Return(nil, fmt.Errorf("list members error")).Maybe()
+						mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, csEnv.GitHubTeamOrg, csEnv.GitHubTeamSlug).Return(nil, fmt.Errorf("list members error")).Maybe()
 
 						err := bs.EnsureComputeInstances()
 						Expect(err).To(HaveOccurred())
