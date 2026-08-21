@@ -665,9 +665,9 @@ License URL: https://github.com/google/go-cmp/blob/v0.7.0/LICENSE
  
 ----------
 Module: github.com/google/go-containerregistry
-Version: v0.21.7
+Version: v0.21.9
 License: Apache-2.0
-License URL: https://github.com/google/go-containerregistry/blob/v0.21.7/LICENSE
+License URL: https://github.com/google/go-containerregistry/blob/v0.21.9/LICENSE
  
 ----------
 Module: github.com/google/go-github/v69/github
