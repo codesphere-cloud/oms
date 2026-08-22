@@ -13,7 +13,7 @@ replace (
 	// The commit tagged for argo-cd v3.4.6 still imports the autoscaling v2beta*
 	// packages that k8s.io/api v0.36 dropped, so use the newer commit that no
 	// longer does.
-	github.com/argoproj/argo-cd/gitops-engine => github.com/argoproj/argo-cd/gitops-engine v0.0.0-20260728075051-7660efb23b2d
+	github.com/argoproj/argo-cd/gitops-engine => github.com/argoproj/argo-cd/gitops-engine 4d09b7bdda94
 	github.com/googleapis/gnostic => github.com/googleapis/gnostic v0.4.1
 	github.com/kubernetes-incubator/external-storage => github.com/libopenstorage/external-storage v5.2.0+incompatible
 
