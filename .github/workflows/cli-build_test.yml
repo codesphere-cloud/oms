@@ -22,11 +22,11 @@ jobs:
       matrix:
         include:
           - task: build
-            label: Build
+            label: build
           - task: test
-            label: Test
+            label: test
           - task: install-config
-            label: Install-Config
+            label: install-config
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
