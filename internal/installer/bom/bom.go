@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/distribution/reference"
 )
@@ -15,6 +16,36 @@ import (
 type Config struct {
 	Components map[string]ComponentConfig `json:"components"`
 	Migrations MigrationsConfig           `json:"migrations"`
+}
+
+// GetOCIArtifacts returns every container image and OCI Helm chart referenced
+// by the BOM. Duplicate references are returned only once and the result is
+// sorted so callers can present a stable transfer plan.
+func (b *Config) GetOCIArtifacts() []string {
+	artifacts := map[string]struct{}{}
+
+	for _, component := range b.Components {
+		for _, image := range component.ContainerImages {
+			if image != "" {
+				artifacts[image] = struct{}{}
+			}
+		}
+
+		for _, file := range component.Files {
+			if file.OciRef != "" {
+				artifacts[file.OciRef] = struct{}{}
+			}
+		}
+	}
+
+	result := make([]string, 0, len(artifacts))
+	for artifact := range artifacts {
+		result = append(result, artifact)
+	}
+
+	sort.Strings(result)
+
+	return result
 }
 
 // ComponentConfig represents a component in the BOM.
