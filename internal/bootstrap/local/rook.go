@@ -236,6 +236,7 @@ func (b *LocalBootstrapper) cephDeviceSelection() rookcephv1.Selection {
 		selection.DeviceFilter = b.Env.CephDeviceFilter
 		selection.DevicePathFilter = b.Env.CephDevicePathFilter
 	}
+
 	return selection
 }
 
@@ -350,6 +351,7 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 		if storageClass.Annotations == nil {
 			storageClass.Annotations = make(map[string]string)
 		}
+
 		storageClass.Annotations[defaultStorageClassAnnotation] = "true"
 		storageClass.Provisioner = cephRBDProvisionerName
 		storageClass.Parameters = map[string]string{

@@ -57,6 +57,7 @@ func (p *Package) GetWorkDir() string {
 	filename := filepath.Base(p.Filename)
 	filename = strings.TrimSuffix(filename, ".tar.gz")
 	filename = strings.TrimSuffix(filename, ".tgz")
+
 	return path.Join(p.OmsWorkdir, filename)
 }
 

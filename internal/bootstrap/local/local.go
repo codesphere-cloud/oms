@@ -100,6 +100,7 @@ type CodesphereEnvironment struct {
 	ArgoCDRegistryURL string `json:"-"`
 }
 
+// NewLocalBootstrapper creates a bootstrapper for a local Codesphere cluster.
 func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, env *CodesphereEnvironment) *LocalBootstrapper {
 	return &LocalBootstrapper{
 		ctx:        ctx,

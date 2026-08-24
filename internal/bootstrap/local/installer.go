@@ -44,6 +44,7 @@ func (b *LocalBootstrapper) DownloadInstallerPackage() (string, error) {
 	if version == "" {
 		return "", fmt.Errorf("install version is required to download from the portal")
 	}
+
 	log.Printf("Downloading Codesphere package %s from the OMS portal...", version)
 
 	p := portal.NewPortalClient()
@@ -370,15 +371,17 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 	if b.argoCDAndAppsInstall == nil {
 		return fmt.Errorf("ArgoCD and apps installer is not initialized")
 	}
+
 	if err := b.stlog.Substep("Sync vault secret", func() error {
 		return b.argoCDAndAppsInstall.SyncVaultSecret(b.ctx)
 	}); err != nil {
-		return err
+		return fmt.Errorf("failed to sync vault secret: %w", err)
 	}
+
 	if err := b.stlog.Substep("Register pc-apps app-of-apps", func() error {
 		return b.argoCDAndAppsInstall.InstallPCApps(b.ctx, filepath.Join(depsDir, "bom.json"))
 	}); err != nil {
-		return err
+		return fmt.Errorf("failed to register pc-apps app-of-apps: %w", err)
 	}
 
 	// Symlink sops and age inside the extracted deps directory so that

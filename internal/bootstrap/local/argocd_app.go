@@ -1,6 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package local implements single-node Codesphere cluster bootstrapping.
 package local
 
 import (
@@ -25,6 +26,7 @@ func (b *LocalBootstrapper) installHelmApplication(cfg helmApplicationConfig) er
 	if err != nil {
 		return fmt.Errorf("failed to marshal values for ArgoCD Application %q: %w", cfg.Name, err)
 	}
+
 	desired := &argov1alpha1.Application{
 		ObjectMeta: metav1.ObjectMeta{Name: cfg.Name, Namespace: "argocd"},
 		Spec: argov1alpha1.ApplicationSpec{
@@ -40,6 +42,7 @@ func (b *LocalBootstrapper) installHelmApplication(cfg helmApplicationConfig) er
 			},
 		},
 	}
+
 	current := &argov1alpha1.Application{ObjectMeta: desired.ObjectMeta}
 	if _, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, current, func() error {
 		current.Spec = desired.Spec
@@ -47,5 +50,10 @@ func (b *LocalBootstrapper) installHelmApplication(cfg helmApplicationConfig) er
 	}); err != nil {
 		return fmt.Errorf("failed to apply ArgoCD Application %q: %w", cfg.Name, err)
 	}
-	return argocd.WaitForApplicationHealthy(b.ctx, b.kubeClient, cfg.Name, cfg.TargetRevision, b.stlog.Logf)
+
+	if err := argocd.WaitForApplicationHealthy(b.ctx, b.kubeClient, cfg.Name, cfg.TargetRevision, b.stlog.Logf); err != nil {
+		return fmt.Errorf("failed to wait for ArgoCD Application %q: %w", cfg.Name, err)
+	}
+
+	return nil
 }
