@@ -5,8 +5,9 @@ package github
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/google/go-github/v74/github"
+	"github.com/google/go-github/v90/github"
 	"golang.org/x/oauth2"
 )
 
@@ -23,10 +24,16 @@ type RealGitHubClient struct {
 }
 
 // NewGitHubClient creates a new RealGitHubClient with the provided OAuth token.
-func NewGitHubClient(ctx context.Context, token string) *RealGitHubClient {
+func NewGitHubClient(ctx context.Context, token string) (*RealGitHubClient, error) {
 	ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
 	tc := oauth2.NewClient(ctx, ts)
-	return &RealGitHubClient{client: github.NewClient(tc)}
+
+	client, err := github.NewClient(github.WithHTTPClient(tc))
+	if err != nil {
+		return nil, fmt.Errorf("creating github client: %w", err)
+	}
+
+	return &RealGitHubClient{client: client}, nil
 }
 
 // ListTeamMembersBySlug lists the members of a GitHub team identified by its slug.

@@ -157,7 +157,10 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := intutil.NewFilesystemWriter()
 	portalClient := portal.NewPortalClient()
-	githubClient := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)
+	githubClient, err := github.NewGitHubClient(ctx, c.CodesphereEnv.GitHubPAT)
+	if err != nil {
+		return fmt.Errorf("failed to create github client: %w", err)
+	}
 
 	bs, err := gcp.NewGCPBootstrapper(
 		ctx,
