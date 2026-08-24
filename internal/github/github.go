@@ -7,7 +7,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/google/go-github/v74/github"
+	"github.com/google/go-github/v90/github"
 )
 
 // GetSSHKeysFromGitHubTeam fetches the public SSH keys of all members of the specified GitHub team and formats them for inclusion in instance metadata.

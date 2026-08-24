@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 
-	gh "github.com/google/go-github/v74/github"
+	gh "github.com/google/go-github/v90/github"
 )
 
 var _ = Describe("Github", func() {
