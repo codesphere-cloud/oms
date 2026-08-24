@@ -54,7 +54,10 @@ func (p *Package) FileIO() util.FileIO {
 // GetWorkDir returns the working directory path for the package
 // by joining the OmsWorkdir and the filename (without the .tar.gz extension).
 func (p *Package) GetWorkDir() string {
-	return path.Join(p.OmsWorkdir, strings.ReplaceAll(p.Filename, ".tar.gz", ""))
+	filename := filepath.Base(p.Filename)
+	filename = strings.TrimSuffix(filename, ".tar.gz")
+	filename = strings.TrimSuffix(filename, ".tgz")
+	return path.Join(p.OmsWorkdir, filename)
 }
 
 // GetDependencyPath returns the full path to a dependency file within the package's deps directory.

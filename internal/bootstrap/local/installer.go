@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -44,11 +44,7 @@ func (b *LocalBootstrapper) DownloadInstallerPackage() (string, error) {
 	if version == "" {
 		return "", fmt.Errorf("install version is required to download from the portal")
 	}
-	if hash == "" {
-		return "", fmt.Errorf("install hash must be set when install version is set")
-	}
-
-	log.Printf("Downloading Codesphere package %s (hash %s) from the OMS portal...", version, hash)
+	log.Printf("Downloading Codesphere package %s from the OMS portal...", version)
 
 	p := portal.NewPortalClient()
 
@@ -64,41 +60,8 @@ func (b *LocalBootstrapper) DownloadInstallerPackage() (string, error) {
 		return destPath, nil
 	}
 
-	download, err := build.GetBuildForDownload(installerArtifactFilename)
-	if err != nil {
-		return "", fmt.Errorf("artifact %q not found in build: %w", installerArtifactFilename, err)
-	}
-
-	// Support resuming a partial download.
-	out, err := b.fw.OpenAppend(destPath)
-	if err != nil {
-		out, err = b.fw.Create(destPath)
-		if err != nil {
-			return "", fmt.Errorf("failed to create file %s: %w", destPath, err)
-		}
-	}
-	defer util.CloseFileIgnoreError(out)
-
-	fileSize := 0
-	fileInfo, err := out.Stat()
-	if err == nil {
-		fileSize = int(fileInfo.Size())
-	}
-
-	err = p.DownloadBuildArtifact(portal.CodesphereProduct, download, out, fileSize, false)
-	if err != nil {
-		return "", fmt.Errorf("failed to download build artifact: %w", err)
-	}
-
-	// Verify integrity.
-	verifyFile, err := b.fw.Open(destPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to open downloaded file for verification: %w", err)
-	}
-	defer util.CloseFileIgnoreError(verifyFile)
-
-	if err := p.VerifyBuildArtifactDownload(verifyFile, download); err != nil {
-		return "", fmt.Errorf("artifact verification failed: %w", err)
+	if err := portal.DownloadAndVerifyBuild(p, b.fw, portal.CodesphereProduct, build, installerArtifactFilename, destPath, portal.DownloadOptions{Resume: true}); err != nil {
+		return "", fmt.Errorf("failed to download installer package: %w", err)
 	}
 
 	return destPath, nil
@@ -106,7 +69,7 @@ func (b *LocalBootstrapper) DownloadInstallerPackage() (string, error) {
 
 // PrepareInstallerBundle resolves the installer package to a directory.
 // It handles three cases:
-//  1. Portal download: InstallVersion+InstallHash are set → download tar.gz, then extract.
+//  1. Portal download: InstallVersion is set → download tar.gz, then extract.
 //  2. Local tar.gz/tgz: InstallLocal points to an archive → extract.
 //  3. Local directory: InstallLocal points to an already-unpacked directory → use as-is.
 func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
@@ -144,23 +107,12 @@ func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
 		return "", fmt.Errorf("installer bundle %q is neither a directory nor a .tar.gz/.tgz archive", bundlePath)
 	}
 
-	destDir := strings.TrimSuffix(strings.TrimSuffix(bundlePath, ".gz"), ".tar")
-	destDir = strings.TrimSuffix(destDir, ".tgz")
-	if destDir == bundlePath {
-		destDir = bundlePath + "-unpacked"
-	}
-
-	if b.fw.Exists(destDir) {
-		log.Printf("Installer bundle is already extracted. Skipping extraction...\n")
-		return destDir, nil
-	}
-
-	log.Printf("Extracting installer bundle %s → %s", bundlePath, destDir)
-	if err := util.ExtractTarGz(b.fw, bundlePath, destDir); err != nil {
+	packageManager := installer.NewPackage(filepath.Dir(bundlePath), bundlePath)
+	if err := packageManager.Extract(false); err != nil {
 		return "", fmt.Errorf("failed to extract installer bundle: %w", err)
 	}
 
-	return destDir, nil
+	return packageManager.GetWorkDir(), nil
 }
 
 // symlinkLocalBinaries replaces bundled node, helm and kubectl binaries with
@@ -393,8 +345,7 @@ func (b *LocalBootstrapper) configurePostgresForMigration(host string, port int3
 	}, nil
 }
 
-// RunInstaller extracts the deps.tar.gz archive locally and then runs the
-// install-components.js script directly on the local machine for each
+// RunInstaller runs the install-components.js script directly on the local machine for each
 // required component step (setUpCluster, codesphere), instead of running
 // the private-cloud-installer.js which orchestrates remote nodes via SSH.
 func (b *LocalBootstrapper) RunInstaller() (err error) {
@@ -414,34 +365,20 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 		return fmt.Errorf("failed to symlink local binaries: %w", err)
 	}
 
-	// Extract deps.tar.gz locally so that install-components.js can find
-	// all dependency binaries (helm charts, sops, etc.) on the local machine.
-	archivePath := filepath.Join(bundleDir, "deps.tar.gz")
 	depsDir := filepath.Join(bundleDir, "deps")
 
-	if b.fw.Exists(depsDir) {
-		log.Printf("deps directory already exists at %s, skipping extraction", depsDir)
-	} else {
-		log.Printf("Extracting deps.tar.gz → %s", depsDir)
-		if err := util.ExtractTarGz(b.fw, archivePath, depsDir); err != nil {
-			return fmt.Errorf("failed to extract deps.tar.gz: %w", err)
-		}
+	if b.argoCDAndAppsInstall == nil {
+		return fmt.Errorf("ArgoCD and apps installer is not initialized")
 	}
-
-	if b.Env.UseArgoCD {
-		if b.argoCDAndAppsInstall == nil {
-			return fmt.Errorf("ArgoCD and apps installer is not initialized")
-		}
-		if err := b.stlog.Substep("Sync vault secret", func() error {
-			return b.argoCDAndAppsInstall.SyncVaultSecret(b.ctx)
-		}); err != nil {
-			return err
-		}
-		if err := b.stlog.Substep("Register pc-apps app-of-apps", func() error {
-			return b.argoCDAndAppsInstall.InstallPCApps(b.ctx, filepath.Join(depsDir, "bom.json"))
-		}); err != nil {
-			return err
-		}
+	if err := b.stlog.Substep("Sync vault secret", func() error {
+		return b.argoCDAndAppsInstall.SyncVaultSecret(b.ctx)
+	}); err != nil {
+		return err
+	}
+	if err := b.stlog.Substep("Register pc-apps app-of-apps", func() error {
+		return b.argoCDAndAppsInstall.InstallPCApps(b.ctx, filepath.Join(depsDir, "bom.json"))
+	}); err != nil {
+		return err
 	}
 
 	// Symlink sops and age inside the extracted deps directory so that

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -35,12 +34,9 @@ const (
 )
 
 func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
-	if err := b.helm.UpgradeChart(b.ctx, installer.ChartConfig{
-		ReleaseName:     cnpgReleaseName,
-		ChartName:       "cloudnative-pg",
-		RepoURL:         cnpgRepoURL,
-		Namespace:       codesphereNamespace,
-		CreateNamespace: true,
+	return b.installHelmApplication(helmApplicationConfig{
+		Name: cnpgReleaseName, Chart: "cloudnative-pg", RepoURL: cnpgRepoURL,
+		TargetRevision: "*", Namespace: codesphereNamespace,
 		Values: map[string]interface{}{
 			"config": map[string]interface{}{
 				"clusterWide": true,
@@ -55,11 +51,7 @@ func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
 				},
 			},
 		},
-	}, installer.UpgradeChartOptions{InstallIfNotExist: true}); err != nil {
-		return fmt.Errorf("failed to deploy Helm chart %q: %w", cnpgReleaseName, err)
-	}
-
-	return nil
+	})
 }
 
 func (b *LocalBootstrapper) DeployPostgresDatabase() error {

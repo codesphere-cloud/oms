@@ -28,6 +28,7 @@ vendor
 .envrc
 .env
 .installer
+tmp
 
 # bin file
 bin/

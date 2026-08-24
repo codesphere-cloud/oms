@@ -59,7 +59,6 @@ type LocalBootstrapper struct {
 	restConfig *rest.Config
 	fw         util.FileIO
 	icg        installer.InstallConfigManager
-	helm       installer.HelmClient
 	// Environment
 	Env *CodesphereEnvironment
 	// cephCredentials holds the Ceph auth credentials read after setup.
@@ -86,21 +85,22 @@ type CodesphereEnvironment struct {
 	RegistryUser     string `json:"-"`
 	RegistryPassword string `json:"-"`
 	// Config
-	InstallDir         string              `json:"-"`
-	ExistingConfigUsed bool                `json:"-"`
-	InstallConfigPath  string              `json:"-"`
-	SecretsFilePath    string              `json:"-"`
-	InstallConfig      *files.RootConfig   `json:"-"`
-	Vault              *files.InstallVault `json:"-"`
-	K0s                bool                `json:"-"`
-	PodCIDR            string              `json:"pod_cidr"`
-	ServiceCIDR        string              `json:"service_cidr"`
+	InstallDir           string              `json:"-"`
+	ExistingConfigUsed   bool                `json:"-"`
+	InstallConfigPath    string              `json:"-"`
+	SecretsFilePath      string              `json:"-"`
+	InstallConfig        *files.RootConfig   `json:"-"`
+	Vault                *files.InstallVault `json:"-"`
+	K0s                  bool                `json:"-"`
+	PodCIDR              string              `json:"pod_cidr"`
+	ServiceCIDR          string              `json:"service_cidr"`
+	CephDeviceFilter     string              `json:"-"`
+	CephDevicePathFilter string              `json:"-"`
 	// ArgoCD integration
-	UseArgoCD         bool   `json:"-"`
 	ArgoCDRegistryURL string `json:"-"`
 }
 
-func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, helm installer.HelmClient, env *CodesphereEnvironment) *LocalBootstrapper {
+func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, env *CodesphereEnvironment) *LocalBootstrapper {
 	return &LocalBootstrapper{
 		ctx:        ctx,
 		stlog:      stlog,
@@ -108,7 +108,6 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 		restConfig: restConfig,
 		fw:         fw,
 		icg:        icg,
-		helm:       helm,
 		Env:        env,
 	}
 }
@@ -134,11 +133,9 @@ func (b *LocalBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure namespaces: %w", err)
 	}
 
-	if b.Env.UseArgoCD {
-		err = b.stlog.Step("Bootstrap ArgoCD", b.BootstrapArgoCD)
-		if err != nil {
-			return fmt.Errorf("failed to bootstrap ArgoCD: %w", err)
-		}
+	err = b.stlog.Step("Bootstrap ArgoCD", b.BootstrapArgoCD)
+	if err != nil {
+		return fmt.Errorf("failed to bootstrap ArgoCD: %w", err)
 	}
 
 	err = b.stlog.Step("Install Rook and test Ceph cluster", func() error {
