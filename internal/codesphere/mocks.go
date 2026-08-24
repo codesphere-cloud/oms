@@ -280,8 +280,8 @@ func (_c *MockClient_GetPipelineState_Call) Run(run func(workspaceID int, stage 
 	return _c
 }
 
-func (_c *MockClient_GetPipelineState_Call) Return(vs []api.PipelineStatus, err error) *MockClient_GetPipelineState_Call {
-	_c.Call.Return(vs, err)
+func (_c *MockClient_GetPipelineState_Call) Return(pipelineStatuss []api.PipelineStatus, err error) *MockClient_GetPipelineState_Call {
+	_c.Call.Return(pipelineStatuss, err)
 	return _c
 }
 
@@ -397,8 +397,8 @@ func (_c *MockClient_ListWorkspacePlans_Call) Run(run func()) *MockClient_ListWo
 	return _c
 }
 
-func (_c *MockClient_ListWorkspacePlans_Call) Return(vs []api.WorkspacePlan, err error) *MockClient_ListWorkspacePlans_Call {
-	_c.Call.Return(vs, err)
+func (_c *MockClient_ListWorkspacePlans_Call) Return(workspacePlans []api.WorkspacePlan, err error) *MockClient_ListWorkspacePlans_Call {
+	_c.Call.Return(workspacePlans, err)
 	return _c
 }
 
