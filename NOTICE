@@ -527,15 +527,15 @@ License URL: https://github.com/go-logr/zapr/blob/v1.3.0/LICENSE
  
 ----------
 Module: github.com/go-openapi/jsonpointer
-Version: v0.23.1
+Version: v1.0.0
 License: Apache-2.0
-License URL: https://github.com/go-openapi/jsonpointer/blob/v0.23.1/LICENSE
+License URL: https://github.com/go-openapi/jsonpointer/blob/v1.0.0/LICENSE
  
 ----------
 Module: github.com/go-openapi/jsonreference
-Version: v0.21.6
+Version: v1.0.0
 License: Apache-2.0
-License URL: https://github.com/go-openapi/jsonreference/blob/v0.21.6/LICENSE
+License URL: https://github.com/go-openapi/jsonreference/blob/v1.0.0/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag
@@ -551,15 +551,15 @@ License URL: https://github.com/go-openapi/swag/blob/cmdutils/v0.26.1/cmdutils/L
  
 ----------
 Module: github.com/go-openapi/swag/conv
-Version: v0.26.1
+Version: v0.27.3
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/conv/v0.26.1/conv/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/conv/v0.27.3/conv/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/fileutils
-Version: v0.26.1
+Version: v0.27.3
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/fileutils/v0.26.1/fileutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/fileutils/v0.27.3/fileutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/jsonname
@@ -569,21 +569,21 @@ License URL: https://github.com/go-openapi/swag/blob/jsonname/v0.26.1/jsonname/L
  
 ----------
 Module: github.com/go-openapi/swag/jsonutils
-Version: v0.26.1
+Version: v0.27.3
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/jsonutils/v0.26.1/jsonutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/jsonutils/v0.27.3/jsonutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/loading
-Version: v0.26.1
+Version: v0.27.3
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/loading/v0.26.1/loading/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/loading/v0.27.3/loading/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/mangling
-Version: v0.26.1
+Version: v0.27.3
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/mangling/v0.26.1/mangling/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/mangling/v0.27.3/mangling/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/netutils
@@ -592,22 +592,28 @@ License: Apache-2.0
 License URL: https://github.com/go-openapi/swag/blob/netutils/v0.26.1/netutils/LICENSE
  
 ----------
-Module: github.com/go-openapi/swag/stringutils
-Version: v0.26.1
+Module: github.com/go-openapi/swag/pools
+Version: v0.27.3
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/stringutils/v0.26.1/stringutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/pools/v0.27.3/pools/LICENSE
+ 
+----------
+Module: github.com/go-openapi/swag/stringutils
+Version: v0.27.3
+License: Apache-2.0
+License URL: https://github.com/go-openapi/swag/blob/stringutils/v0.27.3/stringutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/typeutils
-Version: v0.26.1
+Version: v0.27.3
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/typeutils/v0.26.1/typeutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/typeutils/v0.27.3/typeutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/yamlutils
-Version: v0.26.1
+Version: v0.27.3
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/yamlutils/v0.26.1/yamlutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/yamlutils/v0.27.3/yamlutils/LICENSE
  
 ----------
 Module: github.com/go-redis/cache/v9
@@ -887,39 +893,39 @@ License URL: https://github.com/kevinburke/ssh_config/blob/v1.6.0/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.19.1
+Version: v1.19.2
 License: MIT
-License URL: https://github.com/klauspost/compress/blob/v1.19.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.19.2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.19.1
+Version: v1.19.2
 License: Apache-2.0
-License URL: https://github.com/klauspost/compress/blob/v1.19.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.19.2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress
-Version: v1.19.1
+Version: v1.19.2
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.19.1/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.19.2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/internal/snapref
-Version: v1.19.1
+Version: v1.19.2
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.19.1/internal/snapref/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.19.2/internal/snapref/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/s2
-Version: v1.19.1
+Version: v1.19.2
 License: BSD-3-Clause
-License URL: https://github.com/klauspost/compress/blob/v1.19.1/s2/LICENSE
+License URL: https://github.com/klauspost/compress/blob/v1.19.2/s2/LICENSE
  
 ----------
 Module: github.com/klauspost/compress/zstd/internal/xxhash
-Version: v1.19.1
+Version: v1.19.2
 License: MIT
-License URL: https://github.com/klauspost/compress/blob/v1.19.1/zstd/internal/xxhash/LICENSE.txt
+License URL: https://github.com/klauspost/compress/blob/v1.19.2/zstd/internal/xxhash/LICENSE.txt
  
 ----------
 Module: github.com/klauspost/cpuid/v2
