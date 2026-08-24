@@ -703,8 +703,8 @@ func (_c *MockFileIO_ReadDir_Call) Run(run func(dirname string)) *MockFileIO_Rea
 	return _c
 }
 
-func (_c *MockFileIO_ReadDir_Call) Return(vs []os.DirEntry, err error) *MockFileIO_ReadDir_Call {
-	_c.Call.Return(vs, err)
+func (_c *MockFileIO_ReadDir_Call) Return(dirEntrys []os.DirEntry, err error) *MockFileIO_ReadDir_Call {
+	_c.Call.Return(dirEntrys, err)
 	return _c
 }
 
