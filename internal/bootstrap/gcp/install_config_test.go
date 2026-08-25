@@ -762,7 +762,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 					csEnv.GoogleACMEIssuer = true
 				})
 				It("requests EAB credentials from Public CA and uses them in the ACME config", func() {
-					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-eab-key-id", "fake-eab-mac-key", nil)
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-eab-key-id", "fake-eab-mac-key", nil).Once()
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-cd-eab-key-id", "fake-cd-eab-mac-key", nil).Once()
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -775,6 +776,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.Server).To(Equal("https://dv.acme-v02.api.pki.goog/directory"))
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.EABKeyID).To(Equal("fake-eab-key-id"))
 					Expect(vault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password).To(Equal("fake-eab-mac-key"))
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.CustomDomainsEABKeyID).To(Equal("fake-cd-eab-key-id"))
+					Expect(vault.GetSecret(files.SecretAcmeCustomDomainsEabMacKey).Fields.Password).To(Equal("fake-cd-eab-mac-key"))
 
 					issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
 					httpIssuer := issuers["letsEncryptHttp"].(map[string]interface{})
@@ -786,6 +789,14 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to obtain Google Public CA EAB credentials"))
+				})
+				It("returns an error when the second publicca API call for custom domains fails", func() {
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-eab-key-id", "fake-eab-mac-key", nil).Once()
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("", "", fmt.Errorf("api boom")).Once()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to obtain Google Public CA EAB credentials for custom domains"))
 				})
 			})
 
