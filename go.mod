@@ -47,7 +47,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.42.1
 	github.com/pkg/sftp v1.13.11
-	github.com/rook/rook/pkg/apis v0.0.0-20260825124759-1d260111b3ae
+	github.com/rook/rook/pkg/apis v0.0.0-20260825171748-11e2ef3ba5cc
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
