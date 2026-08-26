@@ -159,6 +159,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	b.Env.Jumpbox = &node.Node{
 		NodeClient: b.NodeClient,
 		FileIO:     b.fw,
+		KeyPath:    util.ExpandPath(b.Env.SSHPrivateKeyPath),
 	}
 	dcByID := map[int]*datacenter.DataCenter{}
 
@@ -555,6 +556,7 @@ func (b *GCPBootstrapper) GetNodeByName(name string) (*node.Node, error) {
 	existingNode := &node.Node{
 		NodeClient: b.NodeClient,
 		FileIO:     b.fw,
+		KeyPath:    util.ExpandPath(b.Env.SSHPrivateKeyPath),
 	}
 
 	internalIP, externalIP := ExtractInstanceIPs(existingInstance)
