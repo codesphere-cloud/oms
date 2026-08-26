@@ -80,7 +80,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 		FileWriter: intutil.NewFilesystemWriter(),
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
-	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", "", "Version of k0sctl to use")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", installer.DefaultK0sctlVersion, "Version of k0sctl to use")
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file (required)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.SSHKeyPath, "ssh-key-path", "", "SSH private key path for remote installation")

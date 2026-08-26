@@ -48,7 +48,7 @@ $ oms install k0s --no-download
   -f, --force                   Force new download and installation
   -h, --help                    help for k0s
       --install-config string   Path to Codesphere install-config file (required)
-      --k0sctl-version string   Version of k0sctl to use
+      --k0sctl-version string   Version of k0sctl to use (default "v0.31.1")
       --no-download             Skip downloading k0s binary
   -p, --package string          Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
       --ssh-key-path string     SSH private key path for remote installation
