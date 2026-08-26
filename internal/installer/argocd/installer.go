@@ -11,6 +11,7 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"helm.sh/helm/v4/pkg/chart/common/util"
 	"helm.sh/helm/v4/pkg/cli/values"
@@ -34,6 +35,7 @@ type InstallerConfig struct {
 	FullInstall    bool
 	ForceConflicts bool
 	RepoURL        string
+	BOM            *bom.Config
 	ValueFiles     []string
 	RESTConfig     *rest.Config
 }
@@ -89,6 +91,17 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
 func (a *Installer) Install() error {
+	chartName := "argo-cd"
+	usingBOMChart := false
+	if a.BOM != nil && a.RepoURL == "" && a.Version == "" {
+		if chart, ok := a.BOM.GetChart("argocd"); ok {
+			chartName = "oci://" + chart.Name()
+			usingBOMChart = true
+			a.Version = chart.Tag()
+			log.Printf("Using ArgoCD chart %s:%s from BOM\n", chart.Name(), chart.Tag())
+		}
+	}
+
 	if err := a.validateRepoURL(); err != nil {
 		return err
 	}
@@ -111,9 +124,18 @@ func (a *Installer) Install() error {
 	defaults := map[string]any{
 		"dex": map[string]any{"enabled": false},
 	}
+	if usingBOMChart {
+		// The Codesphere argocd chart is a wrapper around the upstream
+		// argo-cd chart. Helm passes dependency values through the dependency
+		// name, so upstream defaults must be nested under "argo-cd". The
+		// upstream chart installed directly expects the same values at root.
+		defaults = map[string]any{
+			"argo-cd": defaults,
+		}
+	}
 	vals = util.MergeTables(vals, defaults)
 
-	chartName, repoURL := a.resolveChartRef("argo-cd")
+	chartName, repoURL := a.resolveChartRef(chartName)
 	cfg := installer.ChartConfig{
 		ReleaseName:     "argocd",
 		ChartName:       chartName,
@@ -217,6 +239,9 @@ func (a *Installer) validateRepoURL() error {
 }
 
 func (a *Installer) resolveChartRef(chartName string) (string, string) {
+	if strings.HasPrefix(chartName, "oci://") {
+		return chartName, ""
+	}
 	repoURL := a.RepoURL
 	if repoURL == "" {
 		repoURL = DefaultRepoURL

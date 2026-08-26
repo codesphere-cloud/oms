@@ -10,6 +10,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -170,6 +171,40 @@ var _ = Describe("Installer.Install", func() {
 
 			err := a.Install()
 			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("BOM chart", func() {
+		It("uses the argocd OCI chart and version from the BOM", func() {
+			bomPath := filepath.Join(GinkgoT().TempDir(), "bom.json")
+			Expect(os.WriteFile(bomPath, []byte(`{"components":{"argocd":{"files":{"chart":{"ociRef":"ghcr.io/codesphere-cloud/charts/argocd:1.2.3"}}}}}`), 0o600)).To(Succeed())
+			bomConfig, err := bom.Parse(bomPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				argoValues, ok := cfg.Values["argo-cd"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+				dex, ok := argoValues["dex"].(map[string]interface{})
+				return cfg.ChartName == "oci://ghcr.io/codesphere-cloud/charts/argocd" &&
+					cfg.RepoURL == "" && cfg.Version == "1.2.3" &&
+					ok && dex["enabled"] == false && cfg.Values["dex"] == nil
+			}), mock.Anything).Return(nil)
+
+			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{BOM: bomConfig}, Helm: helmMock}
+			Expect(a.Install()).To(Succeed())
+		})
+
+		It("falls back to the upstream chart when no BOM is provided", func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ChartName == "argo-cd" && cfg.RepoURL == argocd.DefaultRepoURL
+			}), mock.Anything).Return(nil)
+
+			a = &argocd.Installer{Helm: helmMock}
+			Expect(a.Install()).To(Succeed())
 		})
 	})
 

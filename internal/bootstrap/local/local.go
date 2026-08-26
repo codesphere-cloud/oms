@@ -237,13 +237,19 @@ func (b *LocalBootstrapper) Bootstrap() error {
 }
 
 func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*argocd.AppInstaller, error) {
+	version := "9.5.21"
+	if b.installerBOM != nil {
+		version = ""
+	}
+
 	// renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
 	argoCDInstall, err := argocd.NewInstaller(argocd.InstallerConfig{
-		Version:        "9.5.21",
+		Version:        version,
 		OciPassword:    b.Env.RegistryPassword,
 		OciRegistryURL: strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://"),
 		FullInstall:    true,
 		ForceConflicts: true,
+		BOM:            b.installerBOM,
 		RESTConfig:     b.restConfig,
 	})
 	if err != nil {
