@@ -10,8 +10,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
-
-	gh "github.com/google/go-github/v90/github"
 )
 
 var _ = Describe("Github", func() {
@@ -30,8 +28,9 @@ var _ = Describe("Github", func() {
 			})
 
 			It("fetches GitHub team keys", func() {
-				mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, org, teamSlug, mock.Anything).Return([]*gh.User{{Login: gh.Ptr("alice")}}, nil).Once()
-				mockGitHubClient.EXPECT().ListUserKeys(mock.Anything, "alice").Return([]*gh.Key{{Key: gh.Ptr("ssh-rsa AAALICE...")}}, nil).Once()
+				mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, org, teamSlug).Return([]github.TeamMemberKeys{
+					{Login: "alice", Keys: []string{"ssh-rsa AAALICE..."}},
+				}, nil).Once()
 
 				keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
 				Expect(err).ToNot(HaveOccurred())
@@ -39,20 +38,21 @@ var _ = Describe("Github", func() {
 				Expect(keys).To(ContainSubstring("ubuntu:ssh-rsa AAALICE... alice"))
 			})
 
-			Context("when fetching team members fails", func() {
+			Context("when fetching team member keys fails", func() {
 				It("returns an error", func() {
-					mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, org, teamSlug, mock.Anything).Return(nil, fmt.Errorf("GitHub API error")).Once()
+					mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, org, teamSlug).Return(nil, fmt.Errorf("GitHub API error")).Once()
 					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("failed to list GitHub team members"))
+					Expect(err.Error()).To(ContainSubstring("failed to fetch SSH keys from GitHub team"))
 					Expect(keys).To(BeEmpty())
 				})
 			})
 
-			Context("when fetching user keys fails", func() {
-				It("skips the user and continues", func() {
-					mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, org, teamSlug, mock.Anything).Return([]*gh.User{{Login: gh.Ptr("alice")}}, nil).Once()
-					mockGitHubClient.EXPECT().ListUserKeys(mock.Anything, "alice").Return(nil, fmt.Errorf("GitHub API error")).Once()
+			Context("when a member has no keys", func() {
+				It("skips the member and continues", func() {
+					mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, org, teamSlug).Return([]github.TeamMemberKeys{
+						{Login: "alice", Keys: nil},
+					}, nil).Once()
 					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(keys).To(BeEmpty())
@@ -61,31 +61,24 @@ var _ = Describe("Github", func() {
 
 			Context("when team has no members", func() {
 				It("returns an empty string", func() {
-					mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, org, teamSlug, mock.Anything).Return([]*gh.User{}, nil).Once()
+					mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, org, teamSlug).Return([]github.TeamMemberKeys{}, nil).Once()
 					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
 					Expect(err).ToNot(HaveOccurred())
 					Expect(keys).To(BeEmpty())
 				})
 			})
 
-			Context("when team has more than 100 members", func() {
-				It("handles pagination correctly", func() {
-					// Simulate 150 members to trigger pagination
-					membersPage1 := make([]*gh.User, 100)
-					for i := 0; i < 100; i++ {
-						membersPage1[i] = &gh.User{Login: gh.Ptr(fmt.Sprintf("user%d", i+1))}
-					}
-					membersPage2 := make([]*gh.User, 50)
-					for i := 0; i < 50; i++ {
-						membersPage2[i] = &gh.User{Login: gh.Ptr(fmt.Sprintf("user%d", i+101))}
+			Context("when the team has many members", func() {
+				It("formats keys for every member", func() {
+					members := make([]github.TeamMemberKeys, 150)
+					for i := 0; i < 150; i++ {
+						members[i] = github.TeamMemberKeys{
+							Login: fmt.Sprintf("user%d", i+1),
+							Keys:  []string{fmt.Sprintf("ssh-rsa AAAUSER%d...", i+1)},
+						}
 					}
 
-					mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, org, teamSlug, mock.Anything).Return(membersPage1, nil).Once()
-					mockGitHubClient.EXPECT().ListTeamMembersBySlug(mock.Anything, org, teamSlug, mock.Anything).Return(membersPage2, nil).Once()
-
-					for i := 1; i <= 150; i++ {
-						mockGitHubClient.EXPECT().ListUserKeys(mock.Anything, fmt.Sprintf("user%d", i)).Return([]*gh.Key{{Key: gh.Ptr(fmt.Sprintf("ssh-rsa AAAUSER%d...", i))}}, nil).Once()
-					}
+					mockGitHubClient.EXPECT().GetTeamMemberSSHKeys(mock.Anything, org, teamSlug).Return(members, nil).Once()
 
 					keys, err := github.GetSSHKeysFromGitHubTeam(mockGitHubClient, org, teamSlug)
 					Expect(err).ToNot(HaveOccurred())
