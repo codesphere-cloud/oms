@@ -694,12 +694,6 @@ License: BSD-3-Clause
 License URL: https://github.com/google/go-github/blob/v88.0.0/LICENSE
  
 ----------
-Module: github.com/google/go-github/v90/github
-Version: v90.0.0
-License: BSD-3-Clause
-License URL: https://github.com/google/go-github/blob/v90.0.0/LICENSE
- 
-----------
 Module: github.com/google/go-querystring/query
 Version: v1.2.0
 License: BSD-3-Clause

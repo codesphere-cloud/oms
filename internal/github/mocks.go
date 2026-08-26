@@ -100,8 +100,8 @@ func (_c *MockGitHubClient_GetTeamMemberSSHKeys_Call) Run(run func(ctx context.C
 	return _c
 }
 
-func (_c *MockGitHubClient_GetTeamMemberSSHKeys_Call) Return(teamMemberKeys []TeamMemberKeys, err error) *MockGitHubClient_GetTeamMemberSSHKeys_Call {
-	_c.Call.Return(teamMemberKeys, err)
+func (_c *MockGitHubClient_GetTeamMemberSSHKeys_Call) Return(teamMemberKeyss []TeamMemberKeys, err error) *MockGitHubClient_GetTeamMemberSSHKeys_Call {
+	_c.Call.Return(teamMemberKeyss, err)
 	return _c
 }
 
