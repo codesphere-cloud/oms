@@ -264,4 +264,29 @@ var _ = Describe("Bom", func() {
 			}))
 		})
 	})
+
+	Describe("UseRegistry", func() {
+		It("rewrites images and OCI charts while preserving paths, tags, and digests", func() {
+			cfg := &bom.Config{Components: map[string]bom.ComponentConfig{
+				"codesphere": {
+					ContainerImages: map[string]string{
+						"api":    "ghcr.io/codesphere-cloud/api:v1",
+						"worker": "ghcr.io/codesphere-cloud/worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					},
+					Files: map[string]bom.FileRef{
+						"chart": {OciRef: "oci://ghcr.io/codesphere-cloud/charts/codesphere:v1"},
+					},
+				},
+			}}
+
+			Expect(cfg.UseRegistry("oci://registry.example.com/mirror/")).To(Succeed())
+			Expect(cfg.Components["codesphere"].ContainerImages["api"]).To(Equal("registry.example.com/mirror/codesphere-cloud/api:v1"))
+			Expect(cfg.Components["codesphere"].ContainerImages["worker"]).To(Equal("registry.example.com/mirror/codesphere-cloud/worker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+			Expect(cfg.Components["codesphere"].Files["chart"].OciRef).To(Equal("oci://registry.example.com/mirror/codesphere-cloud/charts/codesphere:v1"))
+		})
+
+		It("rejects an empty registry", func() {
+			Expect((&bom.Config{}).UseRegistry("")).To(MatchError("registry must not be empty"))
+		})
+	})
 })

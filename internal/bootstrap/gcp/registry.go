@@ -188,7 +188,12 @@ func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	}
 
 	registry := b.Env.InstallConfig.EnsureRegistry()
-	registry.Server = "ghcr.io"
+	registryURL := strings.TrimSuffix(strings.TrimPrefix(b.Env.ContainerRegistryURL, "oci://"), "/")
+	if registryURL != "" {
+		registry.Server = registryURL
+	} else {
+		registry.Server = "ghcr.io"
+	}
 	registry.ReplaceImagesInBom = false
 	registry.LoadContainerImages = false
 

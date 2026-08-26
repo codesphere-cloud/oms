@@ -96,6 +96,62 @@ func Parse(filePath string) (*Config, error) {
 	return &cfg, nil
 }
 
+// UseRegistry rewrites every image and OCI chart reference to registry while
+// preserving its repository path, tag, or digest.
+func (b *Config) UseRegistry(registry string) error {
+	registry = strings.TrimSuffix(strings.TrimPrefix(registry, "oci://"), "/")
+	if registry == "" {
+		return fmt.Errorf("registry must not be empty")
+	}
+
+	rewrite := func(value string) (string, error) {
+		ociPrefix := ""
+		if strings.HasPrefix(value, "oci://") {
+			ociPrefix = "oci://"
+		}
+		ref, err := reference.ParseAnyReference(strings.TrimPrefix(value, "oci://"))
+		if err != nil {
+			return "", fmt.Errorf("invalid OCI reference %q: %w", value, err)
+		}
+		named, ok := ref.(reference.Named)
+		if !ok {
+			return "", fmt.Errorf("OCI reference %q has no repository name", value)
+		}
+		path := reference.Path(named)
+		suffix := ""
+		switch typed := ref.(type) {
+		case reference.Digested:
+			suffix = "@" + typed.Digest().String()
+		case reference.Tagged:
+			suffix = ":" + typed.Tag()
+		}
+		return ociPrefix + registry + "/" + path + suffix, nil
+	}
+
+	for componentName, component := range b.Components {
+		for name, image := range component.ContainerImages {
+			rewritten, err := rewrite(image)
+			if err != nil {
+				return fmt.Errorf("component %q image %q: %w", componentName, name, err)
+			}
+			component.ContainerImages[name] = rewritten
+		}
+		for name, file := range component.Files {
+			if file.OciRef == "" {
+				continue
+			}
+			rewritten, err := rewrite(file.OciRef)
+			if err != nil {
+				return fmt.Errorf("component %q file %q: %w", componentName, name, err)
+			}
+			file.OciRef = rewritten
+			component.Files[name] = file
+		}
+		b.Components[componentName] = component
+	}
+	return nil
+}
+
 // GetPCApps returns the pc-applications chart version from the BOM by
 // parsing the tag out of the OCI image reference stored at
 // components["pc-applications"].files["chart"].ociRef.
