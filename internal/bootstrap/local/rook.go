@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
@@ -37,6 +38,7 @@ const (
 	cephStorageClassName          = "codesphere-rbd"
 	cephRBDProvisionerName        = "rook-ceph.rbd.csi.ceph.com"
 	defaultStorageClassAnnotation = "storageclass.kubernetes.io/is-default-class"
+	legacyDefaultClassAnnotation  = "storageclass.beta.kubernetes.io/is-default-class"
 )
 
 // csiResourceEntry represents a single container resource definition for Rook CSI drivers.
@@ -338,6 +340,12 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 		return fmt.Errorf("failed to create or update CephBlockPool %q: %w", cephBlockPoolName, err)
 	}
 
+	storageClasses := &storagev1.StorageClassList{}
+	if err := b.kubeClient.List(b.ctx, storageClasses); err != nil {
+		return fmt.Errorf("failed to list StorageClasses: %w", err)
+	}
+	hasOtherDefault := hasDefaultStorageClass(storageClasses.Items, cephStorageClassName)
+
 	// Create StorageClass
 	reclaimPolicy := corev1.PersistentVolumeReclaimDelete
 	volumeBindingMode := storagev1.VolumeBindingImmediate
@@ -352,7 +360,12 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 			storageClass.Annotations = make(map[string]string)
 		}
 
-		storageClass.Annotations[defaultStorageClassAnnotation] = "true"
+		if hasOtherDefault {
+			delete(storageClass.Annotations, defaultStorageClassAnnotation)
+			delete(storageClass.Annotations, legacyDefaultClassAnnotation)
+		} else {
+			storageClass.Annotations[defaultStorageClassAnnotation] = "true"
+		}
 		storageClass.Provisioner = cephRBDProvisionerName
 		storageClass.Parameters = map[string]string{
 			"clusterID":     rookNamespace,
@@ -377,6 +390,19 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 	}
 
 	return nil
+}
+
+func hasDefaultStorageClass(storageClasses []storagev1.StorageClass, excludeName string) bool {
+	for _, storageClass := range storageClasses {
+		if storageClass.Name == excludeName {
+			continue
+		}
+		if strings.EqualFold(storageClass.Annotations[defaultStorageClassAnnotation], "true") ||
+			strings.EqualFold(storageClass.Annotations[legacyDefaultClassAnnotation], "true") {
+			return true
+		}
+	}
+	return false
 }
 
 func isRookCephClusterReady(cluster *rookcephv1.CephCluster) bool {

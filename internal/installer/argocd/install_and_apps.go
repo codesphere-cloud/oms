@@ -14,6 +14,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -41,6 +42,9 @@ func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, na
 	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, applicationReadyTimeout, true, func(ctx context.Context) (bool, error) {
 		app := &argov1alpha1.Application{}
 		if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: DefaultNamespace}, app); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return false, fmt.Errorf("failed to read ArgoCD Application %q: %w", name, err)
+			}
 			logf("Waiting for ArgoCD Application %q: failed to read status: %v", name, err)
 			return false, nil
 		}

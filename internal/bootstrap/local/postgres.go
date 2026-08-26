@@ -7,9 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -31,12 +33,26 @@ const (
 	cnpgReadyTimeout        = 15 * time.Minute
 	cnpgReadyPollInterval   = 5 * time.Second
 	cnpgSecretPasswordKey   = "password"
+	cnpgBOMComponent        = "postgres-operator"
 )
 
 func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
+	if b.installerBundleDir == "" {
+		return fmt.Errorf("installer bundle is not prepared")
+	}
+
+	bomConfig, err := bom.Parse(filepath.Join(b.installerBundleDir, "deps", "bom.json"))
+	if err != nil {
+		return fmt.Errorf("failed to load CloudNativePG chart version from BOM: %w", err)
+	}
+	chart, ok := bomConfig.GetChart(cnpgBOMComponent)
+	if !ok {
+		return fmt.Errorf("CloudNativePG chart is missing from BOM component %q", cnpgBOMComponent)
+	}
+
 	return b.installHelmApplication(helmApplicationConfig{
 		Name: cnpgReleaseName, Chart: "cloudnative-pg", RepoURL: cnpgRepoURL,
-		TargetRevision: "*", Namespace: codesphereNamespace,
+		TargetRevision: chart.Tag(), Namespace: codesphereNamespace,
 		Values: map[string]interface{}{
 			"config": map[string]interface{}{
 				"clusterWide": true,

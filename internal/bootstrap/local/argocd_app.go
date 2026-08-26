@@ -28,7 +28,7 @@ func (b *LocalBootstrapper) installHelmApplication(cfg helmApplicationConfig) er
 	}
 
 	desired := &argov1alpha1.Application{
-		ObjectMeta: metav1.ObjectMeta{Name: cfg.Name, Namespace: "argocd"},
+		ObjectMeta: metav1.ObjectMeta{Name: cfg.Name, Namespace: argocd.DefaultNamespace},
 		Spec: argov1alpha1.ApplicationSpec{
 			Project: "default",
 			Source: &argov1alpha1.ApplicationSource{

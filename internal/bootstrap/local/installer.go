@@ -116,6 +116,21 @@ func (b *LocalBootstrapper) PrepareInstallerBundle() (string, error) {
 	return packageManager.GetWorkDir(), nil
 }
 
+// PrepareInstaller resolves and extracts the installer bundle before the
+// bootstrap needs any version information from its BOM.
+func (b *LocalBootstrapper) PrepareInstaller() error {
+	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
+		return nil
+	}
+
+	bundleDir, err := b.PrepareInstallerBundle()
+	if err != nil {
+		return err
+	}
+	b.installerBundleDir = bundleDir
+	return nil
+}
+
 // symlinkLocalBinaries replaces bundled node, helm and kubectl binaries with
 // symlinks to the locally installed versions. This is only done on non-Linux
 // hosts because the bundled binaries are Linux x86_64 binaries that cannot run
@@ -355,9 +370,9 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 		return nil
 	}
 
-	bundleDir, err := b.PrepareInstallerBundle()
-	if err != nil {
-		return fmt.Errorf("failed to prepare installer bundle: %w", err)
+	bundleDir := b.installerBundleDir
+	if bundleDir == "" {
+		return fmt.Errorf("installer bundle is not prepared")
 	}
 
 	// On non-Linux hosts the bundled binaries are Linux ELF executables that

@@ -69,6 +69,7 @@ type LocalBootstrapper struct {
 	ageKeyPath string
 	// argoCDAndAppsInstall is reused for the ArgoCD, vault, and pc-apps stages.
 	argoCDAndAppsInstall *argocd.AppInstaller
+	installerBundleDir   string
 }
 
 type CodesphereEnvironment struct {
@@ -114,7 +115,12 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 }
 
 func (b *LocalBootstrapper) Bootstrap() error {
-	err := b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
+	err := b.stlog.Step("Prepare installer bundle", b.PrepareInstaller)
+	if err != nil {
+		return fmt.Errorf("failed to prepare installer bundle: %w", err)
+	}
+
+	err = b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
 	if err != nil {
 		return fmt.Errorf("failed to ensure install config: %w", err)
 	}
