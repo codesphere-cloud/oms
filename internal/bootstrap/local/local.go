@@ -15,6 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
@@ -70,6 +71,7 @@ type LocalBootstrapper struct {
 	// argoCDAndAppsInstall is reused for the ArgoCD, vault, and pc-apps stages.
 	argoCDAndAppsInstall *argocd.AppInstaller
 	installerBundleDir   string
+	installerBOM         *bom.Config
 }
 
 type CodesphereEnvironment struct {

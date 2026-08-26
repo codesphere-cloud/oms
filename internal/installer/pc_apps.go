@@ -80,17 +80,15 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 	}, nil
 }
 
-func NewPcAppsFromBom(c client.Client, bomPath string, namespace string, valuesFiles []string, valuesOverride map[string]interface{}) (*PCApps, error) {
+func NewPcAppsFromBom(c client.Client, bomConfig *bom.Config, namespace string, valuesFiles []string, valuesOverride map[string]interface{}) (*PCApps, error) {
 	if err := checkArgoCDScheme(c); err != nil {
 		return nil, err
 	}
-
-	bomCfg, err := bom.Parse(bomPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse bom.json: %w", err)
+	if bomConfig == nil {
+		return nil, fmt.Errorf("BOM is required")
 	}
 
-	pcApps, ok := bomCfg.GetPCApps()
+	pcApps, ok := bomConfig.GetPCApps()
 	if !ok {
 		return nil, fmt.Errorf("pc-applications component not found in BOM")
 	}

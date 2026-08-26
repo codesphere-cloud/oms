@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	corev1 "k8s.io/api/core/v1"
@@ -127,7 +128,12 @@ func (b *LocalBootstrapper) PrepareInstaller() error {
 	if err != nil {
 		return err
 	}
+	bomConfig, err := bom.Parse(filepath.Join(bundleDir, "deps", "bom.json"))
+	if err != nil {
+		return fmt.Errorf("failed to parse installer BOM: %w", err)
+	}
 	b.installerBundleDir = bundleDir
+	b.installerBOM = bomConfig
 	return nil
 }
 
@@ -394,7 +400,7 @@ func (b *LocalBootstrapper) RunInstaller() (err error) {
 	}
 
 	if err := b.stlog.Substep("Register pc-apps app-of-apps", func() error {
-		return b.argoCDAndAppsInstall.InstallPCApps(b.ctx, filepath.Join(depsDir, "bom.json"))
+		return b.argoCDAndAppsInstall.InstallPCApps(b.ctx, b.installerBOM)
 	}); err != nil {
 		return fmt.Errorf("failed to register pc-apps app-of-apps: %w", err)
 	}

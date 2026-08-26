@@ -10,6 +10,7 @@ import (
 
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
@@ -121,14 +122,14 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
-func (i *AppInstaller) InstallPCApps(ctx context.Context, bomPath string) error {
+func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config) error {
 	// Values derived from the install config form the base; an explicit pcApps block in
 	// config.yaml wins over them, and the --pc-apps-values files win over both.
 	values := util.DeepMergeMaps(installer.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault), i.cfg.Config.PcApps)
 
 	pcApps, err := installer.NewPcAppsFromBom(
 		i.cfg.KubeClient,
-		bomPath,
+		bomConfig,
 		DefaultNamespace,
 		i.cfg.PCAppsValues,
 		values,

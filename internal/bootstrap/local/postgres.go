@@ -7,11 +7,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
-	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -37,15 +35,10 @@ const (
 )
 
 func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
-	if b.installerBundleDir == "" {
-		return fmt.Errorf("installer bundle is not prepared")
+	if b.installerBOM == nil {
+		return fmt.Errorf("installer BOM is not prepared")
 	}
-
-	bomConfig, err := bom.Parse(filepath.Join(b.installerBundleDir, "deps", "bom.json"))
-	if err != nil {
-		return fmt.Errorf("failed to load CloudNativePG chart version from BOM: %w", err)
-	}
-	chart, ok := bomConfig.GetChart(cnpgBOMComponent)
+	chart, ok := b.installerBOM.GetChart(cnpgBOMComponent)
 	if !ok {
 		return fmt.Errorf("CloudNativePG chart is missing from BOM component %q", cnpgBOMComponent)
 	}
