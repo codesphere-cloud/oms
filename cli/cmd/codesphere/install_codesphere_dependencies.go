@@ -145,6 +145,7 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 			FullInstall:    true,
 			ForceConflicts: opts.ArgoCDForceConflicts,
 			RepoURL:        opts.ArgoCDRepoURL,
+			BOM:            bomConfig,
 			ValueFiles:     opts.ArgoCDValues,
 			RESTConfig:     restConfig,
 		})
