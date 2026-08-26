@@ -991,11 +991,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			err := bs.EnsureGitHubAccessConfigured()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
+			Expect(bs.Env.InstallConfig.Registry.Server).To(BeEmpty())
 			Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal(csEnv.RegistryUser))
 			Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal(csEnv.GitHubPAT))
 			Expect(bs.Env.InstallConfig.Registry.LoadContainerImages).To(BeFalse())
 			Expect(bs.Env.InstallConfig.Registry.ReplaceImagesInBom).To(BeFalse())
+		})
+
+		It("uses the configured registry URL", func() {
+			csEnv.ContainerRegistryURL = "oci://registry.example.com/mirror/"
+			icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+			Expect(bs.EnsureGitHubAccessConfigured()).To(Succeed())
+			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("registry.example.com/mirror"))
 		})
 
 		Context("When GitHub PAT is missing", func() {

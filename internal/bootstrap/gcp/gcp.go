@@ -1029,7 +1029,10 @@ func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.GitHubPAT == "" {
 		return fmt.Errorf("GitHub PAT is not set")
 	}
-	b.Env.InstallConfig.Registry.Server = "ghcr.io"
+	registryURL := strings.TrimSuffix(strings.TrimPrefix(b.Env.ContainerRegistryURL, "oci://"), "/")
+	if registryURL != "" {
+		b.Env.InstallConfig.Registry.Server = registryURL
+	}
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
 	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -117,6 +118,15 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 	if err != nil {
 		return fmt.Errorf("failed to parse installer BOM: %w", err)
 	}
+	configuredRegistryURL := ""
+	if cfg.Registry != nil {
+		configuredRegistryURL = strings.TrimSuffix(strings.TrimPrefix(cfg.Registry.Server, "oci://"), "/")
+		if configuredRegistryURL != "" && configuredRegistryURL != "ghcr.io" {
+			if err := bomConfig.UseRegistry(configuredRegistryURL); err != nil {
+				return fmt.Errorf("failed to configure installer BOM registry: %w", err)
+			}
+		}
+	}
 
 	var install *argocdinstaller.AppInstaller
 
@@ -133,8 +143,8 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 			return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
 		}
 		registryURL := opts.ArgoCDRegistryURL
-		if registryURL == "" && cfg.Registry != nil {
-			registryURL = cfg.Registry.Server + "/codesphere-cloud/charts"
+		if registryURL == "" && configuredRegistryURL != "" {
+			registryURL = configuredRegistryURL + "/codesphere-cloud/charts"
 		}
 		argoCDInstall, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
 			Version:        opts.ArgoCDVersion,
