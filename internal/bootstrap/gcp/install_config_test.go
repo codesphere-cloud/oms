@@ -790,13 +790,21 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to obtain Google Public CA EAB credentials"))
 				})
-				It("returns an error when the second publicca API call for custom domains fails", func() {
+				It("returns an error when the second public API call for custom domains fails", func() {
 					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-eab-key-id", "fake-eab-mac-key", nil).Once()
 					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("", "", fmt.Errorf("api boom")).Once()
 
 					err := bs.UpdateInstallConfig()
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to obtain Google Public CA EAB credentials for custom domains"))
+				})
+				It("returns an error when both EAB key IDs are the same", func() {
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("same-eab-key-id", "fake-eab-mac-key", nil).Once()
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("same-eab-key-id", "fake-cd-eab-mac-key", nil).Once()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("google Public CA returned the same EAB key ID for the default and custom-domains ACME accounts"))
 				})
 			})
 

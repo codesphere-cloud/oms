@@ -245,6 +245,9 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		if err != nil {
 			return fmt.Errorf("failed to obtain Google Public CA EAB credentials for custom domains: %w", err)
 		}
+		if customDomainsKeyID == keyID {
+			return fmt.Errorf("google Public CA returned the same EAB key ID for the default and custom-domains ACME accounts")
+		}
 		acmeConfig.Server = "https://dv.acme-v02.api.pki.goog/directory"
 		acmeConfig.EABKeyID = keyID
 		acmeConfig.CustomDomainsEABKeyID = customDomainsKeyID

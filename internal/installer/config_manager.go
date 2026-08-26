@@ -239,6 +239,13 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		}
 	}
 
+	if ci := g.Config.Codesphere.CertIssuer; ci != nil && ci.Acme != nil {
+		acme := ci.Acme
+		if acme.EABKeyID != "" && acme.CustomDomainsEABKeyID != "" && acme.EABKeyID == acme.CustomDomainsEABKeyID {
+			errors = append(errors, "ACME EAB key ID and custom-domains EAB key ID must be different")
+		}
+	}
+
 	errors = append(errors, validateOpenFga(g.Config.Codesphere.OpenFga)...)
 
 	return errors
