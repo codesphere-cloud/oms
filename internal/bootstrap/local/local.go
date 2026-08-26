@@ -85,8 +85,9 @@ type CodesphereEnvironment struct {
 	InstallHash    string `json:"install_hash"`
 	InstallLocal   string `json:"install_local"`
 	// Registry
-	RegistryUser     string `json:"-"`
-	RegistryPassword string `json:"-"`
+	RegistryUser         string `json:"-"`
+	RegistryPassword     string `json:"-"`
+	ContainerRegistryURL string `json:"container_registry_url,omitempty"`
 	// Config
 	InstallDir           string              `json:"-"`
 	ExistingConfigUsed   bool                `json:"-"`
@@ -99,8 +100,6 @@ type CodesphereEnvironment struct {
 	ServiceCIDR          string              `json:"service_cidr"`
 	CephDeviceFilter     string              `json:"-"`
 	CephDevicePathFilter string              `json:"-"`
-	// ArgoCD integration
-	ArgoCDRegistryURL string `json:"-"`
 }
 
 // NewLocalBootstrapper creates a bootstrapper for a local Codesphere cluster.
@@ -241,12 +240,16 @@ func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*argocd.AppInstaller, err
 	if b.installerBOM != nil {
 		version = ""
 	}
+	registryURL := ""
+	if b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server != "" {
+		registryURL = strings.TrimSuffix(b.Env.InstallConfig.Registry.Server, "/") + "/codesphere-cloud/charts"
+	}
 
 	// renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
 	argoCDInstall, err := argocd.NewInstaller(argocd.InstallerConfig{
 		Version:        version,
 		OciPassword:    b.Env.RegistryPassword,
-		OciRegistryURL: strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://"),
+		OciRegistryURL: strings.TrimPrefix(registryURL, "oci://"),
 		FullInstall:    true,
 		ForceConflicts: true,
 		BOM:            b.installerBOM,
@@ -517,6 +520,22 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 	}
 
 	b.Env.InstallConfig = b.icg.GetInstallConfig()
+	configuredRegistry := strings.TrimSuffix(strings.TrimPrefix(b.Env.ContainerRegistryURL, "oci://"), "/")
+	if configuredRegistry != "" {
+		if b.Env.InstallConfig.Registry == nil {
+			b.Env.InstallConfig.Registry = &files.RegistryConfig{}
+		}
+		b.Env.InstallConfig.Registry.Server = configuredRegistry
+	}
+	effectiveRegistry := ""
+	if b.Env.InstallConfig.Registry != nil {
+		effectiveRegistry = strings.TrimSuffix(strings.TrimPrefix(b.Env.InstallConfig.Registry.Server, "oci://"), "/")
+	}
+	if b.installerBOM != nil && effectiveRegistry != "" && effectiveRegistry != "ghcr.io" {
+		if err := b.installerBOM.UseRegistry(effectiveRegistry); err != nil {
+			return fmt.Errorf("failed to configure installer BOM registry: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -694,7 +713,6 @@ func (b *LocalBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.RegistryPassword == "" {
 		return fmt.Errorf("registry password is not set")
 	}
-	b.Env.InstallConfig.Registry.Server = "ghcr.io"
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.RegistryPassword}})
 	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false

@@ -4,18 +4,28 @@
 package argocd_test
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func sopsAndAgeAvailable() bool {
@@ -41,6 +51,33 @@ var _ = Describe("AppInstaller", func() {
 
 		Expect(install.InstallArgoCD()).To(Succeed())
 		Expect(argoCDInstall.called).To(BeTrue())
+	})
+
+	It("configures the pc-applications global image registry", func() {
+		scheme := runtime.NewScheme()
+		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
+		Expect(argov1alpha1.AddToScheme(scheme)).To(Succeed())
+		kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "argocd-codesphere-oci-read", Namespace: "argocd"},
+			Data:       map[string][]byte{"url": []byte("registry.example.com/mirror/codesphere-cloud/charts")},
+		}).Build()
+		install := argocd.NewAppInstaller(argocd.AppInstallerConfig{
+			Config:     files.RootConfig{Registry: &files.RegistryConfig{Server: "registry.example.com/mirror"}},
+			Vault:      &files.InstallVault{},
+			KubeClient: kubeClient,
+		})
+		bomConfig := &bom.Config{Components: map[string]bom.ComponentConfig{
+			"pc-applications": {Files: map[string]bom.FileRef{
+				"chart": {OciRef: "oci://registry.example.com/mirror/codesphere-cloud/charts/pc-applications:1.2.3"},
+			}},
+		}}
+
+		Expect(install.InstallPCApps(context.Background(), bomConfig)).To(Succeed())
+		app := &argov1alpha1.Application{}
+		Expect(kubeClient.Get(context.Background(), client.ObjectKey{Name: "pc-applications", Namespace: "argocd"}, app)).To(Succeed())
+		values := map[string]any{}
+		Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &values)).To(Succeed())
+		Expect(values).To(HaveKeyWithValue("global", map[string]any{"imageRegistry": "registry.example.com/mirror"}))
 	})
 })
 
