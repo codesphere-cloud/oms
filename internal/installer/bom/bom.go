@@ -116,10 +116,12 @@ func (b *Config) GetChart(component string) (reference.NamedTagged, bool) {
 	if !ok || chart.OciRef == "" {
 		return nil, false
 	}
+
 	ref, err := reference.ParseNormalizedNamed(strings.TrimPrefix(chart.OciRef, "oci://"))
 	if err != nil {
 		return nil, false
 	}
+
 	tagged, ok := ref.(reference.NamedTagged)
 	if !ok {
 		return nil, false

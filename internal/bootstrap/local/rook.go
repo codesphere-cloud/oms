@@ -344,6 +344,7 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 	if err := b.kubeClient.List(b.ctx, storageClasses); err != nil {
 		return fmt.Errorf("failed to list StorageClasses: %w", err)
 	}
+
 	hasOtherDefault := hasDefaultStorageClass(storageClasses.Items, cephStorageClassName)
 
 	// Create StorageClass
@@ -397,11 +398,13 @@ func hasDefaultStorageClass(storageClasses []storagev1.StorageClass, excludeName
 		if storageClass.Name == excludeName {
 			continue
 		}
+
 		if strings.EqualFold(storageClass.Annotations[defaultStorageClassAnnotation], "true") ||
 			strings.EqualFold(storageClass.Annotations[legacyDefaultClassAnnotation], "true") {
 			return true
 		}
 	}
+
 	return false
 }
 

@@ -38,6 +38,7 @@ func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
 	if b.installerBOM == nil {
 		return fmt.Errorf("installer BOM is not prepared")
 	}
+
 	chart, ok := b.installerBOM.GetChart(cnpgBOMComponent)
 	if !ok {
 		return fmt.Errorf("CloudNativePG chart is missing from BOM component %q", cnpgBOMComponent)

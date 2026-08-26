@@ -80,10 +80,12 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 	}, nil
 }
 
+// NewPcAppsFromBom creates a PCApps installer from the pc-applications entry in a BOM.
 func NewPcAppsFromBom(c client.Client, bomConfig *bom.Config, namespace string, valuesFiles []string, valuesOverride map[string]interface{}) (*PCApps, error) {
 	if err := checkArgoCDScheme(c); err != nil {
 		return nil, err
 	}
+
 	if bomConfig == nil {
 		return nil, fmt.Errorf("BOM is required")
 	}

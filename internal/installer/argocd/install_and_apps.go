@@ -46,7 +46,9 @@ func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, na
 			if !apierrors.IsNotFound(err) {
 				return false, fmt.Errorf("failed to read ArgoCD Application %q: %w", name, err)
 			}
+
 			logf("Waiting for ArgoCD Application %q: failed to read status: %v", name, err)
+
 			return false, nil
 		}
 
