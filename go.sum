@@ -2922,8 +2922,8 @@ github.com/arbovm/levenshtein v0.0.0-20160628152529-48b4e1c0c4d0 h1:jfIu9sQUG6Ig
 github.com/arbovm/levenshtein v0.0.0-20160628152529-48b4e1c0c4d0/go.mod h1:t2tdKJDJF9BV14lnkjHmOQgcvEKgtqs5a1N3LNdJhGE=
 github.com/argoproj/argo-cd/gitops-engine v0.0.0-20260728075051-7660efb23b2d h1:/rO/uVUBn8ywSeYGDCXIIpKiCgxZ23+xshH+5UeuLUo=
 github.com/argoproj/argo-cd/gitops-engine v0.0.0-20260728075051-7660efb23b2d/go.mod h1:RsOM4gdM/lsvAfIuzAhYrnHDTLA1AGooZRzVyxbVT3A=
-github.com/argoproj/argo-cd/v3 v3.5.1 h1:jtwPLEFX9mNj3jSq88ugFcScGnOZVs2DWaXFuZxrRT8=
-github.com/argoproj/argo-cd/v3 v3.5.1/go.mod h1:/248vUTcQHNW3fYkaSUc0PkCFA/+mnILl5b6rv+xG6Y=
+github.com/argoproj/argo-cd/v3 v3.5.2 h1:vYtfW2pEBSL+smt8XdpVZHUg31uERINYH6eXzdiLCY4=
+github.com/argoproj/argo-cd/v3 v3.5.2/go.mod h1:/248vUTcQHNW3fYkaSUc0PkCFA/+mnILl5b6rv+xG6Y=
 github.com/argoproj/pkg/v2 v2.0.1 h1:O/gCETzB/3+/hyFL/7d/VM/6pSOIRWIiBOTb2xqAHvc=
 github.com/argoproj/pkg/v2 v2.0.1/go.mod h1:sdifF6sUTx9ifs38ZaiNMRJuMpSCBB9GulHfbPgQeRE=
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=
