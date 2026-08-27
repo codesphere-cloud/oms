@@ -214,6 +214,27 @@ var _ = Describe("Bom", func() {
 		})
 	})
 
+	Describe("GetChart", func() {
+		It("returns a tagged OCI chart for the requested component", func() {
+			cfg := &bom.Config{Components: map[string]bom.ComponentConfig{
+				"argocd": {Files: map[string]bom.FileRef{
+					"chart": {OciRef: "oci://ghcr.io/codesphere-cloud/charts/argocd:1.2.3"},
+				}},
+			}}
+
+			chart, ok := cfg.GetChart("argocd")
+			Expect(ok).To(BeTrue())
+			Expect(chart.Name()).To(Equal("ghcr.io/codesphere-cloud/charts/argocd"))
+			Expect(chart.Tag()).To(Equal("1.2.3"))
+		})
+
+		It("returns false when the component has no tagged chart", func() {
+			cfg := &bom.Config{Components: map[string]bom.ComponentConfig{}}
+			_, ok := cfg.GetChart("argocd")
+			Expect(ok).To(BeFalse())
+		})
+	})
+
 	Describe("GetOCIArtifacts", func() {
 		It("returns sorted unique container images and OCI Helm charts from all components", func() {
 			cfg := &bom.Config{Components: map[string]bom.ComponentConfig{

@@ -16,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
@@ -112,6 +113,11 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
 // before the main dependency steps.
 func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, installVault *files.InstallVault, restConfig *rest.Config, kubeClient ctrlclient.Client, stlog *bootstrap.StepLogger) error {
+	bomConfig, err := bom.Parse(pm.GetDependencyPath("bom.json"))
+	if err != nil {
+		return fmt.Errorf("failed to parse installer BOM: %w", err)
+	}
+
 	var install *argocdinstaller.AppInstaller
 
 	if err := stlog.Substep("Load vault data", func() error {
@@ -166,7 +172,7 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 		return err
 	}
 	if err := stlog.Substep("Install pc-apps", func() error {
-		return install.InstallPCApps(context.Background(), pm.GetDependencyPath("bom.json"))
+		return install.InstallPCApps(context.Background(), bomConfig)
 	}); err != nil {
 		return err
 	}
