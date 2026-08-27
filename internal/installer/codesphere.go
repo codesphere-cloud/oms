@@ -381,7 +381,7 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config files.RootConfig) ([]string, error) {
 	installerPath := filepath.Join(pm.GetWorkDir(), "private-cloud-installer.js")
 	archivePath := filepath.Join(pm.GetWorkDir(), "deps.tar.gz")
-	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", ci.ConfigPath, "--privKey", ci.PrivKey}
+	cmdArgs := []string{installerPath, "--archive", archivePath, "--config", ci.ConfigPath, "--privKey", ci.PrivKey, "--enable-source-maps"}
 
 	executableSteps := ci.executableInstallerSteps(config)
 
