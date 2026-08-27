@@ -75,12 +75,20 @@ func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, instal
 			return
 		}
 	}
+	sshAddress := node.IPAddress
+	if node.SSHAddress != "" {
+		sshAddress = node.SSHAddress
+	}
+	sshPort := 22
+	if node.SSHPort != 0 {
+		sshPort = node.SSHPort
+	}
 	host := K0sctlHost{
 		Role: role,
 		SSH: K0sctlSSH{
-			Address: node.IPAddress,
+			Address: sshAddress,
 			User:    "root",
-			Port:    22,
+			Port:    sshPort,
 			KeyPath: sshKeyPath,
 		},
 		InstallFlags:   installFlags,

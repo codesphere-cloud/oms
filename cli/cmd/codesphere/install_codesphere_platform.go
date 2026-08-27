@@ -54,7 +54,6 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		Force:            opts.Force,
 		SkipSteps:        opts.SkipSteps,
 		AllowedSteps:     installer.PlatformSteps,
-		CodesphereOnly:   true,
 		DirectConnection: opts.DirectConnection,
 		AutoApprove:      opts.AutoApprove,
 	}
