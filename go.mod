@@ -44,7 +44,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.32.1
-	github.com/onsi/gomega v1.42.1
+	github.com/onsi/gomega v1.43.0
 	github.com/pkg/sftp v1.13.11
 	github.com/rook/rook/pkg/apis v0.0.0-20260826094747-01bbd460392f
 	github.com/spf13/cobra v1.10.2
