@@ -149,9 +149,8 @@ var _ = Describe("ConfigManagerProfile", func() {
 					Expect(config.ManagedServiceBackends).ToNot(BeNil())
 					Expect(config.ManagedServiceBackends.Postgres).ToNot(BeNil())
 
-					// Managed service config
-					Expect(config.Codesphere.ManagedServices).ToNot(BeNil())
-					Expect(len(config.Codesphere.ManagedServices)).To(Equal(5))
+					// Managed service config is opt-in, with no defaults
+					Expect(config.Codesphere.ManagedServices).To(BeNil())
 
 					// Secrets
 					Expect(config.Secrets.BaseDir).To(Equal("/root/secrets"))
