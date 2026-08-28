@@ -186,15 +186,6 @@ func (g *InstallConfig) applyCommonProperties() {
 	} else if g.Config.ManagedServiceBackends.Postgres == nil {
 		g.Config.ManagedServiceBackends.Postgres = &files.PgManagedServiceConfig{}
 	}
-	if g.Config.Codesphere.ManagedServices == nil {
-		g.Config.Codesphere.ManagedServices = []files.ManagedServiceConfig{
-			{Name: "postgres", Version: "v1"},
-			{Name: "babelfish", Version: "v1"},
-			{Name: "s3", Version: "v1"},
-			{Name: "virtual-k8s", Version: "v1"},
-			{Name: "ferretdb", Version: "v0"},
-		}
-	}
 	if g.Config.Secrets.BaseDir == "" {
 		g.Config.Secrets.BaseDir = "/root/secrets"
 	}

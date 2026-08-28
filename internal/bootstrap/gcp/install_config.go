@@ -205,6 +205,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	}
 
 	b.applyPcAppsDefaults()
+	b.applyManagedServiceDefaults()
 
 	dnsProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
@@ -451,6 +452,18 @@ func (b *GCPBootstrapper) applyPcAppsDefaults() {
 			},
 		},
 	})
+}
+
+func (b *GCPBootstrapper) applyManagedServiceDefaults() {
+	if b.Env.InstallConfig.Codesphere.ManagedServices == nil {
+		b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
+			{Name: "postgres", Version: "v1"},
+			{Name: "babelfish", Version: "v1"},
+			{Name: "s3", Version: "v1"},
+			{Name: "virtual-k8s", Version: "v1"},
+			{Name: "ferretdb", Version: "v0"},
+		}
+	}
 }
 
 func (b *GCPBootstrapper) applyExternalLokiConfig() {
