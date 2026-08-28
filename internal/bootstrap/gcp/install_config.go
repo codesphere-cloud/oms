@@ -204,7 +204,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
 	}
 
-	b.applySshProxyConfig()
+	b.applyPcAppsDefaults()
 
 	dnsProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
@@ -427,7 +427,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) applySshProxyConfig() {
+func (b *GCPBootstrapper) applyPcAppsDefaults() {
 	b.Env.InstallConfig.PcApps = util.DeepMergeMaps(b.Env.InstallConfig.PcApps, files.ChartValues{
 		"applications": map[string]any{
 			"ssh-workspace-proxy": map[string]any{
@@ -442,6 +442,12 @@ func (b *GCPBootstrapper) applySshProxyConfig() {
 						},
 					},
 				},
+			},
+			"rabbitmq-operator": map[string]any{
+				"enabled": true,
+			},
+			"ms-backend-k8s": map[string]any{
+				"enabled": true,
 			},
 		},
 	})
