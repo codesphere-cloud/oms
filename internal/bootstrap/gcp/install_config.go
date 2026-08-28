@@ -465,6 +465,7 @@ func (b *GCPBootstrapper) applyManagedServiceDefaults() {
 			{Name: "opensearch", Version: "v0"},
 			{Name: "valkey", Version: "v0"},
 			{Name: "rabbitmq", Version: "v0"},
+			{Name: "url-shortener", Version: "v0"},
 		}
 	}
 }
