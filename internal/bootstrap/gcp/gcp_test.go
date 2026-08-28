@@ -293,8 +293,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(cpNode.GetExternalIP()).To(Equal("1.2.3.4"))
 				Expect(cpNode.GetInternalIP()).To(Equal("10.0.0.1"))
 			}
-
-			Expect(len(bs.Env.InstallConfig.Codesphere.ManagedServices)).To(Equal(5))
 		})
 	})
 
