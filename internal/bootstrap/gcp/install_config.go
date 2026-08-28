@@ -450,6 +450,9 @@ func (b *GCPBootstrapper) applyPcAppsDefaults() {
 			"ms-backend-k8s": map[string]any{
 				"enabled": true,
 			},
+			"ms-backend-opensearch": map[string]any{
+				"enabled": true,
+			},
 		},
 	})
 }
