@@ -1181,9 +1181,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260831155005-9cbf3c45312d
+Version: v0.0.0-20260831181021-5471e1d9b6a1
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/9cbf3c45312d/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/5471e1d9b6a1/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
