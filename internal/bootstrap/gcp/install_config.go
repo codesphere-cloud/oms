@@ -453,6 +453,20 @@ func (b *GCPBootstrapper) applyPcAppsDefaults() {
 			"ms-backend-opensearch": map[string]any{
 				"enabled": true,
 			},
+			// KubeVirt and CDI are needed for VM image import/DataVolumes; the
+			// pc-applications chart ships both disabled by default.
+			"kubevirt-operator": map[string]any{
+				"enabled": true,
+			},
+			"kubevirt-cr": map[string]any{
+				"enabled": true,
+			},
+			"cdi-operator": map[string]any{
+				"enabled": true,
+			},
+			"cdi-cr": map[string]any{
+				"enabled": true,
+			},
 		},
 	})
 }
