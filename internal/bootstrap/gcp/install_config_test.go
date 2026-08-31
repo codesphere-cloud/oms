@@ -339,6 +339,11 @@ var _ = Describe("Installconfig & Secrets", func() {
 				sshProxyAnnotations := sshProxyService["annotations"].(map[string]interface{})
 				Expect(sshProxyAnnotations["cloud.google.com/load-balancer-ipv4"]).To(Equal("3.3.3.3"))
 
+				Expect(applications["kubevirt-operator"].(map[string]interface{})["enabled"]).To(Equal(true))
+				Expect(applications["kubevirt-cr"].(map[string]interface{})["enabled"]).To(Equal(true))
+				Expect(applications["cdi-operator"].(map[string]interface{})["enabled"]).To(Equal(true))
+				Expect(applications["cdi-cr"].(map[string]interface{})["enabled"]).To(Equal(true))
+
 				Expect(bs.Env.InstallConfig.Datacenter.ID).To(Equal(1))
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("dev"))
 				Expect(bs.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))

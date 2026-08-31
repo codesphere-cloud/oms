@@ -82,6 +82,7 @@ var DefaultPreviewFlags []string = []string{
 	"secret-management",
 	"sub-path-mount",
 	"workspace-ssh",
+	"virtual-machines",
 }
 
 var DefaultFeatureFlags []string = []string{}
