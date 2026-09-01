@@ -1,6 +1,6 @@
 module github.com/codesphere-cloud/oms
 
-go 1.27.0
+go 1.27.1
 
 replace (
 	// GoReleaser pulls github.com/chrismellard/docker-credential-acr-env,
@@ -34,7 +34,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/argoproj/argo-cd/v3 v3.5.2
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.34.0
+	github.com/codesphere-cloud/cs-go v1.35.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/distribution/reference v0.6.0
 	github.com/getsops/sops/v3 v3.13.3
