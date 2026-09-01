@@ -26,7 +26,7 @@ type Node struct {
 	// If connecting via the Jumpbox
 	Jumpbox *Node `json:"-"`
 	// Config
-	keyPath      string     `json:"-"`
+	KeyPath      string     `json:"-"`
 	Name         string     `json:"name"`
 	ExternalIP   string     `json:"external_ip"`
 	InternalIP   string     `json:"internal_ip"`
@@ -123,7 +123,7 @@ func (n *Node) CreateSubNode(name string, externalIP string, internalIP string) 
 		// Inherited from jumpbox
 		FileIO:     n.FileIO,
 		Jumpbox:    n,
-		keyPath:    util.ExpandPath(n.keyPath),
+		KeyPath:    util.ExpandPath(n.KeyPath),
 		sshQuiet:   n.sshQuiet,
 		NodeClient: n.NodeClient,
 
@@ -594,7 +594,7 @@ func (n *Node) getAuthMethods() ([]ssh.AuthMethod, error) {
 	}
 
 	// 2. Add Private Key (File) if needed
-	if n.keyPath != "" {
+	if n.KeyPath != "" {
 		shouldLoad := true
 
 		// Use cached signer if available
@@ -605,7 +605,7 @@ func (n *Node) getAuthMethods() ([]ssh.AuthMethod, error) {
 
 		// Check if key is already in agent (requires .pub file)
 		if shouldLoad && len(signers) > 0 {
-			if pubBytes, err := n.FileIO.ReadFile(n.keyPath + ".pub"); err == nil {
+			if pubBytes, err := n.FileIO.ReadFile(n.KeyPath + ".pub"); err == nil {
 				if targetPub, _, _, _, err := ssh.ParseAuthorizedKey(pubBytes); err == nil {
 					targetMarshaled := string(targetPub.Marshal())
 					for _, s := range signers {
@@ -638,9 +638,9 @@ func (n *Node) getAuthMethods() ([]ssh.AuthMethod, error) {
 
 // loadPrivateKey reads and parses the private key, prompting for passphrase if needed.
 func (n *Node) loadPrivateKey() (ssh.Signer, error) {
-	key, err := n.FileIO.ReadFile(n.keyPath)
+	key, err := n.FileIO.ReadFile(n.KeyPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read private key file %s: %v", n.keyPath, err)
+		return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
 	}
 
 	signer, err := ssh.ParsePrivateKey(key)
@@ -653,7 +653,7 @@ func (n *Node) loadPrivateKey() (ssh.Signer, error) {
 	}
 
 	// Key is encrypted, prompt for passphrase
-	log.Printf("Enter passphrase for key '%s': ", n.keyPath)
+	log.Printf("Enter passphrase for key '%s': ", n.KeyPath)
 	passphrase, err := term.ReadPassword(int(syscall.Stdin))
 	log.Println()
 	if err != nil {

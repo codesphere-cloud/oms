@@ -241,9 +241,19 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		if err != nil {
 			return fmt.Errorf("failed to obtain Google Public CA EAB credentials: %w", err)
 		}
+
+		customDomainsKeyID, customDomainsB64MacKey, err := b.GCPClient.CreatePublicCAExternalAccountKey(b.Env.ProjectID)
+		if err != nil {
+			return fmt.Errorf("failed to obtain Google Public CA EAB credentials for custom domains: %w", err)
+		}
+		if customDomainsKeyID == keyID {
+			return fmt.Errorf("google Public CA returned the same EAB key ID for the default and custom-domains ACME accounts")
+		}
 		acmeConfig.Server = "https://dv.acme-v02.api.pki.goog/directory"
 		acmeConfig.EABKeyID = keyID
+		acmeConfig.CustomDomainsEABKeyID = customDomainsKeyID
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: b64MacKey}})
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeCustomDomainsEabMacKey, Fields: &files.SecretFields{Password: customDomainsB64MacKey}})
 	}
 	b.Env.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
 		Type: "acme",

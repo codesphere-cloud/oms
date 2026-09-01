@@ -50,6 +50,8 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
 ### Options
 
 ```
+      --acme-custom-domains-eab-key-id string      External Account Binding key ID for custom-domain certificates (must differ from --acme-eab-key-id)
+      --acme-custom-domains-eab-mac-key string     External Account Binding MAC key for custom-domain certificates
       --acme-dns01-provider string                 DNS provider for DNS-01 solver (e.g., cloudflare)
       --acme-eab-key-id string                     External Account Binding key ID (required by some ACME providers)
       --acme-eab-mac-key string                    External Account Binding MAC key (required by some ACME providers)
