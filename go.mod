@@ -1,6 +1,6 @@
 module github.com/codesphere-cloud/oms
 
-go 1.27.0
+go 1.27.1
 
 replace (
 	// GoReleaser pulls github.com/chrismellard/docker-credential-acr-env,
