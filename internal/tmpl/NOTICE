@@ -1451,9 +1451,9 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.5/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.55.0
+Version: v0.56.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.55.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.56.0:LICENSE
  
 ----------
 Module: golang.org/x/mod/semver
