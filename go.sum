@@ -3221,8 +3221,8 @@ github.com/cockroachdb/datadriven v1.0.2/go.mod h1:a9RdTaap04u637JoCzcUoIcDmvwSU
 github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd/go.mod h1:sE/e/2PUdi/liOCUjSTXgM1o87ZssimdTWN964YiIeI=
 github.com/codahale/rfc6979 v0.0.0-20141003034818-6a90f24967eb h1:EDmT6Q9Zs+SbUoc7Ik9EfrFqcylYqgPZ9ANSbTAntnE=
 github.com/codahale/rfc6979 v0.0.0-20141003034818-6a90f24967eb/go.mod h1:ZjrT6AXHbDs86ZSdt/osfBi5qfexBrKUdONk989Wnk4=
-github.com/codesphere-cloud/cs-go v1.35.0 h1:kz57b/8g3BBnb3v4n1/NMrTIDlafBIK60GHZbyX4hTo=
-github.com/codesphere-cloud/cs-go v1.35.0/go.mod h1:AWBNqVE/u8kLhojXr7MM27bhRhPKEz8DMYbeHsOFRqM=
+github.com/codesphere-cloud/cs-go v1.36.0 h1:r+ap6o4+KlJ8ns7xsQiJ94+Z622hROFq/bVGzwnfiC8=
+github.com/codesphere-cloud/cs-go v1.36.0/go.mod h1:EutNQFD4M44L/kvK5JkexjoOfPY7v3843W9IAfm5iZU=
 github.com/containerd/continuity v0.5.0 h1:7a85HZpCSs+1Zps0Ee3DPSuAWY+0SJM1JNM51nlEVDg=
 github.com/containerd/continuity v0.5.0/go.mod h1:/lNJvtJKUQStBzpVQ1+rasXO1LAWtUQssk28EZvJ3nE=
 github.com/containerd/errdefs v1.0.0 h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI=
