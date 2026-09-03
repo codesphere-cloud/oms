@@ -1181,9 +1181,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260903142735-4169b1898fcd
+Version: v0.0.0-20260903170734-d364b1e8ad7f
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/4169b1898fcd/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/d364b1e8ad7f/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1453,55 +1453,55 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.5/LICENSE
 Module: golang.org/x/crypto
 Version: v0.56.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.56.0:LICENSE
  
 ----------
 Module: golang.org/x/mod/semver
 Version: v0.40.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://cs.opensource.google/go/x/mod/+/v0.40.0:LICENSE
  
 ----------
 Module: golang.org/x/net
 Version: v0.58.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://cs.opensource.google/go/x/net/+/v0.58.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
 Version: v0.36.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://cs.opensource.google/go/x/oauth2/+/v0.36.0:LICENSE
  
 ----------
 Module: golang.org/x/sync
 Version: v0.22.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://cs.opensource.google/go/x/sync/+/v0.22.0:LICENSE
  
 ----------
 Module: golang.org/x/sys
 Version: v0.47.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://cs.opensource.google/go/x/sys/+/v0.47.0:LICENSE
  
 ----------
 Module: golang.org/x/term
 Version: v0.45.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://cs.opensource.google/go/x/term/+/v0.45.0:LICENSE
  
 ----------
 Module: golang.org/x/text
 Version: v0.41.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://cs.opensource.google/go/x/text/+/v0.41.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
 Version: v0.15.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://cs.opensource.google/go/x/time/+/v0.15.0:LICENSE
  
 ----------
 Module: gomodules.xyz/jsonpatch/v2
