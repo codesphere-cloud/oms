@@ -21,9 +21,13 @@ const (
 	// Use of newer versions should work in most cases but can't be guaranteed
 	DefaultK0sVersion = "v1.31.14+k0s.0"
 
+	// GitHubReleaseURL is the github release page for k0s
 	GitHubReleaseURL = "https://github.com/k0sproject/k0s/releases/download"
 
-	BinaryName       = "k0s"
+	// BinaryName is the name of target binary for oms to download to
+	BinaryName = "k0s"
+
+	// AirgapBundleName is the name of target airgap-bundle for oms to download to
 	AirgapBundleName = "k0s-airgap-bundle"
 )
 
