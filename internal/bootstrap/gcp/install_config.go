@@ -501,9 +501,11 @@ func (b *GCPBootstrapper) applyManagedServiceDefaults() {
 			{Name: "valkey", Version: "v0"},
 			{Name: "rabbitmq", Version: "v0"},
 		}
+
 		if util.InstallVersionAtLeast(b.Env.InstallVersion, "v1.106.0") {
-			ms = append(managedServices, files.ManagedServiceConfig{Name: "url-shortener", Version: "v0"})
+			ms = append(ms, files.ManagedServiceConfig{Name: "url-shortener", Version: "v0"})
 		}
+
 		b.Env.InstallConfig.Codesphere.ManagedServices = ms
 	}
 }
