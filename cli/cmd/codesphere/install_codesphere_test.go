@@ -51,13 +51,16 @@ var _ = Describe("InstallCodesphereCmd", func() {
 
 			tempConfigFile, err := os.CreateTemp("", "test-config.yaml")
 			Expect(err).To(BeNil())
+
 			defer func() { _ = os.Remove(tempConfigFile.Name()) }()
 
 			_, err = tempConfigFile.WriteString("codesphere:\n  deployConfig:\n    images: {}\n")
 			Expect(err).To(BeNil())
+
 			_ = tempConfigFile.Close()
 
 			c.Opts.Configs = []string{tempConfigFile.Name()}
+
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
 			runCmd := &cobra.Command{}
@@ -65,6 +68,7 @@ var _ = Describe("InstallCodesphereCmd", func() {
 			err = c.RunE(runCmd, []string{})
 
 			Expect(err).To(HaveOccurred())
+
 			if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 				// Should fail with platform error on non-Linux platform
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
@@ -74,7 +78,6 @@ var _ = Describe("InstallCodesphereCmd", func() {
 			}
 		})
 	})
-
 })
 
 var _ = Describe("AddInstallCodesphereCmd", func() {
@@ -92,6 +95,7 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 		codesphere.AddInstallCmd(parentCmd, globalOpts)
 
 		var codesphereCmd *cobra.Command
+
 		for _, c := range parentCmd.Commands() {
 			if c.Use == "codesphere" {
 				codesphereCmd = c

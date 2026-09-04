@@ -27,6 +27,7 @@ func (c *InstallCodesphereInfraCmd) RunE(_ *cobra.Command, _ []string) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
+
 	effectiveOpts, _, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -55,6 +56,7 @@ func installCodesphereInfra(opts *InstallCodesphereOpts, env env.Env) error {
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install infra: %w", err)
 	}
+
 	return nil
 }
 

@@ -259,6 +259,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		if !c.Opts.Interactive {
 			return fmt.Errorf("configuration validation failed: %s", strings.Join(validationWarnings, ", "))
 		}
+
 		c.printWarningsMessage(validationWarnings)
 	}
 
@@ -290,9 +291,11 @@ func (c *InitInstallConfigCmd) printWelcomeMessage() {
 func (c *InitInstallConfigCmd) printWarningsMessage(warnings []string) {
 	log.Println("\n" + strings.Repeat("!", 70))
 	log.Printf("Configuration has %d warning(s):\n", len(warnings))
+
 	for _, w := range warnings {
 		log.Printf("  WARNING: %s\n", w)
 	}
+
 	log.Println(strings.Repeat("!", 70))
 	log.Println("The configuration files will be generated.")
 	log.Println("Please review and fix the issues in the generated files before use!")
@@ -300,11 +303,13 @@ func (c *InitInstallConfigCmd) printWarningsMessage(warnings []string) {
 
 func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println("\n" + strings.Repeat("=", 70))
+
 	if warningCount > 0 {
 		log.Printf("Configuration files generated with %d warning(s)! Review before use!\n", warningCount)
 	} else {
 		log.Println("Configuration files successfully generated!")
 	}
+
 	log.Println(strings.Repeat("=", 70))
 
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
@@ -317,6 +322,7 @@ func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) 
 	log.Printf("Validating configuration files...\n")
 
 	log.Printf("Reading install config file: %s\n", c.Opts.ConfigFile)
+
 	err := icg.LoadInstallConfigFromFile(c.Opts.ConfigFile)
 	if err != nil {
 		return fmt.Errorf("failed to load config file: %w", err)
@@ -351,12 +357,15 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	if c.Opts.DatacenterID != 0 {
 		config.Datacenter.ID = c.Opts.DatacenterID
 	}
+
 	if c.Opts.DatacenterCity != "" {
 		config.Datacenter.City = c.Opts.DatacenterCity
 	}
+
 	if c.Opts.DatacenterCountryCode != "" {
 		config.Datacenter.CountryCode = c.Opts.DatacenterCountryCode
 	}
+
 	if c.Opts.DatacenterName != "" {
 		config.Datacenter.Name = c.Opts.DatacenterName
 	}
@@ -387,9 +396,11 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		if config.Postgres.Primary == nil {
 			config.Postgres.Primary = &files.PostgresPrimaryConfig{}
 		}
+
 		if postgresPrimaryHostname != "" {
 			config.Postgres.Primary.Hostname = postgresPrimaryHostname
 		}
+
 		if c.Opts.PostgresPrimaryIP != "" {
 			config.Postgres.Primary.IP = c.Opts.PostgresPrimaryIP
 		}
@@ -411,14 +422,17 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	if c.Opts.CephCsiKubeletDir != "" {
 		config.Ceph.CsiKubeletDir = c.Opts.CephCsiKubeletDir
 	}
+
 	if c.Opts.CephNodesSubnet != "" {
 		config.Ceph.NodesSubnet = c.Opts.CephNodesSubnet
 	}
+
 	if len(c.Opts.CephHosts) > 0 {
 		cephHosts := []files.CephHost{}
 		for _, hostCfg := range c.Opts.CephHosts {
 			cephHosts = append(cephHosts, files.CephHost(hostCfg))
 		}
+
 		config.Ceph.Hosts = cephHosts
 	}
 
@@ -426,12 +440,15 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	if c.cmd != nil && c.cmd.Flags().Changed("k8s-managed") {
 		config.Kubernetes.ManagedByCodesphere = c.Opts.KubernetesManagedByCodesphere
 	}
+
 	if c.Opts.KubernetesAPIServerHost != "" {
 		config.Kubernetes.APIServerHost = c.Opts.KubernetesAPIServerHost
 	}
+
 	if c.Opts.KubernetesPodCIDR != "" {
 		config.Kubernetes.PodCIDR = c.Opts.KubernetesPodCIDR
 	}
+
 	if c.Opts.KubernetesServiceCIDR != "" {
 		config.Kubernetes.ServiceCIDR = c.Opts.KubernetesServiceCIDR
 	}
@@ -443,6 +460,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 				IPAddress: ip,
 			})
 		}
+
 		config.Kubernetes.ControlPlanes = kubernetesControlPlanes
 	}
 
@@ -453,6 +471,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 				IPAddress: ip,
 			})
 		}
+
 		config.Kubernetes.Workers = kubernetesWorkers
 	}
 
@@ -460,12 +479,15 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	if c.Opts.ClusterGatewayServiceType != "" {
 		config.Cluster.Gateway.ServiceType = c.Opts.ClusterGatewayServiceType
 	}
+
 	if len(c.Opts.ClusterGatewayIPAddresses) > 0 {
 		config.Cluster.Gateway.IPAddresses = c.Opts.ClusterGatewayIPAddresses
 	}
+
 	if c.Opts.ClusterPublicGatewayServiceType != "" {
 		config.Cluster.PublicGateway.ServiceType = c.Opts.ClusterPublicGatewayServiceType
 	}
+
 	if len(c.Opts.ClusterPublicGatewayIPAddresses) > 0 {
 		config.Cluster.PublicGateway.IPAddresses = c.Opts.ClusterPublicGatewayIPAddresses
 	}
@@ -493,15 +515,18 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		if certIssuer.Acme == nil {
 			certIssuer.Acme = &files.ACMEConfig{}
 		}
+
 		certIssuer.Type = files.CertIssuerTypeACME
 		certIssuer.Acme.Enabled = true
 
 		if c.Opts.ACMEIssuerName != "" {
 			certIssuer.Acme.Name = c.Opts.ACMEIssuerName
 		}
+
 		if c.Opts.ACMEEmail != "" {
 			certIssuer.Acme.Email = c.Opts.ACMEEmail
 		}
+
 		if c.Opts.ACMEServer != "" {
 			certIssuer.Acme.Server = c.Opts.ACMEServer
 		}
@@ -509,6 +534,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		if c.Opts.ACMEEABKeyID != "" {
 			certIssuer.Acme.EABKeyID = c.Opts.ACMEEABKeyID
 		}
+
 		if c.Opts.ACMEEABMacKey != "" {
 			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMEEABMacKey}})
 		}
@@ -525,15 +551,19 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 	if c.Opts.CodesphereDomain != "" {
 		config.Codesphere.Domain = c.Opts.CodesphereDomain
 	}
+
 	if c.Opts.CodespherePublicIP != "" {
 		config.Codesphere.PublicIP = c.Opts.CodespherePublicIP
 	}
+
 	if c.Opts.CodesphereWorkspaceHostingBaseDomain != "" {
 		config.Codesphere.WorkspaceHostingBaseDomain = c.Opts.CodesphereWorkspaceHostingBaseDomain
 	}
+
 	if c.Opts.CodesphereCustomDomainsCNameBaseDomain != "" {
 		config.Codesphere.CustomDomains = files.CustomDomainsConfig{CNameBaseDomain: c.Opts.CodesphereCustomDomainsCNameBaseDomain}
 	}
+
 	if len(c.Opts.CodesphereDNSServers) > 0 {
 		config.Codesphere.DNSServers = c.Opts.CodesphereDNSServers
 	}
@@ -542,6 +572,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		if config.Codesphere.WorkspaceImages == nil {
 			config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{}
 		}
+
 		config.Codesphere.WorkspaceImages.Agent = &files.ImageRef{
 			BomRef: c.Opts.CodesphereWorkspaceImageBomRef,
 		}
@@ -551,8 +582,10 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		if config.Codesphere.OpenBao == nil {
 			config.Codesphere.OpenBao = &files.OpenBaoConfig{}
 		}
+
 		config.Codesphere.OpenBao.URI = c.Opts.CodesphereOpenBaoUri
 		config.Codesphere.OpenBao.Engine = c.Opts.CodesphereOpenBaoEngine
+
 		config.Codesphere.OpenBao.User = c.Opts.CodesphereOpenBaoUser
 		if c.Opts.CodesphereOpenBaoPassword != "" {
 			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenBaoPassword, Fields: &files.SecretFields{Password: c.Opts.CodesphereOpenBaoPassword}})
@@ -564,22 +597,28 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		if config.Codesphere.OpenfgaBackups == nil {
 			config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{}
 		}
+
 		config.Codesphere.OpenfgaBackups.Enabled = true
 		if c.Opts.OpenfgaBackupsDestinationPath != "" {
 			config.Codesphere.OpenfgaBackups.DestinationPath = c.Opts.OpenfgaBackupsDestinationPath
 		}
+
 		if c.Opts.OpenfgaBackupsEndpointURL != "" {
 			config.Codesphere.OpenfgaBackups.EndpointURL = c.Opts.OpenfgaBackupsEndpointURL
 		}
+
 		if c.Opts.OpenfgaBackupsSchedule != "" {
 			config.Codesphere.OpenfgaBackups.Schedule = c.Opts.OpenfgaBackupsSchedule
 		}
+
 		if c.Opts.OpenfgaBackupsRetentionPolicy != "" {
 			config.Codesphere.OpenfgaBackups.RetentionPolicy = c.Opts.OpenfgaBackupsRetentionPolicy
 		}
+
 		if c.Opts.OpenfgaBackupsAccessKeyID != "" {
 			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupAccessKeyId, Fields: &files.SecretFields{Password: c.Opts.OpenfgaBackupsAccessKeyID}})
 		}
+
 		if c.Opts.OpenfgaBackupsSecretAccessKey != "" {
 			vault.SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: c.Opts.OpenfgaBackupsSecretAccessKey}})
 		}
@@ -620,8 +659,10 @@ func determinePostgresServerConfig(postgresMode, postgresServer, primaryHostname
 	if postgresServer == "" {
 		return primaryHostname, serverAddress
 	}
+
 	if postgresMode == "install" {
 		return postgresServer, ""
 	}
+
 	return primaryHostname, postgresServer
 }

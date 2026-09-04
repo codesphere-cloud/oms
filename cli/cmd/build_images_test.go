@@ -80,10 +80,12 @@ var _ = Describe("BuildImagesCmd", func() {
 
 			tempConfigFile, err := os.CreateTemp("", "test-config.yaml")
 			Expect(err).To(BeNil())
+
 			defer func() { _ = os.Remove(tempConfigFile.Name()) }()
 
 			_, err = tempConfigFile.WriteString(validConfigYaml)
 			Expect(err).To(BeNil())
+
 			_ = tempConfigFile.Close()
 
 			c.Opts.Config = tempConfigFile.Name()
@@ -105,6 +107,7 @@ var _ = Describe("BuildImagesCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
 			c.Opts.Config = "non-existent-config.yaml"
+
 			mockConfigManager.EXPECT().ParseConfigYaml("non-existent-config.yaml").Return(files.RootConfig{}, errors.New("failed to parse config"))
 
 			err := c.BuildAndPushImages(mockPackageManager, mockConfigManager, mockImageManager)
@@ -407,6 +410,7 @@ var _ = Describe("AddBuildImagesCmd", func() {
 		cmd.AddBuildImagesCmd(parentCmd, globalOpts)
 
 		var imagesCmd *cobra.Command
+
 		for _, c := range parentCmd.Commands() {
 			if c.Use == "images" {
 				imagesCmd = c

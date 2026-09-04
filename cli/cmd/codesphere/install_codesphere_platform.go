@@ -28,6 +28,7 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
+
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -61,6 +62,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
+
 	return nil
 }
 

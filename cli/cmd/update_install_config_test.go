@@ -28,6 +28,7 @@ func quoteYAMLString(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	s = strings.ReplaceAll(s, `"`, `\"`)
 	s = strings.ReplaceAll(s, "\n", `\n`)
+
 	return `"` + s + `"`
 }
 
@@ -54,6 +55,7 @@ var _ = Describe("UpdateInstallConfig", func() {
 		approveConfirmations = true
 
 		var err error
+
 		configFile, err = os.CreateTemp("", "config-*.yaml")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -204,13 +206,16 @@ codesphere:
 		recipient, err := exec.Command("age-keygen", "-y", ageKeyPath).Output()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(sops.EncryptFile(plaintextVaultPath, vaultFile.Name(), strings.TrimSpace(string(recipient)))).To(Succeed())
+
 		previousAgeKeyFile, hadPreviousAgeKeyFile := os.LookupEnv("SOPS_AGE_KEY_FILE")
+
 		Expect(os.Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)).To(Succeed())
 		DeferCleanup(func() {
 			if hadPreviousAgeKeyFile {
 				Expect(os.Setenv("SOPS_AGE_KEY_FILE", previousAgeKeyFile)).To(Succeed())
 				return
 			}
+
 			Expect(os.Unsetenv("SOPS_AGE_KEY_FILE")).To(Succeed())
 		})
 
@@ -471,6 +476,7 @@ codesphere:
 			initialVault := &files.InstallVault{}
 			err := initialVault.Unmarshal(initialVaultContent)
 			Expect(err).NotTo(HaveOccurred())
+
 			initialSecrets := make(map[string]files.SecretEntry)
 			for _, secret := range initialVault.Secrets {
 				initialSecrets[secret.Name] = secret
@@ -489,13 +495,17 @@ codesphere:
 			// Verify all initial secrets are still present with the same values
 			for secretName, initialSecret := range initialSecrets {
 				found := false
+
 				for _, secret := range updatedVault.Secrets {
 					if secret.Name == secretName {
 						found = true
+
 						Expect(secret.Fields).To(Equal(initialSecret.Fields), "Secret %s values should be preserved", secretName)
+
 						break
 					}
 				}
+
 				Expect(found).To(BeTrue(), "Initial secret %s should be preserved after update", secretName)
 			}
 		})
@@ -504,6 +514,7 @@ codesphere:
 			initialVault := &files.InstallVault{}
 			err := initialVault.Unmarshal(initialVaultContent)
 			Expect(err).NotTo(HaveOccurred())
+
 			initialSecrets := make(map[string]files.SecretEntry)
 			for _, secret := range initialVault.Secrets {
 				initialSecrets[secret.Name] = secret
@@ -524,20 +535,25 @@ codesphere:
 				"postgresPassword":        true,
 				"postgresReplicaPassword": true,
 			}
+
 			for secretName, initialSecret := range initialSecrets {
 				found := false
+
 				for _, secret := range updatedVault.Secrets {
 					if secret.Name == secretName {
 						found = true
+
 						Expect(secret.Fields).To(Equal(initialSecret.Fields), "Secret %s values should be preserved", secretName)
 
 						if passwordSecrets[secretName] {
 							Expect(secret.Fields).NotTo(BeNil(), "Secret %s should have fields", secretName)
 							Expect(secret.Fields.Password).NotTo(BeEmpty(), "Password for %s should not be empty", secretName)
 						}
+
 						break
 					}
 				}
+
 				Expect(found).To(BeTrue(), "Initial secret %s should be preserved after certificate regeneration", secretName)
 			}
 		})

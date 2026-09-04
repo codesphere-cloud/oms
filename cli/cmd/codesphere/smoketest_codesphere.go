@@ -45,6 +45,7 @@ func (c *SmoketestCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create Codesphere client: %w", err)
 	}
+
 	c.Opts.Client = client
 
 	return c.RunSmoketest()
@@ -132,13 +133,16 @@ func (c *SmoketestCodesphereCmd) RunSmoketest() (err error) {
 	}
 
 	var workspaceID int
+
 	deleteStep := &teststeps.DeleteWorkspaceStep{}
+
 	defer func() {
 		if err != nil {
 			log.Printf("Smoketest failed: %s", err.Error())
 		}
 
 		shouldDelete := false
+
 		for _, s := range stepsToRun {
 			if s.Name() == deleteStep.Name() {
 				shouldDelete = true
@@ -166,6 +170,7 @@ func (c *SmoketestCodesphereCmd) RunSmoketest() (err error) {
 		if step.Name() == deleteStep.Name() {
 			continue
 		}
+
 		if err = step.Run(ctx, c.Opts, &workspaceID); err != nil {
 			return err
 		}

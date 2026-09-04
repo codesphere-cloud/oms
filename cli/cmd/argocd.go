@@ -39,6 +39,7 @@ func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+
 		ociPassword = pw
 		gitPassword = os.Getenv("OMS_GIT_PASSWORD")
 	}
@@ -57,6 +58,7 @@ func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 	}
+
 	err = install.Install()
 	if err != nil {
 		return fmt.Errorf("failed to install chart ArgoCD: %w", err)
@@ -77,14 +79,19 @@ func resolveOCIPassword() (string, error) {
 	}
 
 	fmt.Print("OCI registry password/token: ")
+
 	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+
 	fmt.Println()
+
 	if err != nil {
 		return "", fmt.Errorf("failed to read password: %w", err)
 	}
+
 	if len(pw) == 0 {
 		return "", fmt.Errorf("password is required; set OMS_REGISTRY_PASSWORD or enter it when prompted")
 	}
+
 	return string(pw), nil
 }
 

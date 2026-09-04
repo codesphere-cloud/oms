@@ -123,6 +123,7 @@ func (b *GCPBootstrapper) primaryDC() *datacenter.DataCenter {
 	return b.Env.DataCenters[0]
 }
 
+// CodesphereEnvironment describes the bootstrapped Codesphere instance created in gcp.
 type CodesphereEnvironment struct {
 	ProjectID      string     `json:"project_id"`
 	ProjectTTL     string     `json:"project_ttl"`
@@ -130,6 +131,8 @@ type CodesphereEnvironment struct {
 	DNSProjectID   string     `json:"dns_project_id"`
 	Jumpbox        *node.Node `json:"jumpbox"`
 	PostgreSQLNode *node.Node `json:"postgres_node"`
+	AirGapped      bool       `json:"airgapped"`
+
 	// MultiDC bootstraps two data centers that share the PostgreSQL server but run separate
 	// Kubernetes and Ceph clusters.
 	MultiDC bool `json:"multi_dc"`

@@ -41,6 +41,7 @@ func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		return fmt.Errorf("failed to add kubernetes core scheme: %w", err)
 	}
+
 	if err := argov1alpha1.AddToScheme(scheme); err != nil {
 		return fmt.Errorf("failed to add ArgoCD scheme: %w", err)
 	}
