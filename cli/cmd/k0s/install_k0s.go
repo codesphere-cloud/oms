@@ -21,7 +21,7 @@ import (
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
-// InstallK0sCmd represents the k0s download command
+// InstallK0sCmd represents the k0s command
 type InstallK0sCmd struct {
 	cmd        *cobra.Command
 	Opts       InstallK0sOpts
@@ -29,6 +29,7 @@ type InstallK0sCmd struct {
 	FileWriter intutil.FileIO
 }
 
+// InstallK0sOpts holds the flags of the k0s install command
 type InstallK0sOpts struct {
 	*util.GlobalOptions
 	Version       string
@@ -43,6 +44,7 @@ type InstallK0sOpts struct {
 	VaultType     string
 }
 
+// RunE is the starting point for the k0s install command that executes the bootstrap logic.
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	hw := portal.NewHttpWrapper()
 	env := c.Env
@@ -53,6 +55,7 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.InstallK0s(pm, k0s, k0sctl)
 }
 
+// AddInstallCmd registers the k0s install command in the parent command
 func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s := InstallK0sCmd{
 		cmd: &cobra.Command{
@@ -79,6 +82,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
 	}
+
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", "", "Version of k0sctl to use")
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from")
@@ -103,6 +107,8 @@ const (
 	vaultSecretNameKubeconfig = "kubeConfig"
 )
 
+// InstallK0s generates a k0sctl config based on the input parameters and installs k0s
+// Returns an error if installation fails
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
 	if err := c.FileWriter.MkdirAll(c.Env.GetOmsWorkdir(), 0755); err != nil {
 		return fmt.Errorf("failed to create oms workdir: %w", err)
@@ -163,12 +169,15 @@ func (c *InstallK0sCmd) determineK0sVersion(k0s installer.K0sManager) (string, e
 	k0sVersion := c.Opts.Version
 	if k0sVersion == "" {
 		var err error
+
 		k0sVersion, err = k0s.GetLatestVersion()
 		if err != nil {
 			return "", fmt.Errorf("failed to get latest k0s version: %w", err)
 		}
+
 		log.Printf("Using latest k0s version: %s", k0sVersion)
 	}
+
 	return k0sVersion, nil
 }
 
@@ -181,27 +190,32 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 		if err := pm.ExtractDependency(defaultK0sPath, c.Opts.Force); err != nil {
 			return "", fmt.Errorf("failed to extract k0s from package: %w", err)
 		}
+
 		return pm.GetDependencyPath(defaultK0sPath), nil
 	}
 
-	k0sBinaryPath, err := k0s.Download(k0sVersion, c.Opts.Force, false)
+	k0sBinaryPath, err := k0s.Download(k0sVersion, c.Opts.Force, false, false)
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}
+
 	return k0sBinaryPath, nil
 }
 
 func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
 	log.Println("Downloading k0sctl...")
+
 	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, c.Opts.Force, false)
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}
+
 	return k0sctlPath, nil
 }
 
 func (c *InstallK0sCmd) generateK0sctlConfig(config *files.RootConfig, k0sVersion string, k0sBinaryPath string) (string, error) {
 	log.Println("Generating k0sctl configuration from install-config...")
+
 	k0sctlConfig, err := installer.GenerateK0sctlConfig(config, k0sVersion, c.Opts.SSHKeyPath, k0sBinaryPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate k0sctl config: %w", err)
@@ -218,11 +232,13 @@ func (c *InstallK0sCmd) generateK0sctlConfig(config *files.RootConfig, k0sVersio
 	}
 
 	log.Printf("Generated k0sctl configuration at %s", k0sctlConfigPath)
+
 	return k0sctlConfigPath, nil
 }
 
 func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlPath string, k0sctlConfigPath string) error {
 	log.Println("Applying k0sctl configuration to deploy k0s cluster...")
+
 	if err := k0sctl.Apply(k0sctlConfigPath, k0sctlPath, c.Opts.Force); err != nil {
 		return fmt.Errorf("failed to apply k0sctl config: %w", err)
 	}
@@ -235,10 +251,12 @@ func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlP
 
 func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0sctlConfigPath, k0sctlPath string) error {
 	log.Println("Retrieving kubeconfig from k0sctl for vault...")
+
 	kubeconfigContent, err := k0sctl.GetKubeconfig(k0sctlConfigPath, k0sctlPath)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve kubeconfig from k0sctl: %w", err)
 	}
+
 	kubeconfigContent = strings.TrimRight(kubeconfigContent, "\n\r")
 
 	vault, err := c.loadOrCreateVault()
@@ -271,6 +289,7 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	}
 
 	log.Printf("Saved kubeconfig to %s", c.Opts.Vault)
+
 	return nil
 }
 
@@ -293,5 +312,6 @@ func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}
+
 	return vault, nil
 }

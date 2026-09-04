@@ -16,14 +16,25 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// DefaultK0sVersion is the currently verified k0s version
-// Use of newer versions should work in most cases but can't be guaranteed
-const DefaultK0sVersion = "v1.31.14+k0s.0"
+const (
+	// DefaultK0sVersion is the currently verified k0s version
+	// Use of newer versions should work in most cases but can't be guaranteed
+	DefaultK0sVersion = "v1.31.14+k0s.0"
+
+	// GitHubReleaseURL is the github release page for k0s
+	GitHubReleaseURL = "https://github.com/k0sproject/k0s/releases/download"
+
+	// BinaryName is the name of target binary for oms to download to
+	BinaryName = "k0s"
+
+	// AirgapBundleName is the name of target airgap-bundle for oms to download to
+	AirgapBundleName = "k0s-airgap-bundle"
+)
 
 //mockery:generate: true
 type K0sManager interface {
 	GetLatestVersion() (string, error)
-	Download(version string, force bool, quiet bool) (string, error)
+	Download(version string, force bool, quiet bool, airgapped bool) (string, error)
 }
 
 type K0s struct {
@@ -59,7 +70,7 @@ func (k *K0s) GetLatestVersion() (string, error) {
 }
 
 // Download downloads the k0s binary for the specified version and saves it to the OMS cache dir.
-func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
+func (k *K0s) Download(version string, force, quiet, airgapped bool) (string, error) {
 	if k.Goos != "linux" || k.Goarch != "amd64" {
 		return "", fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
 	}
@@ -75,7 +86,29 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 		return "", fmt.Errorf("failed to create workdir: %w", err)
 	}
 
-	cachePath := filepath.Join(cacheDir, "k0s")
+	path, err := k.downloadBinary(version, cacheDir, force, quiet)
+	if err != nil {
+		return "", fmt.Errorf("failed to download k0s binary: %w", err)
+	}
+
+	if airgapped {
+		err = k.downloadAirgappedBundle(version, cacheDir, force, quiet)
+		if err != nil {
+			return "", fmt.Errorf("failed to download k0s-airgapped bundle: %w", err)
+		}
+	}
+
+	log.Printf("k0s binary downloaded and made executable at '%s'", path)
+
+	return path, nil
+}
+
+// downloadBinary fetches the k0s binary for the given version from the k0s GitHub
+// releases and stores it as "k0s" in cacheDir, returning the path to it.
+// If a binary is already cached and force is false, the cached binary is reused as
+// long as its version matches; otherwise it is replaced by a fresh download.
+func (k *K0s) downloadBinary(version, cacheDir string, force, quiet bool) (string, error) {
+	cachePath := filepath.Join(cacheDir, BinaryName)
 	if k.FileWriter.Exists(cachePath) && !force {
 		cachedVersion, versionErr := localBinaryVersion(cachePath)
 		if versionErr == nil && cachedVersion == version {
@@ -91,14 +124,35 @@ func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
 		io.Verbosef(!quiet, "Replacing existing k0s binary: %s", replaceReason)
 	}
 
-	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0s/releases/download/%s/k0s-%s-%s", version, version, k.Goarch)
+	downloadURL := fmt.Sprintf("%s/%s/k0s-%s-%s", GitHubReleaseURL, version, version, k.Goarch)
 
-	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, "k0s", downloadURL, quiet)
+	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, BinaryName, downloadURL, quiet)
 	if err != nil {
 		return "", err
 	}
 
-	log.Printf("k0s binary downloaded and made executable at '%s'", path)
+	return path, err
+}
 
-	return path, nil
+// downloadAirgappedBundle fetches the k0s airgap image bundle for the given version
+// from the k0s GitHub releases and stores it as tar in cacheDir
+// If a bundle for that version is already cached and force is false, the cached bundle
+// is reused; otherwise it is replaced by a fresh download.
+func (k *K0s) downloadAirgappedBundle(version, cacheDir string, force, quiet bool) error {
+	bundleName := fmt.Sprintf("%s-%s-%s-%s.tar", AirgapBundleName, version, k.Goos, k.Goarch)
+
+	cachePath := filepath.Join(cacheDir, bundleName)
+	if k.FileWriter.Exists(cachePath) && !force {
+		io.Verbosef(!quiet, "Using cached %s at %s", bundleName, cachePath)
+		return nil
+	}
+
+	downloadURL := fmt.Sprintf("%s/%s/%s", GitHubReleaseURL, version, bundleName)
+
+	err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, quiet)
+	if err != nil {
+		return err
+	}
+
+	return err
 }
