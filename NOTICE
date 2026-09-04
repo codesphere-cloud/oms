@@ -1739,9 +1739,9 @@ License URL: https://github.com/oras-project/oras-go/blob/v2.6.2/LICENSE
  
 ----------
 Module: sigs.k8s.io/controller-runtime
-Version: v0.24.1
+Version: v0.25.0
 License: Apache-2.0
-License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.24.1/LICENSE
+License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.25.0/LICENSE
  
 ----------
 Module: sigs.k8s.io/json
