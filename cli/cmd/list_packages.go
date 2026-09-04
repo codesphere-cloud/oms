@@ -33,12 +33,14 @@ func (c *ListBuildsCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	p := portal.NewPortalClient()
+
 	packages, err := p.ListBuilds(portal.CodesphereProduct, c.Opts.Sort)
 	if err != nil {
 		return fmt.Errorf("failed to list codesphere packages: %w", err)
 	}
 
 	c.PrintPackagesTable(packages)
+
 	return nil
 }
 
@@ -75,14 +77,17 @@ func (c *ListBuildsCmd) PrintPackagesTable(packages portal.Builds) {
 		}
 
 		artifacts := ""
+
 		for i, art := range build.Artifacts {
 			if i > 0 {
 				artifacts += ", "
 			}
+
 			artifacts = artifacts + art.Filename
 		}
 
 		c.TableWriter.AppendRow(table.Row{int, build.Version, build.Date, build.Hash, artifacts})
 	}
+
 	c.TableWriter.Render()
 }

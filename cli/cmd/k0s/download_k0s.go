@@ -74,6 +74,7 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 
 func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
 	version := c.Opts.Version
+
 	var err error
 	if version == "" {
 		version, err = k0s.GetLatestVersion()

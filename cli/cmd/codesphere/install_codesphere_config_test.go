@@ -21,6 +21,7 @@ import (
 var _ = Describe("prepareInstallConfig", func() {
 	It("merges multiple config files in order and returns a single parsed config path", func() {
 		tmpDir, err := os.MkdirTemp("", "install-config-merge-*")
+
 		Expect(err).ToNot(HaveOccurred())
 		defer func() {
 			Expect(os.RemoveAll(tmpDir)).To(Succeed())
@@ -78,6 +79,7 @@ pcApps:
 
 		effectiveOpts, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
 		Expect(err).ToNot(HaveOccurred())
+
 		defer cleanup()
 
 		Expect(effectiveOpts.ConfigPath).ToNot(BeEmpty())
@@ -105,6 +107,7 @@ pcApps:
 		Expect(statErr).ToNot(HaveOccurred())
 
 		cleanup()
+
 		_, statErr = os.Stat(effectiveOpts.ConfigPath)
 		Expect(os.IsNotExist(statErr)).To(BeTrue())
 	})
@@ -175,6 +178,7 @@ pcApps:
 
 		effectiveOpts, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
 		Expect(err).ToNot(HaveOccurred())
+
 		defer cleanup()
 
 		Expect(effectiveOpts.Vault).To(Equal(vaultPath))
@@ -216,6 +220,7 @@ codesphere:
 
 		effectiveOpts, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
 		Expect(err).ToNot(HaveOccurred())
+
 		defer cleanup()
 
 		Expect(effectiveOpts.Configs).To(Equal([]string{configPath}))
@@ -228,9 +233,11 @@ func installCodesphereSopsAndAgeAvailable() bool {
 	if _, err := exec.LookPath("sops"); err != nil {
 		return false
 	}
+
 	if _, err := exec.LookPath("age-keygen"); err != nil {
 		return false
 	}
+
 	return true
 }
 

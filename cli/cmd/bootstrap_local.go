@@ -48,7 +48,6 @@ type BootstrapLocalCmd struct {
 
 func (c *BootstrapLocalCmd) RunE(_ *cobra.Command, args []string) error {
 	err := c.BootstrapLocal()
-
 	if err != nil {
 		return fmt.Errorf("failed to bootstrap: %w", err)
 	}
@@ -120,6 +119,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	if c.CodesphereEnv.InstallConfigPath == "" {
 		c.CodesphereEnv.InstallConfigPath = filepath.Join(c.CodesphereEnv.InstallDir, "config.yaml")
 	}
+
 	if c.CodesphereEnv.SecretsFilePath == "" {
 		c.CodesphereEnv.SecretsFilePath = filepath.Join(c.CodesphereEnv.InstallDir, "prod.vault.yaml")
 	}
@@ -147,13 +147,16 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
+
 	fw := intutil.NewFilesystemWriter()
+
 	kubeClient, restConfig, err := c.GetKubeClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize Kubernetes client: %w", err)
 	}
 
 	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, c.CodesphereEnv)
+
 	return bs.Bootstrap()
 }
 
@@ -162,16 +165,23 @@ func (c *BootstrapLocalCmd) resolveRegistryPassword() error {
 		c.CodesphereEnv.RegistryPassword = pw
 		return nil
 	}
+
 	fmt.Print("Registry password: ")
+
 	pw, err := term.ReadPassword(int(os.Stdin.Fd()))
+
 	fmt.Println()
+
 	if err != nil {
 		return fmt.Errorf("failed to read registry password: %w", err)
 	}
+
 	if len(pw) == 0 {
 		return fmt.Errorf("registry password is required; set OMS_REGISTRY_PASSWORD or enter it when prompted")
 	}
+
 	c.CodesphereEnv.RegistryPassword = string(pw)
+
 	return nil
 }
 
@@ -203,7 +213,9 @@ func (c *BootstrapLocalCmd) ConfirmLocalBootstrapWarning() error {
 	}
 
 	fmt.Print("\nType 'yes' to continue: ")
+
 	reader := bufio.NewReader(os.Stdin)
+
 	input, err := reader.ReadString('\n')
 	if err != nil && !errors.Is(err, stdio.EOF) {
 		return fmt.Errorf("failed to read confirmation: %w", err)
@@ -243,6 +255,7 @@ func (c *BootstrapLocalCmd) GetKubeClient(ctx context.Context) (ctrlclient.Clien
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to initialize Kubernetes client: %w", err)
 	}
+
 	return kubeClient, kubeConfig, nil
 }
 

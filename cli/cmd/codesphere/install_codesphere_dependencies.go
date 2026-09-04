@@ -37,6 +37,7 @@ func (c *InstallCodesphereDepenciesCmd) RunE(_ *cobra.Command, _ []string) error
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
+
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -107,6 +108,7 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install dependencies: %w", err)
 	}
+
 	return nil
 }
 
@@ -125,17 +127,21 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 		if err != nil {
 			return fmt.Errorf("failed to load vault data and REST config: %w", err)
 		}
+
 		registryPassword := ""
 		if secret := installVault.GetSecret(files.SecretRegistryPassword); secret != nil && secret.Fields != nil {
 			registryPassword = secret.Fields.Password
 		}
+
 		if registryPassword == "" {
 			return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
 		}
+
 		registryURL := opts.ArgoCDRegistryURL
 		if registryURL == "" && cfg.Registry != nil {
 			registryURL = cfg.Registry.Server + "/codesphere-cloud/charts"
 		}
+
 		argoCDInstall, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
 			Version:        opts.ArgoCDVersion,
 			DatacenterId:   fmt.Sprintf("%d", cfg.Datacenter.ID),
@@ -151,6 +157,7 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 		if err != nil {
 			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 		}
+
 		install = argocdinstaller.NewAppInstaller(argocdinstaller.AppInstallerConfig{
 			Config:       cfg,
 			Vault:        installVault,
@@ -159,18 +166,22 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 			Installer:    argoCDInstall,
 			PCAppsValues: opts.PCAppsValues,
 		})
+
 		return nil
 	}); err != nil {
 		return err
 	}
+
 	if err := stlog.Substep("Install ArgoCD", install.InstallArgoCD); err != nil {
 		return err
 	}
+
 	if err := stlog.Substep("Sync vault secret", func() error {
 		return install.SyncVaultSecret(context.Background())
 	}); err != nil {
 		return err
 	}
+
 	if err := stlog.Substep("Install pc-apps", func() error {
 		return install.InstallPCApps(context.Background(), bomConfig)
 	}); err != nil {

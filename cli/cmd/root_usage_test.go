@@ -19,6 +19,7 @@ var _ = Describe("command usage on errors", func() {
 		root.SetErr(&output)
 		root.SetArgs(args)
 		err := root.Execute()
+
 		return output.String(), err
 	}
 
@@ -34,6 +35,7 @@ var _ = Describe("command usage on errors", func() {
 		child.Flags().String("config", "", "installation config")
 		root.AddCommand(child)
 		silenceUsageOnRunErrors(root)
+
 		return root, child
 	}
 

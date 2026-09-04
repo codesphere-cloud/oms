@@ -54,6 +54,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 
 		It("calls GetOmsWorkdir and fails on package operations", func() {
 			c.Opts.Package = "non-existent-package.tar.gz"
+
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir")
 
 			err := c.RunE(nil, []string{})
@@ -107,6 +108,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			// Create a temporary file for the Dockerfile generation to work with
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
+
 			defer func() { _ = os.Remove(tempFile.Name()) }()
 			defer func() { _ = tempFile.Close() }()
 
@@ -127,6 +129,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
 			c.Opts.Force = true
+
 			mockPackageManager.EXPECT().Extract(true).Return(nil)
 			mockPackageManager.EXPECT().GetFullImageTag("").Return("", errors.New("failed to extract package to workdir: extraction failed"))
 
@@ -143,6 +146,7 @@ var _ = Describe("ExtendBaseimageCmd", func() {
 			// Create a temporary file for the Dockerfile generation to work with
 			tempFile, err := os.CreateTemp("", "dockerfile-test-*")
 			Expect(err).To(BeNil())
+
 			defer func() { _ = os.Remove(tempFile.Name()) }()
 			defer func() { _ = tempFile.Close() }()
 
@@ -174,6 +178,7 @@ var _ = Describe("AddExtendBaseimageCmd", func() {
 		cmd.AddExtendBaseimageCmd(parentCmd, globalOpts)
 
 		var baseimagCmd *cobra.Command
+
 		for _, c := range parentCmd.Commands() {
 			if c.Use == "baseimage" {
 				baseimagCmd = c
