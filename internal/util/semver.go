@@ -9,7 +9,7 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// InstallVersionAtLeast returns true if the codesphere installVersion is higher than minimum.
+// InstallVersionAtLeast returns true if the codesphere installVersion is higher or equal to minimum.
 func InstallVersionAtLeast(installVersion, minimum string) bool {
 	var version string
 	for _, prefix := range []string{"codesphere-", "codesphere/"} {
