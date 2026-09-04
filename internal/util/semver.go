@@ -11,15 +11,17 @@ import (
 
 // InstallVersionAtLeast returns true if the codesphere installVersion is higher or equal to minimum.
 func InstallVersionAtLeast(installVersion, minimum string) bool {
-	var version string
-	for _, prefix := range []string{"codesphere-", "codesphere/"} {
-		version = strings.TrimPrefix(installVersion, prefix)
+	var v string
+	for _, prefix := range []string{"codesphere-"} {
+		v = strings.TrimPrefix(installVersion, prefix)
 	}
 
-	version = semver.Canonical(version)
-	if version == "" {
+	parsedVersion := semver.Canonical(v)
+	if parsedVersion == "" {
 		return false
 	}
 
-	return semver.Compare(version, minimum) >= 0
+	compare := semver.Compare(parsedVersion, minimum) >= 0
+
+	return compare
 }
