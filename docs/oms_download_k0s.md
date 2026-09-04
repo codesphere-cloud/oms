@@ -31,6 +31,7 @@ $ oms download k0s --force
 ### Options
 
 ```
+  -a, --airgapped        Downloads the airgapped bundle for that version
   -f, --force            Force download even if k0s binary exists
   -h, --help             help for k0s
   -q, --quiet            Suppress progress output during download
