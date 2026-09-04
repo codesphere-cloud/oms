@@ -491,7 +491,7 @@ func (b *GCPBootstrapper) applyPcAppsDefaults() {
 
 func (b *GCPBootstrapper) applyManagedServiceDefaults() {
 	if b.Env.InstallConfig.Codesphere.ManagedServices == nil {
-		b.Env.InstallConfig.Codesphere.ManagedServices = []files.ManagedServiceConfig{
+		ms := []files.ManagedServiceConfig{
 			{Name: "postgres", Version: "v1"},
 			{Name: "babelfish", Version: "v1"},
 			{Name: "s3", Version: "v1"},
@@ -500,8 +500,13 @@ func (b *GCPBootstrapper) applyManagedServiceDefaults() {
 			{Name: "opensearch", Version: "v0"},
 			{Name: "valkey", Version: "v0"},
 			{Name: "rabbitmq", Version: "v0"},
-			{Name: "url-shortener", Version: "v0"},
 		}
+
+		if util.InstallVersionAtLeast(b.Env.InstallVersion, "v1.106.0") {
+			ms = append(ms, files.ManagedServiceConfig{Name: "url-shortener", Version: "v0"})
+		}
+
+		b.Env.InstallConfig.Codesphere.ManagedServices = ms
 	}
 }
 
