@@ -28,6 +28,7 @@ var _ = Describe("BootstrapGcpRestartVMsCmd", func() {
 		c, _, err := parentCmd.Find([]string{"restart-vms"})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c).NotTo(BeNil())
+
 		return c
 	}
 
