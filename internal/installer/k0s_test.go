@@ -57,7 +57,7 @@ var _ = Describe("K0s", func() {
 		})
 
 		It("implements K0sManager interface", func() {
-			var manager = installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
+			manager := installer.NewK0s(mockHttp, mockEnv, mockFileWriter)
 			Expect(manager).ToNot(BeNil())
 		})
 	})
@@ -113,7 +113,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "windows"
 				k0sImpl.Goarch = "amd64"
 
-				_, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				_, err := k0s.Download("v1.29.1+k0s.0", false, false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("windows/amd64"))
@@ -123,7 +123,7 @@ var _ = Describe("K0s", func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "arm64"
 
-				_, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				_, err := k0s.Download("v1.29.1+k0s.0", false, false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("codesphere installation is only supported on Linux amd64"))
 				Expect(err.Error()).To(ContainSubstring("linux/arm64"))
@@ -148,13 +148,14 @@ var _ = Describe("K0s", func() {
 				// Create a real file for the test
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
 
-				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -164,6 +165,7 @@ var _ = Describe("K0s", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
+
 				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 			})
@@ -175,7 +177,7 @@ var _ = Describe("K0s", func() {
 				Expect(err).ToNot(HaveOccurred())
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(true)
 
-				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -196,7 +198,7 @@ var _ = Describe("K0s", func() {
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
 
-				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -211,13 +213,14 @@ var _ = Describe("K0s", func() {
 				// Create a real file for the test
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
 
-				path, err := k0s.Download("v1.29.1+k0s.0", true, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", true, false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -227,6 +230,7 @@ var _ = Describe("K0s", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
 				k0sImpl.Goarch = "amd64"
+
 				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
@@ -235,9 +239,9 @@ var _ = Describe("K0s", func() {
 			It("should fail when file creation fails", func() {
 				mockFileWriter.EXPECT().Create(k0sPath).Return(nil, errors.New("permission denied"))
 
-				_, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				_, err := k0s.Download("v1.29.1+k0s.0", false, false, false)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to create k0s binary file"))
+				Expect(err.Error()).To(ContainSubstring("failed to download k0s binary"))
 				Expect(err.Error()).To(ContainSubstring("permission denied"))
 			})
 
@@ -245,6 +249,7 @@ var _ = Describe("K0s", func() {
 				// Create a mock file for the test
 				mockFile, err := os.CreateTemp("", "k0s-test")
 				Expect(err).ToNot(HaveOccurred())
+
 				defer func() {
 					_ = os.Remove(mockFile.Name())
 				}()
@@ -253,7 +258,7 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().Create(k0sPath).Return(mockFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", mockFile, false).Return(errors.New("download failed"))
 
-				_, err = k0s.Download("v1.29.1+k0s.0", false, false)
+				_, err = k0s.Download("v1.29.1+k0s.0", false, false, false)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to download k0s binary"))
 				Expect(err.Error()).To(ContainSubstring("download failed"))
@@ -266,13 +271,14 @@ var _ = Describe("K0s", func() {
 
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
 
-				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})
@@ -281,6 +287,7 @@ var _ = Describe("K0s", func() {
 		Context("URL construction", func() {
 			BeforeEach(func() {
 				k0sImpl.Goos = "linux"
+
 				mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
 			})
@@ -297,13 +304,14 @@ var _ = Describe("K0s", func() {
 				// Create a real file for the test
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
+
 				defer util.CloseFileIgnoreError(realFile)
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath, os.FileMode(0755)).Return(nil)
 
-				path, err := k0s.Download("v1.29.1+k0s.0", false, false)
+				path, err := k0s.Download("v1.29.1+k0s.0", false, false, false)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(k0sPath))
 			})

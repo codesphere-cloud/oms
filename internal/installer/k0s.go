@@ -136,6 +136,7 @@ func (k *K0s) downloadBinary(version, cacheDir string, force, quiet bool) (strin
 // is reused; otherwise it is replaced by a fresh download.
 func (k *K0s) downloadAirgappedBundle(version, cacheDir string, force, quiet bool) error {
 	bundleName := fmt.Sprintf("%s-%s-%s-%s.tar", AirgapBundleName, version, k.Goos, k.Goarch)
+
 	cachePath := filepath.Join(cacheDir, bundleName)
 	if k.FileWriter.Exists(cachePath) && !force {
 		io.Verbosef(!quiet, "Using cached %s at %s", bundleName, cachePath)

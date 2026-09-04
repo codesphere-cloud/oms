@@ -75,6 +75,7 @@ func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, instal
 			return
 		}
 	}
+
 	host := K0sctlHost{
 		Role: role,
 		SSH: K0sctlSSH{
