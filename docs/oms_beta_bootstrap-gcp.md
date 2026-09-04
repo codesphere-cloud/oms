@@ -74,6 +74,7 @@ oms beta bootstrap-gcp [flags]
       --prometheus-remote-write-user string       Prometheus remote write username (optional)
       --recover-config                            Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                             GCP Region (default: europe-west4) (default "europe-west4")
+      --registry string                           Alternative container registry used for Codesphere images and charts
       --registry-type string                      Container registry type to use (options: local-container, artifact-registry) (default: local-container) (default "local-container")
       --registry-user string                      Custom Registry username (only for GitHub registry type) (optional)
       --remote-oms-binary string                  Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)

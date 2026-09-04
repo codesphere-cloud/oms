@@ -100,6 +100,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ContainerRegistryURL, "registry", "", "Alternative container registry used for Codesphere images and charts")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: local-container)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
