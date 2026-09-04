@@ -99,3 +99,30 @@ var _ = Describe("BuildDataCenters", func() {
 		Expect(gcp.BuildDataCenters(env)[0].Name).To(Equal("dev"))
 	})
 })
+
+var _ = Describe("DataCenterDNSRecordNames", func() {
+	It("returns the single-DC records for one data center", func() {
+		dcs := gcp.BuildDataCenters(&gcp.CodesphereEnvironment{BaseDomain: "example.com"}, nil)
+
+		Expect(gcp.DataCenterDNSRecordNames("example.com", dcs)).To(ConsistOf(gcp.GetDNSRecordNames("example.com")))
+	})
+
+	It("shares the platform names and scopes the workspace names per data center", func() {
+		dcs := gcp.BuildDataCenters(&gcp.CodesphereEnvironment{MultiDC: true, BaseDomain: "example.com"}, nil)
+
+		Expect(gcp.DataCenterDNSRecordNames("example.com", dcs)).To(Equal([]gcp.DNSRecordName{
+			{Name: "cs.example.com.", Rtype: "A"},
+			{Name: "*.cs.example.com.", Rtype: "A"},
+			{Name: "1.ws.example.com.", Rtype: "A"},
+			{Name: "*.1.ws.example.com.", Rtype: "A"},
+			{Name: "*.1.ssh.cs.example.com.", Rtype: "A"},
+			{Name: "1.cs.example.com.", Rtype: "A"},
+			{Name: "*.1.cs.example.com.", Rtype: "A"},
+			{Name: "2.ws.example.com.", Rtype: "A"},
+			{Name: "*.2.ws.example.com.", Rtype: "A"},
+			{Name: "*.2.ssh.cs.example.com.", Rtype: "A"},
+			{Name: "2.cs.example.com.", Rtype: "A"},
+			{Name: "*.2.cs.example.com.", Rtype: "A"},
+		}))
+	})
+})
