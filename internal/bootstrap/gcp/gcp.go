@@ -1003,7 +1003,7 @@ func (b *GCPBootstrapper) codespherePackageFilename() string {
 }
 
 func (b *GCPBootstrapper) codespherePackageArchiveName() string {
-		return "installer-lite.tar.gz"
+	return "installer-lite.tar.gz"
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
