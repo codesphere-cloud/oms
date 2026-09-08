@@ -929,9 +929,9 @@ License URL: https://github.com/kr/fs/blob/v0.1.0/LICENSE
  
 ----------
 Module: github.com/kube-object-storage/lib-bucket-provisioner/pkg/apis/objectbucket.io
-Version: v0.0.0-20221122204822-d1a8c34382f1
+Version: v0.0.0-20260420161730-5164e3746489
 License: Apache-2.0
-License URL: https://github.com/kube-object-storage/lib-bucket-provisioner/blob/d1a8c34382f1/LICENSE
+License URL: https://github.com/kube-object-storage/lib-bucket-provisioner/blob/5164e3746489/LICENSE
  
 ----------
 Module: github.com/kubernetes-csi/external-snapshotter/client/v8/apis/volumesnapshot/v1
@@ -1181,9 +1181,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260908095802-39803e285e9e
+Version: v0.0.0-20260908154113-0ea78f9c1249
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/39803e285e9e/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/0ea78f9c1249/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
