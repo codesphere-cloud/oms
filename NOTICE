@@ -1469,9 +1469,9 @@ License URL: https://cs.opensource.google/go/x/net/+/v0.58.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
-Version: v0.36.0
+Version: v0.37.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/oauth2/+/v0.36.0:LICENSE
+License URL: https://cs.opensource.google/go/x/oauth2/+/v0.37.0:LICENSE
  
 ----------
 Module: golang.org/x/sync
