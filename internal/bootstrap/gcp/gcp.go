@@ -25,16 +25,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
-	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/dns/v1"
-)
-
-type RegistryType string
-
-const (
-	RegistryTypeLocalContainer   RegistryType = "local-container"
-	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
-	RegistryTypeGitHub           RegistryType = "github"
 )
 
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
@@ -536,10 +527,7 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 		b.Env.InstallHash = build.Hash
 	}
 
-	requiredFilename := "installer.tar.gz"
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		requiredFilename = "installer-lite.tar.gz"
-	}
+	requiredFilename := "installer-lite.tar.gz"
 	filenames := []string{}
 	// Validate required file exists in package artifacts
 	for _, artifact := range build.Artifacts {
@@ -550,25 +538,6 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 	}
 
 	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
-}
-
-// validateGitHubParams checks if the GitHub credentials are fully specified if GitHub registry is selected
-func (b *GCPBootstrapper) validateGitHubParams() error {
-	if b.Env.GitHubTeamSlug != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubPAT == "" {
-		return fmt.Errorf("GitHub PAT is required to extract public keys of GitHub team members")
-	}
-
-	ghTeamParams := []string{b.Env.GitHubTeamSlug, b.Env.GitHubTeamOrg}
-	if slices.Contains(ghTeamParams, "") && strings.Join(ghTeamParams, "") != "" {
-		return fmt.Errorf("GitHub team parameters are not fully specified (all or none of GitHubTeamSlug, GitHubTeamOrg must be set)")
-	}
-
-	ghAppParams := []string{b.Env.GitHubAppName, b.Env.GitHubAppClientID, b.Env.GitHubAppClientSecret}
-	if slices.Contains(ghAppParams, "") && strings.Join(ghAppParams, "") != "" {
-		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GitHubAppClientID, GitHubAppClientSecret must be set)")
-	}
-
-	return nil
 }
 
 // validateGitProviderParams checks that git provider credentials are fully specified (both client ID and secret, or neither)
@@ -637,23 +606,6 @@ func (b *GCPBootstrapper) validateTelemetryExportParams() error {
 	}
 	if b.Env.CentralOtelPassword != "" && b.Env.CentralOtelUsername == "" {
 		return fmt.Errorf("central OTel password is set but username is missing")
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
-	repoName := "codesphere-registry"
-
-	repo, err := b.GCPClient.GetArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
-	if err == nil && repo != nil {
-		b.Env.InstallConfig.Registry.Server = repo.GetRegistryUri()
-		return nil
-	}
-
-	repo, err = b.GCPClient.CreateArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
-	if err != nil || repo == nil {
-		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
 	}
 
 	return nil
@@ -949,95 +901,6 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	return nil
 }
 
-// EnsureLocalContainerRegistry installs a docker registry on the postgres node to speed up image loading time
-func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
-	localRegistryServer := b.Env.PostgreSQLNode.GetInternalIP() + ":5000"
-
-	// Figure out if registry is already running
-	b.stlog.Logf("Checking if local container registry is already running on postgres node")
-	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
-	err := b.Env.PostgreSQLNode.RunSSHCommand("root", checkCommand)
-	registryUsername := ""
-	registryPassword := ""
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
-		registryUsername = s.Fields.Password
-	}
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
-		registryPassword = s.Fields.Password
-	}
-	if err == nil && b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server == localRegistryServer &&
-		registryUsername != "" && registryPassword != "" {
-		b.stlog.Logf("Local container registry already running on postgres node")
-		return nil
-	}
-
-	b.Env.InstallConfig.Registry.Server = localRegistryServer
-	registryUsername = "custom-registry"
-	registryPassword = shortuuid.New()
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: registryUsername}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
-
-	commands := []string{
-		"apt-get update",
-		"apt-get install -y podman apache2-utils",
-		"htpasswd -bBc /root/registry.password " + registryUsername + " " + registryPassword,
-		"openssl req -newkey rsa:4096 -nodes -sha256 -keyout /root/registry.key -x509 -days 365 -out /root/registry.crt -subj \"/C=DE/ST=BW/L=Karlsruhe/O=Codesphere/CN=" + b.Env.PostgreSQLNode.GetInternalIP() + "\" -addext \"subjectAltName = DNS:postgres,IP:" + b.Env.PostgreSQLNode.GetInternalIP() + "\"",
-		"podman rm -f registry || true",
-		`podman run -d \
-		--restart=always --name registry --net=host\
-		--env REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
-		--env REGISTRY_AUTH=htpasswd \
-		--env REGISTRY_AUTH_HTPASSWD_REALM='Registry Realm' \
-		--env REGISTRY_AUTH_HTPASSWD_PATH=/auth/registry.password \
-		-v /root/registry.password:/auth/registry.password \
-		--env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
-		--env REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
-		-v /root/registry.crt:/certs/registry.crt \
-		-v /root/registry.key:/certs/registry.key \
-		registry:2`,
-		`mkdir -p /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server,
-		`cp /root/registry.crt /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server + `/ca.crt`,
-	}
-	for _, cmd := range commands {
-		b.stlog.Logf("Running command on postgres node: %s", util.Truncate(cmd, 12))
-		err := b.Env.PostgreSQLNode.RunSSHCommand("root", cmd)
-		if err != nil {
-			return fmt.Errorf("failed to run command on postgres node: %w", err)
-		}
-	}
-
-	allNodes := append(b.Env.ControlPlaneNodes, b.Env.CephNodes...)
-	for _, node := range allNodes {
-		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
-		err := b.Env.PostgreSQLNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
-		if err != nil {
-			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.GetInternalIP(), err)
-		}
-		err = node.RunSSHCommand("root", "update-ca-certificates")
-		if err != nil {
-			return fmt.Errorf("failed to update CA certificates on node %s: %w", node.GetInternalIP(), err)
-		}
-		err = node.RunSSHCommand("root", "systemctl restart docker.service || true") // docker is probably not yet installed
-		if err != nil {
-			return fmt.Errorf("failed to restart docker service on node %s: %w", node.GetInternalIP(), err)
-		}
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
-	if b.Env.GitHubPAT == "" {
-		return fmt.Errorf("GitHub PAT is not set")
-	}
-	b.Env.InstallConfig.Registry.Server = "ghcr.io"
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
-	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
-	b.Env.InstallConfig.Registry.LoadContainerImages = false
-	return nil
-}
-
 func (b *GCPBootstrapper) EnsureDNSRecords() error {
 	gcpProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
@@ -1140,11 +1003,7 @@ func (b *GCPBootstrapper) codespherePackageFilename() string {
 }
 
 func (b *GCPBootstrapper) codespherePackageArchiveName() string {
-	if b.Env.RegistryType == RegistryTypeGitHub {
 		return "installer-lite.tar.gz"
-	}
-
-	return "installer.tar.gz"
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
