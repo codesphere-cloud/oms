@@ -329,15 +329,15 @@ License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.6.0/LICEN
  
 ----------
 Module: github.com/cyphar/filepath-securejoin
-Version: v0.6.1
+Version: v0.7.0
 License: MPL-2.0
-License URL: https://github.com/cyphar/filepath-securejoin/blob/v0.6.1/COPYING.md
+License URL: https://github.com/cyphar/filepath-securejoin/blob/v0.7.0/COPYING.md
  
 ----------
 Module: github.com/cyphar/filepath-securejoin
-Version: v0.6.1
+Version: v0.7.0
 License: BSD-3-Clause
-License URL: https://github.com/cyphar/filepath-securejoin/blob/v0.6.1/COPYING.md
+License URL: https://github.com/cyphar/filepath-securejoin/blob/v0.7.0/COPYING.md
  
 ----------
 Module: github.com/davecgh/go-spew/spew
@@ -431,9 +431,9 @@ License URL: https://github.com/felixge/httpsnoop/blob/v1.1.0/LICENSE.txt
  
 ----------
 Module: github.com/fluxcd/cli-utils/pkg
-Version: v1.2.1
+Version: v1.2.2
 License: Apache-2.0
-License URL: https://github.com/fluxcd/cli-utils/blob/v1.2.1/LICENSE
+License URL: https://github.com/fluxcd/cli-utils/blob/v1.2.2/LICENSE
  
 ----------
 Module: github.com/fsnotify/fsnotify
@@ -1589,9 +1589,9 @@ License URL: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
  
 ----------
 Module: helm.sh/helm/v4
-Version: v4.2.4
+Version: v4.3.0
 License: Apache-2.0
-License URL: https://github.com/helm/helm/blob/v4.2.4/LICENSE
+License URL: https://github.com/helm/helm/blob/v4.3.0/LICENSE
  
 ----------
 Module: k8s.io/api
