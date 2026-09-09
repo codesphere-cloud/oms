@@ -73,8 +73,10 @@ var _ = Describe("AppInstaller", func() {
 		}}
 
 		Expect(install.InstallPCApps(context.Background(), bomConfig)).To(Succeed())
+
 		app := &argov1alpha1.Application{}
 		Expect(kubeClient.Get(context.Background(), client.ObjectKey{Name: "pc-applications", Namespace: "argocd"}, app)).To(Succeed())
+
 		values := map[string]any{}
 		Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &values)).To(Succeed())
 		Expect(values).To(HaveKeyWithValue("global", map[string]any{"imageRegistry": "registry.example.com/mirror"}))

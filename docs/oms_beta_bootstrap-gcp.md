@@ -75,8 +75,9 @@ oms beta bootstrap-gcp [flags]
       --recover-config                            Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                             GCP Region (default: europe-west4) (default "europe-west4")
       --registry string                           Alternative container registry used for Codesphere images and charts
+      --registry-password string                  Password or token for direct access to an alternative registry
       --registry-type string                      Container registry type to use (options: local-container, artifact-registry) (default: local-container) (default "local-container")
-      --registry-user string                      Custom Registry username (only for GitHub registry type) (optional)
+      --registry-user string                      Username for direct registry access
       --remote-oms-binary string                  Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)
       --root-disk-size int                        Instance root disk size in GB (default: 50) (default 50)
       --secrets-dir string                        Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")
@@ -95,4 +96,3 @@ oms beta bootstrap-gcp [flags]
 * [oms beta bootstrap-gcp cleanup](oms_beta_bootstrap-gcp_cleanup.md)	 - Clean up GCP infrastructure created by bootstrap-gcp
 * [oms beta bootstrap-gcp postconfig](oms_beta_bootstrap-gcp_postconfig.md)	 - Run post-configuration steps for GCP bootstrapping
 * [oms beta bootstrap-gcp restart-vms](oms_beta_bootstrap-gcp_restart-vms.md)	 - Restart stopped or terminated GCP VMs
-

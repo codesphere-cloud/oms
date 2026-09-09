@@ -118,6 +118,7 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 	if err != nil {
 		return fmt.Errorf("failed to parse installer BOM: %w", err)
 	}
+
 	configuredRegistryURL := ""
 	if cfg.Registry != nil {
 		configuredRegistryURL = strings.TrimSuffix(strings.TrimPrefix(cfg.Registry.Server, "oci://"), "/")

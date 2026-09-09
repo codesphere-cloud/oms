@@ -240,6 +240,7 @@ func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*argocd.AppInstaller, err
 	if b.installerBOM != nil {
 		version = ""
 	}
+
 	registryURL := ""
 	if b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server != "" {
 		registryURL = strings.TrimSuffix(b.Env.InstallConfig.Registry.Server, "/") + "/codesphere-cloud/charts"
@@ -520,17 +521,21 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 	}
 
 	b.Env.InstallConfig = b.icg.GetInstallConfig()
+
 	configuredRegistry := strings.TrimSuffix(strings.TrimPrefix(b.Env.ContainerRegistryURL, "oci://"), "/")
 	if configuredRegistry != "" {
 		if b.Env.InstallConfig.Registry == nil {
 			b.Env.InstallConfig.Registry = &files.RegistryConfig{}
 		}
+
 		b.Env.InstallConfig.Registry.Server = configuredRegistry
 	}
+
 	effectiveRegistry := ""
 	if b.Env.InstallConfig.Registry != nil {
 		effectiveRegistry = strings.TrimSuffix(strings.TrimPrefix(b.Env.InstallConfig.Registry.Server, "oci://"), "/")
 	}
+
 	if b.installerBOM != nil && effectiveRegistry != "" && effectiveRegistry != "ghcr.io" {
 		if err := b.installerBOM.UseRegistry(effectiveRegistry); err != nil {
 			return fmt.Errorf("failed to configure installer BOM registry: %w", err)

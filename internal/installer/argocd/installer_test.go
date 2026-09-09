@@ -187,7 +187,9 @@ var _ = Describe("Installer.Install", func() {
 				if !ok {
 					return false
 				}
+
 				dex, ok := argoValues["dex"].(map[string]interface{})
+
 				return cfg.ChartName == "oci://ghcr.io/codesphere-cloud/charts/argocd" &&
 					cfg.RepoURL == "" && cfg.Version == "1.2.3" &&
 					ok && dex["enabled"] == false && cfg.Values["dex"] == nil
