@@ -18,13 +18,16 @@ func IsNotFoundError(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	if status.Code(err) == codes.NotFound {
 		return true
 	}
+
 	var apiErr *googleapi.Error
 	if errors.As(err, &apiErr) {
 		return apiErr.Code == 404
 	}
+
 	return false
 }
 
@@ -33,10 +36,13 @@ func IsSpotCapacityError(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	if status.Code(err) == codes.ResourceExhausted {
 		return true
 	}
+
 	errStr := strings.ToLower(err.Error())
+
 	return strings.Contains(errStr, "zone_resource_pool_exhausted") ||
 		strings.Contains(errStr, "unsupported_operation") ||
 		strings.Contains(errStr, "stockout") ||
@@ -48,5 +54,6 @@ func IsAlreadyExistsError(err error) bool {
 	if err == nil {
 		return false
 	}
+
 	return status.Code(err) == codes.AlreadyExists || strings.Contains(err.Error(), "already exists")
 }

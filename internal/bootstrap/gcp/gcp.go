@@ -34,7 +34,9 @@ func CheckOMSManagedLabel(labels map[string]string) bool {
 	if labels == nil {
 		return false
 	}
+
 	value, exists := labels[OMSManagedLabel]
+
 	return exists && value == "true"
 }
 
@@ -360,20 +362,10 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure DNS records: %w", err)
 	}
 
-	err = b.stlog.Step("Generate k0s config script", b.GenerateK0sConfigScript)
-	if err != nil {
-		return fmt.Errorf("failed to generate k0s config script: %w", err)
-	}
-
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
-		err = b.stlog.Step("Install k0s", b.InstallK0s)
+		err = b.stlog.Step("Install K0s", b.EnsureK0s)
 		if err != nil {
 			return fmt.Errorf("failed to install k0s: %w", err)
-		}
-
-		err = b.stlog.Step("Wait for k0s nodes", b.WaitForK0sNodes)
-		if err != nil {
-			return fmt.Errorf("failed waiting for k0s nodes: %w", err)
 		}
 
 		err = b.stlog.Step("Install Codesphere", b.InstallCodesphere)
@@ -410,10 +402,12 @@ func (b *GCPBootstrapper) createTestUser() error {
 	if b.Env.InstallConfig == nil {
 		return fmt.Errorf("install config not found in bootstrap environment")
 	}
+
 	pgPasswordSecret := b.icg.GetVault().GetSecret(files.SecretPostgresPassword)
 	if pgPasswordSecret == nil || pgPasswordSecret.Fields == nil {
 		return fmt.Errorf("postgres admin password not found in vault")
 	}
+
 	pgPassword := pgPasswordSecret.Fields.Password
 
 	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
@@ -430,8 +424,10 @@ func (b *GCPBootstrapper) createTestUser() error {
 	}
 
 	testuser.LogAndPersistResult(result, b.Env.OmsWorkdir)
+
 	return nil
 }
+
 func (b *GCPBootstrapper) ValidateInput() error {
 	if b.Env.GoogleACMEIssuer && b.Env.ACMEStaging {
 		return fmt.Errorf("acme-staging cannot be combined with google-acme-issuer")
@@ -499,6 +495,7 @@ func (b *GCPBootstrapper) validateClusterAdminEmail() error {
 	if err != nil {
 		return fmt.Errorf("invalid cluster admin email: %w", err)
 	}
+
 	b.Env.ClusterAdminEmail = email
 
 	return nil
@@ -510,14 +507,18 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 		if b.Env.InstallVersion != "" || b.Env.InstallHash != "" {
 			return fmt.Errorf("cannot specify both install-local and install-version/install-hash")
 		}
+
 		if !b.fw.Exists(b.Env.InstallLocal) {
 			return fmt.Errorf("local installer package not found at path: %s", b.Env.InstallLocal)
 		}
+
 		return nil
 	}
+
 	if b.Env.InstallVersion == "" {
 		return nil
 	}
+
 	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
@@ -556,6 +557,7 @@ func (b *GCPBootstrapper) validateGitProviderParams() error {
 		if p.id != "" && p.secret == "" {
 			return fmt.Errorf("%s client ID is set but client secret is missing", p.name)
 		}
+
 		if p.secret != "" && p.id == "" {
 			return fmt.Errorf("%s client secret is set but client ID is missing", p.name)
 		}
@@ -590,9 +592,11 @@ func (b *GCPBootstrapper) validatePrometheusRemoteWriteParams() error {
 	if b.Env.PrometheusRemoteWriteURL != "" && (b.Env.PrometheusRemoteWriteUser == "" || b.Env.PrometheusRemoteWritePassword == "") {
 		return fmt.Errorf("prometheus remote write username and password must both be set when remote write URL is specified")
 	}
+
 	if (b.Env.PrometheusRemoteWriteUser != "" || b.Env.PrometheusRemoteWritePassword != "") && b.Env.PrometheusRemoteWriteURL == "" {
 		return fmt.Errorf("prometheus remote write URL is required when remote write username or password is set")
 	}
+
 	return nil
 }
 
@@ -604,6 +608,7 @@ func (b *GCPBootstrapper) validateTelemetryExportParams() error {
 	if b.Env.CentralOtelUsername != "" && b.Env.CentralOtelPassword == "" {
 		return fmt.Errorf("central OTel username is set but password is missing")
 	}
+
 	if b.Env.CentralOtelPassword != "" && b.Env.CentralOtelUsername == "" {
 		return fmt.Errorf("central OTel password is set but username is missing")
 	}
@@ -616,10 +621,12 @@ func (b *GCPBootstrapper) ensureDnsPermissions() error {
 	if b.Env.DNSProjectID == "" {
 		dnsProject = b.Env.ProjectID
 	}
+
 	err := b.ensureIAMRoleWithRetry(dnsProject, "cloud-controller", b.Env.ProjectID, []string{"roles/dns.admin"})
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -657,6 +664,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		TargetTags:   []string{"ssh"},
 		Description:  protoString("Allow external SSH to Jumpbox"),
 	}
+
 	err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, sshRule)
 	if err != nil {
 		return fmt.Errorf("failed to create jumpbox ssh firewall rule: %w", err)
@@ -674,6 +682,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		SourceRanges: []string{"10.10.0.0/20"},
 		Description:  protoString("Allow all internal traffic"),
 	}
+
 	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, internalRule)
 	if err != nil {
 		return fmt.Errorf("failed to create internal firewall rule: %w", err)
@@ -691,6 +700,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		DestinationRanges: []string{"0.0.0.0/0"},
 		Description:       protoString("Allow all egress"),
 	}
+
 	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, egressRule)
 	if err != nil {
 		return fmt.Errorf("failed to create egress firewall rule: %w", err)
@@ -708,6 +718,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		SourceRanges: []string{"0.0.0.0/0"},
 		Description:  protoString("Allow HTTP/HTTPS ingress"),
 	}
+
 	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, webRule)
 	if err != nil {
 		return fmt.Errorf("failed to create web firewall rule: %w", err)
@@ -726,6 +737,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 		TargetTags:   []string{"postgres"},
 		Description:  protoString("Allow external access to PostgreSQL"),
 	}
+
 	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, postgresRule)
 	if err != nil {
 		return fmt.Errorf("failed to create postgres firewall rule: %w", err)
@@ -738,14 +750,17 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 // controllers of the cluster (gateway and public gateway) and the SSH workspace proxy.
 func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 	var err error
+
 	b.Env.GatewayIP, err = b.EnsureExternalIP("gateway")
 	if err != nil {
 		return fmt.Errorf("failed to ensure gateway IP: %w", err)
 	}
+
 	b.Env.PublicGatewayIP, err = b.EnsureExternalIP("public-gateway")
 	if err != nil {
 		return fmt.Errorf("failed to ensure public gateway IP: %w", err)
 	}
+
 	b.Env.SshProxyIP, err = b.EnsureExternalIP("ssh-proxy")
 	if err != nil {
 		return fmt.Errorf("failed to ensure ssh proxy IP: %w", err)
@@ -822,9 +837,11 @@ func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
 		if err == nil {
 			break
 		}
+
 		if i == 2 {
 			return fmt.Errorf("failed to enable root login on %s: %w", node.GetName(), err)
 		}
+
 		b.stlog.LogRetry()
 		b.Time.Sleep(10 * time.Second)
 	}
@@ -864,6 +881,7 @@ func (b *GCPBootstrapper) EnsureOmsInstalled() (err error) {
 		if err != nil {
 			return fmt.Errorf("failed to make local OMS binary executable on jumpbox: %w", err)
 		}
+
 		return nil
 	}
 
@@ -890,6 +908,7 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 				return fmt.Errorf("failed to configure inotify watches on %s: %w", node.GetName(), err)
 			}
 		}
+
 		if !node.HasMemoryMapConfigured() {
 			err := node.ConfigureMemoryMap()
 			if err != nil {
@@ -908,6 +927,7 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 	}
 
 	zoneName := b.Env.DNSZoneName
+
 	err := b.GCPClient.EnsureDNSManagedZone(gcpProject, zoneName, b.Env.BaseDomain+".", "Codesphere DNS zone")
 	if err != nil {
 		return fmt.Errorf("failed to ensure DNS managed zone: %w", err)
@@ -966,33 +986,6 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 	return nil
 }
 
-// InstallK0s deploys k0s with the native OMS installer and stores its
-// kubeconfig in the encrypted install vault for the remaining installer steps.
-func (b *GCPBootstrapper) InstallK0s() error {
-	// Reuse matching cached binaries and let k0sctl reconcile normally. Without
-	// --force, an unchanged cluster remains untouched on bootstrap retries.
-	installCmd := fmt.Sprintf("oms install k0s --version %s --install-config /etc/codesphere/config.yaml --vault %s --vault-priv-key %s/age_key.txt",
-		installer.DefaultK0sVersion, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), b.Env.SecretsDir)
-	if err := b.Env.Jumpbox.RunSSHCommand("root", installCmd); err != nil {
-		return fmt.Errorf("failed to install k0s from jumpbox: %w", err)
-	}
-
-	return nil
-}
-
-// WaitForK0sNodes restores the readiness barrier from the TypeScript
-// Kubernetes setup. k0sctl apply completing is not sufficient for the
-// Codesphere charts: all schedulable nodes must be Ready before gateway
-// controllers and their admission webhooks are installed.
-func (b *GCPBootstrapper) WaitForK0sNodes() error {
-	const command = "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m"
-	if err := b.Env.ControlPlaneNodes[0].RunSSHCommand("root", command); err != nil {
-		return fmt.Errorf("k0s nodes did not become ready: %w", err)
-	}
-
-	return nil
-}
-
 func (b *GCPBootstrapper) codespherePackageFilename() string {
 	packageFilename := b.codespherePackageArchiveName()
 	if b.Env.InstallLocal != "" {
@@ -1025,9 +1018,11 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 	if b.Env.InstallHash == "" {
 		return fmt.Errorf("install hash must be set when install version is set")
 	}
+
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
 		b.codespherePackageArchiveName(), b.Env.InstallHash, b.Env.InstallVersion)
+
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
@@ -1040,6 +1035,7 @@ func (b *GCPBootstrapper) runInstallCommand(packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere...")
 	installCmd := fmt.Sprintf("oms install codesphere -c /etc/codesphere/config.yaml -k %s/age_key.txt --vault %s -p %s%s",
 		b.Env.SecretsDir, filepath.Join(b.Env.SecretsDir, "prod.vault.yaml"), packageFilename, b.generateSkipStepsArg())
+
 	return b.Env.Jumpbox.RunSSHCommand("root", installCmd)
 }
 
@@ -1052,116 +1048,10 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 	if b.Env.RegistryType == RegistryTypeGitHub {
 		skipSteps = util.AppendUnique(skipSteps, "load-container-images")
 	}
+
 	if len(skipSteps) == 0 {
 		return ""
 	}
 
 	return " -s " + strings.Join(skipSteps, ",")
-}
-func (b *GCPBootstrapper) GenerateK0sConfigScript() error {
-	script := `#!/bin/bash
-
-cat <<EOF > cloud.conf
-[Global]
-project-id = "$PROJECT_ID"
-EOF
-
-cat <<EOF >> cc-deployment.yaml
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: cloud-controller-manager
-  namespace: kube-system
-  labels:
-    component: cloud-controller-manager
-spec:
-  selector:
-    matchLabels:
-      component: cloud-controller-manager
-  template:
-    metadata:
-      labels:
-        component: cloud-controller-manager
-    spec:
-      serviceAccountName: cloud-controller-manager
-      containers:
-      - name: cloud-controller-manager
-        image: k8scloudprovidergcp/cloud-controller-manager:latest
-        command:
-        - /usr/local/bin/cloud-controller-manager
-        args:
-        - --v=5
-        - --cloud-provider=gce
-        - --cloud-config=/etc/gce/cloud.conf
-        - --leader-elect-resource-name=k0s-gcp-ccm
-        - --use-service-account-credentials=true
-        - --controllers=cloud-node,cloud-node-lifecycle,service
-        - --allocate-node-cidrs=false
-        - --configure-cloud-routes=false
-        volumeMounts:
-        - name: cloud-config-volume
-          mountPath: /etc/gce
-          readOnly: true
-      volumes:
-      - name: cloud-config-volume
-        configMap:
-          name: cloud-config
-      tolerations:
-      - key: node.cloudprovider.kubernetes.io/uninitialized
-        value: "true"
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/master
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/control-plane
-        effect: NoSchedule
-EOF
-
-KUBECTL="/etc/codesphere/deps/kubernetes/files/k0s kubectl"
-$KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system
-echo alias kubectl=\"$KUBECTL\" >> /root/.bashrc
-echo alias k=\"$KUBECTL\" >> /root/.bashrc
-
-$KUBECTL apply -f https://raw.githubusercontent.com/kubernetes/cloud-provider-gcp/refs/tags/providers/v0.28.2/deploy/packages/default/manifest.yaml
-
-$KUBECTL apply -f cc-deployment.yaml
-
-# set loadBalancerIP for public-gateway-controller and gateway-controller
-$KUBECTL patch svc public-gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + b.Env.PublicGatewayIP + `'"}}'
-$KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'` + b.Env.GatewayIP + `'"}}'
-
-sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
-
-ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[1].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
-
-ssh -o StrictHostKeyChecking=no root@` + b.Env.ControlPlaneNodes[2].GetInternalIP() + ` "sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker"
-
-systemctl daemon-reload
-systemctl restart k0scontroller
-`
-	// Probably we need to enable the cloud provider plugin in k0s configuration.
-	// --enable-cloud-provider on worker nodes systemd file /etc/systemd/system/k0sworker.service
-	// in addition on the first node: /etc/systemd/system/k0scontroller.service the flag --enable-cloud-provider
-
-	err := b.fw.WriteFile("configure-k0s.sh", []byte(script), 0755)
-	if err != nil {
-		return fmt.Errorf("failed to write configure-k0s.sh: %w", err)
-	}
-	err = b.Env.ControlPlaneNodes[0].NodeClient.CopyFile(b.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh")
-	if err != nil {
-		return fmt.Errorf("failed to copy configure-k0s.sh to control plane node: %w", err)
-	}
-	err = b.Env.ControlPlaneNodes[0].RunSSHCommand("root", "chmod +x /root/configure-k0s.sh")
-	if err != nil {
-		return fmt.Errorf("failed to make configure-k0s.sh executable on control plane node: %w", err)
-	}
-	return nil
-}
-
-func (b *GCPBootstrapper) RunK0sConfigScript() error {
-	err := b.Env.ControlPlaneNodes[0].RunSSHCommand("root", "/root/configure-k0s.sh")
-	if err != nil {
-		return fmt.Errorf("failed to install Codesphere from jumpbox: %w", err)
-	}
-
-	return nil
 }

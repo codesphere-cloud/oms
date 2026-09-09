@@ -34,26 +34,26 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/argoproj/argo-cd/v3 v3.5.2
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.36.0
+	github.com/codesphere-cloud/cs-go v1.38.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/distribution/reference v0.6.0
 	github.com/getsops/sops/v3 v3.13.3
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/google/go-containerregistry v0.22.0
+	github.com/google/go-containerregistry v0.22.1
 	github.com/jedib0t/go-pretty/v6 v6.8.3
 	github.com/lib/pq v1.12.3
 	github.com/lithammer/shortuuid v3.0.0+incompatible
-	github.com/onsi/ginkgo/v2 v2.32.1
+	github.com/onsi/ginkgo/v2 v2.32.2
 	github.com/onsi/gomega v1.43.0
 	github.com/pkg/sftp v1.13.11
-	github.com/rook/rook/pkg/apis v0.0.0-20260902163555-844566b0af98
+	github.com/rook/rook/pkg/apis v0.0.0-20260908181407-bd54fc7aee27
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
-	golang.org/x/crypto v0.56.0
-	golang.org/x/mod v0.40.0
-	golang.org/x/oauth2 v0.36.0
-	golang.org/x/term v0.45.0
+	golang.org/x/crypto v0.57.0
+	golang.org/x/mod v0.41.0
+	golang.org/x/oauth2 v0.37.0
+	golang.org/x/term v0.46.0
 	google.golang.org/api v0.297.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
@@ -433,7 +433,7 @@ require (
 	github.com/knadh/koanf/providers/structs v1.0.0 // indirect
 	github.com/knadh/koanf/v2 v2.3.5 // indirect
 	github.com/kr/fs v0.1.0 // indirect
-	github.com/kube-object-storage/lib-bucket-provisioner v0.0.0-20221122204822-d1a8c34382f1 // indirect
+	github.com/kube-object-storage/lib-bucket-provisioner v0.0.0-20260420161730-5164e3746489 // indirect
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0 // indirect
 	github.com/kulti/thelper v0.7.1 // indirect
 	github.com/kunwardeep/paralleltest v1.0.15 // indirect
@@ -634,9 +634,9 @@ require (
 	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260811152304-ee035b5b010f // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect

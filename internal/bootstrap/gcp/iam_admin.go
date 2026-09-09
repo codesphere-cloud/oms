@@ -145,6 +145,7 @@ func (b *GCPBootstrapper) EnsureBilling() error {
 	if err != nil {
 		return fmt.Errorf("failed to get billing info: %w", err)
 	}
+
 	if bi.BillingEnabled && bi.BillingAccountName == b.Env.BillingAccount {
 		return nil
 	}
@@ -195,6 +196,7 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 		if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
 			existingRegPwd = s.Fields.Password
 		}
+
 		if !newSa && existingRegPwd != "" {
 			return nil
 		}
@@ -206,8 +208,10 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 				if retries > 3 {
 					return fmt.Errorf("failed to create service account key: %w", err)
 				}
+
 				b.stlog.LogRetry()
 				b.Time.Sleep(5 * time.Second)
+
 				continue
 			}
 
