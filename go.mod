@@ -43,7 +43,7 @@ require (
 	github.com/jedib0t/go-pretty/v6 v6.8.3
 	github.com/lib/pq v1.12.3
 	github.com/lithammer/shortuuid v3.0.0+incompatible
-	github.com/onsi/ginkgo/v2 v2.32.1
+	github.com/onsi/ginkgo/v2 v2.32.2
 	github.com/onsi/gomega v1.43.0
 	github.com/pkg/sftp v1.13.11
 	github.com/rook/rook/pkg/apis v0.0.0-20260908181407-bd54fc7aee27
