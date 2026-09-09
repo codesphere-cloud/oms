@@ -117,7 +117,8 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUsername, "registry-user", "", "Username for direct registry access")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryPassword, "registry-password", "", "Password or token for direct access to an alternative registry")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ContainerRegistryURL, "registry", "", "Alternative container registry used for Codesphere images and charts")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "github", "Container registry type to use (options: local-container, artifact-registry, github) (default: github)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
@@ -197,6 +198,17 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	c.CodesphereEnv.RegistryType = gcp.RegistryType(c.InputRegistryType)
 
 	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
+	if c.CodesphereEnv.ContainerRegistryURL != "" {
+		c.CodesphereEnv.RegistryType = gcp.RegistryTypeExternal
+		if c.CodesphereEnv.RegistryUsername == "" || c.CodesphereEnv.RegistryPassword == "" {
+			return fmt.Errorf("registry-user and registry-password must be set when using an alternative registry")
+		}
+	} else if c.CodesphereEnv.GitHubPAT != "" {
+		c.CodesphereEnv.RegistryType = gcp.RegistryTypeGitHub
+		if c.CodesphereEnv.RegistryUsername == "" {
+			return fmt.Errorf("registry-user must be set when using GitHub registry type")
+		}
+	}
 
 	if c.cmd.Flags().Changed("experiments") {
 		if c.cmd.Flags().Changed("internal-flags") {
@@ -232,8 +244,8 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml"
 
-	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
-		log.Printf("Images are pulled directly from GHCR, so container images are not loaded from the package.")
+	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub || gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeExternal {
+		log.Printf("You configured direct registry access. Make sure to use a lite package, as VM root disk sizes are reduced.")
 
 		installCmd += " -s load-container-images"
 	}

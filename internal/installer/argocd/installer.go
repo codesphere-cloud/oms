@@ -93,6 +93,7 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 func (a *Installer) Install() error {
 	chartName := "argo-cd"
 	usingBOMChart := false
+
 	if a.BOM != nil && a.RepoURL == "" && a.Version == "" {
 		if chart, ok := a.BOM.GetChart("argocd"); ok {
 			chartName = "oci://" + chart.Name()

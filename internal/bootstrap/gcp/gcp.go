@@ -163,7 +163,6 @@ type CodesphereEnvironment struct {
 	GitHubAppName                 string       `json:"-"`
 	GitHubTeamOrg                 string       `json:"github_team_org"`
 	GitHubTeamSlug                string       `json:"github_team_slug"`
-	RegistryUser                  string       `json:"-"`
 	InternalFlags                 []string     `json:"internal"`
 	PreviewFlags                  []string     `json:"preview"`
 	FeatureFlags                  []string     `json:"feature_flags"`
@@ -369,8 +368,8 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		}
 	}
 
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		err = b.stlog.Step("Ensure GitHub access configured", b.EnsureGitHubAccessConfigured)
+	if b.Env.RegistryType == RegistryTypeGitHub || b.Env.RegistryType == RegistryTypeExternal {
+		err = b.stlog.Step("Ensure registry access configured", b.EnsureRegistryAccessConfigured)
 		if err != nil {
 			return fmt.Errorf("failed to update install config: %w", err)
 		}
@@ -1084,7 +1083,7 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 	skipSteps := []string{"kubernetes"}
 	skipSteps = util.AppendUnique(skipSteps, b.Env.InstallSkipSteps...)
 
-	if b.Env.RegistryType == RegistryTypeGitHub {
+	if b.Env.RegistryType == RegistryTypeGitHub || b.Env.RegistryType == RegistryTypeExternal {
 		skipSteps = util.AppendUnique(skipSteps, "load-container-images")
 	}
 
