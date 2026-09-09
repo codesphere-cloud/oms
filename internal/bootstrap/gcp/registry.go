@@ -13,8 +13,12 @@ import (
 	"github.com/lithammer/shortuuid"
 )
 
+// RegistryType selects which container registry the installation pulls its images from.
 type RegistryType string
 
+// The registry types supported by the GCP bootstrapper. RegistryTypeLocalContainer runs a
+// local registry, RegistryTypeArtifactRegistry uses a GCP Artifact Registry
+// repository, and RegistryTypeGitHub pulls straight from ghcr.io.
 const (
 	RegistryTypeLocalContainer   RegistryType = "local-container"
 	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
@@ -40,6 +44,8 @@ func (b *GCPBootstrapper) validateGitHubParams() error {
 	return nil
 }
 
+// EnsureArtifactRegistry ensures the project's GCP Artifact Registry repository exists and
+// points the install config's registry server at it
 func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	repoName := "codesphere-registry"
 
@@ -64,16 +70,20 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 	// Figure out if registry is already running
 	b.stlog.Logf("Checking if local container registry is already running on the jumpbox")
+
 	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
 	err := registryNode.RunSSHCommand("root", checkCommand)
 	registryUsername := ""
 	registryPassword := ""
+
 	if s := b.icg.GetVault().GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
 		registryUsername = s.Fields.Password
 	}
+
 	if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
 		registryPassword = s.Fields.Password
 	}
+
 	if err == nil && b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server == localRegistryServer &&
 		registryUsername != "" && registryPassword != "" {
 		b.stlog.Logf("Local container registry already running on the jumpbox")
@@ -83,6 +93,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	b.Env.InstallConfig.Registry.Server = localRegistryServer
 	registryUsername = "custom-registry"
 	registryPassword = shortuuid.New()
+
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: registryUsername}})
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
 
@@ -109,6 +120,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	}
 	for _, cmd := range commands {
 		b.stlog.Logf("Running command on the jumpbox: %s", util.Truncate(cmd, 12))
+
 		err := registryNode.RunSSHCommand("root", cmd)
 		if err != nil {
 			return fmt.Errorf("failed to run command on the jumpbox: %w", err)
@@ -118,14 +130,17 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	allNodes := append(b.Env.ControlPlaneNodes, b.Env.CephNodes...)
 	for _, node := range allNodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
+
 		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
 		if err != nil {
 			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.GetInternalIP(), err)
 		}
+
 		err = node.RunSSHCommand("root", "update-ca-certificates")
 		if err != nil {
 			return fmt.Errorf("failed to update CA certificates on node %s: %w", node.GetInternalIP(), err)
 		}
+
 		err = node.RunSSHCommand("root", "systemctl restart docker.service || true") // docker is probably not yet installed
 		if err != nil {
 			return fmt.Errorf("failed to restart docker service on node %s: %w", node.GetInternalIP(), err)
@@ -135,14 +150,18 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	return nil
 }
 
+// EnsureGitHubAccessConfigured points the install config at ghcr.io and stores the GitHub
+// credentials in the vault. The cluster pulls images from GHCR directly
 func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.GitHubPAT == "" {
 		return fmt.Errorf("GitHub PAT is not set")
 	}
+
 	b.Env.InstallConfig.Registry.Server = "ghcr.io"
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
 	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
 	b.Env.InstallConfig.Registry.LoadContainerImages = false
+
 	return nil
 }
