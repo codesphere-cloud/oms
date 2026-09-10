@@ -128,6 +128,13 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 	// Values derived from the install config form the base; an explicit pcApps block in
 	// config.yaml wins over them, and the --pc-apps-values files win over both.
 	values := util.DeepMergeMaps(installer.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault), i.cfg.Config.PcApps)
+	if i.cfg.Config.Registry != nil && i.cfg.Config.Registry.Server != "" {
+		values = util.DeepMergeMaps(map[string]any{
+			"global": map[string]any{
+				"imageRegistry": i.cfg.Config.Registry.Server,
+			},
+		}, values)
+	}
 
 	pcApps, err := installer.NewPcAppsFromBom(
 		i.cfg.KubeClient,

@@ -48,6 +48,10 @@ const (
 	// bootstrapping only configures GitHub access and installs the lite
 	// package.
 	RegistryTypeGitHub RegistryType = "github"
+
+	// RegistryTypeExternal pulls images directly from a user-provided registry
+	// with explicit credentials and installs the lite package.
+	RegistryTypeExternal RegistryType = "external"
 )
 
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
@@ -161,7 +165,6 @@ type CodesphereEnvironment struct {
 	GitHubAppName                 string       `json:"-"`
 	GitHubTeamOrg                 string       `json:"github_team_org"`
 	GitHubTeamSlug                string       `json:"github_team_slug"`
-	RegistryUser                  string       `json:"-"`
 	InternalFlags                 []string     `json:"internal"`
 	PreviewFlags                  []string     `json:"preview"`
 	FeatureFlags                  []string     `json:"feature_flags"`
@@ -355,8 +358,8 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		}
 	}
 
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		err = b.stlog.Step("Ensure GitHub access configured", b.EnsureGitHubAccessConfigured)
+	if b.Env.RegistryType == RegistryTypeGitHub || b.Env.RegistryType == RegistryTypeExternal {
+		err = b.stlog.Step("Ensure registry access configured", b.EnsureRegistryAccessConfigured)
 		if err != nil {
 			return fmt.Errorf("failed to update install config: %w", err)
 		}
@@ -551,7 +554,7 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 	}
 
 	requiredFilename := "installer.tar.gz"
-	if b.Env.RegistryType == RegistryTypeGitHub {
+	if b.Env.RegistryType == RegistryTypeGitHub || b.Env.RegistryType == RegistryTypeExternal {
 		requiredFilename = "installer-lite.tar.gz"
 	}
 
@@ -1068,14 +1071,35 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
-	if b.Env.GitHubPAT == "" {
-		return fmt.Errorf("GitHub PAT is not set")
+// EnsureRegistryAccessConfigured stores credentials and configures direct access
+// to either GitHub Container Registry or an explicitly selected external registry.
+func (b *GCPBootstrapper) EnsureRegistryAccessConfigured() error {
+	registryPassword := b.Env.RegistryPassword
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		if b.Env.GitHubPAT == "" {
+			return fmt.Errorf("GitHub PAT is not set")
+		}
+
+		registryPassword = b.Env.GitHubPAT
+	} else {
+		registryURL := strings.TrimSuffix(strings.TrimPrefix(b.Env.ContainerRegistryURL, "oci://"), "/")
+		if registryURL == "" {
+			return fmt.Errorf("external registry URL is not set")
+		}
+
+		b.Env.InstallConfig.Registry.Server = registryURL
 	}
 
-	b.Env.InstallConfig.Registry.Server = "ghcr.io"
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
+	if b.Env.RegistryUsername == "" {
+		return fmt.Errorf("registry username is not set")
+	}
+
+	if registryPassword == "" {
+		return fmt.Errorf("registry password is not set")
+	}
+
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUsername}})
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
 	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
 	b.Env.InstallConfig.Registry.LoadContainerImages = false
 
@@ -1158,7 +1182,7 @@ func (b *GCPBootstrapper) codespherePackageFilename() string {
 }
 
 func (b *GCPBootstrapper) codespherePackageArchiveName() string {
-	if b.Env.RegistryType == RegistryTypeGitHub {
+	if b.Env.RegistryType == RegistryTypeGitHub || b.Env.RegistryType == RegistryTypeExternal {
 		return "installer-lite.tar.gz"
 	}
 
@@ -1211,7 +1235,7 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 	skipSteps := []string{"kubernetes"}
 	skipSteps = util.AppendUnique(skipSteps, b.Env.InstallSkipSteps...)
 
-	if b.Env.RegistryType == RegistryTypeGitHub {
+	if b.Env.RegistryType == RegistryTypeGitHub || b.Env.RegistryType == RegistryTypeExternal {
 		skipSteps = util.AppendUnique(skipSteps, "load-container-images")
 	}
 

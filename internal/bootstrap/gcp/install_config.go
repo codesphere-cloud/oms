@@ -124,7 +124,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
 
 	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
-	if b.Env.RegistryType != RegistryTypeGitHub {
+	if b.Env.RegistryType != RegistryTypeGitHub && b.Env.RegistryType != RegistryTypeExternal {
 		b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
 		b.Env.InstallConfig.Registry.LoadContainerImages = true
 	}

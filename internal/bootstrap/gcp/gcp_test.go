@@ -977,20 +977,36 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
-	Describe("EnsureGitHubAccessConfigured", func() {
+	Describe("EnsureRegistryAccessConfigured", func() {
 		BeforeEach(func() {
 			csEnv.GitHubPAT = "fake-pat"
-			csEnv.RegistryUser = "custom-registry"
+			csEnv.RegistryUsername = "custom-registry"
+			csEnv.RegistryType = gcp.RegistryTypeGitHub
 		})
 		It("sets configuration options in installconfig", func() {
 			vault := &files.InstallVault{}
 			icg.EXPECT().GetVault().Return(vault)
 
-			err := bs.EnsureGitHubAccessConfigured()
+			err := bs.EnsureRegistryAccessConfigured()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("ghcr.io"))
-			Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal(csEnv.RegistryUser))
+			Expect(bs.Env.InstallConfig.Registry.Server).To(BeEmpty())
+			Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal(csEnv.RegistryUsername))
 			Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal(csEnv.GitHubPAT))
+			Expect(bs.Env.InstallConfig.Registry.LoadContainerImages).To(BeFalse())
+			Expect(bs.Env.InstallConfig.Registry.ReplaceImagesInBom).To(BeFalse())
+		})
+
+		It("uses explicit credentials for an external registry", func() {
+			csEnv.ContainerRegistryURL = "oci://registry.example.com/mirror/"
+			csEnv.RegistryType = gcp.RegistryTypeExternal
+			csEnv.RegistryPassword = "registry-password"
+			vault := &files.InstallVault{}
+			icg.EXPECT().GetVault().Return(vault)
+
+			Expect(bs.EnsureRegistryAccessConfigured()).To(Succeed())
+			Expect(bs.Env.InstallConfig.Registry.Server).To(Equal("registry.example.com/mirror"))
+			Expect(vault.GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal(csEnv.RegistryUsername))
+			Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal(csEnv.RegistryPassword))
 			Expect(bs.Env.InstallConfig.Registry.LoadContainerImages).To(BeFalse())
 			Expect(bs.Env.InstallConfig.Registry.ReplaceImagesInBom).To(BeFalse())
 		})
@@ -1000,9 +1016,20 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv.GitHubPAT = ""
 			})
 			It("returns an error", func() {
-				err := bs.EnsureGitHubAccessConfigured()
+				err := bs.EnsureRegistryAccessConfigured()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("GitHub PAT is not set"))
+			})
+		})
+
+		Context("When an external registry password is missing", func() {
+			BeforeEach(func() {
+				csEnv.ContainerRegistryURL = "registry.example.com"
+				csEnv.RegistryType = gcp.RegistryTypeExternal
+			})
+
+			It("returns an error", func() {
+				Expect(bs.EnsureRegistryAccessConfigured()).To(MatchError("registry password is not set"))
 			})
 		})
 	})
@@ -1381,7 +1408,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Context("Direct GitHub access", func() {
 				BeforeEach(func() {
 					csEnv.GitHubPAT = "fake-pat"
-					csEnv.RegistryUser = "fake-user"
+					csEnv.RegistryUsername = "fake-user"
 					csEnv.RegistryType = "github"
 				})
 				It("downloads and installs lite package", func() {
@@ -1394,6 +1421,20 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
+				})
+			})
+
+			Context("External registry access", func() {
+				BeforeEach(func() {
+					csEnv.RegistryType = gcp.RegistryTypeExternal
+				})
+
+				It("downloads and installs the lite package", func() {
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes,load-container-images").Return(nil)
+
+					Expect(bs.InstallCodesphere()).To(Succeed())
 				})
 			})
 
