@@ -144,12 +144,7 @@ func (b *GCPBootstrapper) primaryDC() *datacenter.DataCenter {
 // data centers' Ceph and k0s nodes.
 func (b *GCPBootstrapper) allNodes() []*node.Node {
 	nodes := []*node.Node{b.Env.Jumpbox, b.Env.PostgreSQLNode}
-	for _, dc := range b.Env.DataCenters {
-		nodes = append(nodes, dc.ControlPlaneNodes...)
-		nodes = append(nodes, dc.CephNodes...)
-	}
-
-	return nodes
+	return append(nodes, b.clusterNodes()...)
 }
 
 // clusterNodes returns every Ceph and k0s node of all data centers, i.e. all nodes except the
