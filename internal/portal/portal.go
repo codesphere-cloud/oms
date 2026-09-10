@@ -95,25 +95,24 @@ func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
 	}
 
 	if resp.StatusCode >= 300 {
-		log.Printf("Non-2xx response received from OMS-Portal (%s) - Status: %d", c.Env.GetOmsPortalApi(), resp.StatusCode)
-
-		healthErr := c.GetHealth()
-		if healthErr != nil {
-			healthErr = fmt.Errorf("OMS-Portal healthcheck failed: %w", healthErr)
-			log.Println(healthErr.Error())
-			log.Println("Please check if the OMS-Portal URL is correct and instance is healthy and reachable at:", c.Env.GetOmsPortalApi())
-
-			return healthErr
-		}
-
-		healthyPortalLog := fmt.Sprintf("OMS-Portal is healthy and reachable, but returned an error response - Status: %d", resp.StatusCode)
+		var respBody string
 		if resp.Body != nil {
-			respBody, _ := io.ReadAll(resp.Body)
-			healthyPortalLog = fmt.Sprintf("%s, Body: %s", healthyPortalLog, string(respBody))
+			body, _ := io.ReadAll(resp.Body)
+			respBody = strings.TrimSpace(string(body))
 		}
-		log.Println(healthyPortalLog)
 
-		return fmt.Errorf("%s", healthyPortalLog)
+		log.Printf("Non-2xx response received from OMS-Portal (%s) - Status: %d, Body: %s", c.Env.GetOmsPortalApi(), resp.StatusCode, respBody)
+
+		if healthErr := c.GetHealth(); healthErr != nil {
+			log.Printf("OMS-Portal healthcheck also failed: %s", healthErr)
+			log.Println("Please check if the OMS-Portal URL is correct and instance is healthy and reachable at:", c.Env.GetOmsPortalApi())
+		}
+
+		if respBody == "" {
+			return fmt.Errorf("OMS-Portal returned status %d with an empty response body", resp.StatusCode)
+		}
+
+		return fmt.Errorf("OMS-Portal returned status %d: %s", resp.StatusCode, respBody)
 	}
 
 	return nil
