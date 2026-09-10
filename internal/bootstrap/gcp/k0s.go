@@ -37,7 +37,9 @@ func (b *GCPBootstrapper) EnsureK0s() error {
 // every data center to that data center's first control plane node.
 // Returns an error if a script can't be generated, written, copied.
 func (b *GCPBootstrapper) GenerateK0sConfigScript() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	for _, dc := range b.Env.DataCenters {
 		if err := b.generateK0sConfigScript(dc); err != nil {
@@ -164,7 +166,9 @@ systemctl restart k0scontroller
 // plane node. It requires that data center's Codesphere install to have completed, since the
 // script patches the gateway services the install creates.
 func (b *GCPBootstrapper) RunK0sConfigScript() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	for _, dc := range b.Env.DataCenters {
 		err := b.stlog.Step(dc.StepName("Run k0s config script"), func() error {
@@ -191,7 +195,9 @@ func (b *GCPBootstrapper) runK0sConfigScript(dc *datacenter.DataCenter) error {
 // gets its own cluster, so every run stores its kubeconfig in that data center's encrypted
 // install vault for the remaining installer steps.
 func (b *GCPBootstrapper) InstallK0s() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	for _, dc := range b.Env.DataCenters {
 		err := b.stlog.Step(dc.StepName("Install k0s"), func() error {
@@ -222,7 +228,9 @@ func (b *GCPBootstrapper) installK0s(dc *datacenter.DataCenter) error {
 // Codesphere charts: all schedulable nodes must be Ready before gateway
 // controllers and their admission webhooks are installed.
 func (b *GCPBootstrapper) WaitForK0sNodes() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	for _, dc := range b.Env.DataCenters {
 		err := b.stlog.Step(dc.StepName("Wait for k0s nodes"), func() error {

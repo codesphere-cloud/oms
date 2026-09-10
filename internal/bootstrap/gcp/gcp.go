@@ -451,7 +451,9 @@ func (b *GCPBootstrapper) Bootstrap() error {
 // createTestUser creates a test user in the shared PostgreSQL instance using the testuser package
 // and logs the credentials. The user's team is homed in the primary data center.
 func (b *GCPBootstrapper) createTestUser() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	if b.Env.PostgreSQLNode == nil {
 		return fmt.Errorf("postgres node not found in bootstrap environment")
@@ -853,7 +855,9 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 // EnsureGatewayIPAddresses reserves the static external IP addresses of every data center: the
 // ingress controllers of its cluster (gateway and public gateway) and its SSH workspace proxy.
 func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	for _, dc := range b.Env.DataCenters {
 		if err := b.ensureGatewayIPAddresses(dc); err != nil {
@@ -922,7 +926,9 @@ func (b *GCPBootstrapper) EnsureExternalIP(name string) (string, error) {
 }
 
 func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	for _, node := range b.allNodes() {
 		err := b.stlog.Substep(fmt.Sprintf("Ensuring root login enabled on %s", node.GetName()), func() error {
@@ -1013,7 +1019,9 @@ func (b *GCPBootstrapper) EnsureOmsInstalled() (err error) {
 }
 
 func (b *GCPBootstrapper) EnsureHostsConfigured() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.clusterNodes()...)
 
@@ -1215,7 +1223,9 @@ func (b *GCPBootstrapper) EnsureDNSRecords() error {
 // ascending data center order. The order matters: the primary data center's install creates the
 // database, roles and schema that the secondary ones reuse.
 func (b *GCPBootstrapper) InstallCodesphere() error {
-	b.ensureDataCenters()
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
 
 	if err := b.ensureCodespherePackageOnJumpbox(); err != nil {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
