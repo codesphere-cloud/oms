@@ -121,7 +121,7 @@ var _ = Describe("PortalClient", func() {
 			})
 
 			Context("OMS-Portal Health Check is OK", func() {
-				It("returns no response and an error showing portal is healthy", func() {
+				It("returns no response and an error containing the response body", func() {
 					mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 						func(req *http.Request) (*http.Response, error) {
 							if strings.Contains(req.URL.Path, "health") {
@@ -135,6 +135,7 @@ var _ = Describe("PortalClient", func() {
 
 							return &http.Response{
 								StatusCode: http.StatusNotFound,
+								Body:       io.NopCloser(strings.NewReader("owner must be a valid email address")),
 							}, nil
 						})
 
@@ -143,17 +144,19 @@ var _ = Describe("PortalClient", func() {
 
 					resp, err := client.AuthorizedHttpRequest(testRequest)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("OMS-Portal is healthy and reachable, but returned an error response"))
+					Expect(err.Error()).To(ContainSubstring("OMS-Portal returned status 404"))
+					Expect(err.Error()).To(ContainSubstring("owner must be a valid email address"))
 					Expect(resp).To(BeNil())
 				})
 			})
 
 			Context("OMS-Portal Health Check is not OK", func() {
-				It("returns no response and an error showing portal is unhealthy", func() {
+				It("still returns the response body from the original request", func() {
 					mockHttpClient.EXPECT().Do(mock.Anything).RunAndReturn(
 						func(req *http.Request) (*http.Response, error) {
 							return &http.Response{
 								StatusCode: http.StatusNotFound,
+								Body:       io.NopCloser(strings.NewReader("owner must be a valid email address")),
 							}, nil
 						})
 
@@ -162,7 +165,8 @@ var _ = Describe("PortalClient", func() {
 
 					resp, err := client.AuthorizedHttpRequest(testRequest)
 					Expect(err).To(HaveOccurred())
-					Expect(err.Error()).To(ContainSubstring("OMS-Portal healthcheck failed"))
+					Expect(err.Error()).To(ContainSubstring("OMS-Portal returned status 404"))
+					Expect(err.Error()).To(ContainSubstring("owner must be a valid email address"))
 					Expect(resp).To(BeNil())
 				})
 			})
