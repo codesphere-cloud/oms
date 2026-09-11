@@ -796,16 +796,16 @@ func (_c *MockGCPClientManager_CreateVPC_Call) RunAndReturn(run func(projectID s
 }
 
 // DeleteDNSRecordSets provides a mock function for the type MockGCPClientManager
-func (_mock *MockGCPClientManager) DeleteDNSRecordSets(projectID string, zoneName string, baseDomain string) error {
-	ret := _mock.Called(projectID, zoneName, baseDomain)
+func (_mock *MockGCPClientManager) DeleteDNSRecordSets(projectID string, zoneName string, records []DNSRecordName) error {
+	ret := _mock.Called(projectID, zoneName, records)
 
 	if len(ret) == 0 {
 		panic("no return value specified for DeleteDNSRecordSets")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(string, string, string) error); ok {
-		r0 = returnFunc(projectID, zoneName, baseDomain)
+	if returnFunc, ok := ret.Get(0).(func(string, string, []DNSRecordName) error); ok {
+		r0 = returnFunc(projectID, zoneName, records)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -820,12 +820,12 @@ type MockGCPClientManager_DeleteDNSRecordSets_Call struct {
 // DeleteDNSRecordSets is a helper method to define mock.On call
 //   - projectID string
 //   - zoneName string
-//   - baseDomain string
-func (_e *MockGCPClientManager_Expecter) DeleteDNSRecordSets(projectID any, zoneName any, baseDomain any) *MockGCPClientManager_DeleteDNSRecordSets_Call {
-	return &MockGCPClientManager_DeleteDNSRecordSets_Call{Call: _e.mock.On("DeleteDNSRecordSets", projectID, zoneName, baseDomain)}
+//   - records []DNSRecordName
+func (_e *MockGCPClientManager_Expecter) DeleteDNSRecordSets(projectID any, zoneName any, records any) *MockGCPClientManager_DeleteDNSRecordSets_Call {
+	return &MockGCPClientManager_DeleteDNSRecordSets_Call{Call: _e.mock.On("DeleteDNSRecordSets", projectID, zoneName, records)}
 }
 
-func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) Run(run func(projectID string, zoneName string, baseDomain string)) *MockGCPClientManager_DeleteDNSRecordSets_Call {
+func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) Run(run func(projectID string, zoneName string, records []DNSRecordName)) *MockGCPClientManager_DeleteDNSRecordSets_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -835,9 +835,9 @@ func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) Run(run func(projectID 
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
-		var arg2 string
+		var arg2 []DNSRecordName
 		if args[2] != nil {
-			arg2 = args[2].(string)
+			arg2 = args[2].([]DNSRecordName)
 		}
 		run(
 			arg0,
@@ -853,7 +853,7 @@ func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) Return(err error) *Mock
 	return _c
 }
 
-func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) RunAndReturn(run func(projectID string, zoneName string, baseDomain string) error) *MockGCPClientManager_DeleteDNSRecordSets_Call {
+func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) RunAndReturn(run func(projectID string, zoneName string, records []DNSRecordName) error) *MockGCPClientManager_DeleteDNSRecordSets_Call {
 	_c.Call.Return(run)
 	return _c
 }
