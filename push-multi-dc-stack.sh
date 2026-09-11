@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 # Force-push the rebased multi-dc stack (06..11) and retarget each PR onto its new base.
 # The stack was rebased onto main after multi-dc-05 was squash-merged as #627.
 #
