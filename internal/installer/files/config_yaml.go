@@ -133,7 +133,7 @@ type SecretsConfig struct {
 }
 
 type RegistryConfig struct {
-	Server              string `yaml:"server"`
+	Server              string `yaml:"server,omitempty"`
 	ReplaceImagesInBom  bool   `yaml:"replaceImagesInBom"`
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
 }
