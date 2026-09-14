@@ -25,6 +25,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	"github.com/spf13/cobra"
@@ -95,6 +96,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallDir, "install-dir", ".installer", "Directory for config, secrets, and bundle files")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallConfigPath, "install-config", "", "Path to install config file (default: <install-dir>/config.yaml)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "", "Path to secrets file (default: <install-dir>/prod.vault.yaml)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDeviceFilter, "ceph-device-filter", "", "Regular expression selecting Ceph block devices by name")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDevicePathFilter, "ceph-device-path-filter", "", "Regular expression selecting Ceph block devices by path")
 	// ArgoCD integration
@@ -143,11 +145,20 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 	stlog := bootstrap.NewStepLogger(false)
 
-	icg, err := installer.NewInstallConfigManager("plain", "")
+	fw := intutil.NewFilesystemWriter()
+
+	_, ageKey, err := resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey)
+	if err != nil {
+		return err
+	}
+
+	c.CodesphereEnv.AgeKey = ageKey
+
+	icg, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
-	fw := intutil.NewFilesystemWriter()
+
 	kubeClient, restConfig, err := c.GetKubeClient(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to initialize Kubernetes client: %w", err)

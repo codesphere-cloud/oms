@@ -61,7 +61,7 @@ func (b *GCPBootstrapper) ensureConfigManagers() error {
 			continue
 		}
 
-		manager, err := installer.NewInstallConfigManager(string(vault.TypePlain), "")
+		manager, err := installer.NewInstallConfigManager(string(vault.TypeAuto), b.Env.AgeKey)
 		if err != nil {
 			return fmt.Errorf("failed to initialize config manager for data center %d: %w", dc.ID, err)
 		}

@@ -11,6 +11,7 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -25,18 +26,29 @@ type BootstrapGcpPostconfigCmd struct {
 type BootstrapGcpPostconfigOpts struct {
 	*util.GlobalOptions
 	InstallConfigPath string
+	SecretsFilePath   string
+	AgeKey            string
 	PrivateKeyPath    string
 }
 
 func (c *BootstrapGcpPostconfigCmd) RunE(_ *cobra.Command, args []string) error {
 	log.Printf("running post-configuration steps...")
 
-	icg, err := installer.NewInstallConfigManager("plain", "")
+	fw := intutil.NewFilesystemWriter()
+
+	_, ageKey, err := resolveVaultAccess(fw, c.Opts.SecretsFilePath, c.Opts.AgeKey)
+	if err != nil {
+		return err
+	}
+
+	icg, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
 
-	fw := intutil.NewFilesystemWriter()
+	if err := icg.LoadVaultFromFileOrCreate(c.Opts.SecretsFilePath); err != nil {
+		return fmt.Errorf("failed to load vault file: %w", err)
+	}
 
 	infraFilePath := gcp.GetInfraFilePath()
 
@@ -76,6 +88,8 @@ func AddBootstrapGcpPostconfigCmd(bootstrapGcp *cobra.Command, opts *util.Global
 
 	flags := postconfig.cmd.Flags()
 	flags.StringVar(&postconfig.Opts.InstallConfigPath, "install-config-path", "config.yaml", "Path to the installation configuration file")
+	flags.StringVar(&postconfig.Opts.SecretsFilePath, "secrets-file", "prod.vault.yaml", "Path to the secrets (vault) file")
+	flags.StringVar(&postconfig.Opts.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
 	flags.StringVar(&postconfig.Opts.PrivateKeyPath, "private-key-path", "", "Path to the GCP service account private key file (optional)")
 
 	util.AddCmd(bootstrapGcp, postconfig.cmd)

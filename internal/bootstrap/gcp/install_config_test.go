@@ -17,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	vaultpkg "github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -116,7 +117,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			})
 			It("uses existing when config file exists", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -126,7 +127,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 			It("loads existing vault before existing config for templating", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 				icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -158,7 +159,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				It("overwrites an existing config", func() {
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-					icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+					icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
 					icg.EXPECT().GetInstallConfig().Return(&files.RootConfig{})
 
@@ -171,7 +172,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when config file exists but fails to load", func() {
 				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 				err := bs.EnsureInstallConfig()
@@ -266,7 +267,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 
 					fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
-					icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+					icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 					icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(fmt.Errorf("bad format"))
 
 					err := bs.EnsureInstallConfig()
@@ -281,7 +282,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 	Describe("EnsureSecrets", func() {
 		Describe("Valid EnsureSecrets", func() {
 			It("loads existing secrets file", func() {
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -289,7 +290,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 			})
 
 			It("skips when secrets file missing", func() {
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(nil)
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
 
 				err := bs.EnsureSecrets()
@@ -299,7 +300,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 		Describe("Invalid cases", func() {
 			It("returns error when secrets file load fails", func() {
-				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
+				icg.EXPECT().LoadVaultFromFileOrCreate(csEnv.SecretsFilePath).Return(fmt.Errorf("load error"))
 
 				err := bs.EnsureSecrets()
 				Expect(err).To(HaveOccurred())
@@ -372,6 +373,23 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				Expect(bs.Env.InstallConfig.Codesphere.OpenBao).To(BeNil())
 			})
+
+			It("transfers a plaintext vault copy when the local vault is encrypted", func() {
+				csEnv.VaultType = vaultpkg.TypeSOPS
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+				icg.EXPECT().WriteUnencryptedVault("fake-secret.plain", true).Return(nil)
+				fw.EXPECT().Remove("fake-secret.plain").Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-config-file", "/etc/codesphere/config.yaml").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-secret.plain", "/etc/codesphere/secrets/prod.vault.yaml").Return(nil)
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
 			It("uses the configured datacenter name", func() {
 				csEnv.DatacenterName = "staging"
 

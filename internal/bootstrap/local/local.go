@@ -88,10 +88,12 @@ type CodesphereEnvironment struct {
 	RegistryUser     string `json:"-"`
 	RegistryPassword string `json:"-"`
 	// Config
-	InstallDir           string              `json:"-"`
-	ExistingConfigUsed   bool                `json:"-"`
-	InstallConfigPath    string              `json:"-"`
-	SecretsFilePath      string              `json:"-"`
+	InstallDir         string `json:"-"`
+	ExistingConfigUsed bool   `json:"-"`
+	InstallConfigPath  string `json:"-"`
+	SecretsFilePath    string `json:"-"`
+	// AgeKey is the age key resolved for an encrypted vault when the command started.
+	AgeKey               string              `json:"-"`
 	InstallConfig        *files.RootConfig   `json:"-"`
 	Vault                *files.InstallVault `json:"-"`
 	K0s                  bool                `json:"-"`
@@ -516,14 +518,14 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 }
 
 func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file for config templating: %w", err)
 	}
 	return nil
 }
 
 func (b *LocalBootstrapper) EnsureSecrets() error {
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 	b.Env.Vault = b.icg.GetVault()
@@ -531,7 +533,9 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	recipient, keyPath, err := sops.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
+	// Prefer the key resolved by the command so an existing encrypted vault keeps being
+	// encrypted with the same recipient across the bootstrap.
+	recipient, keyPath, err := sops.ResolveAgeKey(b.Env.AgeKey, filepath.Dir(b.Env.SecretsFilePath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}

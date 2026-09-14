@@ -9,11 +9,16 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 const (
 	remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
+
+	// vaultTransferSuffix is appended to the secrets path of the plaintext vault copy that is
+	// transferred to the jumpbox when the local vault is encrypted.
+	vaultTransferSuffix string = ".plain"
 )
 
 // EnsureInstallConfig uses the local config or recovers it from an existing jumpbox if desired.
@@ -51,7 +56,7 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 }
 
 func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
 
@@ -433,17 +438,47 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
+	vaultTransferPath, cleanupVaultTransfer, err := b.prepareVaultTransfer()
+	if err != nil {
+		return err
+	}
+
+	defer cleanupVaultTransfer()
+
+	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
 	if err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
+	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, vaultTransferPath, b.Env.SecretsDir+"/prod.vault.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}
 
 	return nil
+}
+
+// prepareVaultTransfer returns the local path of the vault to copy to the jumpbox. An
+// encrypted vault is first rewritten as a plaintext copy, because the jumpbox re-encrypts it
+// with its own age key (see EncryptVault) and only the caller's machine holds the key that
+// can decrypt the local file. The returned cleanup removes that copy.
+func (b *GCPBootstrapper) prepareVaultTransfer() (string, func(), error) {
+	if b.Env.VaultType != vault.TypeSOPS {
+		return b.Env.SecretsFilePath, func() {}, nil
+	}
+
+	transferPath := b.Env.SecretsFilePath + vaultTransferSuffix
+	if err := b.icg.WriteUnencryptedVault(transferPath, true); err != nil {
+		return "", nil, fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err)
+	}
+
+	cleanup := func() {
+		if err := b.fw.Remove(transferPath); err != nil {
+			b.stlog.Logf("failed to remove unencrypted vault transfer file %s: %s", transferPath, err.Error())
+		}
+	}
+
+	return transferPath, cleanup, nil
 }
 
 func (b *GCPBootstrapper) applyPcAppsDefaults() {
@@ -637,7 +672,7 @@ func (b *GCPBootstrapper) EnsureAgeKey() error {
 }
 
 func (b *GCPBootstrapper) EnsureSecrets() error {
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 

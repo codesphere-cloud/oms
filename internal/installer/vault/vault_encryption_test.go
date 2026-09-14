@@ -162,6 +162,123 @@ var _ = Describe("VaultEncryption", func() {
 		})
 	})
 
+	Describe("ResolveExistingAgeKey", func() {
+		var (
+			tmpDir         string
+			origAgeKey     string
+			origAgeKeyFile string
+			hasOrigAgeKey  bool
+			hasOrigKeyFile bool
+		)
+
+		BeforeEach(func() {
+			tmpDir = GinkgoT().TempDir()
+			// Point the default user config location at an empty directory so a key in the
+			// developer's own ~/.config/sops/age/keys.txt cannot satisfy a lookup.
+			GinkgoT().Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
+
+			origAgeKey, hasOrigAgeKey = os.LookupEnv("SOPS_AGE_KEY")
+			origAgeKeyFile, hasOrigKeyFile = os.LookupEnv("SOPS_AGE_KEY_FILE")
+
+			Expect(os.Unsetenv("SOPS_AGE_KEY")).To(Succeed())
+			Expect(os.Unsetenv("SOPS_AGE_KEY_FILE")).To(Succeed())
+		})
+
+		AfterEach(func() {
+			if hasOrigAgeKey {
+				Expect(os.Setenv("SOPS_AGE_KEY", origAgeKey)).To(Succeed())
+			} else {
+				Expect(os.Unsetenv("SOPS_AGE_KEY")).To(Succeed())
+			}
+
+			if hasOrigKeyFile {
+				Expect(os.Setenv("SOPS_AGE_KEY_FILE", origAgeKeyFile)).To(Succeed())
+			} else {
+				Expect(os.Unsetenv("SOPS_AGE_KEY_FILE")).To(Succeed())
+			}
+		})
+
+		It("returns the explicit key path", func() {
+			if !sopsAndAgeAvailable() {
+				Skip("age-keygen not available")
+			}
+
+			keyFile := filepath.Join(tmpDir, "explicit.txt")
+			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), string(out))
+
+			keyPath, err := sops.ResolveExistingAgeKey(keyFile, tmpDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(keyPath).To(Equal(keyFile))
+		})
+
+		It("returns the key path from SOPS_AGE_KEY_FILE", func() {
+			if !sopsAndAgeAvailable() {
+				Skip("age-keygen not available")
+			}
+
+			keyFile := filepath.Join(tmpDir, "keys.txt")
+			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), string(out))
+			Expect(os.Setenv("SOPS_AGE_KEY_FILE", keyFile)).To(Succeed())
+
+			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(keyPath).To(Equal(keyFile))
+		})
+
+		It("returns the fallback age_key.txt next to the vault", func() {
+			if !sopsAndAgeAvailable() {
+				Skip("age-keygen not available")
+			}
+
+			keyFile := filepath.Join(tmpDir, "age_key.txt")
+			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), string(out))
+
+			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(keyPath).To(Equal(keyFile))
+		})
+
+		It("returns an empty path when the key comes from SOPS_AGE_KEY", func() {
+			if !sopsAndAgeAvailable() {
+				Skip("age-keygen not available")
+			}
+
+			keyFile := filepath.Join(tmpDir, "source.txt")
+			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), string(out))
+
+			data, err := os.ReadFile(keyFile)
+			Expect(err).ToNot(HaveOccurred())
+
+			var privKeyLine string
+
+			for _, line := range splitLines(string(data)) {
+				if len(line) > 0 && line[0] != '#' {
+					privKeyLine = line
+					break
+				}
+			}
+
+			Expect(privKeyLine).ToNot(BeEmpty())
+			Expect(os.Setenv("SOPS_AGE_KEY", privKeyLine)).To(Succeed())
+
+			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(keyPath).To(BeEmpty())
+		})
+
+		It("fails instead of generating a key when none exists", func() {
+			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no existing age key found"))
+			Expect(keyPath).To(BeEmpty())
+			Expect(filepath.Join(tmpDir, "age_key.txt")).ToNot(BeAnExistingFile())
+		})
+	})
+
 	Describe("file-backed vault loading", func() {
 		var tmpDir string
 

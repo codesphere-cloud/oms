@@ -23,10 +23,20 @@ var xdgConfigHome = "XDG_CONFIG_HOME"
 
 // ResolveAgeKey resolves an existing age key or generates one in fallbackDir.
 func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
-	return resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir)
+	return resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir, true)
 }
 
-func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
+// ResolveExistingAgeKey resolves an existing age key without generating one. It returns the
+// path of the key file, or an empty path when the key comes from SOPS_AGE_KEY. Callers use
+// it to decrypt a vault they did not create, where generating a fresh key would silently
+// produce a key that cannot read the vault.
+func ResolveExistingAgeKey(explicitKeyFile, fallbackDir string) (keyPath string, err error) {
+	_, keyPath, err = resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir, false)
+
+	return keyPath, err
+}
+
+func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, generate bool) (recipient string, keyPath string, err error) {
 	if explicitKeyFile != "" {
 		recipient, err = readRecipientFromFile(fileIO, explicitKeyFile)
 		if err != nil {
@@ -74,6 +84,10 @@ func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string) (rec
 	if err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
 			return "", "", fmt.Errorf("failed to read age key from fallback location %s: %w", keyPath, err)
+		}
+
+		if !generate {
+			return "", "", fmt.Errorf("no existing age key found for the SOPS vault; set an age key argument or provide a key at %s", keyPath)
 		}
 
 		recipient, err = generateAgeKey(fileIO, keyPath)

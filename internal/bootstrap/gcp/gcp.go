@@ -21,6 +21,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -226,10 +227,15 @@ type CodesphereEnvironment struct {
 	LocalTraceEndpoint     string `json:"-"`
 
 	// Config
-	InstallConfigPath string              `json:"-"`
-	SecretsFilePath   string              `json:"-"`
-	InstallConfig     *files.RootConfig   `json:"-"`
-	Secrets           *files.InstallVault `json:"-"`
+	InstallConfigPath string `json:"-"`
+	SecretsFilePath   string `json:"-"`
+	// VaultType is the on-disk format of SecretsFilePath as detected when the command
+	// started, and AgeKey is the resolved age key for an encrypted vault. Both are used to
+	// decide how the vault is transferred to the jumpbox and are not serialised.
+	VaultType     vault.Type          `json:"-"`
+	AgeKey        string              `json:"-"`
+	InstallConfig *files.RootConfig   `json:"-"`
+	Secrets       *files.InstallVault `json:"-"`
 
 	// GCP Specific
 	ProjectDisplayName         string `json:"project_display_name"`

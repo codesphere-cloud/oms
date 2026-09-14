@@ -30,7 +30,7 @@ type InstallConfigManager interface {
 	// Configuration management
 	LoadInstallConfigFromFile(configPath string) error
 	LoadVaultFromFile(vaultPath string) error
-	LoadVaultFromUnecryptedFile(vaultPath string) error
+	LoadVaultFromFileOrCreate(vaultPath string) error
 	ValidateInstallConfig() []string
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
@@ -44,6 +44,7 @@ type InstallConfigManager interface {
 	GenerateSecrets() error
 	WriteInstallConfig(configPath string, withComments bool) error
 	WriteVault(vaultPath string, withComments bool) error
+	WriteUnencryptedVault(vaultPath string, withComments bool) error
 }
 
 type InstallConfig struct {
@@ -134,9 +135,12 @@ func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
 	return nil
 }
 
-// LoadVaultFromUnecryptedFile loads the vault content from an unencrypted file into the installConfig
-func (g *InstallConfig) LoadVaultFromUnecryptedFile(vaultPath string) error {
-	store, err := g.vaultStore(vaultPath, false, vault.TypePlain)
+// LoadVaultFromFileOrCreate loads vault content using the manager's configured backend and
+// returns an empty vault when the file does not exist. Bootstrap flows use it because a
+// config can exist without a vault (for example a hand-written config), and because the
+// vault may be plaintext or SOPS-encrypted depending on how it was generated.
+func (g *InstallConfig) LoadVaultFromFileOrCreate(vaultPath string) error {
+	store, err := g.vaultStore(vaultPath, false)
 	if err != nil {
 		return fmt.Errorf("failed to initialize vault backend: %w", err)
 	}
@@ -145,6 +149,7 @@ func (g *InstallConfig) LoadVaultFromUnecryptedFile(vaultPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
+
 	return nil
 }
 
@@ -370,6 +375,22 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to write vault: %w", err)
 	}
+	return nil
+}
+
+// WriteUnencryptedVault writes the vault as plaintext, regardless of the configured vault
+// type. Bootstrap flows use it to prepare a copy that is transferred to the jumpbox and
+// encrypted there with the jumpbox's own age key.
+func (g *InstallConfig) WriteUnencryptedVault(vaultPath string, withComments bool) error {
+	store, err := g.vaultStore(vaultPath, withComments, vault.TypePlain)
+	if err != nil {
+		return fmt.Errorf("failed to initialize vault backend: %w", err)
+	}
+
+	if err := store.Save(g.Vault); err != nil {
+		return fmt.Errorf("failed to write unencrypted vault: %w", err)
+	}
+
 	return nil
 }
 
