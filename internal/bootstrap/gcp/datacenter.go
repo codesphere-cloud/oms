@@ -151,6 +151,7 @@ func newDataCenter(env *CodesphereEnvironment, id int, suffix string) *datacente
 		SSHBaseDomain:              sshBaseDomain(env, id),
 		ExternalPostgres:           suffix != "",
 	}
+
 	return dc
 }
 

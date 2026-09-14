@@ -54,6 +54,7 @@ func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
 	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
+
 	return nil
 }
 
@@ -65,12 +66,14 @@ func (b *GCPBootstrapper) recoverConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to find gcp project for config recovery: %w", err)
 	}
+
 	b.Env.ProjectID = existingProject.ProjectId
 
 	jumpbox, err := b.GetNodeByName("jumpbox")
 	if err != nil {
 		return fmt.Errorf("failed to find jumpbox node for config recovery: %w", err)
 	}
+
 	b.Env.Jumpbox = jumpbox
 
 	err = b.Env.Jumpbox.NodeClient.DownloadFile(jumpbox, remoteInstallConfigPath, b.Env.InstallConfigPath)
@@ -115,9 +118,11 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	if b.Env.DatacenterName == "" {
 		b.Env.DatacenterName = "dev"
 	}
+
 	b.Env.InstallConfig.Datacenter.Name = b.Env.DatacenterName
 	b.Env.InstallConfig.Datacenter.City = "Karlsruhe"
 	b.Env.InstallConfig.Datacenter.CountryCode = "DE"
+
 	b.Env.InstallConfig.Secrets.BaseDir = b.Env.SecretsDir
 	if b.Env.RegistryType != RegistryTypeGitHub {
 		b.Env.InstallConfig.Registry.ReplaceImagesInBom = true
@@ -204,12 +209,14 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		"cloud.google.com/load-balancer-ipv4": b.Env.PublicGatewayIP,
 	}
 
-	b.applySshProxyConfig()
+	b.applyPcAppsDefaults()
+	b.applyManagedServiceDefaults()
 
 	dnsProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
 		dnsProject = b.Env.ProjectID
 	}
+
 	b.Env.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
 		"issuers": map[string]interface{}{
 			"letsEncryptHttp": map[string]interface{}{
@@ -226,10 +233,12 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 			},
 		},
 	}
+
 	acmeServer := "https://acme-v02.api.letsencrypt.org/directory"
 	if b.Env.ACMEStaging {
 		acmeServer = "https://acme-staging-v02.api.letsencrypt.org/directory"
 	}
+
 	acmeConfig := &files.ACMEConfig{
 		Enabled: true,
 		Email:   "oms-testing@" + b.Env.BaseDomain,
@@ -254,6 +263,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: b64MacKey}})
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeCustomDomainsEabMacKey, Fields: &files.SecretFields{Password: customDomainsB64MacKey}})
 	}
+
 	b.Env.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
 		Type: "acme",
 		Acme: acmeConfig,
@@ -289,6 +299,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGithubAppsClientId, Fields: &files.SecretFields{Password: b.Env.GitHubAppClientID}})
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGithubAppsClientSecret, Fields: &files.SecretFields{Password: b.Env.GitHubAppClientSecret}})
 	}
+
 	if b.Env.GitLabAppClientID != "" && b.Env.GitLabAppClientSecret != "" {
 		b.Env.InstallConfig.Codesphere.GitProviders.GitLab = &files.GitProviderConfig{
 			Enabled: true,
@@ -307,6 +318,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGitlabAppClientId, Fields: &files.SecretFields{Password: b.Env.GitLabAppClientID}})
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretGitlabAppClientSecret, Fields: &files.SecretFields{Password: b.Env.GitLabAppClientSecret}})
 	}
+
 	if b.Env.BitbucketAppClientID != "" && b.Env.BitbucketAppClientSecret != "" {
 		b.Env.InstallConfig.Codesphere.GitProviders.Bitbucket = &files.GitProviderConfig{
 			Enabled: true,
@@ -325,6 +337,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretBitbucketAppsClientId, Fields: &files.SecretFields{Password: b.Env.BitbucketAppClientID}})
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretBitbucketAppsClientSecret, Fields: &files.SecretFields{Password: b.Env.BitbucketAppClientSecret}})
 	}
+
 	if b.Env.AzureDevOpsAppClientID != "" && b.Env.AzureDevOpsAppClientSecret != "" {
 		b.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps = &files.GitProviderConfig{
 			Enabled: true,
@@ -344,11 +357,13 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAzureDevOpsAppClientId, Fields: &files.SecretFields{Password: b.Env.AzureDevOpsAppClientID}})
 		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAzureDevOpsAppClientSecret, Fields: &files.SecretFields{Password: b.Env.AzureDevOpsAppClientSecret}})
 	}
+
 	if b.Env.OidcIssuerURL != "" && b.Env.OidcClientID != "" && b.Env.OidcClientSecret != "" {
 		name := b.Env.OidcProviderName
 		if name == "" {
 			name = "OIDC"
 		}
+
 		b.Env.InstallConfig.Codesphere.OAuth = &files.OAuthProvidersConfig{
 			Oidc: &files.OidcOAuthProvider{
 				Type:      "oidc",
@@ -379,8 +394,10 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	if b.Env.ClusterAdminEmail != "" {
 		b.Env.InstallConfig.Codesphere.ClusterAdminEmail = b.Env.ClusterAdminEmail
 	}
+
 	b.applyExternalLokiConfig()
 	b.applyPrometheusRemoteWriteConfig()
+	b.applyOpenfgaBackupConfig()
 
 	// Secret generation is idempotent and also backfills secrets introduced
 	// after an existing vault was created (for example the auth keys required by
@@ -399,6 +416,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		if b.Env.InstallConfig.Cluster.Monitoring == nil {
 			b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
 		}
+
 		b.Env.InstallConfig.Cluster.Monitoring.CentralOtelExport = &files.CentralOtelConfig{
 			Enabled:  true,
 			Username: b.Env.CentralOtelUsername,
@@ -437,7 +455,7 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) applySshProxyConfig() {
+func (b *GCPBootstrapper) applyPcAppsDefaults() {
 	b.Env.InstallConfig.PcApps = util.DeepMergeMaps(b.Env.InstallConfig.PcApps, files.ChartValues{
 		"applications": map[string]any{
 			"ssh-workspace-proxy": map[string]any{
@@ -453,8 +471,112 @@ func (b *GCPBootstrapper) applySshProxyConfig() {
 					},
 				},
 			},
+			"rabbitmq-operator": map[string]any{
+				"enabled": true,
+			},
+			"ms-backend-k8s": map[string]any{
+				"enabled": true,
+			},
+			"ms-backend-opensearch": map[string]any{
+				"enabled": true,
+			},
+			// KubeVirt and CDI are needed for VM image import/DataVolumes; the
+			// pc-applications chart ships both disabled by default.
+			"kubevirt-operator": map[string]any{
+				"enabled": true,
+			},
+			"kubevirt-cr": map[string]any{
+				"enabled": true,
+			},
+			"cdi-operator": map[string]any{
+				"enabled": true,
+			},
+			"cdi-cr": map[string]any{
+				"enabled": true,
+			},
 		},
 	})
+}
+
+func (b *GCPBootstrapper) applyManagedServiceDefaults() {
+	if b.Env.InstallConfig.Codesphere.ManagedServices == nil {
+		ms := []files.ManagedServiceConfig{
+			{Name: "postgres", Version: "v1"},
+			{Name: "babelfish", Version: "v1"},
+			{Name: "s3", Version: "v1"},
+			{Name: "virtual-k8s", Version: "v1"},
+			{Name: "ferretdb", Version: "v0"},
+			{Name: "opensearch", Version: "v0"},
+			{Name: "valkey", Version: "v0"},
+			{Name: "rabbitmq", Version: "v0"},
+		}
+
+		if util.InstallVersionAtLeast(b.Env.InstallVersion, "v1.106.0") {
+			ms = append(ms, files.ManagedServiceConfig{Name: "url-shortener", Version: "v0"})
+		}
+
+		b.Env.InstallConfig.Codesphere.ManagedServices = ms
+	}
+}
+
+// openfgaBackupSAName is the service account whose HMAC key authenticates OpenFGA
+// database backups against the S3-compatible Cloud Storage endpoint.
+const openfgaBackupSAName = "openfga-backup"
+
+// EnsureOpenfgaBackupBucket creates the Cloud Storage bucket and HMAC key used for
+// OpenFGA database backups. The bucket and HMAC key live in the project so they are
+// removed together with the project on cleanup. The dedicated service account and
+// its storage role are provisioned by EnsureServiceAccounts / EnsureIAMRoles.
+//
+// The HMAC secret is only returned at creation time, so it is persisted to the
+// vault by applyOpenfgaBackupConfig. Creation is skipped when a real secret is
+// already present in the vault (e.g. on re-runs or recovered configs).
+func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
+	bucketName := fmt.Sprintf("%s-openfga-backup", b.Env.ProjectID)
+
+	if err := b.GCPClient.EnsureStorageBucket(b.Env.ProjectID, bucketName, b.Env.Region); err != nil {
+		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
+	}
+	b.Env.OpenfgaBackupBucket = bucketName
+
+	// The HMAC secret cannot be retrieved after creation, so only create a new key
+	// when we don't already have a real one persisted in the vault.
+	if existing := b.icg.GetVault().GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey); existing != nil &&
+		existing.Fields != nil && existing.Fields.Password != "" && existing.Fields.Password != "dummy" {
+		return nil
+	}
+
+	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", openfgaBackupSAName, b.Env.ProjectID)
+	accessID, secret, err := b.GCPClient.CreateHMACKey(b.Env.ProjectID, saEmail)
+	if err != nil {
+		return fmt.Errorf("failed to create openfga backup HMAC key: %w", err)
+	}
+	b.Env.OpenfgaBackupAccessKeyID = accessID
+	b.Env.OpenfgaBackupSecret = secret
+
+	return nil
+}
+
+// applyOpenfgaBackupConfig wires the bucket created by EnsureOpenfgaBackupBucket
+// into the install config and persists the HMAC credentials to the vault. It is a
+// no-op when no bucket was provisioned.
+func (b *GCPBootstrapper) applyOpenfgaBackupConfig() {
+	if b.Env.OpenfgaBackupBucket == "" {
+		return
+	}
+
+	b.Env.InstallConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
+		Enabled:         true,
+		DestinationPath: "s3://" + b.Env.OpenfgaBackupBucket,
+		EndpointURL:     "https://storage.googleapis.com",
+	}
+
+	// Only overwrite when a new HMAC key was created this run; otherwise the
+	// existing secret loaded from the vault is kept.
+	if b.Env.OpenfgaBackupAccessKeyID != "" {
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupAccessKeyId, Fields: &files.SecretFields{Password: b.Env.OpenfgaBackupAccessKeyID}})
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: b.Env.OpenfgaBackupSecret}})
+	}
 }
 
 func (b *GCPBootstrapper) applyExternalLokiConfig() {
@@ -465,6 +587,7 @@ func (b *GCPBootstrapper) applyExternalLokiConfig() {
 	if b.Env.InstallConfig.Cluster.Monitoring == nil {
 		b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
+
 	if b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy == nil {
 		b.Env.InstallConfig.Cluster.Monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{}
 	}
@@ -488,9 +611,11 @@ func (b *GCPBootstrapper) applyPrometheusRemoteWriteConfig() {
 	if b.Env.InstallConfig.Cluster.Monitoring == nil {
 		b.Env.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
 	}
+
 	if b.Env.InstallConfig.Cluster.Monitoring.Prometheus == nil {
 		b.Env.InstallConfig.Cluster.Monitoring.Prometheus = &files.PrometheusConfig{}
 	}
+
 	if b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite == nil {
 		b.Env.InstallConfig.Cluster.Monitoring.Prometheus.RemoteWrite = &files.RemoteWriteConfig{}
 	}
@@ -517,6 +642,7 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 		if caSecret == nil || caSecret.File == nil {
 			return fmt.Errorf("postgres CA key not found in vault")
 		}
+
 		primaryKeyPEM, primaryCertPEM, err := secrets.GenerateServerCertificate(
 			caSecret.File.Content,
 			b.Env.InstallConfig.Postgres.CACertPem,
@@ -525,12 +651,16 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 		if err != nil {
 			return fmt.Errorf("failed to generate primary server certificate: %w", err)
 		}
+
 		if err := secrets.ValidateCertKeyPair(primaryCertPEM, primaryKeyPEM); err != nil {
 			return fmt.Errorf("primary PostgreSQL cert/key validation failed: %w", err)
 		}
+
 		vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresPrimaryServerKeyPem, File: &files.SecretFile{Name: "primary.key", Content: primaryKeyPEM}})
+
 		b.Env.InstallConfig.Postgres.Primary.SSLConfig.ServerCertPem = primaryCertPEM
 	}
+
 	if b.Env.InstallConfig.Postgres.Replica != nil {
 		replicaKeySecret := vault.GetSecret(files.SecretPostgresReplicaServerKeyPem)
 		if replicaKeySecret == nil || replicaKeySecret.File == nil {
@@ -538,6 +668,7 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 			if caSecret == nil || caSecret.File == nil {
 				return fmt.Errorf("postgres CA key not found in vault")
 			}
+
 			replicaKeyPEM, replicaCertPEM, err := secrets.GenerateServerCertificate(
 				caSecret.File.Content,
 				b.Env.InstallConfig.Postgres.CACertPem,
@@ -546,13 +677,17 @@ func (b *GCPBootstrapper) regeneratePostgresCerts(previousPrimaryIP, previousPri
 			if err != nil {
 				return fmt.Errorf("failed to generate replica server certificate: %w", err)
 			}
+
 			if err := secrets.ValidateCertKeyPair(replicaCertPEM, replicaKeyPEM); err != nil {
 				return fmt.Errorf("replica PostgreSQL cert/key validation failed: %w", err)
 			}
+
 			vault.SetSecret(files.SecretEntry{Name: files.SecretPostgresReplicaServerKeyPem, File: &files.SecretFile{Name: "replica.key", Content: replicaKeyPEM}})
+
 			b.Env.InstallConfig.Postgres.Replica.SSLConfig.ServerCertPem = replicaCertPEM
 		}
 	}
+
 	return nil
 }
 
@@ -574,7 +709,9 @@ func (b *GCPBootstrapper) EnsureSecrets() error {
 	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
+
 	b.Env.Secrets = b.icg.GetVault()
+
 	return nil
 }
 

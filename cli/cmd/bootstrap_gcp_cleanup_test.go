@@ -73,6 +73,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				var decoded gcp.CodesphereEnvironment
+
 				err = json.Unmarshal(data, &decoded)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -93,6 +94,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				var decoded gcp.CodesphereEnvironment
+
 				err = json.Unmarshal(data, &decoded)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -240,6 +242,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 		Context("when project ID is provided via flag", func() {
 			It("should use the provided project ID", func() {
 				cleanupCmd.Opts.ProjectID = "flag-project"
+
 				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(false)
 				mockGCPClient.EXPECT().IsOMSManagedProject("flag-project").Return(false, nil)
 
@@ -252,6 +255,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 		Context("when OMS management check fails", func() {
 			It("should return the verification error", func() {
 				cleanupCmd.Opts.ProjectID = "test-project"
+
 				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(false)
 				mockGCPClient.EXPECT().IsOMSManagedProject("test-project").Return(false, errors.New("API error"))
 
@@ -265,6 +269,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 			It("should skip OMS management check and proceed to confirmation", func() {
 				cleanupCmd.Opts.ProjectID = "test-project"
 				cleanupCmd.Opts.Force = true
+
 				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(false)
 				mockGCPClient.EXPECT().DeleteProject("test-project").Return(nil)
 
@@ -277,6 +282,7 @@ var _ = Describe("BootstrapGcpCleanupCmd", func() {
 			It("should abort the cleanup", func() {
 				cleanupCmd.Opts.ProjectID = "test-project"
 				deps.ConfirmReader = bytes.NewBufferString("wrong-input\n")
+
 				mockFileIO.EXPECT().Exists("/tmp/test-infra.json").Return(false)
 				mockGCPClient.EXPECT().IsOMSManagedProject("test-project").Return(true, nil)
 

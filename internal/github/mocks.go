@@ -6,7 +6,6 @@ package github
 
 import (
 	"context"
-	"github.com/google/go-github/v90/github"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -37,49 +36,48 @@ func (_m *MockGitHubClient) EXPECT() *MockGitHubClient_Expecter {
 	return &MockGitHubClient_Expecter{mock: &_m.Mock}
 }
 
-// ListTeamMembersBySlug provides a mock function for the type MockGitHubClient
-func (_mock *MockGitHubClient) ListTeamMembersBySlug(ctx context.Context, org string, teamSlug string, opts *github.TeamListTeamMembersOptions) ([]*github.User, error) {
-	ret := _mock.Called(ctx, org, teamSlug, opts)
+// GetTeamMemberSSHKeys provides a mock function for the type MockGitHubClient
+func (_mock *MockGitHubClient) GetTeamMemberSSHKeys(ctx context.Context, org string, teamSlug string) ([]TeamMemberKeys, error) {
+	ret := _mock.Called(ctx, org, teamSlug)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ListTeamMembersBySlug")
+		panic("no return value specified for GetTeamMemberSSHKeys")
 	}
 
-	var r0 []*github.User
+	var r0 []TeamMemberKeys
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, *github.TeamListTeamMembersOptions) ([]*github.User, error)); ok {
-		return returnFunc(ctx, org, teamSlug, opts)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) ([]TeamMemberKeys, error)); ok {
+		return returnFunc(ctx, org, teamSlug)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, *github.TeamListTeamMembersOptions) []*github.User); ok {
-		r0 = returnFunc(ctx, org, teamSlug, opts)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) []TeamMemberKeys); ok {
+		r0 = returnFunc(ctx, org, teamSlug)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*github.User)
+			r0 = ret.Get(0).([]TeamMemberKeys)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, *github.TeamListTeamMembersOptions) error); ok {
-		r1 = returnFunc(ctx, org, teamSlug, opts)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, org, teamSlug)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockGitHubClient_ListTeamMembersBySlug_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListTeamMembersBySlug'
-type MockGitHubClient_ListTeamMembersBySlug_Call struct {
+// MockGitHubClient_GetTeamMemberSSHKeys_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetTeamMemberSSHKeys'
+type MockGitHubClient_GetTeamMemberSSHKeys_Call struct {
 	*mock.Call
 }
 
-// ListTeamMembersBySlug is a helper method to define mock.On call
+// GetTeamMemberSSHKeys is a helper method to define mock.On call
 //   - ctx context.Context
 //   - org string
 //   - teamSlug string
-//   - opts *github.TeamListTeamMembersOptions
-func (_e *MockGitHubClient_Expecter) ListTeamMembersBySlug(ctx any, org any, teamSlug any, opts any) *MockGitHubClient_ListTeamMembersBySlug_Call {
-	return &MockGitHubClient_ListTeamMembersBySlug_Call{Call: _e.mock.On("ListTeamMembersBySlug", ctx, org, teamSlug, opts)}
+func (_e *MockGitHubClient_Expecter) GetTeamMemberSSHKeys(ctx any, org any, teamSlug any) *MockGitHubClient_GetTeamMemberSSHKeys_Call {
+	return &MockGitHubClient_GetTeamMemberSSHKeys_Call{Call: _e.mock.On("GetTeamMemberSSHKeys", ctx, org, teamSlug)}
 }
 
-func (_c *MockGitHubClient_ListTeamMembersBySlug_Call) Run(run func(ctx context.Context, org string, teamSlug string, opts *github.TeamListTeamMembersOptions)) *MockGitHubClient_ListTeamMembersBySlug_Call {
+func (_c *MockGitHubClient_GetTeamMemberSSHKeys_Call) Run(run func(ctx context.Context, org string, teamSlug string)) *MockGitHubClient_GetTeamMemberSSHKeys_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -93,94 +91,21 @@ func (_c *MockGitHubClient_ListTeamMembersBySlug_Call) Run(run func(ctx context.
 		if args[2] != nil {
 			arg2 = args[2].(string)
 		}
-		var arg3 *github.TeamListTeamMembersOptions
-		if args[3] != nil {
-			arg3 = args[3].(*github.TeamListTeamMembersOptions)
-		}
 		run(
 			arg0,
 			arg1,
 			arg2,
-			arg3,
 		)
 	})
 	return _c
 }
 
-func (_c *MockGitHubClient_ListTeamMembersBySlug_Call) Return(users []*github.User, err error) *MockGitHubClient_ListTeamMembersBySlug_Call {
-	_c.Call.Return(users, err)
+func (_c *MockGitHubClient_GetTeamMemberSSHKeys_Call) Return(teamMemberKeyss []TeamMemberKeys, err error) *MockGitHubClient_GetTeamMemberSSHKeys_Call {
+	_c.Call.Return(teamMemberKeyss, err)
 	return _c
 }
 
-func (_c *MockGitHubClient_ListTeamMembersBySlug_Call) RunAndReturn(run func(ctx context.Context, org string, teamSlug string, opts *github.TeamListTeamMembersOptions) ([]*github.User, error)) *MockGitHubClient_ListTeamMembersBySlug_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ListUserKeys provides a mock function for the type MockGitHubClient
-func (_mock *MockGitHubClient) ListUserKeys(ctx context.Context, username string) ([]*github.Key, error) {
-	ret := _mock.Called(ctx, username)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListUserKeys")
-	}
-
-	var r0 []*github.Key
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]*github.Key, error)); ok {
-		return returnFunc(ctx, username)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []*github.Key); ok {
-		r0 = returnFunc(ctx, username)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*github.Key)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, username)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockGitHubClient_ListUserKeys_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUserKeys'
-type MockGitHubClient_ListUserKeys_Call struct {
-	*mock.Call
-}
-
-// ListUserKeys is a helper method to define mock.On call
-//   - ctx context.Context
-//   - username string
-func (_e *MockGitHubClient_Expecter) ListUserKeys(ctx any, username any) *MockGitHubClient_ListUserKeys_Call {
-	return &MockGitHubClient_ListUserKeys_Call{Call: _e.mock.On("ListUserKeys", ctx, username)}
-}
-
-func (_c *MockGitHubClient_ListUserKeys_Call) Run(run func(ctx context.Context, username string)) *MockGitHubClient_ListUserKeys_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockGitHubClient_ListUserKeys_Call) Return(keys []*github.Key, err error) *MockGitHubClient_ListUserKeys_Call {
-	_c.Call.Return(keys, err)
-	return _c
-}
-
-func (_c *MockGitHubClient_ListUserKeys_Call) RunAndReturn(run func(ctx context.Context, username string) ([]*github.Key, error)) *MockGitHubClient_ListUserKeys_Call {
+func (_c *MockGitHubClient_GetTeamMemberSSHKeys_Call) RunAndReturn(run func(ctx context.Context, org string, teamSlug string) ([]TeamMemberKeys, error)) *MockGitHubClient_GetTeamMemberSSHKeys_Call {
 	_c.Call.Return(run)
 	return _c
 }

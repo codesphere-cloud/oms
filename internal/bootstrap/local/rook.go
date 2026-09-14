@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/codesphere-cloud/oms/internal/installer"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
@@ -34,9 +34,11 @@ const (
 	rookReadyTimeout        = 30 * time.Minute
 	rookReadyPollInterval   = 5 * time.Second
 
-	cephBlockPoolName      = "codesphere-rbd"
-	cephStorageClassName   = "codesphere-rbd"
-	cephRBDProvisionerName = "rook-ceph.rbd.csi.ceph.com"
+	cephBlockPoolName             = "codesphere-rbd"
+	cephStorageClassName          = "codesphere-rbd"
+	cephRBDProvisionerName        = "rook-ceph.rbd.csi.ceph.com"
+	defaultStorageClassAnnotation = "storageclass.kubernetes.io/is-default-class"
+	legacyDefaultClassAnnotation  = "storageclass.beta.kubernetes.io/is-default-class"
 )
 
 // csiResourceEntry represents a single container resource definition for Rook CSI drivers.
@@ -139,19 +141,10 @@ func (b *LocalBootstrapper) InstallRookHelmChart() error {
 		return fmt.Errorf("failed to build Helm values: %w", err)
 	}
 
-	if err := b.helm.UpgradeChart(b.ctx, installer.ChartConfig{
-		ReleaseName:     rookReleaseName,
-		ChartName:       "rook-ceph",
-		RepoURL:         rookRepoURL,
-		Version:         rookVersion,
-		Namespace:       rookNamespace,
-		CreateNamespace: true,
-		Values:          helmValues,
-	}, installer.UpgradeChartOptions{InstallIfNotExist: true}); err != nil {
-		return fmt.Errorf("failed to deploy Helm chart %q: %w", rookReleaseName, err)
-	}
-
-	return nil
+	return b.installHelmApplication(helmApplicationConfig{
+		Name: rookReleaseName, Chart: "rook-ceph", RepoURL: rookRepoURL,
+		TargetRevision: rookVersion, Namespace: rookNamespace, Values: helmValues,
+	})
 }
 
 func (b *LocalBootstrapper) DeployTestCephCluster() error {
@@ -178,11 +171,8 @@ func (b *LocalBootstrapper) DeployTestCephCluster() error {
 				AllowMultiplePerNode: true,
 			},
 			Storage: rookcephv1.StorageScopeSpec{
-				// TODO: make configurable.
-				UseAllNodes: true,
-				Selection: rookcephv1.Selection{
-					UseAllDevices: ptr.To(true),
-				},
+				UseAllNodes:               true,
+				Selection:                 b.cephDeviceSelection(),
 				AllowDeviceClassUpdate:    true,
 				AllowOsdCrushWeightUpdate: false,
 			},
@@ -239,6 +229,17 @@ func (b *LocalBootstrapper) DeployTestCephCluster() error {
 	}
 
 	return nil
+}
+
+func (b *LocalBootstrapper) cephDeviceSelection() rookcephv1.Selection {
+	selection := rookcephv1.Selection{UseAllDevices: ptr.To(true)}
+	if b.Env.CephDeviceFilter != "" || b.Env.CephDevicePathFilter != "" {
+		selection.UseAllDevices = ptr.To(false)
+		selection.DeviceFilter = b.Env.CephDeviceFilter
+		selection.DevicePathFilter = b.Env.CephDevicePathFilter
+	}
+
+	return selection
 }
 
 func (b *LocalBootstrapper) WaitForTestCephClusterReady() error {
@@ -339,6 +340,13 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 		return fmt.Errorf("failed to create or update CephBlockPool %q: %w", cephBlockPoolName, err)
 	}
 
+	storageClasses := &storagev1.StorageClassList{}
+	if err := b.kubeClient.List(b.ctx, storageClasses); err != nil {
+		return fmt.Errorf("failed to list StorageClasses: %w", err)
+	}
+
+	hasOtherDefault := hasDefaultStorageClass(storageClasses.Items, cephStorageClassName)
+
 	// Create StorageClass
 	reclaimPolicy := corev1.PersistentVolumeReclaimDelete
 	volumeBindingMode := storagev1.VolumeBindingImmediate
@@ -349,6 +357,16 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 	}
 
 	_, err = controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, storageClass, func() error {
+		if storageClass.Annotations == nil {
+			storageClass.Annotations = make(map[string]string)
+		}
+
+		if hasOtherDefault {
+			delete(storageClass.Annotations, defaultStorageClassAnnotation)
+			delete(storageClass.Annotations, legacyDefaultClassAnnotation)
+		} else {
+			storageClass.Annotations[defaultStorageClassAnnotation] = "true"
+		}
 		storageClass.Provisioner = cephRBDProvisionerName
 		storageClass.Parameters = map[string]string{
 			"clusterID":     rookNamespace,
@@ -373,6 +391,21 @@ func (b *LocalBootstrapper) DeployCephBlockPoolAndStorageClass() error {
 	}
 
 	return nil
+}
+
+func hasDefaultStorageClass(storageClasses []storagev1.StorageClass, excludeName string) bool {
+	for _, storageClass := range storageClasses {
+		if storageClass.Name == excludeName {
+			continue
+		}
+
+		if strings.EqualFold(storageClass.Annotations[defaultStorageClassAnnotation], "true") ||
+			strings.EqualFold(storageClass.Annotations[legacyDefaultClassAnnotation], "true") {
+			return true
+		}
+	}
+
+	return false
 }
 
 func isRookCephClusterReady(cluster *rookcephv1.CephCluster) bool {

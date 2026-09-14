@@ -97,6 +97,7 @@ func (b *GCPBootstrapper) validateVMProvisioningOptions() error {
 	if b.Env.SpotVMs && b.Env.Preemptible {
 		return fmt.Errorf("cannot specify both --spot-vms and --preemptible flags; use --spot-vms for the newer spot VM model")
 	}
+
 	return nil
 }
 
@@ -129,14 +130,17 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		wg.Add(1)
 		go func(vm VMDef) {
 			defer wg.Done()
+
 			result, err := b.ensureVM(vm, b.Env.RootDiskSize, sshKeys, logCh)
 			if err != nil {
 				errCh <- err
 				return
 			}
+
 			resultCh <- result
 		}(vm)
 	}
+
 	wg.Wait()
 
 	close(errCh)
@@ -151,6 +155,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 	for err := range errCh {
 		errs = append(errs, err)
 	}
+
 	if len(errs) > 0 {
 		return fmt.Errorf("error ensuring compute instances: %w", errors.Join(errs...))
 	}
@@ -168,6 +173,7 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 		dc.ControlPlaneNodes = nil
 		dcByID[dc.ID] = dc
 	}
+
 	for result := range resultCh {
 		switch result.vmType {
 		case "jumpbox":
@@ -209,8 +215,10 @@ func (b *GCPBootstrapper) EnsureComputeInstances() error {
 
 func (b *GCPBootstrapper) getSSHKeys() (string, error) {
 	sshKeys := ""
+
 	if b.Env.GitHubPAT != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubTeamSlug != "" {
 		var err error
+
 		sshKeys, err = github.GetSSHKeysFromGitHubTeam(b.GitHubClient, b.Env.GitHubTeamOrg, b.Env.GitHubTeamSlug)
 		if err != nil {
 			return "", fmt.Errorf("failed to get SSH keys from GitHub team: %w", err)
@@ -223,6 +231,7 @@ func (b *GCPBootstrapper) getSSHKeys() (string, error) {
 	}
 
 	sshKeys += fmt.Sprintf("root:%s\nubuntu:%s", pubKey+"root", pubKey+"ubuntu")
+
 	return sshKeys, nil
 }
 
@@ -251,6 +260,7 @@ func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, sshKeys string,
 		if err != nil {
 			return vmResult{}, err
 		}
+
 		if err := b.CreateInstanceWithFallback(projectID, zone, instance, vm.Name, logCh); err != nil {
 			return vmResult{}, err
 		}
@@ -262,6 +272,7 @@ func (b *GCPBootstrapper) ensureVM(vm VMDef, rootDiskSize int64, sshKeys string,
 	}
 
 	internalIP, externalIP := ExtractInstanceIPs(readyInstance)
+
 	return vmResult{
 		vmType:     vm.Tags[0],
 		name:       vm.Name,
@@ -356,6 +367,7 @@ func ExtractInstanceIPs(inst *computepb.Instance) (internalIP, externalIP string
 			externalIP = inst.GetNetworkInterfaces()[0].GetAccessConfigs()[0].GetNatIP()
 		}
 	}
+
 	return
 }
 
@@ -365,13 +377,16 @@ func IsInstanceReady(inst *computepb.Instance, needsExternalIP bool) bool {
 	if inst.GetStatus() != "RUNNING" || len(inst.GetNetworkInterfaces()) == 0 {
 		return false
 	}
+
 	ni := inst.GetNetworkInterfaces()[0]
 	if ni.GetNetworkIP() == "" {
 		return false
 	}
+
 	if needsExternalIP && (len(ni.GetAccessConfigs()) == 0 || ni.GetAccessConfigs()[0].GetNatIP() == "") {
 		return false
 	}
+
 	return true
 }
 
@@ -385,6 +400,7 @@ func (b *GCPBootstrapper) BuildSchedulingConfig() *computepb.Scheduling {
 			InstanceTerminationAction: protoString("STOP"),
 		}
 	}
+
 	if b.Env.Preemptible {
 		return &computepb.Scheduling{
 			Preemptible: protoBool(true),
@@ -408,11 +424,14 @@ func (b *GCPBootstrapper) CreateInstanceWithFallback(projectID, zone string, ins
 
 	if b.Env.SpotVMs && IsSpotCapacityError(err) {
 		logCh <- fmt.Sprintf("Spot capacity unavailable for %s, falling back to standard VM", vmName)
+
 		instance.Scheduling = &computepb.Scheduling{}
+
 		err = b.GCPClient.CreateInstance(projectID, zone, instance)
 		if err != nil && !IsAlreadyExistsError(err) {
 			return fmt.Errorf("failed to create instance %s (fallback to standard VM): %w", vmName, err)
 		}
+
 		return nil
 	}
 
@@ -434,8 +453,10 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 				if attempt < maxAttempts-1 {
 					b.Time.Sleep(pollInterval)
 				}
+
 				continue
 			}
+
 			return nil, fmt.Errorf("failed to poll instance %s: %w", name, err)
 		}
 
@@ -447,6 +468,7 @@ func (b *GCPBootstrapper) waitForInstanceRunning(projectID, zone, name string, n
 			b.Time.Sleep(pollInterval)
 		}
 	}
+
 	return nil, fmt.Errorf("timed out waiting for instance %s to be RUNNING with IPs assigned after %s",
 		name, pollInterval*time.Duration(maxAttempts))
 }
@@ -459,6 +481,7 @@ func findVMDef(defs []VMDef, name string) *VMDef {
 			return &defs[i]
 		}
 	}
+
 	return nil
 }
 
@@ -468,6 +491,7 @@ func validVMNames(defs []VMDef) []string {
 	for i, vm := range defs {
 		names[i] = vm.Name
 	}
+
 	return names
 }
 
@@ -488,6 +512,7 @@ func (b *GCPBootstrapper) RestartVM(name string) error {
 		if IsNotFoundError(err) {
 			return fmt.Errorf("instance %s does not exist in project %s / zone %s; did you run bootstrap first?", name, projectID, zone)
 		}
+
 		return fmt.Errorf("failed to get instance %s: %w", name, err)
 	}
 
@@ -497,6 +522,7 @@ func (b *GCPBootstrapper) RestartVM(name string) error {
 		return nil
 	case "TERMINATED", "STOPPED":
 		log.Printf("Starting stopped instance %s...", name)
+
 		if err := b.GCPClient.StartInstance(projectID, zone, name); err != nil {
 			return fmt.Errorf("failed to start instance %s: %w", name, err)
 		}
@@ -513,6 +539,7 @@ func (b *GCPBootstrapper) RestartVM(name string) error {
 
 	internalIP, externalIP := ExtractInstanceIPs(readyInstance)
 	log.Printf("Instance %s is now running (internal=%s, external=%s)", name, internalIP, externalIP)
+
 	return nil
 }
 
@@ -525,23 +552,28 @@ func (b *GCPBootstrapper) RestartVMs() error {
 			errs = append(errs, err)
 		}
 	}
+
 	if len(errs) > 0 {
 		return fmt.Errorf("errors restarting VMs: %w", errors.Join(errs...))
 	}
+
 	return nil
 }
 
 // ReadSSHKey reads an SSH key file, expanding ~ in the path
 func (b *GCPBootstrapper) ReadSSHKey(path string) (string, error) {
 	realPath := util.ExpandPath(path)
+
 	data, err := b.fw.ReadFile(realPath)
 	if err != nil {
 		return "", fmt.Errorf("error reading SSH key from %s: %w", realPath, err)
 	}
+
 	key := strings.TrimSpace(string(data))
 	if key == "" {
 		return "", fmt.Errorf("SSH key at %s is empty", realPath)
 	}
+
 	return key, nil
 }
 

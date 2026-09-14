@@ -73,7 +73,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	// Installer
 	flags.BoolVarP(&bootstrapLocalCmd.Yes, "yes", "y", false, "Auto-approve the local bootstrapping warning prompt")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (downloaded from the OMS portal)")
-	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash (required when install-version is set)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallHash, "install-hash", "", "Optional Codesphere package hash used to select a specific build")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallLocal, "install-local", "", "Path to a local installer package (tar.gz or unpacked directory)")
 	// Registry
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username")
@@ -95,9 +95,10 @@ func AddBootstrapLocalCmd(parent *cobra.Command) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallDir, "install-dir", ".installer", "Directory for config, secrets, and bundle files")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallConfigPath, "install-config", "", "Path to install config file (default: <install-dir>/config.yaml)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "", "Path to secrets file (default: <install-dir>/prod.vault.yaml)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDeviceFilter, "ceph-device-filter", "", "Regular expression selecting Ceph block devices by name")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDevicePathFilter, "ceph-device-path-filter", "", "Regular expression selecting Ceph block devices by path")
 	// ArgoCD integration
-	flags.BoolVar(&bootstrapLocalCmd.CodesphereEnv.UseArgoCD, "argocd", true, "After infra setup: install ArgoCD, update the OCI pull secret, and install pc-apps from the BOM version")
-	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDRegistryURL, "registry-url", "oci://ghcr.io/codesphere-cloud/charts", "OCI registry URL used for the ArgoCD helm pull secret (only relevant with --argocd)")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDRegistryURL, "registry-url", "oci://ghcr.io/codesphere-cloud/charts", "OCI registry URL used for the ArgoCD helm pull secret")
 	bootstrapLocalCmd.cmd.RunE = bootstrapLocalCmd.RunE
 
 	util.MarkFlagRequired(bootstrapLocalCmd.cmd, "registry-user")
@@ -152,12 +153,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 		return fmt.Errorf("failed to initialize Kubernetes client: %w", err)
 	}
 
-	helmClient, err := installer.NewHelmClient("codesphere")
-	if err != nil {
-		return fmt.Errorf("failed to initialize Helm client: %w", err)
-	}
-
-	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, helmClient, c.CodesphereEnv)
+	bs := local.NewLocalBootstrapper(ctx, stlog, kubeClient, restConfig, fw, icg, c.CodesphereEnv)
 	return bs.Bootstrap()
 }
 

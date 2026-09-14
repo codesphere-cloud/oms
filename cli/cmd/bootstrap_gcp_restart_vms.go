@@ -44,6 +44,7 @@ func (c *BootstrapGcpRestartVMsCmd) resolveEnvironment(fw intutil.FileIO) (*gcp.
 	}
 
 	infraFilePath := gcp.GetInfraFilePath()
+
 	infraEnv, exists, err := gcp.LoadInfraFile(fw, infraFilePath)
 	if err != nil {
 		if projectID == "" {
@@ -97,15 +98,19 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 
 	if c.Opts.Name != "" {
 		log.Printf("Restarting VM %s in project %s (zone %s)...", c.Opts.Name, projectID, zone)
+
 		if err := bs.RestartVM(c.Opts.Name); err != nil {
 			return fmt.Errorf("failed to restart VM: %w", err)
 		}
+
 		log.Printf("VM %s restarted successfully.", c.Opts.Name)
 	} else {
 		log.Printf("Restarting all VMs in project %s (zone %s)...", projectID, zone)
+
 		if err := bs.RestartVMs(); err != nil {
 			return fmt.Errorf("failed to restart VMs: %w", err)
 		}
+
 		log.Printf("All VMs restarted successfully.")
 	}
 

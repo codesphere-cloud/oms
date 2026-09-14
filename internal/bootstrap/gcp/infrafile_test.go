@@ -39,6 +39,7 @@ var _ = Describe("Infrafile", func() {
 
 	JustBeforeEach(func() {
 		var err error
+
 		bs, err = gcp.NewGCPBootstrapper(
 			ctx,
 			e,

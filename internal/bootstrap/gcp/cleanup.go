@@ -56,20 +56,25 @@ func NewCleanupExecutor(opts *CleanupOpts, deps *CleanupDeps) (*CleanupExecutor,
 	if err := exec.loadInfraFileIfNeeded(); err != nil {
 		return nil, err
 	}
+
 	if err := exec.resolveProjectID(); err != nil {
 		return nil, err
 	}
+
 	exec.resolveDNSSettings()
+
 	return exec, nil
 }
 
 // loadInfraFileIfNeeded loads the infra file when the project ID or DNS info is missing.
 func (e *CleanupExecutor) loadInfraFileIfNeeded() error {
 	missingDNSProjectID := e.Opts.DNSProjectID == ""
+
 	missingDNSInfo := missingDNSProjectID
 	if !e.Opts.SkipDNSCleanup {
 		missingDNSInfo = missingDNSProjectID || e.Opts.BaseDomain == "" || e.Opts.DNSZoneName == ""
 	}
+
 	if e.ProjectID != "" && !missingDNSInfo {
 		return nil
 	}
@@ -79,13 +84,16 @@ func (e *CleanupExecutor) loadInfraFileIfNeeded() error {
 		if e.ProjectID == "" {
 			return fmt.Errorf("failed to load infra file: %w", err)
 		}
+
 		log.Printf("Warning: %v", err)
+
 		return nil
 	}
 
 	if infraEnv.ProjectID != "" {
 		e.InfraEnv = infraEnv
 		e.InfraFileLoaded = true
+
 		return nil
 	}
 
@@ -104,6 +112,7 @@ func (e *CleanupExecutor) resolveProjectID() error {
 			e.InfraEnv = CodesphereEnvironment{}
 			e.InfraFileLoaded = false
 		}
+
 		return nil
 	}
 
@@ -113,6 +122,7 @@ func (e *CleanupExecutor) resolveProjectID() error {
 
 	e.ProjectID = e.InfraEnv.ProjectID
 	log.Printf("Using project ID from infra file: %s", e.ProjectID)
+
 	return nil
 }
 
@@ -122,14 +132,17 @@ func (e *CleanupExecutor) resolveDNSSettings() {
 	if e.BaseDomain == "" {
 		e.BaseDomain = e.InfraEnv.BaseDomain
 	}
+
 	e.DNSZoneName = e.Opts.DNSZoneName
 	if e.DNSZoneName == "" {
 		e.DNSZoneName = e.InfraEnv.DNSZoneName
 	}
+
 	e.DNSProjectID = e.Opts.DNSProjectID
 	if e.DNSProjectID == "" {
 		e.DNSProjectID = e.InfraEnv.DNSProjectID
 	}
+
 	if e.DNSProjectID == "" {
 		e.DNSProjectID = e.ProjectID
 	}
@@ -147,6 +160,7 @@ func (e *CleanupExecutor) VerifyAndConfirm() error {
 	if err != nil {
 		return fmt.Errorf("failed to verify project: %w", err)
 	}
+
 	if !isOMSManaged {
 		return fmt.Errorf("project %s was not bootstrapped by OMS (missing 'oms-managed' label). Use --force to override this check", e.ProjectID)
 	}
@@ -160,13 +174,16 @@ func (e *CleanupExecutor) confirmDeletion() error {
 	log.Println("Type the project ID to confirm deletion: ")
 
 	reader := bufio.NewReader(e.Deps.ConfirmReader)
+
 	confirmation, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read confirmation: %w", err)
 	}
+
 	if strings.TrimSpace(confirmation) != e.ProjectID {
 		return fmt.Errorf("confirmation did not match project ID, aborting cleanup")
 	}
+
 	return nil
 }
 
@@ -176,10 +193,12 @@ func (e *CleanupExecutor) CleanupDNSRecords() error {
 	if e.Opts.SkipDNSCleanup {
 		return nil
 	}
+
 	if e.BaseDomain == "" || e.DNSZoneName == "" {
 		log.Printf("Skipping DNS cleanup: missing base domain or DNS zone name (provide --base-domain/--dns-zone-name or use --skip-dns-cleanup)")
 		return nil
 	}
+
 	return e.Deps.GCPClient.DeleteDNSRecordSets(e.DNSProjectID, e.DNSZoneName, e.BaseDomain)
 }
 
@@ -189,6 +208,7 @@ func (e *CleanupExecutor) RemoveDNSIAMBinding() error {
 	if e.DNSProjectID == "" || e.DNSProjectID == e.ProjectID {
 		return nil
 	}
+
 	return e.Deps.GCPClient.RemoveIAMRoleBinding(e.DNSProjectID, "cloud-controller", e.ProjectID, []string{"roles/dns.admin"})
 }
 
@@ -202,9 +222,11 @@ func (e *CleanupExecutor) RemoveLocalInfraFile() {
 	if !e.InfraFileLoaded || e.InfraEnv.ProjectID != e.ProjectID {
 		return
 	}
+
 	if err := e.Deps.FileIO.Remove(e.Deps.InfraFilePath); err != nil {
 		log.Printf("Warning: failed to remove local infra file: %v", err)
 		return
 	}
+
 	log.Printf("Removed local infra file: %s", e.Deps.InfraFilePath)
 }

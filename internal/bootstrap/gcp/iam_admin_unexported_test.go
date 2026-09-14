@@ -12,8 +12,10 @@ import (
 
 var _ = Describe("IAM & Admin - Unexported", func() {
 	Describe("calculateProjectExpiryLabel", func() {
-		const customDateFormat string = "2006-01-02_15-04-05_utc"
-		const customDateFormatRegex string = `^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_utc$`
+		const (
+			customDateFormat      string = "2006-01-02_15-04-05_utc"
+			customDateFormatRegex string = `^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_utc$`
+		)
 
 		type validTestCase struct {
 			inputTTL         string

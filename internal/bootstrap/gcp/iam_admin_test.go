@@ -43,6 +43,7 @@ var _ = Describe("IAM & Admin", func() {
 
 	JustBeforeEach(func() {
 		var err error
+
 		bs, err = gcp.NewGCPBootstrapper(
 			ctx,
 			e,
@@ -130,6 +131,7 @@ var _ = Describe("IAM & Admin", func() {
 		Describe("Invalid cases", func() {
 			It("returns error when GetProjectByName fails unexpectedly", func() {
 				gc.EXPECT().GetProjectByName("", csEnv.ProjectName).Return(nil, fmt.Errorf("api error"))
+
 				err := bs.EnsureProject()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to get project"))
@@ -166,6 +168,7 @@ var _ = Describe("IAM & Admin", func() {
 					BillingAccountName: csEnv.BillingAccount,
 				}
 				gc.EXPECT().GetBillingInfo(csEnv.ProjectID).Return(bi, nil)
+
 				err := bs.EnsureBilling()
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -215,6 +218,7 @@ var _ = Describe("IAM & Admin", func() {
 					"serviceusage.googleapis.com",
 					"artifactregistry.googleapis.com",
 					"dns.googleapis.com",
+					"storage.googleapis.com",
 				}).Return(nil)
 
 				err := bs.EnsureAPIsEnabled()
@@ -242,6 +246,7 @@ var _ = Describe("IAM & Admin", func() {
 				})
 				It("creates cloud-controller and skips writer", func() {
 					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "cloud-controller", "cloud-controller").Return("email@sa", false, nil)
+					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "openfga-backup", "openfga-backup").Return("openfga-backup@sa", true, nil)
 
 					err := bs.EnsureServiceAccounts()
 					Expect(err).NotTo(HaveOccurred())
@@ -258,8 +263,10 @@ var _ = Describe("IAM & Admin", func() {
 					icg.EXPECT().GetVault().Return(vault)
 
 					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "cloud-controller", "cloud-controller").Return("email@sa", false, nil)
+					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "openfga-backup", "openfga-backup").Return("openfga-backup@sa", true, nil)
 					gc.EXPECT().CreateServiceAccount(csEnv.ProjectID, "artifact-registry-writer", "artifact-registry-writer").Return("writer@sa", true, nil)
 					gc.EXPECT().CreateServiceAccountKey(csEnv.ProjectID, "writer@sa").Return("key-content", nil)
+
 					err := bs.EnsureServiceAccounts()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(vault.GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal("key-content"))
@@ -286,6 +293,7 @@ var _ = Describe("IAM & Admin", func() {
 			It("assigns roles correctly", func() {
 				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/compute.admin"}).Return(nil)
 				gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/dns.admin"}).Return(nil)
+				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "openfga-backup", csEnv.ProjectID, []string{"roles/storage.objectAdmin"}).Return(nil)
 				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", csEnv.ProjectID, []string{"roles/artifactregistry.writer"}).Return(nil)
 
 				err := bs.EnsureIAMRoles()
@@ -299,6 +307,7 @@ var _ = Describe("IAM & Admin", func() {
 				It("assigns DNS role to cloud-controller in main project", func() {
 					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/compute.admin"}).Return(nil)
 					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/dns.admin"}).Return(nil)
+					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "openfga-backup", csEnv.ProjectID, []string{"roles/storage.objectAdmin"}).Return(nil)
 					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", csEnv.ProjectID, []string{"roles/artifactregistry.writer"}).Return(nil)
 
 					err := bs.EnsureIAMRoles()
@@ -317,5 +326,4 @@ var _ = Describe("IAM & Admin", func() {
 			})
 		})
 	})
-
 })

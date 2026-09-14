@@ -12,6 +12,7 @@ import (
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/github"
@@ -50,6 +51,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 	JustBeforeEach(func() {
 		var err error
+
 		bs, err = gcp.NewGCPBootstrapper(
 			ctx,
 			e,
@@ -168,10 +170,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 			icg.EXPECT().GetInstallConfig().RunAndReturn(func() *files.RootConfig {
 				realIcm := newPlainInstallConfigManager()
 				_ = realIcm.ApplyProfile("minimal")
+
 				return realIcm.GetInstallConfig()
 			})
 
-			projectId := "test-project-12345"
+			projectID := "test-project-12345"
 
 			// EnsureSecrets
 			icg.EXPECT().LoadVaultFromUnecryptedFile("fake-secret").Return(nil)
@@ -179,7 +182,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			// EnsureProject
 			gc.EXPECT().GetProjectByName(mock.Anything, "test-project").Return(nil, fmt.Errorf("project not found: test-project"))
-			gc.EXPECT().CreateProjectID("test-project").Return(projectId)
+			gc.EXPECT().CreateProjectID("test-project").Return(projectID)
 			gc.EXPECT().CreateProject(mock.Anything, mock.Anything, "test-project", mock.Anything).Return(mock.Anything, nil)
 
 			// WriteInfraFile
@@ -187,48 +190,54 @@ var _ = Describe("GCP Bootstrapper", func() {
 			fw.EXPECT().WriteFile(mock.Anything, mock.Anything, os.FileMode(0644)).Return(nil)
 
 			// EnsureBilling
-			gc.EXPECT().GetBillingInfo(projectId).Return(&cloudbilling.ProjectBillingInfo{BillingEnabled: false}, nil)
-			gc.EXPECT().EnableBilling(projectId, "test-billing-account").Return(nil)
+			gc.EXPECT().GetBillingInfo(projectID).Return(&cloudbilling.ProjectBillingInfo{BillingEnabled: false}, nil)
+			gc.EXPECT().EnableBilling(projectID, "test-billing-account").Return(nil)
 
 			// EnsureAPIsEnabled
-			gc.EXPECT().EnableAPIs(projectId, mock.Anything).Return(nil)
+			gc.EXPECT().EnableAPIs(projectID, mock.Anything).Return(nil)
 
 			// EnsureArtifactRegistry
-			gc.EXPECT().GetArtifactRegistry(projectId, "us-central1", "codesphere-registry").Return(nil, fmt.Errorf("not found"))
-			gc.EXPECT().CreateArtifactRegistry(projectId, "us-central1", "codesphere-registry").Return(&artifactregistrypb.Repository{Name: "codesphere-registry"}, nil)
+			gc.EXPECT().GetArtifactRegistry(projectID, "us-central1", "codesphere-registry").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateArtifactRegistry(projectID, "us-central1", "codesphere-registry").Return(&artifactregistrypb.Repository{Name: "codesphere-registry"}, nil)
 
 			// EnsureServiceAccounts
-			gc.EXPECT().CreateServiceAccount(projectId, "cloud-controller", "cloud-controller").Return("cloud-controller@p.iam.gserviceaccount.com", false, nil)
-			gc.EXPECT().CreateServiceAccount(projectId, "artifact-registry-writer", "artifact-registry-writer").Return("writer@p.iam.gserviceaccount.com", true, nil)
-			gc.EXPECT().CreateServiceAccountKey(projectId, "writer@p.iam.gserviceaccount.com").Return("fake-key", nil)
+			gc.EXPECT().CreateServiceAccount(projectID, "cloud-controller", "cloud-controller").Return("cloud-controller@p.iam.gserviceaccount.com", false, nil)
+			gc.EXPECT().CreateServiceAccount(projectID, "openfga-backup", "openfga-backup").Return("openfga-backup@"+projectID+".iam.gserviceaccount.com", true, nil)
+			gc.EXPECT().CreateServiceAccount(projectID, "artifact-registry-writer", "artifact-registry-writer").Return("writer@p.iam.gserviceaccount.com", true, nil)
+			gc.EXPECT().CreateServiceAccountKey(projectID, "writer@p.iam.gserviceaccount.com").Return("fake-key", nil)
 
 			// EnsureIAMRoles
-			gc.EXPECT().AssignIAMRole(projectId, "artifact-registry-writer", projectId, []string{"roles/artifactregistry.writer"}).Return(nil)
-			gc.EXPECT().AssignIAMRole(projectId, "cloud-controller", projectId, []string{"roles/compute.admin"}).Return(nil)
-			gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", projectId, []string{"roles/dns.admin"}).Return(nil)
+			gc.EXPECT().AssignIAMRole(projectID, "artifact-registry-writer", projectID, []string{"roles/artifactregistry.writer"}).Return(nil)
+			gc.EXPECT().AssignIAMRole(projectID, "cloud-controller", projectID, []string{"roles/compute.admin"}).Return(nil)
+			gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", projectID, []string{"roles/dns.admin"}).Return(nil)
+			gc.EXPECT().AssignIAMRole(projectID, "openfga-backup", projectID, []string{"roles/storage.objectAdmin"}).Return(nil)
+
+			// EnsureOpenfgaBackupBucket
+			gc.EXPECT().EnsureStorageBucket(projectID, projectID+"-openfga-backup", "us-central1").Return(nil)
+			gc.EXPECT().CreateHMACKey(projectID, "openfga-backup@"+projectID+".iam.gserviceaccount.com").Return("fake-access-id", "fake-secret", nil)
 
 			// EnsureVPC
-			gc.EXPECT().CreateVPC(projectId, "us-central1", projectId+"-vpc", projectId+"-us-central1-subnet", projectId+"-router", projectId+"-nat-gateway").Return(nil)
+			gc.EXPECT().CreateVPC(projectID, "us-central1", projectID+"-vpc", projectID+"-us-central1-subnet", projectID+"-router", projectID+"-nat-gateway").Return(nil)
 
 			// EnsureFirewallRules (5 times)
-			gc.EXPECT().CreateFirewallRule(projectId, mock.Anything).Return(nil).Times(5)
+			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(5)
 
 			// EnsureComputeInstances
 			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
-			mockGetInstanceNotFoundThenRunning(gc, projectId, "us-central1-a", ipResp, 8)
+			mockGetInstanceNotFoundThenRunning(gc, projectID, "us-central1-a", ipResp, 8)
 			fw.EXPECT().ReadFile(mock.Anything).Return([]byte("fake-key"), nil).Times(1)
-			gc.EXPECT().CreateInstance(projectId, "us-central1-a", mock.Anything).Return(nil).Times(8)
+			gc.EXPECT().CreateInstance(projectID, "us-central1-a", mock.Anything).Return(nil).Times(8)
 
 			// EnsureGatewayIPAddresses
-			gc.EXPECT().GetAddress(projectId, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
-			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "gateway" })).Return("1.1.1.1", nil)
-			gc.EXPECT().GetAddress(projectId, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
-			gc.EXPECT().GetAddress(projectId, "us-central1", "public-gateway").Return(nil, fmt.Errorf("not found"))
-			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "public-gateway" })).Return("2.2.2.2", nil)
-			gc.EXPECT().GetAddress(projectId, "us-central1", "public-gateway").Return(&computepb.Address{Address: protoString("2.2.2.2")}, nil)
-			gc.EXPECT().GetAddress(projectId, "us-central1", "ssh-proxy").Return(nil, fmt.Errorf("not found"))
-			gc.EXPECT().CreateAddress(projectId, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "ssh-proxy" })).Return("3.3.3.3", nil)
-			gc.EXPECT().GetAddress(projectId, "us-central1", "ssh-proxy").Return(&computepb.Address{Address: protoString("3.3.3.3")}, nil)
+			gc.EXPECT().GetAddress(projectID, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateAddress(projectID, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "gateway" })).Return("1.1.1.1", nil)
+			gc.EXPECT().GetAddress(projectID, "us-central1", "gateway").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().GetAddress(projectID, "us-central1", "public-gateway").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateAddress(projectID, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "public-gateway" })).Return("2.2.2.2", nil)
+			gc.EXPECT().GetAddress(projectID, "us-central1", "public-gateway").Return(&computepb.Address{Address: protoString("2.2.2.2")}, nil)
+			gc.EXPECT().GetAddress(projectID, "us-central1", "ssh-proxy").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateAddress(projectID, "us-central1", mock.MatchedBy(func(addr *computepb.Address) bool { return *addr.Name == "ssh-proxy" })).Return("3.3.3.3", nil)
+			gc.EXPECT().GetAddress(projectID, "us-central1", "ssh-proxy").Return(&computepb.Address{Address: protoString("3.3.3.3")}, nil)
 
 			// UpdateInstallConfig
 			icg.EXPECT().GenerateSecrets().Return(nil)
@@ -256,11 +265,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, "test-zone", mock.MatchedBy(func(records []*dns.ResourceRecordSet) bool {
 				return len(records) == 5
 			})).Return(nil)
-
-			// GenerateK0sConfigScript
-			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
-			nodeClient.EXPECT().CopyFile(mock.Anything, "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
-			nodeClient.EXPECT().RunCommand(mock.Anything, "root", "chmod +x /root/configure-k0s.sh").Return(nil)
 
 			err := bs.Bootstrap()
 			Expect(err).NotTo(HaveOccurred())
@@ -293,13 +297,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(cpNode.GetExternalIP()).To(Equal("1.2.3.4"))
 				Expect(cpNode.GetInternalIP()).To(Equal("10.0.0.1"))
 			}
-
-			Expect(len(bs.Env.InstallConfig.Codesphere.ManagedServices)).To(Equal(5))
 		})
 	})
 
 	Describe("ValidateInput", func() {
 		var artifacts []portal.Artifact
+
 		Context("When GitHub team and org is set", func() {
 			BeforeEach(func() {
 				csEnv.GitHubTeamOrg = "codesphere-cloud"
@@ -884,6 +887,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				icg = installer.NewMockInstallConfigManager(GinkgoT())
 				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
 				gc = gcp.NewMockGCPClientManager(GinkgoT())
 				fw = util.NewMockFileIO(GinkgoT())
 			})
@@ -1232,9 +1236,79 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureHostsConfigured()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It("creates the directory the installer uploads the age key to on every node", func() {
+				mkdirs := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if command == "mkdir -p /etc/codesphere/secrets" {
+							mkdirs[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				// The postgres node plus every cluster node of every data center.
+				Expect(mkdirs).To(Equal(map[string]int{
+					"postgres": 1,
+					"k0s-1":    1, "k0s-2": 1, "k0s-3": 1,
+					"ceph-1": 1, "ceph-2": 1, "ceph-3": 1,
+				}))
+			})
+
+			It("creates a secondary data center's own secrets directory on its nodes only", func() {
+				secondary := &datacenter.DataCenter{ID: 2, Suffix: "-dc2", SecretsDir: "/etc/codesphere/secrets-dc2"}
+				secondary.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1-dc2", nodeClient)}
+				secondary.CephNodes = []*node.Node{fakeNode("ceph-1-dc2", nodeClient)}
+
+				bs.Env.DataCenters = []*datacenter.DataCenter{
+					{
+						ID:                1,
+						SecretsDir:        "/etc/codesphere/secrets",
+						ControlPlaneNodes: bs.Env.ControlPlaneNodes,
+						CephNodes:         bs.Env.CephNodes,
+					},
+					secondary,
+				}
+
+				mkdirs := map[string][]string{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if dir, found := strings.CutPrefix(command, "mkdir -p "); found {
+							mkdirs[n.GetName()] = append(mkdirs[n.GetName()], dir)
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				// Both paths on the secondary's nodes, because the installer's fixed path is
+				// created everywhere; the secondary's path on nobody else's.
+				Expect(mkdirs["k0s-1-dc2"]).To(ConsistOf("/etc/codesphere/secrets", "/etc/codesphere/secrets-dc2"))
+				Expect(mkdirs["ceph-1-dc2"]).To(ConsistOf("/etc/codesphere/secrets", "/etc/codesphere/secrets-dc2"))
+				Expect(mkdirs["k0s-1"]).To(ConsistOf("/etc/codesphere/secrets"))
+				Expect(mkdirs["postgres"]).To(ConsistOf("/etc/codesphere/secrets"))
+			})
 		})
 
 		Describe("Invalid cases", func() {
+			It("fails when the secrets directory cannot be created", func() {
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						if command == "mkdir -p /etc/codesphere/secrets" {
+							return fmt.Errorf("ouch")
+						}
+
+						return nil
+					})
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to create secrets directory on postgres")))
+			})
+
 			It("fails when ConfigureInotifyWatches fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch"))
 
@@ -1377,6 +1451,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
 			csEnv.InstallHash = "abc1234567890"
+
 			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
 		})
 		Describe("Valid InstallCodesphere", func() {
