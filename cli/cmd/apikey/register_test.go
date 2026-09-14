@@ -30,7 +30,7 @@ var _ = Describe("RegisterCmd", func() {
 	BeforeEach(func() {
 		mockPortal = portal.NewMockPortal(GinkgoT())
 		validFor = "10d"
-		owner = "test-owner"
+		owner = "test-owner@example.com"
 		organization = "test-org"
 		role = apikey.API_KEY_ROLE_ADMIN
 		c = apikey.RegisterCmd{
@@ -124,6 +124,15 @@ var _ = Describe("RegisterCmd", func() {
 			ak, err := c.Register(mockPortal)
 			Expect(ak).To(BeNil())
 			Expect(err).To(MatchError(ContainSubstring("invalid role: InvalidRole")))
+		})
+	})
+
+	Context("when owner is not a valid email address", func() {
+		It("returns error for invalid owner", func() {
+			c.Opts.Owner = "not-an-email"
+			ak, err := c.Register(mockPortal)
+			Expect(ak).To(BeNil())
+			Expect(err).To(MatchError(ContainSubstring("invalid owner")))
 		})
 	})
 })

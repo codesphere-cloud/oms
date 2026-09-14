@@ -10,7 +10,7 @@ test:
 	# -count=1 to disable caching test results
 	go test -count=1 -v ./...
 
-test-integration:
+test-integration: build-cli
 	# Run integration tests with build tag
 	go test -count=1 -v -tags=integration ./cli/...
 
