@@ -1425,6 +1425,44 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureDNSRecords()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It("points each data center's platform host at its own gateway", func() {
+				bs.Env.DataCenters = []*datacenter.DataCenter{
+					{
+						ID: 1, GatewayIP: "1.1.1.1", PublicGatewayIP: "1.1.1.2", SSHProxyIP: "1.1.1.3",
+						WorkspaceHostingBaseDomain: "1.ws.example.com", SSHBaseDomain: "1.ssh.cs.example.com",
+					},
+					{
+						ID: 2, Suffix: "-dc2", GatewayIP: "2.2.2.1", PublicGatewayIP: "2.2.2.2", SSHProxyIP: "2.2.2.3",
+						WorkspaceHostingBaseDomain: "2.ws.example.com", SSHBaseDomain: "2.ssh.cs.example.com",
+					},
+				}
+
+				gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, csEnv.DNSZoneName, csEnv.BaseDomain+".", mock.Anything).Return(nil)
+
+				targets := map[string]string{}
+
+				gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, csEnv.DNSZoneName, mock.Anything).
+					RunAndReturn(func(_ string, _ string, records []*dns.ResourceRecordSet) error {
+						for _, r := range records {
+							targets[r.Name] = r.Rrdatas[0]
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureDNSRecords()).To(Succeed())
+				// The shared platform name stays on the primary data center's gateway, but the
+				// per-data-center platform host the frontend calls resolves to its own gateway.
+				Expect(targets["cs.example.com."]).To(Equal("1.1.1.1"))
+				Expect(targets["*.cs.example.com."]).To(Equal("1.1.1.1"))
+				Expect(targets["1.cs.example.com."]).To(Equal("1.1.1.1"))
+				Expect(targets["2.cs.example.com."]).To(Equal("2.2.2.1"))
+				Expect(targets["*.2.cs.example.com."]).To(Equal("2.2.2.1"))
+				// Workspaces and SSH keep pointing at the public gateway and SSH proxy.
+				Expect(targets["2.ws.example.com."]).To(Equal("2.2.2.2"))
+				Expect(targets["*.2.ssh.cs.example.com."]).To(Equal("2.2.2.3"))
+			})
 		})
 
 		Describe("Invalid cases", func() {
