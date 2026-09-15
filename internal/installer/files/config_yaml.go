@@ -600,18 +600,19 @@ type OAuthConfig struct {
 }
 
 type ManagedServiceConfig struct {
-	Name          string                 `yaml:"name"`
-	API           ManagedServiceAPI      `yaml:"api,omitempty"`
-	Author        string                 `yaml:"author,omitempty"`
-	Category      string                 `yaml:"category,omitempty"`
-	ConfigSchema  map[string]interface{} `yaml:"configSchema,omitempty"`
-	DetailsSchema map[string]interface{} `yaml:"detailsSchema,omitempty"`
-	SecretsSchema map[string]interface{} `yaml:"secretsSchema,omitempty"`
-	Description   string                 `yaml:"description,omitempty"`
-	DisplayName   string                 `yaml:"displayName,omitempty"`
-	IconURL       string                 `yaml:"iconUrl,omitempty"`
-	Plans         []ServicePlan          `yaml:"plans,omitempty"`
-	Version       string                 `yaml:"version"`
+	Name               string                   `yaml:"name"`
+	API                ManagedServiceAPI        `yaml:"api,omitempty"`
+	Author             string                   `yaml:"author,omitempty"`
+	Category           string                   `yaml:"category,omitempty"`
+	ConfigSchema       map[string]interface{}   `yaml:"configSchema,omitempty"`
+	DetailsSchema      map[string]interface{}   `yaml:"detailsSchema,omitempty"`
+	SecretsSchema      map[string]interface{}   `yaml:"secretsSchema,omitempty"`
+	Description        string                   `yaml:"description,omitempty"`
+	DisplayName        string                   `yaml:"displayName,omitempty"`
+	IconURL            string                   `yaml:"iconUrl,omitempty"`
+	ResourceParameters map[string]ResourceParam `yaml:"resourceParameters,omitempty"`
+	Plans              []ServicePlan            `yaml:"plans,omitempty"`
+	Version            string                   `yaml:"version"`
 }
 
 type ManagedServiceAPI struct {
@@ -625,9 +626,32 @@ type ServicePlan struct {
 	Parameters  map[string]PlanParam `yaml:"parameters"`
 }
 
-type PlanParam struct {
-	PricedAs string                 `yaml:"pricedAs"`
+type ResourceParam struct {
+	PricedAs string                 `yaml:"pricedAs,omitempty"`
 	Schema   map[string]interface{} `yaml:"schema"`
+}
+
+// TODO(CU-869ev5bn2): once legacy support is dropped, delete PlanParam and its custom
+// (Un)MarshalYAML methods entirely; ServicePlan.Parameters becomes map[string]interface{}
+type PlanParam struct {
+	IsScalar bool
+	Value    interface{}
+	Legacy   ResourceParam
+}
+
+func (p *PlanParam) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		p.IsScalar = true
+		return value.Decode(&p.Value)
+	}
+	return value.Decode(&p.Legacy)
+}
+
+func (p PlanParam) MarshalYAML() (interface{}, error) {
+	if p.IsScalar {
+		return p.Value, nil
+	}
+	return p.Legacy, nil
 }
 
 type ManagedServiceBackendsConfig struct {
