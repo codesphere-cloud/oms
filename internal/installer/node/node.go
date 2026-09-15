@@ -5,6 +5,7 @@ package node
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -468,7 +469,9 @@ func (n *Node) createClient(jumpboxIp string, ip string, username string) (*ssh.
 		}
 
 		finalAddr := fmt.Sprintf("%s:22", ip)
-		jbConn, err := jbClient.Dial("tcp", finalAddr)
+		dialCtx, cancel := context.WithTimeout(context.Background(), finalTargetConfig.Timeout)
+		defer cancel()
+		jbConn, err := jbClient.DialContext(dialCtx, "tcp", finalAddr)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create connection through jumpbox: %v", err)
 		}

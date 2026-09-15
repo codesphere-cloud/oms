@@ -954,8 +954,10 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 	return nil
 }
 
+const sshReadyTimeout = 5 * time.Minute
+
 func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
-	err := node.NodeClient.WaitReady(node, 30*time.Second)
+	err := node.NodeClient.WaitReady(node, sshReadyTimeout)
 	if err != nil {
 		return fmt.Errorf("timed out waiting for SSH service to start on %s: %w", node.GetName(), err)
 	}
