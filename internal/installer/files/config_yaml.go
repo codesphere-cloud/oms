@@ -610,8 +610,11 @@ type ManagedServiceConfig struct {
 	Description   string                 `yaml:"description,omitempty"`
 	DisplayName   string                 `yaml:"displayName,omitempty"`
 	IconURL       string                 `yaml:"iconUrl,omitempty"`
-	Plans         []ServicePlan          `yaml:"plans,omitempty"`
-	Version       string                 `yaml:"version"`
+	// ResourceParameters is the provider-level parameter schema shared across all plans
+	// (new format). It is absent in the old format, where each plan carried its own schema.
+	ResourceParameters map[string]ResourceParam `yaml:"resourceParameters,omitempty"`
+	Plans              []ServicePlan            `yaml:"plans,omitempty"`
+	Version            string                   `yaml:"version"`
 }
 
 type ManagedServiceAPI struct {
@@ -625,9 +628,47 @@ type ServicePlan struct {
 	Parameters  map[string]PlanParam `yaml:"parameters"`
 }
 
-type PlanParam struct {
-	PricedAs string                 `yaml:"pricedAs"`
+// ResourceParam is the definition of a resource parameter: its pricing tag and JSON-schema
+// constraints (type, minimum, readOnly, ...). In the new format it lives once in the
+// provider-level ResourceParameters block; in the old format the same shape appeared inline
+// on every plan. This is the permanent type and survives the legacy migration untouched.
+type ResourceParam struct {
+	PricedAs string                 `yaml:"pricedAs,omitempty"`
 	Schema   map[string]interface{} `yaml:"schema"`
+}
+
+// PlanParam is one plan's value for a resource parameter, in either format supported during
+// the grace period while the marketplace migrates:
+//   - New format: a plain scalar Value (the plan's default for that parameter).
+//   - Old format: the full ResourceParam definition, inline on the plan.
+//
+// IsScalar distinguishes the two, so a scalar value of 0 or null round-trips as a scalar
+// rather than being re-emitted as an empty schema object.
+//
+// TODO(CU-869ev5bn2): once legacy support is dropped, delete PlanParam and its custom
+// (Un)MarshalYAML methods entirely; ServicePlan.Parameters becomes map[string]interface{}
+// (the marketplace schema restricts values to numbers, but interface{} keeps oms a faithful
+// round-tripper and avoids coercing integers to floats), leaving ResourceParam as the only
+// parameter type.
+type PlanParam struct {
+	IsScalar bool
+	Value    interface{}
+	Legacy   ResourceParam
+}
+
+func (p *PlanParam) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		p.IsScalar = true
+		return value.Decode(&p.Value)
+	}
+	return value.Decode(&p.Legacy)
+}
+
+func (p PlanParam) MarshalYAML() (interface{}, error) {
+	if p.IsScalar {
+		return p.Value, nil
+	}
+	return p.Legacy, nil
 }
 
 type ManagedServiceBackendsConfig struct {

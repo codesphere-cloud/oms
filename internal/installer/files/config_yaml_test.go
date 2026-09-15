@@ -613,3 +613,100 @@ var _ = Describe("RootConfig Clone", func() {
 		Expect(string(data)).NotTo(ContainSubstring("unmodelledKey"))
 	})
 })
+
+var _ = Describe("ManagedService plan parameters", func() {
+	It("parses the old format where each plan parameter is a {pricedAs, schema} object", func() {
+		yamlData := `
+codesphere:
+  managedServices:
+    - name: ferretdb
+      version: v0
+      plans:
+        - id: 0
+          name: Small
+          parameters:
+            storage:
+              pricedAs: storage-mib
+              schema:
+                type: integer
+                default: 512
+                minimum: 512
+`
+		var config files.RootConfig
+		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
+
+		Expect(config.Codesphere.ManagedServices).To(HaveLen(1))
+		storage := config.Codesphere.ManagedServices[0].Plans[0].Parameters["storage"]
+		Expect(storage.IsScalar).To(BeFalse())
+		Expect(storage.Legacy.PricedAs).To(Equal("storage-mib"))
+		Expect(storage.Legacy.Schema).To(HaveKeyWithValue("default", 512))
+	})
+
+	It("parses the new format with scalar plan parameters and a provider-level resourceParameters block", func() {
+		yamlData := `
+codesphere:
+  managedServices:
+    - name: ferretdb
+      version: v0
+      resourceParameters:
+        storage:
+          pricedAs: storage-mib
+          schema:
+            type: integer
+            minimum: 512
+      plans:
+        - id: 0
+          name: Small
+          parameters:
+            storage: 512
+            cpu: 0
+`
+		var config files.RootConfig
+		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
+
+		svc := config.Codesphere.ManagedServices[0]
+		resource := svc.ResourceParameters["storage"]
+		Expect(resource.PricedAs).To(Equal("storage-mib"))
+		Expect(resource.Schema).To(HaveKeyWithValue("type", "integer"))
+
+		params := svc.Plans[0].Parameters
+		Expect(params["storage"].IsScalar).To(BeTrue())
+		Expect(params["storage"].Value).To(Equal(512))
+		Expect(params["cpu"].IsScalar).To(BeTrue())
+		Expect(params["cpu"].Value).To(Equal(0))
+	})
+
+	It("preserves a new-format managed service through a Clone round-trip", func() {
+		yamlData := `
+codesphere:
+  managedServices:
+    - name: virtual-k8s
+      version: v1
+      resourceParameters:
+        cpu:
+          pricedAs: cpu-tenths
+          schema:
+            type: integer
+            minimum: 32
+        loadBalancerLimit:
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 2
+      plans:
+        - id: 0
+          name: Custom
+          description: Modify all parameters
+          parameters:
+            cpu: 50
+            loadBalancerLimit: 0
+`
+		var config files.RootConfig
+		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
+
+		clone, err := config.Clone()
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(clone.Codesphere.ManagedServices).To(Equal(config.Codesphere.ManagedServices))
+	})
+})
