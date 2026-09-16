@@ -4711,8 +4711,8 @@ github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWN
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/rogpeppe/go-internal v1.16.0 h1:O9DK+vNMDVGLr2BeZqmpLeMjiMNkuXfcqntWbZV6S5g=
 github.com/rogpeppe/go-internal v1.16.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/rook/rook/pkg/apis v0.0.0-20260916124047-ee55ea4494a9 h1:0a4uenUp8XZyenKGwOfr9rFcA2j3y3lgekNvrEDl/OE=
-github.com/rook/rook/pkg/apis v0.0.0-20260916124047-ee55ea4494a9/go.mod h1:/w90bR1VfwSprwWPyhT8ShROlEpRNXn5vSLmR1qH0jk=
+github.com/rook/rook/pkg/apis v0.0.0-20260916183928-de651b9726dd h1:/49qkuNAouDzQCug2pXvjQ6QK/oXwId6MDUSQ4cSTd4=
+github.com/rook/rook/pkg/apis v0.0.0-20260916183928-de651b9726dd/go.mod h1:/w90bR1VfwSprwWPyhT8ShROlEpRNXn5vSLmR1qH0jk=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937 h1:1TpdIqF9mtQfhNfwOpXdpJTMhx66PonVCCvYcGWvu/I=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937/go.mod h1:jOxzr6jXuSz9UztMhEpcBi1/vPygUA4z9kFuFj+6zd8=
 github.com/rs/xid v1.2.1/go.mod h1:+uKXf+4Djp6Md1KODXJxgGQPKngRmWyn10oCKFzNHOQ=
