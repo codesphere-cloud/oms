@@ -72,7 +72,11 @@ func GetRootCmd() *cobra.Command {
 	apikey.AddRegisterCmd(rootCmd, opts)
 	AddRevokeCmd(rootCmd, opts)
 
-	// Smoke test commands
+	// Status and test commands
+	AddStatusCmd(rootCmd, opts)
+	AddTestCmd(rootCmd, opts)
+
+	// Deprecated, superseded by the smoketest step of 'oms test codesphere'.
 	AddSmoketestCmd(rootCmd, opts)
 
 	// Resource creation commands
