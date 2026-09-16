@@ -53,7 +53,9 @@ func DataCenterDNSRecordNames(baseDomain string, dcs []*datacenter.DataCenter) [
 	return records
 }
 
-func (b *GCPBootstrapper) ensureDnsPermissions() error {
+// ensureDNSPermissions grants the cloud-controller service account DNS admin on the project that
+// hosts the managed zone, which is the DNS project when one is configured.
+func (b *GCPBootstrapper) ensureDNSPermissions() error {
 	dnsProject := b.Env.DNSProjectID
 	if b.Env.DNSProjectID == "" {
 		dnsProject = b.Env.ProjectID
@@ -67,6 +69,9 @@ func (b *GCPBootstrapper) ensureDnsPermissions() error {
 	return nil
 }
 
+// EnsureDNSRecords creates the managed zone and the A records for the platform, every data
+// center's workspace and SSH names and, with more than one data center, each one's own platform
+// host. It records the created names in the environment so cleanup deletes exactly those.
 func (b *GCPBootstrapper) EnsureDNSRecords() error {
 	if err := b.ensureDataCenters(); err != nil {
 		return err
