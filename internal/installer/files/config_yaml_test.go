@@ -709,4 +709,46 @@ codesphere:
 
 		Expect(clone.Codesphere.ManagedServices).To(Equal(config.Codesphere.ManagedServices))
 	})
+
+	It("keeps a null plan parameter as null through a round-trip", func() {
+		yamlData := `
+codesphere:
+  managedServices:
+    - name: ferretdb
+      version: v0
+      plans:
+        - id: 0
+          name: Small
+          parameters:
+            storage: null
+`
+		var config files.RootConfig
+		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
+
+		clone, err := config.Clone()
+		Expect(err).NotTo(HaveOccurred())
+
+		storage := clone.Codesphere.ManagedServices[0].Plans[0].Parameters["storage"]
+		Expect(storage.Legacy.Schema).To(BeNil())
+	})
+
+	It("fails with a clear error on an unsupported plan parameter shape", func() {
+		yamlData := `
+codesphere:
+  managedServices:
+    - name: ferretdb
+      version: v0
+      plans:
+        - id: 0
+          name: Small
+          parameters:
+            storage:
+              - 1
+              - 2
+`
+		var config files.RootConfig
+		err := config.Unmarshal([]byte(yamlData))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("unsupported plan parameter shape"))
+	})
 })

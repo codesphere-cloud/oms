@@ -640,16 +640,23 @@ type PlanParam struct {
 }
 
 func (p *PlanParam) UnmarshalYAML(value *yaml.Node) error {
-	if value.Kind == yaml.ScalarNode {
+	switch value.Kind {
+	case yaml.ScalarNode:
 		p.IsScalar = true
 		return value.Decode(&p.Value)
+	case yaml.MappingNode:
+		return value.Decode(&p.Legacy)
+	default:
+		return fmt.Errorf("unsupported plan parameter shape %s at line %d", value.ShortTag(), value.Line)
 	}
-	return value.Decode(&p.Legacy)
 }
 
 func (p PlanParam) MarshalYAML() (interface{}, error) {
 	if p.IsScalar {
 		return p.Value, nil
+	}
+	if p.Legacy.PricedAs == "" && p.Legacy.Schema == nil {
+		return nil, nil
 	}
 	return p.Legacy, nil
 }
