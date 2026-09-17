@@ -189,10 +189,11 @@ func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 
 	registry := b.Env.InstallConfig.EnsureRegistry()
 	registry.Server = "ghcr.io"
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
 	registry.ReplaceImagesInBom = false
 	registry.LoadContainerImages = false
+
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
 
 	return nil
 }
