@@ -212,6 +212,83 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to download k0s"))
 		})
 
+		It("installs k0s airgapped from a local bundle", func() {
+			config := createTestConfig(true)
+			config.Kubernetes.Workers = []files.K8sNode{{IPAddress: "192.168.1.101"}}
+			c.Opts.InstallConfig = writeTestConfig(config)
+			c.Opts.Version = "v1.30.0+k0s.0"
+			c.Opts.AirGapped = true
+			c.Opts.AirgapBundle = filepath.Join(tempDir, "k0s-airgap-bundle-amd64")
+
+			err := os.WriteFile(c.Opts.AirgapBundle, []byte("bundle"), 0644)
+			Expect(err).NotTo(HaveOccurred())
+
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", false, false, true).Return("/downloaded/k0s", nil)
+			mockFileWriter.EXPECT().Exists(c.Opts.AirgapBundle).Return(true)
+			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			// The generated k0sctl config must upload the bundle to the workers and
+			// the embedded k0s config must stop pulling images.
+			mockFileWriter.EXPECT().WriteFile(
+				mock.Anything,
+				mock.MatchedBy(func(data []byte) bool {
+					return strings.Contains(string(data), "dstDir: /var/lib/k0s/images") &&
+						strings.Contains(string(data), "default_pull_policy: Never")
+				}),
+				mock.Anything,
+			).Return(nil)
+			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
+
+			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("resolves the airgap bundle from the cache when no path is given", func() {
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+			c.Opts.Version = "v1.30.0+k0s.0"
+			c.Opts.AirGapped = true
+
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", false, false, true).Return("/downloaded/k0s", nil)
+			mockK0s.EXPECT().EnsureAirgapBundle("v1.30.0+k0s.0", false, false).Return("/cache/k0s-airgap-bundle-amd64", nil)
+			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("fails when the airgap bundle path does not exist", func() {
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+			c.Opts.Version = "v1.30.0+k0s.0"
+			c.Opts.AirGapped = true
+			c.Opts.AirgapBundle = "/nonexistent/bundle.tar"
+
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", false, false, true).Return("/downloaded/k0s", nil)
+			mockFileWriter.EXPECT().Exists("/nonexistent/bundle.tar").Return(false)
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("does not exist"))
+		})
+
+		It("fails when an airgap bundle is given without --airgapped", func() {
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+			c.Opts.AirgapBundle = "/cache/k0s-airgap-bundle-amd64"
+
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("--airgap-bundle requires --airgapped"))
+		})
+
 		It("fails when k0sctl download fails", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = "test-package.tar.gz"
@@ -609,7 +686,8 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.Opts.Vault = vaultPath
 				c.Opts.VaultPrivKey = ageKeyPath
 
-				// Use mockFileWriter to simulate an I/O error during encryption.
+				// The vault itself is written through the real filesystem, so the
+				// failure is provoked on the filesystem instead of via the mock.
 				c.FileWriter = mockFileWriter
 
 				setupCommonMocks()
@@ -621,28 +699,21 @@ var _ = Describe("InstallK0sCmd", func() {
 				}), mock.Anything, mock.Anything).Return(nil)
 				mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
-				mockFileWriter.EXPECT().MkdirAll(mock.Anything, os.FileMode(0755)).Return(nil)
 
-				// Vault exists and is encrypted.
-				mockFileWriter.EXPECT().Exists(vaultPath).Return(true)
-
-				// Simulate encryption failure: writing the temporary vault file fails.
-				mockFileWriter.EXPECT().WriteFile(vaultPath+".tmp", mock.Anything, os.FileMode(0600)).
-					Return(os.ErrPermission)
+				// Make the vault directory unwritable so the SOPS backend cannot create
+				// its temporary files while the existing vault file stays readable.
+				Expect(os.Chmod(tempDir, 0500)).To(Succeed())
+				DeferCleanup(func() { _ = os.Chmod(tempDir, 0755) })
 
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to write temporary vault file"))
+				Expect(err.Error()).To(ContainSubstring("failed to create temporary plaintext vault"))
 
 				// Verify the vault file is unchanged.
 				currentData, err := os.ReadFile(vaultPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(currentData)).To(Equal(string(origData)),
 					"vault should be untouched when encryption fails")
-
-				// Verify no tmp file is left behind.
-				tmpPath := vaultPath + ".tmp"
-				Expect(tmpPath).NotTo(BeAnExistingFile())
 			})
 		})
 	})

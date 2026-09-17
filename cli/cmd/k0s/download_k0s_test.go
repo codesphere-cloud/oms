@@ -85,6 +85,18 @@ var _ = Describe("DownloadK0sk0s", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
+		It("requests the airgap bundle when --airgapped is set", func() {
+			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
+
+			c.Opts.Version = "v1.29.1+k0s.0"
+			c.Opts.AirGapped = true
+
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", false, false, true).Return("/test/workdir/k0s", nil)
+
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
 		It("succeeds when version is auto-detected and download works", func() {
 			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
 

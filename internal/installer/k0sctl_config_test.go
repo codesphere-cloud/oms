@@ -136,6 +136,79 @@ var _ = Describe("K0sctlConfig", func() {
 				Expect(k0sctlConfig.Spec.Hosts[0].Environment).To(HaveKeyWithValue("KUBELET_EXTRA_ARGS", "--node-ip=10.0.1.10"))
 			})
 
+			It("should upload the airgap bundle to worker nodes when airgapped", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+				installConfig.Kubernetes.Workers = []files.K8sNode{
+					{IPAddress: "10.0.2.10"},
+				}
+
+				airgap := installer.AirgapOptions{Enabled: true, BundlePath: "/cache/k0s-airgap-bundle-amd64"}
+
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "", airgap)
+				Expect(err).ToNot(HaveOccurred())
+
+				// Controllers without the worker role do not import image bundles.
+				Expect(k0sctlConfig.Spec.Hosts[0].Role).To(Equal("controller"))
+				Expect(k0sctlConfig.Spec.Hosts[0].Files).To(BeEmpty())
+
+				Expect(k0sctlConfig.Spec.Hosts[1].Role).To(Equal("worker"))
+				Expect(k0sctlConfig.Spec.Hosts[1].Files).To(Equal([]installer.K0sctlFile{{
+					Src:    "/cache/k0s-airgap-bundle-amd64",
+					DstDir: "/var/lib/k0s/images",
+					Perm:   "0644",
+				}}))
+			})
+
+			It("should upload the airgap bundle to control planes that also run a worker", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+				installConfig.Kubernetes.Workers = []files.K8sNode{
+					{IPAddress: "10.0.1.10"}, // Same node, so it also runs a worker
+				}
+
+				airgap := installer.AirgapOptions{Enabled: true, BundlePath: "/cache/bundle"}
+
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "", airgap)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(1))
+				Expect(k0sctlConfig.Spec.Hosts[0].InstallFlags).To(Equal([]string{"--enable-worker", "--no-taints=true"}))
+				Expect(k0sctlConfig.Spec.Hosts[0].Files).To(HaveLen(1))
+			})
+
+			It("should not upload files for installations with internet access", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+				installConfig.Kubernetes.Workers = []files.K8sNode{
+					{IPAddress: "10.0.2.10"},
+				}
+
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(k0sctlConfig.Spec.Hosts[0].Files).To(BeEmpty())
+				Expect(k0sctlConfig.Spec.Hosts[1].Files).To(BeEmpty())
+			})
+
+			It("should marshal the airgap upload with k0sctl field names", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+				installConfig.Kubernetes.Workers = []files.K8sNode{
+					{IPAddress: "10.0.2.10"},
+				}
+
+				airgap := installer.AirgapOptions{Enabled: true, BundlePath: "/cache/bundle"}
+
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "", airgap)
+				Expect(err).ToNot(HaveOccurred())
+
+				yamlData, err := k0sctlConfig.Marshal()
+				Expect(err).ToNot(HaveOccurred())
+
+				yamlString := string(yamlData)
+				Expect(yamlString).To(ContainSubstring("files:"))
+				Expect(yamlString).To(ContainSubstring("src: /cache/bundle"))
+				Expect(yamlString).To(ContainSubstring("dstDir: /var/lib/k0s/images"))
+				Expect(yamlString).To(ContainSubstring("perm:"))
+			})
+
 			It("should generate valid YAML", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
