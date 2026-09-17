@@ -25,16 +25,16 @@ replace (
 
 require (
 	cloud.google.com/go/artifactregistry v1.26.0
-	cloud.google.com/go/compute v1.67.0
+	cloud.google.com/go/compute v1.68.0
 	cloud.google.com/go/iam v1.13.0
 	cloud.google.com/go/resourcemanager v1.16.0
 	cloud.google.com/go/serviceusage v1.15.0
 	filippo.io/age v1.3.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/argoproj/argo-cd/v3 v3.5.2
+	github.com/argoproj/argo-cd/v3 v3.5.3
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.38.0
+	github.com/codesphere-cloud/cs-go v1.40.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/distribution/reference v0.6.0
 	github.com/getsops/sops/v3 v3.13.3
@@ -46,7 +46,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.32.2
 	github.com/onsi/gomega v1.43.0
 	github.com/pkg/sftp v1.13.11
-	github.com/rook/rook/pkg/apis v0.0.0-20260908181407-bd54fc7aee27
+	github.com/rook/rook/pkg/apis v0.0.0-20260916215613-09bbdd1c16d8
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
@@ -54,11 +54,11 @@ require (
 	golang.org/x/mod v0.41.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/term v0.46.0
-	google.golang.org/api v0.297.0
+	google.golang.org/api v0.298.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
-	helm.sh/helm/v4 v4.2.4
+	helm.sh/helm/v4 v4.3.0
 	k8s.io/api v0.37.0
 	k8s.io/apimachinery v0.37.0
 	k8s.io/client-go v12.0.0+incompatible
@@ -84,7 +84,7 @@ require (
 	code.gitea.io/sdk/gitea v0.25.1 // indirect
 	codeberg.org/chavacava/garif v0.2.1 // indirect
 	codeberg.org/polyfloyd/go-errorlint v1.9.0 // indirect
-	cyphar.com/go-pathrs v0.2.2 // indirect
+	cyphar.com/go-pathrs v0.2.5 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	dev.gaijin.team/go/exhaustruct/v4 v4.0.0 // indirect
 	dev.gaijin.team/go/exhaustruct/v5 v5.0.3 // indirect
@@ -232,7 +232,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/curioswitch/go-reassign v0.3.0 // indirect
 	github.com/cyberphone/json-canonicalization v0.0.0-20241213102144-19d51d7fe467 // indirect
-	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
+	github.com/cyphar/filepath-securejoin v0.7.0 // indirect
 	github.com/daixiang0/gci v0.14.0 // indirect
 	github.com/dave/dst v0.27.4 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -267,9 +267,9 @@ require (
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/firefart/nonamedreturns v1.0.8 // indirect
-	github.com/fluxcd/cli-utils v1.2.1 // indirect
+	github.com/fluxcd/cli-utils v1.2.2 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
-	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
+	github.com/fxamacker/cbor/v2 v2.9.3 // indirect
 	github.com/fzipp/gocyclo v0.6.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/getsops/gopgagent v0.0.0-20241224165529-7044f28e491e // indirect
@@ -289,24 +289,24 @@ require (
 	github.com/go-openapi/analysis v0.25.5 // indirect
 	github.com/go-openapi/errors v0.22.8 // indirect
 	github.com/go-openapi/jsonpointer v1.0.0 // indirect
-	github.com/go-openapi/jsonreference v1.0.0 // indirect
+	github.com/go-openapi/jsonreference v1.0.1 // indirect
 	github.com/go-openapi/loads v0.25.0 // indirect
 	github.com/go-openapi/runtime v0.32.3 // indirect
 	github.com/go-openapi/runtime/server-middleware v0.32.3 // indirect
 	github.com/go-openapi/spec v0.22.9 // indirect
 	github.com/go-openapi/strfmt v0.27.0 // indirect
-	github.com/go-openapi/swag v0.27.1 // indirect
-	github.com/go-openapi/swag/cmdutils v0.27.1 // indirect
-	github.com/go-openapi/swag/conv v0.27.3 // indirect
-	github.com/go-openapi/swag/fileutils v0.27.3 // indirect
-	github.com/go-openapi/swag/jsonutils v0.27.3 // indirect
-	github.com/go-openapi/swag/loading v0.27.3 // indirect
-	github.com/go-openapi/swag/mangling v0.27.3 // indirect
-	github.com/go-openapi/swag/netutils v0.27.1 // indirect
-	github.com/go-openapi/swag/pools v0.27.3 // indirect
-	github.com/go-openapi/swag/stringutils v0.27.3 // indirect
-	github.com/go-openapi/swag/typeutils v0.27.3 // indirect
-	github.com/go-openapi/swag/yamlutils v0.27.3 // indirect
+	github.com/go-openapi/swag v0.29.1 // indirect
+	github.com/go-openapi/swag/cmdutils v0.29.1 // indirect
+	github.com/go-openapi/swag/conv v0.29.1 // indirect
+	github.com/go-openapi/swag/fileutils v0.29.1 // indirect
+	github.com/go-openapi/swag/jsonutils v0.29.1 // indirect
+	github.com/go-openapi/swag/loading v0.29.1 // indirect
+	github.com/go-openapi/swag/mangling v0.29.1 // indirect
+	github.com/go-openapi/swag/netutils v0.29.1 // indirect
+	github.com/go-openapi/swag/pools v0.29.1 // indirect
+	github.com/go-openapi/swag/stringutils v0.29.1 // indirect
+	github.com/go-openapi/swag/typeutils v0.29.1 // indirect
+	github.com/go-openapi/swag/yamlutils v0.29.1 // indirect
 	github.com/go-openapi/validate v0.26.1 // indirect
 	github.com/go-redis/cache/v9 v9.0.0 // indirect
 	github.com/go-restruct/restruct v1.2.0-alpha // indirect
@@ -652,16 +652,16 @@ require (
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	honnef.co/go/tools v0.8.1 // indirect
-	k8s.io/apiextensions-apiserver v0.36.2 // indirect
-	k8s.io/apiserver v0.36.4 // indirect
+	k8s.io/apiextensions-apiserver v0.37.0 // indirect
+	k8s.io/apiserver v0.37.0 // indirect
 	k8s.io/cli-runtime v0.37.0 // indirect
-	k8s.io/component-base v0.36.4 // indirect
+	k8s.io/component-base v0.37.0 // indirect
 	k8s.io/component-helpers v0.36.4 // indirect
 	k8s.io/controller-manager v0.36.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-aggregator v0.36.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad // indirect
-	k8s.io/kubectl v0.36.1 // indirect
+	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098 // indirect
+	k8s.io/kubectl v0.37.0 // indirect
 	k8s.io/kubernetes v1.36.1 // indirect
 	k8s.io/streaming v0.36.4 // indirect
 	lukechampine.com/blake3 v1.4.1 // indirect
