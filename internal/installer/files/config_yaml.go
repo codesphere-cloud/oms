@@ -806,6 +806,16 @@ func (c *CodesphereConfig) EnsureCertIssuer() *CertIssuerConfig {
 	return c.CertIssuer
 }
 
+// EnsureRegistry returns the registry config, creating an empty one first if the config does
+// not have a registry section.
+func (c *RootConfig) EnsureRegistry() *RegistryConfig {
+	if c.Registry == nil {
+		c.Registry = &RegistryConfig{}
+	}
+
+	return c.Registry
+}
+
 func (c *RootConfig) ExtractBomRefs() []string {
 	var bomRefs []string
 	for _, imageConfig := range c.Codesphere.DeployConfig.Images {
