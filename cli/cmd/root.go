@@ -72,8 +72,9 @@ func GetRootCmd() *cobra.Command {
 	apikey.AddRegisterCmd(rootCmd, opts)
 	AddRevokeCmd(rootCmd, opts)
 
-	// Smoke test commands
+	// Test commands
 	AddSmoketestCmd(rootCmd, opts)
+	AddStatusCmd(rootCmd, opts)
 
 	// Resource creation commands
 	AddCreateCmd(rootCmd, opts)
