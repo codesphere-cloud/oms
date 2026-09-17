@@ -100,6 +100,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			PreviewFlags:          gcp.DefaultPreviewFlags,
 			FeatureFlags:          gcp.DefaultFeatureFlags,
 			RootDiskSize:          50,
+			RegistryType:          gcp.RegistryTypeLocalContainer,
 			InstallConfig: &files.RootConfig{
 				Registry: &files.RegistryConfig{},
 				Postgres: files.PostgresConfig{
@@ -145,6 +146,48 @@ var _ = Describe("GCP Bootstrapper", func() {
 			fw.EXPECT().Exists(csEnv.RemoteOmsBinaryPath).Return(false)
 
 			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("remote OMS binary not found")))
+		})
+	})
+
+	Describe("ValidateInput registry params", func() {
+		It("rejects an unknown registry type", func() {
+			csEnv.RegistryType = "guthub"
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring(`unsupported registry type "guthub"`)))
+		})
+
+		It("rejects an empty registry type", func() {
+			csEnv.RegistryType = ""
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("unsupported registry type")))
+		})
+
+		It("accepts the local container registry without GitHub credentials", func() {
+			Expect(bs.ValidateInput()).To(Succeed())
+		})
+
+		Context("when the GitHub registry is selected", func() {
+			BeforeEach(func() {
+				csEnv.RegistryType = gcp.RegistryTypeGitHub
+				csEnv.GitHubPAT = "fake-pat"
+				csEnv.RegistryUser = "fake-registry-user"
+			})
+
+			It("accepts full GitHub credentials", func() {
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("rejects a missing PAT", func() {
+				csEnv.GitHubPAT = ""
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("github-pat must be set")))
+			})
+
+			It("rejects a missing registry user", func() {
+				csEnv.RegistryUser = ""
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("registry-user must be set")))
+			})
 		})
 	})
 
@@ -382,6 +425,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Context("when GHCR registry is used", func() {
 				BeforeEach(func() {
 					csEnv.RegistryType = gcp.RegistryTypeGitHub
+					csEnv.GitHubPAT = "fake-pat"
+					csEnv.RegistryUser = "fake-registry-user"
 				})
 
 				Context("when GitHub arguments are partially set", func() {
@@ -842,6 +887,20 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("EnsureLocalContainerRegistry", func() {
+		Describe("Missing jumpbox", func() {
+			It("fails when the jumpbox is not set", func() {
+				csEnv.Jumpbox = nil
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(MatchError(ContainSubstring("jumpbox not found")))
+			})
+
+			It("fails when the jumpbox has no internal IP", func() {
+				csEnv.Jumpbox = &node.Node{Name: "jumpbox", NodeClient: nodeClient}
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(MatchError(ContainSubstring("jumpbox has no internal IP")))
+			})
+		})
+
 		Describe("Valid EnsureLocalContainerRegistry", func() {
 			It("installs local registry", func() {
 				vault := &files.InstallVault{}

@@ -44,6 +44,27 @@ func (b *GCPBootstrapper) validateGitHubParams() error {
 	return nil
 }
 
+// validateRegistryParams checks that the registry type is supported and that the credentials
+// the selected type requires are set.
+func (b *GCPBootstrapper) validateRegistryParams() error {
+	switch b.Env.RegistryType {
+	case RegistryTypeLocalContainer, RegistryTypeArtifactRegistry:
+		return nil
+	case RegistryTypeGitHub:
+		if b.Env.GitHubPAT == "" {
+			return fmt.Errorf("github-pat must be set when using GitHub registry type")
+		}
+
+		if b.Env.RegistryUser == "" {
+			return fmt.Errorf("registry-user must be set when using GitHub registry type")
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("unsupported registry type %q (supported: local-container, artifact-registry, github)", b.Env.RegistryType)
+	}
+}
+
 // EnsureArtifactRegistry ensures the project's GCP Artifact Registry repository exists and
 // points the install config's registry server at it
 func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
@@ -51,7 +72,7 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 
 	repo, err := b.GCPClient.GetArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
 	if err == nil && repo != nil {
-		b.Env.InstallConfig.Registry.Server = repo.GetRegistryUri()
+		b.Env.InstallConfig.EnsureRegistry().Server = repo.GetRegistryUri()
 		return nil
 	}
 
@@ -66,6 +87,15 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 // EnsureLocalContainerRegistry installs a docker registry on the jumpbox to speed up image loading time
 func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	registryNode := b.Env.Jumpbox
+	if registryNode == nil {
+		return fmt.Errorf("jumpbox not found in bootstrap environment")
+	}
+
+	if registryNode.GetInternalIP() == "" {
+		return fmt.Errorf("jumpbox has no internal IP")
+	}
+
+	registry := b.Env.InstallConfig.EnsureRegistry()
 	localRegistryServer := registryNode.GetInternalIP() + ":5000"
 
 	// Figure out if registry is already running
@@ -84,13 +114,13 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		registryPassword = s.Fields.Password
 	}
 
-	if err == nil && b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server == localRegistryServer &&
+	if err == nil && registry.Server == localRegistryServer &&
 		registryUsername != "" && registryPassword != "" {
 		b.stlog.Logf("Local container registry already running on the jumpbox")
 		return nil
 	}
 
-	b.Env.InstallConfig.Registry.Server = localRegistryServer
+	registry.Server = localRegistryServer
 	registryUsername = "custom-registry"
 	registryPassword = shortuuid.New()
 
@@ -115,8 +145,8 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		-v /root/registry.crt:/certs/registry.crt \
 		-v /root/registry.key:/certs/registry.key \
 		registry:3`,
-		`mkdir -p /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server,
-		`cp /root/registry.crt /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server + `/ca.crt`,
+		`mkdir -p /etc/docker/certs.d/` + registry.Server,
+		`cp /root/registry.crt /etc/docker/certs.d/` + registry.Server + `/ca.crt`,
 	}
 	for _, cmd := range commands {
 		b.stlog.Logf("Running command on the jumpbox: %s", util.Truncate(cmd, 12))
@@ -157,11 +187,12 @@ func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 		return fmt.Errorf("GitHub PAT is not set")
 	}
 
-	b.Env.InstallConfig.Registry.Server = "ghcr.io"
+	registry := b.Env.InstallConfig.EnsureRegistry()
+	registry.Server = "ghcr.io"
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
-	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
-	b.Env.InstallConfig.Registry.LoadContainerImages = false
+	registry.ReplaceImagesInBom = false
+	registry.LoadContainerImages = false
 
 	return nil
 }

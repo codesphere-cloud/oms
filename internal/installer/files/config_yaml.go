@@ -763,6 +763,13 @@ func (c *CodesphereConfig) EnsureCertIssuer() *CertIssuerConfig {
 	return c.CertIssuer
 }
 
+func (c *RootConfig) EnsureRegistry() *RegistryConfig {
+	if c.Registry == nil {
+		c.Registry = &RegistryConfig{}
+	}
+	return c.Registry
+}
+
 func (c *RootConfig) ExtractBomRefs() []string {
 	var bomRefs []string
 	for _, imageConfig := range c.Codesphere.DeployConfig.Images {

@@ -196,14 +196,6 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	c.CodesphereEnv.RegistryType = gcp.RegistryType(c.InputRegistryType)
 
 	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
-	if c.CodesphereEnv.RegistryType == gcp.RegistryTypeGitHub {
-		if c.CodesphereEnv.GitHubPAT == "" {
-			return fmt.Errorf("registry-pat must be set when using GitHub registry type")
-		}
-		if c.CodesphereEnv.RegistryUser == "" {
-			return fmt.Errorf("registry-user must be set when using GitHub registry type")
-		}
-	}
 
 	if c.cmd.Flags().Changed("experiments") {
 		if c.cmd.Flags().Changed("internal-flags") {
@@ -237,17 +229,15 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return nil
 	}
 
-	packageName := "<package-name>-installer"
 	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml"
 
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
-		log.Printf("You set a GitHub PAT for direct image access. Make sure to use a lite package, as VM root disk sizes are reduced.")
+		log.Printf("Images are pulled directly from GHCR, so container images are not loaded from the package.")
 
 		installCmd += " -s load-container-images"
-		packageName += "-lite"
 	}
 
-	log.Printf("example install command (run from jumpbox):\n%s -p %s.tar.gz", installCmd, packageName)
+	log.Printf("example install command (run from jumpbox):\n%s -p <package-name>-%s", installCmd, gcp.InstallerArchiveName)
 
 	return nil
 }

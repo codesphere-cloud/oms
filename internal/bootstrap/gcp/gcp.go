@@ -28,6 +28,9 @@ import (
 	"google.golang.org/api/dns/v1"
 )
 
+// InstallerArchiveName is the package artifact bootstrapping downloads and installs.
+const InstallerArchiveName = "installer-lite.tar.gz"
+
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
 // A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
 func CheckOMSManagedLabel(labels map[string]string) bool {
@@ -452,6 +455,11 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
+	err = b.validateRegistryParams()
+	if err != nil {
+		return err
+	}
+
 	err = b.validateGitProviderParams()
 	if err != nil {
 		return err
@@ -528,7 +536,7 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 		b.Env.InstallHash = build.Hash
 	}
 
-	requiredFilename := "installer-lite.tar.gz"
+	requiredFilename := InstallerArchiveName
 	filenames := []string{}
 	// Validate required file exists in package artifacts
 	for _, artifact := range build.Artifacts {
@@ -987,16 +995,11 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 }
 
 func (b *GCPBootstrapper) codespherePackageFilename() string {
-	packageFilename := b.codespherePackageArchiveName()
 	if b.Env.InstallLocal != "" {
-		return "local-" + packageFilename
+		return "local-" + InstallerArchiveName
 	}
 
-	return portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFilename)
-}
-
-func (b *GCPBootstrapper) codespherePackageArchiveName() string {
-	return "installer-lite.tar.gz"
+	return portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, InstallerArchiveName)
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
@@ -1021,7 +1024,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
-		b.codespherePackageArchiveName(), b.Env.InstallHash, b.Env.InstallVersion)
+		InstallerArchiveName, b.Env.InstallHash, b.Env.InstallVersion)
 
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
