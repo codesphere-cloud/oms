@@ -57,7 +57,7 @@ func AddRegisterCmd(list *cobra.Command, opts *util.GlobalOptions) {
 		},
 		Opts: RegisterOpts{GlobalOptions: opts},
 	}
-	c.cmd.Flags().StringVarP(&c.Opts.Owner, "owner", "o", "", "Owner of the new API key")
+	c.cmd.Flags().StringVarP(&c.Opts.Owner, "owner", "o", "", "Owner of the new API key (must be a valid email address)")
 	c.cmd.Flags().StringVarP(&c.Opts.Organization, "organization", "g", "", "Organization of the new API key")
 	c.cmd.Flags().StringVarP(&c.Opts.Role, "role", "r", "Ext", "Role of the new API key. Available roles: Admin, Dev, Ext")
 	c.cmd.Flags().StringVar(&c.Opts.ValidFor, "valid-for", "", "Validity duration of the new API key in days (e.g., 10d)")
@@ -70,6 +70,10 @@ func AddRegisterCmd(list *cobra.Command, opts *util.GlobalOptions) {
 func (c *RegisterCmd) Register(p portal.Portal) (*portal.ApiKey, error) {
 	if c.Opts.Role != API_KEY_ROLE_ADMIN && c.Opts.Role != API_KEY_ROLE_DEV && c.Opts.Role != API_KEY_ROLE_EXT {
 		return nil, fmt.Errorf("invalid role: %s. Available roles are: Admin, Dev, Ext", c.Opts.Role)
+	}
+
+	if err := intutil.ValidateEmail(c.Opts.Owner); err != nil {
+		return nil, fmt.Errorf("invalid owner: %w", err)
 	}
 
 	var expiresAt time.Time
