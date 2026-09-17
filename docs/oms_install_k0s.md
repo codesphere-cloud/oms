@@ -40,11 +40,19 @@ $ oms install k0s --force
 # Skip downloading k0s binary (expects it to be on remote nodes)
 $ oms install k0s --no-download
 
+# Install k0s without internet access using an airgap image bundle
+$ oms install k0s --airgapped
+
+# Install k0s airgapped from a local airgap image bundle
+$ oms install k0s --airgapped --airgap-bundle <path>
+
 ```
 
 ### Options
 
 ```
+      --airgap-bundle string    Path to the k0s airgap image bundle to install from (requires --airgapped)
+      --airgapped               Install k0s without internet access by uploading the airgap image bundle to the workers
   -f, --force                   Force new download and installation
   -h, --help                    help for k0s
       --install-config string   Path to Codesphere install-config file (required)
