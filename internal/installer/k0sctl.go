@@ -17,6 +17,9 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
+// DefaultK0sctlVersion is the currently verified k0sctl version.
+const DefaultK0sctlVersion = "v0.31.1"
+
 //mockery:generate: true
 type K0sctlManager interface {
 	GetLatestVersion() (string, error)

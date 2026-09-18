@@ -38,7 +38,8 @@ const (
 	SecretRegistryPassword = "registryPassword"
 
 	// ACME
-	SecretAcmeEabMacKey = "acmeEabMacKey"
+	SecretAcmeEabMacKey              = "acmeEabMacKey"
+	SecretAcmeCustomDomainsEabMacKey = "acmeCustomDomainsEabMacKey"
 
 	// OpenBao
 	SecretOpenBaoPassword = "openBaoPassword"
