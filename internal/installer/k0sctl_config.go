@@ -37,7 +37,20 @@ type K0sctlHost struct {
 	Environment      map[string]string `yaml:"environment,omitempty"`
 	UploadBinary     bool              `yaml:"uploadBinary,omitempty"`
 	K0sBinaryPath    string            `yaml:"k0sBinaryPath,omitempty"`
+	Files            []K0sctlFile      `yaml:"files,omitempty"`
 	Hooks            *K0sctlHooks      `yaml:"hooks,omitempty"`
+}
+
+type K0sctlFile struct {
+	Src    string `yaml:"src"`
+	DstDir string `yaml:"dstDir"`
+	Perm   string `yaml:"perm,omitempty"`
+}
+
+type k0sctlHostOptions struct {
+	SSHKeyPath    string
+	K0sBinaryPath string
+	Airgap        AirgapOptions
 }
 
 type K0sctlSSH struct {
@@ -69,19 +82,23 @@ type K0sctlApplyHooks struct {
 	After  []string `yaml:"after,omitempty"`
 }
 
-func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, installFlags []string, sshKeyPath string, k0sBinaryPath string) {
+// addUniqueK0sctlHost appends a host to the cluster config unless its address is
+// already present. isWorker marks hosts that run the k0s worker role, either
+// dedicated workers or control planes installed with --enable-worker.
+func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, installFlags []string, isWorker bool, options k0sctlHostOptions) {
 	for _, host := range k.Hosts {
 		if host.PrivateAddress == node.IPAddress {
 			return
 		}
 	}
+
 	host := K0sctlHost{
 		Role: role,
 		SSH: K0sctlSSH{
 			Address: node.IPAddress,
 			User:    "root",
 			Port:    22,
-			KeyPath: sshKeyPath,
+			KeyPath: options.SSHKeyPath,
 		},
 		InstallFlags:   installFlags,
 		PrivateAddress: node.IPAddress,
@@ -90,16 +107,24 @@ func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, instal
 		},
 	}
 
-	if k0sBinaryPath != "" {
+	if options.K0sBinaryPath != "" {
 		host.UploadBinary = true
-		host.K0sBinaryPath = k0sBinaryPath
+		host.K0sBinaryPath = options.K0sBinaryPath
+	}
+
+	if isWorker && options.Airgap.Enabled && options.Airgap.BundlePath != "" {
+		host.Files = []K0sctlFile{{
+			Src:    options.Airgap.BundlePath,
+			DstDir: AirgapImagesDir,
+			Perm:   "0644",
+		}}
 	}
 
 	k.Hosts = append(k.Hosts, host)
 }
 
 // GenerateK0sctlConfig generates a k0sctl configuration from a Codesphere install-config
-func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, sshKeyPath string, k0sBinaryPath string) (*K0sctlConfig, error) {
+func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, sshKeyPath string, k0sBinaryPath string, airgap ...AirgapOptions) (*K0sctlConfig, error) {
 	if installConfig == nil {
 		return nil, fmt.Errorf("installConfig cannot be nil")
 	}
@@ -108,8 +133,14 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 		return nil, fmt.Errorf("k0sctl is only supported for Codesphere-managed Kubernetes")
 	}
 
+	options := k0sctlHostOptions{
+		SSHKeyPath:    sshKeyPath,
+		K0sBinaryPath: k0sBinaryPath,
+		Airgap:        firstAirgapOption(airgap),
+	}
+
 	// Generate k0s config that will be embedded in k0sctl config
-	k0sConfig, err := GenerateK0sConfig(installConfig)
+	k0sConfig, err := GenerateK0sConfig(installConfig, options.Airgap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate k0s config: %w", err)
 	}
@@ -133,16 +164,17 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, k0sVersion string, ss
 	for _, cp := range installConfig.Kubernetes.ControlPlanes {
 		var installFlags []string
 		// A node may intentionally be listed as both a control plane and a worker.
-		if slices.Contains(installConfig.Kubernetes.Workers, cp) {
+		isWorker := slices.Contains(installConfig.Kubernetes.Workers, cp)
+		if isWorker {
 			installFlags = []string{"--enable-worker", "--no-taints=true"}
 		}
 
-		k0sctlConfig.Spec.addUniqueK0sctlHost(cp, "controller", installFlags, sshKeyPath, k0sBinaryPath)
+		k0sctlConfig.Spec.addUniqueK0sctlHost(cp, "controller", installFlags, isWorker, options)
 	}
 
 	// Add dedicated worker nodes if present
 	for _, worker := range installConfig.Kubernetes.Workers {
-		k0sctlConfig.Spec.addUniqueK0sctlHost(worker, "worker", nil, sshKeyPath, k0sBinaryPath)
+		k0sctlConfig.Spec.addUniqueK0sctlHost(worker, "worker", nil, true, options)
 	}
 
 	return k0sctlConfig, nil

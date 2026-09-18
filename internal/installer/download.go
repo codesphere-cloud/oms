@@ -11,15 +11,24 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, binaryName, downloadURL string, quiet bool) (string, error) {
-	dstFile, err := fw.Create(binaryPath)
+func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool) error {
+	dstFile, err := fw.Create(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to create %s binary file: %w", binaryName, err)
+		return fmt.Errorf("failed to create file: %s: %w", path, err)
 	}
 	defer util.CloseFileIgnoreError(dstFile)
 
 	if err := http.Download(downloadURL, dstFile, quiet); err != nil {
-		return "", fmt.Errorf("failed to download %s binary: %w", binaryName, err)
+		return fmt.Errorf("failed to download %s: %w", path, err)
+	}
+
+	return nil
+}
+
+func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, binaryName, downloadURL string, quiet bool) (string, error) {
+	err := downloadToPath(fw, http, binaryPath, downloadURL, quiet)
+	if err != nil {
+		return "", fmt.Errorf("failed to download: %w", err)
 	}
 
 	if err := fw.Chmod(binaryPath, 0755); err != nil {

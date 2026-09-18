@@ -27,9 +27,10 @@ type DownloadK0sCmd struct {
 
 type DownloadK0sOpts struct {
 	*util.GlobalOptions
-	Version string
-	Force   bool
-	Quiet   bool
+	Version   string
+	Force     bool
+	Quiet     bool
+	AirGapped bool
 }
 
 func (c *DownloadK0sCmd) RunE(_ *cobra.Command, args []string) error {
@@ -66,6 +67,7 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to download")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force download even if k0s binary exists")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
+	k0s.cmd.Flags().BoolVarP(&k0s.Opts.AirGapped, "airgapped", "a", false, "Downloads the airgapped bundle for that version")
 
 	util.AddCmd(download, k0s.cmd)
 
@@ -74,6 +76,7 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 
 func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
 	version := c.Opts.Version
+
 	var err error
 	if version == "" {
 		version, err = k0s.GetLatestVersion()
@@ -82,12 +85,12 @@ func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
 		}
 	}
 
-	k0sPath, err := k0s.Download(version, c.Opts.Force, c.Opts.Quiet)
+	k0sPath, err := k0s.Download(version, c.Opts.Force, c.Opts.Quiet, c.Opts.AirGapped)
 	if err != nil {
 		return fmt.Errorf("failed to download k0s: %w", err)
 	}
 
-	log.Printf("k0s binary downloaded successfully at '%s'", k0sPath)
+	log.Printf("k0s binary downloaded successfully to '%s'", k0sPath)
 
 	return nil
 }

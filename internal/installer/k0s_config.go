@@ -66,7 +66,26 @@ type K0sKonnectivity struct {
 	AgentPort int `yaml:"agentPort,omitempty"`
 }
 
-func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
+type AirgapOptions struct {
+	Enabled    bool
+	BundlePath string
+}
+
+// firstAirgapOption returns the optionally passed airgap options, or the zero value
+// when no options were passed.
+func firstAirgapOption(airgap []AirgapOptions) AirgapOptions {
+	if len(airgap) == 0 {
+		return AirgapOptions{}
+	}
+
+	return airgap[0]
+}
+
+// GenerateK0sConfig generates the k0s cluster configuration for a Codesphere
+// install-config. Airgapped installations are requested through the optional
+// airgap options and stop k0s from pulling images.
+func GenerateK0sConfig(installConfig *files.RootConfig, airgap ...AirgapOptions) (*K0sConfig, error) {
+	options := firstAirgapOption(airgap)
 	if installConfig == nil {
 		return nil, fmt.Errorf("installConfig cannot be nil")
 	}
@@ -88,6 +107,7 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 			for _, cp := range installConfig.Kubernetes.ControlPlanes {
 				sans = append(sans, cp.IPAddress)
 			}
+
 			if installConfig.Kubernetes.APIServerHost != "" {
 				sans = append(sans, installConfig.Kubernetes.APIServerHost)
 			}
@@ -115,7 +135,7 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 		}
 
 		k0sConfig.Spec.Images = &K0sImages{
-			DefaultPullPolicy: "IfNotPresent",
+			DefaultPullPolicy: pullPolicyFor(options),
 		}
 
 		k0sConfig.Spec.Telemetry = &K0sTelemetry{
@@ -131,10 +151,21 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 	return k0sConfig, nil
 }
 
+// pullPolicyFor returns the k0s image pull policy. Airgapped installations get their
+// images from a pre-loaded bundle, so they must never pull from the internet.
+func pullPolicyFor(options AirgapOptions) string {
+	if options.Enabled {
+		return "Never"
+	}
+
+	return "IfNotPresent"
+}
+
 func defaultIfEmpty(value, defaultValue string) string {
 	if value != "" {
 		return value
 	}
+
 	return defaultValue
 }
 

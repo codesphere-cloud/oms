@@ -65,6 +65,25 @@ var _ = Describe("K0sConfig", func() {
 				Expect(k0sConfig.Metadata.Name).To(Equal("codesphere-minimal"))
 			})
 
+			It("should set the pull policy to Never for airgapped installations", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{Enabled: true})
+				Expect(err).ToNot(HaveOccurred())
+
+				// Airgapped nodes get their images from a pre-loaded bundle and must
+				// never pull from the internet.
+				Expect(k0sConfig.Spec.Images.DefaultPullPolicy).To(Equal("Never"))
+			})
+
+			It("should keep the default pull policy when airgapped is not enabled", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(k0sConfig.Spec.Images.DefaultPullPolicy).To(Equal("IfNotPresent"))
+			})
+
 			It("should generate valid YAML", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
@@ -79,6 +98,7 @@ var _ = Describe("K0sConfig", func() {
 
 				// Verify it can be unmarshalled back
 				var parsedConfig installer.K0sConfig
+
 				err = yaml.Unmarshal(yamlData, &parsedConfig)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(parsedConfig.Metadata.Name).To(Equal("codesphere-test-dc"))

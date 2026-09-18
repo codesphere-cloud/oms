@@ -50,6 +50,7 @@ type githubRelease struct {
 
 func (k *K0sctl) GetLatestVersion() (string, error) {
 	releaseURL := "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
+
 	responseBody, err := k.Http.Get(releaseURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch latest k0sctl release: %w", err)
@@ -79,10 +80,12 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 
 	if version == "" {
 		var err error
+
 		version, err = k.GetLatestVersion()
 		if err != nil {
 			return "", fmt.Errorf("failed to get latest version: %w", err)
 		}
+
 		io.Verbosef(!quiet, "Using latest k0sctl version: %s", version)
 	}
 
@@ -127,9 +130,11 @@ func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
 	}
+
 	if !k.FileWriter.Exists(configPath) {
 		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
 	}
+
 	return nil
 }
 
@@ -155,6 +160,7 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 	}
 
 	log.Println("k0sctl apply completed successfully")
+
 	return nil
 }
 
@@ -162,6 +168,7 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return nil
 	}
+
 	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
 		return err
 	}
@@ -176,6 +183,7 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 	}
 
 	log.Println("k0sctl reset completed successfully")
+
 	return nil
 }
 
@@ -187,6 +195,7 @@ func (k *K0sctl) GetKubeconfig(configPath string, k0sctlPath string) (string, er
 	args := []string{"kubeconfig", "--config", configPath}
 
 	log.Println("Retrieving kubeconfig from k0sctl...")
+
 	output, err := util.RunCommandWithOutput(k0sctlPath, args, "")
 	if err != nil {
 		return "", fmt.Errorf("k0sctl kubeconfig failed: %w", err)
