@@ -22,7 +22,7 @@ import (
 // against, while users can override k0sctl via --k0sctl-version.
 //
 // renovate: datasource=github-releases depName=k0sproject/k0sctl
-const DefaultK0sctlVersion = "v0.33.0"
+const DefaultK0sctlVersion = "v0.33.1"
 
 //mockery:generate: true
 type K0sctlManager interface {
