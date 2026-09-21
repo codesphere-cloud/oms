@@ -26,6 +26,9 @@ $ oms download k0s --quiet
 # Force download even if k0s binary exists
 $ oms download k0s --force
 
+# Also download the airgap image bundle for that version
+$ oms download k0s --airgapped
+
 ```
 
 ### Options

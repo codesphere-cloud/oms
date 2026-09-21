@@ -32,18 +32,35 @@ type InstallK0sCmd struct {
 // InstallK0sOpts holds the flags of the k0s install command
 type InstallK0sOpts struct {
 	*util.GlobalOptions
-	Version       string
-	K0sctlVersion string
-	Package       string
-	InstallConfig string
-	SSHKeyPath    string
-	Force         bool
-	NoDownload    bool
-	AirGapped     bool
-	AirgapBundle  string
-	Vault         string
-	VaultPrivKey  string
-	VaultType     string
+	Version          string
+	K0sctlVersion    string
+	Package          string
+	InstallConfig    string
+	SSHKeyPath       string
+	Force            bool
+	NoDownload       bool
+	Airgap           bool
+	AirgapBundlePath string
+	Vault            string
+	VaultPrivKey     string
+	VaultType        string
+}
+
+// resolveK0sVersion returns the requested k0s version, or the latest version when
+// none was requested.
+func resolveK0sVersion(k0s installer.K0sManager, version string) (string, error) {
+	if version != "" {
+		return version, nil
+	}
+
+	latestVersion, err := k0s.GetLatestVersion()
+	if err != nil {
+		return "", fmt.Errorf("failed to get latest k0s version: %w", err)
+	}
+
+	log.Printf("Using latest k0s version: %s", latestVersion)
+
+	return latestVersion, nil
 }
 
 // RunE is the starting point for the k0s install command that executes the bootstrap logic.
@@ -94,8 +111,8 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().StringVar(&k0s.Opts.SSHKeyPath, "ssh-key-path", "", "SSH private key path for remote installation")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.NoDownload, "no-download", false, "Skip downloading k0s binary")
-	k0s.cmd.Flags().BoolVar(&k0s.Opts.AirGapped, "airgapped", false, "Install k0s without internet access by uploading the airgap image bundle to the workers")
-	k0s.cmd.Flags().StringVar(&k0s.Opts.AirgapBundle, "airgap-bundle", "", "Path to the k0s airgap image bundle to install from (requires --airgapped)")
+	k0s.cmd.Flags().BoolVar(&k0s.Opts.Airgap, "airgapped", false, "Install k0s without internet access by uploading the airgap image bundle to the workers")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.AirgapBundlePath, "airgap-bundle", "", "Path to the k0s airgap image bundle to install from (requires --airgapped)")
 
 	k0s.cmd.Flags().StringVar(&k0s.Opts.Vault, "vault", "", "Path to prod.vault.yaml to save the kubeconfig into (optional)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.VaultPrivKey, "vault-priv-key", "", "Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)")
@@ -120,9 +137,11 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return fmt.Errorf("failed to create oms workdir: %w", err)
 	}
 
-	if c.Opts.AirgapBundle != "" && !c.Opts.AirGapped {
-		return fmt.Errorf("--airgap-bundle requires --airgapped")
+	if err := c.validateOptions(); err != nil {
+		return err
 	}
+
+	c.warnAboutNetworkAccess()
 
 	config, err := c.loadInstallConfig()
 	if err != nil {
@@ -167,6 +186,31 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 	return nil
 }
 
+// validateOptions checks that the provided flags can be combined.
+func (c *InstallK0sCmd) validateOptions() error {
+	if c.Opts.AirgapBundlePath != "" && !c.Opts.Airgap {
+		return fmt.Errorf("--airgap-bundle requires --airgapped")
+	}
+
+	return nil
+}
+
+// warnAboutNetworkAccess logs the steps of an airgapped installation that still
+// require internet access, so they can be prepared before going offline.
+func (c *InstallK0sCmd) warnAboutNetworkAccess() {
+	if !c.Opts.Airgap {
+		return
+	}
+
+	if c.Opts.AirgapBundlePath == "" {
+		log.Println("Warning: --airgapped without --airgap-bundle downloads the airgap bundle from the internet; pre-download it with 'oms download k0s --airgapped' or pass --airgap-bundle for a truly offline installation")
+	}
+
+	if c.Opts.K0sctlVersion == "" {
+		log.Println("Warning: k0sctl is resolved and downloaded from the internet; pass --k0sctl-version and pre-cache k0sctl for a truly offline installation")
+	}
+}
+
 func (c *InstallK0sCmd) loadInstallConfig() (*files.RootConfig, error) {
 	config, err := installer.NewConfig().ParseConfigYaml(c.Opts.InstallConfig)
 	if err != nil {
@@ -181,19 +225,7 @@ func (c *InstallK0sCmd) loadInstallConfig() (*files.RootConfig, error) {
 }
 
 func (c *InstallK0sCmd) determineK0sVersion(k0s installer.K0sManager) (string, error) {
-	k0sVersion := c.Opts.Version
-	if k0sVersion == "" {
-		var err error
-
-		k0sVersion, err = k0s.GetLatestVersion()
-		if err != nil {
-			return "", fmt.Errorf("failed to get latest k0s version: %w", err)
-		}
-
-		log.Printf("Using latest k0s version: %s", k0sVersion)
-	}
-
-	return k0sVersion, nil
+	return resolveK0sVersion(k0s, c.Opts.Version)
 }
 
 func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
@@ -209,7 +241,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 		return pm.GetDependencyPath(defaultK0sPath), nil
 	}
 
-	k0sBinaryPath, err := k0s.Download(k0sVersion, c.Opts.Force, false, c.Opts.AirGapped)
+	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force, Airgapped: c.Opts.Airgap})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}
@@ -220,19 +252,19 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 // getAirgapBundlePath returns the local airgap image bundle that k0sctl uploads to the
 // worker nodes. It is empty for installations with internet access.
 func (c *InstallK0sCmd) getAirgapBundlePath(k0s installer.K0sManager, k0sVersion string) (string, error) {
-	if !c.Opts.AirGapped {
+	if !c.Opts.Airgap {
 		return "", nil
 	}
 
-	if c.Opts.AirgapBundle != "" {
-		if !c.FileWriter.Exists(c.Opts.AirgapBundle) {
-			return "", fmt.Errorf("airgap bundle '%s' does not exist", c.Opts.AirgapBundle)
+	if c.Opts.AirgapBundlePath != "" {
+		if !c.FileWriter.Exists(c.Opts.AirgapBundlePath) {
+			return "", fmt.Errorf("airgap bundle '%s' does not exist", c.Opts.AirgapBundlePath)
 		}
 
-		return c.Opts.AirgapBundle, nil
+		return c.Opts.AirgapBundlePath, nil
 	}
 
-	bundlePath, err := k0s.EnsureAirgapBundle(k0sVersion, c.Opts.Force, false)
+	bundlePath, err := k0s.EnsureAirgapBundle(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s airgap bundle: %w", err)
 	}
@@ -254,9 +286,14 @@ func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, 
 func (c *InstallK0sCmd) generateK0sctlConfig(config *files.RootConfig, k0sVersion string, k0sBinaryPath string, airgapBundlePath string) (string, error) {
 	log.Println("Generating k0sctl configuration from install-config...")
 
-	airgap := installer.AirgapOptions{Enabled: c.Opts.AirGapped, BundlePath: airgapBundlePath}
+	options := installer.K0sctlOptions{
+		K0sVersion:    k0sVersion,
+		SSHKeyPath:    c.Opts.SSHKeyPath,
+		K0sBinaryPath: k0sBinaryPath,
+		Airgap:        installer.AirgapOptions{Enabled: c.Opts.Airgap, BundlePath: airgapBundlePath},
+	}
 
-	k0sctlConfig, err := installer.GenerateK0sctlConfig(config, k0sVersion, c.Opts.SSHKeyPath, k0sBinaryPath, airgap)
+	k0sctlConfig, err := installer.GenerateK0sctlConfig(config, options)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate k0sctl config: %w", err)
 	}

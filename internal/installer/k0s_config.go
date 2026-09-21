@@ -66,26 +66,10 @@ type K0sKonnectivity struct {
 	AgentPort int `yaml:"agentPort,omitempty"`
 }
 
-type AirgapOptions struct {
-	Enabled    bool
-	BundlePath string
-}
-
-// firstAirgapOption returns the optionally passed airgap options, or the zero value
-// when no options were passed.
-func firstAirgapOption(airgap []AirgapOptions) AirgapOptions {
-	if len(airgap) == 0 {
-		return AirgapOptions{}
-	}
-
-	return airgap[0]
-}
-
 // GenerateK0sConfig generates the k0s cluster configuration for a Codesphere
-// install-config. Airgapped installations are requested through the optional
-// airgap options and stop k0s from pulling images.
-func GenerateK0sConfig(installConfig *files.RootConfig, airgap ...AirgapOptions) (*K0sConfig, error) {
-	options := firstAirgapOption(airgap)
+// install-config. Airgapped installations are requested through the airgap options
+// and stop k0s from pulling images.
+func GenerateK0sConfig(installConfig *files.RootConfig, airgap AirgapOptions) (*K0sConfig, error) {
 	if installConfig == nil {
 		return nil, fmt.Errorf("installConfig cannot be nil")
 	}
@@ -135,7 +119,7 @@ func GenerateK0sConfig(installConfig *files.RootConfig, airgap ...AirgapOptions)
 		}
 
 		k0sConfig.Spec.Images = &K0sImages{
-			DefaultPullPolicy: pullPolicyFor(options),
+			DefaultPullPolicy: pullPolicyFor(airgap),
 		}
 
 		k0sConfig.Spec.Telemetry = &K0sTelemetry{

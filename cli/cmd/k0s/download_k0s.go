@@ -27,10 +27,10 @@ type DownloadK0sCmd struct {
 
 type DownloadK0sOpts struct {
 	*util.GlobalOptions
-	Version   string
-	Force     bool
-	Quiet     bool
-	AirGapped bool
+	Version string
+	Force   bool
+	Quiet   bool
+	Airgap  bool
 }
 
 func (c *DownloadK0sCmd) RunE(_ *cobra.Command, args []string) error {
@@ -58,6 +58,7 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 				{Cmd: "--version 1.22.0", Desc: "Download a specific version of k0s"},
 				{Cmd: "--quiet", Desc: "Download k0s with minimal output"},
 				{Cmd: "--force", Desc: "Force download even if k0s binary exists"},
+				{Cmd: "--airgapped", Desc: "Also download the airgap image bundle for that version"},
 			}),
 		},
 		Opts:       DownloadK0sOpts{GlobalOptions: opts},
@@ -67,7 +68,7 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to download")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force download even if k0s binary exists")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
-	k0s.cmd.Flags().BoolVarP(&k0s.Opts.AirGapped, "airgapped", "a", false, "Downloads the airgapped bundle for that version")
+	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Airgap, "airgapped", "a", false, "Downloads the airgapped bundle for that version")
 
 	util.AddCmd(download, k0s.cmd)
 
@@ -75,17 +76,16 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 }
 
 func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
-	version := c.Opts.Version
-
-	var err error
-	if version == "" {
-		version, err = k0s.GetLatestVersion()
-		if err != nil {
-			return fmt.Errorf("failed to get latest k0s version: %w", err)
-		}
+	version, err := resolveK0sVersion(k0s, c.Opts.Version)
+	if err != nil {
+		return err
 	}
 
-	k0sPath, err := k0s.Download(version, c.Opts.Force, c.Opts.Quiet, c.Opts.AirGapped)
+	k0sPath, err := k0s.Download(version, installer.DownloadOptions{
+		Force:     c.Opts.Force,
+		Quiet:     c.Opts.Quiet,
+		Airgapped: c.Opts.Airgap,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to download k0s: %w", err)
 	}

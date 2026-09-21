@@ -17,6 +17,9 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
+// k0sctlBinaryName is the name of the cached k0sctl binary.
+const k0sctlBinaryName = "k0sctl"
+
 //mockery:generate: true
 type K0sctlManager interface {
 	GetLatestVersion() (string, error)
@@ -44,10 +47,6 @@ func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) *K0sctl {
 	}
 }
 
-type githubRelease struct {
-	TagName string `json:"tag_name"`
-}
-
 func (k *K0sctl) GetLatestVersion() (string, error) {
 	releaseURL := "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
 
@@ -69,13 +68,9 @@ func (k *K0sctl) GetLatestVersion() (string, error) {
 }
 
 func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error) {
-	cacheDir, err := k.Env.GetOmsCacheDir()
+	cacheDir, err := ensureCacheDir(k.FileWriter, k.Env)
 	if err != nil {
-		return "", fmt.Errorf("failed to determine cache directory: %w", err)
-	}
-
-	if err := k.FileWriter.MkdirAll(cacheDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create workdir: %w", err)
+		return "", err
 	}
 
 	if version == "" {
@@ -93,28 +88,17 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 		version = "v" + version
 	}
 
-	cachePath := filepath.Join(cacheDir, "k0sctl")
-	if k.FileWriter.Exists(cachePath) && !force {
-		cachedVersion, versionErr := localBinaryVersion(cachePath)
-		if versionErr == nil && cachedVersion == version {
-			io.Verbosef(!quiet, "Using cached k0sctl %s at %s", version, cachePath)
-
-			return cachePath, nil
-		}
-
-		if versionErr != nil {
-			io.Verbosef(!quiet, "Cached k0sctl version could not be determined; replacing it: %v", versionErr)
-		} else {
-			io.Verbosef(!quiet, "Cached k0sctl version %s does not match requested version %s; replacing it", cachedVersion, version)
-		}
+	cachePath := filepath.Join(cacheDir, k0sctlBinaryName)
+	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sctlBinaryName, force, quiet); cached {
+		return cachedPath, nil
 	}
 
-	binaryName := fmt.Sprintf("k0sctl-%s-%s", k.Goos, k.Goarch)
+	binaryName := fmt.Sprintf("%s-%s-%s", k0sctlBinaryName, k.Goos, k.Goarch)
 	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0sctl/releases/download/%s/%s", version, binaryName)
 
 	io.Verbosef(!quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 
-	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, "k0sctl", downloadURL, quiet)
+	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sctlBinaryName, downloadURL, quiet)
 	if err != nil {
 		return "", err
 	}

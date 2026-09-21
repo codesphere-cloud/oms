@@ -21,7 +21,11 @@ var _ = Describe("K0sctlConfig", func() {
 				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
 				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "/path/to/k0s")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, installer.K0sctlOptions{
+					K0sVersion:    "v1.30.0+k0s.0",
+					SSHKeyPath:    "/path/to/key",
+					K0sBinaryPath: "/path/to/k0s",
+				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(k0sctlConfig).ToNot(BeNil())
 
@@ -40,7 +44,7 @@ var _ = Describe("K0sctlConfig", func() {
 			It("should assign controller role to control plane nodes", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(1))
@@ -55,7 +59,7 @@ var _ = Describe("K0sctlConfig", func() {
 					{IPAddress: "10.0.2.11"},
 				}
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(3))
@@ -76,7 +80,7 @@ var _ = Describe("K0sctlConfig", func() {
 					{IPAddress: "10.0.2.10"}, // Unique
 				}
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				// The overlapping node is emitted once, but retains both roles in
@@ -92,7 +96,7 @@ var _ = Describe("K0sctlConfig", func() {
 			It("should enable UploadBinary when k0sBinaryPath is provided", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "/path/to/k0s")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", "/path/to/k0s"))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts[0].UploadBinary).To(BeTrue())
@@ -102,7 +106,7 @@ var _ = Describe("K0sctlConfig", func() {
 			It("should not enable UploadBinary when k0sBinaryPath is empty", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts[0].UploadBinary).To(BeFalse())
@@ -112,7 +116,7 @@ var _ = Describe("K0sctlConfig", func() {
 			It("should set SSH key path correctly", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/home/user/.ssh/id_rsa", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/home/user/.ssh/id_rsa", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts[0].SSH.KeyPath).To(Equal("/home/user/.ssh/id_rsa"))
@@ -121,7 +125,7 @@ var _ = Describe("K0sctlConfig", func() {
 			It("should set SSH user to root", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts[0].SSH.User).To(Equal("root"))
@@ -130,7 +134,7 @@ var _ = Describe("K0sctlConfig", func() {
 			It("should set KUBELET_EXTRA_ARGS environment variable", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts[0].Environment).To(HaveKeyWithValue("KUBELET_EXTRA_ARGS", "--node-ip=10.0.1.10"))
@@ -144,7 +148,7 @@ var _ = Describe("K0sctlConfig", func() {
 
 				airgap := installer.AirgapOptions{Enabled: true, BundlePath: "/cache/k0s-airgap-bundle-amd64"}
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "", airgap)
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", airgap))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Controllers without the worker role do not import image bundles.
@@ -167,7 +171,7 @@ var _ = Describe("K0sctlConfig", func() {
 
 				airgap := installer.AirgapOptions{Enabled: true, BundlePath: "/cache/bundle"}
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "", airgap)
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", airgap))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(1))
@@ -181,7 +185,7 @@ var _ = Describe("K0sctlConfig", func() {
 					{IPAddress: "10.0.2.10"},
 				}
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts[0].Files).To(BeEmpty())
@@ -196,7 +200,7 @@ var _ = Describe("K0sctlConfig", func() {
 
 				airgap := installer.AirgapOptions{Enabled: true, BundlePath: "/cache/bundle"}
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "", airgap)
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", airgap))
 				Expect(err).ToNot(HaveOccurred())
 
 				yamlData, err := k0sctlConfig.Marshal()
@@ -214,7 +218,7 @@ var _ = Describe("K0sctlConfig", func() {
 				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
 				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				yamlData, err := k0sctlConfig.Marshal()
@@ -232,7 +236,7 @@ var _ = Describe("K0sctlConfig", func() {
 
 		Context("with invalid input", func() {
 			It("should return error for nil install-config", func() {
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(nil, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(nil, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("installConfig cannot be nil"))
 				Expect(k0sctlConfig).To(BeNil())
@@ -241,9 +245,19 @@ var _ = Describe("K0sctlConfig", func() {
 			It("should return error for non-managed Kubernetes", func() {
 				installConfig := newTestConfig("test-dc", false)
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("k0sctl is only supported for Codesphere-managed Kubernetes"))
+				Expect(k0sctlConfig).To(BeNil())
+			})
+
+			It("should return error for airgapped installations without a bundle path", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig,
+					k0sctlAirgapOptions("v1.30.0+k0s.0", installer.AirgapOptions{Enabled: true}))
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("require an airgap bundle path"))
 				Expect(k0sctlConfig).To(BeNil())
 			})
 		})
@@ -253,7 +267,7 @@ var _ = Describe("K0sctlConfig", func() {
 				installConfig := newTestConfig("test-dc", true)
 				installConfig.Kubernetes.ControlPlanes = []files.K8sNode{}
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 				Expect(k0sctlConfig.Spec.Hosts).To(BeEmpty())
 			})
@@ -261,7 +275,7 @@ var _ = Describe("K0sctlConfig", func() {
 			It("should handle nil control plane list", func() {
 				installConfig := newTestConfig("test-dc", true)
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 				Expect(k0sctlConfig.Spec.Hosts).To(BeEmpty())
 			})
@@ -273,17 +287,36 @@ var _ = Describe("K0sctlConfig", func() {
 					{IPAddress: "10.0.2.10"},
 				}
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 				// Workers should still be added even without control planes
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(1))
 				Expect(k0sctlConfig.Spec.Hosts[0].Role).To(Equal("worker"))
 			})
 
+			It("should upload the airgap bundle to worker-only clusters", func() {
+				installConfig := newTestConfig("test-dc", true)
+				installConfig.Kubernetes.ControlPlanes = []files.K8sNode{}
+				installConfig.Kubernetes.Workers = []files.K8sNode{
+					{IPAddress: "10.0.2.10"},
+				}
+
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig,
+					k0sctlAirgapOptions("v1.30.0+k0s.0", installer.AirgapOptions{Enabled: true, BundlePath: "/cache/bundle"}))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(1))
+				Expect(k0sctlConfig.Spec.Hosts[0].Files).To(Equal([]installer.K0sctlFile{{
+					Src:    "/cache/bundle",
+					DstDir: "/var/lib/k0s/images",
+					Perm:   "0644",
+				}}))
+			})
+
 			It("should handle empty SSH key path", func() {
 				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts[0].SSH.KeyPath).To(BeEmpty())
@@ -295,7 +328,7 @@ var _ = Describe("K0sctlConfig", func() {
 					{IPAddress: "10.0.2.10"},
 				}
 
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, "v1.30.0+k0s.0", "/path/to/key", "")
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Both hosts should have PrivateAddress set to the internal IP
@@ -305,3 +338,21 @@ var _ = Describe("K0sctlConfig", func() {
 		})
 	})
 })
+
+// k0sctlOptions builds k0sctl options for installations with internet access.
+func k0sctlOptions(k0sVersion, sshKeyPath, k0sBinaryPath string) installer.K0sctlOptions {
+	return installer.K0sctlOptions{
+		K0sVersion:    k0sVersion,
+		SSHKeyPath:    sshKeyPath,
+		K0sBinaryPath: k0sBinaryPath,
+	}
+}
+
+// k0sctlAirgapOptions builds k0sctl options for airgapped installations.
+func k0sctlAirgapOptions(k0sVersion string, airgap installer.AirgapOptions) installer.K0sctlOptions {
+	return installer.K0sctlOptions{
+		K0sVersion: k0sVersion,
+		SSHKeyPath: "/path/to/key",
+		Airgap:     airgap,
+	}
+}
