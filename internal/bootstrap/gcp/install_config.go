@@ -212,53 +212,8 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	b.applyPcAppsDefaults()
 	b.applyManagedServiceDefaults()
 
-	dnsProject := b.Env.DNSProjectID
-	if b.Env.DNSProjectID == "" {
-		dnsProject = b.Env.ProjectID
-	}
-
-	b.Env.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
-		"issuers": map[string]interface{}{
-			"letsEncryptHttp": map[string]interface{}{
-				"enabled": !b.Env.GoogleACMEIssuer,
-			},
-			"acme": map[string]interface{}{
-				"dnsSolver": map[string]interface{}{
-					"config": map[string]interface{}{
-						"cloudDNS": map[string]interface{}{
-							"project": dnsProject,
-						},
-					},
-				},
-			},
-		},
-	}
-
-	acmeServer := "https://acme-v02.api.letsencrypt.org/directory"
-	if b.Env.ACMEStaging {
-		acmeServer = "https://acme-staging-v02.api.letsencrypt.org/directory"
-	}
-
-	acmeConfig := &files.ACMEConfig{
-		Enabled: true,
-		Email:   "oms-testing@" + b.Env.BaseDomain,
-		Server:  acmeServer,
-	}
-	if b.Env.GoogleACMEIssuer {
-		keyID, b64MacKey, err := b.GCPClient.CreatePublicCAExternalAccountKey(b.Env.ProjectID)
-		if err != nil {
-			return fmt.Errorf("failed to obtain Google Public CA EAB credentials: %w", err)
-		}
-
-		acmeConfig.Server = "https://dv.acme-v02.api.pki.goog/directory"
-		acmeConfig.EABKeyID = keyID
-
-		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: b64MacKey}})
-	}
-
-	b.Env.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
-		Type: "acme",
-		Acme: acmeConfig,
+	if err := b.applyACMEConfig(); err != nil {
+		return err
 	}
 
 	b.Env.InstallConfig.Codesphere.Domain = "cs." + b.Env.BaseDomain
@@ -442,6 +397,73 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
 	if err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// applyACMEConfig configures the ACME certificate issuer, including the DNS-01
+// solver override for Cloud DNS and, when the Google ACME issuer is used, the
+// Google Public CA EAB credentials for the default and the custom-domains ACME
+// accounts.
+func (b *GCPBootstrapper) applyACMEConfig() error {
+	dnsProject := b.Env.DNSProjectID
+	if dnsProject == "" {
+		dnsProject = b.Env.ProjectID
+	}
+
+	b.Env.InstallConfig.Cluster.Certificates.Override = map[string]interface{}{
+		"issuers": map[string]interface{}{
+			"letsEncryptHttp": map[string]interface{}{
+				"enabled": !b.Env.GoogleACMEIssuer,
+			},
+			"acme": map[string]interface{}{
+				"dnsSolver": map[string]interface{}{
+					"config": map[string]interface{}{
+						"cloudDNS": map[string]interface{}{
+							"project": dnsProject,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	acmeConfig := &files.ACMEConfig{
+		Enabled: true,
+		Email:   "oms-testing@" + b.Env.BaseDomain,
+		Server:  "https://acme-v02.api.letsencrypt.org/directory",
+	}
+	if b.Env.ACMEStaging {
+		acmeConfig.Server = "https://acme-staging-v02.api.letsencrypt.org/directory"
+	}
+
+	if b.Env.GoogleACMEIssuer {
+		keyID, b64MacKey, err := b.GCPClient.CreatePublicCAExternalAccountKey(b.Env.ProjectID)
+		if err != nil {
+			return fmt.Errorf("failed to obtain Google Public CA EAB credentials: %w", err)
+		}
+
+		customDomainsKeyID, customDomainsB64MacKey, err := b.GCPClient.CreatePublicCAExternalAccountKey(b.Env.ProjectID)
+		if err != nil {
+			return fmt.Errorf("failed to obtain Google Public CA EAB credentials for custom domains: %w", err)
+		}
+
+		if customDomainsKeyID == keyID {
+			return fmt.Errorf("google Public CA returned the same EAB key ID for the default and custom-domains ACME accounts")
+		}
+
+		acmeConfig.Server = "https://dv.acme-v02.api.pki.goog/directory"
+		acmeConfig.EABKeyID = keyID
+		acmeConfig.CustomDomainsEABKeyID = customDomainsKeyID
+
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: b64MacKey}})
+		b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAcmeCustomDomainsEabMacKey, Fields: &files.SecretFields{Password: customDomainsB64MacKey}})
+	}
+
+	b.Env.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
+		Type: "acme",
+		Acme: acmeConfig,
 	}
 
 	return nil

@@ -17,6 +17,13 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
+// DefaultK0sctlVersion is the currently verified k0sctl version. It mirrors
+// DefaultK0sVersion in k0s.go: the pair is the version combination we test
+// against, while users can override k0sctl via --k0sctl-version.
+//
+// renovate: datasource=github-releases depName=k0sproject/k0sctl
+const DefaultK0sctlVersion = "v0.31.1"
+
 //mockery:generate: true
 type K0sctlManager interface {
 	GetLatestVersion() (string, error)
