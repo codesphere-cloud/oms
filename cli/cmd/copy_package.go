@@ -115,7 +115,7 @@ func AddCopyPackageCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 // CopyPackage extracts the package, prints the complete transfer plan, asks
 // for confirmation, and then copies each artifact.
 func (c *CopyPackageCmd) CopyPackage(ctx context.Context, packageManager installer.PackageManager, copier installer.ArtifactCopier) error {
-	if err := packageManager.Extract(c.Opts.Force); err != nil {
+	if err := packageManager.Extract(c.Opts.Force, c.Opts.Verbose); err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
 	}
 

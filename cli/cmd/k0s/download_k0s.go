@@ -29,7 +29,6 @@ type DownloadK0sOpts struct {
 	*util.GlobalOptions
 	Version string
 	Force   bool
-	Quiet   bool
 }
 
 func (c *DownloadK0sCmd) RunE(_ *cobra.Command, args []string) error {
@@ -55,7 +54,6 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 			Example: util.FormatExamples("download k0s", []packageio.Example{
 				{Cmd: "", Desc: "Download k0s using the Go-native implementation"},
 				{Cmd: "--version 1.22.0", Desc: "Download a specific version of k0s"},
-				{Cmd: "--quiet", Desc: "Download k0s with minimal output"},
 				{Cmd: "--force", Desc: "Force download even if k0s binary exists"},
 			}),
 		},
@@ -65,7 +63,6 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to download")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force download even if k0s binary exists")
-	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Quiet, "quiet", "q", false, "Suppress progress output during download")
 
 	util.AddCmd(download, k0s.cmd)
 
@@ -82,7 +79,7 @@ func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
 		}
 	}
 
-	k0sPath, err := k0s.Download(version, c.Opts.Force, c.Opts.Quiet)
+	k0sPath, err := k0s.Download(version, c.Opts.Force, !c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to download k0s: %w", err)
 	}

@@ -8,6 +8,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"log"
+	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,7 +27,8 @@ var fileContents = map[string]string{
 }
 var _ = Describe("Tar", func() {
 	var (
-		archiveIn io.Reader
+		archiveIn   io.Reader
+		archiveData []byte
 	)
 	BeforeEach(func() {
 		// Create an in-memory tar.gz containing the embedded files.
@@ -53,7 +57,8 @@ var _ = Describe("Tar", func() {
 		Expect(tw.Close()).To(Succeed())
 		Expect(gz.Close()).To(Succeed())
 
-		archiveIn = bytes.NewReader(buf.Bytes())
+		archiveData = append([]byte(nil), buf.Bytes()...)
+		archiveIn = bytes.NewReader(archiveData)
 	})
 
 	Describe("StreamFileFromGzip", func() {
@@ -77,6 +82,43 @@ var _ = Describe("Tar", func() {
 			out, err := util.StreamFileFromGzip(archiveIn, "file3.txt")
 			Expect(out).To(BeNil())
 			Expect(err).To(MatchError("file file3.txt not found in archive"))
+		})
+	})
+
+	Describe("ExtractTarGzSingleFile", func() {
+		var (
+			archivePath string
+			destination string
+			logOutput   bytes.Buffer
+		)
+
+		BeforeEach(func() {
+			tempDir := GinkgoT().TempDir()
+			archivePath = filepath.Join(tempDir, "test.tar.gz")
+			destination = filepath.Join(tempDir, "extracted")
+
+			Expect(os.WriteFile(archivePath, archiveData, 0600)).To(Succeed())
+
+			previousLogWriter := log.Writer()
+
+			log.SetOutput(&logOutput)
+			DeferCleanup(func() { log.SetOutput(previousLogWriter) })
+		})
+
+		It("does not log extraction details when verbose output is disabled", func() {
+			err := util.ExtractTarGzSingleFile(util.NewFilesystemWriter(), archivePath, "file1.txt", destination, false)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logOutput.String()).To(BeEmpty())
+		})
+
+		It("logs extraction details when verbose output is enabled", func() {
+			err := util.ExtractTarGzSingleFile(util.NewFilesystemWriter(), archivePath, "file1.txt", destination, true)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(logOutput.String()).To(ContainSubstring("Opening archive:"))
+			Expect(logOutput.String()).To(ContainSubstring("Extracting file1.txt from archive"))
+			Expect(logOutput.String()).To(ContainSubstring("File file1.txt extracted to"))
 		})
 	})
 })
