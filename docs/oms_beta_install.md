@@ -8,6 +8,12 @@ Install beta components
   -h, --help   help for install
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta](oms_beta.md)	 - Commands for early testing

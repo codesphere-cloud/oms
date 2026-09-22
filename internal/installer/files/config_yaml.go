@@ -254,7 +254,8 @@ type ACMEConfig struct {
 	PrivateKeySecretName string     `yaml:"-"`
 	Solver               ACMESolver `yaml:"-"`
 
-	EABKeyID string `yaml:"eabKeyId,omitempty"`
+	EABKeyID              string `yaml:"eabKeyId,omitempty"`
+	CustomDomainsEABKeyID string `yaml:"customDomainsEabKeyId,omitempty"`
 }
 
 type ACMESolver struct {
@@ -600,18 +601,19 @@ type OAuthConfig struct {
 }
 
 type ManagedServiceConfig struct {
-	Name          string                 `yaml:"name"`
-	API           ManagedServiceAPI      `yaml:"api,omitempty"`
-	Author        string                 `yaml:"author,omitempty"`
-	Category      string                 `yaml:"category,omitempty"`
-	ConfigSchema  map[string]interface{} `yaml:"configSchema,omitempty"`
-	DetailsSchema map[string]interface{} `yaml:"detailsSchema,omitempty"`
-	SecretsSchema map[string]interface{} `yaml:"secretsSchema,omitempty"`
-	Description   string                 `yaml:"description,omitempty"`
-	DisplayName   string                 `yaml:"displayName,omitempty"`
-	IconURL       string                 `yaml:"iconUrl,omitempty"`
-	Plans         []ServicePlan          `yaml:"plans,omitempty"`
-	Version       string                 `yaml:"version"`
+	Name               string                   `yaml:"name"`
+	API                ManagedServiceAPI        `yaml:"api,omitempty"`
+	Author             string                   `yaml:"author,omitempty"`
+	Category           string                   `yaml:"category,omitempty"`
+	ConfigSchema       map[string]interface{}   `yaml:"configSchema,omitempty"`
+	DetailsSchema      map[string]interface{}   `yaml:"detailsSchema,omitempty"`
+	SecretsSchema      map[string]interface{}   `yaml:"secretsSchema,omitempty"`
+	Description        string                   `yaml:"description,omitempty"`
+	DisplayName        string                   `yaml:"displayName,omitempty"`
+	IconURL            string                   `yaml:"iconUrl,omitempty"`
+	ResourceParameters map[string]ResourceParam `yaml:"resourceParameters,omitempty"`
+	Plans              []ServicePlan            `yaml:"plans,omitempty"`
+	Version            string                   `yaml:"version"`
 }
 
 type ManagedServiceAPI struct {
@@ -625,9 +627,51 @@ type ServicePlan struct {
 	Parameters  map[string]PlanParam `yaml:"parameters"`
 }
 
-type PlanParam struct {
-	PricedAs string                 `yaml:"pricedAs"`
+// ResourceParam defines the schema for provider plan parameters.
+type ResourceParam struct {
+	PricedAs string                 `yaml:"pricedAs,omitempty"`
 	Schema   map[string]interface{} `yaml:"schema"`
+}
+
+// PlanParam is a provider plan's value for a resource parameter: a scalar (new format) or an inline
+// ResourceParam definition (old format).
+//
+// TODO(CU-869ev5bn2): once legacy support is dropped, delete PlanParam and its custom
+// (Un)MarshalYAML methods; ServicePlan.Parameters becomes map[string]interface{}.
+type PlanParam struct {
+	IsScalar bool
+	Value    interface{}
+	Legacy   ResourceParam
+}
+
+// UnmarshalYAML reads a plan parameter in either the scalar or object form.
+func (p *PlanParam) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		p.IsScalar = true
+		if err := value.Decode(&p.Value); err != nil {
+			return fmt.Errorf("decode scalar plan parameter: %w", err)
+		}
+		return nil
+	case yaml.MappingNode:
+		if err := value.Decode(&p.Legacy); err != nil {
+			return fmt.Errorf("decode legacy plan parameter: %w", err)
+		}
+		return nil
+	default:
+		return fmt.Errorf("unsupported plan parameter shape %s at line %d", value.ShortTag(), value.Line)
+	}
+}
+
+// MarshalYAML writes the parameter back in the form it was read, rendering a null/empty value as null rather than an empty {schema: {}} object.
+func (p PlanParam) MarshalYAML() (interface{}, error) {
+	if p.IsScalar {
+		return p.Value, nil
+	}
+	if p.Legacy.PricedAs == "" && p.Legacy.Schema == nil {
+		return nil, nil
+	}
+	return p.Legacy, nil
 }
 
 type ManagedServiceBackendsConfig struct {
@@ -761,6 +805,16 @@ func (c *CodesphereConfig) EnsureCertIssuer() *CertIssuerConfig {
 		c.CertIssuer = &CertIssuerConfig{}
 	}
 	return c.CertIssuer
+}
+
+// EnsureRegistry returns the registry config, creating an empty one first if the config does
+// not have a registry section.
+func (c *RootConfig) EnsureRegistry() *RegistryConfig {
+	if c.Registry == nil {
+		c.Registry = &RegistryConfig{}
+	}
+
+	return c.Registry
 }
 
 func (c *RootConfig) ExtractBomRefs() []string {

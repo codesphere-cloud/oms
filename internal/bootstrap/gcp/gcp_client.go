@@ -25,9 +25,11 @@ import (
 	"github.com/lithammer/shortuuid"
 	"google.golang.org/api/cloudbilling/v1"
 	"google.golang.org/api/dns/v1"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
 	publicca "google.golang.org/api/publicca/v1"
+	storage "google.golang.org/api/storage/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
@@ -61,8 +63,10 @@ type GCPClientManager interface {
 	GetAddress(projectID, region, addressName string) (*computepb.Address, error)
 	EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error
 	EnsureDNSRecordSets(projectID, zoneName string, records []*dns.ResourceRecordSet) error
-	DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error
+	DeleteDNSRecordSets(projectID, zoneName string, records []DNSRecordName) error
 	CreatePublicCAExternalAccountKey(projectID string) (keyID, b64MacKey string, err error)
+	EnsureStorageBucket(projectID, bucketName, location string) error
+	CreateHMACKey(projectID, serviceAccountEmail string) (accessID, secret string, err error)
 }
 
 // Concrete implementation
@@ -873,8 +877,8 @@ func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*d
 	return nil
 }
 
-// DeleteDNSRecordSets deletes DNS record sets created by OMS for the given base domain.
-func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error {
+// DeleteDNSRecordSets deletes the given DNS record sets, ignoring those that no longer exist.
+func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName string, records []DNSRecordName) error {
 	service, err := dns.NewService(c.ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create DNS service: %w", err)
@@ -882,7 +886,7 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 
 	var deletions []*dns.ResourceRecordSet
 
-	for _, record := range GetDNSRecordNames(baseDomain) {
+	for _, record := range records {
 		existing, err := service.ResourceRecordSets.Get(projectID, zoneName, record.Name, record.Rtype).Context(c.ctx).Do()
 		if IsNotFoundError(err) {
 			continue
@@ -924,6 +928,51 @@ func (c *GCPClient) CreatePublicCAExternalAccountKey(projectID string) (string, 
 	}
 
 	return key.KeyId, key.B64MacKey, nil
+}
+
+// EnsureStorageBucket creates a Cloud Storage bucket in the given project and
+// location. It is idempotent: an already-existing bucket owned by the project is
+// treated as success. The bucket lives in the project so it is removed together
+// with the project on cleanup.
+func (c *GCPClient) EnsureStorageBucket(projectID, bucketName, location string) error {
+	svc, err := storage.NewService(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create storage client: %w", err)
+	}
+
+	bucket := &storage.Bucket{
+		Name:     bucketName,
+		Location: location,
+	}
+	_, err = svc.Buckets.Insert(projectID, bucket).Context(c.ctx).Do()
+	if err != nil {
+		if apiErr, ok := err.(*googleapi.Error); ok && apiErr.Code == 409 {
+			// Bucket already exists (owned by this project on re-runs).
+			return nil
+		}
+		return fmt.Errorf("failed to create storage bucket %s: %w", bucketName, err)
+	}
+	return nil
+}
+
+// CreateHMACKey creates an HMAC key for the given service account, used for
+// S3-compatible access to Cloud Storage. The secret is only returned at creation
+// time, so callers must persist it. HMAC keys are removed together with the
+// project on cleanup.
+func (c *GCPClient) CreateHMACKey(projectID, serviceAccountEmail string) (string, string, error) {
+	svc, err := storage.NewService(c.ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create storage client: %w", err)
+	}
+
+	key, err := svc.Projects.HmacKeys.Create(projectID, serviceAccountEmail).Context(c.ctx).Do()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create HMAC key: %w", err)
+	}
+	if key.Metadata == nil {
+		return "", "", fmt.Errorf("HMAC key response missing metadata")
+	}
+	return key.Metadata.AccessId, key.Secret, nil
 }
 
 // Helper functions

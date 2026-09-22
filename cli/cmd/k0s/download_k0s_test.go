@@ -34,7 +34,6 @@ var _ = Describe("DownloadK0sk0s", func() {
 			GlobalOptions: globalOpts,
 			Version:       "",
 			Force:         false,
-			Quiet:         false,
 		}
 		c = k0s.DownloadK0sCmd{
 			Opts:       *opts,
@@ -67,7 +66,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 
 			c.Opts.Version = "v1.29.1+k0s.0"
 
-			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{}).Return("", errors.New("download failed"))
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Quiet: true}).Return("", errors.New("download failed"))
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).To(HaveOccurred())
@@ -80,7 +79,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 
 			c.Opts.Version = "v1.29.1+k0s.0"
 
-			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{}).Return("/test/workdir/k0s", nil)
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Quiet: true}).Return("/test/workdir/k0s", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).ToNot(HaveOccurred())
@@ -92,7 +91,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 			c.Opts.Version = "v1.29.1+k0s.0"
 			c.Opts.Airgap = true
 
-			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Airgapped: true}).Return("/test/workdir/k0s", nil)
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Quiet: true, Airgapped: true}).Return("/test/workdir/k0s", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).ToNot(HaveOccurred())
@@ -103,10 +102,10 @@ var _ = Describe("DownloadK0sk0s", func() {
 
 			c.Opts.Version = "" // Test auto-version detection
 			c.Opts.Force = true
-			c.Opts.Quiet = true
+			c.Opts.Verbose = true
 
 			mockK0sManager.EXPECT().GetLatestVersion().Return("v1.29.1+k0s.0", nil)
-			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Force: true, Quiet: true}).Return("/test/workdir/k0s", nil)
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Force: true, Quiet: false}).Return("/test/workdir/k0s", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).ToNot(HaveOccurred())

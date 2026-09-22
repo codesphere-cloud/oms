@@ -69,7 +69,7 @@ func AddBuildImageCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 
 // AddBuildImageCmd adds the build image command to the parent command
 func (c *BuildImageCmd) BuildImage(pm installer.PackageManager, im system.ImageManager) error {
-	err := pm.Extract(c.Opts.Force)
+	err := pm.Extract(c.Opts.Force, c.Opts.Verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
 	}

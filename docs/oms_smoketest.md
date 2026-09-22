@@ -12,6 +12,12 @@ Run automated smoke tests for Codesphere installations to verify functionality.
   -h, --help   help for smoketest
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)

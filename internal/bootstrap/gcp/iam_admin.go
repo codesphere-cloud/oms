@@ -166,6 +166,7 @@ func (b *GCPBootstrapper) EnsureAPIsEnabled() error {
 		"serviceusage.googleapis.com",
 		"artifactregistry.googleapis.com",
 		"dns.googleapis.com",
+		"storage.googleapis.com",
 	}
 	if b.Env.GoogleACMEIssuer {
 		apis = append(apis, "publicca.googleapis.com")
@@ -184,6 +185,12 @@ func (b *GCPBootstrapper) EnsureServiceAccounts() error {
 	_, _, err := b.GCPClient.CreateServiceAccount(b.Env.ProjectID, "cloud-controller", "cloud-controller")
 	if err != nil {
 		return err
+	}
+
+	// Dedicated service account for OpenFGA database backups. Its storage role is
+	// assigned in EnsureIAMRoles and its HMAC key created in EnsureOpenfgaBackupBucket.
+	if _, _, err := b.GCPClient.CreateServiceAccount(b.Env.ProjectID, openfgaBackupSAName, openfgaBackupSAName); err != nil {
+		return fmt.Errorf("failed to ensure openfga backup service account: %w", err)
 	}
 
 	if b.Env.RegistryType == RegistryTypeArtifactRegistry {
@@ -232,9 +239,14 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 		return fmt.Errorf("failed to ensure cloud-controller role bindings: %w", err)
 	}
 
-	err = b.ensureDnsPermissions()
+	err = b.ensureDNSPermissions()
 	if err != nil {
 		return fmt.Errorf("failed to ensure DNS permissions: %w", err)
+	}
+
+	err = b.ensureIAMRoleWithRetry(b.Env.ProjectID, openfgaBackupSAName, b.Env.ProjectID, []string{"roles/storage.objectAdmin"})
+	if err != nil {
+		return fmt.Errorf("failed to ensure openfga backup role bindings: %w", err)
 	}
 
 	if b.Env.RegistryType != RegistryTypeArtifactRegistry {

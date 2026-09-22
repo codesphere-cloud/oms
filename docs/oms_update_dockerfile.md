@@ -34,6 +34,12 @@ $ oms update dockerfile --dockerfile baseimage/Dockerfile --package codesphere-v
   -p, --package string      Path to the Codesphere package (required)
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms update](oms_update.md)	 - Update OMS related resources

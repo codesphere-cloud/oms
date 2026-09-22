@@ -118,7 +118,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
-	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "local-container", "Container registry type to use (options: local-container, artifact-registry) (default: local-container)")
+	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "github", "Container registry type to use (options: local-container, artifact-registry, github) (default: github)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
 	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
@@ -196,12 +196,6 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	c.CodesphereEnv.RegistryType = gcp.RegistryType(c.InputRegistryType)
 
 	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
-	if c.CodesphereEnv.GitHubPAT != "" {
-		c.CodesphereEnv.RegistryType = gcp.RegistryTypeGitHub
-		if c.CodesphereEnv.RegistryUser == "" {
-			return fmt.Errorf("registry-user must be set when using GitHub registry type")
-		}
-	}
 
 	if c.cmd.Flags().Changed("experiments") {
 		if c.cmd.Flags().Changed("internal-flags") {
@@ -235,17 +229,15 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return nil
 	}
 
-	packageName := "<package-name>-installer"
 	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml"
 
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
-		log.Printf("You set a GitHub PAT for direct image access. Make sure to use a lite package, as VM root disk sizes are reduced.")
+		log.Printf("Images are pulled directly from GHCR, so container images are not loaded from the package.")
 
 		installCmd += " -s load-container-images"
-		packageName += "-lite"
 	}
 
-	log.Printf("example install command (run from jumpbox):\n%s -p %s.tar.gz", installCmd, packageName)
+	log.Printf("example install command (run from jumpbox):\n%s -p <package-name>-%s", installCmd, gcp.InstallerArchiveName)
 
 	return nil
 }

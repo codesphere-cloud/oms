@@ -263,6 +263,7 @@ var _ = Describe("GCE", func() {
 				GitHubAppName:         "fake-app",
 				GitHubAppClientID:     "fake-id",
 				GitHubAppClientSecret: "fake-secret",
+				RegistryType:          gcp.RegistryTypeLocalContainer,
 			}
 		})
 

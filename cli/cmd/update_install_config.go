@@ -67,6 +67,9 @@ type UpdateInstallConfigOpts struct {
 	ACMEEABMacKey     string
 	ACMEDNS01Provider string
 
+	ACMECustomDomainsEABKeyID  string
+	ACMECustomDomainsEABMacKey string
+
 	CodesphereDomain                       string
 	CodespherePublicIP                     string
 	CodesphereWorkspaceHostingBaseDomain   string
@@ -151,6 +154,8 @@ func AddUpdateInstallConfigCmd(update *cobra.Command, opts *util.GlobalOptions) 
 	c.cmd.Flags().StringVar(&c.Opts.ACMEServer, "acme-server", "", "ACME server URL")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEEABKeyID, "acme-eab-key-id", "", "External Account Binding key ID (required by some ACME providers)")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEEABMacKey, "acme-eab-mac-key", "", "External Account Binding MAC key (required by some ACME providers)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMECustomDomainsEABKeyID, "acme-custom-domains-eab-key-id", "", "External Account Binding key ID for custom-domain certificates (must differ from --acme-eab-key-id)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMECustomDomainsEABMacKey, "acme-custom-domains-eab-mac-key", "", "External Account Binding MAC key for custom-domain certificates")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEDNS01Provider, "acme-dns01-provider", "", "DNS provider for DNS-01 solver")
 
 	// Codesphere update flags
@@ -379,6 +384,24 @@ func (c *UpdateInstallConfigCmd) applyACMEUpdates(config *files.RootConfig, vaul
 		if currentKey != c.Opts.ACMEEABMacKey {
 			log.Printf("Updating ACME EAB MAC key\n")
 			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMEEABMacKey}})
+			acmeChanged = true
+		}
+	}
+
+	if c.Opts.ACMECustomDomainsEABKeyID != "" && certIssuer.Acme.CustomDomainsEABKeyID != c.Opts.ACMECustomDomainsEABKeyID {
+		log.Printf("Updating ACME custom-domains EAB key ID: %s -> %s\n", certIssuer.Acme.CustomDomainsEABKeyID, c.Opts.ACMECustomDomainsEABKeyID)
+		certIssuer.Acme.CustomDomainsEABKeyID = c.Opts.ACMECustomDomainsEABKeyID
+		acmeChanged = true
+	}
+
+	if c.Opts.ACMECustomDomainsEABMacKey != "" {
+		currentKey := ""
+		if s := vault.GetSecret(files.SecretAcmeCustomDomainsEabMacKey); s != nil && s.Fields != nil {
+			currentKey = s.Fields.Password
+		}
+		if currentKey != c.Opts.ACMECustomDomainsEABMacKey {
+			log.Printf("Updating ACME custom-domains EAB MAC key\n")
+			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeCustomDomainsEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMECustomDomainsEABMacKey}})
 			acmeChanged = true
 		}
 	}

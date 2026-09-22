@@ -33,7 +33,8 @@ var availableSteps = []teststeps.SmokeTestStep{
 }
 
 type SmoketestCodesphereCmd struct {
-	cmd *cobra.Command
+	cmd           *cobra.Command
+	GlobalOptions *util.GlobalOptions
 	// TODO (Simon)for now I kept the opts in the teststeps package,
 	// but if we add more tests we should move unified opts here and probably use seperate
 	// structs for the different test types (base smoke test, ui test etc.)
@@ -41,6 +42,7 @@ type SmoketestCodesphereCmd struct {
 }
 
 func (c *SmoketestCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
+	c.Opts.Verbose = c.GlobalOptions.Verbose
 	client, err := codesphere.NewClient(c.Opts.BaseURL, c.Opts.Token)
 	if err != nil {
 		return fmt.Errorf("failed to create Codesphere client: %w", err)
@@ -77,10 +79,6 @@ func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 					Desc: "Run smoke tests against a specific team within your Codesphere installation, using a specific workspace plan",
 				},
 				{
-					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --quiet",
-					Desc: "Run smoke tests in quiet mode (no progress logging)",
-				},
-				{
 					Cmd:  "--baseurl https://codesphere.example.com/api --token YOUR_TOKEN --timeout 15m",
 					Desc: "Run smoke tests with custom timeout",
 				},
@@ -94,13 +92,13 @@ func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 				},
 			}),
 		},
-		Opts: &teststeps.SmoketestCodesphereOpts{},
+		GlobalOptions: opts,
+		Opts:          &teststeps.SmoketestCodesphereOpts{},
 	}
 	c.cmd.Flags().StringVar(&c.Opts.BaseURL, "baseurl", "", "Base URL of the Codesphere API")
 	c.cmd.Flags().StringVar(&c.Opts.Token, "token", "", "API token for authentication")
 	c.cmd.Flags().StringVar(&c.Opts.TeamID, "team-id", "", "Team ID for workspace creation")
 	c.cmd.Flags().StringVar(&c.Opts.PlanID, "plan-id", "", "Plan ID for workspace creation")
-	c.cmd.Flags().BoolVarP(&c.Opts.Quiet, "quiet", "q", false, "Suppress progress logging")
 	c.cmd.Flags().DurationVar(&c.Opts.Timeout, "timeout", defaultTimeout, "Timeout for the entire smoke test")
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", defaultProfile, "CI profile to use for landscape and pipeline")
 	c.cmd.Flags().StringSliceVar(&c.Opts.Steps, "steps", []string{}, fmt.Sprintf("Comma-separated list of steps to run (%s). If empty, all steps including deleteWorkspace are run. If specified without deleteWorkspace, the workspace will be kept for manual inspection.", strings.Join(stepNames, ",")))

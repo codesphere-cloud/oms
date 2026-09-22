@@ -20,9 +20,6 @@ $ oms download k0s
 # Download a specific version of k0s
 $ oms download k0s --version 1.22.0
 
-# Download k0s with minimal output
-$ oms download k0s --quiet
-
 # Force download even if k0s binary exists
 $ oms download k0s --force
 
@@ -37,8 +34,13 @@ $ oms download k0s --airgapped
   -a, --airgapped        Downloads the airgapped bundle for that version
   -f, --force            Force download even if k0s binary exists
   -h, --help             help for k0s
-  -q, --quiet            Suppress progress output during download
   -v, --version string   Version of k0s to download
+```
+
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
 ```
 
 ### SEE ALSO
