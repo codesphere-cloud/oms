@@ -24,7 +24,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
-	"google.golang.org/api/dns/v1"
 )
 
 // InstallerArchiveName is the package artifact bootstrapping downloads and installs.
@@ -58,23 +57,6 @@ func CheckOMSManagedLabel(labels map[string]string) bool {
 	value, exists := labels[OMSManagedLabel]
 
 	return exists && value == "true"
-}
-
-// GetDNSRecordNames returns the DNS record names that OMS creates for a given base domain.
-func GetDNSRecordNames(baseDomain string) []struct {
-	Name  string
-	Rtype string
-} {
-	return []struct {
-		Name  string
-		Rtype string
-	}{
-		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
-		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
-		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
-		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
-		{fmt.Sprintf("*.ssh.cs.%s.", baseDomain), "A"},
-	}
 }
 
 // This should ALWAYS be empty. Internal flags are for internal feature
@@ -152,6 +134,9 @@ type CodesphereEnvironment struct {
 	MultiDC bool `json:"multi_dc"`
 	// DataCenters holds the per-data-center state. It always has at least one entry.
 	DataCenters []*datacenter.DataCenter `json:"datacenters"`
+	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
+	// those instead of recomputing the list.
+	DNSRecords []DNSRecordName `json:"dns_records,omitempty"`
 	// ControlPlaneNodes and CephNodes are where the primary data center's nodes lived before
 	// multi-DC support. The steps that have not been migrated to DataCenters yet still use
 	// them, and infra files written by an earlier OMS carry the nodes here.
@@ -680,20 +665,6 @@ func (b *GCPBootstrapper) validateTelemetryExportParams() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) ensureDnsPermissions() error {
-	dnsProject := b.Env.DNSProjectID
-	if b.Env.DNSProjectID == "" {
-		dnsProject = b.Env.ProjectID
-	}
-
-	err := b.ensureIAMRoleWithRetry(dnsProject, "cloud-controller", b.Env.ProjectID, []string{"roles/dns.admin"})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (b *GCPBootstrapper) EnsureVPC() error {
 	networkName := fmt.Sprintf("%s-vpc", b.Env.ProjectID)
 	subnetName := fmt.Sprintf("%s-%s-subnet", b.Env.ProjectID, b.Env.Region)
@@ -1020,60 +991,6 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 				return fmt.Errorf("failed to create secrets directory on %s: %w", n.GetName(), err)
 			}
 		}
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureDNSRecords() error {
-	gcpProject := b.Env.DNSProjectID
-	if b.Env.DNSProjectID == "" {
-		gcpProject = b.Env.ProjectID
-	}
-
-	zoneName := b.Env.DNSZoneName
-
-	err := b.GCPClient.EnsureDNSManagedZone(gcpProject, zoneName, b.Env.BaseDomain+".", "Codesphere DNS zone")
-	if err != nil {
-		return fmt.Errorf("failed to ensure DNS managed zone: %w", err)
-	}
-
-	records := []*dns.ResourceRecordSet{
-		{
-			Name:    fmt.Sprintf("cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.ssh.cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.SshProxyIP},
-		},
-	}
-
-	err = b.GCPClient.EnsureDNSRecordSets(gcpProject, zoneName, records)
-	if err != nil {
-		return fmt.Errorf("failed to ensure DNS record sets: %w", err)
 	}
 
 	return nil
