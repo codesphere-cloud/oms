@@ -25,7 +25,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	rookcephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	"github.com/spf13/cobra"
@@ -157,7 +156,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 	c.CodesphereEnv.AgeKey = ageKey
 
-	icg, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
+	icg, err := installer.NewAutoInstallConfigManager(ageKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}

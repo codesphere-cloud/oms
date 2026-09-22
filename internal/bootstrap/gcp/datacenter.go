@@ -8,7 +8,6 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 // BuildDataCenters derives the data center layout from the bootstrap environment: a single
@@ -61,7 +60,7 @@ func (b *GCPBootstrapper) ensureConfigManagers() error {
 			continue
 		}
 
-		manager, err := installer.NewInstallConfigManager(string(vault.TypeAuto), b.Env.AgeKey)
+		manager, err := installer.NewAutoInstallConfigManager(b.Env.AgeKey)
 		if err != nil {
 			return fmt.Errorf("failed to initialize config manager for data center %d: %w", dc.ID, err)
 		}

@@ -80,6 +80,38 @@ var _ = Describe("Vault stores", func() {
 		Expect(vaultType).To(Equal(vault.TypeSOPS))
 	})
 
+	It("accepts the user selectable vault types", func() {
+		for _, tc := range []struct {
+			value string
+			want  vault.Type
+		}{
+			{"sops", vault.TypeSOPS},
+			{"plain", vault.TypePlain},
+			{"  PLAIN  ", vault.TypePlain},
+		} {
+			vaultType, err := vault.ParseType(tc.value)
+			Expect(err).NotTo(HaveOccurred(), tc.value)
+			Expect(vaultType).To(Equal(tc.want), tc.value)
+		}
+	})
+
+	// TypeAuto follows whatever format is already on disk, so a command that promises
+	// encrypted output would silently write a plaintext vault if a user could select it.
+	It("rejects the internal auto type from user facing entry points", func() {
+		_, err := vault.ParseType(string(vault.TypeAuto))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("unsupported vault type"))
+
+		_, err = vault.NewFromString(string(vault.TypeAuto), vault.Options{Path: filepath.Join(GinkgoT().TempDir(), "prod.vault.yaml")})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("still resolves the auto backend through the vault factory", func() {
+		store, err := vault.New(vault.TypeAuto, vault.Options{Path: filepath.Join(GinkgoT().TempDir(), "prod.vault.yaml")})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(store).NotTo(BeNil())
+	})
+
 	It("validates file paths in the file-backed implementations", func() {
 		_, err := plain.New(plain.Options{})
 		Expect(err).To(HaveOccurred())

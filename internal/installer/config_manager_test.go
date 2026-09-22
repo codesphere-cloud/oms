@@ -822,11 +822,23 @@ var _ = Describe("Bootstrap vault loading", func() {
 	})
 
 	It("loads an existing SOPS-encrypted vault with the auto backend", func() {
-		manager, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
+		manager, err := installer.NewAutoInstallConfigManager(ageKey)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(manager.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
 		Expect(manager.GetVault().GetSecret("registryPassword").Fields.Password).To(Equal("ghcr-token"))
+	})
+
+	// "auto" must stay unavailable to the user facing --vault-type flag, otherwise a command
+	// that promises to encrypt the vault would quietly write it in plaintext.
+	It("rejects auto as a user supplied type but accepts it for the bootstrap flows", func() {
+		_, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("unsupported vault type"))
+
+		manager, err := installer.NewAutoInstallConfigManager(ageKey)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(manager).NotTo(BeNil())
 	})
 
 	It("loads a plaintext vault with the auto backend", func() {
@@ -837,7 +849,7 @@ var _ = Describe("Bootstrap vault loading", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(os.WriteFile(plainPath, vaultYAML, 0600)).To(Succeed())
 
-		manager, err := installer.NewInstallConfigManager(string(vault.TypeAuto), "")
+		manager, err := installer.NewAutoInstallConfigManager("")
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(manager.LoadVaultFromFileOrCreate(plainPath)).To(Succeed())
@@ -845,7 +857,7 @@ var _ = Describe("Bootstrap vault loading", func() {
 	})
 
 	It("re-encrypts a loaded SOPS vault when it is written back", func() {
-		manager, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
+		manager, err := installer.NewAutoInstallConfigManager(ageKey)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
 
@@ -856,7 +868,7 @@ var _ = Describe("Bootstrap vault loading", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(raw)).To(ContainSubstring("sops"))
 
-		reloaded, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
+		reloaded, err := installer.NewAutoInstallConfigManager(ageKey)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(reloaded.LoadVaultFromFileOrCreate(vaultPath)).To(Succeed())
 		Expect(reloaded.GetVault().GetSecret("extra").Fields.Password).To(Equal("value"))

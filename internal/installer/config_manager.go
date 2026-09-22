@@ -60,14 +60,27 @@ func (g *InstallConfig) SetFileIO(fio util.FileIO) {
 	g.fileIO = fio
 }
 
-// NewInstallConfigManager configures all vault reads and writes to go through
-// the selected vault implementation.
+// NewInstallConfigManager configures all vault reads and writes to go through the vault
+// implementation selected by the user supplied vault type.
 func NewInstallConfigManager(vaultType string, ageKey string) (InstallConfigManager, error) {
 	t, err := vault.ParseType(vaultType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse vault type %s: %w", vaultType, err)
 	}
 
+	return newInstallConfigManager(t, ageKey)
+}
+
+// NewAutoInstallConfigManager configures all vault reads and writes to go through the vault
+// implementation that matches the file already on disk. The bootstrap flows use it because
+// they accept a vault that is either plaintext or SOPS-encrypted. The type is not user
+// selectable: an "auto" choice would silently write a plaintext vault for a command that
+// promises encrypted output.
+func NewAutoInstallConfigManager(ageKey string) (InstallConfigManager, error) {
+	return newInstallConfigManager(vault.TypeAuto, ageKey)
+}
+
+func newInstallConfigManager(t vault.Type, ageKey string) (InstallConfigManager, error) {
 	if err := vault.ValidateConfiguration(t, ageKey); err != nil {
 		return nil, fmt.Errorf("failed to validate install config: %w", err)
 	}

@@ -18,7 +18,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
@@ -174,7 +173,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	c.CodesphereEnv.VaultType = vaultType
 	c.CodesphereEnv.AgeKey = ageKey
 
-	icg, err := installer.NewInstallConfigManager(string(vault.TypeAuto), ageKey)
+	icg, err := installer.NewAutoInstallConfigManager(ageKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}

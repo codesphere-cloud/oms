@@ -46,17 +46,18 @@ type Options struct {
 	FileIO       util.FileIO
 }
 
-// ParseType validates a user supplied vault type.
+// ParseType validates a user supplied vault type. The internal TypeAuto is deliberately not
+// accepted here: it follows whatever format the file already has, so exposing it would let a
+// command that promises encrypted output silently write a plaintext vault. Callers that need
+// it construct the type directly instead (see installer.NewAutoInstallConfigManager).
 func ParseType(value string) (Type, error) {
 	switch Type(strings.ToLower(strings.TrimSpace(value))) {
 	case "", TypeSOPS:
 		return TypeSOPS, nil
 	case TypePlain:
 		return TypePlain, nil
-	case TypeAuto:
-		return TypeAuto, nil
 	default:
-		return "", fmt.Errorf("unsupported vault type %q (must be %q, %q or %q)", value, TypeSOPS, TypePlain, TypeAuto)
+		return "", fmt.Errorf("unsupported vault type %q (must be %q or %q)", value, TypeSOPS, TypePlain)
 	}
 }
 
