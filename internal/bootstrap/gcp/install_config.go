@@ -4,7 +4,9 @@
 package gcp
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -399,15 +401,20 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return err
 	}
 
-	defer cleanupVaultTransfer()
+	transferErr := b.copyConfigAndVaultToJumpbox(vaultTransferPath)
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
-	if err != nil {
+	// The transfer copy holds every secret in the clear, so a failed removal is reported even
+	// when the transfer itself succeeded.
+	return errors.Join(transferErr, cleanupVaultTransfer())
+}
+
+// copyConfigAndVaultToJumpbox uploads the install config and the vault the jumpbox installs from.
+func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(vaultTransferPath string) error {
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath); err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, vaultTransferPath, b.Env.SecretsDir+"/prod.vault.yaml")
-	if err != nil {
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, vaultTransferPath, b.Env.SecretsDir+"/prod.vault.yaml"); err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}
 
@@ -417,24 +424,47 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 // prepareVaultTransfer returns the local path of the vault to copy to the jumpbox. An
 // encrypted vault is first rewritten as a plaintext copy, because the jumpbox re-encrypts it
 // with its own age key (see EncryptVault) and only the caller's machine holds the key that
-// can decrypt the local file. The returned cleanup removes that copy.
-func (b *GCPBootstrapper) prepareVaultTransfer() (string, func(), error) {
+// can decrypt the local file. The copy gets a unique path so it can never replace a file the
+// caller owns. The returned cleanup removes it and reports a failure to do so, because the
+// file holds every secret in the clear.
+func (b *GCPBootstrapper) prepareVaultTransfer() (string, func() error, error) {
 	if b.Env.VaultType != vault.TypeSOPS {
-		return b.Env.SecretsFilePath, func() {}, nil
+		return b.Env.SecretsFilePath, func() error { return nil }, nil
 	}
 
-	transferPath := b.Env.SecretsFilePath + vaultTransferSuffix
-	if err := b.icg.WriteUnencryptedVault(transferPath, true); err != nil {
-		return "", nil, fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err)
+	transferPath, err := b.newVaultTransferPath()
+	if err != nil {
+		return "", nil, err
 	}
 
-	cleanup := func() {
+	cleanup := func() error {
 		if err := b.fw.Remove(transferPath); err != nil {
-			b.stlog.Logf("failed to remove unencrypted vault transfer file %s: %s", transferPath, err.Error())
+			return fmt.Errorf("failed to remove unencrypted vault transfer file %s: %w", transferPath, err)
 		}
+
+		return nil
+	}
+
+	if err := b.icg.WriteUnencryptedVault(transferPath, true); err != nil {
+		writeErr := fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err)
+
+		return "", nil, errors.Join(writeErr, cleanup())
 	}
 
 	return transferPath, cleanup, nil
+}
+
+// newVaultTransferPath reserves a unique file for the plaintext transfer copy.
+func (b *GCPBootstrapper) newVaultTransferPath() (string, error) {
+	dir := filepath.Dir(b.Env.SecretsFilePath)
+	pattern := filepath.Base(b.Env.SecretsFilePath) + vaultTransferSuffix + "*"
+
+	path, err := b.fw.CreateTemp(dir, pattern)
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary vault transfer file: %w", err)
+	}
+
+	return path, nil
 }
 
 // applyACMEConfig configures the ACME certificate issuer, including the DNS-01

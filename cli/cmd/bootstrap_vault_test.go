@@ -152,3 +152,35 @@ var _ = Describe("resolveVaultAccess", func() {
 		Expect(err.Error()).To(ContainSubstring("sops binary is not in PATH"))
 	})
 })
+
+var _ = Describe("resolveBootstrapVaultAccess", func() {
+	var (
+		dir        string
+		unreadable string
+		fw         intutil.FileIO
+	)
+
+	BeforeEach(func() {
+		dir = GinkgoT().TempDir()
+		fw = intutil.NewFilesystemWriter()
+
+		// A directory always fails the vault inspection, whatever tooling is installed.
+		unreadable = filepath.Join(dir, "unreadable")
+		Expect(os.MkdirAll(unreadable, 0755)).To(Succeed())
+	})
+
+	// recoverVault replaces the local vault with the plaintext copy it decrypts on the jumpbox,
+	// so a local vault that cannot be read must not block --recover-config.
+	It("ignores the local vault when recovering", func() {
+		vaultType, ageKey, err := resolveBootstrapVaultAccess(fw, unreadable, "key-from-flag", true)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(vaultType).To(Equal(vault.TypePlain))
+		Expect(ageKey).To(BeEmpty())
+	})
+
+	It("still reports an unreadable local vault when not recovering", func() {
+		_, _, err := resolveBootstrapVaultAccess(fw, unreadable, "", false)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to detect vault type"))
+	})
+})

@@ -5,6 +5,7 @@ package gcp_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -418,20 +419,38 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(bs.Env.InstallConfig.Codesphere.OpenBao).To(BeNil())
 			})
 
-			It("transfers a plaintext vault copy when the local vault is encrypted", func() {
+			It("transfers a unique plaintext vault copy when the local vault is encrypted", func() {
 				csEnv.VaultType = vaultpkg.TypeSOPS
 
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
-				icg.EXPECT().WriteUnencryptedVault("fake-secret.plain", true).Return(nil)
-				fw.EXPECT().Remove("fake-secret.plain").Return(nil)
+				icg.EXPECT().WriteUnencryptedVault("fake-secret.plain-1234", true).Return(nil)
+				fw.EXPECT().CreateTemp(".", "fake-secret.plain*").Return("fake-secret.plain-1234", nil)
+				fw.EXPECT().Remove("fake-secret.plain-1234").Return(nil)
 
 				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-config-file", "/etc/codesphere/config.yaml").Return(nil)
-				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-secret.plain", "/etc/codesphere/secrets/prod.vault.yaml").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-secret.plain-1234", "/etc/codesphere/secrets/prod.vault.yaml").Return(nil)
 
 				err := bs.UpdateInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("reports a plaintext transfer copy that could not be removed", func() {
+				csEnv.VaultType = vaultpkg.TypeSOPS
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+				icg.EXPECT().WriteUnencryptedVault("fake-secret.plain-1234", true).Return(nil)
+				fw.EXPECT().CreateTemp(".", "fake-secret.plain*").Return("fake-secret.plain-1234", nil)
+				fw.EXPECT().Remove("fake-secret.plain-1234").Return(errors.New("permission denied"))
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("failed to remove unencrypted vault transfer file"))
 			})
 
 			It("uses the configured datacenter name", func() {

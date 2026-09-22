@@ -34,6 +34,9 @@ const (
 	codesphereSystemNamespace = "codesphere-system"
 	codesphereNamespace       = "codesphere"
 	workspacesNamespace       = "workspaces"
+
+	// ageKeyFileName is the age key file the Codesphere installer is invoked with.
+	ageKeyFileName = "age_key.txt"
 )
 
 type retryableWaitError struct {
@@ -541,11 +544,20 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
+
+	if keyPath == "" {
+		// An identity from SOPS_AGE_KEY has no file of its own, but the Codesphere installer is
+		// invoked with a key file. Materialize it next to the vault once.
+		keyPath = filepath.Join(filepath.Dir(b.Env.SecretsFilePath), ageKeyFileName)
+		if err := sops.WriteEnvAgeKeyFile(b.fw, keyPath); err != nil {
+			return fmt.Errorf("failed to write the age key for the installer: %w", err)
+		}
+	}
+
 	b.ageRecipient = recipient
 	b.ageKeyPath = keyPath
-	if keyPath != "" {
-		fmt.Printf("Using age key: %s\n", keyPath)
-	}
+	fmt.Printf("Using age key: %s\n", keyPath)
+
 	return nil
 }
 

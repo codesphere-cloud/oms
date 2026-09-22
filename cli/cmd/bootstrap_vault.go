@@ -13,6 +13,18 @@ import (
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
+// resolveBootstrapVaultAccess resolves the vault type and age key for a bootstrap run.
+// A recovery run skips the local preflight entirely: recoverVault replaces the local file with
+// the plaintext copy it decrypts on the jumpbox, so a stale SOPS vault whose key is gone must
+// not block the very recovery that is meant to resolve it.
+func resolveBootstrapVaultAccess(fw intutil.FileIO, secretsFilePath, ageKeyFlag string, recoverConfig bool) (vault.Type, string, error) {
+	if recoverConfig {
+		return vault.TypePlain, "", nil
+	}
+
+	return resolveVaultAccess(fw, secretsFilePath, ageKeyFlag)
+}
+
 // resolveVaultAccess detects the on-disk format of the install vault at secretsFilePath and
 // resolves the age key needed to read it. A plaintext vault, including a file that does not
 // exist yet, needs no key. An encrypted vault requires an existing key: the CLI must not

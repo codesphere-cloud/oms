@@ -165,7 +165,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	fw := intutil.NewFilesystemWriter()
 
-	vaultType, ageKey, err := resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey)
+	vaultType, ageKey, err := resolveBootstrapVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, c.CodesphereEnv.RecoverConfig)
 	if err != nil {
 		return err
 	}

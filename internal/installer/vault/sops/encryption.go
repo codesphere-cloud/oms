@@ -36,6 +36,31 @@ func ResolveExistingAgeKey(explicitKeyFile, fallbackDir string) (keyPath string,
 	return keyPath, err
 }
 
+// WriteEnvAgeKeyFile writes the identity supplied through SOPS_AGE_KEY to path with owner-only
+// permissions. Callers that must hand a key file to a subprocess use it, because an identity
+// that comes from the environment has no file of its own.
+func WriteEnvAgeKeyFile(fileIO util.FileIO, path string) error {
+	raw := strings.TrimSpace(os.Getenv(sopsage.SopsAgeKeyEnv))
+	if raw == "" {
+		return fmt.Errorf("SOPS_AGE_KEY is not set")
+	}
+
+	if _, err := parseAgeRecipient(strings.NewReader(raw)); err != nil {
+		return fmt.Errorf("failed to parse age key from SOPS_AGE_KEY environment variable: %w", err)
+	}
+
+	if err := fileIO.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return fmt.Errorf("failed to create directory for age key: %w", err)
+	}
+
+	// A trailing newline matches the file age-keygen writes.
+	if err := fileIO.WriteFile(path, []byte(raw+"\n"), 0600); err != nil {
+		return fmt.Errorf("failed to write age key file %s: %w", path, err)
+	}
+
+	return nil
+}
+
 func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, generate bool) (recipient string, keyPath string, err error) {
 	if explicitKeyFile != "" {
 		recipient, err = readRecipientFromFile(fileIO, explicitKeyFile)
