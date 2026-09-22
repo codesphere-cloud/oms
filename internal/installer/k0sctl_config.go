@@ -41,6 +41,8 @@ type K0sctlHost struct {
 	Hooks            *K0sctlHooks      `yaml:"hooks,omitempty"`
 }
 
+// K0sctlFile is a file that k0sctl uploads to a node before installing k0s, for
+// example the airgap image bundle that worker nodes import.
 type K0sctlFile struct {
 	Src    string `yaml:"src"`
 	DstDir string `yaml:"dstDir"`
