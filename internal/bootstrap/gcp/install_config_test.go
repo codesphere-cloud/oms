@@ -310,6 +310,47 @@ var _ = Describe("Installconfig & Secrets", func() {
 		})
 	})
 
+	Describe("EnsureOpenfgaBackupBucket", func() {
+		It("creates the bucket and HMAC key", func() {
+			vault := &files.InstallVault{}
+			icg.EXPECT().GetVault().Return(vault)
+
+			gc.EXPECT().EnsureStorageBucket("pid", "pid-openfga-backup", "us-central1").Return(nil)
+			gc.EXPECT().CreateHMACKey("pid", "openfga-backup@pid.iam.gserviceaccount.com").Return("access-id", "secret-key", nil)
+
+			err := bs.EnsureOpenfgaBackupBucket()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bs.Env.OpenfgaBackupBucket).To(Equal("pid-openfga-backup"))
+			Expect(bs.Env.OpenfgaBackupAccessKeyID).To(Equal("access-id"))
+			Expect(bs.Env.OpenfgaBackupSecret).To(Equal("secret-key"))
+		})
+
+		It("does not create a new HMAC key when a real secret already exists", func() {
+			vault := &files.InstallVault{
+				Secrets: []files.SecretEntry{
+					{Name: files.SecretOpenfgaDbBackupSecretAccessKey, Fields: &files.SecretFields{Password: "existing-secret"}},
+				},
+			}
+			icg.EXPECT().GetVault().Return(vault)
+
+			gc.EXPECT().EnsureStorageBucket("pid", "pid-openfga-backup", "us-central1").Return(nil)
+			// CreateHMACKey must not be called.
+
+			err := bs.EnsureOpenfgaBackupBucket()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(bs.Env.OpenfgaBackupBucket).To(Equal("pid-openfga-backup"))
+			Expect(bs.Env.OpenfgaBackupAccessKeyID).To(BeEmpty())
+		})
+
+		It("returns an error when bucket creation fails", func() {
+			gc.EXPECT().EnsureStorageBucket("pid", "pid-openfga-backup", "us-central1").Return(fmt.Errorf("bucket error"))
+
+			err := bs.EnsureOpenfgaBackupBucket()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to ensure openfga backup bucket"))
+		})
+	})
+
 	Describe("UpdateInstallConfig", func() {
 		var vault *files.InstallVault
 
@@ -331,6 +372,9 @@ var _ = Describe("Installconfig & Secrets", func() {
 
 				err := bs.UpdateInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
+
+				// No openfga backup bucket provisioned → config stays unset.
+				Expect(bs.Env.InstallConfig.Codesphere.OpenfgaBackups).To(BeNil())
 
 				applications := bs.Env.InstallConfig.PcApps["applications"].(map[string]interface{})
 				sshProxy := applications["ssh-workspace-proxy"].(map[string]interface{})
@@ -403,6 +447,33 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(bs.Env.InstallConfig.Datacenter.Name).To(Equal("staging"))
+			})
+			It("wires the openfga backup config and secrets when a bucket was provisioned", func() {
+				csEnv.OpenfgaBackupBucket = "pid-openfga-backup"
+				csEnv.OpenfgaBackupAccessKeyID = "access-id"
+				csEnv.OpenfgaBackupSecret = "secret-key"
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				err := bs.UpdateInstallConfig()
+				Expect(err).NotTo(HaveOccurred())
+
+				ob := bs.Env.InstallConfig.Codesphere.OpenfgaBackups
+				Expect(ob).NotTo(BeNil())
+				Expect(ob.Enabled).To(BeTrue())
+				Expect(ob.DestinationPath).To(Equal("s3://pid-openfga-backup"))
+				Expect(ob.EndpointURL).To(Equal("https://storage.googleapis.com"))
+
+				accessKey := vault.GetSecret(files.SecretOpenfgaDbBackupAccessKeyId)
+				Expect(accessKey).NotTo(BeNil())
+				Expect(accessKey.Fields.Password).To(Equal("access-id"))
+				secretKey := vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey)
+				Expect(secretKey).NotTo(BeNil())
+				Expect(secretKey.Fields.Password).To(Equal("secret-key"))
 			})
 			Context("When internal flags are set in CodesphereEnvironment", func() {
 				BeforeEach(func() {
@@ -788,7 +859,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 					csEnv.GoogleACMEIssuer = true
 				})
 				It("requests EAB credentials from Public CA and uses them in the ACME config", func() {
-					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-eab-key-id", "fake-eab-mac-key", nil)
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-eab-key-id", "fake-eab-mac-key", nil).Once()
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-cd-eab-key-id", "fake-cd-eab-mac-key", nil).Once()
 					icg.EXPECT().GenerateSecrets().Return(nil)
 					icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
 					icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
@@ -801,6 +873,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.Server).To(Equal("https://dv.acme-v02.api.pki.goog/directory"))
 					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.EABKeyID).To(Equal("fake-eab-key-id"))
 					Expect(vault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password).To(Equal("fake-eab-mac-key"))
+					Expect(bs.Env.InstallConfig.Codesphere.CertIssuer.Acme.CustomDomainsEABKeyID).To(Equal("fake-cd-eab-key-id"))
+					Expect(vault.GetSecret(files.SecretAcmeCustomDomainsEabMacKey).Fields.Password).To(Equal("fake-cd-eab-mac-key"))
 
 					issuers := bs.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
 					httpIssuer := issuers["letsEncryptHttp"].(map[string]interface{})
@@ -812,6 +886,22 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).To(HaveOccurred())
 					Expect(err.Error()).To(ContainSubstring("failed to obtain Google Public CA EAB credentials"))
+				})
+				It("returns an error when the second public API call for custom domains fails", func() {
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("fake-eab-key-id", "fake-eab-mac-key", nil).Once()
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("", "", fmt.Errorf("api boom")).Once()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to obtain Google Public CA EAB credentials for custom domains"))
+				})
+				It("returns an error when both EAB key IDs are the same", func() {
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("same-eab-key-id", "fake-eab-mac-key", nil).Once()
+					gc.EXPECT().CreatePublicCAExternalAccountKey(mock.Anything).Return("same-eab-key-id", "fake-cd-eab-mac-key", nil).Once()
+
+					err := bs.UpdateInstallConfig()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("google Public CA returned the same EAB key ID for the default and custom-domains ACME accounts"))
 				})
 			})
 

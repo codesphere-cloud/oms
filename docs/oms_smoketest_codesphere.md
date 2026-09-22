@@ -24,9 +24,6 @@ $ oms smoketest codesphere --baseurl https://codesphere.example.com/api --token 
 # Run smoke tests against a specific team within your Codesphere installation, using a specific workspace plan
 $ oms smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --team-id TEAM_ID --plan-id PLAN_ID
 
-# Run smoke tests in quiet mode (no progress logging)
-$ oms smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --quiet
-
 # Run smoke tests with custom timeout
 $ oms smoketest codesphere --baseurl https://codesphere.example.com/api --token YOUR_TOKEN --timeout 15m
 
@@ -45,11 +42,16 @@ $ oms smoketest codesphere --baseurl https://codesphere.example.com/api --token 
   -h, --help               help for codesphere
       --plan-id string     Plan ID for workspace creation
       --profile string     CI profile to use for landscape and pipeline (default "ci.yml")
-  -q, --quiet              Suppress progress logging
       --steps strings      Comma-separated list of steps to run (createWorkspace,setEnvVar,createFiles,syncLandscape,executeRunStage,deleteWorkspace). If empty, all steps including deleteWorkspace are run. If specified without deleteWorkspace, the workspace will be kept for manual inspection.
       --team-id string     Team ID for workspace creation
       --timeout duration   Timeout for the entire smoke test (default 10m0s)
       --token string       API token for authentication
+```
+
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
 ```
 
 ### SEE ALSO

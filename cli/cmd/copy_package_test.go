@@ -43,7 +43,7 @@ var _ = Describe("CopyPackageCmd", func() {
 	})
 
 	preparePackageManager := func() {
-		packageManager.EXPECT().Extract(false).Return(nil)
+		packageManager.EXPECT().Extract(false, false).Return(nil)
 		packageManager.EXPECT().GetDependencyPath("bom.json").Return(bomPath)
 	}
 

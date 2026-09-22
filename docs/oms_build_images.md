@@ -19,6 +19,12 @@ oms build images [flags]
   -h, --help            help for images
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms build](oms_build.md)	 - Build and push images to a registry

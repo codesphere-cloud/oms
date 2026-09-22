@@ -58,6 +58,7 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 		VaultPath:        opts.Vault,
 		PrivKey:          opts.PrivKey,
 		Force:            opts.Force,
+		Verbose:          opts.Verbose,
 		SkipSteps:        opts.SkipSteps,
 		AllowedSteps:     installer.DependenciesSteps,
 		DirectConnection: opts.DirectConnection,

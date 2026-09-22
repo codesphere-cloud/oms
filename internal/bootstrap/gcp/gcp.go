@@ -25,30 +25,10 @@ import (
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
-	"github.com/lithammer/shortuuid"
-	"google.golang.org/api/dns/v1"
 )
 
-// RegistryType is a custom type to define which registry is used in the bootstrapper
-type RegistryType string
-
-const (
-	// RegistryTypeLocalContainer runs a container registry inside the cluster,
-	// which is set up on the nodes during bootstrapping.
-	// Used for air-gapped installation
-	RegistryTypeLocalContainer RegistryType = "local-container"
-
-	// RegistryTypeArtifactRegistry uses GCP Artifact Registry. Bootstrapping
-	// creates the registry, a dedicated service account with writer
-	// permissions, and stores its key as the registry credentials.
-	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
-
-	// RegistryTypeGitHub pulls images directly from the GitHub container
-	// registry. Since no images need to be loaded into a self-hosted registry,
-	// bootstrapping only configures GitHub access and installs the lite
-	// package.
-	RegistryTypeGitHub RegistryType = "github"
-)
+// InstallerArchiveName is the package artifact bootstrapping downloads and installs.
+const InstallerArchiveName = "installer-lite.tar.gz"
 
 // remoteK0sConfigScriptPath is where each data center's k0s configuration script is placed on
 // that data center's first control plane node. Data centers have separate nodes, so the path can
@@ -78,23 +58,6 @@ func CheckOMSManagedLabel(labels map[string]string) bool {
 	value, exists := labels[OMSManagedLabel]
 
 	return exists && value == "true"
-}
-
-// GetDNSRecordNames returns the DNS record names that OMS creates for a given base domain.
-func GetDNSRecordNames(baseDomain string) []struct {
-	Name  string
-	Rtype string
-} {
-	return []struct {
-		Name  string
-		Rtype string
-	}{
-		{fmt.Sprintf("cs.%s.", baseDomain), "A"},
-		{fmt.Sprintf("*.cs.%s.", baseDomain), "A"},
-		{fmt.Sprintf("ws.%s.", baseDomain), "A"},
-		{fmt.Sprintf("*.ws.%s.", baseDomain), "A"},
-		{fmt.Sprintf("*.ssh.cs.%s.", baseDomain), "A"},
-	}
 }
 
 // This should ALWAYS be empty. Internal flags are for internal feature
@@ -172,6 +135,9 @@ type CodesphereEnvironment struct {
 	MultiDC bool `json:"multi_dc"`
 	// DataCenters holds the per-data-center state. It always has at least one entry.
 	DataCenters []*datacenter.DataCenter `json:"datacenters"`
+	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
+	// those instead of recomputing the list.
+	DNSRecords []DNSRecordName `json:"dns_records,omitempty"`
 	// ControlPlaneNodes and CephNodes are where the primary data center's nodes lived before
 	// multi-DC support. The steps that have not been migrated to DataCenters yet still use
 	// them, and infra files written by an earlier OMS carry the nodes here.
@@ -273,6 +239,13 @@ type CodesphereEnvironment struct {
 	RootDiskSize   int64  `json:"root_disk_size"`
 	// Local OMS binary copied to the jumpbox instead of installing a release.
 	RemoteOmsBinaryPath string `json:"-"`
+
+	// OpenFGA database backups. The bucket lives in the project and is removed
+	// together with the project on cleanup. Access key/secret are populated only
+	// when a new HMAC key is created.
+	OpenfgaBackupBucket      string `json:"openfga_backup_bucket"`
+	OpenfgaBackupAccessKeyID string `json:"-"`
+	OpenfgaBackupSecret      string `json:"-"`
 }
 
 func NewGCPBootstrapper(
@@ -353,6 +326,11 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	err = b.stlog.Step("Ensure IAM roles", b.EnsureIAMRoles)
 	if err != nil {
 		return fmt.Errorf("failed to ensure IAM roles: %w", err)
+	}
+
+	err = b.stlog.Step("Ensure openfga backup bucket", b.EnsureOpenfgaBackupBucket)
+	if err != nil {
+		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
 	}
 
 	err = b.stlog.Step("Ensure VPC", b.EnsureVPC)
@@ -524,6 +502,11 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
+	err = b.validateRegistryParams()
+	if err != nil {
+		return err
+	}
+
 	err = b.validateGitProviderParams()
 	if err != nil {
 		return err
@@ -600,11 +583,7 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 		b.Env.InstallHash = build.Hash
 	}
 
-	requiredFilename := "installer.tar.gz"
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		requiredFilename = "installer-lite.tar.gz"
-	}
-
+	requiredFilename := InstallerArchiveName
 	filenames := []string{}
 	// Validate required file exists in package artifacts
 	for _, artifact := range build.Artifacts {
@@ -615,25 +594,6 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 	}
 
 	return fmt.Errorf("specified package does not contain required installer artifact %s. Existing artifacts: %s", requiredFilename, strings.Join(filenames, ", "))
-}
-
-// validateGitHubParams checks if the GitHub credentials are fully specified if GitHub registry is selected
-func (b *GCPBootstrapper) validateGitHubParams() error {
-	if b.Env.GitHubTeamSlug != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubPAT == "" {
-		return fmt.Errorf("GitHub PAT is required to extract public keys of GitHub team members")
-	}
-
-	ghTeamParams := []string{b.Env.GitHubTeamSlug, b.Env.GitHubTeamOrg}
-	if slices.Contains(ghTeamParams, "") && strings.Join(ghTeamParams, "") != "" {
-		return fmt.Errorf("GitHub team parameters are not fully specified (all or none of GitHubTeamSlug, GitHubTeamOrg must be set)")
-	}
-
-	ghAppParams := []string{b.Env.GitHubAppName, b.Env.GitHubAppClientID, b.Env.GitHubAppClientSecret}
-	if slices.Contains(ghAppParams, "") && strings.Join(ghAppParams, "") != "" {
-		return fmt.Errorf("GitHub app credentials are not fully specified (all or none of GitHubAppName, GitHubAppClientID, GitHubAppClientSecret must be set)")
-	}
-
-	return nil
 }
 
 // validateGitProviderParams checks that git provider credentials are fully specified (both client ID and secret, or neither)
@@ -706,37 +666,6 @@ func (b *GCPBootstrapper) validateTelemetryExportParams() error {
 
 	if b.Env.CentralOtelPassword != "" && b.Env.CentralOtelUsername == "" {
 		return fmt.Errorf("central OTel password is set but username is missing")
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
-	repoName := "codesphere-registry"
-
-	repo, err := b.GCPClient.GetArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
-	if err == nil && repo != nil {
-		b.Env.InstallConfig.Registry.Server = repo.GetRegistryUri()
-		return nil
-	}
-
-	repo, err = b.GCPClient.CreateArtifactRegistry(b.Env.ProjectID, b.Env.Region, repoName)
-	if err != nil || repo == nil {
-		return fmt.Errorf("failed to create artifact registry: %w, repo: %v", err, repo)
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) ensureDnsPermissions() error {
-	dnsProject := b.Env.DNSProjectID
-	if b.Env.DNSProjectID == "" {
-		dnsProject = b.Env.ProjectID
-	}
-
-	err := b.ensureIAMRoleWithRetry(dnsProject, "cloud-controller", b.Env.ProjectID, []string{"roles/dns.admin"})
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -948,8 +877,10 @@ func (b *GCPBootstrapper) EnsureRootLoginEnabled() error {
 	return nil
 }
 
+const sshReadyTimeout = 5 * time.Minute
+
 func (b *GCPBootstrapper) ensureRootLoginEnabledInNode(node *node.Node) error {
-	err := node.NodeClient.WaitReady(node, 30*time.Second)
+	err := node.NodeClient.WaitReady(node, sshReadyTimeout)
 	if err != nil {
 		return fmt.Errorf("timed out waiting for SSH service to start on %s: %w", node.GetName(), err)
 	}
@@ -1071,160 +1002,6 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	return nil
 }
 
-// EnsureLocalContainerRegistry installs a docker registry on the postgres node to speed up image loading time
-func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
-	localRegistryServer := b.Env.PostgreSQLNode.GetInternalIP() + ":5000"
-
-	// Figure out if registry is already running
-	b.stlog.Logf("Checking if local container registry is already running on postgres node")
-
-	checkCommand := `test "$(podman ps --filter 'name=registry' --format '{{.Names}}' | wc -l)" -eq "1"`
-	err := b.Env.PostgreSQLNode.RunSSHCommand("root", checkCommand)
-	registryUsername := ""
-	registryPassword := ""
-
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryUsername); s != nil && s.Fields != nil {
-		registryUsername = s.Fields.Password
-	}
-
-	if s := b.icg.GetVault().GetSecret(files.SecretRegistryPassword); s != nil && s.Fields != nil {
-		registryPassword = s.Fields.Password
-	}
-
-	if err == nil && b.Env.InstallConfig.Registry != nil && b.Env.InstallConfig.Registry.Server == localRegistryServer &&
-		registryUsername != "" && registryPassword != "" {
-		b.stlog.Logf("Local container registry already running on postgres node")
-		return nil
-	}
-
-	b.Env.InstallConfig.Registry.Server = localRegistryServer
-	registryUsername = "custom-registry"
-	registryPassword = shortuuid.New()
-
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: registryUsername}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
-
-	commands := []string{
-		"apt-get update",
-		"apt-get install -y podman apache2-utils",
-		"htpasswd -bBc /root/registry.password " + registryUsername + " " + registryPassword,
-		"openssl req -newkey rsa:4096 -nodes -sha256 -keyout /root/registry.key -x509 -days 365 -out /root/registry.crt -subj \"/C=DE/ST=BW/L=Karlsruhe/O=Codesphere/CN=" + b.Env.PostgreSQLNode.GetInternalIP() + "\" -addext \"subjectAltName = DNS:postgres,IP:" + b.Env.PostgreSQLNode.GetInternalIP() + "\"",
-		"podman rm -f registry || true",
-		`podman run -d \
-		--restart=always --name registry --net=host\
-		--env REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
-		--env REGISTRY_AUTH=htpasswd \
-		--env REGISTRY_AUTH_HTPASSWD_REALM='Registry Realm' \
-		--env REGISTRY_AUTH_HTPASSWD_PATH=/auth/registry.password \
-		-v /root/registry.password:/auth/registry.password \
-		--env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
-		--env REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
-		-v /root/registry.crt:/certs/registry.crt \
-		-v /root/registry.key:/certs/registry.key \
-		registry:2`,
-		`mkdir -p /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server,
-		`cp /root/registry.crt /etc/docker/certs.d/` + b.Env.InstallConfig.Registry.Server + `/ca.crt`,
-	}
-	for _, cmd := range commands {
-		b.stlog.Logf("Running command on postgres node: %s", util.Truncate(cmd, 12))
-
-		err := b.Env.PostgreSQLNode.RunSSHCommand("root", cmd)
-		if err != nil {
-			return fmt.Errorf("failed to run command on postgres node: %w", err)
-		}
-	}
-
-	allNodes := append(b.Env.ControlPlaneNodes, b.Env.CephNodes...)
-	for _, node := range allNodes {
-		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
-
-		err := b.Env.PostgreSQLNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
-		if err != nil {
-			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.GetInternalIP(), err)
-		}
-
-		err = node.RunSSHCommand("root", "update-ca-certificates")
-		if err != nil {
-			return fmt.Errorf("failed to update CA certificates on node %s: %w", node.GetInternalIP(), err)
-		}
-
-		err = node.RunSSHCommand("root", "systemctl restart docker.service || true") // docker is probably not yet installed
-		if err != nil {
-			return fmt.Errorf("failed to restart docker service on node %s: %w", node.GetInternalIP(), err)
-		}
-	}
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
-	if b.Env.GitHubPAT == "" {
-		return fmt.Errorf("GitHub PAT is not set")
-	}
-
-	b.Env.InstallConfig.Registry.Server = "ghcr.io"
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
-	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
-	b.Env.InstallConfig.Registry.LoadContainerImages = false
-
-	return nil
-}
-
-func (b *GCPBootstrapper) EnsureDNSRecords() error {
-	gcpProject := b.Env.DNSProjectID
-	if b.Env.DNSProjectID == "" {
-		gcpProject = b.Env.ProjectID
-	}
-
-	zoneName := b.Env.DNSZoneName
-
-	err := b.GCPClient.EnsureDNSManagedZone(gcpProject, zoneName, b.Env.BaseDomain+".", "Codesphere DNS zone")
-	if err != nil {
-		return fmt.Errorf("failed to ensure DNS managed zone: %w", err)
-	}
-
-	records := []*dns.ResourceRecordSet{
-		{
-			Name:    fmt.Sprintf("cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.GatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("ws.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.PublicGatewayIP},
-		},
-		{
-			Name:    fmt.Sprintf("*.ssh.cs.%s.", b.Env.BaseDomain),
-			Type:    "A",
-			Ttl:     300,
-			Rrdatas: []string{b.Env.SshProxyIP},
-		},
-	}
-
-	err = b.GCPClient.EnsureDNSRecordSets(gcpProject, zoneName, records)
-	if err != nil {
-		return fmt.Errorf("failed to ensure DNS record sets: %w", err)
-	}
-
-	return nil
-}
-
 // InstallCodesphere installs Codesphere into every data center from the shared jumpbox, in
 // ascending data center order. The order matters: the primary data center's install creates the
 // database, roles and schema that the secondary ones reuse.
@@ -1251,20 +1028,11 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 }
 
 func (b *GCPBootstrapper) codespherePackageFilename() string {
-	packageFilename := b.codespherePackageArchiveName()
 	if b.Env.InstallLocal != "" {
-		return "local-" + packageFilename
+		return "local-" + InstallerArchiveName
 	}
 
-	return portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, packageFilename)
-}
-
-func (b *GCPBootstrapper) codespherePackageArchiveName() string {
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		return "installer-lite.tar.gz"
-	}
-
-	return "installer.tar.gz"
+	return portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, InstallerArchiveName)
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
@@ -1289,7 +1057,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 
 	b.stlog.Logf("Downloading Codesphere package...")
 	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
-		b.codespherePackageArchiveName(), b.Env.InstallHash, b.Env.InstallVersion)
+		InstallerArchiveName, b.Env.InstallHash, b.Env.InstallVersion)
 
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {

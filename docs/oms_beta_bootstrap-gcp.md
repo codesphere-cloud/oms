@@ -18,6 +18,7 @@ oms beta bootstrap-gcp [flags]
 
 ```
       --acme-staging                              Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)
+      --age-key string                            Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
       --azure-devops-app-client-id string         Azure DevOps App Client ID (optional)
       --azure-devops-app-client-secret string     Azure DevOps App Client Secret (optional)
       --base-domain string                        Base domain for Codesphere (required)
@@ -74,7 +75,7 @@ oms beta bootstrap-gcp [flags]
       --prometheus-remote-write-user string       Prometheus remote write username (optional)
       --recover-config                            Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                             GCP Region (default: europe-west4) (default "europe-west4")
-      --registry-type string                      Container registry type to use (options: local-container, artifact-registry) (default: local-container) (default "local-container")
+      --registry-type string                      Container registry type to use (options: local-container, artifact-registry, github) (default: github) (default "github")
       --registry-user string                      Custom Registry username (only for GitHub registry type) (optional)
       --remote-oms-binary string                  Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)
       --root-disk-size int                        Instance root disk size in GB (default: 50) (default 50)
@@ -86,6 +87,12 @@ oms beta bootstrap-gcp [flags]
       --ssh-quiet                                 Suppress SSH command output (default: false)
       --write-config                              Write generated install config to file (default: true) (default true)
       --zone string                               GCP Zone (default: europe-west4-a) (default "europe-west4-a")
+```
+
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
 ```
 
 ### SEE ALSO

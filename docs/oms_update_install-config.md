@@ -41,6 +41,8 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
 ### Options
 
 ```
+      --acme-custom-domains-eab-key-id string        External Account Binding key ID for custom-domain certificates (must differ from --acme-eab-key-id)
+      --acme-custom-domains-eab-mac-key string       External Account Binding MAC key for custom-domain certificates
       --acme-dns01-provider string                   DNS provider for DNS-01 solver
       --acme-eab-key-id string                       External Account Binding key ID (required by some ACME providers)
       --acme-eab-mac-key string                      External Account Binding MAC key (required by some ACME providers)
@@ -72,6 +74,12 @@ $ oms update install-config --k8s-api-server 10.0.0.10 --config config.yaml --va
       --with-comments                                Add helpful comments to the generated YAML files
       --workspace-hosting-base-domain string         Workspace hosting base domain
   -y, --yes                                          Auto-approve every change to the vault (regenerated certificates and missing secrets)
+```
+
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
 ```
 
 ### SEE ALSO

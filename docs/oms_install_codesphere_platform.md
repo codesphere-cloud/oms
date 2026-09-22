@@ -43,6 +43,7 @@ $ oms install codesphere platform -p codesphere-v1.2.3-installer-lite.tar.gz -k 
   -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)
   -s, --skip-steps strings           Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd
       --vault string                 Path to the prod.vault.yaml file used for config templating
+      --verbose                      Enable verbose output
 ```
 
 ### SEE ALSO

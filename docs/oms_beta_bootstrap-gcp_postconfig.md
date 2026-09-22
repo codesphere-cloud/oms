@@ -16,9 +16,17 @@ oms beta bootstrap-gcp postconfig [flags]
 ### Options
 
 ```
+      --age-key string               Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
   -h, --help                         help for postconfig
       --install-config-path string   Path to the installation configuration file (default "config.yaml")
       --private-key-path string      Path to the GCP service account private key file (optional)
+      --secrets-file string          Path to the secrets (vault) file (default "prod.vault.yaml")
+```
+
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
 ```
 
 ### SEE ALSO

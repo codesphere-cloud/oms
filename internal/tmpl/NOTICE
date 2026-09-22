@@ -11,9 +11,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry
  
 ----------
 Module: cloud.google.com/go/auth
-Version: v0.23.2
+Version: v0.23.3
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/auth/v0.23.2/auth/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/auth/v0.23.3/auth/LICENSE
  
 ----------
 Module: cloud.google.com/go/auth/oauth2adapt
@@ -23,15 +23,15 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.67.0
+Version: v1.69.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.67.0/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.69.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
-Version: v0.9.0
+Version: v0.9.1
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata/v0.9.0/compute/metadata/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata/v0.9.1/compute/metadata/LICENSE
  
 ----------
 Module: cloud.google.com/go/iam/apiv1/iampb
@@ -167,9 +167,9 @@ License URL: https://github.com/argoproj/argo-cd/blob/7660efb23b2d/gitops-engine
  
 ----------
 Module: github.com/argoproj/argo-cd/v3
-Version: v3.5.2
+Version: v3.5.3
 License: Apache-2.0
-License URL: https://github.com/argoproj/argo-cd/blob/v3.5.2/LICENSE
+License URL: https://github.com/argoproj/argo-cd/blob/v3.5.3/LICENSE
  
 ----------
 Module: github.com/argoproj/pkg/v2
@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.38.0
+Version: v1.43.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.38.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.43.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -443,9 +443,9 @@ License URL: https://github.com/fsnotify/fsnotify/blob/v1.10.1/LICENSE
  
 ----------
 Module: github.com/fxamacker/cbor/v2
-Version: v2.9.2
+Version: v2.9.3
 License: MIT
-License URL: https://github.com/fxamacker/cbor/blob/v2.9.2/LICENSE
+License URL: https://github.com/fxamacker/cbor/blob/v2.9.3/LICENSE
  
 ----------
 Module: github.com/getsops/gopgagent
@@ -533,81 +533,81 @@ License URL: https://github.com/go-openapi/jsonpointer/blob/v1.0.0/LICENSE
  
 ----------
 Module: github.com/go-openapi/jsonreference
-Version: v1.0.0
+Version: v1.0.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/jsonreference/blob/v1.0.0/LICENSE
+License URL: https://github.com/go-openapi/jsonreference/blob/v1.0.1/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag
-Version: v0.27.1
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/v0.27.1/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/v0.29.1/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/cmdutils
-Version: v0.27.1
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/cmdutils/v0.27.1/cmdutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/cmdutils/v0.29.1/cmdutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/conv
-Version: v0.27.3
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/conv/v0.27.3/conv/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/conv/v0.29.1/conv/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/fileutils
-Version: v0.27.3
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/fileutils/v0.27.3/fileutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/fileutils/v0.29.1/fileutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/jsonutils
-Version: v0.27.3
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/jsonutils/v0.27.3/jsonutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/jsonutils/v0.29.1/jsonutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/loading
-Version: v0.27.3
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/loading/v0.27.3/loading/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/loading/v0.29.1/loading/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/mangling
-Version: v0.27.3
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/mangling/v0.27.3/mangling/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/mangling/v0.29.1/mangling/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/netutils
-Version: v0.27.1
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/netutils/v0.27.1/netutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/netutils/v0.29.1/netutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/pools
-Version: v0.27.3
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/pools/v0.27.3/pools/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/pools/v0.29.1/pools/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/stringutils
-Version: v0.27.3
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/stringutils/v0.27.3/stringutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/stringutils/v0.29.1/stringutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/typeutils
-Version: v0.27.3
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/typeutils/v0.27.3/typeutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/typeutils/v0.29.1/typeutils/LICENSE
  
 ----------
 Module: github.com/go-openapi/swag/yamlutils
-Version: v0.27.3
+Version: v0.29.1
 License: Apache-2.0
-License URL: https://github.com/go-openapi/swag/blob/yamlutils/v0.27.3/yamlutils/LICENSE
+License URL: https://github.com/go-openapi/swag/blob/yamlutils/v0.29.1/yamlutils/LICENSE
  
 ----------
 Module: github.com/go-redis/cache/v9
@@ -695,9 +695,9 @@ License URL: https://github.com/google/go-querystring/blob/v1.2.0/LICENSE
  
 ----------
 Module: github.com/google/s2a-go
-Version: v0.1.9
+Version: v0.1.10
 License: Apache-2.0
-License URL: https://github.com/google/s2a-go/blob/v0.1.9/LICENSE.md
+License URL: https://github.com/google/s2a-go/blob/v0.1.10/LICENSE.md
  
 ----------
 Module: github.com/google/shlex
@@ -713,15 +713,15 @@ License URL: https://github.com/google/uuid/blob/2d3c2a9cc518/LICENSE
  
 ----------
 Module: github.com/googleapis/enterprise-certificate-proxy/client
-Version: v0.3.20
+Version: v0.3.22
 License: Apache-2.0
-License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.20/LICENSE
+License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.22/LICENSE
  
 ----------
 Module: github.com/googleapis/gax-go/v2
-Version: v2.24.0
+Version: v2.24.1
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/gax-go/blob/v2.24.0/v2/LICENSE
+License URL: https://github.com/googleapis/gax-go/blob/v2.24.1/v2/LICENSE
  
 ----------
 Module: github.com/gorilla/websocket
@@ -1067,9 +1067,9 @@ License URL: https://github.com/munnerz/goautoneg/blob/a7dc8b61c822/LICENSE
  
 ----------
 Module: github.com/onsi/gomega
-Version: v1.43.0
+Version: v1.43.1
 License: MIT
-License URL: https://github.com/onsi/gomega/blob/v1.43.0/LICENSE
+License URL: https://github.com/onsi/gomega/blob/v1.43.1/LICENSE
  
 ----------
 Module: github.com/opencontainers/go-digest
@@ -1181,9 +1181,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260909201307-2785aa192641
+Version: v0.0.0-20260921201415-c2addf97cd72
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/2785aa192641/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/c2addf97cd72/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1379,39 +1379,39 @@ License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/ins
  
 ----------
 Module: go.opentelemetry.io/otel
-Version: v1.44.0
+Version: v1.45.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.44.0/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.45.0/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel
-Version: v1.44.0
+Version: v1.45.0
 License: BSD-3-Clause
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.44.0/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.45.0/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/metric
-Version: v1.44.0
+Version: v1.45.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.44.0/metric/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.45.0/metric/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/metric
-Version: v1.44.0
+Version: v1.45.0
 License: BSD-3-Clause
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.44.0/metric/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.45.0/metric/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/trace
-Version: v1.44.0
+Version: v1.45.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.44.0/trace/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.45.0/trace/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/trace
-Version: v1.44.0
+Version: v1.45.0
 License: BSD-3-Clause
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.44.0/trace/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.45.0/trace/LICENSE
  
 ----------
 Module: go.opentelemetry.io/proto/otlp
@@ -1463,9 +1463,9 @@ License URL: https://cs.opensource.google/go/x/mod/+/v0.41.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.58.0
+Version: v0.59.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.58.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.59.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
@@ -1499,9 +1499,9 @@ License URL: https://cs.opensource.google/go/x/text/+/v0.42.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
-Version: v0.15.0
+Version: v0.16.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/time/+/v0.15.0:LICENSE
+License URL: https://cs.opensource.google/go/x/time/+/v0.16.0:LICENSE
  
 ----------
 Module: gomodules.xyz/jsonpatch/v2
@@ -1511,15 +1511,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.297.0
+Version: v0.299.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.297.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.299.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.297.0
+Version: v0.299.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.297.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.299.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1535,15 +1535,15 @@ License URL: https://github.com/googleapis/go-genproto/blob/e059f2f05d78/googlea
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
-Version: v0.0.0-20260819154853-08b0e4226688
+Version: v0.0.0-20260921155816-b14227669459
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/08b0e4226688/googleapis/rpc/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/b14227669459/googleapis/rpc/LICENSE
  
 ----------
 Module: google.golang.org/grpc
-Version: v1.83.2
+Version: v1.84.0
 License: Apache-2.0
-License URL: https://github.com/grpc/grpc-go/blob/v1.83.2/LICENSE
+License URL: https://github.com/grpc/grpc-go/blob/v1.84.0/LICENSE
  
 ----------
 Module: google.golang.org/protobuf
@@ -1679,21 +1679,21 @@ License URL: https://github.com/kubernetes/kube-aggregator/blob/v0.36.4/LICENSE
  
 ----------
 Module: k8s.io/kube-openapi/pkg
-Version: v0.0.0-20260721132016-d427ff9ee9ad
+Version: v0.0.0-20260821135717-be32def86098
 License: Apache-2.0
-License URL: https://github.com/kubernetes/kube-openapi/blob/d427ff9ee9ad/LICENSE
+License URL: https://github.com/kubernetes/kube-openapi/blob/be32def86098/LICENSE
  
 ----------
 Module: k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json
-Version: v0.0.0-20260721132016-d427ff9ee9ad
+Version: v0.0.0-20260821135717-be32def86098
 License: BSD-3-Clause
-License URL: https://github.com/kubernetes/kube-openapi/blob/d427ff9ee9ad/pkg/internal/third_party/go-json-experiment/json/LICENSE
+License URL: https://github.com/kubernetes/kube-openapi/blob/be32def86098/pkg/internal/third_party/go-json-experiment/json/LICENSE
  
 ----------
 Module: k8s.io/kube-openapi/pkg/validation/spec
-Version: v0.0.0-20260721132016-d427ff9ee9ad
+Version: v0.0.0-20260821135717-be32def86098
 License: Apache-2.0
-License URL: https://github.com/kubernetes/kube-openapi/blob/d427ff9ee9ad/pkg/validation/spec/LICENSE
+License URL: https://github.com/kubernetes/kube-openapi/blob/be32def86098/pkg/validation/spec/LICENSE
  
 ----------
 Module: k8s.io/kubectl/pkg
