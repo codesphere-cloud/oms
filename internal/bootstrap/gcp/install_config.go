@@ -17,10 +17,7 @@ import (
 
 const (
 	remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
-
-	// vaultTransferSuffix is appended to the secrets path of the plaintext vault copy that is
-	// transferred to the jumpbox when the local vault is encrypted.
-	vaultTransferSuffix string = ".plain"
+	vaultTransferSuffix     string = ".plain"
 )
 
 // EnsureInstallConfig uses the local config or recovers it from an existing jumpbox if desired.
@@ -403,8 +400,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 
 	transferErr := b.copyConfigAndVaultToJumpbox(vaultTransferPath)
 
-	// The transfer copy holds every secret in the clear, so a failed removal is reported even
-	// when the transfer itself succeeded.
 	return errors.Join(transferErr, cleanupVaultTransfer())
 }
 

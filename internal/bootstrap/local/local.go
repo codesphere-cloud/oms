@@ -34,9 +34,7 @@ const (
 	codesphereSystemNamespace = "codesphere-system"
 	codesphereNamespace       = "codesphere"
 	workspacesNamespace       = "workspaces"
-
-	// ageKeyFileName is the age key file the Codesphere installer is invoked with.
-	ageKeyFileName = "age_key.txt"
+	ageKeyFileName            = "age_key.txt"
 )
 
 type retryableWaitError struct {
@@ -92,11 +90,10 @@ type CodesphereEnvironment struct {
 	RegistryUser     string `json:"-"`
 	RegistryPassword string `json:"-"`
 	// Config
-	InstallDir         string `json:"-"`
-	ExistingConfigUsed bool   `json:"-"`
-	InstallConfigPath  string `json:"-"`
-	SecretsFilePath    string `json:"-"`
-	// AgeKey is the age key resolved for an encrypted vault when the command started.
+	InstallDir           string              `json:"-"`
+	ExistingConfigUsed   bool                `json:"-"`
+	InstallConfigPath    string              `json:"-"`
+	SecretsFilePath      string              `json:"-"`
 	AgeKey               string              `json:"-"`
 	InstallConfig        *files.RootConfig   `json:"-"`
 	Vault                *files.InstallVault `json:"-"`
@@ -538,16 +535,12 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	// Prefer the key resolved by the command so an existing encrypted vault keeps being
-	// encrypted with the same recipient across the bootstrap.
 	recipient, keyPath, err := sops.ResolveAgeKey(b.Env.AgeKey, filepath.Dir(b.Env.SecretsFilePath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
 
 	if keyPath == "" {
-		// An identity from SOPS_AGE_KEY has no file of its own, but the Codesphere installer is
-		// invoked with a key file. Materialize it next to the vault once.
 		keyPath = filepath.Join(filepath.Dir(b.Env.SecretsFilePath), ageKeyFileName)
 		if err := sops.WriteEnvAgeKeyFile(b.fw, keyPath); err != nil {
 			return fmt.Errorf("failed to write the age key for the installer: %w", err)
