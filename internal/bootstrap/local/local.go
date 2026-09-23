@@ -69,6 +69,8 @@ type LocalBootstrapper struct {
 	ageRecipient string
 	// ageKeyPath is the filesystem path to the age private key file.
 	ageKeyPath string
+	// envAgeKeyFile is the owner-only key file materialized.
+	envAgeKeyFile string
 	// argoCDAndAppsInstall is reused for the ArgoCD, vault, and pc-apps stages.
 	argoCDAndAppsInstall *argocd.AppInstaller
 	installerBundleDir   string
@@ -119,8 +121,11 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 	}
 }
 
-func (b *LocalBootstrapper) Bootstrap() error {
-	err := b.stlog.Step("Prepare installer bundle", b.PrepareInstaller)
+// Bootstrap prepares the local cluster and runs the Codesphere installer against it.
+func (b *LocalBootstrapper) Bootstrap() (err error) {
+	defer func() { err = errors.Join(err, b.removeEnvAgeKeyFile()) }()
+
+	err = b.stlog.Step("Prepare installer bundle", b.PrepareInstaller)
 	if err != nil {
 		return fmt.Errorf("failed to prepare installer bundle: %w", err)
 	}
@@ -540,15 +545,34 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 	}
 
 	if keyPath == "" {
-		keyPath = filepath.Join(filepath.Dir(b.Env.SecretsFilePath), sops.DefaultAgeKeyFileName)
-		if err := sops.WriteEnvAgeKeyFile(b.fw, keyPath); err != nil {
+		keyPath, err = sops.MaterializeEnvAgeKey(b.fw, filepath.Dir(b.Env.SecretsFilePath))
+		if err != nil {
 			return fmt.Errorf("failed to write the age key for the installer: %w", err)
 		}
+
+		b.envAgeKeyFile = keyPath
 	}
 
 	b.ageRecipient = recipient
 	b.ageKeyPath = keyPath
 	fmt.Printf("Using age key: %s\n", keyPath)
+
+	return nil
+}
+
+// removeEnvAgeKeyFile deletes the key file materialized from SOPS_AGE_KEY, if one was written.
+// The identity itself stays available to the user through the environment.
+func (b *LocalBootstrapper) removeEnvAgeKeyFile() error {
+	keyPath := b.envAgeKeyFile
+	b.envAgeKeyFile = ""
+
+	if keyPath == "" {
+		return nil
+	}
+
+	if err := b.fw.Remove(keyPath); err != nil {
+		return fmt.Errorf("failed to remove materialized age key file %s: %w", keyPath, err)
+	}
 
 	return nil
 }

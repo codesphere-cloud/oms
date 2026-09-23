@@ -118,7 +118,7 @@ func (b *GCPBootstrapper) recoverVault() error {
 
 // UpdateInstallConfig applies the environment to the install config and vault, writes both
 // locally and uploads them to the jumpbox.
-func (b *GCPBootstrapper) UpdateInstallConfig() (err error) {
+func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	// Update install config with necessary values
 	b.Env.InstallConfig.Datacenter.ID = b.Env.DatacenterID
 	if b.Env.DatacenterName == "" {
@@ -398,12 +398,13 @@ func (b *GCPBootstrapper) UpdateInstallConfig() (err error) {
 	vaultTransferPath := b.Env.SecretsFilePath
 
 	if b.Env.VaultType == vault.TypeSOPS {
-		vaultTransferPath, err = b.writePlaintextVaultCopy()
+		copied, err := b.writePlaintextVaultCopy()
 		if err != nil {
 			return err
 		}
 
-		defer func() { err = errors.Join(err, b.removeVaultTransfer(vaultTransferPath)) }()
+		vaultTransferPath = copied
+		b.vaultTransferCopy = copied
 	}
 
 	return b.copyConfigAndVaultToJumpbox(vaultTransferPath)
@@ -452,6 +453,41 @@ func (b *GCPBootstrapper) removeVaultTransfer(transferPath string) error {
 	}
 
 	return nil
+}
+
+// WriteAndEncryptVault writes the install config and vault, uploads them to the jumpbox and
+// re-encrypts the uploaded vault there. The plaintext transfer copy is removed on every path,
+// and its removal error is reported last, so a copy that could not be deleted never keeps the
+// vault on the jumpbox in plaintext.
+func (b *GCPBootstrapper) WriteAndEncryptVault() (err error) {
+	defer func() { err = errors.Join(err, b.removeVaultTransferCopy()) }()
+
+	if err := b.stlog.Step("Update install config", b.UpdateInstallConfig); err != nil {
+		return fmt.Errorf("failed to update install config: %w", err)
+	}
+
+	if err := b.stlog.Step("Ensure age key", b.EnsureAgeKey); err != nil {
+		return fmt.Errorf("failed to ensure age key: %w", err)
+	}
+
+	if err := b.stlog.Step("Encrypt vault", b.EncryptVault); err != nil {
+		return fmt.Errorf("failed to encrypt vault: %w", err)
+	}
+
+	return nil
+}
+
+// removeVaultTransferCopy deletes the plaintext copy recorded by UpdateInstallConfig, if one was
+// written.
+func (b *GCPBootstrapper) removeVaultTransferCopy() error {
+	transferCopy := b.vaultTransferCopy
+	b.vaultTransferCopy = ""
+
+	if transferCopy == "" {
+		return nil
+	}
+
+	return b.removeVaultTransfer(transferCopy)
 }
 
 // applyACMEConfig configures the ACME certificate issuer, including the DNS-01

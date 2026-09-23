@@ -427,16 +427,14 @@ var _ = Describe("Installconfig & Secrets", func() {
 				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
 				icg.EXPECT().WriteUnencryptedVault("fake-secret.plain-1234", true).Return(nil)
 				fw.EXPECT().CreateTemp(".", "fake-secret.plain*").Return("fake-secret.plain-1234", nil)
-				fw.EXPECT().Remove("fake-secret.plain-1234").Return(nil)
 
 				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-config-file", "/etc/codesphere/config.yaml").Return(nil)
 				nodeClient.EXPECT().CopyFile(mock.Anything, "fake-secret.plain-1234", "/etc/codesphere/secrets/prod.vault.yaml").Return(nil)
 
-				err := bs.UpdateInstallConfig()
-				Expect(err).NotTo(HaveOccurred())
+				Expect(bs.UpdateInstallConfig()).To(Succeed())
 			})
 
-			It("reports a plaintext transfer copy that could not be removed", func() {
+			It("reports a plaintext transfer copy that could not be removed, after encrypting the vault", func() {
 				csEnv.VaultType = vaultpkg.TypeSOPS
 
 				icg.EXPECT().GenerateSecrets().Return(nil)
@@ -447,10 +445,21 @@ var _ = Describe("Installconfig & Secrets", func() {
 				fw.EXPECT().Remove("fake-secret.plain-1234").Return(errors.New("permission denied"))
 
 				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+				nodeClient.EXPECT().HasFile(mock.Anything, "/etc/codesphere/secrets/age_key.txt").Return(true)
 
-				err := bs.UpdateInstallConfig()
+				var commands []string
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).RunAndReturn(
+					func(_ *node.Node, _, command string) error {
+						commands = append(commands, command)
+
+						return nil
+					})
+
+				err := bs.WriteAndEncryptVault()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to remove unencrypted vault transfer file"))
+				Expect(commands).To(ContainElement(ContainSubstring("sops --encrypt")))
 			})
 
 			It("uses the configured datacenter name", func() {

@@ -35,14 +35,18 @@ var _ = Describe("ResolveAgeKey", func() {
 
 	// The Codesphere installer is invoked with a private key file, so an identity that only
 	// exists in SOPS_AGE_KEY has to be materialized first.
-	It("materializes an identity from SOPS_AGE_KEY into a key file", func() {
+	It("materializes an identity from SOPS_AGE_KEY into its own key file", func() {
 		identity, err := age.GenerateX25519Identity()
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoT().Setenv("SOPS_AGE_KEY", identity.String())
 
+		fallbackKey := filepath.Join(dir, "age_key.txt")
+		Expect(os.WriteFile(fallbackKey, []byte("AGE-SECRET-KEY-1EXISTING\n"), 0600)).To(Succeed())
+
 		Expect(bs.ResolveAgeKey()).To(Succeed())
 		Expect(bs.ageRecipient).To(Equal(identity.Recipient().String()))
-		Expect(bs.ageKeyPath).To(Equal(filepath.Join(dir, "age_key.txt")))
+		Expect(filepath.Dir(bs.ageKeyPath)).To(Equal(dir))
+		Expect(bs.ageKeyPath).NotTo(Equal(fallbackKey))
 
 		info, err := os.Stat(bs.ageKeyPath)
 		Expect(err).NotTo(HaveOccurred())
@@ -52,10 +56,16 @@ var _ = Describe("ResolveAgeKey", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(content)).To(Equal(identity.String() + "\n"))
 
-		// The SOPS backend and the installer both read this file, so it has to parse back.
 		keyFile, err := sops.ResolveExistingAgeKey(bs.ageKeyPath, dir)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(keyFile).To(Equal(bs.ageKeyPath))
+
+		Expect(bs.removeEnvAgeKeyFile()).To(Succeed())
+		Expect(bs.ageKeyPath).NotTo(BeAnExistingFile())
+
+		existing, err := os.ReadFile(fallbackKey)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(existing)).To(Equal("AGE-SECRET-KEY-1EXISTING\n"))
 	})
 
 	It("keeps the path of an explicitly provided key file", func() {
