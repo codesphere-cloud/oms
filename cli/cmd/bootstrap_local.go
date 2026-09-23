@@ -149,7 +149,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 
 	fw := intutil.NewFilesystemWriter()
 
-	_, ageKey, err := resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey)
+	_, ageKey, err := resolveVaultAccess(fw, c.CodesphereEnv.SecretsFilePath, c.CodesphereEnv.AgeKey, false)
 	if err != nil {
 		return err
 	}

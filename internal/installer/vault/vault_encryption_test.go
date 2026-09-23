@@ -163,49 +163,34 @@ var _ = Describe("VaultEncryption", func() {
 	})
 
 	Describe("ResolveExistingAgeKey", func() {
-		var (
-			tmpDir         string
-			origAgeKey     string
-			origAgeKeyFile string
-			hasOrigAgeKey  bool
-			hasOrigKeyFile bool
-		)
+		var tmpDir string
 
 		BeforeEach(func() {
 			tmpDir = GinkgoT().TempDir()
 			// Point the default user config location at an empty directory so a key in the
-			// developer's own ~/.config/sops/age/keys.txt cannot satisfy a lookup.
+			// developer's own ~/.config/sops/age/keys.txt cannot satisfy a lookup. An empty
+			// value counts as unset, and Setenv restores the original value afterwards.
 			GinkgoT().Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
-
-			origAgeKey, hasOrigAgeKey = os.LookupEnv("SOPS_AGE_KEY")
-			origAgeKeyFile, hasOrigKeyFile = os.LookupEnv("SOPS_AGE_KEY_FILE")
-
-			Expect(os.Unsetenv("SOPS_AGE_KEY")).To(Succeed())
-			Expect(os.Unsetenv("SOPS_AGE_KEY_FILE")).To(Succeed())
+			GinkgoT().Setenv("SOPS_AGE_KEY", "")
+			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", "")
 		})
 
-		AfterEach(func() {
-			if hasOrigAgeKey {
-				Expect(os.Setenv("SOPS_AGE_KEY", origAgeKey)).To(Succeed())
-			} else {
-				Expect(os.Unsetenv("SOPS_AGE_KEY")).To(Succeed())
-			}
-
-			if hasOrigKeyFile {
-				Expect(os.Setenv("SOPS_AGE_KEY_FILE", origAgeKeyFile)).To(Succeed())
-			} else {
-				Expect(os.Unsetenv("SOPS_AGE_KEY_FILE")).To(Succeed())
-			}
-		})
-
-		It("returns the explicit key path", func() {
+		// ageKeyFile writes a fresh identity with age-keygen and fails the spec loudly when
+		// the toolchain is missing.
+		ageKeyFile := func(name string) string {
 			if !sopsAndAgeAvailable() {
 				Skip("age-keygen not available")
 			}
 
-			keyFile := filepath.Join(tmpDir, "explicit.txt")
+			keyFile := filepath.Join(tmpDir, name)
 			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
 			Expect(err).ToNot(HaveOccurred(), string(out))
+
+			return keyFile
+		}
+
+		It("returns the explicit key path", func() {
+			keyFile := ageKeyFile("explicit.txt")
 
 			keyPath, err := sops.ResolveExistingAgeKey(keyFile, tmpDir)
 			Expect(err).ToNot(HaveOccurred())
@@ -213,14 +198,8 @@ var _ = Describe("VaultEncryption", func() {
 		})
 
 		It("returns the key path from SOPS_AGE_KEY_FILE", func() {
-			if !sopsAndAgeAvailable() {
-				Skip("age-keygen not available")
-			}
-
-			keyFile := filepath.Join(tmpDir, "keys.txt")
-			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
-			Expect(err).ToNot(HaveOccurred(), string(out))
-			Expect(os.Setenv("SOPS_AGE_KEY_FILE", keyFile)).To(Succeed())
+			keyFile := ageKeyFile("keys.txt")
+			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", keyFile)
 
 			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
 			Expect(err).ToNot(HaveOccurred())
@@ -228,13 +207,7 @@ var _ = Describe("VaultEncryption", func() {
 		})
 
 		It("returns the fallback age_key.txt next to the vault", func() {
-			if !sopsAndAgeAvailable() {
-				Skip("age-keygen not available")
-			}
-
-			keyFile := filepath.Join(tmpDir, "age_key.txt")
-			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
-			Expect(err).ToNot(HaveOccurred(), string(out))
+			keyFile := ageKeyFile("age_key.txt")
 
 			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
 			Expect(err).ToNot(HaveOccurred())
@@ -242,13 +215,7 @@ var _ = Describe("VaultEncryption", func() {
 		})
 
 		It("returns an empty path when the key comes from SOPS_AGE_KEY", func() {
-			if !sopsAndAgeAvailable() {
-				Skip("age-keygen not available")
-			}
-
-			keyFile := filepath.Join(tmpDir, "source.txt")
-			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
-			Expect(err).ToNot(HaveOccurred(), string(out))
+			keyFile := ageKeyFile("source.txt")
 
 			data, err := os.ReadFile(keyFile)
 			Expect(err).ToNot(HaveOccurred())
@@ -263,7 +230,7 @@ var _ = Describe("VaultEncryption", func() {
 			}
 
 			Expect(privKeyLine).ToNot(BeEmpty())
-			Expect(os.Setenv("SOPS_AGE_KEY", privKeyLine)).To(Succeed())
+			GinkgoT().Setenv("SOPS_AGE_KEY", privKeyLine)
 
 			keyPath, err := sops.ResolveExistingAgeKey("", tmpDir)
 			Expect(err).ToNot(HaveOccurred())

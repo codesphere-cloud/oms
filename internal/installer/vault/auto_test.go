@@ -35,21 +35,17 @@ var _ = ginkgo.Describe("Auto vault", func() {
 			gomega.Expect(vaultType).To(gomega.Equal(vault.TypePlain))
 		})
 
-		ginkgo.It("reports plain for a plaintext vault", func() {
-			gomega.Expect(os.WriteFile(vaultPath, []byte("secrets: []\n"), 0600)).To(gomega.Succeed())
+		ginkgo.DescribeTable("reports the type of the vault on disk",
+			func(content string, want vault.Type) {
+				gomega.Expect(os.WriteFile(vaultPath, []byte(content), 0600)).To(gomega.Succeed())
 
-			vaultType, err := vault.DetectType(fw, vaultPath)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(vaultType).To(gomega.Equal(vault.TypePlain))
-		})
-
-		ginkgo.It("reports sops for a vault with SOPS metadata", func() {
-			gomega.Expect(os.WriteFile(vaultPath, []byte("secrets: []\nsops:\n    age: []\n"), 0600)).To(gomega.Succeed())
-
-			vaultType, err := vault.DetectType(fw, vaultPath)
-			gomega.Expect(err).NotTo(gomega.HaveOccurred())
-			gomega.Expect(vaultType).To(gomega.Equal(vault.TypeSOPS))
-		})
+				vaultType, err := vault.DetectType(fw, vaultPath)
+				gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				gomega.Expect(vaultType).To(gomega.Equal(want))
+			},
+			ginkgo.Entry("plaintext", "secrets: []\n", vault.TypePlain),
+			ginkgo.Entry("SOPS metadata", "secrets: []\nsops:\n    age: []\n", vault.TypeSOPS),
+		)
 
 		ginkgo.It("returns an error for a file that is not valid YAML", func() {
 			gomega.Expect(os.WriteFile(vaultPath, []byte("secrets:\n\tbroken: value\n"), 0600)).To(gomega.Succeed())

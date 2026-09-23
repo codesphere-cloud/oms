@@ -21,6 +21,9 @@ import (
 
 var xdgConfigHome = "XDG_CONFIG_HOME"
 
+// DefaultAgeKeyFileName is the key file looked up next to the vault when no key is configured.
+const DefaultAgeKeyFileName = "age_key.txt"
+
 // ResolveAgeKey resolves an existing age key or generates one in fallbackDir.
 func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
 	return resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir, true)
@@ -45,8 +48,8 @@ func WriteEnvAgeKeyFile(fileIO util.FileIO, path string) error {
 		return fmt.Errorf("SOPS_AGE_KEY is not set")
 	}
 
-	if _, err := parseAgeRecipient(strings.NewReader(raw)); err != nil {
-		return fmt.Errorf("failed to parse age key from SOPS_AGE_KEY environment variable: %w", err)
+	if _, err := parseEnvAgeKey(raw); err != nil {
+		return err
 	}
 
 	if err := fileIO.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -61,7 +64,7 @@ func WriteEnvAgeKeyFile(fileIO util.FileIO, path string) error {
 	return nil
 }
 
-func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, generate bool) (recipient string, keyPath string, err error) {
+func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, generateIfMissing bool) (recipient string, keyPath string, err error) {
 	if explicitKeyFile != "" {
 		recipient, err = readRecipientFromFile(fileIO, explicitKeyFile)
 		if err != nil {
@@ -72,9 +75,9 @@ func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, gene
 	}
 
 	if raw := os.Getenv(sopsage.SopsAgeKeyEnv); raw != "" {
-		recipient, err = parseAgeRecipient(strings.NewReader(raw))
+		recipient, err = parseEnvAgeKey(raw)
 		if err != nil {
-			return "", "", fmt.Errorf("failed to parse age key from SOPS_AGE_KEY environment variable: %w", err)
+			return "", "", err
 		}
 
 		return recipient, "", nil
@@ -103,7 +106,7 @@ func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, gene
 		}
 	}
 
-	keyPath = filepath.Join(fallbackDir, "age_key.txt")
+	keyPath = filepath.Join(fallbackDir, DefaultAgeKeyFileName)
 
 	recipient, err = readRecipientFromFile(fileIO, keyPath)
 	if err != nil {
@@ -111,7 +114,7 @@ func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, gene
 			return "", "", fmt.Errorf("failed to read age key from fallback location %s: %w", keyPath, err)
 		}
 
-		if !generate {
+		if !generateIfMissing {
 			return "", "", fmt.Errorf("no existing age key found for the SOPS vault; set an age key argument or provide a key at %s", keyPath)
 		}
 
@@ -122,6 +125,16 @@ func resolveAgeKey(fileIO util.FileIO, explicitKeyFile, fallbackDir string, gene
 	}
 
 	return recipient, keyPath, nil
+}
+
+// parseEnvAgeKey validates the identity passed through SOPS_AGE_KEY and returns its recipient.
+func parseEnvAgeKey(raw string) (string, error) {
+	recipient, err := parseAgeRecipient(strings.NewReader(strings.TrimSpace(raw)))
+	if err != nil {
+		return "", fmt.Errorf("failed to parse age key from SOPS_AGE_KEY environment variable: %w", err)
+	}
+
+	return recipient, nil
 }
 
 func parseAgeRecipient(reader io.Reader) (string, error) {

@@ -13,24 +13,19 @@ import (
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
-// resolveBootstrapVaultAccess resolves the vault type and age key for a bootstrap run.
-// A recovery run skips the local preflight entirely: recoverVault replaces the local file with
-// the plaintext copy it decrypts on the jumpbox, so a stale SOPS vault whose key is gone must
-// not block the very recovery that is meant to resolve it.
-func resolveBootstrapVaultAccess(fw intutil.FileIO, secretsFilePath, ageKeyFlag string, recoverConfig bool) (vault.Type, string, error) {
+// resolveVaultAccess detects the on-disk format of the install vault at secretsFilePath and
+// resolves the age key needed to read it. A plaintext vault, including a file that does not
+// exist yet, needs no key; an encrypted vault requires an existing one, because a freshly
+// generated key cannot decrypt it and would turn a clear error into a decryption failure.
+//
+// A recovery run skips that preflight entirely: recoverVault replaces the local vault with the
+// plaintext copy it decrypts on the jumpbox, so a stale SOPS vault whose key is gone must not
+// block the very recovery that is meant to resolve it.
+func resolveVaultAccess(fw intutil.FileIO, secretsFilePath, ageKeyFlag string, recoverConfig bool) (vault.Type, string, error) {
 	if recoverConfig {
 		return vault.TypePlain, "", nil
 	}
 
-	return resolveVaultAccess(fw, secretsFilePath, ageKeyFlag)
-}
-
-// resolveVaultAccess detects the on-disk format of the install vault at secretsFilePath and
-// resolves the age key needed to read it. A plaintext vault, including a file that does not
-// exist yet, needs no key. An encrypted vault requires an existing key: the CLI must not
-// generate one, because a freshly generated key cannot decrypt the vault and would turn a
-// clear error into a confusing decryption failure.
-func resolveVaultAccess(fw intutil.FileIO, secretsFilePath, ageKeyFlag string) (vault.Type, string, error) {
 	vaultType, err := vault.DetectType(fw, secretsFilePath)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to detect vault type of %s: %w", secretsFilePath, err)

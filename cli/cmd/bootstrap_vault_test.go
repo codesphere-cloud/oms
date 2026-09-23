@@ -62,7 +62,7 @@ var _ = Describe("resolveVaultAccess", func() {
 	}
 
 	It("treats a missing vault file as plaintext so a new vault can be created", func() {
-		vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "")
+		vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "", false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(vaultType).To(Equal(vault.TypePlain))
 		Expect(ageKey).To(BeEmpty())
@@ -71,116 +71,78 @@ var _ = Describe("resolveVaultAccess", func() {
 	It("keeps a plaintext vault plain and passes the flag through", func() {
 		Expect(os.WriteFile(vaultPath, []byte("secrets: []\n"), 0600)).To(Succeed())
 
-		vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "key-from-flag")
+		vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "key-from-flag", false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(vaultType).To(Equal(vault.TypePlain))
 		Expect(ageKey).To(Equal("key-from-flag"))
 	})
 
 	It("reports a read failure instead of silently treating the vault as plaintext", func() {
-		Expect(os.MkdirAll(filepath.Join(dir, "a-directory"), 0755)).To(Succeed())
+		unreadable := filepath.Join(dir, "a-directory")
+		Expect(os.MkdirAll(unreadable, 0755)).To(Succeed())
 
-		_, _, err := resolveVaultAccess(fw, filepath.Join(dir, "a-directory"), "")
+		_, _, err := resolveVaultAccess(fw, unreadable, "", false)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("failed to detect vault type"))
 	})
 
-	It("uses the explicit age key for an encrypted vault", func() {
-		putFakeSopsInPath()
-		writeEncryptedVault()
-
-		keyPath := writeAgeKey("explicit.txt")
-
-		vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, keyPath)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(vaultType).To(Equal(vault.TypeSOPS))
-		Expect(ageKey).To(Equal(keyPath))
-	})
-
-	It("falls back to SOPS_AGE_KEY_FILE for an encrypted vault", func() {
-		putFakeSopsInPath()
-		writeEncryptedVault()
-
-		keyPath := writeAgeKey("keys.txt")
-		GinkgoT().Setenv("SOPS_AGE_KEY_FILE", keyPath)
-
-		vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(vaultType).To(Equal(vault.TypeSOPS))
-		Expect(ageKey).To(Equal(keyPath))
-	})
-
-	It("falls back to an age_key.txt next to an encrypted vault", func() {
-		putFakeSopsInPath()
-		writeEncryptedVault()
-
-		keyPath := writeAgeKey("age_key.txt")
-
-		vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "")
-		Expect(err).NotTo(HaveOccurred())
-		Expect(vaultType).To(Equal(vault.TypeSOPS))
-		Expect(ageKey).To(Equal(keyPath))
-	})
-
-	It("reports that no usable age key was found for an encrypted vault", func() {
-		putFakeSopsInPath()
-		writeEncryptedVault()
-
-		_, _, err := resolveVaultAccess(fw, vaultPath, "")
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("no usable age key"))
-	})
-
-	It("never generates a key that could not decrypt the vault", func() {
-		putFakeSopsInPath()
-		writeEncryptedVault()
-
-		_, _, err := resolveVaultAccess(fw, vaultPath, "")
-		Expect(err).To(HaveOccurred())
-		Expect(filepath.Join(dir, "age_key.txt")).NotTo(BeAnExistingFile())
-	})
-
-	It("reports a missing sops binary before trying to resolve a key", func() {
-		writeEncryptedVault()
-
-		keyPath := writeAgeKey("explicit.txt")
-
-		GinkgoT().Setenv("PATH", filepath.Join(dir, "empty-bin"))
-
-		_, _, err := resolveVaultAccess(fw, vaultPath, keyPath)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("sops binary is not in PATH"))
-	})
-})
-
-var _ = Describe("resolveBootstrapVaultAccess", func() {
-	var (
-		dir        string
-		unreadable string
-		fw         intutil.FileIO
-	)
-
-	BeforeEach(func() {
-		dir = GinkgoT().TempDir()
-		fw = intutil.NewFilesystemWriter()
-
-		// A directory always fails the vault inspection, whatever tooling is installed.
-		unreadable = filepath.Join(dir, "unreadable")
+	It("skips the local vault entirely when recovering", func() {
+		unreadable := filepath.Join(dir, "unreadable")
 		Expect(os.MkdirAll(unreadable, 0755)).To(Succeed())
-	})
 
-	// recoverVault replaces the local vault with the plaintext copy it decrypts on the jumpbox,
-	// so a local vault that cannot be read must not block --recover-config.
-	It("ignores the local vault when recovering", func() {
-		vaultType, ageKey, err := resolveBootstrapVaultAccess(fw, unreadable, "key-from-flag", true)
+		vaultType, ageKey, err := resolveVaultAccess(fw, unreadable, "key-from-flag", true)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(vaultType).To(Equal(vault.TypePlain))
 		Expect(ageKey).To(BeEmpty())
 	})
 
-	It("still reports an unreadable local vault when not recovering", func() {
-		_, _, err := resolveBootstrapVaultAccess(fw, unreadable, "", false)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to detect vault type"))
+	Context("with an encrypted vault", func() {
+		BeforeEach(func() {
+			putFakeSopsInPath()
+			writeEncryptedVault()
+		})
+
+		It("uses the explicit age key", func() {
+			keyPath := writeAgeKey("explicit.txt")
+
+			vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, keyPath, false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(vaultType).To(Equal(vault.TypeSOPS))
+			Expect(ageKey).To(Equal(keyPath))
+		})
+
+		It("falls back to SOPS_AGE_KEY_FILE", func() {
+			keyPath := writeAgeKey("keys.txt")
+			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", keyPath)
+
+			vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "", false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(vaultType).To(Equal(vault.TypeSOPS))
+			Expect(ageKey).To(Equal(keyPath))
+		})
+
+		It("falls back to an age_key.txt next to the vault", func() {
+			keyPath := writeAgeKey("age_key.txt")
+
+			vaultType, ageKey, err := resolveVaultAccess(fw, vaultPath, "", false)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(vaultType).To(Equal(vault.TypeSOPS))
+			Expect(ageKey).To(Equal(keyPath))
+		})
+
+		It("reports that no usable age key was found and never generates one", func() {
+			_, _, err := resolveVaultAccess(fw, vaultPath, "", false)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no usable age key"))
+			Expect(filepath.Join(dir, "age_key.txt")).NotTo(BeAnExistingFile())
+		})
+
+		It("reports a missing sops binary before trying to resolve a key", func() {
+			GinkgoT().Setenv("PATH", filepath.Join(dir, "empty-bin"))
+
+			_, _, err := resolveVaultAccess(fw, vaultPath, writeAgeKey("explicit.txt"), false)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("sops binary is not in PATH"))
+		})
 	})
 })

@@ -116,7 +116,9 @@ func (b *GCPBootstrapper) recoverVault() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) UpdateInstallConfig() error {
+// UpdateInstallConfig applies the environment to the install config and vault, writes both
+// locally and uploads them to the jumpbox.
+func (b *GCPBootstrapper) UpdateInstallConfig() (err error) {
 	// Update install config with necessary values
 	b.Env.InstallConfig.Datacenter.ID = b.Env.DatacenterID
 	if b.Env.DatacenterName == "" {
@@ -393,14 +395,18 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	vaultTransferPath, cleanupVaultTransfer, err := b.prepareVaultTransfer()
-	if err != nil {
-		return err
+	vaultTransferPath := b.Env.SecretsFilePath
+
+	if b.Env.VaultType == vault.TypeSOPS {
+		vaultTransferPath, err = b.writePlaintextVaultCopy()
+		if err != nil {
+			return err
+		}
+
+		defer func() { err = errors.Join(err, b.removeVaultTransfer(vaultTransferPath)) }()
 	}
 
-	transferErr := b.copyConfigAndVaultToJumpbox(vaultTransferPath)
-
-	return errors.Join(transferErr, cleanupVaultTransfer())
+	return b.copyConfigAndVaultToJumpbox(vaultTransferPath)
 }
 
 // copyConfigAndVaultToJumpbox uploads the install config and the vault the jumpbox installs from.
@@ -416,50 +422,36 @@ func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(vaultTransferPath string) 
 	return nil
 }
 
-// prepareVaultTransfer returns the local path of the vault to copy to the jumpbox. An
-// encrypted vault is first rewritten as a plaintext copy, because the jumpbox re-encrypts it
-// with its own age key (see EncryptVault) and only the caller's machine holds the key that
-// can decrypt the local file. The copy gets a unique path so it can never replace a file the
-// caller owns. The returned cleanup removes it and reports a failure to do so, because the
-// file holds every secret in the clear.
-func (b *GCPBootstrapper) prepareVaultTransfer() (string, func() error, error) {
-	if b.Env.VaultType != vault.TypeSOPS {
-		return b.Env.SecretsFilePath, func() error { return nil }, nil
-	}
+// writePlaintextVaultCopy writes the vault as plaintext to a fresh file next to it. Only the
+// caller's machine holds the key of an encrypted vault, while the jumpbox re-encrypts the copy
+// with its own key (see EncryptVault). The unique name means the copy can never replace a file
+// the caller owns.
+func (b *GCPBootstrapper) writePlaintextVaultCopy() (string, error) {
+	dir := filepath.Dir(b.Env.SecretsFilePath)
+	pattern := filepath.Base(b.Env.SecretsFilePath) + vaultTransferSuffix + "*"
 
-	transferPath, err := b.newVaultTransferPath()
+	transferPath, err := b.fw.CreateTemp(dir, pattern)
 	if err != nil {
-		return "", nil, err
-	}
-
-	cleanup := func() error {
-		if err := b.fw.Remove(transferPath); err != nil {
-			return fmt.Errorf("failed to remove unencrypted vault transfer file %s: %w", transferPath, err)
-		}
-
-		return nil
+		return "", fmt.Errorf("failed to create temporary vault transfer file: %w", err)
 	}
 
 	if err := b.icg.WriteUnencryptedVault(transferPath, true); err != nil {
 		writeErr := fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err)
 
-		return "", nil, errors.Join(writeErr, cleanup())
+		return "", errors.Join(writeErr, b.removeVaultTransfer(transferPath))
 	}
 
-	return transferPath, cleanup, nil
+	return transferPath, nil
 }
 
-// newVaultTransferPath reserves a unique file for the plaintext transfer copy.
-func (b *GCPBootstrapper) newVaultTransferPath() (string, error) {
-	dir := filepath.Dir(b.Env.SecretsFilePath)
-	pattern := filepath.Base(b.Env.SecretsFilePath) + vaultTransferSuffix + "*"
-
-	path, err := b.fw.CreateTemp(dir, pattern)
-	if err != nil {
-		return "", fmt.Errorf("failed to create temporary vault transfer file: %w", err)
+// removeVaultTransfer deletes the plaintext transfer copy and reports a failure to do so,
+// because the file holds every secret in the clear.
+func (b *GCPBootstrapper) removeVaultTransfer(transferPath string) error {
+	if err := b.fw.Remove(transferPath); err != nil {
+		return fmt.Errorf("failed to remove unencrypted vault transfer file %s: %w", transferPath, err)
 	}
 
-	return path, nil
+	return nil
 }
 
 // applyACMEConfig configures the ACME certificate issuer, including the DNS-01

@@ -34,7 +34,6 @@ const (
 	codesphereSystemNamespace = "codesphere-system"
 	codesphereNamespace       = "codesphere"
 	workspacesNamespace       = "workspaces"
-	ageKeyFileName            = "age_key.txt"
 )
 
 type retryableWaitError struct {
@@ -541,7 +540,7 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 	}
 
 	if keyPath == "" {
-		keyPath = filepath.Join(filepath.Dir(b.Env.SecretsFilePath), ageKeyFileName)
+		keyPath = filepath.Join(filepath.Dir(b.Env.SecretsFilePath), sops.DefaultAgeKeyFileName)
 		if err := sops.WriteEnvAgeKeyFile(b.fw, keyPath); err != nil {
 			return fmt.Errorf("failed to write the age key for the installer: %w", err)
 		}
