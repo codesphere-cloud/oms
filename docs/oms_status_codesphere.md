@@ -32,6 +32,12 @@ $ oms status codesphere --baseurl https://codesphere.example.com/api --token YOU
       --wait               Block and retry until the installation is ready
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms status](oms_status.md)	 - Check the status of Codesphere components
