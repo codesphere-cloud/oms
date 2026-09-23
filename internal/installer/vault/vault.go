@@ -5,10 +5,13 @@
 package vault
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/internal/filebackend"
 	"github.com/codesphere-cloud/oms/internal/installer/vault/plain"
 	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -56,9 +59,33 @@ func ParseType(value string) (Type, error) {
 }
 
 // HasAgeKey reports whether a SOPS vault can be encrypted or decrypted with the
-// configured parameters.
+// configured parameters. Non-SOPS vaults never need an age key.
 func HasAgeKey(vaultType Type, ageKey string) bool {
 	return vaultType != TypeSOPS || sops.HasAgeKey(ageKey)
+}
+
+// IsEncryptedFile reports whether path already holds a SOPS-encrypted vault. A missing
+// file reports false, so "no vault yet" and "unencrypted vault" can be treated alike.
+func IsEncryptedFile(fileIO util.FileIO, path string) (bool, error) {
+	if fileIO == nil {
+		fileIO = util.NewFilesystemWriter()
+	}
+
+	data, err := fileIO.ReadFile(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("failed to read vault file %s: %w", path, err)
+	}
+
+	encrypted, err := filebackend.IsSOPSEncryptedYAML(data)
+	if err != nil {
+		return false, fmt.Errorf("failed to inspect vault file %s: %w", path, err)
+	}
+
+	return encrypted, nil
 }
 
 // ValidateConfiguration validates backend-specific, non-resource parameters.

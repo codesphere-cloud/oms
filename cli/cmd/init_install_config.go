@@ -140,9 +140,32 @@ func (c *InitInstallConfigCmd) resolveVaultType() error {
 	}
 
 	c.Opts.VaultType = string(vault.TypePlain)
+
+	if c.Opts.VaultFile != "" {
+		encrypted, err := vault.IsEncryptedFile(c.FileWriter, c.Opts.VaultFile)
+		if err != nil {
+			return fmt.Errorf("failed to check if %s is encrypted: %w", c.Opts.VaultFile, err)
+		}
+
+		if encrypted {
+			return encryptedVaultError(c.Opts.ValidateOnly, c.Opts.VaultFile)
+		}
+	}
+
 	log.Println("No age key configured (--age-key, SOPS_AGE_KEY or SOPS_AGE_KEY_FILE); " + ageKeyHint(c.Opts.ValidateOnly, c.Opts.VaultFile))
 
 	return nil
+}
+
+// encryptedVaultError explains how to proceed when the target vault is encrypted but no
+// age key is configured.
+func encryptedVaultError(validateOnly bool, vaultFile string) error {
+	if validateOnly {
+		return fmt.Errorf("%s is SOPS-encrypted; pass --age-key or set SOPS_AGE_KEY/SOPS_AGE_KEY_FILE to read it", vaultFile)
+	}
+
+	return fmt.Errorf("%s is SOPS-encrypted; pass --age-key or set SOPS_AGE_KEY/SOPS_AGE_KEY_FILE to keep it encrypted, "+
+		"or --vault-type plain to replace it with an unencrypted vault", vaultFile)
 }
 
 // ageKeyHint describes what an unencrypted vault means for the current mode.
@@ -153,7 +176,11 @@ func ageKeyHint(validateOnly bool, vaultFile string) string {
 
 	return fmt.Sprintf("writing %s unencrypted. Create an age key and encrypt the vault before use:\n"+
 		"  age-keygen -o age_key.txt\n"+
-		"  sops --encrypt --age \"$(age-keygen -y age_key.txt)\" --in-place %s", vaultFile, vaultFile)
+		"  sops --encrypt --age \"$(age-keygen -y age_key.txt)\" --in-place %s", vaultFile, shellQuote(vaultFile))
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
@@ -352,7 +379,7 @@ func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	if c.Opts.VaultType == string(vault.TypePlain) {
 		log.Println("   The vault file is NOT encrypted. Create an age key and encrypt it before use:")
 		log.Println("     age-keygen -o age_key.txt")
-		log.Printf("     sops --encrypt --age \"$(age-keygen -y age_key.txt)\" --in-place %s\n", c.Opts.VaultFile)
+		log.Printf("     sops --encrypt --age \"$(age-keygen -y age_key.txt)\" --in-place %s\n", shellQuote(c.Opts.VaultFile))
 	} else {
 		log.Println("   The vault file has been encrypted with SOPS automatically.")
 	}

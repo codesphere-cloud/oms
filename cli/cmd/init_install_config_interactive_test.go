@@ -301,7 +301,34 @@ var _ = Describe("Install-config vault encryption", func() {
 
 			Expect(c.RunE(nil, nil)).To(MatchError(ContainSubstring("unsupported vault type")))
 		})
+
+		It("refuses to replace an existing encrypted vault with an unencrypted one", func() {
+			c := buildCmd("sops")
+			encryptedVault := "sops:\n    age:\n        - recipient: age1test\n" +
+				"secrets:\n    - name: registryPassword\n      fields:\n        password: keep-me\n"
+			Expect(os.WriteFile(c.Opts.VaultFile, []byte(encryptedVault), 0600)).To(Succeed())
+
+			err := c.RunE(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("is SOPS-encrypted")))
+			Expect(err.Error()).To(ContainSubstring("--age-key"))
+
+			vaultContent, readErr := os.ReadFile(c.Opts.VaultFile)
+			Expect(readErr).NotTo(HaveOccurred())
+			Expect(string(vaultContent)).To(Equal(encryptedVault))
+
+			_, statErr := os.Stat(c.Opts.ConfigFile)
+			Expect(statErr).To(MatchError(ContainSubstring("no such file")))
+		})
 	})
+
+	DescribeTable("quotes vault paths for the shell",
+		func(path, want string) {
+			Expect(shellQuote(path)).To(Equal(want))
+		},
+		Entry("plain path", "prod.vault.yaml", "'prod.vault.yaml'"),
+		Entry("path with spaces", "/tmp/oms secrets/prod.vault.yaml", "'/tmp/oms secrets/prod.vault.yaml'"),
+		Entry("path with a single quote", "it's.vault.yaml", `'it'\''s.vault.yaml'`),
+	)
 
 	Context("with an age key", func() {
 		It("encrypts the vault with SOPS", func() {
