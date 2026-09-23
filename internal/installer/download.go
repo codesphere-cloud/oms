@@ -84,6 +84,8 @@ func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, 
 	defer util.CloseFileIgnoreError(dstFile)
 
 	if err := http.Download(downloadURL, dstFile, quiet); err != nil {
+		_ = fw.Remove(path)
+
 		return fmt.Errorf("failed to download %s: %w", path, err)
 	}
 

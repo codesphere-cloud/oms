@@ -225,7 +225,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{Airgapped: true}).Return("/downloaded/k0s", nil)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 			mockFileWriter.EXPECT().Exists(c.Opts.AirgapBundlePath).Return(true)
 			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
 			// The generated k0sctl config must upload the bundle to the workers and
@@ -251,7 +251,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{Airgapped: true}).Return("/downloaded/k0s", nil)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 			mockK0s.EXPECT().EnsureAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/cache/k0s-airgap-bundle-amd64", nil)
 			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
@@ -269,7 +269,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{Airgapped: true}).Return("/downloaded/k0s", nil)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 			mockFileWriter.EXPECT().Exists("/nonexistent/bundle.tar").Return(false)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
@@ -343,7 +343,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockK0s.EXPECT().GetLatestVersion().Return("v1.30.0+k0s.0", nil)
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{Airgapped: true}).Return("/downloaded/k0s", nil)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 			mockFileWriter.EXPECT().Exists("/cache/bundle").Return(true)
 			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
@@ -361,7 +361,7 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{Force: true, Airgapped: true}).Return("/downloaded/k0s", nil)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{Force: true}).Return("/downloaded/k0s", nil)
 			mockK0s.EXPECT().EnsureAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{Force: true}).Return("/cache/bundle", nil)
 			mockK0sctl.EXPECT().Download("", true, false).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)

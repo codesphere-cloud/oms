@@ -258,6 +258,8 @@ var _ = Describe("K0s", func() {
 
 				mockFileWriter.EXPECT().Create(k0sPath).Return(mockFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", mockFile, false).Return(errors.New("download failed"))
+				// The truncated destination must not stay behind as a reusable cache entry.
+				mockFileWriter.EXPECT().Remove(k0sPath).Return(nil)
 
 				_, err = k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).To(HaveOccurred())
@@ -461,6 +463,34 @@ var _ = Describe("K0s", func() {
 			path, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal(bundlePath))
+		})
+
+		It("removes a partial bundle when the transfer fails", func() {
+			bundlePath := filepath.Join(workDir, modernAsset)
+
+			mockFileWriter.EXPECT().ReadDir(workDir).Return(nil, nil)
+			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+modernVersion).
+				Return(releaseJSON(modernAsset), nil)
+
+			err := os.MkdirAll(workDir, 0755)
+			Expect(err).ToNot(HaveOccurred())
+
+			realFile, err := os.Create(bundlePath)
+			Expect(err).ToNot(HaveOccurred())
+
+			defer util.CloseFileIgnoreError(realFile)
+
+			mockFileWriter.EXPECT().Exists(bundlePath).Return(false)
+			mockFileWriter.EXPECT().Create(bundlePath).Return(realFile, nil)
+			mockHttp.EXPECT().Download(
+				"https://github.com/k0sproject/k0s/releases/download/"+modernVersion+"/"+modernAsset, realFile, false,
+			).Return(errors.New("connection reset"))
+			// The cache only checks for existence, so the partial bundle must go.
+			mockFileWriter.EXPECT().Remove(bundlePath).Return(nil)
+
+			_, err = k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to download"))
 		})
 
 		It("fails when the release metadata cannot be fetched", func() {

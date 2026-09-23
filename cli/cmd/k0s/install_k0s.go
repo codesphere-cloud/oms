@@ -241,7 +241,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 		return pm.GetDependencyPath(defaultK0sPath), nil
 	}
 
-	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force, Airgapped: c.Opts.Airgap})
+	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}
