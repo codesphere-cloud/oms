@@ -75,7 +75,11 @@ func AddCopyPackageCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 				and copy them to another registry.
 
 				Use --package for a local installer package or --version to download one
-				from the OMS portal. The source repository paths are preserved below --dest.`),
+				from the OMS portal. Container images keep their source registry as a path
+				segment below --dest, so that ghcr.io/codesphere-cloud/api ends up as
+				<dest>/ghcr_io/codesphere-cloud/api, which is where an installation configured
+				with replaceImagesInBom looks for them. Helm charts keep their repository path
+				only, since chart references are not rewritten.`),
 			Args: cobra.NoArgs,
 			Example: util.FormatExamples("copy package", []csio.Example{
 				{Cmd: "--package codesphere-v1.70.0-installer-lite.tar.gz --dest registry.example.com/mirror", Desc: "Copy artifacts from a local package"},

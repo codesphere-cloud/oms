@@ -235,9 +235,11 @@ var _ = Describe("Bom", func() {
 		})
 	})
 
-	Describe("GetOCIArtifacts", func() {
-		It("returns sorted unique container images and OCI Helm charts from all components", func() {
-			cfg := &bom.Config{Components: map[string]bom.ComponentConfig{
+	Describe("GetContainerImages and GetChartRefs", func() {
+		var cfg *bom.Config
+
+		BeforeEach(func() {
+			cfg = &bom.Config{Components: map[string]bom.ComponentConfig{
 				"codesphere": {
 					ContainerImages: map[string]string{
 						"api": "ghcr.io/codesphere/api:v1",
@@ -256,10 +258,17 @@ var _ = Describe("Bom", func() {
 					},
 				},
 			}}
+		})
 
-			Expect(cfg.GetOCIArtifacts()).To(Equal([]string{
+		It("returns sorted unique container images from all components", func() {
+			Expect(cfg.GetContainerImages()).To(Equal([]string{
 				"docker.io/library/redis:7",
 				"ghcr.io/codesphere/api:v1",
+			}))
+		})
+
+		It("returns only the OCI Helm charts", func() {
+			Expect(cfg.GetChartRefs()).To(Equal([]string{
 				"oci://ghcr.io/codesphere/charts/codesphere:v1",
 			}))
 		})

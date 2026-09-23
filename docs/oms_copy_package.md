@@ -8,7 +8,11 @@ Read all container images and OCI Helm charts from an installer package BOM
 and copy them to another registry.
 
 Use --package for a local installer package or --version to download one
-from the OMS portal. The source repository paths are preserved below --dest.
+from the OMS portal. Container images keep their source registry as a path
+segment below --dest, so that ghcr.io/codesphere-cloud/api ends up as
+<dest>/ghcr_io/codesphere-cloud/api, which is where an installation configured
+with replaceImagesInBom looks for them. Helm charts keep their repository path
+only, since chart references are not rewritten.
 
 ```
 oms copy package [flags]

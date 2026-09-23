@@ -25,30 +25,79 @@ func (c *recordingArtifactCopier) Copy(_ context.Context, source, destination st
 }
 
 var _ = Describe("Package artifact copying", func() {
-	Describe("PackageArtifactDestination", func() {
+	Describe("PackageImageDestination", func() {
 		It("preserves the source repository path and tag below the destination", func() {
-			destination, err := installer.PackageArtifactDestination(
-				"oci://ghcr.io/codesphere-cloud/charts/pc-apps:1.2.3",
-				"oci://registry.example.com/private-cloud/",
+			destination, err := installer.PackageImageDestination(
+				"ghcr.io/codesphere-cloud/api:1.2.3",
+				"registry.example.com/private-cloud/",
 			)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("registry.example.com/private-cloud/codesphere-cloud/charts/pc-apps:1.2.3"))
+			Expect(destination).To(Equal("registry.example.com/private-cloud/ghcr_io/codesphere-cloud/api:1.2.3"))
+		})
+
+		It("keeps the source registry of every image in its own path segment", func() {
+			destination, err := installer.PackageImageDestination(
+				"quay.io/ceph/ceph:v18.2",
+				"10.10.0.2:5000",
+			)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destination).To(Equal("10.10.0.2:5000/quay_io/ceph/ceph:v18.2"))
+		})
+
+		It("leaves references without a registry below their first path segment", func() {
+			destination, err := installer.PackageImageDestination(
+				"alpine/kubectl:1.35.4",
+				"10.10.0.2:5000",
+			)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destination).To(Equal("10.10.0.2:5000/alpine/kubectl:1.35.4"))
+		})
+
+		It("leaves a single segment reference unqualified", func() {
+			destination, err := installer.PackageImageDestination("alpine:3.21", "10.10.0.2:5000")
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destination).To(Equal("10.10.0.2:5000/alpine:3.21"))
+		})
+
+		It("copies a reference carrying a tag and a digest to its tag", func() {
+			destination, err := installer.PackageImageDestination(
+				"ghcr.io/codesphere-cloud/api:main@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				"10.10.0.2:5000",
+			)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destination).To(Equal("10.10.0.2:5000/ghcr_io/codesphere-cloud/api:main"))
 		})
 
 		It("preserves digests", func() {
-			destination, err := installer.PackageArtifactDestination(
+			destination, err := installer.PackageImageDestination(
 				"ghcr.io/codesphere-cloud/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 				"registry.example.com/mirror",
 			)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("registry.example.com/mirror/codesphere-cloud/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+			Expect(destination).To(Equal("registry.example.com/mirror/ghcr_io/codesphere-cloud/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 		})
 
 		It("rejects an empty destination", func() {
-			_, err := installer.PackageArtifactDestination("ghcr.io/codesphere/api:v1", "")
+			_, err := installer.PackageImageDestination("ghcr.io/codesphere/api:v1", "")
 			Expect(err).To(MatchError("destination registry must not be empty"))
+		})
+	})
+
+	Describe("PackageChartDestination", func() {
+		It("drops the source registry of a chart", func() {
+			destination, err := installer.PackageChartDestination(
+				"oci://ghcr.io/codesphere-cloud/charts/pc-applications:0.157.0",
+				"10.10.0.5:5000",
+			)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destination).To(Equal("10.10.0.5:5000/codesphere-cloud/charts/pc-applications:0.157.0"))
 		})
 	})
 
@@ -68,7 +117,7 @@ var _ = Describe("Package artifact copying", func() {
 			artifacts, err := installer.ReadPackageArtifacts(bomPath, "registry.example.com/mirror")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(artifacts).To(Equal([]installer.PackageArtifact{
-				{Source: "ghcr.io/codesphere/api:v1", Destination: "registry.example.com/mirror/codesphere/api:v1"},
+				{Source: "ghcr.io/codesphere/api:v1", Destination: "registry.example.com/mirror/ghcr_io/codesphere/api:v1"},
 				{Source: "ghcr.io/codesphere/charts/app:v1", Destination: "registry.example.com/mirror/codesphere/charts/app:v1"},
 			}))
 		})

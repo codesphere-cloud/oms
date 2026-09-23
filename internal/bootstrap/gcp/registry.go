@@ -5,10 +5,12 @@ package gcp
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/lithammer/shortuuid"
 )
@@ -24,6 +26,11 @@ const (
 	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
 	RegistryTypeGitHub           RegistryType = "github"
 )
+
+// jumpboxRegistryAuthFile holds the registry credentials of the jumpbox's root user. OMS and the
+// crane library it copies images with read this Docker config first and never merge it with
+// podman's own auth file, so every login on the jumpbox is pointed here explicitly.
+const jumpboxRegistryAuthFile = "/root/.docker/config.json"
 
 // validateGitHubParams checks if the GitHub credentials are fully specified if GitHub registry is selected
 func (b *GCPBootstrapper) validateGitHubParams() error {
@@ -117,7 +124,13 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	if err == nil && registry.Server == localRegistryServer &&
 		registryUsername != "" && registryPassword != "" {
 		b.stlog.Logf("Local container registry already running on the jumpbox")
-		return nil
+
+		err := b.ensureJumpboxRegistryAccess(registryNode, localRegistryServer, registryUsername, registryPassword)
+		if err != nil {
+			return err
+		}
+
+		return b.distributeRegistryCertificate(registryNode)
 	}
 
 	registry.Server = localRegistryServer
@@ -157,7 +170,21 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		}
 	}
 
-	allNodes := append(b.Env.ControlPlaneNodes, b.Env.CephNodes...)
+	if err := b.ensureJumpboxRegistryAccess(registryNode, registry.Server, registryUsername, registryPassword); err != nil {
+		return err
+	}
+
+	return b.distributeRegistryCertificate(registryNode)
+}
+
+// distributeRegistryCertificate installs the registry's certificate on every node that pulls
+// images from it. The postgres node needs it just like the cluster nodes do, and the work is
+// repeated whenever the registry is ensured so that a rerun repairs an environment whose nodes
+// never received the certificate.
+func (b *GCPBootstrapper) distributeRegistryCertificate(registryNode *node.Node) error {
+	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.Env.ControlPlaneNodes...)
+	allNodes = append(allNodes, b.Env.CephNodes...)
+
 	for _, node := range allNodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
 
@@ -178,6 +205,48 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	}
 
 	return nil
+}
+
+// ensureJumpboxRegistryAccess lets the jumpbox itself talk to the registries a local container
+// registry setup involves. Go tools such as OMS and the crane library it copies images with read
+// the system trust store and the Docker config instead of the podman locations the registry
+// installation writes to, so the registry CA and the credentials are installed where they can
+// find them. The upstream login is what allows 'oms copy package' to mirror the Codesphere
+// images into the local registry.
+func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, server, username, password string) error {
+	commands := []string{
+		"cp /root/registry.crt /usr/local/share/ca-certificates/registry.crt",
+		"update-ca-certificates",
+		"mkdir -p " + path.Dir(jumpboxRegistryAuthFile),
+		// A freshly started registry container is not serving yet when podman returns, so wait
+		// for it to answer before logging in.
+		fmt.Sprintf("timeout 120 sh -c 'until curl -s -o /dev/null https://%s/v2/; do sleep 2; done'", server),
+		registryLoginCommand(server, username, password),
+	}
+
+	if b.Env.RegistryUser != "" && b.Env.GitHubPAT != "" {
+		commands = append(commands, registryLoginCommand("ghcr.io", b.Env.RegistryUser, b.Env.GitHubPAT))
+	} else {
+		b.stlog.Logf("Skipping ghcr.io login on the jumpbox, set --registry-user and --github-pat to mirror the Codesphere images into the local registry")
+	}
+
+	for _, cmd := range commands {
+		b.stlog.Logf("Running command on the jumpbox: %s", util.Truncate(cmd, 12))
+
+		err := registryNode.RunSSHCommand("root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to configure registry access on the jumpbox: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// registryLoginCommand stores a registry's credentials where OMS looks for them. The password is
+// piped in through the shell built-in printf so it never shows up in the jumpbox process list.
+func registryLoginCommand(server, username, password string) string {
+	return fmt.Sprintf("printf '%%s' '%s' | podman login --authfile %s --username '%s' --password-stdin %s",
+		password, jumpboxRegistryAuthFile, username, server)
 }
 
 // EnsureGitHubAccessConfigured points the install config at ghcr.io and stores the GitHub
