@@ -17,8 +17,11 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// k0sctlBinaryName is the name of the cached k0sctl binary.
-const k0sctlBinaryName = "k0sctl"
+const (
+	k0sctlBinaryName    = "k0sctl"
+	k0sctlReleaseURL    = "https://github.com/k0sproject/k0sctl/releases/download"
+	k0sctlReleaseAPIURL = "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
+)
 
 // DefaultK0sctlVersion is the currently verified k0sctl version. It mirrors
 // DefaultK0sVersion in k0s.go: the pair is the version combination we test
@@ -55,9 +58,7 @@ func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) *K0sctl {
 }
 
 func (k *K0sctl) GetLatestVersion() (string, error) {
-	releaseURL := "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
-
-	responseBody, err := k.Http.Get(releaseURL)
+	responseBody, err := k.Http.Get(k0sctlReleaseAPIURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch latest k0sctl release: %w", err)
 	}
@@ -81,13 +82,12 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 	}
 
 	if version == "" {
-		var err error
-
-		version, err = k.GetLatestVersion()
+		latestVersion, err := k.GetLatestVersion()
 		if err != nil {
 			return "", fmt.Errorf("failed to get latest version: %w", err)
 		}
 
+		version = latestVersion
 		io.Verbosef(!quiet, "Using latest k0sctl version: %s", version)
 	}
 
@@ -100,8 +100,8 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 		return cachedPath, nil
 	}
 
-	binaryName := fmt.Sprintf("%s-%s-%s", k0sctlBinaryName, k.Goos, k.Goarch)
-	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0sctl/releases/download/%s/%s", version, binaryName)
+	assetName := fmt.Sprintf("%s-%s-%s", k0sctlBinaryName, k.Goos, k.Goarch)
+	downloadURL := releaseAssetURL(k0sctlReleaseURL, version, assetName)
 
 	io.Verbosef(!quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 
@@ -115,8 +115,7 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 	return path, nil
 }
 
-// requireBinaryAndConfig checks that both the k0sctl binary and config exist,
-// returning an error if either is missing.
+// requireBinaryAndConfig checks that both the k0sctl binary and config exist.
 func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
@@ -140,7 +139,6 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 		args = append(args, "--force")
 	}
 
-	// Add debug flag for more verbose output
 	args = append(args, "--debug")
 
 	log.Printf("Running k0sctl apply with config: %s", configPath)

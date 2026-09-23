@@ -54,7 +54,7 @@ func (k *K0s) ensureAirgapBundle(version, cacheDir string, opts DownloadOptions)
 		return cachePath, nil
 	}
 
-	downloadURL := k.releaseAssetURL(version, filepath.Base(cachePath))
+	downloadURL := releaseAssetURL(k0sReleaseURL, version, filepath.Base(cachePath))
 	io.Verbosef(!opts.Quiet, "Downloading k0s airgap bundle from %s", downloadURL)
 
 	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet); err != nil {
@@ -64,12 +64,15 @@ func (k *K0s) ensureAirgapBundle(version, cacheDir string, opts DownloadOptions)
 	return cachePath, nil
 }
 
-// airgapBundleCachePath returns the path of the airgap image bundle of the given
-// version in cacheDir. An already cached bundle is preferred, so airgapped
-// installations do not have to resolve the release metadata over the network.
+// airgapBundleCachePath prefers an already cached bundle of the given version over
+// resolving the release metadata, so airgapped installations can stay offline.
 func (k *K0s) airgapBundleCachePath(version, cacheDir string) (string, error) {
-	if cachedPath, found := k.cachedAirgapBundlePath(version, cacheDir); found {
-		return cachedPath, nil
+	if entries, err := k.FileWriter.ReadDir(cacheDir); err == nil {
+		for _, entry := range entries {
+			if k.isAirgapBundleFor(entry.Name(), version) {
+				return filepath.Join(cacheDir, entry.Name()), nil
+			}
+		}
 	}
 
 	assetName, err := k.resolveAirgapBundleAssetName(version)
@@ -78,23 +81,6 @@ func (k *K0s) airgapBundleCachePath(version, cacheDir string) (string, error) {
 	}
 
 	return filepath.Join(cacheDir, assetName), nil
-}
-
-// cachedAirgapBundlePath looks for an already downloaded airgap bundle of the given
-// version and architecture in cacheDir.
-func (k *K0s) cachedAirgapBundlePath(version, cacheDir string) (string, bool) {
-	entries, err := k.FileWriter.ReadDir(cacheDir)
-	if err != nil {
-		return "", false
-	}
-
-	for _, entry := range entries {
-		if k.isAirgapBundleFor(entry.Name(), version) {
-			return filepath.Join(cacheDir, entry.Name()), true
-		}
-	}
-
-	return "", false
 }
 
 // resolveAirgapBundleAssetName returns the release asset name of the airgap image
@@ -128,12 +114,12 @@ func (k *K0s) resolveAirgapBundleAssetName(version string) (string, error) {
 // given version that matches the configured OS and architecture. It accepts both the
 // legacy and the current upstream naming scheme.
 func (k *K0s) isAirgapBundleFor(name, version string) bool {
-	prefix := fmt.Sprintf("%s-%s-", AirgapBundleName, version)
-	if !strings.HasPrefix(name, prefix) {
+	platform, ok := strings.CutPrefix(name, fmt.Sprintf("%s-%s-", AirgapBundleName, version))
+	if !ok {
 		return false
 	}
 
-	platform := strings.TrimSuffix(strings.TrimPrefix(name, prefix), ".tar")
+	platform = strings.TrimSuffix(platform, ".tar")
 
-	return platform == k.Goarch || platform == fmt.Sprintf("%s-%s", k.Goos, k.Goarch)
+	return platform == k.Goarch || platform == k.Goos+"-"+k.Goarch
 }

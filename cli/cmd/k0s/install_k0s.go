@@ -148,7 +148,7 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return err
 	}
 
-	k0sVersion, err := c.determineK0sVersion(k0s)
+	k0sVersion, err := resolveK0sVersion(k0s, c.Opts.Version)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,14 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return err
 	}
 
-	k0sctlConfigPath, err := c.generateK0sctlConfig(config, k0sVersion, k0sBinaryPath, airgapBundlePath)
+	k0sctlOptions := installer.K0sctlOptions{
+		K0sVersion:    k0sVersion,
+		SSHKeyPath:    c.Opts.SSHKeyPath,
+		K0sBinaryPath: k0sBinaryPath,
+		Airgap:        installer.AirgapOptions{Enabled: c.Opts.Airgap, BundlePath: airgapBundlePath},
+	}
+
+	k0sctlConfigPath, err := c.generateK0sctlConfig(config, k0sctlOptions)
 	if err != nil {
 		return err
 	}
@@ -222,10 +229,6 @@ func (c *InstallK0sCmd) loadInstallConfig() (*files.RootConfig, error) {
 	}
 
 	return &config, nil
-}
-
-func (c *InstallK0sCmd) determineK0sVersion(k0s installer.K0sManager) (string, error) {
-	return resolveK0sVersion(k0s, c.Opts.Version)
 }
 
 func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
@@ -283,15 +286,8 @@ func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, 
 	return k0sctlPath, nil
 }
 
-func (c *InstallK0sCmd) generateK0sctlConfig(config *files.RootConfig, k0sVersion string, k0sBinaryPath string, airgapBundlePath string) (string, error) {
+func (c *InstallK0sCmd) generateK0sctlConfig(config *files.RootConfig, options installer.K0sctlOptions) (string, error) {
 	log.Println("Generating k0sctl configuration from install-config...")
-
-	options := installer.K0sctlOptions{
-		K0sVersion:    k0sVersion,
-		SSHKeyPath:    c.Opts.SSHKeyPath,
-		K0sBinaryPath: k0sBinaryPath,
-		Airgap:        installer.AirgapOptions{Enabled: c.Opts.Airgap, BundlePath: airgapBundlePath},
-	}
 
 	k0sctlConfig, err := installer.GenerateK0sctlConfig(config, options)
 	if err != nil {
@@ -341,11 +337,8 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
 
-	for _, s := range vault.Secrets {
-		if s.Name == vaultSecretNameKubeconfig {
-			log.Printf("Updating existing %s secret in vault", vaultSecretNameKubeconfig)
-			break
-		}
+	if vault.GetSecret(vaultSecretNameKubeconfig) != nil {
+		log.Printf("Updating existing %s secret in vault", vaultSecretNameKubeconfig)
 	}
 
 	vault.SetSecret(files.SecretEntry{

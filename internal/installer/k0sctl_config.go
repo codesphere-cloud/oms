@@ -92,9 +92,9 @@ type K0sctlApplyHooks struct {
 }
 
 // addUniqueK0sctlHost appends a host to the cluster config unless its address is
-// already present. isWorker marks hosts that run the k0s worker role, either
+// already present. runsWorker marks hosts that run the k0s worker role, either
 // dedicated workers or control planes installed with --enable-worker.
-func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, installFlags []string, isWorker bool, options K0sctlOptions) {
+func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, installFlags []string, runsWorker bool, options K0sctlOptions) {
 	for _, host := range k.Hosts {
 		if host.PrivateAddress == node.IPAddress {
 			return
@@ -121,7 +121,7 @@ func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, instal
 		host.K0sBinaryPath = options.K0sBinaryPath
 	}
 
-	if isWorker && options.Airgap.Enabled {
+	if runsWorker && options.Airgap.Enabled {
 		host.Files = append(host.Files, K0sctlFile{
 			Src:    options.Airgap.BundlePath,
 			DstDir: AirgapImagesDir,
@@ -146,7 +146,6 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, options K0sctlOptions
 		return nil, fmt.Errorf("airgapped installations require an airgap bundle path")
 	}
 
-	// Generate k0s config that will be embedded in k0sctl config
 	k0sConfig, err := GenerateK0sConfig(installConfig, options.Airgap)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate k0s config: %w", err)
@@ -171,15 +170,14 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, options K0sctlOptions
 	for _, cp := range installConfig.Kubernetes.ControlPlanes {
 		var installFlags []string
 		// A node may intentionally be listed as both a control plane and a worker.
-		isWorker := slices.Contains(installConfig.Kubernetes.Workers, cp)
-		if isWorker {
+		runsWorker := slices.Contains(installConfig.Kubernetes.Workers, cp)
+		if runsWorker {
 			installFlags = []string{"--enable-worker", "--no-taints=true"}
 		}
 
-		k0sctlConfig.Spec.addUniqueK0sctlHost(cp, "controller", installFlags, isWorker, options)
+		k0sctlConfig.Spec.addUniqueK0sctlHost(cp, "controller", installFlags, runsWorker, options)
 	}
 
-	// Add dedicated worker nodes if present
 	for _, worker := range installConfig.Kubernetes.Workers {
 		k0sctlConfig.Spec.addUniqueK0sctlHost(worker, "worker", nil, true, options)
 	}

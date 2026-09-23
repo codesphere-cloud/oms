@@ -65,15 +65,20 @@ func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string,
 		return cachePath, true
 	}
 
-	replaceReason := fmt.Sprintf("Cached %s version %s does not match requested version %s; replacing it",
-		name, cachedVersion, requestedVersion)
+	replaceReason := fmt.Sprintf("version %s does not match requested version %s; replacing it",
+		cachedVersion, requestedVersion)
 	if versionErr != nil {
-		replaceReason = fmt.Sprintf("Cached %s version could not be determined: %v", name, versionErr)
+		replaceReason = fmt.Sprintf("version could not be determined: %v", versionErr)
 	}
 
-	io.Verbosef(!quiet, "Replacing existing %s binary: %s", name, replaceReason)
+	io.Verbosef(!quiet, "Replacing existing %s binary: Cached %s %s", name, name, replaceReason)
 
 	return "", false
+}
+
+// releaseAssetURL returns the download URL of an asset of a GitHub release.
+func releaseAssetURL(releaseURL, version, assetName string) string {
+	return fmt.Sprintf("%s/%s/%s", releaseURL, version, assetName)
 }
 
 func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool) error {
@@ -93,8 +98,7 @@ func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, 
 }
 
 func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, binaryName, downloadURL string, quiet bool) (string, error) {
-	err := downloadToPath(fw, http, binaryPath, downloadURL, quiet)
-	if err != nil {
+	if err := downloadToPath(fw, http, binaryPath, downloadURL, quiet); err != nil {
 		return "", fmt.Errorf("failed to download: %w", err)
 	}
 
@@ -113,13 +117,15 @@ func localBinaryVersion(binaryPath string) (string, error) {
 
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
 		if version, found := strings.CutPrefix(line, "version:"); found {
 			return strings.TrimSpace(version), nil
 		}
 
-		if line != "" {
-			return line, nil
-		}
+		return line, nil
 	}
 
 	return "", fmt.Errorf("version output is empty")

@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"cmp"
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -113,8 +114,8 @@ func GenerateK0sConfig(installConfig *files.RootConfig, airgap AirgapOptions) (*
 
 		k0sConfig.Spec.Network = &K0sNetwork{
 			Provider:      "calico",
-			PodCIDR:       defaultIfEmpty(installConfig.Kubernetes.PodCIDR, "100.96.0.0/11"),
-			ServiceCIDR:   defaultIfEmpty(installConfig.Kubernetes.ServiceCIDR, "100.64.0.0/13"),
+			PodCIDR:       cmp.Or(installConfig.Kubernetes.PodCIDR, "100.96.0.0/11"),
+			ServiceCIDR:   cmp.Or(installConfig.Kubernetes.ServiceCIDR, "100.64.0.0/13"),
 			ClusterDomain: "cluster.local",
 		}
 
@@ -143,14 +144,6 @@ func pullPolicyFor(options AirgapOptions) string {
 	}
 
 	return "IfNotPresent"
-}
-
-func defaultIfEmpty(value, defaultValue string) string {
-	if value != "" {
-		return value
-	}
-
-	return defaultValue
 }
 
 func (c *K0sConfig) Marshal() ([]byte, error) {

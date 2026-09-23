@@ -16,18 +16,10 @@ import (
 )
 
 const (
-	// DefaultK0sVersion is the currently verified k0s version
-	// Use of newer versions should work in most cases but can't be guaranteed
 	DefaultK0sVersion = "v1.31.14+k0s.0"
-
-	// GitHubReleaseURL is the github release page for k0s
-	GitHubReleaseURL = "https://github.com/k0sproject/k0s/releases/download"
-
-	// k0sReleaseAPIURL lists the assets of a k0s release
-	k0sReleaseAPIURL = "https://api.github.com/repos/k0sproject/k0s/releases/tags"
-
-	// BinaryName is the name of target binary for oms to download to
-	BinaryName = "k0s"
+	k0sReleaseURL     = "https://github.com/k0sproject/k0s/releases/download"
+	k0sReleaseAPIURL  = "https://api.github.com/repos/k0sproject/k0s/releases/tags"
+	k0sBinaryName     = "k0s"
 )
 
 //mockery:generate: true
@@ -89,9 +81,9 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 	}
 
 	if opts.Airgapped {
-		bundlePath, bundleErr := k.ensureAirgapBundle(version, cacheDir, opts)
-		if bundleErr != nil {
-			return "", fmt.Errorf("failed to download k0s airgap bundle: %w", bundleErr)
+		bundlePath, err := k.ensureAirgapBundle(version, cacheDir, opts)
+		if err != nil {
+			return "", fmt.Errorf("failed to download k0s airgap bundle: %w", err)
 		}
 
 		log.Printf("k0s airgap bundle downloaded to '%s'", bundlePath)
@@ -105,14 +97,15 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 // If a binary is already cached and force is false, the cached binary is reused as
 // long as its version matches; otherwise it is replaced by a fresh download.
 func (k *K0s) downloadBinary(version, cacheDir string, opts DownloadOptions) (string, error) {
-	cachePath := filepath.Join(cacheDir, BinaryName)
-	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, BinaryName, opts.Force, opts.Quiet); cached {
+	cachePath := filepath.Join(cacheDir, k0sBinaryName)
+	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts.Force, opts.Quiet); cached {
 		return cachedPath, nil
 	}
 
-	downloadURL := k.releaseAssetURL(version, fmt.Sprintf("%s-%s-%s", BinaryName, version, k.Goarch))
+	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
+	downloadURL := releaseAssetURL(k0sReleaseURL, version, assetName)
 
-	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, BinaryName, downloadURL, opts.Quiet)
+	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sBinaryName, downloadURL, opts.Quiet)
 	if err != nil {
 		return "", err
 	}
@@ -120,9 +113,4 @@ func (k *K0s) downloadBinary(version, cacheDir string, opts DownloadOptions) (st
 	log.Printf("k0s binary downloaded and made executable at '%s'", path)
 
 	return path, nil
-}
-
-// releaseAssetURL returns the download URL of a k0s release asset.
-func (k *K0s) releaseAssetURL(version, assetName string) string {
-	return fmt.Sprintf("%s/%s/%s", GitHubReleaseURL, version, assetName)
 }
