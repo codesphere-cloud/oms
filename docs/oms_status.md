@@ -12,6 +12,12 @@ Check whether Codesphere installations or components are up and ready.
   -h, --help   help for status
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)
