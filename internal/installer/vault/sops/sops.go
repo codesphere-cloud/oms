@@ -171,9 +171,14 @@ func (v *SopsVault) getAgeKey() (string, error) {
 	return "", ValidateConfiguration("")
 }
 
+// HasAgeKey reports whether an age key is available for SOPS operations.
+func HasAgeKey(ageKey string) bool {
+	return ageKey != "" || os.Getenv(sopsage.SopsAgeKeyEnv) != "" || os.Getenv(sopsage.SopsAgeKeyFileEnv) != ""
+}
+
 // ValidateConfiguration ensures an age key is available for SOPS operations.
 func ValidateConfiguration(ageKey string) error {
-	if ageKey != "" || os.Getenv(sopsage.SopsAgeKeyEnv) != "" || os.Getenv(sopsage.SopsAgeKeyFileEnv) != "" {
+	if HasAgeKey(ageKey) {
 		return nil
 	}
 

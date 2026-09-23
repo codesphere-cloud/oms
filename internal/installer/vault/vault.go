@@ -55,6 +55,12 @@ func ParseType(value string) (Type, error) {
 	}
 }
 
+// HasAgeKey reports whether a SOPS vault can be encrypted or decrypted with the
+// configured parameters.
+func HasAgeKey(vaultType Type, ageKey string) bool {
+	return vaultType != TypeSOPS || sops.HasAgeKey(ageKey)
+}
+
 // ValidateConfiguration validates backend-specific, non-resource parameters.
 // File paths are intentionally validated by the file-backed constructors.
 func ValidateConfiguration(vaultType Type, ageKey string) error {
