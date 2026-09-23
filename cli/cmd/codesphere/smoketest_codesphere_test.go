@@ -4,6 +4,7 @@
 package codesphere_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -76,7 +77,6 @@ func mockFullTestRun(mockClient *intcs.MockClient, teamId, planId, workspaceId i
 var _ = Describe("SmoketestCodesphereCmd", func() {
 	var (
 		mockClient  *intcs.MockClient
-		c           codesphere.SmoketestCodesphereCmd
 		opts        *teststeps.SmoketestCodesphereOpts
 		planId      string
 		teamId      string
@@ -100,14 +100,11 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			Token:   "test-token",
 			TeamID:  teamId,
 			PlanID:  planId,
-			Verbose: false, // Suppress log output in tests
+			Quiet:   true, // Suppress log output in tests
 			Timeout: 10 * time.Minute,
 			Profile: "ci.yml",
 			Steps:   []string{},
 			Client:  mockClient,
-		}
-		c = codesphere.SmoketestCodesphereCmd{
-			Opts: opts,
 		}
 	})
 
@@ -124,7 +121,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				It("returns an error indicating no teams are available", func() {
 					mockClient.EXPECT().ListTeams("").Return([]api.Team{}, nil).Once()
 
-					err := c.RunSmoketest()
+					err := teststeps.RunSmoketest(context.Background(), opts)
 					Expect(err).To(MatchError(ContainSubstring("no teams available")))
 				})
 			})
@@ -138,7 +135,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 					mockFullTestRun(mockClient, 99, 456, 789)
 
-					err := c.RunSmoketest()
+					err := teststeps.RunSmoketest(context.Background(), opts)
 					Expect(err).To(BeNil())
 				})
 			})
@@ -152,7 +149,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 				mockFullTestRun(mockClient, 21, 456, 789)
 
-				err := c.RunSmoketest()
+				err := teststeps.RunSmoketest(context.Background(), opts)
 				Expect(err).To(BeNil())
 			})
 		})
@@ -164,7 +161,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				It("returns an error indicating no workspace plans are available", func() {
 					mockClient.EXPECT().ListWorkspacePlans().Return([]api.WorkspacePlan{}, nil).Once()
 
-					err := c.RunSmoketest()
+					err := teststeps.RunSmoketest(context.Background(), opts)
 					Expect(err).To(MatchError(ContainSubstring("no workspace plans available")))
 				})
 			})
@@ -176,13 +173,13 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 
 				mockFullTestRun(mockClient, teamIdInt, 42, 789)
 
-				err := c.RunSmoketest()
+				err := teststeps.RunSmoketest(context.Background(), opts)
 				Expect(err).To(BeNil())
 			})
 		})
 		It("completes successfully with all steps", func() {
 			mockFullTestRun(mockClient, teamIdInt, planIdInt, 789)
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(BeNil())
 		})
 
@@ -194,7 +191,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				(*string)(nil), // empty workspace
 			).Return(0, fmt.Errorf("create failed")).Once()
 
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("failed to create workspace")))
 		})
 
@@ -218,7 +215,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				workspaceID,
 			).Return(nil).Once()
 
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("failed to set environment variable")))
 		})
 
@@ -248,7 +245,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				workspaceId,
 			).Return(nil).Once()
 
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("failed to create ci.yml")))
 		})
 
@@ -291,7 +288,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				workspaceId,
 			).Return(nil).Once()
 
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("failed to sync landscape")))
 		})
 
@@ -340,7 +337,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				workspaceId,
 			).Return(nil).Once()
 
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("failed to start pipeline")))
 		})
 
@@ -394,7 +391,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				workspaceId,
 			).Return(nil).Once()
 
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("unexpected state")))
 		})
 
@@ -448,7 +445,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				workspaceId,
 			).Return(nil).Once()
 
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("unexpected state")))
 		})
 
@@ -501,7 +498,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			).Return(nil).Once()
 
 			opts.Timeout = 100 * time.Millisecond
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("timed out")))
 			Expect(err).To(MatchError(ContainSubstring("connection refused")))
 		})
@@ -558,7 +555,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 			).Return(nil).Once()
 
 			opts.Timeout = 100 * time.Millisecond
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("timed out")))
 		})
 
@@ -614,7 +611,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				workspaceId,
 			).Return(fmt.Errorf("delete failed")).Once()
 
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(MatchError(ContainSubstring("failed to delete workspace")))
 		})
 
@@ -634,7 +631,7 @@ var _ = Describe("SmoketestCodesphereCmd", func() {
 				"smoketest",
 			).Return(nil).Once()
 
-			err := c.RunSmoketest()
+			err := teststeps.RunSmoketest(context.Background(), opts)
 			Expect(err).To(BeNil())
 		})
 	})

@@ -18,9 +18,10 @@ type SmoketestCmd struct {
 func AddSmoketestCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	smoketest := SmoketestCmd{
 		cmd: &cobra.Command{
-			Use:   "smoketest",
-			Short: "Run smoke tests for Codesphere components",
-			Long:  io.Long(`Run automated smoke tests for Codesphere installations to verify functionality.`),
+			Use:        "smoketest",
+			Short:      "Run smoke tests for Codesphere components",
+			Deprecated: "use 'oms test' instead.",
+			Long:       io.Long(`Run automated smoke tests for Codesphere installations to verify functionality.`),
 		},
 	}
 	util.AddCmd(rootCmd, smoketest.cmd)
