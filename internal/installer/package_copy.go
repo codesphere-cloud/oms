@@ -48,7 +48,7 @@ func (c *CraneArtifactCopier) Copy(ctx context.Context, source, destination stri
 }
 
 // ReadPackageArtifacts reads all images and OCI Helm charts from a BOM and
-// builds their destination references. The original repository path is kept
+// builds their destination references. The original registry and repository path are kept
 // below dest so repositories with the same basename cannot collide.
 func ReadPackageArtifacts(bomPath, dest string) ([]PackageArtifact, error) {
 	bomConfig, err := bom.Parse(bomPath)
@@ -56,11 +56,24 @@ func ReadPackageArtifacts(bomPath, dest string) ([]PackageArtifact, error) {
 		return nil, fmt.Errorf("failed to parse BOM: %w", err)
 	}
 
-	references := bomConfig.GetOCIArtifacts()
+	images := bomConfig.GetContainerImages()
+	charts := bomConfig.GetChartRefs()
 
-	artifacts := make([]PackageArtifact, 0, len(references))
-	for _, source := range references {
-		destination, err := PackageArtifactDestination(source, dest)
+	artifacts := make([]PackageArtifact, 0, len(images)+len(charts))
+	for _, source := range images {
+		destination, err := PackageImageDestination(source, dest)
+		if err != nil {
+			return nil, err
+		}
+
+		artifacts = append(artifacts, PackageArtifact{
+			Source:      strings.TrimPrefix(source, "oci://"),
+			Destination: destination,
+		})
+	}
+
+	for _, source := range charts {
+		destination, err := PackageChartDestination(source, dest)
 		if err != nil {
 			return nil, err
 		}
@@ -74,9 +87,62 @@ func ReadPackageArtifacts(bomPath, dest string) ([]PackageArtifact, error) {
 	return artifacts, nil
 }
 
-// PackageArtifactDestination maps a source reference below a destination
+// registrySegmentReplacer flattens a registry into a single path segment.
+var registrySegmentReplacer = strings.NewReplacer(".", "_", ":", "_")
+
+// splitReference separates a reference into its repository, tag and digest. A reference can carry
+// both a tag and a digest, which the installer keeps and the reference parser does not.
+func splitReference(source string) (repository, tag, digest string) {
+	repository = source
+	if at := strings.Index(repository, "@"); at != -1 {
+		digest = repository[at+1:]
+		repository = repository[:at]
+	}
+
+	if colon := strings.LastIndex(repository, ":"); colon > strings.LastIndex(repository, "/") {
+		tag = repository[colon+1:]
+		repository = repository[:colon]
+	}
+
+	return repository, tag, digest
+}
+
+// destinationRepository returns the repository path a reference keeps below the destination. The
+// installer rewrites the images of a BOM onto another registry by moving the source registry into
+// the first path segment with its dots and colons replaced by underscores, so that
+// ghcr.io/codesphere-cloud/api ends up as <server>/ghcr_io/codesphere-cloud/api. The same layout
+// is built here, because an installation only finds the mirrored artifacts if both sides name them
+// identically. The repository is split as a plain string rather than parsed, since the installer
+// reads the leading segment of a reference without a registry as one, keeping alpine/kubectl below
+// alpine instead of below docker.io.
+func destinationRepository(repository string) string {
+	registry, path, found := strings.Cut(repository, "/")
+
+	registry = registrySegmentReplacer.Replace(registry)
+	if !found {
+		return registry
+	}
+
+	return registry + "/" + path
+}
+
+// PackageImageDestination maps a container image below a destination registry or repository
+// prefix. The source registry is kept as its own path segment, because that is how an
+// installation rewrites the images of its BOM onto the registry it pulls from.
+func PackageImageDestination(source, dest string) (string, error) {
+	return packageArtifactDestination(source, dest, true)
+}
+
+// PackageChartDestination maps an OCI Helm chart below a destination registry or repository
+// prefix. An installation does not rewrite its chart references and addresses them by their
+// repository path alone, so the source registry is dropped.
+func PackageChartDestination(source, dest string) (string, error) {
+	return packageArtifactDestination(source, dest, false)
+}
+
+// packageArtifactDestination maps a source reference below a destination
 // registry or repository prefix while preserving its tag or digest.
-func PackageArtifactDestination(source, dest string) (string, error) {
+func packageArtifactDestination(source, dest string, keepRegistry bool) (string, error) {
 	source = strings.TrimPrefix(source, "oci://")
 
 	dest = strings.TrimSuffix(strings.TrimPrefix(dest, "oci://"), "/")
@@ -89,12 +155,29 @@ func PackageArtifactDestination(source, dest string) (string, error) {
 		return "", fmt.Errorf("invalid package artifact reference %q: %w", source, err)
 	}
 
-	separator := ":"
-	if _, ok := sourceRef.(name.Digest); ok {
-		separator = "@"
+	repository, tag, digest := splitReference(source)
+
+	// A reference carrying both a tag and a digest is copied to its tag, because a manifest pushed
+	// under a digest alone leaves the repository without the tag the Helm charts pull by. Its
+	// digest keeps resolving either way, the copy does not change the manifest.
+	var identifier string
+
+	switch {
+	case tag != "":
+		identifier = ":" + tag
+	case digest != "":
+		identifier = "@" + digest
+	default:
+		// Neither is set, the parsed reference supplies the implicit latest tag.
+		identifier = ":" + sourceRef.Identifier()
 	}
 
-	candidate := dest + "/" + sourceRef.Context().RepositoryStr() + separator + sourceRef.Identifier()
+	repositoryPath := sourceRef.Context().RepositoryStr()
+	if keepRegistry {
+		repositoryPath = destinationRepository(repository)
+	}
+
+	candidate := dest + "/" + repositoryPath + identifier
 
 	destinationRef, err := name.ParseReference(candidate)
 	if err != nil {

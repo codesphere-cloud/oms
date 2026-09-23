@@ -75,7 +75,7 @@ oms beta bootstrap-gcp [flags]
       --recover-config                            Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                             GCP Region (default: europe-west4) (default "europe-west4")
       --registry-type string                      Container registry type to use (options: local-container, artifact-registry, github) (default: github) (default "github")
-      --registry-user string                      Custom Registry username (only for GitHub registry type) (optional)
+      --registry-user string                      Registry username for ghcr.io. Required for the GitHub registry type, and used with --github-pat to let the jumpbox pull the Codesphere images when mirroring them into a local container registry (optional)
       --remote-oms-binary string                  Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)
       --root-disk-size int                        Instance root disk size in GB (default: 50) (default 50)
       --secrets-dir string                        Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")

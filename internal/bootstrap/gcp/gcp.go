@@ -1009,6 +1009,16 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 	}
 
 	packageFilename := b.codespherePackageFilename()
+
+	if b.Env.RegistryType == RegistryTypeLocalContainer {
+		err := b.stlog.Step("Mirror package artifacts into the local registry", func() error {
+			return b.mirrorPackageToLocalRegistry(packageFilename)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to mirror package artifacts into the local registry: %w", err)
+		}
+	}
+
 	for _, dc := range b.Env.DataCenters {
 		err := b.stlog.Step(dc.StepName("Install Codesphere"), func() error {
 			return b.runInstallCommand(dc, packageFilename)
@@ -1056,6 +1066,26 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
 		return fmt.Errorf("failed to download Codesphere package from jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// mirrorPackageToLocalRegistry copies the container images and Helm charts the installer package
+// references from their upstream registry into the registry running on the jumpbox. The lite
+// package ships no images of its own, so the local registry is empty until they are mirrored and
+// the installation would have nothing to pull from.
+func (b *GCPBootstrapper) mirrorPackageToLocalRegistry(packageFilename string) error {
+	registryServer := b.Env.InstallConfig.EnsureRegistry().Server
+	if registryServer == "" {
+		return errors.New("local container registry has no server address")
+	}
+
+	b.stlog.Logf("Copying package artifacts to %s, this takes several minutes...", registryServer)
+
+	copyCmd := fmt.Sprintf("oms copy package -p %s --dest %s --yes", packageFilename, registryServer)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", copyCmd); err != nil {
+		return fmt.Errorf("failed to copy package artifacts from the jumpbox: %w", err)
 	}
 
 	return nil
