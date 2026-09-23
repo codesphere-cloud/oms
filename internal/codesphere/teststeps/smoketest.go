@@ -5,6 +5,7 @@ package teststeps
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"slices"
 	"time"
@@ -89,7 +90,7 @@ func RunSmoketest(ctx context.Context, opts *SmoketestCodesphereOpts) (err error
 			continue
 		}
 		if err = step.Run(ctx, opts, &workspaceID); err != nil {
-			return err
+			return fmt.Errorf("failed to run step %s: %w", step.Name(), err)
 		}
 	}
 

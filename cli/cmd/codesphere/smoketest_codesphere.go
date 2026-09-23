@@ -20,6 +20,7 @@ type SmoketestCodesphereCmd struct {
 	Opts          *teststeps.SmoketestCodesphereOpts
 }
 
+// RunE runs the smoke test against the installation selected by the flags.
 func (c *SmoketestCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	c.Opts.Quiet = !c.GlobalOptions.Verbose
 	client, err := codesphere.NewClient(c.Opts.BaseURL, c.Opts.Token)
@@ -28,7 +29,11 @@ func (c *SmoketestCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 	c.Opts.Client = client
 
-	return teststeps.RunSmoketest(cmd.Context(), c.Opts)
+	if err := teststeps.RunSmoketest(cmd.Context(), c.Opts); err != nil {
+		return fmt.Errorf("failed to run smoke test: %w", err)
+	}
+
+	return nil
 }
 
 func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {

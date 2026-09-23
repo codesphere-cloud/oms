@@ -5,6 +5,7 @@ package steps
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/codesphere-cloud/oms/internal/codesphere/teststeps"
@@ -25,7 +26,7 @@ func init() {
 // sample app in it and deletes the workspace again. It logs to stdout rather
 // than to out, because the smoke test steps report their own progress.
 func runSmoketest(ctx context.Context, _ io.Writer, opts *Options) error {
-	return teststeps.RunSmoketest(ctx, &teststeps.SmoketestCodesphereOpts{
+	err := teststeps.RunSmoketest(ctx, &teststeps.SmoketestCodesphereOpts{
 		BaseURL: opts.BaseURL,
 		Token:   opts.Token,
 		TeamID:  opts.TeamID,
@@ -35,4 +36,9 @@ func runSmoketest(ctx context.Context, _ io.Writer, opts *Options) error {
 		Timeout: opts.Timeout,
 		Client:  opts.Client,
 	})
+	if err != nil {
+		return fmt.Errorf("failed to run smoke test: %w", err)
+	}
+
+	return nil
 }
