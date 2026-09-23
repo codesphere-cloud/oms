@@ -77,6 +77,28 @@ jobs:
               --vault ""
           done
 
+      - name: Generate an install config without an age key
+        if: ${{ matrix.task == 'install-config' }}
+        env:
+          SOPS_AGE_KEY_FILE: ""
+        run: |
+          set -euo pipefail
+          ./oms init install-config \
+            --profile dev \
+            --interactive=false \
+            -c config-plain.yaml \
+            --vault prod-plain.vault.yaml
+
+          if grep -q 'ENC\[' prod-plain.vault.yaml; then
+            echo "expected an unencrypted vault when no age key is configured" >&2
+            exit 1
+          fi
+
+          ./oms init install-config \
+            --validate \
+            -c config-plain.yaml \
+            --vault prod-plain.vault.yaml
+
       - name: Slack Notification on Failure
         if: ${{ failure() && github.ref == 'refs/heads/main' }}
         uses: ./.github/actions/slack-notify
