@@ -21,6 +21,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -90,7 +91,8 @@ type GCPBootstrapper struct {
 	Time      util.Time
 	GCPClient GCPClientManager
 	// Environment
-	Env *CodesphereEnvironment
+	Env               *CodesphereEnvironment
+	vaultTransferCopy string
 	// SSH command runner
 	NodeClient   node.NodeClient
 	PortalClient portal.Portal
@@ -194,6 +196,8 @@ type CodesphereEnvironment struct {
 	// Config
 	InstallConfigPath string              `json:"-"`
 	SecretsFilePath   string              `json:"-"`
+	VaultType         vault.Type          `json:"-"`
+	AgeKey            string              `json:"-"`
 	InstallConfig     *files.RootConfig   `json:"-"`
 	Secrets           *files.InstallVault `json:"-"`
 
@@ -377,19 +381,9 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.WriteConfig {
-		err = b.stlog.Step("Update install config", b.UpdateInstallConfig)
+		err = b.WriteAndEncryptVault()
 		if err != nil {
-			return fmt.Errorf("failed to update install config: %w", err)
-		}
-
-		err = b.stlog.Step("Ensure age key", b.EnsureAgeKey)
-		if err != nil {
-			return fmt.Errorf("failed to ensure age key: %w", err)
-		}
-
-		err = b.stlog.Step("Encrypt vault", b.EncryptVault)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt vault: %w", err)
+			return err
 		}
 	}
 

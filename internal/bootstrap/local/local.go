@@ -69,6 +69,8 @@ type LocalBootstrapper struct {
 	ageRecipient string
 	// ageKeyPath is the filesystem path to the age private key file.
 	ageKeyPath string
+	// envAgeKeyFile is the owner-only key file materialized.
+	envAgeKeyFile string
 	// argoCDAndAppsInstall is reused for the ArgoCD, vault, and pc-apps stages.
 	argoCDAndAppsInstall *argocd.AppInstaller
 	installerBundleDir   string
@@ -93,6 +95,7 @@ type CodesphereEnvironment struct {
 	ExistingConfigUsed   bool                `json:"-"`
 	InstallConfigPath    string              `json:"-"`
 	SecretsFilePath      string              `json:"-"`
+	AgeKey               string              `json:"-"`
 	InstallConfig        *files.RootConfig   `json:"-"`
 	Vault                *files.InstallVault `json:"-"`
 	K0s                  bool                `json:"-"`
@@ -118,8 +121,11 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 	}
 }
 
-func (b *LocalBootstrapper) Bootstrap() error {
-	err := b.stlog.Step("Prepare installer bundle", b.PrepareInstaller)
+// Bootstrap prepares the local cluster and runs the Codesphere installer against it.
+func (b *LocalBootstrapper) Bootstrap() (err error) {
+	defer func() { err = errors.Join(err, b.removeEnvAgeKeyFile()) }()
+
+	err = b.stlog.Step("Prepare installer bundle", b.PrepareInstaller)
 	if err != nil {
 		return fmt.Errorf("failed to prepare installer bundle: %w", err)
 	}
@@ -518,14 +524,14 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 }
 
 func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file for config templating: %w", err)
 	}
 	return nil
 }
 
 func (b *LocalBootstrapper) EnsureSecrets() error {
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 	b.Env.Vault = b.icg.GetVault()
@@ -533,15 +539,41 @@ func (b *LocalBootstrapper) EnsureSecrets() error {
 }
 
 func (b *LocalBootstrapper) ResolveAgeKey() error {
-	recipient, keyPath, err := sops.ResolveAgeKey("", filepath.Dir(b.Env.SecretsFilePath))
+	recipient, keyPath, err := sops.ResolveAgeKey(b.Env.AgeKey, filepath.Dir(b.Env.SecretsFilePath))
 	if err != nil {
 		return fmt.Errorf("failed to resolve age key: %w", err)
 	}
+
+	if keyPath == "" {
+		keyPath, err = sops.MaterializeEnvAgeKey(b.fw, filepath.Dir(b.Env.SecretsFilePath))
+		if err != nil {
+			return fmt.Errorf("failed to write the age key for the installer: %w", err)
+		}
+
+		b.envAgeKeyFile = keyPath
+	}
+
 	b.ageRecipient = recipient
 	b.ageKeyPath = keyPath
-	if keyPath != "" {
-		fmt.Printf("Using age key: %s\n", keyPath)
+	fmt.Printf("Using age key: %s\n", keyPath)
+
+	return nil
+}
+
+// removeEnvAgeKeyFile deletes the key file materialized from SOPS_AGE_KEY, if one was written.
+// The identity itself stays available to the user through the environment.
+func (b *LocalBootstrapper) removeEnvAgeKeyFile() error {
+	keyPath := b.envAgeKeyFile
+	b.envAgeKeyFile = ""
+
+	if keyPath == "" {
+		return nil
 	}
+
+	if err := b.fw.Remove(keyPath); err != nil {
+		return fmt.Errorf("failed to remove materialized age key file %s: %w", keyPath, err)
+	}
+
 	return nil
 }
 

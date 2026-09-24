@@ -19,8 +19,11 @@ type Type string
 
 // Supported Vault types
 const (
-	TypeSOPS    Type = "sops"
-	TypePlain   Type = "plain"
+	TypeSOPS  Type = "sops"
+	TypePlain Type = "plain"
+	// TypeAuto selects the backend that matches the vault file on disk. It is used by the
+	// bootstrap flows, which accept a vault that is either plaintext or SOPS-encrypted.
+	TypeAuto    Type = "auto"
 	DefaultType      = TypeSOPS
 )
 
@@ -43,7 +46,10 @@ type Options struct {
 	FileIO       util.FileIO
 }
 
-// ParseType validates a user supplied vault type.
+// ParseType validates a user supplied vault type. The internal TypeAuto is deliberately not
+// accepted here: it follows whatever format the file already has, so exposing it would let a
+// command that promises encrypted output silently write a plaintext vault. Callers that need
+// it construct the type directly instead (see installer.NewAutoInstallConfigManager).
 func ParseType(value string) (Type, error) {
 	switch Type(strings.ToLower(strings.TrimSpace(value))) {
 	case "", TypeSOPS:
@@ -72,6 +78,8 @@ func ValidateConfiguration(vaultType Type, ageKey string) error {
 // New creates a vault implementation for the requested type.
 func New(vaultType Type, opts Options) (Vault, error) {
 	switch vaultType {
+	case TypeAuto:
+		return &autoVault{options: opts}, nil
 	case TypeSOPS:
 		backend, err := sops.New(sops.Options{
 			Path: opts.Path, AgeKey: opts.AgeKey, WithComments: opts.WithComments, FileIO: opts.FileIO,

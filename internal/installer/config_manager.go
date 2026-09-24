@@ -30,7 +30,7 @@ type InstallConfigManager interface {
 	// Configuration management
 	LoadInstallConfigFromFile(configPath string) error
 	LoadVaultFromFile(vaultPath string) error
-	LoadVaultFromUnecryptedFile(vaultPath string) error
+	LoadVaultFromFileOrCreate(vaultPath string) error
 	ValidateInstallConfig() []string
 	ValidateVault() []string
 	GetInstallConfig() *files.RootConfig
@@ -44,6 +44,7 @@ type InstallConfigManager interface {
 	GenerateSecrets() error
 	WriteInstallConfig(configPath string, withComments bool) error
 	WriteVault(vaultPath string, withComments bool) error
+	WriteUnencryptedVault(vaultPath string, withComments bool) error
 }
 
 type InstallConfig struct {
@@ -59,14 +60,27 @@ func (g *InstallConfig) SetFileIO(fio util.FileIO) {
 	g.fileIO = fio
 }
 
-// NewInstallConfigManager configures all vault reads and writes to go through
-// the selected vault implementation.
+// NewInstallConfigManager configures all vault reads and writes to go through the vault
+// implementation selected by the user supplied vault type.
 func NewInstallConfigManager(vaultType string, ageKey string) (InstallConfigManager, error) {
 	t, err := vault.ParseType(vaultType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse vault type %s: %w", vaultType, err)
 	}
 
+	return newInstallConfigManager(t, ageKey)
+}
+
+// NewAutoInstallConfigManager configures all vault reads and writes to go through the vault
+// implementation that matches the file already on disk. The bootstrap flows use it because
+// they accept a vault that is either plaintext or SOPS-encrypted. The type is not user
+// selectable: an "auto" choice would silently write a plaintext vault for a command that
+// promises encrypted output.
+func NewAutoInstallConfigManager(ageKey string) (InstallConfigManager, error) {
+	return newInstallConfigManager(vault.TypeAuto, ageKey)
+}
+
+func newInstallConfigManager(t vault.Type, ageKey string) (InstallConfigManager, error) {
 	if err := vault.ValidateConfiguration(t, ageKey); err != nil {
 		return nil, fmt.Errorf("failed to validate install config: %w", err)
 	}
@@ -82,12 +96,7 @@ func NewInstallConfigManager(vaultType string, ageKey string) (InstallConfigMana
 	}, nil
 }
 
-func (g *InstallConfig) vaultStore(path string, comments bool, forcedType ...vault.Type) (vault.Vault, error) {
-	t := g.vaultType
-	if len(forcedType) > 0 {
-		t = forcedType[0]
-	}
-
+func (g *InstallConfig) vaultStore(path string, comments bool, t vault.Type) (vault.Vault, error) {
 	vault, err := vault.New(t, vault.Options{Path: path, AgeKey: g.vaultAgeKey, WithComments: comments, FileIO: g.fileIO})
 	if err != nil {
 		return nil, fmt.Errorf("failed to read vault: %w", err)
@@ -120,31 +129,28 @@ func (g *InstallConfig) LoadInstallConfigFromFile(configPath string) error {
 // LoadVaultFromFile loads vault content using the manager's configured backend.
 // An empty type selects the default SOPS backend.
 func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
-	store, err := g.vaultStore(vaultPath, false)
-	if err != nil {
-		return fmt.Errorf("failed to initialize vault backend: %w", err)
-	}
-
-	loaded, err := store.Load()
-	if err != nil {
-		return fmt.Errorf("failed to load vault: %w", err)
-	}
-
-	g.Vault = loaded
-	return nil
+	return g.loadVault(vaultPath, vault.Vault.Load)
 }
 
-// LoadVaultFromUnecryptedFile loads the vault content from an unencrypted file into the installConfig
-func (g *InstallConfig) LoadVaultFromUnecryptedFile(vaultPath string) error {
-	store, err := g.vaultStore(vaultPath, false, vault.TypePlain)
+// LoadVaultFromFileOrCreate loads vault content using the manager's configured backend and
+// returns an empty vault when the file does not exist. Bootstrap flows use it because a
+// config can exist without a vault (for example a hand-written config), and because the
+// vault may be plaintext or SOPS-encrypted depending on how it was generated.
+func (g *InstallConfig) LoadVaultFromFileOrCreate(vaultPath string) error {
+	return g.loadVault(vaultPath, vault.Vault.LoadOrCreate)
+}
+
+func (g *InstallConfig) loadVault(vaultPath string, load func(vault.Vault) (*files.InstallVault, error)) error {
+	store, err := g.vaultStore(vaultPath, false, g.vaultType)
 	if err != nil {
 		return fmt.Errorf("failed to initialize vault backend: %w", err)
 	}
 
-	g.Vault, err = store.LoadOrCreate()
+	g.Vault, err = load(store)
 	if err != nil {
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
+
 	return nil
 }
 
@@ -367,16 +373,28 @@ func (g *InstallConfig) WriteInstallConfig(configPath string, withComments bool)
 	return nil
 }
 
+// WriteVault writes the vault using the manager's configured backend.
 func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
-	store, err := g.vaultStore(vaultPath, withComments)
+	return g.writeVault(vaultPath, withComments, g.vaultType, "failed to write vault")
+}
+
+// WriteUnencryptedVault writes the vault as plaintext, regardless of the configured vault
+// type. Bootstrap flows use it to prepare a copy that is transferred to the jumpbox and
+// encrypted there with the jumpbox's own age key.
+func (g *InstallConfig) WriteUnencryptedVault(vaultPath string, withComments bool) error {
+	return g.writeVault(vaultPath, withComments, vault.TypePlain, "failed to write unencrypted vault")
+}
+
+func (g *InstallConfig) writeVault(vaultPath string, withComments bool, t vault.Type, errContext string) error {
+	store, err := g.vaultStore(vaultPath, withComments, t)
 	if err != nil {
 		return fmt.Errorf("failed to initialize vault backend: %w", err)
 	}
 
-	err = store.Save(g.Vault)
-	if err != nil {
-		return fmt.Errorf("failed to write vault: %w", err)
+	if err := store.Save(g.Vault); err != nil {
+		return fmt.Errorf("%s: %w", errContext, err)
 	}
+
 	return nil
 }
 

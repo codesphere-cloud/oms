@@ -4,16 +4,20 @@
 package gcp
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 const (
 	remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
+	vaultTransferSuffix     string = ".plain"
 )
 
 // EnsureInstallConfig uses the local config or recovers it from an existing jumpbox if desired.
@@ -51,7 +55,7 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 }
 
 func (b *GCPBootstrapper) loadVaultForConfigTemplating() error {
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
 
@@ -112,6 +116,8 @@ func (b *GCPBootstrapper) recoverVault() error {
 	return nil
 }
 
+// UpdateInstallConfig applies the environment to the install config and vault, writes both
+// locally and uploads them to the jumpbox.
 func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	// Update install config with necessary values
 	b.Env.InstallConfig.Datacenter.ID = b.Env.DatacenterID
@@ -389,17 +395,99 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath)
-	if err != nil {
+	vaultTransferPath := b.Env.SecretsFilePath
+
+	if b.Env.VaultType == vault.TypeSOPS {
+		copied, err := b.writePlaintextVaultCopy()
+		if err != nil {
+			return err
+		}
+
+		vaultTransferPath = copied
+		b.vaultTransferCopy = copied
+	}
+
+	return b.copyConfigAndVaultToJumpbox(vaultTransferPath)
+}
+
+// copyConfigAndVaultToJumpbox uploads the install config and the vault the jumpbox installs from.
+func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(vaultTransferPath string) error {
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath); err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
 	}
 
-	err = b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.SecretsFilePath, b.Env.SecretsDir+"/prod.vault.yaml")
-	if err != nil {
+	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, vaultTransferPath, b.Env.SecretsDir+"/prod.vault.yaml"); err != nil {
 		return fmt.Errorf("failed to copy secrets file to jumpbox: %w", err)
 	}
 
 	return nil
+}
+
+// writePlaintextVaultCopy writes the vault as plaintext to a fresh file next to it. Only the
+// caller's machine holds the key of an encrypted vault, while the jumpbox re-encrypts the copy
+// with its own key (see EncryptVault). The unique name means the copy can never replace a file
+// the caller owns.
+func (b *GCPBootstrapper) writePlaintextVaultCopy() (string, error) {
+	dir := filepath.Dir(b.Env.SecretsFilePath)
+	pattern := filepath.Base(b.Env.SecretsFilePath) + vaultTransferSuffix + "*"
+
+	transferPath, err := b.fw.CreateTemp(dir, pattern)
+	if err != nil {
+		return "", fmt.Errorf("failed to create temporary vault transfer file: %w", err)
+	}
+
+	if err := b.icg.WriteUnencryptedVault(transferPath, true); err != nil {
+		writeErr := fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err)
+
+		return "", errors.Join(writeErr, b.removeVaultTransfer(transferPath))
+	}
+
+	return transferPath, nil
+}
+
+// removeVaultTransfer deletes the plaintext transfer copy and reports a failure to do so,
+// because the file holds every secret in the clear.
+func (b *GCPBootstrapper) removeVaultTransfer(transferPath string) error {
+	if err := b.fw.Remove(transferPath); err != nil {
+		return fmt.Errorf("failed to remove unencrypted vault transfer file %s: %w", transferPath, err)
+	}
+
+	return nil
+}
+
+// WriteAndEncryptVault writes the install config and vault, uploads them to the jumpbox and
+// re-encrypts the uploaded vault there. The plaintext transfer copy is removed on every path,
+// and its removal error is reported last, so a copy that could not be deleted never keeps the
+// vault on the jumpbox in plaintext.
+func (b *GCPBootstrapper) WriteAndEncryptVault() (err error) {
+	defer func() { err = errors.Join(err, b.removeVaultTransferCopy()) }()
+
+	if err := b.stlog.Step("Update install config", b.UpdateInstallConfig); err != nil {
+		return fmt.Errorf("failed to update install config: %w", err)
+	}
+
+	if err := b.stlog.Step("Ensure age key", b.EnsureAgeKey); err != nil {
+		return fmt.Errorf("failed to ensure age key: %w", err)
+	}
+
+	if err := b.stlog.Step("Encrypt vault", b.EncryptVault); err != nil {
+		return fmt.Errorf("failed to encrypt vault: %w", err)
+	}
+
+	return nil
+}
+
+// removeVaultTransferCopy deletes the plaintext copy recorded by UpdateInstallConfig, if one was
+// written.
+func (b *GCPBootstrapper) removeVaultTransferCopy() error {
+	transferCopy := b.vaultTransferCopy
+	b.vaultTransferCopy = ""
+
+	if transferCopy == "" {
+		return nil
+	}
+
+	return b.removeVaultTransfer(transferCopy)
 }
 
 // applyACMEConfig configures the ACME certificate issuer, including the DNS-01
@@ -551,6 +639,7 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	if err := b.GCPClient.EnsureStorageBucket(b.Env.ProjectID, bucketName, b.Env.Region); err != nil {
 		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
 	}
+
 	b.Env.OpenfgaBackupBucket = bucketName
 
 	// The HMAC secret cannot be retrieved after creation, so only create a new key
@@ -561,10 +650,12 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	}
 
 	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", openfgaBackupSAName, b.Env.ProjectID)
+
 	accessID, secret, err := b.GCPClient.CreateHMACKey(b.Env.ProjectID, saEmail)
 	if err != nil {
 		return fmt.Errorf("failed to create openfga backup HMAC key: %w", err)
 	}
+
 	b.Env.OpenfgaBackupAccessKeyID = accessID
 	b.Env.OpenfgaBackupSecret = secret
 
@@ -720,7 +811,7 @@ func (b *GCPBootstrapper) EnsureAgeKey() error {
 }
 
 func (b *GCPBootstrapper) EnsureSecrets() error {
-	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
+	if err := b.icg.LoadVaultFromFileOrCreate(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
 
