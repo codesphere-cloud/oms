@@ -18,11 +18,13 @@ type RegistryType string
 
 // The registry types supported by the GCP bootstrapper. RegistryTypeLocalContainer runs a
 // local registry, RegistryTypeArtifactRegistry uses a GCP Artifact Registry
-// repository, and RegistryTypeGitHub pulls straight from ghcr.io.
+// repository, RegistryTypeGitHub pulls straight from ghcr.io, and RegistryTypeExternal pulls
+// from a user-provided registry with explicit credentials.
 const (
 	RegistryTypeLocalContainer   RegistryType = "local-container"
 	RegistryTypeArtifactRegistry RegistryType = "artifact-registry"
 	RegistryTypeGitHub           RegistryType = "github"
+	RegistryTypeExternal         RegistryType = "external"
 )
 
 // validateGitHubParams checks if the GitHub credentials are fully specified if GitHub registry is selected
@@ -55,13 +57,19 @@ func (b *GCPBootstrapper) validateRegistryParams() error {
 			return fmt.Errorf("github-pat must be set when using GitHub registry type")
 		}
 
-		if b.Env.RegistryUser == "" {
+		if b.Env.RegistryUsername == "" {
 			return fmt.Errorf("registry-user must be set when using GitHub registry type")
 		}
 
 		return nil
+	case RegistryTypeExternal:
+		if b.Env.ContainerRegistryURL == "" || b.Env.RegistryUsername == "" || b.Env.RegistryPassword == "" {
+			return fmt.Errorf("registry, registry-user and registry-password must be set when using an external registry")
+		}
+
+		return nil
 	default:
-		return fmt.Errorf("unsupported registry type %q (supported: local-container, artifact-registry, github)", b.Env.RegistryType)
+		return fmt.Errorf("unsupported registry type %q (supported: local-container, artifact-registry, github, external)", b.Env.RegistryType)
 	}
 }
 
@@ -180,20 +188,39 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	return nil
 }
 
-// EnsureGitHubAccessConfigured points the install config at ghcr.io and stores the GitHub
-// credentials in the vault. The cluster pulls images from GHCR directly
-func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
-	if b.Env.GitHubPAT == "" {
-		return fmt.Errorf("GitHub PAT is not set")
+// EnsureRegistryAccessConfigured stores credentials and configures direct access to either
+// GitHub Container Registry or an explicitly selected external registry.
+func (b *GCPBootstrapper) EnsureRegistryAccessConfigured() error {
+	registry := b.Env.InstallConfig.EnsureRegistry()
+	registryPassword := b.Env.RegistryPassword
+	if b.Env.RegistryType == RegistryTypeGitHub {
+		if b.Env.GitHubPAT == "" {
+			return fmt.Errorf("GitHub PAT is not set")
+		}
+
+		registryPassword = b.Env.GitHubPAT
+		registry.Server = "ghcr.io"
+	} else {
+		registryURL := strings.TrimSuffix(strings.TrimPrefix(b.Env.ContainerRegistryURL, "oci://"), "/")
+		if registryURL == "" {
+			return fmt.Errorf("external registry URL is not set")
+		}
+
+		registry.Server = registryURL
 	}
 
-	registry := b.Env.InstallConfig.EnsureRegistry()
-	registry.Server = "ghcr.io"
+	if b.Env.RegistryUsername == "" {
+		return fmt.Errorf("registry username is not set")
+	}
+	if registryPassword == "" {
+		return fmt.Errorf("registry password is not set")
+	}
+
 	registry.ReplaceImagesInBom = false
 	registry.LoadContainerImages = false
 
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
-	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.GitHubPAT}})
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUsername}})
+	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: registryPassword}})
 
 	return nil
 }
