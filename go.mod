@@ -24,7 +24,7 @@ replace (
 )
 
 require (
-	cloud.google.com/go/artifactregistry v1.26.0
+	cloud.google.com/go/artifactregistry v1.27.0
 	cloud.google.com/go/compute v1.69.0
 	cloud.google.com/go/iam v1.13.0
 	cloud.google.com/go/resourcemanager v1.16.0
