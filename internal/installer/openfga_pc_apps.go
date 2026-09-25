@@ -62,7 +62,7 @@ func authnValues(config *files.RootConfig, vault *files.InstallVault) files.Char
 		return nil
 	}
 
-	if !hasOpenFgaPresharedKey(vault) {
+	if !secrets.HasOpenFgaPresharedKey(vault) {
 		log.Printf(
 			"OpenFGA: %s is not in the vault, deploying OpenFGA without authentication."+
 				" Add the key with `oms update install-config` — a future version will require it.\n",
@@ -98,18 +98,6 @@ func gatewayValues(config *files.RootConfig, expose *files.OpenFgaExposeConfig) 
 	}
 
 	return gateway
-}
-
-// hasOpenFgaPresharedKey reports whether the vault holds a usable preshared key. A vault
-// written by an older oms has no entry at all; `oms update install-config` adds one.
-func hasOpenFgaPresharedKey(vault *files.InstallVault) bool {
-	if vault == nil {
-		return false
-	}
-
-	secret := vault.GetSecret(files.SecretOpenFgaPresharedKey)
-
-	return secret != nil && secret.Fields != nil && secret.Fields.Password != ""
 }
 
 // certIssuerName returns the name of the ClusterIssuer for this installation, matching the

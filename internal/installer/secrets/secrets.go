@@ -210,16 +210,22 @@ const CopyOpenFgaPresharedKeyHint = files.SecretOpenFgaPresharedKey + " is not i
 	"This data center uses another data center's OpenFGA (codesphere.openFga.deploy: false), " +
 	"so copy the key from that data center's vault. A key generated here would not match it."
 
-// OpenFgaPresharedKeyMustBeCopied reports whether the vault lacks the preshared key in a data
-// center that must not generate its own, because it does not deploy OpenFGA.
-func OpenFgaPresharedKeyMustBeCopied(vault *files.InstallVault, config *files.RootConfig) bool {
-	if config.Codesphere.OpenFga.DeploysOpenFga() {
+// HasOpenFgaPresharedKey reports whether the vault holds a usable preshared key. A vault
+// written by an older oms has no entry at all.
+func HasOpenFgaPresharedKey(vault *files.InstallVault) bool {
+	if vault == nil {
 		return false
 	}
 
 	secret := vault.GetSecret(files.SecretOpenFgaPresharedKey)
 
-	return secret == nil || secret.Fields == nil || secret.Fields.Password == ""
+	return secret != nil && secret.Fields != nil && secret.Fields.Password != ""
+}
+
+// OpenFgaPresharedKeyMustBeCopied reports whether the vault lacks the preshared key in a data
+// center that must not generate its own, because it does not deploy OpenFGA.
+func OpenFgaPresharedKeyMustBeCopied(vault *files.InstallVault, config *files.RootConfig) bool {
+	return !config.Codesphere.OpenFga.DeploysOpenFga() && !HasOpenFgaPresharedKey(vault)
 }
 
 // EnsureNixSigningKeys generates an Ed25519 signing key pair for nix-cache in the

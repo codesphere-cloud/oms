@@ -203,6 +203,10 @@ var _ = Describe("OpenFgaPresharedKeyMustBeCopied", func() {
 		Expect(secrets.OpenFgaPresharedKeyMustBeCopied(newVault(), remoteOpenFgaConfig())).To(BeTrue())
 	})
 
+	It("is true when that data center has no vault loaded", func() {
+		Expect(secrets.OpenFgaPresharedKeyMustBeCopied(nil, remoteOpenFgaConfig())).To(BeTrue())
+	})
+
 	It("is true when that data center's key entry is empty", func() {
 		Expect(secrets.OpenFgaPresharedKeyMustBeCopied(vaultWithKey(""), remoteOpenFgaConfig())).To(BeTrue())
 	})
