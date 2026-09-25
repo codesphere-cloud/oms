@@ -50,8 +50,12 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 		return fmt.Errorf("ensure hmac secret: %w", err)
 	}
 
-	if err := EnsureOpenFgaPresharedKey(vault); err != nil {
-		return fmt.Errorf("ensure openfga preshared key: %w", err)
+	// A data center that calls another's OpenFGA must use that one's key; one generated here
+	// would never match it.
+	if config.Codesphere.OpenFga.DeploysOpenFga() {
+		if err := EnsureOpenFgaPresharedKey(vault); err != nil {
+			return fmt.Errorf("ensure openfga preshared key: %w", err)
+		}
 	}
 	if err := EnsureDefaultSecrets(vault); err != nil {
 		return fmt.Errorf("ensure default secrets: %w", err)
@@ -198,6 +202,24 @@ func EnsureOpenFgaPresharedKey(vault *files.InstallVault) error {
 	})
 
 	return nil
+}
+
+// CopyOpenFgaPresharedKeyHint tells the operator of a data center that does not deploy OpenFGA
+// where its missing preshared key has to come from.
+const CopyOpenFgaPresharedKeyHint = files.SecretOpenFgaPresharedKey + " is not in the vault. " +
+	"This data center uses another data center's OpenFGA (codesphere.openFga.deploy: false), " +
+	"so copy the key from that data center's vault. A key generated here would not match it."
+
+// OpenFgaPresharedKeyMustBeCopied reports whether the vault lacks the preshared key in a data
+// center that must not generate its own, because it does not deploy OpenFGA.
+func OpenFgaPresharedKeyMustBeCopied(vault *files.InstallVault, config *files.RootConfig) bool {
+	if config.Codesphere.OpenFga.DeploysOpenFga() {
+		return false
+	}
+
+	secret := vault.GetSecret(files.SecretOpenFgaPresharedKey)
+
+	return secret == nil || secret.Fields == nil || secret.Fields.Password == ""
 }
 
 // EnsureNixSigningKeys generates an Ed25519 signing key pair for nix-cache in the

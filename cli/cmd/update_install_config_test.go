@@ -622,6 +622,18 @@ var _ = Describe("addMissingSecrets", func() {
 		Expect(vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password).To(Equal(secret))
 	})
 
+	It("does not offer the OpenFGA preshared key to a data center that uses another data center's OpenFGA", func() {
+		deploy := false
+		config.Codesphere.OpenFga = &files.OpenFgaConfig{Deploy: &deploy, APIURL: "https://openfga.1.cs.example.com"}
+		vault := &files.InstallVault{}
+
+		added, err := addMissingSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(added).ToNot(ContainElement(files.SecretOpenFgaPresharedKey))
+		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey)).To(BeNil())
+	})
+
 	It("never modifies a secret the vault already holds", func() {
 		vault := &files.InstallVault{}
 		vault.SetSecret(files.SecretEntry{
