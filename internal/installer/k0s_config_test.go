@@ -21,7 +21,7 @@ var _ = Describe("K0sConfig", func() {
 				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
 				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(k0sConfig).ToNot(BeNil())
 
@@ -59,10 +59,40 @@ var _ = Describe("K0sConfig", func() {
 			It("should handle minimal configuration", func() {
 				installConfig := newTestConfig("minimal", true, "192.168.1.100")
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(k0sConfig).ToNot(BeNil())
 				Expect(k0sConfig.Metadata.Name).To(Equal("codesphere-minimal"))
+			})
+
+			It("should set the pull policy to Never for airgapped installations", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{Enabled: true})
+				Expect(err).ToNot(HaveOccurred())
+
+				// Airgapped nodes get their images from a pre-loaded bundle and must
+				// never pull from the internet.
+				Expect(k0sConfig.Spec.Images.DefaultPullPolicy).To(Equal("Never"))
+			})
+
+			It("should keep the default pull policy when airgapped is not enabled", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(k0sConfig.Spec.Images.DefaultPullPolicy).To(Equal("IfNotPresent"))
+			})
+
+			It("should serialize the airgapped pull policy into the k0s config YAML", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{Enabled: true})
+				Expect(err).ToNot(HaveOccurred())
+
+				yamlData, err := k0sConfig.Marshal()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(yamlData)).To(ContainSubstring("default_pull_policy: Never"))
 			})
 
 			It("should generate valid YAML", func() {
@@ -70,7 +100,7 @@ var _ = Describe("K0sConfig", func() {
 				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
 				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).ToNot(HaveOccurred())
 
 				yamlData, err := k0sConfig.Marshal()
@@ -79,6 +109,7 @@ var _ = Describe("K0sConfig", func() {
 
 				// Verify it can be unmarshalled back
 				var parsedConfig installer.K0sConfig
+
 				err = yaml.Unmarshal(yamlData, &parsedConfig)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(parsedConfig.Metadata.Name).To(Equal("codesphere-test-dc"))
@@ -87,7 +118,7 @@ var _ = Describe("K0sConfig", func() {
 
 		Context("with invalid input", func() {
 			It("should return error for nil install-config", func() {
-				k0sConfig, err := installer.GenerateK0sConfig(nil)
+				k0sConfig, err := installer.GenerateK0sConfig(nil, installer.AirgapOptions{})
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("installConfig cannot be nil"))
 				Expect(k0sConfig).To(BeNil())
@@ -100,7 +131,7 @@ var _ = Describe("K0sConfig", func() {
 				installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
 				installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(k0sConfig).ToNot(BeNil())
 				// Should still have basic structure but no specific config
@@ -112,7 +143,7 @@ var _ = Describe("K0sConfig", func() {
 			It("should handle empty datacenter name", func() {
 				installConfig := newTestConfig("", true, "10.0.0.1")
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Metadata.Name).To(Equal("codesphere-"))
 			})
@@ -121,7 +152,7 @@ var _ = Describe("K0sConfig", func() {
 				installConfig := newTestConfig("test", true)
 				installConfig.Kubernetes.ControlPlanes = []files.K8sNode{}
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				// Should have basic structure but no API/Storage config
 				Expect(k0sConfig.Spec.API).To(BeNil())
@@ -131,7 +162,7 @@ var _ = Describe("K0sConfig", func() {
 			It("should handle nil control plane addresses", func() {
 				installConfig := newTestConfig("test", true)
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Spec.API).To(BeNil())
 			})
@@ -139,7 +170,7 @@ var _ = Describe("K0sConfig", func() {
 			It("should handle missing APIServerHost", func() {
 				installConfig := newTestConfig("test", true, "10.0.0.1")
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Spec.API.ExternalAddress).To(BeEmpty())
 				Expect(k0sConfig.Spec.API.SANs).To(ConsistOf("10.0.0.1"))
@@ -148,7 +179,7 @@ var _ = Describe("K0sConfig", func() {
 			It("should handle missing network CIDRs", func() {
 				installConfig := newTestConfig("test", true, "10.0.0.1")
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Spec.Network).NotTo(BeNil())
 				Expect(k0sConfig.Spec.Network.Provider).To(Equal("calico"))
@@ -157,7 +188,7 @@ var _ = Describe("K0sConfig", func() {
 			It("should use default network provider", func() {
 				installConfig := newTestConfig("test", true, "10.0.0.1")
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Spec.Network.Provider).To(Equal("calico"))
 			})
@@ -166,7 +197,7 @@ var _ = Describe("K0sConfig", func() {
 				installConfig := newTestConfig("test", true, "10.0.0.1")
 				installConfig.Kubernetes.APIServerHost = "api.example.com"
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Spec.API.SANs).To(HaveLen(2))
 				Expect(k0sConfig.Spec.API.SANs).To(ContainElements("10.0.0.1", "api.example.com"))
@@ -175,7 +206,7 @@ var _ = Describe("K0sConfig", func() {
 			It("should handle special characters in datacenter name", func() {
 				installConfig := newTestConfig("test-dc_01.prod", true, "10.0.0.1")
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Metadata.Name).To(Equal("codesphere-test-dc_01.prod"))
 			})
@@ -183,7 +214,7 @@ var _ = Describe("K0sConfig", func() {
 			It("should set correct API port", func() {
 				installConfig := newTestConfig("test", true, "10.0.0.1")
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Spec.API.Port).To(Equal(6443))
 			})
@@ -191,7 +222,7 @@ var _ = Describe("K0sConfig", func() {
 			It("should configure etcd with first control plane IP", func() {
 				installConfig := newTestConfig("test", true, "10.0.0.1", "10.0.0.2")
 
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Spec.Storage.Type).To(Equal("etcd"))
 				Expect(k0sConfig.Spec.Storage.Etcd.PeerAddress).To(Equal("10.0.0.1"))

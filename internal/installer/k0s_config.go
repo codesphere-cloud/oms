@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"cmp"
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -66,7 +67,10 @@ type K0sKonnectivity struct {
 	AgentPort int `yaml:"agentPort,omitempty"`
 }
 
-func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
+// GenerateK0sConfig generates the k0s cluster configuration for a Codesphere
+// install-config. Airgapped installations are requested through the airgap options
+// and stop k0s from pulling images.
+func GenerateK0sConfig(installConfig *files.RootConfig, airgap AirgapOptions) (*K0sConfig, error) {
 	if installConfig == nil {
 		return nil, fmt.Errorf("installConfig cannot be nil")
 	}
@@ -88,6 +92,7 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 			for _, cp := range installConfig.Kubernetes.ControlPlanes {
 				sans = append(sans, cp.IPAddress)
 			}
+
 			if installConfig.Kubernetes.APIServerHost != "" {
 				sans = append(sans, installConfig.Kubernetes.APIServerHost)
 			}
@@ -109,13 +114,13 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 
 		k0sConfig.Spec.Network = &K0sNetwork{
 			Provider:      "calico",
-			PodCIDR:       defaultIfEmpty(installConfig.Kubernetes.PodCIDR, "100.96.0.0/11"),
-			ServiceCIDR:   defaultIfEmpty(installConfig.Kubernetes.ServiceCIDR, "100.64.0.0/13"),
+			PodCIDR:       cmp.Or(installConfig.Kubernetes.PodCIDR, "100.96.0.0/11"),
+			ServiceCIDR:   cmp.Or(installConfig.Kubernetes.ServiceCIDR, "100.64.0.0/13"),
 			ClusterDomain: "cluster.local",
 		}
 
 		k0sConfig.Spec.Images = &K0sImages{
-			DefaultPullPolicy: "IfNotPresent",
+			DefaultPullPolicy: pullPolicyFor(airgap),
 		}
 
 		k0sConfig.Spec.Telemetry = &K0sTelemetry{
@@ -131,11 +136,14 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 	return k0sConfig, nil
 }
 
-func defaultIfEmpty(value, defaultValue string) string {
-	if value != "" {
-		return value
+// pullPolicyFor returns the k0s image pull policy. Airgapped installations get their
+// images from a pre-loaded bundle, so they must never pull from the internet.
+func pullPolicyFor(options AirgapOptions) string {
+	if options.Enabled {
+		return "Never"
 	}
-	return defaultValue
+
+	return "IfNotPresent"
 }
 
 func (c *K0sConfig) Marshal() ([]byte, error) {

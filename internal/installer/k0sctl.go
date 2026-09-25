@@ -17,6 +17,12 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
+const (
+	k0sctlBinaryName    = "k0sctl"
+	k0sctlReleaseURL    = "https://github.com/k0sproject/k0sctl/releases/download"
+	k0sctlReleaseAPIURL = "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
+)
+
 // DefaultK0sctlVersion is the currently verified k0sctl version. It mirrors
 // DefaultK0sVersion in k0s.go: the pair is the version combination we test
 // against, while users can override k0sctl via --k0sctl-version.
@@ -27,7 +33,7 @@ const DefaultK0sctlVersion = "v0.33.1"
 //mockery:generate: true
 type K0sctlManager interface {
 	GetLatestVersion() (string, error)
-	Download(version string, force bool, quiet bool) (string, error)
+	Download(version string, opts DownloadOptions) (string, error)
 	Apply(configPath string, k0sctlPath string, force bool) error
 	Reset(configPath string, k0sctlPath string) error
 	GetKubeconfig(configPath string, k0sctlPath string) (string, error)
@@ -51,13 +57,8 @@ func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) *K0sctl {
 	}
 }
 
-type githubRelease struct {
-	TagName string `json:"tag_name"`
-}
-
 func (k *K0sctl) GetLatestVersion() (string, error) {
-	releaseURL := "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
-	responseBody, err := k.Http.Get(releaseURL)
+	responseBody, err := k.Http.Get(k0sctlReleaseAPIURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch latest k0sctl release: %w", err)
 	}
@@ -74,69 +75,58 @@ func (k *K0sctl) GetLatestVersion() (string, error) {
 	return release.TagName, nil
 }
 
-func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error) {
-	cacheDir, err := k.Env.GetOmsCacheDir()
+// Download stores the k0sctl binary of the requested version in the OMS cache dir and
+// returns its path. An empty version resolves to the latest release.
+func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) {
+	cacheDir, err := ensureCacheDir(k.FileWriter, k.Env)
 	if err != nil {
-		return "", fmt.Errorf("failed to determine cache directory: %w", err)
-	}
-
-	if err := k.FileWriter.MkdirAll(cacheDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create workdir: %w", err)
+		return "", err
 	}
 
 	if version == "" {
-		var err error
-		version, err = k.GetLatestVersion()
+		latestVersion, err := k.GetLatestVersion()
 		if err != nil {
 			return "", fmt.Errorf("failed to get latest version: %w", err)
 		}
-		io.Verbosef(!quiet, "Using latest k0sctl version: %s", version)
+
+		version = latestVersion
+		io.Verbosef(!opts.Quiet, "Using latest k0sctl version: %s", version)
 	}
 
 	if !strings.HasPrefix(version, "v") {
 		version = "v" + version
 	}
 
-	cachePath := filepath.Join(cacheDir, "k0sctl")
-	if k.FileWriter.Exists(cachePath) && !force {
-		cachedVersion, versionErr := localBinaryVersion(cachePath)
-		if versionErr == nil && cachedVersion == version {
-			io.Verbosef(!quiet, "Using cached k0sctl %s at %s", version, cachePath)
-
-			return cachePath, nil
-		}
-
-		if versionErr != nil {
-			io.Verbosef(!quiet, "Cached k0sctl version could not be determined; replacing it: %v", versionErr)
-		} else {
-			io.Verbosef(!quiet, "Cached k0sctl version %s does not match requested version %s; replacing it", cachedVersion, version)
-		}
+	cachePath := filepath.Join(cacheDir, k0sctlBinaryName)
+	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sctlBinaryName, opts); cached {
+		return cachedPath, nil
 	}
 
-	binaryName := fmt.Sprintf("k0sctl-%s-%s", k.Goos, k.Goarch)
-	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0sctl/releases/download/%s/%s", version, binaryName)
+	assetName := fmt.Sprintf("%s-%s-%s", k0sctlBinaryName, k.Goos, k.Goarch)
+	downloadURL := releaseAssetURL(k0sctlReleaseURL, version, assetName)
 
-	io.Verbosef(!quiet, "Downloading k0sctl %s from %s", version, downloadURL)
+	io.Verbosef(!opts.Quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 
-	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, "k0sctl", downloadURL, quiet)
+	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sctlBinaryName, downloadURL, opts.Quiet)
 	if err != nil {
 		return "", err
 	}
 
-	io.Verbosef(!quiet, "k0sctl downloaded successfully to %s", path)
+	io.Verbosef(!opts.Quiet, "k0sctl downloaded successfully to %s", path)
 
 	return path, nil
 }
 
-// requireBinaryAndConfig checks that both the k0sctl binary and config exist,
-// returning an error if either is missing.
+// requireBinaryAndConfig checks that both the k0sctl binary and config exist.
 func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
 	}
+
 	if !k.FileWriter.Exists(configPath) {
 		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
 	}
+
 	return nil
 }
 
@@ -151,7 +141,6 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 		args = append(args, "--force")
 	}
 
-	// Add debug flag for more verbose output
 	args = append(args, "--debug")
 
 	log.Printf("Running k0sctl apply with config: %s", configPath)
@@ -162,6 +151,7 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 	}
 
 	log.Println("k0sctl apply completed successfully")
+
 	return nil
 }
 
@@ -169,6 +159,7 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return nil
 	}
+
 	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
 		return err
 	}
@@ -183,6 +174,7 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 	}
 
 	log.Println("k0sctl reset completed successfully")
+
 	return nil
 }
 
@@ -194,6 +186,7 @@ func (k *K0sctl) GetKubeconfig(configPath string, k0sctlPath string) (string, er
 	args := []string{"kubeconfig", "--config", configPath}
 
 	log.Println("Retrieving kubeconfig from k0sctl...")
+
 	output, err := util.RunCommandWithOutput(k0sctlPath, args, "")
 	if err != nil {
 		return "", fmt.Errorf("k0sctl kubeconfig failed: %w", err)

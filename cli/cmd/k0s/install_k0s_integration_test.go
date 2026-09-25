@@ -89,7 +89,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			Expect(loadedConfig.Kubernetes.ManagedByCodesphere).To(BeTrue())
 
 			// Generate k0s config
-			k0sConfig, err := installer.GenerateK0sConfig(loadedConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(loadedConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(k0sConfig).NotTo(BeNil())
 
@@ -128,7 +128,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			}
 			installConfig.Kubernetes.APIServerHost = "api.cluster.test"
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify primary IP is used
@@ -145,7 +145,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
 			installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k0sConfig.Spec.Network).NotTo(BeNil())
@@ -156,7 +156,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 		It("should configure etcd storage correctly", func() {
 			installConfig := createBaseConfig("storage-test", "192.168.1.100")
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k0sConfig.Spec.Storage).NotTo(BeNil())
@@ -168,7 +168,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 		It("should generate correct cluster name from datacenter", func() {
 			installConfig := createBaseConfig("prod-us-east", "10.1.2.3")
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k0sConfig.Metadata.Name).To(Equal("codesphere-prod-us-east"))
@@ -178,7 +178,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			installConfig := createBaseConfig("empty-cp", "10.0.0.1")
 			installConfig.Kubernetes.ControlPlanes = []files.K8sNode{}
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			// Should either handle gracefully or error
 			if err == nil {
 				Expect(k0sConfig).NotTo(BeNil())
@@ -190,7 +190,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 		It("should use default network values when not specified", func() {
 			installConfig := createBaseConfig("defaults-test", "10.0.0.1")
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			// Verify defaults are applied or fields are present
@@ -215,7 +215,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 
 			for _, tc := range testCases {
 				installConfig := createBaseConfig(tc.name, "10.0.0.1")
-				k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+				k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(k0sConfig.Metadata.Name).To(Equal(tc.expected))
 			}
@@ -231,7 +231,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			}
 			installConfig.Kubernetes.ControlPlanes = controlPlanes
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(k0sConfig.Spec.API.Address).To(Equal("10.0.1.1"))
 			Expect(len(k0sConfig.Spec.API.SANs)).To(BeNumerically(">=", 7))
@@ -242,7 +242,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			installConfig.Kubernetes.APIServerHost = "k8s.example.com"
 			installConfig.Codesphere.Domain = "app.example.com"
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(k0sConfig.Spec.API.SANs).To(ContainElement("192.168.100.50"))
@@ -260,7 +260,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 		})
 
 		It("should fail when generating config from nil", func() {
-			_, err := installer.GenerateK0sConfig(nil)
+			_, err := installer.GenerateK0sConfig(nil, installer.AirgapOptions{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("cannot be nil"))
 		})
@@ -291,7 +291,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			installConfig := createBaseConfig("external-k8s", "10.0.0.1")
 			installConfig.Kubernetes.ManagedByCodesphere = false
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(k0sConfig).NotTo(BeNil())
 		})
@@ -300,7 +300,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			installConfig := createBaseConfig("missing-host", "10.0.0.1")
 			installConfig.Kubernetes.APIServerHost = ""
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			if err == nil {
 				Expect(k0sConfig).NotTo(BeNil())
 				Expect(k0sConfig.Spec.API.Address).To(Equal("10.0.0.1"))
@@ -312,7 +312,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 		It("should handle missing datacenter name", func() {
 			installConfig := createBaseConfig("", "10.0.0.1")
 
-			k0sConfig, err := installer.GenerateK0sConfig(installConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			if err == nil {
 				Expect(k0sConfig).NotTo(BeNil())
 			} else {
@@ -343,7 +343,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			installConfig.Kubernetes.PodCIDR = "10.244.0.0/16"
 			installConfig.Kubernetes.ServiceCIDR = "10.96.0.0/12"
 
-			original, err := installer.GenerateK0sConfig(installConfig)
+			original, err := installer.GenerateK0sConfig(installConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			yamlData, err := original.Marshal()
@@ -378,7 +378,7 @@ var _ = Describe("K0s Install-Config Integration", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Generate and save k0s config
-			k0sConfig, err := installer.GenerateK0sConfig(originalConfig)
+			k0sConfig, err := installer.GenerateK0sConfig(originalConfig, installer.AirgapOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			k0sData, err := k0sConfig.Marshal()
 			Expect(err).NotTo(HaveOccurred())

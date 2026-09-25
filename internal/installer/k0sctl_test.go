@@ -58,7 +58,7 @@ var _ = Describe("K0sctl", func() {
 		writeCachedVersion("v0.32.1")
 		mockFileWriter.EXPECT().Exists(cachedPath).Return(true)
 
-		path, err := k0sctl.Download("v0.32.1", false, false)
+		path, err := k0sctl.Download("v0.32.1", installer.DownloadOptions{})
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(path).To(Equal(cachedPath))
@@ -69,7 +69,7 @@ var _ = Describe("K0sctl", func() {
 		mockFileWriter.EXPECT().Exists(cachedPath).Return(true)
 		expectDownload("v0.32.1")
 
-		path, err := k0sctl.Download("v0.32.1", false, false)
+		path, err := k0sctl.Download("v0.32.1", installer.DownloadOptions{})
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(path).To(Equal(cachedPath))
@@ -81,7 +81,7 @@ var _ = Describe("K0sctl", func() {
 			Return([]byte(`{"tag_name":"v0.32.1"}`), nil)
 		mockFileWriter.EXPECT().Exists(cachedPath).Return(true)
 
-		path, err := k0sctl.Download("", false, false)
+		path, err := k0sctl.Download("", installer.DownloadOptions{})
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(path).To(Equal(cachedPath))
