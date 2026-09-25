@@ -12,6 +12,7 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
@@ -113,12 +114,73 @@ type InitInstallConfigOpts struct {
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
+	if err := c.resolveVaultType(); err != nil {
+		return err
+	}
+
 	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
 	if err != nil {
 		return fmt.Errorf("failed to initialize config manager: %w", err)
 	}
 
 	return c.InitInstallConfig(icg)
+}
+
+// resolveVaultType stores the effective vault type in the command options.
+func (c *InitInstallConfigCmd) resolveVaultType() error {
+	vaultType, err := vault.ParseType(c.Opts.VaultType)
+	if err != nil {
+		return fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
+	}
+
+	if vault.HasAgeKey(vaultType, c.Opts.AgeKey) {
+		c.Opts.VaultType = string(vaultType)
+
+		return nil
+	}
+
+	c.Opts.VaultType = string(vault.TypePlain)
+
+	if c.Opts.VaultFile != "" {
+		encrypted, err := vault.IsEncryptedFile(c.FileWriter, c.Opts.VaultFile)
+		if err != nil {
+			return fmt.Errorf("failed to check if %s is encrypted: %w", c.Opts.VaultFile, err)
+		}
+
+		if encrypted {
+			return encryptedVaultError(c.Opts.ValidateOnly, c.Opts.VaultFile)
+		}
+	}
+
+	log.Println("No age key configured (--age-key, SOPS_AGE_KEY or SOPS_AGE_KEY_FILE); " + ageKeyHint(c.Opts.ValidateOnly, c.Opts.VaultFile))
+
+	return nil
+}
+
+// encryptedVaultError explains how to proceed when the target vault is encrypted but no
+// age key is configured.
+func encryptedVaultError(validateOnly bool, vaultFile string) error {
+	if validateOnly {
+		return fmt.Errorf("%s is SOPS-encrypted; pass --age-key or set SOPS_AGE_KEY/SOPS_AGE_KEY_FILE to read it", vaultFile)
+	}
+
+	return fmt.Errorf("%s is SOPS-encrypted; pass --age-key or set SOPS_AGE_KEY/SOPS_AGE_KEY_FILE to keep it encrypted, "+
+		"or --vault-type plain to replace it with an unencrypted vault", vaultFile)
+}
+
+// ageKeyHint describes what an unencrypted vault means for the current mode.
+func ageKeyHint(validateOnly bool, vaultFile string) string {
+	if validateOnly {
+		return fmt.Sprintf("reading %s as an unencrypted vault", vaultFile)
+	}
+
+	return fmt.Sprintf("writing %s unencrypted. Create an age key and encrypt the vault before use:\n"+
+		"  age-keygen -o age_key.txt\n"+
+		"  sops --encrypt --age \"$(age-keygen -y age_key.txt)\" --in-place %s", vaultFile, shellQuote(vaultFile))
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }
 
 func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
@@ -158,8 +220,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
-	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
-	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)")
+	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain), without an age key a sops vault is written unencrypted")
+	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key used to encrypt the vault (falls back to SOPS_AGE_KEY or SOPS_AGE_KEY_FILE)")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
 	c.cmd.Flags().StringVar(&c.Opts.AnsibleInventoryFile, "ansible-inventory", "", "Path to Ansible inventory file to import host information from")
@@ -313,7 +375,14 @@ func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println(strings.Repeat("=", 70))
 
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
-	log.Println("   The vault file has been encrypted with SOPS automatically.")
+
+	if c.Opts.VaultType == string(vault.TypePlain) {
+		log.Println("   The vault file is NOT encrypted. Create an age key and encrypt it before use:")
+		log.Println("     age-keygen -o age_key.txt")
+		log.Printf("     sops --encrypt --age \"$(age-keygen -y age_key.txt)\" --in-place %s\n", shellQuote(c.Opts.VaultFile))
+	} else {
+		log.Println("   The vault file has been encrypted with SOPS automatically.")
+	}
 	log.Println("   Keep the vault file and its decryption key secure.")
 	log.Println()
 }

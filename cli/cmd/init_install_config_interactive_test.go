@@ -5,12 +5,14 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 
+	"github.com/codesphere-cloud/oms/cli/cmd/testutil"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -245,6 +247,116 @@ func newTempConfigVaultPair() (configPath, vaultPath string) {
 	dir := GinkgoT().TempDir()
 	return filepath.Join(dir, "config.yaml"), filepath.Join(dir, "prod.vault.yaml")
 }
+
+var _ = Describe("Install-config vault encryption", func() {
+	buildCmd := func(vaultType string) *InitInstallConfigCmd {
+		configPath, vaultPath := newTempConfigVaultPair()
+
+		return &InitInstallConfigCmd{
+			Opts: &InitInstallConfigOpts{
+				GlobalOptions: &util.GlobalOptions{},
+				ConfigFile:    configPath,
+				VaultFile:     vaultPath,
+				VaultType:     vaultType,
+				Profile:       "dev",
+				Interactive:   false,
+			},
+			FileWriter: intutil.NewFilesystemWriter(),
+		}
+	}
+
+	Context("without an age key", func() {
+		BeforeEach(func() {
+			GinkgoT().Setenv("SOPS_AGE_KEY", "")
+			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", "")
+		})
+
+		It("writes an unencrypted vault instead of failing", func() {
+			c := buildCmd("sops")
+
+			Expect(c.RunE(nil, nil)).To(Succeed())
+			Expect(c.Opts.VaultType).To(Equal("plain"))
+
+			vaultContent, err := os.ReadFile(c.Opts.VaultFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(vaultContent)).NotTo(ContainSubstring("ENC["))
+
+			plainManager := newPlainInstallConfigManager()
+			Expect(plainManager.LoadVaultFromFile(c.Opts.VaultFile)).To(Succeed())
+			Expect(plainManager.ValidateVault()).To(BeEmpty())
+
+			_, err = os.Stat(c.Opts.ConfigFile)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("keeps the requested plain vault type", func() {
+			c := buildCmd("plain")
+
+			Expect(c.RunE(nil, nil)).To(Succeed())
+			Expect(c.Opts.VaultType).To(Equal("plain"))
+		})
+
+		It("rejects an unsupported vault type", func() {
+			c := buildCmd("auto")
+
+			Expect(c.RunE(nil, nil)).To(MatchError(ContainSubstring("unsupported vault type")))
+		})
+
+		It("refuses to replace an existing encrypted vault with an unencrypted one", func() {
+			c := buildCmd("sops")
+			encryptedVault := "sops:\n    age:\n        - recipient: age1test\n" +
+				"secrets:\n    - name: registryPassword\n      fields:\n        password: keep-me\n"
+			Expect(os.WriteFile(c.Opts.VaultFile, []byte(encryptedVault), 0600)).To(Succeed())
+
+			err := c.RunE(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("is SOPS-encrypted")))
+			Expect(err.Error()).To(ContainSubstring("--age-key"))
+
+			vaultContent, readErr := os.ReadFile(c.Opts.VaultFile)
+			Expect(readErr).NotTo(HaveOccurred())
+			Expect(string(vaultContent)).To(Equal(encryptedVault))
+
+			_, statErr := os.Stat(c.Opts.ConfigFile)
+			Expect(statErr).To(MatchError(ContainSubstring("no such file")))
+		})
+	})
+
+	DescribeTable("quotes vault paths for the shell",
+		func(path, want string) {
+			Expect(shellQuote(path)).To(Equal(want))
+		},
+		Entry("plain path", "prod.vault.yaml", "'prod.vault.yaml'"),
+		Entry("path with spaces", "/tmp/oms secrets/prod.vault.yaml", "'/tmp/oms secrets/prod.vault.yaml'"),
+		Entry("path with a single quote", "it's.vault.yaml", `'it'\''s.vault.yaml'`),
+	)
+
+	Context("with an age key", func() {
+		It("encrypts the vault with SOPS", func() {
+			if !testutil.SopsAndAgeAvailable() {
+				Skip("sops and age-keygen not available")
+			}
+
+			ageKeyPath := filepath.Join(GinkgoT().TempDir(), "age_key.txt")
+			Expect(exec.Command("age-keygen", "-o", ageKeyPath).Run()).To(Succeed())
+			GinkgoT().Setenv("SOPS_AGE_KEY", "")
+			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", ageKeyPath)
+
+			c := buildCmd("sops")
+
+			Expect(c.RunE(nil, nil)).To(Succeed())
+			Expect(c.Opts.VaultType).To(Equal("sops"))
+
+			vaultContent, err := os.ReadFile(c.Opts.VaultFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(vaultContent)).To(ContainSubstring("ENC["))
+
+			manager, err := installer.NewInstallConfigManager("sops", ageKeyPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(manager.LoadVaultFromFile(c.Opts.VaultFile)).To(Succeed())
+			Expect(manager.ValidateVault()).To(BeEmpty())
+		})
+	})
+})
 
 var _ = Describe("Non-interactive Kubernetes CIDR flags", func() {
 	// buildCmd returns a command wired to a real cobra.Command registering the
