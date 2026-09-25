@@ -165,8 +165,6 @@ var _ = Describe("EnsureSecrets and the OpenFGA preshared key", func() {
 		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey)).NotTo(BeNil())
 	})
 
-	// A key generated here would differ from the one the deploying data center's OpenFGA
-	// accepts, and every call from this data center would be rejected.
 	It("does not generate the key in a data center that uses another data center's OpenFGA", func() {
 		vault := newVault()
 
