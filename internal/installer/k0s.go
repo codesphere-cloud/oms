@@ -62,7 +62,6 @@ func (k *K0s) GetLatestVersion() (string, error) {
 }
 
 // Download downloads the k0s binary for the specified version and saves it to the OMS cache dir.
-// When the airgap option is set, the airgap image bundle of that version is downloaded as well.
 func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 	if k.Goos != "linux" || k.Goarch != "amd64" {
 		return "", fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
@@ -80,15 +79,6 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 		return "", fmt.Errorf("failed to download k0s binary: %w", err)
 	}
 
-	if opts.Airgapped {
-		bundlePath, err := k.ensureAirgapBundle(version, cacheDir, opts)
-		if err != nil {
-			return "", fmt.Errorf("failed to download k0s airgap bundle: %w", err)
-		}
-
-		log.Printf("k0s airgap bundle downloaded to '%s'", bundlePath)
-	}
-
 	return path, nil
 }
 
@@ -98,7 +88,7 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 // long as its version matches; otherwise it is replaced by a fresh download.
 func (k *K0s) downloadBinary(version, cacheDir string, opts DownloadOptions) (string, error) {
 	cachePath := filepath.Join(cacheDir, k0sBinaryName)
-	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts.Force, opts.Quiet); cached {
+	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts); cached {
 		return cachedPath, nil
 	}
 

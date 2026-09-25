@@ -33,7 +33,7 @@ const DefaultK0sctlVersion = "v0.33.1"
 //mockery:generate: true
 type K0sctlManager interface {
 	GetLatestVersion() (string, error)
-	Download(version string, force bool, quiet bool) (string, error)
+	Download(version string, opts DownloadOptions) (string, error)
 	Apply(configPath string, k0sctlPath string, force bool) error
 	Reset(configPath string, k0sctlPath string) error
 	GetKubeconfig(configPath string, k0sctlPath string) (string, error)
@@ -75,7 +75,9 @@ func (k *K0sctl) GetLatestVersion() (string, error) {
 	return release.TagName, nil
 }
 
-func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error) {
+// Download stores the k0sctl binary of the requested version in the OMS cache dir and
+// returns its path. An empty version resolves to the latest release.
+func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) {
 	cacheDir, err := ensureCacheDir(k.FileWriter, k.Env)
 	if err != nil {
 		return "", err
@@ -88,7 +90,7 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 		}
 
 		version = latestVersion
-		io.Verbosef(!quiet, "Using latest k0sctl version: %s", version)
+		io.Verbosef(!opts.Quiet, "Using latest k0sctl version: %s", version)
 	}
 
 	if !strings.HasPrefix(version, "v") {
@@ -96,21 +98,21 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 	}
 
 	cachePath := filepath.Join(cacheDir, k0sctlBinaryName)
-	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sctlBinaryName, force, quiet); cached {
+	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sctlBinaryName, opts); cached {
 		return cachedPath, nil
 	}
 
 	assetName := fmt.Sprintf("%s-%s-%s", k0sctlBinaryName, k.Goos, k.Goarch)
 	downloadURL := releaseAssetURL(k0sctlReleaseURL, version, assetName)
 
-	io.Verbosef(!quiet, "Downloading k0sctl %s from %s", version, downloadURL)
+	io.Verbosef(!opts.Quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 
-	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sctlBinaryName, downloadURL, quiet)
+	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sctlBinaryName, downloadURL, opts.Quiet)
 	if err != nil {
 		return "", err
 	}
 
-	io.Verbosef(!quiet, "k0sctl downloaded successfully to %s", path)
+	io.Verbosef(!opts.Quiet, "k0sctl downloaded successfully to %s", path)
 
 	return path, nil
 }

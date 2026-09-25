@@ -20,9 +20,6 @@ type DownloadOptions struct {
 	Force bool
 	// Quiet suppresses progress output.
 	Quiet bool
-	// Airgapped additionally ensures the k0s airgap image bundle. Downloads of
-	// airgap artifacts themselves ignore it.
-	Airgapped bool
 }
 
 // githubReleaseAsset is a single downloadable asset of a GitHub release.
@@ -51,27 +48,27 @@ func ensureCacheDir(fw util.FileIO, environment env.Env) (string, error) {
 }
 
 // reuseCachedBinary returns the cached binary at cachePath when it exists and reports
-// requestedVersion, unless force asks for a fresh download. The returned bool reports
+// requestedVersion, unless opts ask for a fresh download. The returned bool reports
 // whether the cached binary can be reused.
-func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string, force, quiet bool) (string, bool) {
-	if !fw.Exists(cachePath) || force {
+func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string, opts DownloadOptions) (string, bool) {
+	if !fw.Exists(cachePath) || opts.Force {
 		return "", false
 	}
 
 	cachedVersion, versionErr := localBinaryVersion(cachePath)
 	if versionErr == nil && cachedVersion == requestedVersion {
-		io.Verbosef(!quiet, "Using cached %s %s at %s", name, requestedVersion, cachePath)
+		io.Verbosef(!opts.Quiet, "Using cached %s %s at %s", name, requestedVersion, cachePath)
 
 		return cachePath, true
 	}
 
-	replaceReason := fmt.Sprintf("version %s does not match requested version %s; replacing it",
-		cachedVersion, requestedVersion)
-	if versionErr != nil {
-		replaceReason = fmt.Sprintf("version could not be determined: %v", versionErr)
+	replaceReason := fmt.Sprintf("version could not be determined: %v", versionErr)
+	if versionErr == nil {
+		replaceReason = fmt.Sprintf("version %s does not match requested version %s; replacing it",
+			cachedVersion, requestedVersion)
 	}
 
-	io.Verbosef(!quiet, "Replacing existing %s binary: Cached %s %s", name, name, replaceReason)
+	io.Verbosef(!opts.Quiet, "Replacing existing %s binary: Cached %s %s", name, name, replaceReason)
 
 	return "", false
 }

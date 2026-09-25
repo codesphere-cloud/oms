@@ -210,11 +210,11 @@ func (c *InstallK0sCmd) warnAboutNetworkAccess() {
 	}
 
 	if c.Opts.AirgapBundlePath == "" {
-		log.Println("Warning: --airgapped without --airgap-bundle downloads the airgap bundle from the internet; pre-download it with 'oms download k0s --airgapped' or pass --airgap-bundle for a truly offline installation")
+		log.Println("Warning: --airgapped without --airgap-bundle uses the cached airgap bundle or downloads it from the internet; pre-download it with 'oms download k0s --airgapped' or pass --airgap-bundle for a truly offline installation")
 	}
 
-	if c.Opts.K0sctlVersion == "" {
-		log.Println("Warning: k0sctl is resolved and downloaded from the internet; pass --k0sctl-version and pre-cache k0sctl for a truly offline installation")
+	if c.Opts.K0sctlVersion == "" || c.Opts.K0sctlVersion == installer.DefaultK0sctlVersion {
+		log.Println("Warning: k0sctl is downloaded from the internet unless it is already cached; pass --k0sctl-version with a pre-cached version for a truly offline installation")
 	}
 }
 
@@ -276,9 +276,9 @@ func (c *InstallK0sCmd) getAirgapBundlePath(k0s installer.K0sManager, k0sVersion
 }
 
 func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
-	log.Println("Downloading k0sctl...")
+	log.Println("Preparing k0sctl...")
 
-	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, c.Opts.Force, false)
+	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}
@@ -332,7 +332,12 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 
 	kubeconfigContent = strings.TrimRight(kubeconfigContent, "\n\r")
 
-	vault, err := c.loadOrCreateVault()
+	store, err := c.vaultStore()
+	if err != nil {
+		return err
+	}
+
+	vault, err := store.LoadOrCreate()
 	if err != nil {
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
@@ -349,11 +354,6 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 		},
 	})
 
-	store, err := c.vaultStore()
-	if err != nil {
-		return err
-	}
-
 	if err := store.Save(vault); err != nil {
 		return err
 	}
@@ -361,20 +361,6 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	log.Printf("Saved kubeconfig to %s", c.Opts.Vault)
 
 	return nil
-}
-
-func (c *InstallK0sCmd) loadOrCreateVault() (*files.InstallVault, error) {
-	store, err := c.vaultStore()
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := store.LoadOrCreate()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load vault: %w", err)
-	}
-
-	return data, nil
 }
 
 func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {

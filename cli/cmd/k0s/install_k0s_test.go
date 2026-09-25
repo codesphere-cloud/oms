@@ -174,7 +174,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", true, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", true, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{Force: true}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", true).Return(nil)
 
@@ -190,7 +190,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockK0s.EXPECT().Download("v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
@@ -227,7 +227,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 			mockFileWriter.EXPECT().Exists(c.Opts.AirgapBundlePath).Return(true)
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			// The generated k0sctl config must upload the bundle to the workers and
 			// the embedded k0s config must stop pulling images.
 			mockFileWriter.EXPECT().WriteFile(
@@ -253,7 +253,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 			mockK0s.EXPECT().EnsureAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/cache/k0s-airgap-bundle-amd64", nil)
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
@@ -300,7 +300,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockK0s.EXPECT().EnsureAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/cache/bundle", nil)
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			// The bundle must be uploaded although no k0s binary is uploaded.
 			mockFileWriter.EXPECT().WriteFile(
 				mock.Anything,
@@ -327,7 +327,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
 			mockK0s.EXPECT().EnsureAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/cache/bundle", nil)
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
@@ -345,7 +345,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockK0s.EXPECT().GetLatestVersion().Return("v1.30.0+k0s.0", nil)
 			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 			mockFileWriter.EXPECT().Exists("/cache/bundle").Return(true)
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
@@ -363,7 +363,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{Force: true}).Return("/downloaded/k0s", nil)
 			mockK0s.EXPECT().EnsureAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{Force: true}).Return("/cache/bundle", nil)
-			mockK0sctl.EXPECT().Download("", true, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{Force: true}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", true).Return(nil)
 
@@ -380,7 +380,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", false, false).Return("", os.ErrPermission)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("", os.ErrPermission)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
@@ -396,7 +396,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(os.ErrPermission)
 
@@ -409,7 +409,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 		}
 

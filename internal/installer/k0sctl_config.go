@@ -49,6 +49,18 @@ type K0sctlFile struct {
 	Perm   string `yaml:"perm,omitempty"`
 }
 
+// k0sctlFilePerm is the permission k0sctl creates uploaded files with.
+const k0sctlFilePerm = "0644"
+
+// airgapBundleFile uploads an airgap image bundle to the k0s images dir of a node.
+func airgapBundleFile(bundlePath string) K0sctlFile {
+	return K0sctlFile{
+		Src:    bundlePath,
+		DstDir: AirgapImagesDir,
+		Perm:   k0sctlFilePerm,
+	}
+}
+
 // K0sctlOptions configures the k0sctl cluster configuration that oms generates from
 // an install-config.
 type K0sctlOptions struct {
@@ -122,11 +134,7 @@ func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, instal
 	}
 
 	if runsWorker && options.Airgap.Enabled {
-		host.Files = append(host.Files, K0sctlFile{
-			Src:    options.Airgap.BundlePath,
-			DstDir: AirgapImagesDir,
-			Perm:   "0644",
-		})
+		host.Files = []K0sctlFile{airgapBundleFile(options.Airgap.BundlePath)}
 	}
 
 	k.Hosts = append(k.Hosts, host)

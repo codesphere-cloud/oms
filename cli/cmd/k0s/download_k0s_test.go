@@ -91,10 +91,28 @@ var _ = Describe("DownloadK0sk0s", func() {
 			c.Opts.Version = "v1.29.1+k0s.0"
 			c.Opts.Airgap = true
 
-			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Quiet: true, Airgapped: true}).Return("/test/workdir/k0s", nil)
+			opts := installer.DownloadOptions{Quiet: true}
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", opts).Return("/test/workdir/k0s", nil)
+			mockK0sManager.EXPECT().EnsureAirgapBundle("v1.29.1+k0s.0", opts).Return("/cache/k0s-airgap-bundle-amd64", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("reports airgap bundle download failures", func() {
+			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
+
+			c.Opts.Version = "v1.29.1+k0s.0"
+			c.Opts.Airgap = true
+
+			opts := installer.DownloadOptions{Quiet: true}
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", opts).Return("/test/workdir/k0s", nil)
+			mockK0sManager.EXPECT().EnsureAirgapBundle("v1.29.1+k0s.0", opts).Return("", errors.New("network error"))
+
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to download k0s airgap bundle"))
+			Expect(err.Error()).To(ContainSubstring("network error"))
 		})
 
 		It("succeeds when version is auto-detected and download works", func() {

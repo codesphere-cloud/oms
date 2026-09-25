@@ -37,12 +37,6 @@ func (k *K0s) EnsureAirgapBundle(version string, opts DownloadOptions) (string, 
 		return "", err
 	}
 
-	return k.ensureAirgapBundle(version, cacheDir, opts)
-}
-
-// ensureAirgapBundle downloads the airgap image bundle into cacheDir unless a bundle
-// of that version is already cached there, and returns its path.
-func (k *K0s) ensureAirgapBundle(version, cacheDir string, opts DownloadOptions) (string, error) {
 	cachePath, err := k.airgapBundleCachePath(version, cacheDir)
 	if err != nil {
 		return "", err
@@ -67,12 +61,8 @@ func (k *K0s) ensureAirgapBundle(version, cacheDir string, opts DownloadOptions)
 // airgapBundleCachePath prefers an already cached bundle of the given version over
 // resolving the release metadata, so airgapped installations can stay offline.
 func (k *K0s) airgapBundleCachePath(version, cacheDir string) (string, error) {
-	if entries, err := k.FileWriter.ReadDir(cacheDir); err == nil {
-		for _, entry := range entries {
-			if k.isAirgapBundleFor(entry.Name(), version) {
-				return filepath.Join(cacheDir, entry.Name()), nil
-			}
-		}
+	if cachedPath, found := k.cachedAirgapBundle(cacheDir, version); found {
+		return cachedPath, nil
 	}
 
 	assetName, err := k.resolveAirgapBundleAssetName(version)
@@ -81,6 +71,24 @@ func (k *K0s) airgapBundleCachePath(version, cacheDir string) (string, error) {
 	}
 
 	return filepath.Join(cacheDir, assetName), nil
+}
+
+// cachedAirgapBundle returns the path of the cached airgap bundle of the given
+// version, if there is one. An unreadable cache is not an error: the release
+// metadata then decides which bundle to look for.
+func (k *K0s) cachedAirgapBundle(cacheDir, version string) (string, bool) {
+	entries, err := k.FileWriter.ReadDir(cacheDir)
+	if err != nil {
+		return "", false
+	}
+
+	for _, entry := range entries {
+		if k.isAirgapBundleFor(entry.Name(), version) {
+			return filepath.Join(cacheDir, entry.Name()), true
+		}
+	}
+
+	return "", false
 }
 
 // resolveAirgapBundleAssetName returns the release asset name of the airgap image

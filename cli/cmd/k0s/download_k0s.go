@@ -37,12 +37,7 @@ func (c *DownloadK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	env := c.Env
 	k0s := installer.NewK0s(hw, env, c.FileWriter)
 
-	err := c.DownloadK0s(k0s)
-	if err != nil {
-		return fmt.Errorf("failed to download k0s: %w", err)
-	}
-
-	return nil
+	return c.DownloadK0s(k0s)
 }
 
 func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
@@ -78,13 +73,20 @@ func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
 		return err
 	}
 
-	k0sPath, err := k0s.Download(version, installer.DownloadOptions{
-		Force:     c.Opts.Force,
-		Quiet:     !c.Opts.Verbose,
-		Airgapped: c.Opts.Airgap,
-	})
+	opts := installer.DownloadOptions{Force: c.Opts.Force, Quiet: !c.Opts.Verbose}
+
+	k0sPath, err := k0s.Download(version, opts)
 	if err != nil {
 		return fmt.Errorf("failed to download k0s: %w", err)
+	}
+
+	if c.Opts.Airgap {
+		bundlePath, err := k0s.EnsureAirgapBundle(version, opts)
+		if err != nil {
+			return fmt.Errorf("failed to download k0s airgap bundle: %w", err)
+		}
+
+		log.Printf("k0s airgap bundle downloaded to '%s'", bundlePath)
 	}
 
 	log.Printf("k0s binary downloaded successfully to '%s'", k0sPath)
