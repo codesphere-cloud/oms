@@ -217,6 +217,10 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		return err
 	}
 
+	if secrets.OpenFgaPresharedKeyMustBeCopied(vault, config) {
+		log.Printf("\nWarning: %s\n", secrets.CopyOpenFgaPresharedKeyHint)
+	}
+
 	if err := icg.WriteInstallConfig(c.Opts.ConfigFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}

@@ -147,6 +147,77 @@ var _ = Describe("EnsureOpenFgaPresharedKey", func() {
 	})
 })
 
+// remoteOpenFgaConfig is the config of a data center that calls another data center's OpenFGA.
+func remoteOpenFgaConfig() *files.RootConfig {
+	deploy := false
+	config := &files.RootConfig{}
+	config.Codesphere.OpenFga = &files.OpenFgaConfig{Deploy: &deploy, APIURL: "https://openfga.1.cs.example.com"}
+
+	return config
+}
+
+var _ = Describe("EnsureSecrets and the OpenFGA preshared key", func() {
+	It("generates the key in a data center that deploys OpenFGA", func() {
+		vault := newVault()
+
+		Expect(secrets.EnsureSecrets(vault, &files.RootConfig{})).To(Succeed())
+
+		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey)).NotTo(BeNil())
+	})
+
+	It("does not generate the key in a data center that uses another data center's OpenFGA", func() {
+		vault := newVault()
+
+		Expect(secrets.EnsureSecrets(vault, remoteOpenFgaConfig())).To(Succeed())
+
+		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey)).To(BeNil())
+	})
+
+	It("keeps a key copied into the vault of a data center that uses another data center's OpenFGA", func() {
+		vault := newVault()
+		vault.SetSecret(files.SecretEntry{
+			Name:   files.SecretOpenFgaPresharedKey,
+			Fields: &files.SecretFields{Password: "copied-from-data-center-1"},
+		})
+
+		Expect(secrets.EnsureSecrets(vault, remoteOpenFgaConfig())).To(Succeed())
+
+		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey).Fields.Password).To(Equal("copied-from-data-center-1"))
+	})
+})
+
+var _ = Describe("OpenFgaPresharedKeyMustBeCopied", func() {
+	vaultWithKey := func(password string) *files.InstallVault {
+		vault := newVault()
+		vault.SetSecret(files.SecretEntry{
+			Name:   files.SecretOpenFgaPresharedKey,
+			Fields: &files.SecretFields{Password: password},
+		})
+
+		return vault
+	}
+
+	It("is true when a data center using another data center's OpenFGA has no key", func() {
+		Expect(secrets.OpenFgaPresharedKeyMustBeCopied(newVault(), remoteOpenFgaConfig())).To(BeTrue())
+	})
+
+	It("is true when that data center has no vault loaded", func() {
+		Expect(secrets.OpenFgaPresharedKeyMustBeCopied(nil, remoteOpenFgaConfig())).To(BeTrue())
+	})
+
+	It("is true when that data center's key entry is empty", func() {
+		Expect(secrets.OpenFgaPresharedKeyMustBeCopied(vaultWithKey(""), remoteOpenFgaConfig())).To(BeTrue())
+	})
+
+	It("is false once that data center's vault holds a key", func() {
+		Expect(secrets.OpenFgaPresharedKeyMustBeCopied(vaultWithKey("copied"), remoteOpenFgaConfig())).To(BeFalse())
+	})
+
+	It("is false in a data center that deploys OpenFGA, which generates its own key", func() {
+		Expect(secrets.OpenFgaPresharedKeyMustBeCopied(newVault(), &files.RootConfig{})).To(BeFalse())
+	})
+})
+
 var _ = Describe("EnsureNixSigningKeys", func() {
 	It("creates priv/pub keys in host:hexKey format", func() {
 		vault := newVault()
