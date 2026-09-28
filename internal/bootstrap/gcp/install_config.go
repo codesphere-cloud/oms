@@ -129,6 +129,17 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 		b.Env.InstallConfig.Registry.LoadContainerImages = true
 	}
 
+	// The pc-applications chart pulls the chart of every application it creates from
+	// chartsRegistry and defaults it to GHCR. Only a local container registry is filled with the
+	// package's artifacts, so only it can serve those charts as well.
+	if b.Env.RegistryType == RegistryTypeLocalContainer {
+		if b.Env.InstallConfig.PcApps == nil {
+			b.Env.InstallConfig.PcApps = files.ChartValues{}
+		}
+
+		b.Env.InstallConfig.PcApps["chartsRegistry"] = b.Env.InstallConfig.Registry.Server + "/codesphere-cloud/charts"
+	}
+
 	if b.Env.InstallConfig.Postgres.Primary == nil {
 		b.Env.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
 			Hostname: b.Env.PostgreSQLNode.GetName(),

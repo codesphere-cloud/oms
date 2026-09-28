@@ -43,14 +43,16 @@ $ oms beta install argocd --deploy-dc-config --dc-id 0
 ### Options
 
 ```
-      --dc-id string          Codesphere Datacenter ID (optional, registers local cluster in ArgoCD)
-      --deploy-dc-config      Apply Codesphere-managed resources (Repo Creds, ...) after installing the chart
-      --force-conflicts       Force field ownership conflicts during upgrade (sets server-side apply ForceConflicts)
-  -h, --help                  help for argocd
-      --registry-url string   OCI registry URL for the Helm chart repository (default "ghcr.io/codesphere-cloud/charts")
-      --repo string           Helm chart repository URL; supports HTTP (default: https://argoproj.github.io/argo-helm) and OCI (e.g. oci://ghcr.io/argoproj/argo-helm)
-  -f, --values stringArray    Specify values in a YAML file (can be specified multiple times)
-  -v, --version string        Version of the ArgoCD helm chart to install
+      --dc-id string               Codesphere Datacenter ID (optional, registers local cluster in ArgoCD)
+      --deploy-dc-config           Apply Codesphere-managed resources (Repo Creds, ...) after installing the chart
+      --force-conflicts            Force field ownership conflicts during upgrade (sets server-side apply ForceConflicts)
+  -h, --help                       help for argocd
+      --registry-ca string         Path to the certificate authority of the OCI registry, needed when its certificate is self-signed
+      --registry-url string        OCI registry URL for the Helm chart repository (default "ghcr.io/codesphere-cloud/charts")
+      --registry-username string   Username of the OCI registry (default: the Codesphere GHCR user)
+      --repo string                Helm chart repository URL; supports HTTP (default: https://argoproj.github.io/argo-helm) and OCI (e.g. oci://ghcr.io/argoproj/argo-helm)
+  -f, --values stringArray         Specify values in a YAML file (can be specified multiple times)
+  -v, --version string             Version of the ArgoCD helm chart to install
 ```
 
 ### SEE ALSO

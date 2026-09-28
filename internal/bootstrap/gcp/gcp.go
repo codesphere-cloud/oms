@@ -1185,8 +1185,21 @@ func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFi
 // InstallCommand returns the command that installs Codesphere into the given data center from
 // the jumpbox. It is also printed for the operator when the bootstrap does not install itself.
 func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilename string) string {
-	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s",
-		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename, b.generateSkipStepsArg())
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s%s",
+		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename,
+		b.generateRegistryTrustArg(), b.generateSkipStepsArg())
+}
+
+// generateRegistryTrustArg points the installation at the certificate authority of the local
+// container registry, which EnsureLocalContainerRegistry leaves on the jumpbox. ArgoCD pulls the
+// Helm charts from that registry and verifies its certificate inside its own containers, where the
+// jumpbox's trust store does not reach.
+func (b *GCPBootstrapper) generateRegistryTrustArg() string {
+	if b.Env.RegistryType != RegistryTypeLocalContainer {
+		return ""
+	}
+
+	return " --argo-registry-ca /root/registry.crt"
 }
 
 func (b *GCPBootstrapper) generateSkipStepsArg() string {

@@ -47,9 +47,10 @@ func (c *CraneArtifactCopier) Copy(ctx context.Context, source, destination stri
 	return nil
 }
 
-// ReadPackageArtifacts reads all images and OCI Helm charts from a BOM and
-// builds their destination references. The original registry and repository path are kept
-// below dest so repositories with the same basename cannot collide.
+// ReadPackageArtifacts reads all images and OCI Helm charts from a BOM and builds their
+// destination references. Images keep their registry and repository path below dest, so that
+// repositories with the same basename cannot collide. Charts keep their repository path alone,
+// because that is where an installation looks for them.
 func ReadPackageArtifacts(bomPath, dest string) ([]PackageArtifact, error) {
 	bomConfig, err := bom.Parse(bomPath)
 	if err != nil {

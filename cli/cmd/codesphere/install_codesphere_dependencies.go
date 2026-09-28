@@ -132,21 +132,30 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 		if registryPassword == "" {
 			return fmt.Errorf("registry password not found in vault (secret %q)", files.SecretRegistryPassword)
 		}
+		// A mirrored registry has a user of its own, so ArgoCD is given the same credentials the
+		// rest of the installation pulls with instead of the GHCR default.
+		registryUsername := ""
+		if secret := installVault.GetSecret(files.SecretRegistryUsername); secret != nil && secret.Fields != nil {
+			registryUsername = secret.Fields.Password
+		}
+
 		registryURL := opts.ArgoCDRegistryURL
 		if registryURL == "" && cfg.Registry != nil {
 			registryURL = cfg.Registry.Server + "/codesphere-cloud/charts"
 		}
 		argoCDInstall, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
-			Version:        opts.ArgoCDVersion,
-			DatacenterId:   fmt.Sprintf("%d", cfg.Datacenter.ID),
-			OciPassword:    registryPassword,
-			OciRegistryURL: registryURL,
-			GitPassword:    os.Getenv("OMS_GIT_PASSWORD"),
-			FullInstall:    true,
-			ForceConflicts: opts.ArgoCDForceConflicts,
-			RepoURL:        opts.ArgoCDRepoURL,
-			ValueFiles:     opts.ArgoCDValues,
-			RESTConfig:     restConfig,
+			Version:           opts.ArgoCDVersion,
+			DatacenterID:      fmt.Sprintf("%d", cfg.Datacenter.ID),
+			OciUsername:       registryUsername,
+			OciPassword:       registryPassword,
+			OciRegistryURL:    registryURL,
+			OciRegistryCAFile: opts.ArgoCDRegistryCA,
+			GitPassword:       os.Getenv("OMS_GIT_PASSWORD"),
+			FullInstall:       true,
+			ForceConflicts:    opts.ArgoCDForceConflicts,
+			RepoURL:           opts.ArgoCDRepoURL,
+			ValueFiles:        opts.ArgoCDValues,
+			RESTConfig:        restConfig,
 		})
 		if err != nil {
 			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)

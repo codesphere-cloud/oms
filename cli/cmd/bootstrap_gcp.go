@@ -229,12 +229,8 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return nil
 	}
 
-	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml"
-
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
 		log.Printf("Images are pulled directly from GHCR, so container images are not loaded from the package.")
-
-		installCmd += " -s load-container-images"
 	}
 
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeLocalContainer {
@@ -242,7 +238,12 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 			gcp.InstallerArchiveName, bs.Env.InstallConfig.EnsureRegistry().Server)
 	}
 
-	log.Printf("example install command (run from jumpbox):\n%s -p <package-name>-%s", installCmd, gcp.InstallerArchiveName)
+	// The command the bootstrapper would have run itself, so that an operator running it by hand
+	// gets the same one instead of a copy that drifts from it.
+	if len(bs.Env.DataCenters) > 0 {
+		log.Printf("example install command (run from jumpbox):\n%s",
+			bs.InstallCommand(bs.Env.DataCenters[0], "<package-name>-"+gcp.InstallerArchiveName))
+	}
 
 	return nil
 }

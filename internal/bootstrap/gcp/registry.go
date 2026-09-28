@@ -103,7 +103,11 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	}
 
 	registry := b.Env.InstallConfig.EnsureRegistry()
-	localRegistryServer := registryNode.GetInternalIP() + ":5000"
+
+	// The registry serves on the HTTPS port so that its address carries no port number. Helm
+	// charts that split an image reference at its first colon to find the tag would otherwise
+	// mistake the port separator for it and pull from the registry's host name alone.
+	localRegistryServer := registryNode.GetInternalIP()
 
 	// Figure out if registry is already running
 	b.stlog.Logf("Checking if local container registry is already running on the jumpbox")
@@ -148,7 +152,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		"podman rm -f registry || true",
 		`podman run -d \
 		--restart=always --name registry --net=host\
-		--env REGISTRY_HTTP_ADDR=0.0.0.0:5000 \
+		--env REGISTRY_HTTP_ADDR=0.0.0.0:443 \
 		--env REGISTRY_AUTH=htpasswd \
 		--env REGISTRY_AUTH_HTPASSWD_REALM='Registry Realm' \
 		--env REGISTRY_AUTH_HTPASSWD_PATH=/auth/registry.password \
@@ -177,30 +181,32 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	return b.distributeRegistryCertificate(registryNode)
 }
 
-// distributeRegistryCertificate installs the registry's certificate on every node that pulls
-// images from it. The postgres node needs it just like the cluster nodes do, and the work is
-// repeated whenever the registry is ensured so that a rerun repairs an environment whose nodes
-// never received the certificate.
+// distributeRegistryCertificate installs the registry's certificate on the postgres node and on
+// the nodes of the primary data center. The postgres node needs it just like the cluster nodes do,
+// and the work is repeated whenever the registry is ensured so that a rerun repairs an environment
+// whose nodes never received the certificate.
 func (b *GCPBootstrapper) distributeRegistryCertificate(registryNode *node.Node) error {
 	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.Env.ControlPlaneNodes...)
 	allNodes = append(allNodes, b.Env.CephNodes...)
 
+	// Trusting the certificate restarts the Docker daemon and with it the containers a node
+	// already runs, so a node that trusts it is left alone. Ensuring the registry again
+	// therefore repairs the nodes that need it without disturbing a running installation.
+	installCertificate := "if ! cmp -s /tmp/registry.crt /usr/local/share/ca-certificates/registry.crt; then " +
+		"cp /tmp/registry.crt /usr/local/share/ca-certificates/registry.crt && update-ca-certificates && " +
+		"{ systemctl restart docker.service || true; }; fi" // docker is probably not yet installed
+
 	for _, node := range allNodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
 
-		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
+		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/tmp/registry.crt")
 		if err != nil {
 			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.GetInternalIP(), err)
 		}
 
-		err = node.RunSSHCommand("root", "update-ca-certificates")
+		err = node.RunSSHCommand("root", installCertificate)
 		if err != nil {
-			return fmt.Errorf("failed to update CA certificates on node %s: %w", node.GetInternalIP(), err)
-		}
-
-		err = node.RunSSHCommand("root", "systemctl restart docker.service || true") // docker is probably not yet installed
-		if err != nil {
-			return fmt.Errorf("failed to restart docker service on node %s: %w", node.GetInternalIP(), err)
+			return fmt.Errorf("failed to install registry certificate on node %s: %w", node.GetInternalIP(), err)
 		}
 	}
 
@@ -243,7 +249,8 @@ func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, s
 }
 
 // registryLoginCommand stores a registry's credentials where OMS looks for them. The password is
-// piped in through the shell built-in printf so it never shows up in the jumpbox process list.
+// piped in from the shell built-in printf instead of being passed as an argument, which keeps it
+// out of podman's own process arguments, though the shell running the command still carries it.
 func registryLoginCommand(server, username, password string) string {
 	return fmt.Sprintf("printf '%%s' '%s' | podman login --authfile %s --username '%s' --password-stdin %s",
 		password, jumpboxRegistryAuthFile, username, server)

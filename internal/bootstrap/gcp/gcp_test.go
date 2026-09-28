@@ -920,8 +920,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})).Return(fmt.Errorf("not running"))
 
 				// Install commands (8 commands) + jumpbox registry access (5 commands)
-				// + scp/update-ca/docker commands (3 per postgres and 4 cluster nodes = 15)
-				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 5 + 15)
+				// + scp and install commands (2 per postgres and 4 cluster nodes = 10)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 5 + 10)
 
 				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient), fakeNode("k0s-2", nodeClient)}
 				bs.Env.CephNodes = []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient)}
@@ -946,7 +946,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", "update-ca-certificates").Return(nil).Once()
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "podman login --authfile /root/.docker/config.json") &&
-						strings.HasSuffix(cmd, bs.Env.Jumpbox.GetInternalIP()+":5000")
+						strings.HasSuffix(cmd, bs.Env.Jumpbox.GetInternalIP())
 				})).Return(nil).Once()
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "podman login --authfile /root/.docker/config.json") &&
@@ -964,7 +964,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "registry-password"}})
 				icg.EXPECT().GetVault().Return(vault)
 
-				bs.Env.InstallConfig.Registry.Server = bs.Env.Jumpbox.GetInternalIP() + ":5000"
+				bs.Env.InstallConfig.Registry.Server = bs.Env.Jumpbox.GetInternalIP()
 				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
 				bs.Env.CephNodes = []*node.Node{}
 
@@ -984,8 +984,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})).Return(nil).Times(2)
 
 				for _, n := range []*node.Node{bs.Env.PostgreSQLNode, bs.Env.ControlPlaneNodes[0]} {
-					nodeClient.EXPECT().RunCommand(n, "root", "update-ca-certificates").Return(nil).Once()
-					nodeClient.EXPECT().RunCommand(n, "root", "systemctl restart docker.service || true").Return(nil).Once()
+					nodeClient.EXPECT().RunCommand(n, "root", mock.MatchedBy(installsCertificate)).Return(nil).Once()
 				}
 
 				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
@@ -1049,7 +1048,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err.Error()).To(ContainSubstring("failed to copy registry certificate"))
 			})
 
-			It("fails when update-ca-certificates fails", func() {
+			It("fails when the certificate cannot be installed on a node", func() {
 				// Override node setup for this test
 				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
 				bs.Env.CephNodes = []*node.Node{}
@@ -1067,48 +1066,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})).Return(nil).Times(2)
 
 				// The postgres node is configured first and succeeds
-				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "update-ca-certificates").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "systemctl restart docker.service || true").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", mock.MatchedBy(installsCertificate)).Return(nil).Once()
 
-				// update-ca-certificates fails
-				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "update-ca-certificates").Return(fmt.Errorf("ca update error")).Once()
-
-				err := bs.EnsureLocalContainerRegistry()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to update CA certificates"))
-			})
-
-			It("fails when docker restart fails", func() {
-				// Override node setup for this test
-				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
-				bs.Env.CephNodes = []*node.Node{}
-
-				// First check - registry not running
-				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.Contains(cmd, "podman ps")
-				})).Return(fmt.Errorf("not running"))
-
-				// All 8 install commands and the 5 jumpbox registry access commands succeed
-				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.Anything).Return(nil).Times(8 + 5)
-
-				// scp to the postgres node and to the control plane node succeeds
-				nodeClient.EXPECT().RunCommand(csEnv.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
-					return strings.HasPrefix(cmd, "scp ")
-				})).Return(nil).Times(2)
-
-				// The postgres node is configured first and succeeds
-				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "update-ca-certificates").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(bs.Env.PostgreSQLNode, "root", "systemctl restart docker.service || true").Return(nil).Once()
-
-				// update-ca-certificates succeeds
-				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "update-ca-certificates").Return(nil).Once()
-
-				// docker restart fails
-				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "systemctl restart docker.service || true").Return(fmt.Errorf("docker restart error")).Once()
+				// Installing the certificate on the control plane node fails
+				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", mock.MatchedBy(installsCertificate)).Return(fmt.Errorf("ca update error")).Once()
 
 				err := bs.EnsureLocalContainerRegistry()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to restart docker service"))
+				Expect(err.Error()).To(ContainSubstring("failed to install registry certificate"))
 			})
 		})
 	})
@@ -1576,6 +1541,38 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("UpdateInstallConfig", func() {
+		BeforeEach(func() {
+			icg.EXPECT().GetVault().Return(&files.InstallVault{}).Maybe()
+			icg.EXPECT().GenerateSecrets().Return(nil).Maybe()
+			icg.EXPECT().WriteInstallConfig(mock.Anything, mock.Anything).Return(nil).Maybe()
+			icg.EXPECT().WriteVault(mock.Anything, mock.Anything).Return(nil).Maybe()
+			nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+			nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+		})
+
+		It("serves the applications' charts from a mirrored registry", func() {
+			bs.Env.RegistryType = gcp.RegistryTypeLocalContainer
+			bs.Env.InstallConfig.Registry.Server = "10.0.0.1"
+
+			Expect(bs.UpdateInstallConfig()).To(Succeed())
+			Expect(bs.Env.InstallConfig.PcApps).To(HaveKeyWithValue("chartsRegistry", "10.0.0.1/codesphere-cloud/charts"))
+		})
+
+		DescribeTable("leaves the applications' charts on GHCR without a mirror",
+			func(registryType gcp.RegistryType, server string) {
+				bs.Env.RegistryType = registryType
+				bs.Env.InstallConfig.Registry.Server = server
+
+				Expect(bs.UpdateInstallConfig()).To(Succeed())
+				Expect(bs.Env.InstallConfig.PcApps).NotTo(HaveKey("chartsRegistry"))
+			},
+			Entry("GitHub", gcp.RegistryTypeGitHub, "ghcr.io"),
+			// An artifact registry holds no charts, the package is only mirrored into a local one.
+			Entry("artifact registry", gcp.RegistryTypeArtifactRegistry, "europe-docker.pkg.dev/pid/repo"),
+		)
+	})
+
 	Describe("InstallCodesphere", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
@@ -1617,7 +1614,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-def9876543210-installer-lite.tar.gz --dest 10.10.0.2:5000 --yes").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer-lite.tar.gz -s kubernetes").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1627,7 +1624,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("downloads and installs codesphere with hash", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2:5000 --yes").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1638,7 +1635,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2:5000 --yes").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes,postgres").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes,postgres").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1673,7 +1670,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 							"oms copy package -p local-installer-lite.tar.gz --dest 10.10.0.2:5000 --yes").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz -s kubernetes").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -1727,7 +1724,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("fails when install codesphere fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2:5000 --yes").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes").Return(fmt.Errorf("install error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
@@ -1819,6 +1816,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 })
+
+// installsCertificate matches the command that makes a node trust the local registry.
+func installsCertificate(cmd string) bool {
+	return strings.HasPrefix(cmd, "if ! cmp -s /tmp/registry.crt")
+}
 
 func fakeNode(name string, commandRunner node.NodeClient) *node.Node {
 	return &node.Node{

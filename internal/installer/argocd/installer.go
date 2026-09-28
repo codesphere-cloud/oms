@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
+	"os"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
@@ -27,15 +29,19 @@ const (
 // InstallerConfig holds all user-facing parameters for an ArgoCD install/upgrade.
 type InstallerConfig struct {
 	Version        string
-	DatacenterId   string
+	DatacenterID   string
+	OciUsername    string
 	OciPassword    string
 	OciRegistryURL string
-	GitPassword    string
-	FullInstall    bool
-	ForceConflicts bool
-	RepoURL        string
-	ValueFiles     []string
-	RESTConfig     *rest.Config
+	// OciRegistryCAFile is the certificate authority of the OCI registry, needed when its
+	// certificate is not signed by a public authority.
+	OciRegistryCAFile string
+	GitPassword       string
+	FullInstall       bool
+	ForceConflicts    bool
+	RepoURL           string
+	ValueFiles        []string
+	RESTConfig        *rest.Config
 }
 
 // Installer holds the resolved configuration and initialized clients.
@@ -56,7 +62,8 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 		if err != nil {
 			return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 		}
-		resources, err := NewArgoCDResources(clientset, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+
+		resources, err := NewArgoCDResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 		if err != nil {
 			return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 		}
@@ -74,7 +81,8 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 	}
-	resources, err := NewArgoCDResources(clientset, cfg.DatacenterId, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+
+	resources, err := NewArgoCDResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}
@@ -111,6 +119,13 @@ func (a *Installer) Install() error {
 	defaults := map[string]any{
 		"dex": map[string]any{"enabled": false},
 	}
+
+	trust, err := a.registryTrustValues()
+	if err != nil {
+		return err
+	}
+
+	defaults = util.MergeTables(defaults, trust)
 	vals = util.MergeTables(vals, defaults)
 
 	chartName, repoURL := a.resolveChartRef("argo-cd")
@@ -150,6 +165,47 @@ func (a *Installer) Install() error {
 	a.showPostInstallHints()
 
 	return nil
+}
+
+// registryTrustValues puts the OCI registry's certificate authority into ArgoCD's certificate
+// store. The repo server runs in a container and reads that store instead of the trust store of
+// the node it runs on, so it rejects a registry with a self-signed certificate until the
+// authority is configured here. The store is keyed by host name without its port.
+func (a *Installer) registryTrustValues() (map[string]any, error) {
+	if a.OciRegistryCAFile == "" {
+		return nil, nil
+	}
+
+	authority, err := os.ReadFile(a.OciRegistryCAFile)
+	if err != nil {
+		return nil, fmt.Errorf("reading registry certificate authority: %w", err)
+	}
+
+	// A registry URL may name its scheme, which is neither part of the host nor recognised as
+	// one: splitting "oci:" into host and port succeeds and yields the scheme itself.
+	registryURL := a.OciRegistryURL
+	if _, rest, found := strings.Cut(registryURL, "://"); found {
+		registryURL = rest
+	}
+
+	address, _, _ := strings.Cut(registryURL, "/")
+
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		host = address
+	}
+
+	if host == "" {
+		return nil, fmt.Errorf("registry URL %q has no host to trust the certificate authority for", a.OciRegistryURL)
+	}
+
+	return map[string]any{
+		"configs": map[string]any{
+			"tls": map[string]any{
+				"certificates": map[string]any{host: string(authority)},
+			},
+		},
+	}, nil
 }
 
 func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) error {
