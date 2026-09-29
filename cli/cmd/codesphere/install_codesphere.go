@@ -46,6 +46,7 @@ type InstallCodesphereOpts struct {
 	CodesphereOnly   bool
 	DirectConnection bool
 	AutoApprove      bool
+	StepTimer        bool
 	// ArgoCD deployment (pre-step in Phase 2)
 	ArgoCDVersion        string
 	ArgoCDRegistryURL    string
@@ -134,6 +135,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
+	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDVersion, "argo-version", "", "ArgoCD Helm chart version to install")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryURL, "argo-registry-url", "", "OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)")

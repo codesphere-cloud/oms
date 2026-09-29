@@ -42,6 +42,7 @@ type BootstrapLocalCmd struct {
 	Opts          *util.GlobalOptions
 	CodesphereEnv *local.CodesphereEnvironment
 	Yes           bool
+	StepTimer     bool
 	// Experiments backs the deprecated --experiments flag; its values
 	// are folded into the internal bucket for backwards compatibility.
 	experiments []string
@@ -73,6 +74,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	}
 
 	flags := bootstrapLocalCmd.cmd.Flags()
+	flags.BoolVar(&bootstrapLocalCmd.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	// Installer
 	flags.BoolVarP(&bootstrapLocalCmd.Yes, "yes", "y", false, "Auto-approve the local bootstrapping warning prompt")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (downloaded from the OMS portal)")
@@ -144,7 +146,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 		}
 	}
 
-	stlog := bootstrap.NewStepLogger(false)
+	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
 
 	icg, err := installer.NewInstallConfigManager("plain", "")
 	if err != nil {

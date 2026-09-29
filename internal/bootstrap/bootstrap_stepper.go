@@ -7,6 +7,7 @@ package bootstrap
 // Line resets don't work with log.Print as expected.
 import (
 	"fmt"
+	"time"
 )
 
 const (
@@ -19,19 +20,43 @@ const (
 )
 
 type StepLogger struct {
-	silent      bool
+	config      StepLoggerConfig
 	subSteps    int
 	currentStep string
 }
 
-func NewStepLogger(silent bool) *StepLogger {
-	return &StepLogger{
-		silent: silent,
+type StepLoggerConfig struct {
+	Silent bool
+	Timer  bool
+}
+
+type StepLoggerOption func(*StepLoggerConfig)
+
+// WithTimer controls whether completed steps show their elapsed time.
+func WithTimer(enabled bool) StepLoggerOption {
+	return func(config *StepLoggerConfig) {
+		config.Timer = enabled
 	}
 }
 
+// NewStepLogger creates a logger with the supplied options.
+func NewStepLogger(silent bool, options ...StepLoggerOption) *StepLogger {
+	config := StepLoggerConfig{Silent: silent}
+	for _, option := range options {
+		option(&config)
+	}
+	return &StepLogger{config: config}
+}
+
+func (b *StepLogger) elapsed(start time.Time) string {
+	if !b.config.Timer {
+		return ""
+	}
+	return fmt.Sprintf(" (%s)", time.Since(start).Round(time.Millisecond))
+}
+
 func (b *StepLogger) Step(name string, fn func() error) error {
-	if b.silent {
+	if b.config.Silent {
 		return fn()
 	}
 
@@ -39,20 +64,21 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 	b.currentStep = name
 
 	fmt.Printf("%s%s%s...", LINE_RESET, RESET_TEXT, name)
+	start := time.Now()
 	err := fn()
 	if err != nil {
-		fmt.Printf("%s%s%s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
+		fmt.Printf("%s%s%s failed: %v%s%s\n", LINE_RESET, RED_TEXT, name, err, b.elapsed(start), RESET_TEXT)
 	} else {
 		for i := 0; i < b.subSteps; i++ {
 			fmt.Printf("%s", MOVE_UP_CLEAR_LINE)
 		}
-		fmt.Printf("%s%s%s %s✓%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, RESET_TEXT)
+		fmt.Printf("%s%s%s %s✓%s%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, b.elapsed(start), RESET_TEXT)
 	}
 	return err
 }
 
 func (b *StepLogger) Substep(name string, fn func() error) error {
-	if b.silent {
+	if b.config.Silent {
 		return fn()
 	}
 
@@ -60,11 +86,12 @@ func (b *StepLogger) Substep(name string, fn func() error) error {
 	b.currentStep = name
 
 	fmt.Printf("%s%s   %s...", LINE_RESET, RESET_TEXT, name)
+	start := time.Now()
 	err := fn()
 	if err != nil {
-		fmt.Printf("%s%s   %s failed: %v%s\n", LINE_RESET, RED_TEXT, name, err, RESET_TEXT)
+		fmt.Printf("%s%s   %s failed: %v%s%s\n", LINE_RESET, RED_TEXT, name, err, b.elapsed(start), RESET_TEXT)
 	} else {
-		fmt.Printf("%s%s   %s %s✓%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, RESET_TEXT)
+		fmt.Printf("%s%s   %s %s✓%s%s\n", LINE_RESET, RESET_TEXT, name, GREEN_TEXT, b.elapsed(start), RESET_TEXT)
 	}
 	return err
 }
@@ -80,7 +107,7 @@ func (b *StepLogger) LogRetry() {
 
 // Logf prints a log message for the current step.
 func (b *StepLogger) Logf(message string, args ...interface{}) {
-	if b.silent {
+	if b.config.Silent {
 		return
 	}
 
