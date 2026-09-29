@@ -410,7 +410,6 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 	return b.copyConfigAndVaultToJumpbox(vaultTransferPath)
 }
 
-// copyConfigAndVaultToJumpbox uploads the install config and the vault the jumpbox installs from.
 func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(vaultTransferPath string) error {
 	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, b.Env.InstallConfigPath, remoteInstallConfigPath); err != nil {
 		return fmt.Errorf("failed to copy install config to jumpbox: %w", err)
@@ -423,10 +422,8 @@ func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(vaultTransferPath string) 
 	return nil
 }
 
-// writePlaintextVaultCopy writes the vault as plaintext to a fresh file next to it. Only the
-// caller's machine holds the key of an encrypted vault, while the jumpbox re-encrypts the copy
-// with its own key (see EncryptVault). The unique name means the copy can never replace a file
-// the caller owns.
+// writePlaintextVaultCopy writes the vault as plaintext to a uniquely named file next to it, so
+// the jumpbox can re-encrypt it with its own key without clobbering any file the caller owns.
 func (b *GCPBootstrapper) writePlaintextVaultCopy() (string, error) {
 	dir := filepath.Dir(b.Env.SecretsFilePath)
 	pattern := filepath.Base(b.Env.SecretsFilePath) + vaultTransferSuffix + "*"
@@ -437,16 +434,16 @@ func (b *GCPBootstrapper) writePlaintextVaultCopy() (string, error) {
 	}
 
 	if err := b.icg.WriteUnencryptedVault(transferPath, true); err != nil {
-		writeErr := fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err)
-
-		return "", errors.Join(writeErr, b.removeVaultTransfer(transferPath))
+		return "", errors.Join(
+			fmt.Errorf("failed to write unencrypted vault for jumpbox transfer: %w", err),
+			b.removeVaultTransfer(transferPath),
+		)
 	}
 
 	return transferPath, nil
 }
 
-// removeVaultTransfer deletes the plaintext transfer copy and reports a failure to do so,
-// because the file holds every secret in the clear.
+// removeVaultTransfer reports a failed removal because the file holds every secret in the clear.
 func (b *GCPBootstrapper) removeVaultTransfer(transferPath string) error {
 	if err := b.fw.Remove(transferPath); err != nil {
 		return fmt.Errorf("failed to remove unencrypted vault transfer file %s: %w", transferPath, err)
@@ -455,10 +452,9 @@ func (b *GCPBootstrapper) removeVaultTransfer(transferPath string) error {
 	return nil
 }
 
-// WriteAndEncryptVault writes the install config and vault, uploads them to the jumpbox and
-// re-encrypts the uploaded vault there. The plaintext transfer copy is removed on every path,
-// and its removal error is reported last, so a copy that could not be deleted never keeps the
-// vault on the jumpbox in plaintext.
+// WriteAndEncryptVault uploads the install config and vault and encrypts the vault on the
+// jumpbox. The plaintext transfer copy is removed last, so a failed removal never keeps the
+// jumpbox vault in plaintext.
 func (b *GCPBootstrapper) WriteAndEncryptVault() (err error) {
 	defer func() { err = errors.Join(err, b.removeVaultTransferCopy()) }()
 
@@ -477,15 +473,13 @@ func (b *GCPBootstrapper) WriteAndEncryptVault() (err error) {
 	return nil
 }
 
-// removeVaultTransferCopy deletes the plaintext copy recorded by UpdateInstallConfig, if one was
-// written.
 func (b *GCPBootstrapper) removeVaultTransferCopy() error {
-	transferCopy := b.vaultTransferCopy
-	b.vaultTransferCopy = ""
-
-	if transferCopy == "" {
+	if b.vaultTransferCopy == "" {
 		return nil
 	}
+
+	transferCopy := b.vaultTransferCopy
+	b.vaultTransferCopy = ""
 
 	return b.removeVaultTransfer(transferCopy)
 }
@@ -639,7 +633,6 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	if err := b.GCPClient.EnsureStorageBucket(b.Env.ProjectID, bucketName, b.Env.Region); err != nil {
 		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
 	}
-
 	b.Env.OpenfgaBackupBucket = bucketName
 
 	// The HMAC secret cannot be retrieved after creation, so only create a new key
@@ -650,12 +643,10 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	}
 
 	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", openfgaBackupSAName, b.Env.ProjectID)
-
 	accessID, secret, err := b.GCPClient.CreateHMACKey(b.Env.ProjectID, saEmail)
 	if err != nil {
 		return fmt.Errorf("failed to create openfga backup HMAC key: %w", err)
 	}
-
 	b.Env.OpenfgaBackupAccessKeyID = accessID
 	b.Env.OpenfgaBackupSecret = secret
 

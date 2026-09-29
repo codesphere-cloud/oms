@@ -19,10 +19,8 @@ type Type string
 
 // Supported Vault types
 const (
-	TypeSOPS  Type = "sops"
-	TypePlain Type = "plain"
-	// TypeAuto selects the backend that matches the vault file on disk. It is used by the
-	// bootstrap flows, which accept a vault that is either plaintext or SOPS-encrypted.
+	TypeSOPS    Type = "sops"
+	TypePlain   Type = "plain"
 	TypeAuto    Type = "auto"
 	DefaultType      = TypeSOPS
 )

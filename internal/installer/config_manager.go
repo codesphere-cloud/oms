@@ -71,11 +71,8 @@ func NewInstallConfigManager(vaultType string, ageKey string) (InstallConfigMana
 	return newInstallConfigManager(t, ageKey)
 }
 
-// NewAutoInstallConfigManager configures all vault reads and writes to go through the vault
-// implementation that matches the file already on disk. The bootstrap flows use it because
-// they accept a vault that is either plaintext or SOPS-encrypted. The type is not user
-// selectable: an "auto" choice would silently write a plaintext vault for a command that
-// promises encrypted output.
+// NewAutoInstallConfigManager reads and writes the vault in whatever format the file on disk
+// already has, for bootstrap flows that accept plaintext or SOPS-encrypted vaults.
 func NewAutoInstallConfigManager(ageKey string) (InstallConfigManager, error) {
 	return newInstallConfigManager(vault.TypeAuto, ageKey)
 }
@@ -132,10 +129,8 @@ func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
 	return g.loadVault(vaultPath, vault.Vault.Load)
 }
 
-// LoadVaultFromFileOrCreate loads vault content using the manager's configured backend and
-// returns an empty vault when the file does not exist. Bootstrap flows use it because a
-// config can exist without a vault (for example a hand-written config), and because the
-// vault may be plaintext or SOPS-encrypted depending on how it was generated.
+// LoadVaultFromFileOrCreate is like LoadVaultFromFile but yields an empty vault when the file
+// does not exist, e.g. next to a hand-written config.
 func (g *InstallConfig) LoadVaultFromFileOrCreate(vaultPath string) error {
 	return g.loadVault(vaultPath, vault.Vault.LoadOrCreate)
 }

@@ -21,12 +21,10 @@ import (
 
 var xdgConfigHome = "XDG_CONFIG_HOME"
 
-// defaultAgeKeyFileName is the key file looked up next to the vault when no key is configured.
-const defaultAgeKeyFileName = "age_key.txt"
-
-// envAgeKeyFilePattern names the file MaterializeEnvAgeKey creates. The random suffix keeps it
-// distinct from defaultAgeKeyFileName, so the fallback lookup never picks it up.
-const envAgeKeyFilePattern = "oms-env-age-key-*"
+const (
+	defaultAgeKeyFileName = "age_key.txt"
+	envAgeKeyFilePattern  = "oms-env-age-key-*"
+)
 
 // ResolveAgeKey resolves an existing age key or generates one in fallbackDir.
 func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPath string, err error) {
@@ -43,11 +41,8 @@ func ResolveExistingAgeKey(explicitKeyFile, fallbackDir string) (keyPath string,
 	return keyPath, err
 }
 
-// MaterializeEnvAgeKey writes the identity supplied through SOPS_AGE_KEY to a newly created,
-// owner-only file in dir and returns its path. Callers that must hand a key file to a subprocess
-// use it, because an identity that comes from the environment has no file of its own. A fresh
-// file is created instead of reusing a well-known key path, so an identity that already sits
-// next to the vault is never overwritten or left with wider permissions.
+// MaterializeEnvAgeKey writes the SOPS_AGE_KEY identity to a new owner-only file in dir, for
+// subprocesses that need a key file. A fresh file never overwrites a key already next to the vault.
 func MaterializeEnvAgeKey(fileIO util.FileIO, dir string) (keyPath string, err error) {
 	raw := strings.TrimSpace(os.Getenv(sopsage.SopsAgeKeyEnv))
 	if raw == "" {
@@ -69,9 +64,7 @@ func MaterializeEnvAgeKey(fileIO util.FileIO, dir string) (keyPath string, err e
 
 	// A trailing newline matches the file age-keygen writes.
 	if err := fileIO.WriteFile(keyPath, []byte(raw+"\n"), 0600); err != nil {
-		writeErr := fmt.Errorf("failed to write age key file %s: %w", keyPath, err)
-
-		return "", errors.Join(writeErr, fileIO.Remove(keyPath))
+		return "", errors.Join(fmt.Errorf("failed to write age key file %s: %w", keyPath, err), fileIO.Remove(keyPath))
 	}
 
 	return keyPath, nil

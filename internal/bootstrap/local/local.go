@@ -69,7 +69,7 @@ type LocalBootstrapper struct {
 	ageRecipient string
 	// ageKeyPath is the filesystem path to the age private key file.
 	ageKeyPath string
-	// envAgeKeyFile is the owner-only key file materialized.
+	// envAgeKeyFile is the key file materialized from SOPS_AGE_KEY; removed when Bootstrap returns.
 	envAgeKeyFile string
 	// argoCDAndAppsInstall is reused for the ArgoCD, vault, and pc-apps stages.
 	argoCDAndAppsInstall *argocd.AppInstaller
@@ -560,15 +560,13 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 	return nil
 }
 
-// removeEnvAgeKeyFile deletes the key file materialized from SOPS_AGE_KEY, if one was written.
-// The identity itself stays available to the user through the environment.
 func (b *LocalBootstrapper) removeEnvAgeKeyFile() error {
-	keyPath := b.envAgeKeyFile
-	b.envAgeKeyFile = ""
-
-	if keyPath == "" {
+	if b.envAgeKeyFile == "" {
 		return nil
 	}
+
+	keyPath := b.envAgeKeyFile
+	b.envAgeKeyFile = ""
 
 	if err := b.fw.Remove(keyPath); err != nil {
 		return fmt.Errorf("failed to remove materialized age key file %s: %w", keyPath, err)
