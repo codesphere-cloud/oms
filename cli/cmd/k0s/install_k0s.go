@@ -63,7 +63,7 @@ func resolveK0sVersion(k0s installer.K0sManager, version string) (string, error)
 	return latestVersion, nil
 }
 
-// RunE is the starting point for the k0s install command that executes the bootstrap logic.
+// RunE runs the k0s install command.
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	hw := portal.NewHttpWrapper()
 	env := c.Env
@@ -130,8 +130,7 @@ const (
 	vaultSecretNameKubeconfig = "kubeConfig"
 )
 
-// InstallK0s generates a k0sctl config based on the input parameters and installs k0s
-// Returns an error if installation fails
+// InstallK0s generates a k0sctl config from the command options and installs k0s.
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
 	if err := c.FileWriter.MkdirAll(c.Env.GetOmsWorkdir(), 0755); err != nil {
 		return fmt.Errorf("failed to create oms workdir: %w", err)
@@ -193,13 +192,16 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 	return nil
 }
 
-// validateOptions checks that the provided flags can be combined.
 func (c *InstallK0sCmd) validateOptions() error {
 	if c.Opts.AirgapBundlePath != "" && !c.Opts.Airgap {
 		return fmt.Errorf("--airgap-bundle requires --airgapped")
 	}
 
 	return nil
+}
+
+func (c *InstallK0sCmd) downloadOptions() installer.DownloadOptions {
+	return installer.DownloadOptions{Force: c.Opts.Force}
 }
 
 // warnAboutNetworkAccess logs the steps of an airgapped installation that still
@@ -244,7 +246,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 		return pm.GetDependencyPath(defaultK0sPath), nil
 	}
 
-	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
+	k0sBinaryPath, err := k0s.Download(k0sVersion, c.downloadOptions())
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}
@@ -267,7 +269,7 @@ func (c *InstallK0sCmd) getAirgapBundlePath(k0s installer.K0sManager, k0sVersion
 		return c.Opts.AirgapBundlePath, nil
 	}
 
-	bundlePath, err := k0s.EnsureAirgapBundle(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
+	bundlePath, err := k0s.EnsureAirgapBundle(k0sVersion, c.downloadOptions())
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s airgap bundle: %w", err)
 	}
@@ -278,7 +280,7 @@ func (c *InstallK0sCmd) getAirgapBundlePath(k0s installer.K0sManager, k0sVersion
 func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
 	log.Println("Preparing k0sctl...")
 
-	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, installer.DownloadOptions{Force: c.Opts.Force})
+	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, c.downloadOptions())
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}
@@ -337,16 +339,16 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 		return err
 	}
 
-	vault, err := store.LoadOrCreate()
+	vaultData, err := store.LoadOrCreate()
 	if err != nil {
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
 
-	if vault.GetSecret(vaultSecretNameKubeconfig) != nil {
+	if vaultData.GetSecret(vaultSecretNameKubeconfig) != nil {
 		log.Printf("Updating existing %s secret in vault", vaultSecretNameKubeconfig)
 	}
 
-	vault.SetSecret(files.SecretEntry{
+	vaultData.SetSecret(files.SecretEntry{
 		Name: vaultSecretNameKubeconfig,
 		File: &files.SecretFile{
 			Name:    vaultSecretNameKubeconfig,
@@ -354,7 +356,7 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 		},
 	})
 
-	if err := store.Save(vault); err != nil {
+	if err := store.Save(vaultData); err != nil {
 		return err
 	}
 
@@ -364,10 +366,10 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 }
 
 func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
-	vault, err := vault.NewFromString(c.Opts.VaultType, vault.Options{Path: c.Opts.Vault, AgeKey: c.Opts.VaultPrivKey})
+	store, err := vault.NewFromString(c.Opts.VaultType, vault.Options{Path: c.Opts.Vault, AgeKey: c.Opts.VaultPrivKey})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}
 
-	return vault, nil
+	return store, nil
 }

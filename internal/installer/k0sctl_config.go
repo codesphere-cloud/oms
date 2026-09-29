@@ -52,7 +52,6 @@ type K0sctlFile struct {
 // k0sctlFilePerm is the permission k0sctl creates uploaded files with.
 const k0sctlFilePerm = "0644"
 
-// airgapBundleFile uploads an airgap image bundle to the k0s images dir of a node.
 func airgapBundleFile(bundlePath string) K0sctlFile {
 	return K0sctlFile{
 		Src:    bundlePath,

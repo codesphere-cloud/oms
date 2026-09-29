@@ -4,7 +4,6 @@
 package installer
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"path/filepath"
@@ -23,9 +22,8 @@ const (
 	k0sctlReleaseAPIURL = "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
 )
 
-// DefaultK0sctlVersion is the currently verified k0sctl version. It mirrors
-// DefaultK0sVersion in k0s.go: the pair is the version combination we test
-// against, while users can override k0sctl via --k0sctl-version.
+// DefaultK0sctlVersion is the currently verified k0sctl version, mirroring
+// DefaultK0sVersion in k0s.go. Users can override it via --k0sctl-version.
 //
 // renovate: datasource=github-releases depName=k0sproject/k0sctl
 const DefaultK0sctlVersion = "v0.33.1"
@@ -58,14 +56,9 @@ func NewK0sctl(hw portal.Http, env env.Env, fw util.FileIO) *K0sctl {
 }
 
 func (k *K0sctl) GetLatestVersion() (string, error) {
-	responseBody, err := k.Http.Get(k0sctlReleaseAPIURL)
+	release, err := getGitHubRelease(k.Http, k0sctlReleaseAPIURL, "latest k0sctl release")
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch latest k0sctl release: %w", err)
-	}
-
-	var release githubRelease
-	if err := json.Unmarshal(responseBody, &release); err != nil {
-		return "", fmt.Errorf("failed to parse GitHub API response: %w", err)
+		return "", err
 	}
 
 	if release.TagName == "" {
@@ -117,7 +110,6 @@ func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) 
 	return path, nil
 }
 
-// requireBinaryAndConfig checks that both the k0sctl binary and config exist.
 func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)

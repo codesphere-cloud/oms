@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -33,7 +34,22 @@ type githubRelease struct {
 	Assets  []githubReleaseAsset `json:"assets"`
 }
 
-// ensureCacheDir returns the OMS cache dir and creates it when it does not exist yet.
+// getGitHubRelease fetches the GitHub release at url and decodes it. subject names
+// the release in error messages.
+func getGitHubRelease(h portal.Http, url, subject string) (*githubRelease, error) {
+	responseBody, err := h.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch %s: %w", subject, err)
+	}
+
+	var release githubRelease
+	if err := json.Unmarshal(responseBody, &release); err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", subject, err)
+	}
+
+	return &release, nil
+}
+
 func ensureCacheDir(fw util.FileIO, environment env.Env) (string, error) {
 	cacheDir, err := environment.GetOmsCacheDir()
 	if err != nil {
@@ -47,9 +63,8 @@ func ensureCacheDir(fw util.FileIO, environment env.Env) (string, error) {
 	return cacheDir, nil
 }
 
-// reuseCachedBinary returns the cached binary at cachePath when it exists and reports
-// requestedVersion, unless opts ask for a fresh download. The returned bool reports
-// whether the cached binary can be reused.
+// reuseCachedBinary returns the cached binary at cachePath and true when it exists,
+// matches requestedVersion and opts do not force a fresh download.
 func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string, opts DownloadOptions) (string, bool) {
 	if !fw.Exists(cachePath) || opts.Force {
 		return "", false
@@ -73,7 +88,6 @@ func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string,
 	return "", false
 }
 
-// releaseAssetURL returns the download URL of an asset of a GitHub release.
 func releaseAssetURL(releaseURL, version, assetName string) string {
 	return fmt.Sprintf("%s/%s/%s", releaseURL, version, assetName)
 }

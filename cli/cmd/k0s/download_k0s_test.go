@@ -24,11 +24,13 @@ var _ = Describe("DownloadK0sk0s", func() {
 		globalOpts     *util.GlobalOptions
 		mockEnv        *env.MockEnv
 		mockFileWriter *intutil.MockFileIO
+		mockK0sManager *installer.MockK0sManager
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		mockFileWriter = intutil.NewMockFileIO(GinkgoT())
+		mockK0sManager = installer.NewMockK0sManager(GinkgoT())
 		globalOpts = &util.GlobalOptions{}
 		opts = &k0s.DownloadK0sOpts{
 			GlobalOptions: globalOpts,
@@ -49,8 +51,6 @@ var _ = Describe("DownloadK0sk0s", func() {
 
 	Context("DownloadK0s method", func() {
 		It("fails when k0s manager fails to get latest version", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
-
 			c.Opts.Version = "" // Test auto-version detection
 
 			mockK0sManager.EXPECT().GetLatestVersion().Return("", errors.New("network error"))
@@ -62,8 +62,6 @@ var _ = Describe("DownloadK0sk0s", func() {
 		})
 
 		It("fails when k0s manager fails to download", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
-
 			c.Opts.Version = "v1.29.1+k0s.0"
 
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Quiet: true}).Return("", errors.New("download failed"))
@@ -75,8 +73,6 @@ var _ = Describe("DownloadK0sk0s", func() {
 		})
 
 		It("succeeds when version is specified and download works", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
-
 			c.Opts.Version = "v1.29.1+k0s.0"
 
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Quiet: true}).Return("/test/workdir/k0s", nil)
@@ -86,8 +82,6 @@ var _ = Describe("DownloadK0sk0s", func() {
 		})
 
 		It("requests the airgap bundle when --airgapped is set", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
-
 			c.Opts.Version = "v1.29.1+k0s.0"
 			c.Opts.Airgap = true
 
@@ -100,8 +94,6 @@ var _ = Describe("DownloadK0sk0s", func() {
 		})
 
 		It("reports airgap bundle download failures", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
-
 			c.Opts.Version = "v1.29.1+k0s.0"
 			c.Opts.Airgap = true
 
@@ -116,8 +108,6 @@ var _ = Describe("DownloadK0sk0s", func() {
 		})
 
 		It("succeeds when version is auto-detected and download works", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
-
 			c.Opts.Version = "" // Test auto-version detection
 			c.Opts.Force = true
 			c.Opts.Verbose = true

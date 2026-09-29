@@ -83,10 +83,8 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 	return path, nil
 }
 
-// downloadBinary fetches the k0s binary for the given version from the k0s GitHub
-// releases and stores it as "k0s" in cacheDir, returning the path to it.
-// If a binary is already cached and force is false, the cached binary is reused as
-// long as its version matches; otherwise it is replaced by a fresh download.
+// downloadBinary stores the k0s binary of version as k0sBinaryName in cacheDir and
+// returns its path, reusing a cached copy unless it is missing or opts force a download.
 func (k *K0s) downloadBinary(version, cacheDir string, opts DownloadOptions) (string, error) {
 	cachePath := filepath.Join(cacheDir, k0sBinaryName)
 	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts); cached {

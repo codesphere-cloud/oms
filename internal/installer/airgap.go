@@ -4,7 +4,6 @@
 package installer
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -99,14 +98,11 @@ func (k *K0s) cachedAirgapBundle(cacheDir, version string) (string, bool) {
 // "k0s-airgap-bundle-<version>-<os>-<arch>.tar", so the name is resolved from the
 // release metadata instead of being constructed.
 func (k *K0s) resolveAirgapBundleAssetName(version string) (string, error) {
-	responseBody, err := k.Http.Get(fmt.Sprintf("%s/%s", k0sReleaseAPIURL, version))
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch k0s release %s: %w", version, err)
-	}
+	subject := "k0s release " + version
 
-	var release githubRelease
-	if err := json.Unmarshal(responseBody, &release); err != nil {
-		return "", fmt.Errorf("failed to parse k0s release %s: %w", version, err)
+	release, err := getGitHubRelease(k.Http, fmt.Sprintf("%s/%s", k0sReleaseAPIURL, version), subject)
+	if err != nil {
+		return "", err
 	}
 
 	for _, asset := range release.Assets {
