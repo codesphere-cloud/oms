@@ -271,29 +271,43 @@ var _ = Describe("Install-config vault encryption", func() {
 			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", "")
 		})
 
-		It("writes an unencrypted vault instead of failing", func() {
+		It("generates an age key and encrypts the vault with it", func() {
+			if !testutil.SopsAndAgeAvailable() {
+				Skip("sops and age-keygen not available")
+			}
+
 			c := buildCmd("sops")
 
 			Expect(c.RunE(nil, nil)).To(Succeed())
-			Expect(c.Opts.VaultType).To(Equal("plain"))
+			Expect(c.Opts.VaultType).To(Equal("sops"))
+			Expect(c.generatedAgeKey).To(HavePrefix("AGE-SECRET-KEY-"))
+			Expect(c.generatedAgeRecipient).To(HavePrefix("age1"))
+			Expect(os.Getenv("SOPS_AGE_KEY")).To(BeEmpty(), "the generated key must not leak into the environment")
 
 			vaultContent, err := os.ReadFile(c.Opts.VaultFile)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(vaultContent)).NotTo(ContainSubstring("ENC["))
+			Expect(string(vaultContent)).To(ContainSubstring("ENC["))
+			Expect(string(vaultContent)).To(ContainSubstring(c.generatedAgeRecipient))
 
-			plainManager := newPlainInstallConfigManager()
-			Expect(plainManager.LoadVaultFromFile(c.Opts.VaultFile)).To(Succeed())
-			Expect(plainManager.ValidateVault()).To(BeEmpty())
+			ageKeyPath := filepath.Join(GinkgoT().TempDir(), "age_key.txt")
+			Expect(os.WriteFile(ageKeyPath, []byte(c.generatedAgeKey+"\n"), 0600)).To(Succeed())
 
-			_, err = os.Stat(c.Opts.ConfigFile)
+			manager, err := installer.NewInstallConfigManager("sops", ageKeyPath)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(manager.LoadVaultFromFile(c.Opts.VaultFile)).To(Succeed())
+			Expect(manager.ValidateVault()).To(BeEmpty())
 		})
 
-		It("keeps the requested plain vault type", func() {
+		It("writes a plain vault only when requested explicitly", func() {
 			c := buildCmd("plain")
 
 			Expect(c.RunE(nil, nil)).To(Succeed())
 			Expect(c.Opts.VaultType).To(Equal("plain"))
+			Expect(c.generatedAgeKey).To(BeEmpty())
+
+			vaultContent, err := os.ReadFile(c.Opts.VaultFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(vaultContent)).NotTo(ContainSubstring("ENC["))
 		})
 
 		It("rejects an unsupported vault type", func() {
@@ -302,14 +316,25 @@ var _ = Describe("Install-config vault encryption", func() {
 			Expect(c.RunE(nil, nil)).To(MatchError(ContainSubstring("unsupported vault type")))
 		})
 
-		It("refuses to replace an existing encrypted vault with an unencrypted one", func() {
+		It("fails validation with a hint to pass an age key or use a plain vault", func() {
+			c := buildCmd("sops")
+			c.Opts.ValidateOnly = true
+
+			err := c.RunE(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("requires an age key")))
+			Expect(err.Error()).To(ContainSubstring("--age-key"))
+			Expect(err.Error()).To(ContainSubstring("--vault-type plain"))
+			Expect(c.generatedAgeKey).To(BeEmpty())
+		})
+
+		It("refuses to replace an existing encrypted vault", func() {
 			c := buildCmd("sops")
 			encryptedVault := "sops:\n    age:\n        - recipient: age1test\n" +
 				"secrets:\n    - name: registryPassword\n      fields:\n        password: keep-me\n"
 			Expect(os.WriteFile(c.Opts.VaultFile, []byte(encryptedVault), 0600)).To(Succeed())
 
 			err := c.RunE(nil, nil)
-			Expect(err).To(MatchError(ContainSubstring("is SOPS-encrypted")))
+			Expect(err).To(MatchError(ContainSubstring("already SOPS-encrypted")))
 			Expect(err.Error()).To(ContainSubstring("--age-key"))
 
 			vaultContent, readErr := os.ReadFile(c.Opts.VaultFile)
@@ -320,15 +345,6 @@ var _ = Describe("Install-config vault encryption", func() {
 			Expect(statErr).To(MatchError(ContainSubstring("no such file")))
 		})
 	})
-
-	DescribeTable("quotes vault paths for the shell",
-		func(path, want string) {
-			Expect(shellQuote(path)).To(Equal(want))
-		},
-		Entry("plain path", "prod.vault.yaml", "'prod.vault.yaml'"),
-		Entry("path with spaces", "/tmp/oms secrets/prod.vault.yaml", "'/tmp/oms secrets/prod.vault.yaml'"),
-		Entry("path with a single quote", "it's.vault.yaml", `'it'\''s.vault.yaml'`),
-	)
 
 	Context("with an age key", func() {
 		It("encrypts the vault with SOPS", func() {

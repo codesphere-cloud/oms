@@ -86,18 +86,25 @@ jobs:
           ./oms init install-config \
             --profile dev \
             --interactive=false \
-            -c config-plain.yaml \
-            --vault prod-plain.vault.yaml
+            -c config-generated-key.yaml \
+            --vault prod-generated-key.vault.yaml 2>&1 | tee generate.log
 
-          if grep -q 'ENC\[' prod-plain.vault.yaml; then
-            echo "expected an unencrypted vault when no age key is configured" >&2
+          if ! grep -q 'ENC\[' prod-generated-key.vault.yaml; then
+            echo "expected a SOPS-encrypted vault encrypted with a generated age key" >&2
+            exit 1
+          fi
+
+          grep -E '^(# public key: |AGE-SECRET-KEY-)' generate.log > generated_age_key.txt
+          if ! grep -q '^AGE-SECRET-KEY-' generated_age_key.txt; then
+            echo "expected the generated age key to be printed" >&2
             exit 1
           fi
 
           ./oms init install-config \
             --validate \
-            -c config-plain.yaml \
-            --vault prod-plain.vault.yaml
+            --age-key generated_age_key.txt \
+            -c config-generated-key.yaml \
+            --vault prod-generated-key.vault.yaml
 
       - name: Slack Notification on Failure
         if: ${{ failure() && github.ref == 'refs/heads/main' }}

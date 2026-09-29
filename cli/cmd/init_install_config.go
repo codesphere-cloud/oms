@@ -13,14 +13,17 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 )
 
 type InitInstallConfigCmd struct {
-	cmd        *cobra.Command
-	Opts       *InitInstallConfigOpts
-	FileWriter intutil.FileIO
+	cmd                   *cobra.Command
+	Opts                  *InitInstallConfigOpts
+	FileWriter            intutil.FileIO
+	generatedAgeKey       string
+	generatedAgeRecipient string
 }
 
 type InitInstallConfigOpts struct {
@@ -114,9 +117,11 @@ type InitInstallConfigOpts struct {
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
-	if err := c.resolveVaultType(); err != nil {
+	restore, err := c.ensureAgeKey()
+	if err != nil {
 		return err
 	}
+	defer restore()
 
 	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
 	if err != nil {
@@ -126,61 +131,55 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.InitInstallConfig(icg)
 }
 
-// resolveVaultType stores the effective vault type in the command options.
-func (c *InitInstallConfigCmd) resolveVaultType() error {
+// ensureAgeKey makes sure a SOPS vault can be encrypted. When no age key is configured
+// a fresh age key is generated in memory and shown to the user once.
+func (c *InitInstallConfigCmd) ensureAgeKey() (restore func(), err error) {
+	noop := func() {}
+
 	vaultType, err := vault.ParseType(c.Opts.VaultType)
 	if err != nil {
-		return fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
+		return noop, fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
 	}
 
 	if vault.HasAgeKey(vaultType, c.Opts.AgeKey) {
-		c.Opts.VaultType = string(vaultType)
-
-		return nil
+		return noop, nil
 	}
 
-	c.Opts.VaultType = string(vault.TypePlain)
-
-	if c.Opts.VaultFile != "" {
-		encrypted, err := vault.IsEncryptedFile(c.FileWriter, c.Opts.VaultFile)
-		if err != nil {
-			return fmt.Errorf("failed to check if %s is encrypted: %w", c.Opts.VaultFile, err)
-		}
-
-		if encrypted {
-			return encryptedVaultError(c.Opts.ValidateOnly, c.Opts.VaultFile)
-		}
+	if c.Opts.ValidateOnly {
+		return noop, missingAgeKeyError(fmt.Sprintf("reading the SOPS vault %s", c.Opts.VaultFile))
 	}
 
-	log.Println("No age key configured (--age-key, SOPS_AGE_KEY or SOPS_AGE_KEY_FILE); " + ageKeyHint(c.Opts.ValidateOnly, c.Opts.VaultFile))
+	encrypted, err := vault.IsEncryptedFile(c.FileWriter, c.Opts.VaultFile)
+	if err != nil {
+		return noop, fmt.Errorf("failed to check if %s is encrypted: %w", c.Opts.VaultFile, err)
+	}
 
-	return nil
+	if encrypted {
+		return noop, missingAgeKeyError(fmt.Sprintf("%s is already SOPS-encrypted; replacing it", c.Opts.VaultFile))
+	}
+
+	secretKey, recipient, err := sops.GenerateAgeIdentity()
+	if err != nil {
+		return noop, err
+	}
+
+	restore, err = sops.SetGeneratedAgeKey(secretKey)
+	if err != nil {
+		return noop, err
+	}
+
+	c.generatedAgeKey = secretKey
+	c.generatedAgeRecipient = recipient
+
+	log.Println("No age key configured (--age-key, SOPS_AGE_KEY or SOPS_AGE_KEY_FILE); generating a new age key to encrypt the vault.")
+
+	return restore, nil
 }
 
-// encryptedVaultError explains how to proceed when the target vault is encrypted but no
-// age key is configured.
-func encryptedVaultError(validateOnly bool, vaultFile string) error {
-	if validateOnly {
-		return fmt.Errorf("%s is SOPS-encrypted; pass --age-key or set SOPS_AGE_KEY/SOPS_AGE_KEY_FILE to read it", vaultFile)
-	}
-
-	return fmt.Errorf("%s is SOPS-encrypted; pass --age-key or set SOPS_AGE_KEY/SOPS_AGE_KEY_FILE to keep it encrypted, "+
-		"or --vault-type plain to replace it with an unencrypted vault", vaultFile)
-}
-
-// ageKeyHint describes what an unencrypted vault means for the current mode.
-func ageKeyHint(validateOnly bool, vaultFile string) string {
-	if validateOnly {
-		return fmt.Sprintf("reading %s as an unencrypted vault", vaultFile)
-	}
-
-	return fmt.Sprintf("writing %s unencrypted. Create an age key and encrypt the vault before use:\n"+
-		"  age-keygen -o age_key.txt\n"+
-		"  sops --encrypt --age \"$(age-keygen -y age_key.txt)\" --in-place %s", vaultFile, shellQuote(vaultFile))
-}
-
-func shellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
+// missingAgeKeyError explains the options when an operation needs an age key.
+func missingAgeKeyError(operation string) error {
+	return fmt.Errorf("%s requires an age key: pass --age-key or set SOPS_AGE_KEY/SOPS_AGE_KEY_FILE, "+
+		"or use --vault-type plain. CAUTION: --vault-type plain stores unencrypted secrets on disk, do not use it in production", operation)
 }
 
 func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
@@ -220,8 +219,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
-	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain), without an age key a sops vault is written unencrypted")
-	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key used to encrypt the vault (falls back to SOPS_AGE_KEY or SOPS_AGE_KEY_FILE)")
+	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
+	c.cmd.Flags().StringVar(&c.Opts.AgeKey, "age-key", "", "Path to the age private key for the sops vault (falls back to SOPS_AGE_KEY or SOPS_AGE_KEY_FILE; if none is set, a new key is generated and printed once)")
 
 	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", "", "Use a predefined configuration profile (dev, production, minimal)")
 	c.cmd.Flags().StringVar(&c.Opts.AnsibleInventoryFile, "ansible-inventory", "", "Path to Ansible inventory file to import host information from")
@@ -337,8 +336,9 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
-	// The freshly generated vault is SOPS-encrypted automatically with the
-	// configured age key (--age-key or SOPS_AGE_KEY[_FILE]).
+	// A sops vault is encrypted with the configured age key (--age-key or
+	// SOPS_AGE_KEY[_FILE]) or with the key generated in ensureAgeKey. A plain
+	// vault is written unencrypted.
 	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
@@ -377,14 +377,30 @@ func (c *InitInstallConfigCmd) printSuccessMessage(warningCount int) {
 	log.Println("\nIMPORTANT: Keys and certificates have been generated and embedded in the vault file.")
 
 	if c.Opts.VaultType == string(vault.TypePlain) {
-		log.Println("   The vault file is NOT encrypted. Create an age key and encrypt it before use:")
-		log.Println("     age-keygen -o age_key.txt")
-		log.Printf("     sops --encrypt --age \"$(age-keygen -y age_key.txt)\" --in-place %s\n", shellQuote(c.Opts.VaultFile))
+		log.Println("   The vault file is NOT encrypted. Do not use a plain vault in production.")
 	} else {
 		log.Println("   The vault file has been encrypted with SOPS automatically.")
 	}
 	log.Println("   Keep the vault file and its decryption key secure.")
 	log.Println()
+
+	if c.generatedAgeKey != "" {
+		c.printGeneratedAgeKey()
+	}
+}
+
+// printGeneratedAgeKey shows the generated age key exactly once. OMS does not store it.
+func (c *InitInstallConfigCmd) printGeneratedAgeKey() {
+	log.Println(strings.Repeat("!", 70))
+	log.Println("A new age key was generated to encrypt the vault. It is shown only ONCE and is NOT stored anywhere.")
+	log.Println("Store it in a secure place (e.g. a password manager). Without it the vault cannot be decrypted.")
+	log.Println("Save the following lines to a file (e.g. age_key.txt, mode 0600) and pass it with")
+	log.Println("--age-key or SOPS_AGE_KEY_FILE for later commands:")
+	log.Println()
+	log.Printf("# public key: %s\n", c.generatedAgeRecipient)
+	log.Println(c.generatedAgeKey)
+	log.Println()
+	log.Println(strings.Repeat("!", 70))
 }
 
 func (c *InitInstallConfigCmd) validateOnly(icg installer.InstallConfigManager) error {
