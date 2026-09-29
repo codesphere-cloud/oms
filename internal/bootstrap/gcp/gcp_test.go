@@ -969,6 +969,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 						ID:                1,
 						ControlPlaneNodes: bs.Env.ControlPlaneNodes,
 						CephNodes:         bs.Env.CephNodes,
+						InstallConfig: &files.RootConfig{
+							Registry: &files.RegistryConfig{Server: bs.Env.Jumpbox.GetInternalIP() + ":5000"},
+						},
 					},
 					secondary,
 				}
@@ -977,6 +980,36 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
 				Expect(scpTargets).To(HaveLen(4))
 				Expect(bs.Env.RegistryPassword).To(Equal("existing-password"))
+			})
+
+			// The vault then holds the previous registry's credentials, which the running local
+			// registry would reject.
+			It("generates new credentials when the config points at another registry", func() {
+				vault := &files.InstallVault{}
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "github-user"}})
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "github-pat"}})
+				icg.EXPECT().GetVault().Return(vault)
+
+				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
+				bs.Env.CephNodes = []*node.Node{}
+				bs.Env.DataCenters = []*datacenter.DataCenter{{
+					ID:                1,
+					ControlPlaneNodes: bs.Env.ControlPlaneNodes,
+					CephNodes:         bs.Env.CephNodes,
+					InstallConfig:     &files.RootConfig{Registry: &files.RegistryConfig{Server: "ghcr.io"}},
+				}}
+				bs.Env.DataCenters[0].ConfigManager = icg
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(nil)
+				// Install commands (8) + scp/update-ca/docker restart for the one node (3).
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 3)
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(bs.Env.RegistryUsername).To(Equal("custom-registry"))
+				Expect(bs.Env.RegistryPassword).NotTo(Equal("github-pat"))
+				Expect(bs.Env.RegistryPassword).NotTo(BeEmpty())
 			})
 		})
 

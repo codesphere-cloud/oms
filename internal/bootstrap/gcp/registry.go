@@ -87,8 +87,9 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 	return nil
 }
 
-// EnsureLocalContainerRegistry installs a container registry on the jumpbox to speed up image
-// loading time, and makes every cluster node of every data center trust its certificate.
+// EnsureLocalContainerRegistry runs a container registry on the jumpbox for installations whose
+// clusters cannot pull from a public registry, such as air-gapped ones, and makes every cluster
+// node of every data center trust its certificate.
 func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	registryNode, err := b.registryNode()
 	if err != nil {
@@ -149,7 +150,10 @@ func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node) (string
 		registryPassword = s.Fields.Password
 	}
 
-	if err == nil && registryUsername != "" && registryPassword != "" {
+	// After a switch from another registry type the vault still holds that registry's
+	// credentials, so a running registry is only reused when the config already points at it.
+	if err == nil && b.configuredRegistryServer() == localRegistryServer &&
+		registryUsername != "" && registryPassword != "" {
 		b.stlog.Logf("Local container registry already running on the jumpbox")
 		b.Env.RegistryUsername = registryUsername
 		b.Env.RegistryPassword = registryPassword
@@ -193,6 +197,17 @@ func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node) (string
 	}
 
 	return localRegistryServer, nil
+}
+
+// configuredRegistryServer returns the registry server the primary data center's config points
+// at, or an empty string if it has none yet.
+func (b *GCPBootstrapper) configuredRegistryServer() string {
+	config := b.primaryDC().InstallConfig
+	if config == nil || config.Registry == nil {
+		return ""
+	}
+
+	return config.Registry.Server
 }
 
 // distributeRegistryCert installs the local registry's self-signed certificate on the given
