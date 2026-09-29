@@ -49,7 +49,7 @@ func (c *InstallCodesphereDepenciesCmd) RunE(_ *cobra.Command, _ []string) error
 func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
-	stlog := bootstrap.NewStepLogger(false)
+	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(opts.StepTimer))
 	cm := installer.NewConfig()
 	im := system.NewImage(context.Background())
 
