@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	// DefaultK0sVersion is the k0s version installed unless another one is requested.
 	DefaultK0sVersion = "v1.31.14+k0s.0"
 	k0sReleaseURL     = "https://github.com/k0sproject/k0s/releases/download"
 	k0sReleaseAPIURL  = "https://api.github.com/repos/k0sproject/k0s/releases/tags"
