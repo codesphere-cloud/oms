@@ -141,7 +141,7 @@ func (c *InitInstallConfigCmd) ensureAgeKey() (restore func(), err error) {
 		return noop, fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
 	}
 
-	if vault.HasAgeKey(vaultType, c.Opts.AgeKey) {
+	if vault.ValidateConfiguration(vaultType, c.Opts.AgeKey) == nil {
 		return noop, nil
 	}
 

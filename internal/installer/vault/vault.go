@@ -58,19 +58,9 @@ func ParseType(value string) (Type, error) {
 	}
 }
 
-// HasAgeKey reports whether a SOPS vault can be encrypted or decrypted with the
-// configured parameters. Non-SOPS vaults never need an age key.
-func HasAgeKey(vaultType Type, ageKey string) bool {
-	return vaultType != TypeSOPS || sops.HasAgeKey(ageKey)
-}
-
 // IsEncryptedFile reports whether path already holds a SOPS-encrypted vault. A missing
 // file reports false, so "no vault yet" and "unencrypted vault" can be treated alike.
 func IsEncryptedFile(fileIO util.FileIO, path string) (bool, error) {
-	if fileIO == nil {
-		fileIO = util.NewFilesystemWriter()
-	}
-
 	data, err := fileIO.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, nil
