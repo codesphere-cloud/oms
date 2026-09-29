@@ -5,9 +5,9 @@ This project includes code licensed under the following terms:
  
 ----------
 Module: cloud.google.com/go/artifactregistry
-Version: v1.26.0
+Version: v1.27.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.26.0/artifactregistry/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.27.0/artifactregistry/LICENSE
  
 ----------
 Module: cloud.google.com/go/auth
@@ -23,9 +23,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.69.0
+Version: v1.70.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.69.0/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.70.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
@@ -35,9 +35,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata
  
 ----------
 Module: cloud.google.com/go/iam/apiv1/iampb
-Version: v1.13.0
+Version: v1.14.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.13.0/iam/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.14.0/iam/LICENSE
  
 ----------
 Module: cloud.google.com/go/longrunning
@@ -47,15 +47,15 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v1.2
  
 ----------
 Module: cloud.google.com/go/resourcemanager
-Version: v1.16.0
+Version: v1.17.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.16.0/resourcemanager/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/resourcemanager/v1.17.0/resourcemanager/LICENSE
  
 ----------
 Module: cloud.google.com/go/serviceusage
-Version: v1.15.0
+Version: v1.16.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.15.0/serviceusage/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/serviceusage/v1.16.0/serviceusage/LICENSE
  
 ----------
 Module: code.gitea.io/sdk/gitea
@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.43.0
+Version: v1.45.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.43.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.45.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -1067,9 +1067,9 @@ License URL: https://github.com/munnerz/goautoneg/blob/a7dc8b61c822/LICENSE
  
 ----------
 Module: github.com/onsi/gomega
-Version: v1.43.1
+Version: v1.44.0
 License: MIT
-License URL: https://github.com/onsi/gomega/blob/v1.43.1/LICENSE
+License URL: https://github.com/onsi/gomega/blob/v1.44.0/LICENSE
  
 ----------
 Module: github.com/opencontainers/go-digest
@@ -1181,9 +1181,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20260921201415-c2addf97cd72
+Version: v0.0.0-20260928202406-f09547c142ae
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/c2addf97cd72/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/f09547c142ae/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1709,9 +1709,9 @@ License URL: https://github.com/kubernetes/kubernetes/blob/v1.36.4/LICENSE
  
 ----------
 Module: k8s.io/streaming/pkg
-Version: v0.37.0
+Version: v0.37.1
 License: Apache-2.0
-License URL: https://github.com/kubernetes/streaming/blob/v0.37.0/LICENSE
+License URL: https://github.com/kubernetes/streaming/blob/v0.37.1/LICENSE
  
 ----------
 Module: k8s.io/utils

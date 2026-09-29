@@ -24,17 +24,17 @@ replace (
 )
 
 require (
-	cloud.google.com/go/artifactregistry v1.26.0
-	cloud.google.com/go/compute v1.69.0
-	cloud.google.com/go/iam v1.13.0
-	cloud.google.com/go/resourcemanager v1.16.0
-	cloud.google.com/go/serviceusage v1.15.0
+	cloud.google.com/go/artifactregistry v1.27.0
+	cloud.google.com/go/compute v1.70.0
+	cloud.google.com/go/iam v1.14.0
+	cloud.google.com/go/resourcemanager v1.17.0
+	cloud.google.com/go/serviceusage v1.16.0
 	filippo.io/age v1.3.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/argoproj/argo-cd/v3 v3.5.3
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.43.0
+	github.com/codesphere-cloud/cs-go v1.45.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/distribution/reference v0.6.0
 	github.com/getsops/sops/v3 v3.13.3
@@ -44,9 +44,9 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.33.0
-	github.com/onsi/gomega v1.43.1
+	github.com/onsi/gomega v1.44.0
 	github.com/pkg/sftp v1.13.11
-	github.com/rook/rook/pkg/apis v0.0.0-20260921201415-c2addf97cd72
+	github.com/rook/rook/pkg/apis v0.0.0-20260928202406-f09547c142ae
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
@@ -59,8 +59,8 @@ require (
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.3.0
-	k8s.io/api v0.37.0
-	k8s.io/apimachinery v0.37.0
+	k8s.io/api v0.37.1
+	k8s.io/apimachinery v0.37.1
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.24.1
@@ -654,7 +654,7 @@ require (
 	honnef.co/go/tools v0.8.1 // indirect
 	k8s.io/apiextensions-apiserver v0.37.0 // indirect
 	k8s.io/apiserver v0.37.0 // indirect
-	k8s.io/cli-runtime v0.37.0 // indirect
+	k8s.io/cli-runtime v0.37.1 // indirect
 	k8s.io/component-base v0.37.0 // indirect
 	k8s.io/component-helpers v0.36.4 // indirect
 	k8s.io/controller-manager v0.36.1 // indirect
@@ -719,6 +719,6 @@ replace (
 	k8s.io/sample-controller => k8s.io/sample-controller v0.36.4
 )
 
-replace k8s.io/cri-streaming => k8s.io/cri-streaming v0.37.0
+replace k8s.io/cri-streaming => k8s.io/cri-streaming v0.37.1
 
-replace k8s.io/streaming => k8s.io/streaming v0.37.0
+replace k8s.io/streaming => k8s.io/streaming v0.37.1
