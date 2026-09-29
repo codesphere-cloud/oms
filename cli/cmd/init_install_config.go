@@ -160,12 +160,12 @@ func (c *InitInstallConfigCmd) ensureAgeKey() (restore func(), err error) {
 
 	secretKey, recipient, err := sops.GenerateAgeIdentity()
 	if err != nil {
-		return noop, err
+		return noop, fmt.Errorf("failed to generate age identity: %w", err)
 	}
 
 	restore, err = sops.SetGeneratedAgeKey(secretKey)
 	if err != nil {
-		return noop, err
+		return noop, fmt.Errorf("failed to set generated age key: %w", err)
 	}
 
 	c.generatedAgeKey = secretKey
