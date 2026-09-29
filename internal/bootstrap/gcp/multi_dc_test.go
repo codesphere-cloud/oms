@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
 	"cloud.google.com/go/compute/apiv1/computepb"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,6 +19,7 @@ import (
 	"google.golang.org/api/cloudbilling/v1"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
+	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/env"
@@ -224,6 +226,103 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		nodeClient.EXPECT().RunCommand(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 	}
+
+	// registryCertTargets returns the names of the nodes the jumpbox copied the local
+	// registry's certificate to.
+	registryCertTargets := func() []string {
+		targets := []string{}
+
+		for _, call := range nodeClient.Calls {
+			if call.Method != "RunCommand" {
+				continue
+			}
+
+			if cmd, _ := call.Arguments.Get(2).(string); strings.HasPrefix(cmd, "scp ") && strings.Contains(cmd, "registry.crt") {
+				targets = append(targets, call.Arguments.Get(0).(*node.Node).GetName()+" -> "+cmd[strings.LastIndex(cmd, "@")+1:])
+			}
+		}
+
+		return targets
+	}
+
+	Context("with the local container registry", func() {
+		BeforeEach(func() {
+			csEnv.RegistryType = gcp.RegistryTypeLocalContainer
+			csEnv.GitHubPAT = ""
+			csEnv.RegistryUser = ""
+		})
+
+		It("serves both data centers from one registry on the jumpbox", func() {
+			expectBootstrapMocks("test-project-12345")
+
+			Expect(bs.Bootstrap()).To(Succeed())
+
+			server := bs.Env.Jumpbox.GetInternalIP() + ":5000"
+
+			primary, secondary := bs.Env.DataCenters[0], bs.Env.DataCenters[1]
+			for _, dc := range []*datacenter.DataCenter{primary, secondary} {
+				Expect(dc.InstallConfig.Registry.Server).To(Equal(server), "data center %d", dc.ID)
+				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeTrue(), "data center %d", dc.ID)
+				Expect(dc.InstallConfig.Registry.ReplaceImagesInBom).To(BeTrue(), "data center %d", dc.ID)
+				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal("custom-registry"))
+			}
+
+			Expect(secondary.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword).Fields.Password).
+				To(Equal(primary.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword).Fields.Password))
+			Expect(primary.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword).Fields.Password).NotTo(BeEmpty())
+
+			// Every cluster node of both data centers must trust the jumpbox registry.
+			targets := registryCertTargets()
+			GinkgoWriter.Printf("registry certificate copied: %v\n", targets)
+			Expect(targets).To(HaveLen(len(primary.CephNodes) + len(primary.ControlPlaneNodes) +
+				len(secondary.CephNodes) + len(secondary.ControlPlaneNodes)))
+
+			for _, target := range targets {
+				Expect(target).To(HavePrefix("jumpbox -> "))
+			}
+
+			Expect(len(secondary.CephNodes) + len(secondary.ControlPlaneNodes)).To(BeNumerically(">", 0))
+
+			for _, dc := range []*datacenter.DataCenter{primary, secondary} {
+				Expect(bs.InstallCommand(dc, "pkg.tar.gz")).NotTo(ContainSubstring("load-container-images"))
+			}
+		})
+	})
+
+	Context("with a GCP Artifact Registry", func() {
+		BeforeEach(func() {
+			csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+			csEnv.GitHubPAT = ""
+			csEnv.RegistryUser = ""
+		})
+
+		It("points both data centers at the created repository", func() {
+			const uri = "us-central1-docker.pkg.dev/test-project-12345/codesphere-registry"
+
+			gc.EXPECT().GetArtifactRegistry("test-project-12345", "us-central1", "codesphere-registry").Return(nil, fmt.Errorf("not found"))
+			gc.EXPECT().CreateArtifactRegistry("test-project-12345", "us-central1", "codesphere-registry").
+				Return(&artifactregistrypb.Repository{RegistryUri: uri}, nil)
+
+			const writer = "artifact-registry-writer@test-project-12345.iam.gserviceaccount.com"
+			gc.EXPECT().CreateServiceAccount("test-project-12345", "artifact-registry-writer", "artifact-registry-writer").Return(writer, true, nil)
+			gc.EXPECT().CreateServiceAccountKey("test-project-12345", writer).Return("writer-key", nil)
+			gc.EXPECT().AssignIAMRole("test-project-12345", "artifact-registry-writer", "test-project-12345", []string{"roles/artifactregistry.writer"}).Return(nil)
+			expectBootstrapMocks("test-project-12345")
+
+			Expect(bs.Bootstrap()).To(Succeed())
+
+			for _, dc := range bs.Env.DataCenters {
+				Expect(dc.InstallConfig.Registry.Server).To(Equal(uri), "data center %d", dc.ID)
+				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeTrue(), "data center %d", dc.ID)
+				// Only the primary vault is written when the key is created; the others must inherit it.
+				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword)).NotTo(BeNil(), "data center %d", dc.ID)
+				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal("writer-key"), "data center %d", dc.ID)
+				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal("_json_key_base64"), "data center %d", dc.ID)
+			}
+
+			Expect(registryCertTargets()).To(BeEmpty())
+		})
+	})
 
 	It("bootstraps two data centers sharing one database", func() {
 		expectBootstrapMocks("test-project-12345")
