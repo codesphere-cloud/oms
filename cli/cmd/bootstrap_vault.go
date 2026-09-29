@@ -13,11 +13,11 @@ import (
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
-// resolveVaultAccess detects the vault format at secretsFilePath and resolves the age key to read
-// it. An encrypted vault requires an existing key, since a freshly generated one cannot decrypt it.
+// resolveVaultAccess resolves the age key needed to read the vault at secretsFilePath. An
+// encrypted vault requires an existing key; a freshly generated one cannot decrypt it.
 //
-// Recovery skips the preflight: recoverVault replaces the local vault with a plaintext copy from
-// the jumpbox, so a stale SOPS vault whose key is gone must not block it.
+// Recovery skips the preflight, since recoverVault replaces the local vault with a plaintext
+// copy from the jumpbox, so a stale SOPS vault whose key is gone must not block it.
 func resolveVaultAccess(fw intutil.FileIO, secretsFilePath, ageKeyFlag string, recoverConfig bool) (vault.Type, string, error) {
 	if recoverConfig {
 		return vault.TypePlain, "", nil

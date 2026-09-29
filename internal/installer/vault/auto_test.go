@@ -112,8 +112,7 @@ var _ = ginkgo.Describe("Auto vault", func() {
 		})
 
 		ginkgo.It("fails on an encrypted vault when no age key is available", func() {
-			// Deterministic: an empty value counts as unset, so an age key from the
-			// environment cannot make this test pass by accident.
+			// Empty values count as unset, so an environment key cannot make this pass by accident.
 			ginkgo.GinkgoT().Setenv("SOPS_AGE_KEY", "")
 			ginkgo.GinkgoT().Setenv("SOPS_AGE_KEY_FILE", "")
 

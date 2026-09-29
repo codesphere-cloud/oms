@@ -44,10 +44,9 @@ type Options struct {
 	FileIO       util.FileIO
 }
 
-// ParseType validates a user supplied vault type. The internal TypeAuto is deliberately not
-// accepted here: it follows whatever format the file already has, so exposing it would let a
-// command that promises encrypted output silently write a plaintext vault. Callers that need
-// it construct the type directly instead (see installer.NewAutoInstallConfigManager).
+// ParseType validates a user supplied vault type. TypeAuto is deliberately rejected here: it
+// follows whatever format the file already has, so exposing it would let a command that
+// promises encrypted output silently write a plaintext vault.
 func ParseType(value string) (Type, error) {
 	switch Type(strings.ToLower(strings.TrimSpace(value))) {
 	case "", TypeSOPS:

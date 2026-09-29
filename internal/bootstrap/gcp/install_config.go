@@ -449,8 +449,8 @@ func (b *GCPBootstrapper) copyConfigAndVaultToJumpbox(dc *datacenter.DataCenter)
 	return nil
 }
 
-// writePlaintextVaultCopy writes the vault as plaintext to a uniquely named file next to it, so
-// the jumpbox can re-encrypt it with its own key without clobbering any file the caller owns.
+// writePlaintextVaultCopy writes the vault as plaintext to a unique file next to it, for the
+// jumpbox to re-encrypt with its own key.
 func (b *GCPBootstrapper) writePlaintextVaultCopy(dc *datacenter.DataCenter) (string, error) {
 	dir := filepath.Dir(dc.SecretsFilePath)
 	pattern := filepath.Base(dc.SecretsFilePath) + vaultTransferSuffix + "*"

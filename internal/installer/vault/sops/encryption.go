@@ -31,10 +31,9 @@ func ResolveAgeKey(explicitKeyFile, fallbackDir string) (recipient string, keyPa
 	return resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir, true)
 }
 
-// ResolveExistingAgeKey resolves an existing age key without generating one. It returns the
-// path of the key file, or an empty path when the key comes from SOPS_AGE_KEY. Callers use
-// it to decrypt a vault they did not create, where generating a fresh key would silently
-// produce a key that cannot read the vault.
+// ResolveExistingAgeKey resolves an existing age key without generating one, returning the key
+// file path or an empty path when the key comes from SOPS_AGE_KEY. Callers use it for vaults
+// they did not create, since a freshly generated key cannot decrypt those.
 func ResolveExistingAgeKey(explicitKeyFile, fallbackDir string) (keyPath string, err error) {
 	_, keyPath, err = resolveAgeKey(util.NewFilesystemWriter(), explicitKeyFile, fallbackDir, false)
 

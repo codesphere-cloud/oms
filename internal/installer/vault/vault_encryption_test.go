@@ -168,15 +168,12 @@ var _ = Describe("VaultEncryption", func() {
 		BeforeEach(func() {
 			tmpDir = GinkgoT().TempDir()
 			// Point the default user config location at an empty directory so a key in the
-			// developer's own ~/.config/sops/age/keys.txt cannot satisfy a lookup. An empty
-			// value counts as unset, and Setenv restores the original value afterwards.
+			// developer's own ~/.config/sops/age/keys.txt cannot satisfy a lookup.
 			GinkgoT().Setenv("XDG_CONFIG_HOME", filepath.Join(tmpDir, "xdg"))
 			GinkgoT().Setenv("SOPS_AGE_KEY", "")
 			GinkgoT().Setenv("SOPS_AGE_KEY_FILE", "")
 		})
 
-		// ageKeyFile writes a fresh identity with age-keygen and fails the spec loudly when
-		// the toolchain is missing.
 		ageKeyFile := func(name string) string {
 			if !sopsAndAgeAvailable() {
 				Skip("age-keygen not available")

@@ -60,8 +60,7 @@ func (g *InstallConfig) SetFileIO(fio util.FileIO) {
 	g.fileIO = fio
 }
 
-// NewInstallConfigManager configures all vault reads and writes to go through the vault
-// implementation selected by the user supplied vault type.
+// NewInstallConfigManager configures the vault backend from the user supplied vault type.
 func NewInstallConfigManager(vaultType string, ageKey string) (InstallConfigManager, error) {
 	t, err := vault.ParseType(vaultType)
 	if err != nil {
@@ -129,8 +128,8 @@ func (g *InstallConfig) LoadVaultFromFile(vaultPath string) error {
 	return g.loadVault(vaultPath, vault.Vault.Load)
 }
 
-// LoadVaultFromFileOrCreate is like LoadVaultFromFile but yields an empty vault when the file
-// does not exist, e.g. next to a hand-written config.
+// LoadVaultFromFileOrCreate is like LoadVaultFromFile, but yields an empty vault when no file
+// exists yet.
 func (g *InstallConfig) LoadVaultFromFileOrCreate(vaultPath string) error {
 	return g.loadVault(vaultPath, vault.Vault.LoadOrCreate)
 }
@@ -373,9 +372,8 @@ func (g *InstallConfig) WriteVault(vaultPath string, withComments bool) error {
 	return g.writeVault(vaultPath, withComments, g.vaultType, "failed to write vault")
 }
 
-// WriteUnencryptedVault writes the vault as plaintext, regardless of the configured vault
-// type. Bootstrap flows use it to prepare a copy that is transferred to the jumpbox and
-// encrypted there with the jumpbox's own age key.
+// WriteUnencryptedVault writes the vault as plaintext regardless of the configured vault type,
+// for the bootstrap transfer copy that the jumpbox encrypts with its own age key.
 func (g *InstallConfig) WriteUnencryptedVault(vaultPath string, withComments bool) error {
 	return g.writeVault(vaultPath, withComments, vault.TypePlain, "failed to write unencrypted vault")
 }

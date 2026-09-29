@@ -13,9 +13,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// autoVault selects the backend that matches the vault file on disk. The format is detected
-// on every Load and Save, so a vault that changes format between runs (for example after
-// --recover-config downloads a decrypted copy) keeps working.
+// autoVault picks the backend matching the file on disk, redetected on every Load and Save so a
+// vault that changes format between runs (e.g. after --recover-config) keeps working.
 type autoVault struct{ options Options }
 
 // DetectType reports the on-disk vault type of path. A missing file counts as plaintext so
@@ -70,9 +69,8 @@ func (v *autoVault) load(load func(Vault) (*files.InstallVault, error)) (*files.
 	return loaded, nil
 }
 
-// Save writes the vault in the format that is already on disk. A vault that does not exist
-// yet is written as plaintext, matching the pre-existing bootstrap behaviour of encrypting it
-// on the jumpbox instead.
+// Save writes the vault in the format already on disk. A vault that does not exist yet is
+// written as plaintext, since the bootstrap flow encrypts it on the jumpbox afterwards.
 func (v *autoVault) Save(data *files.InstallVault) error {
 	backend, err := v.backendForFile()
 	if err != nil {
