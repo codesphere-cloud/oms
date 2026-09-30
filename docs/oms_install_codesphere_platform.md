@@ -42,6 +42,7 @@ $ oms install codesphere platform -p codesphere-v1.2.3-installer-lite.tar.gz -k 
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
   -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)
   -s, --skip-steps strings           Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd
+      --timer                        Show how long each step took after it finishes
       --vault string                 Path to the prod.vault.yaml file used for config templating
       --verbose                      Enable verbose output
 ```

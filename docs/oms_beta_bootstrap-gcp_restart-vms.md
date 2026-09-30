@@ -43,6 +43,7 @@ $ oms beta bootstrap-gcp restart-vms --project-id my-project --zone us-central1-
   -h, --help                help for restart-vms
       --name string         Name of a specific VM to restart (e.g. jumpbox, postgres, ceph-1, k0s-1). Restarts all VMs if not specified.
       --project-id string   GCP Project ID (optional, will use infra file if not provided)
+      --timer               Show how long each step took after it finishes
       --zone string         GCP Zone (optional, will use infra file if not provided)
 ```
 
