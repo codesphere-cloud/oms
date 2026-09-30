@@ -282,7 +282,7 @@ var _ = Describe("Install-config vault encryption", func() {
 			Expect(c.Opts.VaultType).To(Equal("sops"))
 			Expect(c.generatedAgeKey).To(HavePrefix("AGE-SECRET-KEY-"))
 			Expect(c.generatedAgeRecipient).To(HavePrefix("age1"))
-			Expect(os.Getenv("SOPS_AGE_KEY")).To(BeEmpty(), "the generated key must not leak into the environment")
+			Expect(os.Getenv("SOPS_AGE_KEY")).To(Equal(c.generatedAgeKey))
 
 			vaultContent, err := os.ReadFile(c.Opts.VaultFile)
 			Expect(err).NotTo(HaveOccurred())

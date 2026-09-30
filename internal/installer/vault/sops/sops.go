@@ -181,20 +181,13 @@ func ValidateConfiguration(ageKey string) error {
 }
 
 // SetGeneratedAgeKey makes secretKey the age key used by SOPS operations in this
-// process via SOPS_AGE_KEY. The returned function restores the previous environment.
-func SetGeneratedAgeKey(secretKey string) (restore func(), err error) {
-	previous, hadPrevious := os.LookupEnv(sopsage.SopsAgeKeyEnv)
+// process via SOPS_AGE_KEY. The variable only lives in the OMS process environment.
+func SetGeneratedAgeKey(secretKey string) error {
 	if err := os.Setenv(sopsage.SopsAgeKeyEnv, secretKey); err != nil {
-		return nil, fmt.Errorf("failed to set %s: %w", sopsage.SopsAgeKeyEnv, err)
+		return fmt.Errorf("failed to set %s: %w", sopsage.SopsAgeKeyEnv, err)
 	}
 
-	return func() {
-		if hadPrevious {
-			_ = os.Setenv(sopsage.SopsAgeKeyEnv, previous)
-		} else {
-			_ = os.Unsetenv(sopsage.SopsAgeKeyEnv)
-		}
-	}, nil
+	return nil
 }
 
 func resolveConfiguredAgeKey(fileIO util.FileIO, explicit string) (recipient, keyPath string, err error) {

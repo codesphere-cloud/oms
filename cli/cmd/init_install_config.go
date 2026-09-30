@@ -117,11 +117,16 @@ type InitInstallConfigOpts struct {
 }
 
 func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
-	restore, err := c.ensureAgeKey()
+	vaultType, err := vault.ParseType(c.Opts.VaultType)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
 	}
-	defer restore()
+
+	if vaultType == vault.TypeSOPS && sops.ValidateConfiguration(c.Opts.AgeKey) != nil {
+		if err := c.generateMissingAgeKey(); err != nil {
+			return err
+		}
+	}
 
 	icg, err := installer.NewInstallConfigManager(c.Opts.VaultType, c.Opts.AgeKey)
 	if err != nil {
@@ -131,41 +136,30 @@ func (c *InitInstallConfigCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.InitInstallConfig(icg)
 }
 
-// ensureAgeKey makes sure a SOPS vault can be encrypted. When no age key is configured
-// a fresh age key is generated in memory and shown to the user once.
-func (c *InitInstallConfigCmd) ensureAgeKey() (restore func(), err error) {
-	noop := func() {}
-
-	vaultType, err := vault.ParseType(c.Opts.VaultType)
-	if err != nil {
-		return noop, fmt.Errorf("failed to parse vault type %s: %w", c.Opts.VaultType, err)
-	}
-
-	if vault.ValidateConfiguration(vaultType, c.Opts.AgeKey) == nil {
-		return noop, nil
-	}
-
+// generateMissingAgeKey is called for a SOPS vault without a configured age key. It
+// generates a fresh age key in memory, makes it available to SOPS and keeps it so it
+// can be shown to the user once.
+func (c *InitInstallConfigCmd) generateMissingAgeKey() error {
 	if c.Opts.ValidateOnly {
-		return noop, missingAgeKeyError(fmt.Sprintf("reading the SOPS vault %s", c.Opts.VaultFile))
+		return missingAgeKeyError(fmt.Sprintf("reading the SOPS vault %s", c.Opts.VaultFile))
 	}
 
 	encrypted, err := vault.IsEncryptedFile(c.FileWriter, c.Opts.VaultFile)
 	if err != nil {
-		return noop, fmt.Errorf("failed to check if %s is encrypted: %w", c.Opts.VaultFile, err)
+		return fmt.Errorf("failed to check if %s is encrypted: %w", c.Opts.VaultFile, err)
 	}
 
 	if encrypted {
-		return noop, missingAgeKeyError(fmt.Sprintf("%s is already SOPS-encrypted; replacing it", c.Opts.VaultFile))
+		return missingAgeKeyError(fmt.Sprintf("%s is already SOPS-encrypted; replacing it", c.Opts.VaultFile))
 	}
 
 	secretKey, recipient, err := sops.GenerateAgeIdentity()
 	if err != nil {
-		return noop, fmt.Errorf("failed to generate age identity: %w", err)
+		return fmt.Errorf("failed to generate age identity: %w", err)
 	}
 
-	restore, err = sops.SetGeneratedAgeKey(secretKey)
-	if err != nil {
-		return noop, fmt.Errorf("failed to set generated age key: %w", err)
+	if err := sops.SetGeneratedAgeKey(secretKey); err != nil {
+		return fmt.Errorf("failed to set generated age key: %w", err)
 	}
 
 	c.generatedAgeKey = secretKey
@@ -173,7 +167,7 @@ func (c *InitInstallConfigCmd) ensureAgeKey() (restore func(), err error) {
 
 	log.Println("No age key configured (--age-key, SOPS_AGE_KEY or SOPS_AGE_KEY_FILE); generating a new age key to encrypt the vault.")
 
-	return restore, nil
+	return nil
 }
 
 // missingAgeKeyError explains the options when an operation needs an age key.
@@ -337,7 +331,7 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 	}
 
 	// A sops vault is encrypted with the configured age key (--age-key or
-	// SOPS_AGE_KEY[_FILE]) or with the key generated in ensureAgeKey. A plain
+	// SOPS_AGE_KEY[_FILE]) or with the key generated in generateMissingAgeKey. A plain
 	// vault is written unencrypted.
 	if err := icg.WriteVault(c.Opts.VaultFile, c.Opts.WithComments); err != nil {
 		return fmt.Errorf("failed to write vault file: %w", err)
