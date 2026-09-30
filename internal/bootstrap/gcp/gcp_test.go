@@ -1737,6 +1737,33 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.GenerateK0sConfigScript()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			Describe("script content", func() {
+				var script string
+
+				JustBeforeEach(func() {
+					fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).
+						Run(func(_ string, content []byte, _ os.FileMode) { script = string(content) }).
+						Return(nil)
+					nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+					nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+
+					Expect(bs.GenerateK0sConfigScript()).To(Succeed())
+				})
+
+				It("given a natively installed k0s, when the script is generated, then it calls the k0s binary on the PATH", func() {
+					Expect(script).To(ContainSubstring(`KUBECTL="k0s kubectl"`))
+					Expect(script).NotTo(ContainSubstring("/etc/codesphere/deps/kubernetes"))
+				})
+
+				It("given a failing kubectl call, when the script runs, then it exits before reporting success", func() {
+					Expect(script).To(MatchRegexp(`(?s)set -eo pipefail\s+KUBECTL=.*patch svc gateway-controller.*set \+e`))
+				})
+
+				It("given a rerun on an existing cluster, when the script runs, then the cloud-config configmap is applied instead of created", func() {
+					Expect(script).To(ContainSubstring("create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml | $KUBECTL apply -f -"))
+				})
+			})
 		})
 
 		Describe("Invalid cases", func() {
