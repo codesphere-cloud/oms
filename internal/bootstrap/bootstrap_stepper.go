@@ -25,11 +25,13 @@ type StepLogger struct {
 	currentStep string
 }
 
+// StepLoggerConfig controls step logger output.
 type StepLoggerConfig struct {
 	Silent bool
 	Timer  bool
 }
 
+// StepLoggerOption configures a step logger.
 type StepLoggerOption func(*StepLoggerConfig)
 
 // WithTimer controls whether completed steps show their elapsed time.
