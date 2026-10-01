@@ -11,15 +11,15 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry
  
 ----------
 Module: cloud.google.com/go/auth
-Version: v0.23.3
+Version: v0.24.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/auth/v0.23.3/auth/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/auth/v0.24.0/auth/LICENSE
  
 ----------
 Module: cloud.google.com/go/auth/oauth2adapt
-Version: v0.2.8
+Version: v0.3.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt/v0.2.8/auth/oauth2adapt/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt/v0.3.0/auth/oauth2adapt/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute
@@ -29,9 +29,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.71.0/
  
 ----------
 Module: cloud.google.com/go/compute/metadata
-Version: v0.9.1
+Version: v0.10.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata/v0.9.1/compute/metadata/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/metadata/v0.10.0/compute/metadata/LICENSE
  
 ----------
 Module: cloud.google.com/go/iam/apiv1/iampb
@@ -1511,15 +1511,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.299.0
+Version: v0.300.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.299.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.300.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.299.0
+Version: v0.300.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.299.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.300.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
