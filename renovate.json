@@ -11,6 +11,16 @@
         "# renovate: datasource=helm depName=(?<depName>[^\\s]+) registryUrl=(?<registryUrl>[^\\s]+)\\n\\s+install, err := argocd\\.NewInstaller\\(argocd\\.InstallerConfig\\{\\n\\s+Version:\\s+\"(?<currentValue>[^\"]+)\""
       ],
       "datasourceTemplate": "helm"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/internal/installer/k0sctl\\.go/"
+      ],
+      "matchStrings": [
+        "renovate: datasource=github-releases depName=(?<depName>[^\\s]+)\\nconst DefaultK0sctlVersion = \"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [

@@ -34,6 +34,12 @@ $ oms vault-secret --vault-file prod.vault.yaml --age-key /path/to/age_key.txt -
       --vault-type string    Vault storage type (sops or plain) (default "sops")
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta](oms_beta.md)	 - Commands for early testing

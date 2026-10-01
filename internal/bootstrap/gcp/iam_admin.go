@@ -239,7 +239,7 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 		return fmt.Errorf("failed to ensure cloud-controller role bindings: %w", err)
 	}
 
-	err = b.ensureDnsPermissions()
+	err = b.ensureDNSPermissions()
 	if err != nil {
 		return fmt.Errorf("failed to ensure DNS permissions: %w", err)
 	}

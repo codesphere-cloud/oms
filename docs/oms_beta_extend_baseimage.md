@@ -24,6 +24,12 @@ oms beta extend baseimage [flags]
   -p, --package string      Package file (e.g. codesphere-v1.2.3-installer.tar.gz) to load base image from
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta extend](oms_beta_extend.md)	 - Extend Codesphere ressources such as base images.

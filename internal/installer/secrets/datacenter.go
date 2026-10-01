@@ -26,6 +26,9 @@ var DataCenterScopedSecretNames = []string{
 	files.SecretKubeConfig,
 	// ACME external account binding — paired with codesphere.certIssuer.acme.eabKeyId.
 	files.SecretAcmeEabMacKey,
+	// ACME external account binding for custom domains — paired with
+	// codesphere.certIssuer.acme.customDomainsEabKeyId.
+	files.SecretAcmeCustomDomainsEabMacKey,
 	// Only present in recovered vaults; keyed to a single cluster's nix cache.
 	files.SecretPrivNixSigningKey,
 	files.SecretPubNixSigningKey,
@@ -100,8 +103,10 @@ func clearDataCenterScopedConfig(config *files.RootConfig) {
 	config.Cluster.Certificates.CA.CertPem = ""
 	// Paired with cephSshPrivateKey, written by EnsureCephSSHKeys.
 	config.Ceph.CephAdmSSHKey.PublicKey = ""
-	// Paired with acmeEabMacKey, obtained per data center from the ACME CA.
+	// Paired with acmeEabMacKey / acmeCustomDomainsEabMacKey, obtained per data center from
+	// the ACME CA.
 	if config.Codesphere.CertIssuer != nil && config.Codesphere.CertIssuer.Acme != nil {
 		config.Codesphere.CertIssuer.Acme.EABKeyID = ""
+		config.Codesphere.CertIssuer.Acme.CustomDomainsEABKeyID = ""
 	}
 }

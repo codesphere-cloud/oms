@@ -254,7 +254,8 @@ type ACMEConfig struct {
 	PrivateKeySecretName string     `yaml:"-"`
 	Solver               ACMESolver `yaml:"-"`
 
-	EABKeyID string `yaml:"eabKeyId,omitempty"`
+	EABKeyID              string `yaml:"eabKeyId,omitempty"`
+	CustomDomainsEABKeyID string `yaml:"customDomainsEabKeyId,omitempty"`
 }
 
 type ACMESolver struct {

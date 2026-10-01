@@ -82,6 +82,9 @@ type InitInstallConfigOpts struct {
 	ACMEEABMacKey     string
 	ACMEDNS01Provider string
 
+	ACMECustomDomainsEABKeyID  string
+	ACMECustomDomainsEABMacKey string
+
 	CodesphereDomain                       string
 	CodespherePublicIP                     string
 	CodesphereWorkspaceHostingBaseDomain   string
@@ -198,6 +201,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.ACMEServer, "acme-server", "https://acme-v02.api.letsencrypt.org/directory", "ACME server URL")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEEABKeyID, "acme-eab-key-id", "", "External Account Binding key ID (required by some ACME providers)")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEEABMacKey, "acme-eab-mac-key", "", "External Account Binding MAC key (required by some ACME providers)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMECustomDomainsEABKeyID, "acme-custom-domains-eab-key-id", "", "External Account Binding key ID for custom-domain certificates (must differ from --acme-eab-key-id)")
+	c.cmd.Flags().StringVar(&c.Opts.ACMECustomDomainsEABMacKey, "acme-custom-domains-eab-mac-key", "", "External Account Binding MAC key for custom-domain certificates")
 	c.cmd.Flags().StringVar(&c.Opts.ACMEDNS01Provider, "acme-dns01-provider", "", "DNS provider for DNS-01 solver (e.g., cloudflare)")
 
 	c.cmd.Flags().StringVar(&c.Opts.CodesphereDomain, "domain", "", "Main Codesphere domain")
@@ -511,6 +516,12 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		}
 		if c.Opts.ACMEEABMacKey != "" {
 			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMEEABMacKey}})
+		}
+		if c.Opts.ACMECustomDomainsEABKeyID != "" {
+			certIssuer.Acme.CustomDomainsEABKeyID = c.Opts.ACMECustomDomainsEABKeyID
+		}
+		if c.Opts.ACMECustomDomainsEABMacKey != "" {
+			vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeCustomDomainsEabMacKey, Fields: &files.SecretFields{Password: c.Opts.ACMECustomDomainsEABMacKey}})
 		}
 
 		// Configure DNS-01 solver

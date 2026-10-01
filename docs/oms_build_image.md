@@ -28,6 +28,12 @@ $ oms build image --dockerfile baseimage/Dockerfile --package codesphere-v1.68.0
   -r, --registry string     Registry URL to push to (e.g., my-registry.com/my-image) (required)
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms build](oms_build.md)	 - Build and push images to a registry

@@ -280,6 +280,28 @@ func (g *InstallConfig) collectACMEConfig(prompter prompt.Prompter) {
 		}
 	}
 
+	// External Account Binding (EAB) for custom domains
+	log.Println("\n--- Custom Domains External Account Binding (Optional) ---")
+	hasCustomDomainsEAB := prompter.Bool("Configure a separate External Account Binding for custom-domain certificates", certIssuer.Acme.CustomDomainsEABKeyID != "")
+
+	certIssuer.Acme.CustomDomainsEABKeyID = ""
+	if hasCustomDomainsEAB {
+		certIssuer.Acme.CustomDomainsEABKeyID = g.collectString(prompter, "Custom Domains EAB Key ID", certIssuer.Acme.CustomDomainsEABKeyID)
+		existingCustomDomainsEabKey := ""
+		if g.Vault != nil {
+			if s := g.Vault.GetSecret(files.SecretAcmeCustomDomainsEabMacKey); s != nil && s.Fields != nil {
+				existingCustomDomainsEabKey = s.Fields.Password
+			}
+		}
+		newCustomDomainsEabKey := g.collectString(prompter, "Custom Domains EAB MAC Key", existingCustomDomainsEabKey)
+		if newCustomDomainsEabKey != "" {
+			if g.Vault == nil {
+				g.Vault = &files.InstallVault{}
+			}
+			g.Vault.SetSecret(files.SecretEntry{Name: files.SecretAcmeCustomDomainsEabMacKey, Fields: &files.SecretFields{Password: newCustomDomainsEabKey}})
+		}
+	}
+
 	// DNS-01 Challenge Configuration
 	log.Println("\n--- DNS-01 Challenge Configuration (Optional) ---")
 	if certIssuer.Acme.Solver.DNS01 == nil {

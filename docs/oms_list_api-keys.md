@@ -16,6 +16,12 @@ oms list api-keys [flags]
   -h, --help   help for api-keys
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms list](oms_list.md)	 - List resources available through OMS

@@ -68,7 +68,7 @@ var _ = Describe("BuildImageCmd", func() {
 			mockPackageManager := installer.NewMockPackageManager(GinkgoT())
 			mockImageManager := system.NewMockImageManager(GinkgoT())
 
-			mockPackageManager.EXPECT().Extract(false).Return(nil)
+			mockPackageManager.EXPECT().Extract(false, false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("", errors.New("failed to extract version"))
 
 			err := c.BuildImage(mockPackageManager, mockImageManager)
@@ -83,7 +83,7 @@ var _ = Describe("BuildImageCmd", func() {
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Registry = "my-registry.com/my-image"
 
-			mockPackageManager.EXPECT().Extract(false).Return(nil)
+			mockPackageManager.EXPECT().Extract(false, false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("codesphere-v1.66.0", nil)
 			mockImageManager.EXPECT().BuildImage("Dockerfile", "my-registry.com/my-image:codesphere-v1.66.0", ".").Return(errors.New("build failed"))
 
@@ -99,7 +99,7 @@ var _ = Describe("BuildImageCmd", func() {
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Registry = "my-registry.com/my-image"
 
-			mockPackageManager.EXPECT().Extract(false).Return(nil)
+			mockPackageManager.EXPECT().Extract(false, false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("codesphere-v1.66.0", nil)
 			mockImageManager.EXPECT().BuildImage("Dockerfile", "my-registry.com/my-image:codesphere-v1.66.0", ".").Return(nil)
 			mockImageManager.EXPECT().PushImage("my-registry.com/my-image:codesphere-v1.66.0").Return(errors.New("push failed"))
@@ -116,7 +116,7 @@ var _ = Describe("BuildImageCmd", func() {
 			c.Opts.Dockerfile = "Dockerfile"
 			c.Opts.Registry = "my-registry.com/my-image"
 
-			mockPackageManager.EXPECT().Extract(false).Return(nil)
+			mockPackageManager.EXPECT().Extract(false, false).Return(nil)
 			mockPackageManager.EXPECT().GetCodesphereVersion().Return("codesphere-v1.66.0", nil)
 			mockImageManager.EXPECT().BuildImage("Dockerfile", "my-registry.com/my-image:codesphere-v1.66.0", ".").Return(nil)
 			mockImageManager.EXPECT().PushImage("my-registry.com/my-image:codesphere-v1.66.0").Return(nil)

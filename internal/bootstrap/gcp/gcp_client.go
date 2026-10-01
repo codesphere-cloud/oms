@@ -63,7 +63,7 @@ type GCPClientManager interface {
 	GetAddress(projectID, region, addressName string) (*computepb.Address, error)
 	EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error
 	EnsureDNSRecordSets(projectID, zoneName string, records []*dns.ResourceRecordSet) error
-	DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error
+	DeleteDNSRecordSets(projectID, zoneName string, records []DNSRecordName) error
 	CreatePublicCAExternalAccountKey(projectID string) (keyID, b64MacKey string, err error)
 	EnsureStorageBucket(projectID, bucketName, location string) error
 	CreateHMACKey(projectID, serviceAccountEmail string) (accessID, secret string, err error)
@@ -877,8 +877,8 @@ func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*d
 	return nil
 }
 
-// DeleteDNSRecordSets deletes DNS record sets created by OMS for the given base domain.
-func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) error {
+// DeleteDNSRecordSets deletes the given DNS record sets, ignoring those that no longer exist.
+func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName string, records []DNSRecordName) error {
 	service, err := dns.NewService(c.ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create DNS service: %w", err)
@@ -886,7 +886,7 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName, baseDomain string) 
 
 	var deletions []*dns.ResourceRecordSet
 
-	for _, record := range GetDNSRecordNames(baseDomain) {
+	for _, record := range records {
 		existing, err := service.ResourceRecordSets.Get(projectID, zoneName, record.Name, record.Rtype).Context(c.ctx).Do()
 		if IsNotFoundError(err) {
 			continue

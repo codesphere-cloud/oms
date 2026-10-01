@@ -12,6 +12,12 @@ Extend Codesphere ressources such as base images to customize them for your need
   -h, --help   help for extend
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta](oms_beta.md)	 - Commands for early testing

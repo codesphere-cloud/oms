@@ -60,6 +60,7 @@ type LocalBootstrapper struct {
 	restConfig *rest.Config
 	fw         util.FileIO
 	icg        installer.InstallConfigManager
+	Verbose    bool
 	// Environment
 	Env *CodesphereEnvironment
 	// cephCredentials holds the Ceph auth credentials read after setup.
@@ -104,7 +105,7 @@ type CodesphereEnvironment struct {
 }
 
 // NewLocalBootstrapper creates a bootstrapper for a local Codesphere cluster.
-func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, env *CodesphereEnvironment) *LocalBootstrapper {
+func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, env *CodesphereEnvironment, verbose bool) *LocalBootstrapper {
 	return &LocalBootstrapper{
 		ctx:        ctx,
 		stlog:      stlog,
@@ -113,6 +114,7 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 		fw:         fw,
 		icg:        icg,
 		Env:        env,
+		Verbose:    verbose,
 	}
 }
 

@@ -116,8 +116,10 @@ spec:
         effect: NoSchedule
 EOF
 
-KUBECTL="/etc/codesphere/deps/kubernetes/files/k0s kubectl"
-$KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system
+set -eo pipefail
+
+KUBECTL="k0s kubectl"
+$KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml | $KUBECTL apply -f -
 echo alias kubectl=\"$KUBECTL\" >> /root/.bashrc
 echo alias k=\"$KUBECTL\" >> /root/.bashrc
 
@@ -128,6 +130,9 @@ $KUBECTL apply -f cc-deployment.yaml
 # set loadBalancerIP for public-gateway-controller and gateway-controller
 $KUBECTL patch svc public-gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'%s'"}}'
 $KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'%s'"}}'
+
+# The worker loop's "systemctl restart k0sworker" also runs here on the controller, which has no such unit.
+set +e
 
 %s
 

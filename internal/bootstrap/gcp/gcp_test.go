@@ -1519,6 +1519,44 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureDNSRecords()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			It("points each data center's platform host at its own gateway", func() {
+				bs.Env.DataCenters = []*datacenter.DataCenter{
+					{
+						ID: 1, GatewayIP: "1.1.1.1", PublicGatewayIP: "1.1.1.2", SSHProxyIP: "1.1.1.3",
+						WorkspaceHostingBaseDomain: "1.ws.example.com", SSHBaseDomain: "1.ssh.cs.example.com",
+					},
+					{
+						ID: 2, Suffix: "-dc2", GatewayIP: "2.2.2.1", PublicGatewayIP: "2.2.2.2", SSHProxyIP: "2.2.2.3",
+						WorkspaceHostingBaseDomain: "2.ws.example.com", SSHBaseDomain: "2.ssh.cs.example.com",
+					},
+				}
+
+				gc.EXPECT().EnsureDNSManagedZone(csEnv.DNSProjectID, csEnv.DNSZoneName, csEnv.BaseDomain+".", mock.Anything).Return(nil)
+
+				targets := map[string]string{}
+
+				gc.EXPECT().EnsureDNSRecordSets(csEnv.DNSProjectID, csEnv.DNSZoneName, mock.Anything).
+					RunAndReturn(func(_ string, _ string, records []*dns.ResourceRecordSet) error {
+						for _, r := range records {
+							targets[r.Name] = r.Rrdatas[0]
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureDNSRecords()).To(Succeed())
+				// The shared platform name stays on the primary data center's gateway, but the
+				// per-data-center platform host the frontend calls resolves to its own gateway.
+				Expect(targets["cs.example.com."]).To(Equal("1.1.1.1"))
+				Expect(targets["*.cs.example.com."]).To(Equal("1.1.1.1"))
+				Expect(targets["1.cs.example.com."]).To(Equal("1.1.1.1"))
+				Expect(targets["2.cs.example.com."]).To(Equal("2.2.2.1"))
+				Expect(targets["*.2.cs.example.com."]).To(Equal("2.2.2.1"))
+				// Workspaces and SSH keep pointing at the public gateway and SSH proxy.
+				Expect(targets["2.ws.example.com."]).To(Equal("2.2.2.2"))
+				Expect(targets["*.2.ssh.cs.example.com."]).To(Equal("2.2.2.3"))
+			})
 		})
 
 		Describe("Invalid cases", func() {
@@ -1782,6 +1820,33 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.GenerateK0sConfigScript()
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			Describe("script content", func() {
+				var script string
+
+				JustBeforeEach(func() {
+					fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).
+						Run(func(_ string, content []byte, _ os.FileMode) { script = string(content) }).
+						Return(nil)
+					nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+					nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+
+					Expect(bs.GenerateK0sConfigScript()).To(Succeed())
+				})
+
+				It("given a natively installed k0s, when the script is generated, then it calls the k0s binary on the PATH", func() {
+					Expect(script).To(ContainSubstring(`KUBECTL="k0s kubectl"`))
+					Expect(script).NotTo(ContainSubstring("/etc/codesphere/deps/kubernetes"))
+				})
+
+				It("given a failing kubectl call, when the script runs, then it exits before reporting success", func() {
+					Expect(script).To(MatchRegexp(`(?s)set -eo pipefail\s+KUBECTL=.*patch svc gateway-controller.*set \+e`))
+				})
+
+				It("given a rerun on an existing cluster, when the script runs, then the cloud-config configmap is applied instead of created", func() {
+					Expect(script).To(ContainSubstring("create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml | $KUBECTL apply -f -"))
+				})
 			})
 		})
 

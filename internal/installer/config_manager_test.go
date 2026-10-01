@@ -310,6 +310,35 @@ var _ = Describe("ConfigManager", func() {
 			})
 		})
 
+		Context("ACME validation", func() {
+			BeforeEach(func() {
+				configManager.Config.Codesphere.CertIssuer = &files.CertIssuerConfig{
+					Type: files.CertIssuerTypeACME,
+					Acme: &files.ACMEConfig{
+						Enabled:  true,
+						EABKeyID: "eab-key-id",
+					},
+				}
+			})
+
+			It("should not error when only the primary EAB key ID is set", func() {
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).ToNot(ContainElement(ContainSubstring("EAB key ID")))
+			})
+
+			It("should not error when the EAB key IDs differ", func() {
+				configManager.Config.Codesphere.CertIssuer.Acme.CustomDomainsEABKeyID = "custom-domains-eab-key-id"
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).ToNot(ContainElement(ContainSubstring("EAB key ID")))
+			})
+
+			It("should error when the EAB key IDs are the same", func() {
+				configManager.Config.Codesphere.CertIssuer.Acme.CustomDomainsEABKeyID = "eab-key-id"
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("ACME EAB key ID and custom-domains EAB key ID must be different")))
+			})
+		})
+
 		Context("openfga backups validation", func() {
 			It("should require destinationPath and endpointURL when enabled", func() {
 				configManager.Config.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{

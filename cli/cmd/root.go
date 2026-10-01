@@ -53,6 +53,9 @@ func GetRootCmd() *cobra.Command {
 			}
 		},
 	}
+
+	rootCmd.PersistentFlags().BoolVarP(&opts.Verbose, "verbose", "", false, "Enable verbose output")
+
 	// General commands
 	AddVersionCmd(rootCmd)
 	AddBetaCmd(rootCmd, opts)

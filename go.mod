@@ -24,17 +24,17 @@ replace (
 )
 
 require (
-	cloud.google.com/go/artifactregistry v1.26.0
-	cloud.google.com/go/compute v1.68.0
-	cloud.google.com/go/iam v1.13.0
-	cloud.google.com/go/resourcemanager v1.16.0
-	cloud.google.com/go/serviceusage v1.15.0
+	cloud.google.com/go/artifactregistry v1.27.0
+	cloud.google.com/go/compute v1.70.0
+	cloud.google.com/go/iam v1.14.0
+	cloud.google.com/go/resourcemanager v1.17.0
+	cloud.google.com/go/serviceusage v1.16.0
 	filippo.io/age v1.3.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/argoproj/argo-cd/v3 v3.5.3
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.40.0
+	github.com/codesphere-cloud/cs-go v1.47.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
 	github.com/distribution/reference v0.6.0
 	github.com/getsops/sops/v3 v3.13.3
@@ -43,10 +43,10 @@ require (
 	github.com/jedib0t/go-pretty/v6 v6.8.3
 	github.com/lib/pq v1.12.3
 	github.com/lithammer/shortuuid v3.0.0+incompatible
-	github.com/onsi/ginkgo/v2 v2.32.2
-	github.com/onsi/gomega v1.43.0
+	github.com/onsi/ginkgo/v2 v2.33.0
+	github.com/onsi/gomega v1.44.0
 	github.com/pkg/sftp v1.13.11
-	github.com/rook/rook/pkg/apis v0.0.0-20260916215613-09bbdd1c16d8
+	github.com/rook/rook/pkg/apis v0.0.0-20260930191534-81a4ec2cf2da
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
@@ -54,13 +54,13 @@ require (
 	golang.org/x/mod v0.41.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/term v0.46.0
-	google.golang.org/api v0.298.0
-	google.golang.org/grpc v1.83.2
+	google.golang.org/api v0.299.0
+	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.3.0
-	k8s.io/api v0.37.0
-	k8s.io/apimachinery v0.37.0
+	k8s.io/api v0.37.1
+	k8s.io/apimachinery v0.37.1
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.24.1
@@ -74,9 +74,9 @@ require (
 	cel.dev/expr v0.25.2 // indirect
 	charm.land/lipgloss/v2 v2.0.6 // indirect
 	cloud.google.com/go v0.123.0 // indirect
-	cloud.google.com/go/auth v0.23.2 // indirect
+	cloud.google.com/go/auth v0.23.3 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
-	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	cloud.google.com/go/compute/metadata v0.9.1 // indirect
 	cloud.google.com/go/kms v1.33.0 // indirect
 	cloud.google.com/go/longrunning v1.2.0 // indirect
 	cloud.google.com/go/monitoring v1.30.0 // indirect
@@ -353,12 +353,12 @@ require (
 	github.com/google/licenseclassifier/v2 v2.0.0 // indirect
 	github.com/google/pprof v0.0.0-20260709232956-b9395ee17fa0 // indirect
 	github.com/google/rpmpack v0.7.1 // indirect
-	github.com/google/s2a-go v0.1.9 // indirect
+	github.com/google/s2a-go v0.1.10 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.1-0.20241114170450-2d3c2a9cc518 // indirect
 	github.com/google/wire v0.7.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.20 // indirect
-	github.com/googleapis/gax-go/v2 v2.24.0 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.22 // indirect
+	github.com/googleapis/gax-go/v2 v2.24.1 // indirect
 	github.com/gordonklaus/ineffassign v0.2.0 // indirect
 	github.com/goreleaser/chglog v0.7.4 // indirect
 	github.com/goreleaser/fileglob v1.4.0 // indirect
@@ -619,11 +619,11 @@ require (
 	go.opentelemetry.io/contrib/detectors/gcp v1.44.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.69.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0 // indirect
-	go.opentelemetry.io/otel v1.44.0 // indirect
-	go.opentelemetry.io/otel/metric v1.44.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.44.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.44.0 // indirect
-	go.opentelemetry.io/otel/trace v1.44.0 // indirect
+	go.opentelemetry.io/otel v1.45.0 // indirect
+	go.opentelemetry.io/otel/metric v1.45.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.45.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v1.45.0 // indirect
+	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -633,17 +633,17 @@ require (
 	gocloud.dev v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20260811152304-ee035b5b010f // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
-	golang.org/x/time v0.15.0 // indirect
+	golang.org/x/time v0.16.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto v0.0.0-20260720171339-e059f2f05d78 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260720171339-e059f2f05d78 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260921155816-b14227669459 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -654,7 +654,7 @@ require (
 	honnef.co/go/tools v0.8.1 // indirect
 	k8s.io/apiextensions-apiserver v0.37.0 // indirect
 	k8s.io/apiserver v0.37.0 // indirect
-	k8s.io/cli-runtime v0.37.0 // indirect
+	k8s.io/cli-runtime v0.37.1 // indirect
 	k8s.io/component-base v0.37.0 // indirect
 	k8s.io/component-helpers v0.36.4 // indirect
 	k8s.io/controller-manager v0.36.1 // indirect
@@ -719,6 +719,6 @@ replace (
 	k8s.io/sample-controller => k8s.io/sample-controller v0.36.4
 )
 
-replace k8s.io/cri-streaming => k8s.io/cri-streaming v0.37.0
+replace k8s.io/cri-streaming => k8s.io/cri-streaming v0.37.1
 
-replace k8s.io/streaming => k8s.io/streaming v0.37.0
+replace k8s.io/streaming => k8s.io/streaming v0.37.1

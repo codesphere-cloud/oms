@@ -17,6 +17,12 @@ oms revoke api-key [flags]
   -i, --id string   API key id to revoke
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms revoke](oms_revoke.md)	 - Revoke resources available through OMS

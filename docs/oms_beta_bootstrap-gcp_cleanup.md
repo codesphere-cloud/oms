@@ -42,6 +42,12 @@ $ oms beta bootstrap-gcp cleanup --project-id my-project --base-domain example.c
       --skip-dns-cleanup        Skip cleaning up DNS records
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta bootstrap-gcp](oms_beta_bootstrap-gcp.md)	 - Bootstrap GCP infrastructure for Codesphere

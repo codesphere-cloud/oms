@@ -88,6 +88,12 @@ oms beta bootstrap-gcp [flags]
       --zone string                               GCP Zone (default: europe-west4-a) (default "europe-west4-a")
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms beta](oms_beta.md)	 - Commands for early testing

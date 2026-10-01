@@ -44,6 +44,12 @@ $ oms template config --config config.yaml --vault prod.vault.yaml --age-key age
       --vault-type string   Vault storage type (sops or plain) (default "sops")
 ```
 
+### Options inherited from parent commands
+
+```
+      --verbose   Enable verbose output
+```
+
 ### SEE ALSO
 
 * [oms template](oms_template.md)	 - Render OMS configuration templates
