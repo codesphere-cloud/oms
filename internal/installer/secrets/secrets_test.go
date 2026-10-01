@@ -21,7 +21,7 @@ func newVault() *files.InstallVault {
 }
 
 var _ = Describe("EnsureAuthKeys", func() {
-	It("writes RSA token key pair and EC domain-auth key pair to vault", func() {
+	It("writes ES256 token key pair and EC domain-auth key pair to vault", func() {
 		vault := newVault()
 		Expect(secrets.EnsureAuthKeys(vault)).To(Succeed())
 
@@ -54,14 +54,35 @@ var _ = Describe("EnsureAuthKeys", func() {
 
 	It("generates domain auth keys independently when only token key is pre-populated", func() {
 		vault := newVault()
-		vault.SetSecret(files.SecretEntry{Name: "tokenPrivateKey", File: &files.SecretFile{Name: "key.pem", Content: "existing"}})
-		vault.SetSecret(files.SecretEntry{Name: "tokenPublicKey", File: &files.SecretFile{Name: "key.pub", Content: "existing-pub"}})
+		Expect(secrets.EnsureAuthKeys(vault)).To(Succeed())
+		existing := vault.GetSecret("tokenPrivateKey").File.Content
+		vault.RemoveSecret("domainAuthPrivateKey")
+		vault.RemoveSecret("domainAuthPublicKey")
 
 		Expect(secrets.EnsureAuthKeys(vault)).To(Succeed())
 
-		Expect(vault.GetSecret("tokenPrivateKey").File.Content).To(Equal("existing"))
+		Expect(vault.GetSecret("tokenPrivateKey").File.Content).To(Equal(existing))
 		assertFileSecret(vault, "domainAuthPrivateKey", "EC PRIVATE KEY")
 		assertFileSecret(vault, "domainAuthPublicKey", "PUBLIC KEY")
+	})
+
+	It("supports every configured signing algorithm and preserves existing RSA keys", func() {
+		for _, algorithm := range []string{"ES256", "ES384", "ES512", "RS512"} {
+			vault := newVault()
+			Expect(secrets.EnsureAuthKeys(vault, algorithm)).To(Succeed())
+			Expect(secrets.EnsureAuthKeys(vault)).To(Succeed())
+			Expect(secrets.EnsureServiceAccountTokens(vault)).To(Succeed())
+			token := vault.GetSecret("authServiceUserToken").Fields.Password
+			parsed, _, err := new(jwt.Parser).ParseUnverified(token, jwt.MapClaims{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(parsed.Method.Alg()).To(Equal(algorithm))
+		}
+	})
+
+	It("rejects a configured algorithm that conflicts with an existing key", func() {
+		vault := newVault()
+		Expect(secrets.EnsureAuthKeys(vault, "ES384")).To(Succeed())
+		Expect(secrets.EnsureAuthKeys(vault, "ES256")).To(MatchError(ContainSubstring("does not match")))
 	})
 
 	It("generates distinct keys on each fresh invocation", func() {
@@ -481,14 +502,14 @@ var _ = Describe("EnsureServiceAccountTokens", func() {
 		}
 	})
 
-	It("tokens are valid RS512 JWTs with correct claims", func() {
+	It("tokens are valid ES256 JWTs with correct claims", func() {
 		Expect(secrets.EnsureServiceAccountTokens(vault)).To(Succeed())
 
 		tokenStr := vault.GetSecret("authServiceUserToken").Fields.Password
 		// Parse without verification to inspect claims.
 		tok, _, err := new(jwt.Parser).ParseUnverified(tokenStr, jwt.MapClaims{})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(tok.Method.Alg()).To(Equal("RS512"))
+		Expect(tok.Method.Alg()).To(Equal("ES256"))
 
 		claims, ok := tok.Claims.(jwt.MapClaims)
 		Expect(ok).To(BeTrue())
@@ -496,6 +517,14 @@ var _ = Describe("EnsureServiceAccountTokens", func() {
 		Expect(claims["authenticationMethod"]).To(Equal("service"))
 		Expect(claims["email"]).To(Equal("auth.service@codesphere.com"))
 		Expect(claims["userId"]).To(BeNumerically("==", -1))
+	})
+
+	It("renews tokens on every call", func() {
+		Expect(secrets.EnsureServiceAccountTokens(vault)).To(Succeed())
+		original := vault.GetSecret("authServiceUserToken").Fields.Password
+		Expect(secrets.EnsureServiceAccountTokens(vault)).To(Succeed())
+		Expect(vault.GetSecret("authServiceUserToken").Fields.Password).NotTo(Equal(original))
+		Expect(vault.GetSecret("paymentServiceUserToken")).NotTo(BeNil())
 	})
 
 	It("returns an error when tokenPrivateKey is absent", func() {

@@ -52,9 +52,9 @@ func (v *VaultSecretCreator) CreateSecretFromStore(ctx context.Context, store Va
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
 
-	// Always create new service accounts tokens during creation to ensure they are always valid and updated.
+	// Always issue fresh service account tokens when syncing the Kubernetes secret.
 	if err := secrets.EnsureServiceAccountTokens(data); err != nil {
-		return fmt.Errorf("failed to ensure service account tokens: %w", err)
+		return fmt.Errorf("failed to renew service account tokens: %w", err)
 	}
 
 	return v.CreateSecretFromVault(ctx, data, namespace, secretName)

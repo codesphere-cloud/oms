@@ -112,7 +112,7 @@ func (i *AppInstaller) InstallArgoCD() error {
 // SyncVaultSecret refreshes the service account tokens and creates or updates
 // the Codesphere vault secret in Kubernetes.
 func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
-	if err := secrets.EnsureServiceAccountTokens(i.cfg.Vault); err != nil {
+	if err := secrets.EnsureServiceAccountTokens(i.cfg.Vault, i.cfg.Config.Codesphere.TokenAlgorithm); err != nil {
 		return fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 	creator := vault.NewVaultSecretCreator(i.cfg.KubeClient)

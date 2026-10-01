@@ -340,6 +340,7 @@ type MetalLBBGPConfig struct {
 }
 
 type CodesphereConfig struct {
+	TokenAlgorithm             string                 `yaml:"tokenAlgorithm,omitempty"`
 	Domain                     string                 `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                 `yaml:"workspaceHostingBaseDomain"`
 	PublicIP                   string                 `yaml:"publicIp"`
