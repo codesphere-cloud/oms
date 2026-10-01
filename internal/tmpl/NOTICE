@@ -23,9 +23,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/auth/oauth2adapt
  
 ----------
 Module: cloud.google.com/go/compute
-Version: v1.70.0
+Version: v1.71.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.70.0/compute/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/compute/v1.71.0/compute/LICENSE
  
 ----------
 Module: cloud.google.com/go/compute/metadata
@@ -719,9 +719,9 @@ License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.
  
 ----------
 Module: github.com/googleapis/gax-go/v2
-Version: v2.24.1
+Version: v2.26.2
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/gax-go/blob/v2.24.1/v2/LICENSE
+License URL: https://github.com/googleapis/gax-go/blob/v2.26.2/v2/LICENSE
  
 ----------
 Module: github.com/gorilla/websocket
