@@ -171,6 +171,91 @@ var _ = Describe("Installer.Install", func() {
 			err := a.Install()
 			Expect(err).ToNot(HaveOccurred())
 		})
+
+		It("trusts the registry certificate authority under the host without its port", func() {
+			authority := filepath.Join(GinkgoT().TempDir(), "registry.crt")
+			Expect(os.WriteFile(authority, []byte("-----BEGIN CERTIFICATE-----\n"), 0o600)).To(Succeed())
+
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				configs, ok := cfg.Values["configs"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+
+				tls, ok := configs["tls"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+
+				certificates, ok := tls["certificates"].(map[string]interface{})
+
+				return ok && certificates["10.10.0.7"] == "-----BEGIN CERTIFICATE-----\n"
+			}), mock.Anything).Return(nil)
+
+			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+				Version:           "7.0.0",
+				OciRegistryURL:    "10.10.0.7:5000/codesphere-cloud/charts",
+				OciRegistryCAFile: authority,
+			}, Helm: helmMock}
+
+			Expect(a.Install()).To(Succeed())
+		})
+
+		It("trusts the certificate authority under the host of a registry URL naming its scheme", func() {
+			authority := filepath.Join(GinkgoT().TempDir(), "registry.crt")
+			Expect(os.WriteFile(authority, []byte("-----BEGIN CERTIFICATE-----\n"), 0o600)).To(Succeed())
+
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				configs, ok := cfg.Values["configs"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+
+				tls, ok := configs["tls"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+
+				certificates, ok := tls["certificates"].(map[string]interface{})
+
+				return ok && certificates["10.10.0.7"] != nil
+			}), mock.Anything).Return(nil)
+
+			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+				Version:           "7.0.0",
+				OciRegistryURL:    "oci://10.10.0.7/codesphere-cloud/charts",
+				OciRegistryCAFile: authority,
+			}, Helm: helmMock}
+
+			Expect(a.Install()).To(Succeed())
+		})
+
+		It("configures no certificate authority when none is given", func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				_, configured := cfg.Values["configs"]
+				return !configured
+			}), mock.Anything).Return(nil)
+
+			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+				Version:        "7.0.0",
+				OciRegistryURL: "ghcr.io/codesphere-cloud/charts",
+			}, Helm: helmMock}
+
+			Expect(a.Install()).To(Succeed())
+		})
+
+		It("fails when the certificate authority cannot be read", func() {
+			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+				Version:           "7.0.0",
+				OciRegistryURL:    "10.10.0.7:5000/codesphere-cloud/charts",
+				OciRegistryCAFile: "/does/not/exist.crt",
+			}, Helm: helmMock}
+
+			Expect(a.Install()).To(MatchError(ContainSubstring("reading registry certificate authority")))
+		})
 	})
 
 	Context("values overrides", func() {
