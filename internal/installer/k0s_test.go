@@ -537,7 +537,6 @@ var _ = Describe("K0s", func() {
 			Expect(err.Error()).To(ContainSubstring("failed to create workdir"))
 		})
 	})
-
 })
 
 // fakeDirEntry is a minimal os.DirEntry for cache lookups in tests.

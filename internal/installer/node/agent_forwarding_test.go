@@ -42,12 +42,14 @@ func listedKeys(a agent.Agent) []string {
 	for _, k := range keys {
 		blobs = append(blobs, string(k.Marshal()))
 	}
+
 	return blobs
 }
 
 func publicBlob(priv ed25519.PrivateKey) string {
 	signer, err := ssh.NewSignerFromKey(priv)
 	Expect(err).NotTo(HaveOccurred())
+
 	return string(signer.PublicKey().Marshal())
 }
 

@@ -1,6 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package node manages the remote hosts of an installation over SSH.
 package node
 
 import (
@@ -703,6 +704,7 @@ func (n *Node) loadPrivateKey() (any, error) {
 // forwarded agent, so it always offers the key at KeyPath, even when the local agent lacks it.
 func (n *Node) setupAgentForwarding(client *ssh.Client) error {
 	var localAgent agent.ExtendedAgent
+
 	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
 		conn, err := net.Dial("unix", authSocket)
 		if err != nil {
@@ -716,11 +718,16 @@ func (n *Node) setupAgentForwarding(client *ssh.Client) error {
 	if err != nil {
 		return err
 	}
+
 	if forwarded == nil {
 		return nil
 	}
 
-	return agent.ForwardToAgent(client, forwarded)
+	if err := agent.ForwardToAgent(client, forwarded); err != nil {
+		return fmt.Errorf("failed to forward SSH agent: %w", err)
+	}
+
+	return nil
 }
 
 // forwardedAgent returns the agent to forward to remote hosts: the local agent when it already
@@ -735,7 +742,9 @@ func (n *Node) forwardedAgent(localAgent agent.ExtendedAgent) (agent.Agent, erro
 		if localAgent == nil {
 			return nil, fmt.Errorf("no SSH agent to forward and failed to load private key: %w", err)
 		}
+
 		log.Printf("Warning: forwarding SSH agent without the key at %s: %v", n.KeyPath, err)
+
 		return localAgent, nil
 	}
 
@@ -762,6 +771,7 @@ func agentHoldsKey(a agent.Agent, keyPath string, fileIO util.FileIO) bool {
 	if err != nil {
 		return false
 	}
+
 	pub, _, _, _, err := ssh.ParseAuthorizedKey(pubBytes)
 	if err != nil {
 		return false
@@ -771,6 +781,7 @@ func agentHoldsKey(a agent.Agent, keyPath string, fileIO util.FileIO) bool {
 	if err != nil {
 		return false
 	}
+
 	target := string(pub.Marshal())
 	for _, k := range keys {
 		if string(k.Marshal()) == target {
@@ -798,11 +809,17 @@ func (a *keyAddingAgent) Sign(key ssh.PublicKey, data []byte) (*ssh.Signature, e
 }
 
 func (a *keyAddingAgent) SignWithFlags(key ssh.PublicKey, data []byte, flags agent.SignatureFlags) (*ssh.Signature, error) {
+	signer := a.ExtendedAgent
 	if bytes.Equal(key.Marshal(), a.keyBlob) {
-		return a.keyring.SignWithFlags(key, data, flags)
+		signer = a.keyring
 	}
 
-	return a.ExtendedAgent.SignWithFlags(key, data, flags)
+	signature, err := signer.SignWithFlags(key, data, flags)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign with SSH agent: %w", err)
+	}
+
+	return signature, nil
 }
 
 func (a *keyAddingAgent) Signers() ([]ssh.Signer, error) {
