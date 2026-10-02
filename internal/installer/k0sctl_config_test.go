@@ -146,9 +146,7 @@ var _ = Describe("K0sctlConfig", func() {
 					{IPAddress: "10.0.2.10"},
 				}
 
-				airgap := installer.AirgapOptions{Enabled: true, BundlePath: "/cache/k0s-airgap-bundle-amd64"}
-
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", airgap))
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", "/cache/k0s-airgap-bundle-amd64"))
 				Expect(err).ToNot(HaveOccurred())
 
 				// Controllers without the worker role do not import image bundles.
@@ -169,14 +167,32 @@ var _ = Describe("K0sctlConfig", func() {
 					{IPAddress: "10.0.1.10"}, // Same node, so it also runs a worker
 				}
 
-				airgap := installer.AirgapOptions{Enabled: true, BundlePath: "/cache/bundle"}
-
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", airgap))
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", "/cache/bundle"))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(1))
 				Expect(k0sctlConfig.Spec.Hosts[0].InstallFlags).To(Equal([]string{"--enable-worker", "--no-taints=true"}))
 				Expect(k0sctlConfig.Spec.Hosts[0].Files).To(HaveLen(1))
+			})
+
+			It("should stop pulling images when airgapped", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", "/cache/bundle"))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(k0sctlConfig.Spec.K0s.Config.Spec.Images.DefaultPullPolicy).To(Equal("Never"))
+
+				yamlData, err := k0sctlConfig.Marshal()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(string(yamlData)).To(ContainSubstring("default_pull_policy: Never"))
+			})
+
+			It("should keep the default pull policy for installations with internet access", func() {
+				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
+
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlOptions("v1.30.0+k0s.0", "/path/to/key", ""))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(k0sctlConfig.Spec.K0s.Config.Spec.Images.DefaultPullPolicy).To(Equal("IfNotPresent"))
 			})
 
 			It("should not upload files for installations with internet access", func() {
@@ -198,9 +214,7 @@ var _ = Describe("K0sctlConfig", func() {
 					{IPAddress: "10.0.2.10"},
 				}
 
-				airgap := installer.AirgapOptions{Enabled: true, BundlePath: "/cache/bundle"}
-
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", airgap))
+				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig, k0sctlAirgapOptions("v1.30.0+k0s.0", "/cache/bundle"))
 				Expect(err).ToNot(HaveOccurred())
 
 				yamlData, err := k0sctlConfig.Marshal()
@@ -250,16 +264,6 @@ var _ = Describe("K0sctlConfig", func() {
 				Expect(err.Error()).To(ContainSubstring("k0sctl is only supported for Codesphere-managed Kubernetes"))
 				Expect(k0sctlConfig).To(BeNil())
 			})
-
-			It("should return error for airgapped installations without a bundle path", func() {
-				installConfig := newTestConfig("test-dc", true, "10.0.1.10")
-
-				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig,
-					k0sctlAirgapOptions("v1.30.0+k0s.0", installer.AirgapOptions{Enabled: true}))
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("require an airgap bundle path"))
-				Expect(k0sctlConfig).To(BeNil())
-			})
 		})
 
 		Context("edge cases", func() {
@@ -302,7 +306,7 @@ var _ = Describe("K0sctlConfig", func() {
 				}
 
 				k0sctlConfig, err := installer.GenerateK0sctlConfig(installConfig,
-					k0sctlAirgapOptions("v1.30.0+k0s.0", installer.AirgapOptions{Enabled: true, BundlePath: "/cache/bundle"}))
+					k0sctlAirgapOptions("v1.30.0+k0s.0", "/cache/bundle"))
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(k0sctlConfig.Spec.Hosts).To(HaveLen(1))
@@ -349,10 +353,10 @@ func k0sctlOptions(k0sVersion, sshKeyPath, k0sBinaryPath string) installer.K0sct
 }
 
 // k0sctlAirgapOptions builds k0sctl options for airgapped installations.
-func k0sctlAirgapOptions(k0sVersion string, airgap installer.AirgapOptions) installer.K0sctlOptions {
+func k0sctlAirgapOptions(k0sVersion, bundlePath string) installer.K0sctlOptions {
 	return installer.K0sctlOptions{
-		K0sVersion: k0sVersion,
-		SSHKeyPath: "/path/to/key",
-		Airgap:     airgap,
+		K0sVersion:       k0sVersion,
+		SSHKeyPath:       "/path/to/key",
+		AirgapBundlePath: bundlePath,
 	}
 }

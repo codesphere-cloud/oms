@@ -58,8 +58,8 @@ type K0sctlOptions struct {
 	SSHKeyPath string
 	// K0sBinaryPath is the local k0s binary that k0sctl uploads to the nodes.
 	K0sBinaryPath string
-	// Airgap describes an airgapped installation.
-	Airgap AirgapOptions
+	// AirgapBundlePath is the image bundle that k0sctl uploads to the worker nodes.
+	AirgapBundlePath string
 }
 
 type K0sctlSSH struct {
@@ -121,8 +121,8 @@ func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, instal
 		host.K0sBinaryPath = options.K0sBinaryPath
 	}
 
-	if runsWorker && options.Airgap.Enabled {
-		host.Files = []K0sctlFile{{Src: options.Airgap.BundlePath, DstDir: AirgapImagesDir, Perm: "0644"}}
+	if runsWorker && options.AirgapBundlePath != "" {
+		host.Files = []K0sctlFile{{Src: options.AirgapBundlePath, DstDir: AirgapImagesDir, Perm: "0644"}}
 	}
 
 	k.Hosts = append(k.Hosts, host)
@@ -138,13 +138,13 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, options K0sctlOptions
 		return nil, fmt.Errorf("k0sctl is only supported for Codesphere-managed Kubernetes")
 	}
 
-	if options.Airgap.Enabled && options.Airgap.BundlePath == "" {
-		return nil, fmt.Errorf("airgapped installations require an airgap bundle path")
-	}
-
-	k0sConfig, err := GenerateK0sConfig(installConfig, options.Airgap)
+	k0sConfig, err := GenerateK0sConfig(installConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate k0s config: %w", err)
+	}
+
+	if options.AirgapBundlePath != "" {
+		k0sConfig.Spec.Images.DefaultPullPolicy = "Never"
 	}
 
 	k0sctlConfig := &K0sctlConfig{

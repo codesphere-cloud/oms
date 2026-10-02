@@ -99,14 +99,13 @@ func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) 
 
 	io.Verbosef(!opts.Quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 
-	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sctlBinaryName, downloadURL, opts.Quiet)
-	if err != nil {
+	if err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sctlBinaryName, downloadURL, opts.Quiet); err != nil {
 		return "", err
 	}
 
-	io.Verbosef(!opts.Quiet, "k0sctl downloaded successfully to %s", path)
+	io.Verbosef(!opts.Quiet, "k0sctl downloaded successfully to %s", cachePath)
 
-	return path, nil
+	return cachePath, nil
 }
 
 func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {

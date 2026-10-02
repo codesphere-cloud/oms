@@ -67,10 +67,8 @@ type K0sKonnectivity struct {
 	AgentPort int `yaml:"agentPort,omitempty"`
 }
 
-// GenerateK0sConfig generates the k0s cluster configuration for a Codesphere
-// install-config. Airgapped installations are requested through the airgap options
-// and stop k0s from pulling images.
-func GenerateK0sConfig(installConfig *files.RootConfig, airgap AirgapOptions) (*K0sConfig, error) {
+// GenerateK0sConfig generates a K0sConfig based on the provided RootConfig.
+func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 	if installConfig == nil {
 		return nil, fmt.Errorf("installConfig cannot be nil")
 	}
@@ -120,7 +118,7 @@ func GenerateK0sConfig(installConfig *files.RootConfig, airgap AirgapOptions) (*
 		}
 
 		k0sConfig.Spec.Images = &K0sImages{
-			DefaultPullPolicy: pullPolicyFor(airgap),
+			DefaultPullPolicy: "IfNotPresent",
 		}
 
 		k0sConfig.Spec.Telemetry = &K0sTelemetry{
@@ -134,16 +132,6 @@ func GenerateK0sConfig(installConfig *files.RootConfig, airgap AirgapOptions) (*
 	}
 
 	return k0sConfig, nil
-}
-
-// pullPolicyFor returns the k0s image pull policy. Airgapped installations get their
-// images from a pre-loaded bundle, so they must never pull from the internet.
-func pullPolicyFor(options AirgapOptions) string {
-	if options.Enabled {
-		return "Never"
-	}
-
-	return "IfNotPresent"
 }
 
 func (c *K0sConfig) Marshal() ([]byte, error) {

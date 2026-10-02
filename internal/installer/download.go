@@ -77,13 +77,11 @@ func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string,
 		return cachePath, true
 	}
 
-	replaceReason := fmt.Sprintf("version could not be determined: %v", versionErr)
-	if versionErr == nil {
-		replaceReason = fmt.Sprintf("version %s does not match requested version %s; replacing it",
-			cachedVersion, requestedVersion)
+	if versionErr != nil {
+		io.Verbosef(!opts.Quiet, "Replacing cached %s: version could not be determined: %v", name, versionErr)
+	} else {
+		io.Verbosef(!opts.Quiet, "Replacing cached %s %s: requested version %s", name, cachedVersion, requestedVersion)
 	}
-
-	io.Verbosef(!opts.Quiet, "Replacing existing %s binary: Cached %s %s", name, name, replaceReason)
 
 	return "", false
 }
@@ -108,16 +106,16 @@ func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, 
 	return nil
 }
 
-func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, binaryName, downloadURL string, quiet bool) (string, error) {
+func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, binaryName, downloadURL string, quiet bool) error {
 	if err := downloadToPath(fw, http, binaryPath, downloadURL, quiet); err != nil {
-		return "", fmt.Errorf("failed to download: %w", err)
+		return fmt.Errorf("failed to download: %w", err)
 	}
 
 	if err := fw.Chmod(binaryPath, 0755); err != nil {
-		return "", fmt.Errorf("failed to make %s binary executable: %w", binaryName, err)
+		return fmt.Errorf("failed to make %s binary executable: %w", binaryName, err)
 	}
 
-	return binaryPath, nil
+	return nil
 }
 
 func localBinaryVersion(binaryPath string) (string, error) {

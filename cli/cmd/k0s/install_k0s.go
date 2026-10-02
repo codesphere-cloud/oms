@@ -237,10 +237,10 @@ func (c *InstallK0sCmd) prepareK0sctlConfig(pm installer.PackageManager, k0s ins
 	}
 
 	k0sctlOptions := installer.K0sctlOptions{
-		K0sVersion:    k0sVersion,
-		SSHKeyPath:    c.Opts.SSHKeyPath,
-		K0sBinaryPath: k0sBinaryPath,
-		Airgap:        installer.AirgapOptions{Enabled: c.Opts.Airgap, BundlePath: airgapBundlePath},
+		K0sVersion:       k0sVersion,
+		SSHKeyPath:       c.Opts.SSHKeyPath,
+		K0sBinaryPath:    k0sBinaryPath,
+		AirgapBundlePath: airgapBundlePath,
 	}
 
 	return c.generateK0sctlConfig(config, k0sctlOptions)

@@ -75,17 +75,6 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 		return "", err
 	}
 
-	path, err := k.downloadBinary(version, cacheDir, opts)
-	if err != nil {
-		return "", fmt.Errorf("failed to download k0s binary: %w", err)
-	}
-
-	return path, nil
-}
-
-// downloadBinary stores the k0s binary of version as k0sBinaryName in cacheDir and
-// returns its path, reusing a cached copy unless it is missing or opts force a download.
-func (k *K0s) downloadBinary(version, cacheDir string, opts DownloadOptions) (string, error) {
 	cachePath := filepath.Join(cacheDir, k0sBinaryName)
 	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts); cached {
 		return cachedPath, nil
@@ -94,12 +83,11 @@ func (k *K0s) downloadBinary(version, cacheDir string, opts DownloadOptions) (st
 	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
 	downloadURL := releaseAssetURL(k0sReleaseURL, version, assetName)
 
-	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sBinaryName, downloadURL, opts.Quiet)
-	if err != nil {
-		return "", err
+	if err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sBinaryName, downloadURL, opts.Quiet); err != nil {
+		return "", fmt.Errorf("failed to download k0s binary: %w", err)
 	}
 
-	log.Printf("k0s binary downloaded and made executable at '%s'", path)
+	log.Printf("k0s binary downloaded and made executable at '%s'", cachePath)
 
-	return path, nil
+	return cachePath, nil
 }

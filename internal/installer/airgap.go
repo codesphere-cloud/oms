@@ -5,7 +5,9 @@ package installer
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -20,14 +22,6 @@ const (
 	AirgapImagesDir = "/var/lib/k0s/images"
 )
 
-// AirgapOptions describes an airgapped installation. Enabled marks the installation
-// as airgapped and BundlePath is the local airgap image bundle that k0sctl uploads
-// to the worker nodes.
-type AirgapOptions struct {
-	Enabled    bool
-	BundlePath string
-}
-
 // EnsureAirgapBundle makes sure the airgap image bundle of the given version is
 // available in the OMS cache dir and returns its path.
 func (k *K0s) EnsureAirgapBundle(version string, opts DownloadOptions) (string, error) {
@@ -36,9 +30,14 @@ func (k *K0s) EnsureAirgapBundle(version string, opts DownloadOptions) (string, 
 		return "", err
 	}
 
-	cachePath, err := k.airgapBundleCachePath(version, cacheDir)
-	if err != nil {
-		return "", err
+	cachePath, found := k.cachedAirgapBundle(cacheDir, version)
+	if !found {
+		assetName, err := k.resolveAirgapBundleAssetName(version)
+		if err != nil {
+			return "", err
+		}
+
+		cachePath = filepath.Join(cacheDir, assetName)
 	}
 
 	if k.FileWriter.Exists(cachePath) && !opts.Force {
@@ -57,21 +56,6 @@ func (k *K0s) EnsureAirgapBundle(version string, opts DownloadOptions) (string, 
 	return cachePath, nil
 }
 
-// airgapBundleCachePath prefers an already cached bundle of the given version over
-// resolving the release metadata, so airgapped installations can stay offline.
-func (k *K0s) airgapBundleCachePath(version, cacheDir string) (string, error) {
-	if cachedPath, found := k.cachedAirgapBundle(cacheDir, version); found {
-		return cachedPath, nil
-	}
-
-	assetName, err := k.resolveAirgapBundleAssetName(version)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(cacheDir, assetName), nil
-}
-
 // cachedAirgapBundle returns the path of the cached airgap bundle of the given
 // version, if there is one. An unreadable cache is not an error: the release
 // metadata then decides which bundle to look for.
@@ -81,13 +65,12 @@ func (k *K0s) cachedAirgapBundle(cacheDir, version string) (string, bool) {
 		return "", false
 	}
 
-	for _, entry := range entries {
-		if k.isAirgapBundleFor(entry.Name(), version) {
-			return filepath.Join(cacheDir, entry.Name()), true
-		}
+	i := slices.IndexFunc(entries, func(entry os.DirEntry) bool { return k.isAirgapBundleFor(entry.Name(), version) })
+	if i < 0 {
+		return "", false
 	}
 
-	return "", false
+	return filepath.Join(cacheDir, entries[i].Name()), true
 }
 
 // resolveAirgapBundleAssetName returns the release asset name of the airgap image
@@ -103,13 +86,12 @@ func (k *K0s) resolveAirgapBundleAssetName(version string) (string, error) {
 		return "", err
 	}
 
-	for _, asset := range release.Assets {
-		if k.isAirgapBundleFor(asset.Name, version) {
-			return asset.Name, nil
-		}
+	i := slices.IndexFunc(release.Assets, func(asset githubReleaseAsset) bool { return k.isAirgapBundleFor(asset.Name, version) })
+	if i < 0 {
+		return "", fmt.Errorf("no airgap bundle for %s/%s found in k0s release %s", k.Goos, k.Goarch, version)
 	}
 
-	return "", fmt.Errorf("no airgap bundle for %s/%s found in k0s release %s", k.Goos, k.Goarch, version)
+	return release.Assets[i].Name, nil
 }
 
 // isAirgapBundleFor reports whether name is the airgap image bundle asset of the
