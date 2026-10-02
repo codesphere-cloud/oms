@@ -141,7 +141,7 @@ func (b *LocalBootstrapper) InstallRookHelmChart() error {
 		return fmt.Errorf("failed to build Helm values: %w", err)
 	}
 
-	return b.installHelmApplication(helmApplicationConfig{
+	return b.installPrerequisiteChart(prerequisiteChartConfig{
 		Name: rookReleaseName, Chart: "rook-ceph", RepoURL: rookRepoURL,
 		TargetRevision: rookVersion, Namespace: rookNamespace, Values: helmValues,
 	})

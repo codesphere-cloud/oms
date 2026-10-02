@@ -24,6 +24,9 @@ type InstallCodesphereInfraCmd struct {
 }
 
 func (c *InstallCodesphereInfraCmd) RunE(_ *cobra.Command, _ []string) error {
+	if c.Opts.LocalComponents {
+		return fmt.Errorf("--local-components requires install codesphere dependencies or install codesphere platform")
+	}
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
