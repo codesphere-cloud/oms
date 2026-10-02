@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.47.0
+Version: v1.48.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.47.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.48.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -479,9 +479,9 @@ License URL: https://github.com/go-git/gcfg/blob/3a3c6141e376/LICENSE
  
 ----------
 Module: github.com/go-git/go-billy/v5
-Version: v5.9.1
+Version: v5.9.2
 License: Apache-2.0
-License URL: https://github.com/go-git/go-billy/blob/v5.9.1/LICENSE
+License URL: https://github.com/go-git/go-billy/blob/v5.9.2/LICENSE
  
 ----------
 Module: github.com/go-git/go-git/v5
