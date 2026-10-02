@@ -271,11 +271,12 @@ var _ = Describe("Multi-DC bootstrap", func() {
 				To(Equal(primary.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword).Fields.Password))
 			Expect(primary.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword).Fields.Password).NotTo(BeEmpty())
 
-			// Every cluster node of both data centers must trust the jumpbox registry.
+			// Every cluster node of both data centers and the shared Postgres node must trust the
+			// jumpbox registry.
 			targets := registryCertTargets()
 			GinkgoWriter.Printf("registry certificate copied: %v\n", targets)
 			Expect(targets).To(HaveLen(len(primary.CephNodes) + len(primary.ControlPlaneNodes) +
-				len(secondary.CephNodes) + len(secondary.ControlPlaneNodes)))
+				len(secondary.CephNodes) + len(secondary.ControlPlaneNodes) + 1))
 
 			for _, target := range targets {
 				Expect(target).To(HavePrefix("jumpbox -> "))
