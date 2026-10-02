@@ -84,6 +84,7 @@ oms beta bootstrap-gcp [flags]
       --ssh-private-key-path string               SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string                SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
       --ssh-quiet                                 Suppress SSH command output (default: false)
+      --timer                                     Show how long each step took after it finishes
       --write-config                              Write generated install config to file (default: true) (default true)
       --zone string                               GCP Zone (default: europe-west4-a) (default "europe-west4-a")
 ```

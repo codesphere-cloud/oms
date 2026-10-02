@@ -26,6 +26,7 @@ type BootstrapGcpRestartVMsOpts struct {
 	ProjectID string
 	Zone      string
 	Name      string
+	StepTimer bool
 }
 
 // resolveEnvironment returns the environment to restart VMs in. Project ID and zone come from
@@ -76,7 +77,7 @@ func (c *BootstrapGcpRestartVMsCmd) resolveEnvironment(fw intutil.FileIO) (*gcp.
 
 func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 	ctx := c.cmd.Context()
-	stlog := bootstrap.NewStepLogger(false)
+	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.Opts.StepTimer))
 	fw := intutil.NewFilesystemWriter()
 
 	csEnv, err := c.resolveEnvironment(fw)
@@ -142,6 +143,7 @@ func AddBootstrapGcpRestartVMsCmd(bootstrapGcp *cobra.Command, opts *util.Global
 	}
 
 	flags := restartVMs.cmd.Flags()
+	flags.BoolVar(&restartVMs.Opts.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	flags.StringVar(&restartVMs.Opts.ProjectID, "project-id", "", "GCP Project ID (optional, will use infra file if not provided)")
 	flags.StringVar(&restartVMs.Opts.Zone, "zone", "", "GCP Zone (optional, will use infra file if not provided)")
 	flags.StringVar(&restartVMs.Opts.Name, "name", "", "Name of a specific VM to restart (e.g. jumpbox, postgres, ceph-1, k0s-1). Restarts all VMs if not specified.")

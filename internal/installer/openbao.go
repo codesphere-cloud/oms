@@ -97,6 +97,7 @@ type OpenBaoInstallerConfig struct {
 	ReadinessTimeoutPerReplica time.Duration
 	AgeRecipient               string
 	AgeKeyPath                 string
+	StepTimer                  bool
 }
 
 // OpenBaoInstaller orchestrates the Day-0 bootstrap, configuration, and DR
@@ -143,7 +144,7 @@ func NewOpenBaoInstaller(cfg OpenBaoInstallerConfig) (*OpenBaoInstaller, error) 
 		Helm:      helm,
 		Clientset: clientset,
 		DynClient: dynClient,
-		Logger:    bootstrap.NewStepLogger(false),
+		Logger:    bootstrap.NewStepLogger(false, bootstrap.WithTimer(cfg.StepTimer)),
 		Config:    cfg,
 	}, nil
 }
