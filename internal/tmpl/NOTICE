@@ -199,7 +199,7 @@ License URL: https://github.com/beorn7/perks/blob/v1.0.1/LICENSE
 Module: github.com/blang/semver/v4
 Version: v4.0.0
 License: MIT
-License URL: https://github.com/blang/semver/blob/v4.0.0/v4/LICENSE
+License URL: https://github.com/blang/semver/blob/v4.0.0/LICENSE
  
 ----------
 Module: github.com/bmatcuk/doublestar/v4
@@ -397,7 +397,7 @@ License URL: https://github.com/emirpasic/gods/blob/v1.18.1/LICENSE
 Module: github.com/evanphx/json-patch/v5
 Version: v5.9.11
 License: BSD-3-Clause
-License URL: https://github.com/evanphx/json-patch/blob/v5.9.11/v5/LICENSE
+License URL: https://github.com/evanphx/json-patch/blob/v5.9.11/LICENSE
  
 ----------
 Module: github.com/exponent-io/jsonpath
@@ -721,7 +721,7 @@ License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.
 Module: github.com/googleapis/gax-go/v2
 Version: v2.26.2
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/gax-go/blob/v2.26.2/v2/LICENSE
+License URL: https://github.com/googleapis/gax-go/blob/v2.26.2/LICENSE
  
 ----------
 Module: github.com/gorilla/websocket
@@ -1507,7 +1507,7 @@ License URL: https://cs.opensource.google/go/x/time/+/v0.16.0:LICENSE
 Module: gomodules.xyz/jsonpatch/v2
 Version: v2.5.0
 License: Apache-2.0
-License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
+License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/LICENSE
  
 ----------
 Module: google.golang.org/api
