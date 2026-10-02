@@ -88,8 +88,8 @@ func (b *GCPBootstrapper) EnsureArtifactRegistry() error {
 }
 
 // EnsureLocalContainerRegistry runs a container registry on the jumpbox for installations whose
-// clusters cannot pull from a public registry, such as air-gapped ones, and makes every cluster
-// node of every data center trust its certificate.
+// clusters cannot pull from a public registry, such as air-gapped ones, and makes every node that
+// pulls from it trust its certificate.
 func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	registryNode, err := b.registryNode()
 	if err != nil {
@@ -100,17 +100,49 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		return err
 	}
 
-	registryServer, err := b.ensureRegistryRunning(registryNode)
+	registryServer, created, err := b.ensureRegistryRunning(registryNode)
 	if err != nil {
 		return err
 	}
 
 	b.Env.ContainerRegistryURL = registryServer
 
-	// The certificate must be distributed on every run, not only when the registry was just
-	// created: a re-run that adds a data center finds the registry already up, and that data
-	// center's nodes would otherwise not trust it.
-	return b.distributeRegistryCert(registryNode, b.clusterNodes())
+	nodes := b.registryClientNodes()
+	// A running registry keeps its certificate, so on a re-run only the nodes that lack it, such
+	// as those of an added data center, get it: distributing restarts Docker, and with it Postgres
+	// and the Ceph daemons.
+	if !created {
+		nodes = nodesWithoutRegistryCert(nodes)
+	}
+
+	return b.distributeRegistryCert(registryNode, nodes)
+}
+
+// registryCertPath is where a node keeps the local registry's certificate among its trusted CAs.
+const registryCertPath = "/usr/local/share/ca-certificates/registry.crt"
+
+// registryClientNodes returns every node that pulls images from the local registry: the cluster
+// nodes of all data centers and the shared Postgres node, which runs Postgres from a registry image.
+func (b *GCPBootstrapper) registryClientNodes() []*node.Node {
+	nodes := b.clusterNodes()
+	if b.Env.PostgreSQLNode != nil {
+		nodes = append(nodes, b.Env.PostgreSQLNode)
+	}
+
+	return nodes
+}
+
+// nodesWithoutRegistryCert returns the nodes that do not have the registry certificate yet.
+func nodesWithoutRegistryCert(nodes []*node.Node) []*node.Node {
+	missing := []*node.Node{}
+
+	for _, n := range nodes {
+		if !n.NodeClient.HasFile(n, registryCertPath) {
+			missing = append(missing, n)
+		}
+	}
+
+	return missing
 }
 
 // registryNode returns the jumpbox the local container registry runs on. It is shared by all
@@ -129,8 +161,9 @@ func (b *GCPBootstrapper) registryNode() (*node.Node, error) {
 }
 
 // ensureRegistryRunning starts the container registry on the registry node and generates its
-// credentials when it is not already serving. Returns the registry server address.
-func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node) (string, error) {
+// credentials when it is not already serving. Returns the registry server address and whether the
+// registry, and with it its certificate, was created by this call.
+func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node) (string, bool, error) {
 	localRegistryServer := registryNode.GetInternalIP() + ":5000"
 
 	// Figure out if registry is already running
@@ -158,7 +191,7 @@ func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node) (string
 		b.Env.RegistryUsername = registryUsername
 		b.Env.RegistryPassword = registryPassword
 
-		return localRegistryServer, nil
+		return localRegistryServer, false, nil
 	}
 
 	registryUsername = "custom-registry"
@@ -192,11 +225,11 @@ func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node) (string
 
 		err := registryNode.RunSSHCommand("root", cmd)
 		if err != nil {
-			return "", fmt.Errorf("failed to run command on the jumpbox: %w", err)
+			return "", false, fmt.Errorf("failed to run command on the jumpbox: %w", err)
 		}
 	}
 
-	return localRegistryServer, nil
+	return localRegistryServer, true, nil
 }
 
 // configuredRegistryServer returns the registry server the primary data center's config points
@@ -211,12 +244,12 @@ func (b *GCPBootstrapper) configuredRegistryServer() string {
 }
 
 // distributeRegistryCert installs the local registry's self-signed certificate on the given
-// nodes. It is idempotent, so it is safe — and required — to re-run for an additional data center.
+// nodes. It is idempotent, so it is safe to re-run for an additional data center.
 func (b *GCPBootstrapper) distributeRegistryCert(registryNode *node.Node, nodes []*node.Node) error {
 	for _, node := range nodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
 
-		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":/usr/local/share/ca-certificates/registry.crt")
+		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":"+registryCertPath)
 		if err != nil {
 			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.GetInternalIP(), err)
 		}

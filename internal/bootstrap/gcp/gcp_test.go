@@ -918,8 +918,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(fmt.Errorf("not running"))
 
-				// Install commands (8 commands) + scp/update-ca/docker commands (3 per 4 nodes = 12)
-				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 12)
+				// Install commands (8) + scp/update-ca/docker restart (3) for 4 cluster nodes and Postgres.
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 3*5)
 
 				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient), fakeNode("k0s-2", nodeClient)}
 				bs.Env.CephNodes = []*node.Node{fakeNode("ceph-1", nodeClient), fakeNode("ceph-2", nodeClient)}
@@ -933,7 +933,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			// A re-run that adds a data center finds the registry already up. Its nodes still
 			// need the registry's self-signed certificate, or every image pull fails.
-			It("distributes the registry certificate even when the registry is already running", func() {
+			It("distributes the registry certificate to nodes that lack it when the registry is already running", func() {
 				vault := &files.InstallVault{}
 				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "custom-registry"}})
 				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "existing-password"}})
@@ -958,9 +958,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})).RunAndReturn(func(_ *node.Node, _ string, cmd string) error {
 					scpTargets = append(scpTargets, cmd)
 					return nil
-				}).Times(4)
-				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "update-ca-certificates").Return(nil).Times(4)
-				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "systemctl restart docker.service || true").Return(nil).Times(4)
+				}).Times(5)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "update-ca-certificates").Return(nil).Times(5)
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "systemctl restart docker.service || true").Return(nil).Times(5)
+				nodeClient.EXPECT().HasFile(mock.Anything, "/usr/local/share/ca-certificates/registry.crt").Return(false)
 
 				// Register the second data center only after ensureDataCenters would have run,
 				// mirroring what EnsureComputeInstances produces for a --multi-dc bootstrap.
@@ -978,8 +979,50 @@ var _ = Describe("GCP Bootstrapper", func() {
 				bs.Env.DataCenters[0].ConfigManager = icg
 
 				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
-				Expect(scpTargets).To(HaveLen(4))
+				// Both data centers' cluster nodes and the shared Postgres node.
+				Expect(scpTargets).To(HaveLen(5))
+				Expect(scpTargets).To(ContainElement(ContainSubstring("root@" + bs.Env.PostgreSQLNode.GetInternalIP() + ":")))
 				Expect(bs.Env.RegistryPassword).To(Equal("existing-password"))
+			})
+
+			// Distributing restarts Docker on the node, which would bounce Postgres and the Ceph
+			// daemons on every bootstrap re-run.
+			It("leaves nodes that already trust a running registry alone", func() {
+				vault := &files.InstallVault{}
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "custom-registry"}})
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "existing-password"}})
+				icg.EXPECT().GetVault().Return(vault)
+
+				trusted := fakeNode("k0s-1", nodeClient)
+				added := fakeNode("k0s-1-dc2", nodeClient)
+				bs.Env.DataCenters = []*datacenter.DataCenter{
+					{
+						ID:                1,
+						ControlPlaneNodes: []*node.Node{trusted},
+						CephNodes:         []*node.Node{},
+						InstallConfig: &files.RootConfig{
+							Registry: &files.RegistryConfig{Server: bs.Env.Jumpbox.GetInternalIP() + ":5000"},
+						},
+					},
+					{ID: 2, Suffix: "-dc2", ControlPlaneNodes: []*node.Node{added}, CephNodes: []*node.Node{}},
+				}
+				bs.Env.DataCenters[0].ConfigManager = icg
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(nil)
+				nodeClient.EXPECT().HasFile(trusted, "/usr/local/share/ca-certificates/registry.crt").Return(true)
+				nodeClient.EXPECT().HasFile(bs.Env.PostgreSQLNode, "/usr/local/share/ca-certificates/registry.crt").Return(true)
+				nodeClient.EXPECT().HasFile(added, "/usr/local/share/ca-certificates/registry.crt").Return(false)
+
+				// Only the added data center's node gets the certificate and a Docker restart.
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.HasPrefix(cmd, "scp ") && strings.Contains(cmd, "root@"+added.GetInternalIP()+":")
+				})).Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(added, "root", "update-ca-certificates").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(added, "root", "systemctl restart docker.service || true").Return(nil).Once()
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
 			})
 
 			// The vault then holds the previous registry's credentials, which the running local
@@ -1003,8 +1046,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
 					return strings.Contains(cmd, "podman ps")
 				})).Return(nil)
-				// Install commands (8) + scp/update-ca/docker restart for the one node (3).
-				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 3)
+				// Install commands (8) + scp/update-ca/docker restart (3) for the node and Postgres.
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil).Times(8 + 3*2)
 
 				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
 				Expect(bs.Env.RegistryUsername).To(Equal("custom-registry"))
