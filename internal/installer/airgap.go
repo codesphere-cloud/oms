@@ -98,9 +98,7 @@ func (k *K0s) cachedAirgapBundle(cacheDir, version string) (string, bool) {
 // "k0s-airgap-bundle-<version>-<os>-<arch>.tar", so the name is resolved from the
 // release metadata instead of being constructed.
 func (k *K0s) resolveAirgapBundleAssetName(version string) (string, error) {
-	subject := "k0s release " + version
-
-	release, err := getGitHubRelease(k.Http, fmt.Sprintf("%s/%s", k0sReleaseAPIURL, version), subject)
+	release, err := getGitHubRelease(k.Http, k0sReleaseAPIURL+"/"+version, "k0s release "+version)
 	if err != nil {
 		return "", err
 	}

@@ -77,12 +77,11 @@ func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) 
 	}
 
 	if version == "" {
-		latestVersion, err := k.GetLatestVersion()
+		version, err = k.GetLatestVersion()
 		if err != nil {
 			return "", fmt.Errorf("failed to get latest version: %w", err)
 		}
 
-		version = latestVersion
 		io.Verbosef(!opts.Quiet, "Using latest k0sctl version: %s", version)
 	}
 

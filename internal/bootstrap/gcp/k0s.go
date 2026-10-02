@@ -274,13 +274,13 @@ func (b *GCPBootstrapper) InstallK0s() error {
 func (b *GCPBootstrapper) installK0s(dc *datacenter.DataCenter) error {
 	// Reuse matching cached binaries and let k0sctl reconcile normally. Without
 	// --force, an unchanged cluster remains untouched on bootstrap retries.
-	installCmd := fmt.Sprintf("oms install k0s --version %s --install-config %s --vault %s --vault-priv-key %s",
-		installer.DefaultK0sVersion, dc.RemoteConfigPath, dc.RemoteVaultPath(), dc.RemoteAgeKeyPath())
+	configFlags := fmt.Sprintf("--version %s --install-config %s", installer.DefaultK0sVersion, dc.RemoteConfigPath)
 	if b.Env.Airgapped {
-		installCmd = fmt.Sprintf("oms install k0s --k0sctl-config %s --vault %s --vault-priv-key %s",
-			dc.RemoteK0sctlConfigPath(), dc.RemoteVaultPath(), dc.RemoteAgeKeyPath())
+		configFlags = "--k0sctl-config " + dc.RemoteK0sctlConfigPath()
 	}
 
+	installCmd := fmt.Sprintf("oms install k0s %s --vault %s --vault-priv-key %s",
+		configFlags, dc.RemoteVaultPath(), dc.RemoteAgeKeyPath())
 	if err := b.Env.Jumpbox.RunSSHCommand("root", installCmd); err != nil {
 		return fmt.Errorf("failed to install k0s from jumpbox (data center %d): %w", dc.ID, err)
 	}

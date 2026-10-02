@@ -727,9 +727,6 @@ func (n *Node) setupAgentForwarding(client *ssh.Client) error {
 // holds the key at KeyPath, otherwise an agent that adds that key to the local agent's keys.
 func (n *Node) forwardedAgent(localAgent agent.ExtendedAgent) (agent.Agent, error) {
 	if n.KeyPath == "" || (localAgent != nil && agentHoldsKey(localAgent, n.KeyPath, n.FileIO)) {
-		if localAgent == nil {
-			return nil, nil
-		}
 		return localAgent, nil
 	}
 
@@ -793,17 +790,7 @@ type keyAddingAgent struct {
 }
 
 func (a *keyAddingAgent) List() ([]*agent.Key, error) {
-	extra, err := a.keyring.List()
-	if err != nil {
-		return nil, err
-	}
-	keys, err := a.ExtendedAgent.List()
-	if err != nil {
-		// The local agent may be locked or broken, the extra key still works.
-		return extra, nil
-	}
-
-	return append(extra, keys...), nil
+	return withExtra(a.keyring.List, a.ExtendedAgent.List)
 }
 
 func (a *keyAddingAgent) Sign(key ssh.PublicKey, data []byte) (*ssh.Signature, error) {
@@ -819,14 +806,21 @@ func (a *keyAddingAgent) SignWithFlags(key ssh.PublicKey, data []byte, flags age
 }
 
 func (a *keyAddingAgent) Signers() ([]ssh.Signer, error) {
-	extra, err := a.keyring.Signers()
+	return withExtra(a.keyring.Signers, a.ExtendedAgent.Signers)
+}
+
+// withExtra prepends the keyring's entries to the local agent's. A failing local agent is
+// ignored, as it may be locked or broken while the extra key still works.
+func withExtra[T any](extra, local func() ([]T, error)) ([]T, error) {
+	extraItems, err := extra()
 	if err != nil {
 		return nil, err
 	}
-	signers, err := a.ExtendedAgent.Signers()
+
+	localItems, err := local()
 	if err != nil {
-		return extra, nil
+		return extraItems, nil
 	}
 
-	return append(extra, signers...), nil
+	return append(extraItems, localItems...), nil
 }
