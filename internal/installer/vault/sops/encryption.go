@@ -153,6 +153,17 @@ func generateAgeKey(fileIO util.FileIO, keyPath string) (string, error) {
 	return recipient, nil
 }
 
+// GenerateAgeIdentity creates a new age identity in memory without persisting it.
+// It returns the secret key and its public recipient.
+func GenerateAgeIdentity() (secretKey string, recipient string, err error) {
+	id, err := age.GenerateX25519Identity()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate age identity: %w", err)
+	}
+
+	return id.String(), id.Recipient().String(), nil
+}
+
 // EncryptFile encrypts src with SOPS and age and writes ciphertext to target.
 func EncryptFile(src, target, recipient string) error {
 	cmd := exec.Command("sops", "--encrypt", "--input-type", "yaml", "--age", recipient, "--output", target, src)
