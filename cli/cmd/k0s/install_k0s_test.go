@@ -285,30 +285,79 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err.Error()).To(ContainSubstring("--airgap-bundle requires --airgapped"))
 		})
 
-		It("installs k0s airgapped with the k0s binary already on the nodes", func() {
-			config := createTestConfig(true)
-			config.Kubernetes.Workers = []files.K8sNode{{IPAddress: "192.168.1.100"}}
-			c.Opts.InstallConfig = writeTestConfig(config)
-			c.Opts.Version = "v1.30.0+k0s.0"
+		It("fails when --no-download is combined with --airgapped", func() {
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Airgap = true
 			c.Opts.NoDownload = true
 
 			setupWorkdirMocks()
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).To(MatchError(ContainSubstring("--no-download cannot be combined with --airgapped")))
+		})
+
+		It("fails without install-config unless an existing k0sctl config is installed", func() {
+			c.Opts.ConfigOnly = true
+			c.Opts.K0sctlConfig = filepath.Join(tempDir, "k0sctl.yaml")
+
+			setupWorkdirMocks()
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).To(MatchError(ContainSubstring("--install-config is required")))
+		})
+
+		It("only generates the airgap k0sctl config with --config-only", func() {
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+			c.Opts.Version = "v1.30.0+k0s.0"
+			c.Opts.Airgap = true
+			c.Opts.ConfigOnly = true
+			c.Opts.K0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
+
+			setupWorkdirMocks()
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
 			mockK0s.EXPECT().EnsureAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/cache/bundle", nil)
-			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
-			// The bundle must be uploaded although no k0s binary is uploaded.
 			mockFileWriter.EXPECT().WriteFile(
-				mock.Anything,
+				"/etc/codesphere/k0sctl-config.yaml",
 				mock.MatchedBy(func(data []byte) bool {
-					return strings.Contains(string(data), "src: /cache/bundle") &&
-						!strings.Contains(string(data), "k0sBinaryPath")
+					return strings.Contains(string(data), "default_pull_policy: Never")
 				}),
-				mock.Anything,
+				os.FileMode(0644),
 			).Return(nil)
-			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("installs an existing k0sctl config without generating one", func() {
+			c.Opts.K0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
+
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists("/etc/codesphere/k0sctl-config.yaml").Return(true)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Apply("/etc/codesphere/k0sctl-config.yaml", "/tmp/k0sctl", false).Return(nil)
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("fails when the existing k0sctl config does not exist", func() {
+			c.Opts.K0sctlConfig = "/nonexistent/k0sctl-config.yaml"
+
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists("/nonexistent/k0sctl-config.yaml").Return(false)
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).To(MatchError(ContainSubstring("k0sctl config '/nonexistent/k0sctl-config.yaml' does not exist")))
+		})
+
+		It("fails when an existing k0sctl config is combined with generation flags", func() {
+			c.Opts.K0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+
+			setupWorkdirMocks()
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).To(MatchError(ContainSubstring("cannot be combined with --install-config")))
 		})
 
 		It("takes the k0s binary from the package but still ensures the airgap bundle", func() {
@@ -371,6 +420,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			setupWorkdirMocks()
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
+			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("", os.ErrPermission)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
