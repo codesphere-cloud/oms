@@ -25,7 +25,7 @@ replace (
 
 require (
 	cloud.google.com/go/artifactregistry v1.27.0
-	cloud.google.com/go/compute v1.70.0
+	cloud.google.com/go/compute v1.71.0
 	cloud.google.com/go/iam v1.14.0
 	cloud.google.com/go/resourcemanager v1.17.0
 	cloud.google.com/go/serviceusage v1.16.0
@@ -46,7 +46,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.33.0
 	github.com/onsi/gomega v1.44.0
 	github.com/pkg/sftp v1.13.11
-	github.com/rook/rook/pkg/apis v0.0.0-20260930191534-81a4ec2cf2da
+	github.com/rook/rook/pkg/apis v0.0.0-20261001204524-406ef13b7851
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
@@ -54,7 +54,7 @@ require (
 	golang.org/x/mod v0.41.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/term v0.46.0
-	google.golang.org/api v0.299.0
+	google.golang.org/api v0.300.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
@@ -74,9 +74,9 @@ require (
 	cel.dev/expr v0.25.2 // indirect
 	charm.land/lipgloss/v2 v2.0.6 // indirect
 	cloud.google.com/go v0.123.0 // indirect
-	cloud.google.com/go/auth v0.23.3 // indirect
-	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
-	cloud.google.com/go/compute/metadata v0.9.1 // indirect
+	cloud.google.com/go/auth v0.24.0 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.3.0 // indirect
+	cloud.google.com/go/compute/metadata v0.10.0 // indirect
 	cloud.google.com/go/kms v1.33.0 // indirect
 	cloud.google.com/go/longrunning v1.2.0 // indirect
 	cloud.google.com/go/monitoring v1.30.0 // indirect
@@ -358,7 +358,7 @@ require (
 	github.com/google/uuid v1.6.1-0.20241114170450-2d3c2a9cc518 // indirect
 	github.com/google/wire v0.7.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.22 // indirect
-	github.com/googleapis/gax-go/v2 v2.24.1 // indirect
+	github.com/googleapis/gax-go/v2 v2.26.2 // indirect
 	github.com/gordonklaus/ineffassign v0.2.0 // indirect
 	github.com/goreleaser/chglog v0.7.4 // indirect
 	github.com/goreleaser/fileglob v1.4.0 // indirect
