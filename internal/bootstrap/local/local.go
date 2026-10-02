@@ -10,11 +10,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -34,6 +35,9 @@ const (
 	codesphereSystemNamespace = "codesphere-system"
 	codesphereNamespace       = "codesphere"
 	workspacesNamespace       = "workspaces"
+	StorageEngineRookCeph     = "rook-ceph"
+	StorageEngineLocal        = "local"
+	localStorageClassName     = "local-rwx"
 )
 
 type retryableWaitError struct {
@@ -69,10 +73,10 @@ type LocalBootstrapper struct {
 	ageRecipient string
 	// ageKeyPath is the filesystem path to the age private key file.
 	ageKeyPath string
-	// argoCDAndAppsInstall is reused for the ArgoCD, vault, and pc-apps stages.
-	argoCDAndAppsInstall *argocd.AppInstaller
-	installerBundleDir   string
-	installerBOM         *bom.Config
+	// helmClient installs prerequisite operators before the dependencies phase.
+	helmClient         installer.HelmClient
+	installerBundleDir string
+	installerBOM       *bom.Config
 }
 
 type CodesphereEnvironment struct {
@@ -81,6 +85,7 @@ type CodesphereEnvironment struct {
 	PreviewFlags  []string `json:"preview"`
 	FeatureFlags  []string `json:"feature_flags"`
 	Profile       string   `json:"profile"`
+	StorageEngine string   `json:"storage_engine"`
 	// Installer
 	InstallVersion string `json:"install_version"`
 	InstallHash    string `json:"install_hash"`
@@ -96,6 +101,7 @@ type CodesphereEnvironment struct {
 	InstallConfig        *files.RootConfig   `json:"-"`
 	Vault                *files.InstallVault `json:"-"`
 	K0s                  bool                `json:"-"`
+	ExposeShared         bool                `json:"-"`
 	PodCIDR              string              `json:"pod_cidr"`
 	ServiceCIDR          string              `json:"service_cidr"`
 	CephDeviceFilter     string              `json:"-"`
@@ -105,7 +111,7 @@ type CodesphereEnvironment struct {
 }
 
 // NewLocalBootstrapper creates a bootstrapper for a local Codesphere cluster.
-func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, env *CodesphereEnvironment, verbose bool) *LocalBootstrapper {
+func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kubeClient client.Client, restConfig *rest.Config, fw util.FileIO, icg installer.InstallConfigManager, helmClient installer.HelmClient, env *CodesphereEnvironment, verbose bool) *LocalBootstrapper {
 	return &LocalBootstrapper{
 		ctx:        ctx,
 		stlog:      stlog,
@@ -113,6 +119,7 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 		restConfig: restConfig,
 		fw:         fw,
 		icg:        icg,
+		helmClient: helmClient,
 		Env:        env,
 		Verbose:    verbose,
 	}
@@ -144,68 +151,70 @@ func (b *LocalBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure namespaces: %w", err)
 	}
 
-	err = b.stlog.Step("Bootstrap ArgoCD", b.BootstrapArgoCD)
-	if err != nil {
-		return fmt.Errorf("failed to bootstrap ArgoCD: %w", err)
-	}
-
-	err = b.stlog.Step("Install Rook and test Ceph cluster", func() error {
-		err := b.stlog.Substep("Install Rook operator", b.InstallRookHelmChart)
+	if b.Env.StorageEngine == StorageEngineLocal {
+		err = b.stlog.Step("Install local CSI provisioner", b.InstallLocalCSIProvisioner)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to install local CSI provisioner: %w", err)
 		}
-
-		err = b.stlog.Substep("Deploy test Ceph cluster (single OSD)", b.DeployTestCephCluster)
-		if err != nil {
-			return err
-		}
-
-		err = b.stlog.Substep("Create CephBlockPool and StorageClass", b.DeployCephBlockPoolAndStorageClass)
-		if err != nil {
-			return err
-		}
-
-		err = b.stlog.Substep("Deploy CephFS filesystem", b.DeployCephFilesystem)
-		if err != nil {
-			return err
-		}
-
-		err = b.stlog.Substep("Create CephFS SubVolumeGroup", b.DeployCephFilesystemSubVolumeGroup)
-		if err != nil {
-			return err
-		}
-
-		err = b.stlog.Substep("Bootstrap RGW gateway", b.DeployRGWGateway)
-		if err != nil {
-			return err
-		}
-
-		err = b.stlog.Substep("Ensure Ceph users", func() error {
-			creds, err := b.EnsureCephUsers()
+	} else {
+		err = b.stlog.Step("Install Rook and test Ceph cluster", func() error {
+			err := b.stlog.Substep("Install Rook operator", b.InstallRookHelmChart)
 			if err != nil {
 				return err
 			}
-			b.cephCredentials = creds
+
+			err = b.stlog.Substep("Deploy test Ceph cluster (single OSD)", b.DeployTestCephCluster)
+			if err != nil {
+				return err
+			}
+
+			err = b.stlog.Substep("Create CephBlockPool and StorageClass", b.DeployCephBlockPoolAndStorageClass)
+			if err != nil {
+				return err
+			}
+
+			err = b.stlog.Substep("Deploy CephFS filesystem", b.DeployCephFilesystem)
+			if err != nil {
+				return err
+			}
+
+			err = b.stlog.Substep("Create CephFS SubVolumeGroup", b.DeployCephFilesystemSubVolumeGroup)
+			if err != nil {
+				return err
+			}
+
+			err = b.stlog.Substep("Bootstrap RGW gateway", b.DeployRGWGateway)
+			if err != nil {
+				return err
+			}
+
+			err = b.stlog.Substep("Ensure Ceph users", func() error {
+				creds, err := b.EnsureCephUsers()
+				if err != nil {
+					return err
+				}
+				b.cephCredentials = creds
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+			err = b.stlog.Substep("Create Ceph admin credential secrets", b.CreateCephAdminSecrets)
+			if err != nil {
+				return err
+			}
+
+			err = b.stlog.Substep("Sync ceph-mon-endpoints ConfigMap", b.SyncCephMonEndpoints)
+			if err != nil {
+				return err
+			}
+
 			return nil
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to install Rook and deploy test Ceph cluster: %w", err)
 		}
-
-		err = b.stlog.Substep("Create Ceph admin credential secrets", b.CreateCephAdminSecrets)
-		if err != nil {
-			return err
-		}
-
-		err = b.stlog.Substep("Sync ceph-mon-endpoints ConfigMap", b.SyncCephMonEndpoints)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to install Rook and deploy test Ceph cluster: %w", err)
 	}
 
 	err = b.stlog.Step("Install CloudNativePG and PostgreSQL", func() error {
@@ -230,43 +239,25 @@ func (b *LocalBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to update install config: %w", err)
 	}
 
-	err = b.stlog.Step("Run Codesphere installer", b.RunInstaller)
+	err = b.stlog.Step("Run Codesphere installer", b.RunInstallCodesphereCommand)
 	if err != nil {
 		return fmt.Errorf("failed to run Codesphere installer: %w", err)
+	}
+
+	if b.Env.ExposeShared {
+		if err := b.stlog.Step("Expose shared edge gateway", b.ExposeSharedGateway); err != nil {
+			return fmt.Errorf("failed to expose shared edge gateway: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*argocd.AppInstaller, error) {
-	// renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
-	argoCDInstall, err := argocd.NewInstaller(argocd.InstallerConfig{
-		Version:        "9.5.21",
-		OciPassword:    b.Env.RegistryPassword,
-		OciRegistryURL: strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://"),
-		FullInstall:    true,
-		ForceConflicts: true,
-		RESTConfig:     b.restConfig,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
+func (b *LocalBootstrapper) storageClassName() string {
+	if b.Env.StorageEngine == StorageEngineLocal {
+		return localStorageClassName
 	}
-	return argocd.NewAppInstaller(argocd.AppInstallerConfig{
-		Config:     *b.Env.InstallConfig,
-		Vault:      b.icg.GetVault(),
-		RESTConfig: b.restConfig,
-		KubeClient: b.kubeClient,
-		Installer:  argoCDInstall,
-	}), nil
-}
-
-func (b *LocalBootstrapper) BootstrapArgoCD() error {
-	install, err := b.newArgoCDAndAppsInstall()
-	if err != nil {
-		return err
-	}
-	b.argoCDAndAppsInstall = install
-	return install.InstallArgoCD()
+	return cephStorageClassName
 }
 
 func (b *LocalBootstrapper) EnsureNamespaces() error {
@@ -506,6 +497,19 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 		}
 
 		b.Env.ExistingConfigUsed = true
+
+		config := b.icg.GetInstallConfig()
+		if config.Codesphere.Domain == "" {
+			config.Codesphere.Domain = b.Env.BaseDomain
+		}
+
+		if config.Codesphere.WorkspaceHostingBaseDomain == "" {
+			config.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
+		}
+
+		if config.Codesphere.CustomDomains.CNameBaseDomain == "" {
+			config.Codesphere.CustomDomains.CNameBaseDomain = config.Codesphere.WorkspaceHostingBaseDomain
+		}
 	}
 	err := b.icg.ApplyProfile(b.Env.Profile)
 	if err != nil {
@@ -513,11 +517,21 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 	}
 
 	b.Env.InstallConfig = b.icg.GetInstallConfig()
+	if b.Env.ExposeShared {
+		if !b.Env.K0s {
+			return fmt.Errorf("--expose-shared requires --k0s")
+		}
+
+		configureSharedExposure(b.Env.InstallConfig)
+	}
 
 	return nil
 }
 
 func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
+	if !b.fw.Exists(b.Env.SecretsFilePath) {
+		return nil
+	}
 	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file for config templating: %w", err)
 	}
@@ -525,6 +539,10 @@ func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
 }
 
 func (b *LocalBootstrapper) EnsureSecrets() error {
+	if !b.fw.Exists(b.Env.SecretsFilePath) {
+		b.Env.Vault = b.icg.GetVault()
+		return nil
+	}
 	if err := b.icg.LoadVaultFromUnecryptedFile(b.Env.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault file: %w", err)
 	}
@@ -600,17 +618,19 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 		Enabled: false,
 	}
 	b.Env.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
-		Enabled: true,
+		Enabled: b.Env.StorageEngine != StorageEngineLocal,
 	}
-	cephMonHosts, err := b.ReadCephMonHosts()
-	if err != nil {
-		return fmt.Errorf("failed to read Ceph monitor hosts: %w", err)
-	}
-	b.Env.InstallConfig.Ceph = files.CephConfig{
-		Hosts: cephMonHosts,
-	}
-	if b.cephCredentials != nil {
-		b.addCephSecretsToVault(b.Env.Vault)
+	if b.Env.StorageEngine != StorageEngineLocal {
+		cephMonHosts, err := b.ReadCephMonHosts()
+		if err != nil {
+			return fmt.Errorf("failed to read Ceph monitor hosts: %w", err)
+		}
+		b.Env.InstallConfig.Ceph = files.CephConfig{Hosts: cephMonHosts}
+		if b.cephCredentials != nil {
+			b.addCephSecretsToVault(b.Env.Vault)
+		}
+	} else {
+		b.Env.InstallConfig.Ceph = files.CephConfig{}
 	}
 
 	b.Env.InstallConfig.Kubernetes = files.KubernetesConfig{
@@ -623,22 +643,23 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	}
 	b.Env.InstallConfig.Kubernetes.PodCIDR = podCIDR
 	b.Env.InstallConfig.Kubernetes.ServiceCIDR = serviceCIDR
-	b.Env.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
-	b.Env.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
+	if b.Env.ExposeShared {
+		configureSharedExposure(b.Env.InstallConfig)
+	} else {
+		b.Env.InstallConfig.Cluster.Gateway.ServiceType = "LoadBalancer"
+		b.Env.InstallConfig.Cluster.PublicGateway.ServiceType = "LoadBalancer"
+	}
 
-	// TODO: certificates
 	if b.Env.InstallConfig.Codesphere.CertIssuer == nil {
 		b.Env.InstallConfig.Codesphere.CertIssuer = &files.CertIssuerConfig{
-			Type: "self-signed",
+			Type: files.CertIssuerTypeSelfSigned,
 		}
 	}
 
-	b.Env.InstallConfig.Codesphere.Domain = b.Env.BaseDomain
-	b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
-	// TODO: set public IP or configure DNS for local setup
-	// b.Env.InstallConfig.Codesphere.PublicIP = b.Env.ControlPlaneNodes[1].GetExternalIP()
-	b.Env.InstallConfig.Codesphere.CustomDomains = files.CustomDomainsConfig{
-		CNameBaseDomain: "ws." + b.Env.BaseDomain,
+	if !b.Env.ExistingConfigUsed {
+		b.Env.InstallConfig.Codesphere.Domain = b.Env.BaseDomain
+		b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain = "ws." + b.Env.BaseDomain
+		b.Env.InstallConfig.Codesphere.CustomDomains.CNameBaseDomain = b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain
 	}
 	b.Env.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
 
@@ -654,9 +675,10 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	}
 	b.Env.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
 
-	b.Env.InstallConfig.Codesphere.Internal = b.Env.InternalFlags
+	b.configureStorageValues()
 	b.Env.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
 	b.Env.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
+	configureVirtualMachineApps(b.Env.InstallConfig)
 
 	if err := b.icg.GenerateSecrets(); err != nil {
 		return fmt.Errorf("failed to generate secrets: %w", err)
@@ -684,6 +706,46 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	}
 
 	return nil
+}
+
+func configureVirtualMachineApps(config *files.RootConfig) {
+	if !config.Codesphere.IsEnabled("virtual-machines") {
+		return
+	}
+
+	config.PcApps = util.DeepMergeMaps(config.PcApps, files.ChartValues{
+		"applications": map[string]any{
+			"kubevirt-operator": map[string]any{"enabled": true},
+			"kubevirt-cr":       map[string]any{"enabled": true},
+			"cdi-operator":      map[string]any{"enabled": true},
+			"cdi-cr":            map[string]any{"enabled": true},
+		},
+	})
+}
+
+func (b *LocalBootstrapper) configureStorageValues() {
+	b.Env.InstallConfig.Codesphere.Internal = append([]string(nil), b.Env.InternalFlags...)
+	if b.Env.StorageEngine != StorageEngineLocal {
+		return
+	}
+	if b.Env.InstallConfig.ManagedServiceBackends == nil {
+		b.Env.InstallConfig.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{}
+	}
+	if b.Env.InstallConfig.ManagedServiceBackends.S3 == nil {
+		b.Env.InstallConfig.ManagedServiceBackends.S3 = &files.S3ManagedServiceConfig{}
+	}
+	b.Env.InstallConfig.ManagedServiceBackends.S3.Enabled = ptr.To(false)
+	b.Env.InstallConfig.Codesphere.ManagedServices = slices.DeleteFunc(b.Env.InstallConfig.Codesphere.ManagedServices, func(service files.ManagedServiceConfig) bool {
+		return service.Name == "s3"
+	})
+	if !slices.Contains(b.Env.InstallConfig.Codesphere.Internal, "workspace-pvc-storage") {
+		b.Env.InstallConfig.Codesphere.Internal = append(b.Env.InstallConfig.Codesphere.Internal, "workspace-pvc-storage")
+	}
+	b.Env.InstallConfig.Codesphere.Override = util.DeepMergeMaps(b.Env.InstallConfig.Codesphere.Override, map[string]any{
+		"global": map[string]any{
+			"ceph": map[string]any{"storageClass": localStorageClassName},
+		},
+	})
 }
 
 func (b *LocalBootstrapper) EnsureGitHubAccessConfigured() error {

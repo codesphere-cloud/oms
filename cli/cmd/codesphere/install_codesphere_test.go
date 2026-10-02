@@ -46,6 +46,14 @@ var _ = Describe("InstallCodesphereCmd", func() {
 	})
 
 	Context("RunE method", func() {
+		It("requires a phase subcommand for local components", func() {
+			c.Opts.LocalComponents = true
+			runCmd := &cobra.Command{}
+			runCmd.SetContext(context.Background())
+			err := c.RunE(runCmd, nil)
+			Expect(err).To(MatchError("--local-components requires install codesphere dependencies or install codesphere platform"))
+		})
+
 		It("calls GetOmsWorkdir and fails on non-linux platform", func() {
 			c.Opts.Package = "test-package.tar.gz"
 
@@ -131,5 +139,12 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 		skipStepFlag := codesphereCmd.PersistentFlags().Lookup("skip-steps")
 		Expect(skipStepFlag).NotTo(BeNil())
 		Expect(skipStepFlag.Shorthand).To(Equal("s"))
+		Expect(codesphereCmd.PersistentFlags().Lookup("local-components")).NotTo(BeNil())
+		Expect(codesphereCmd.PersistentFlags().Lookup("local-config-dir")).NotTo(BeNil())
+		for _, subcommand := range codesphereCmd.Commands() {
+			if subcommand.Name() == "dependencies" || subcommand.Name() == "platform" {
+				Expect(subcommand.InheritedFlags().Lookup("local-components")).NotTo(BeNil())
+			}
+		}
 	})
 })

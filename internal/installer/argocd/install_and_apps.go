@@ -31,16 +31,20 @@ type LogFunc func(format string, args ...interface{})
 
 // WaitForApplicationHealthy waits until Argo CD has compared the requested target revision
 // and reports the Application as healthy and synced.
-func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, name, targetRevision string, logf LogFunc) error {
+func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, name, targetRevision string, timeout time.Duration, logf LogFunc) error {
 	if logf == nil {
 		logf = func(string, ...interface{}) {}
 	}
 
-	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, applicationReadyTimeout)
+	if timeout <= 0 {
+		timeout = applicationReadyTimeout
+	}
+
+	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, timeout)
 
 	lastHealth, lastSync, lastTargetRevision := "", "", ""
 
-	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, applicationReadyTimeout, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		app := &argov1alpha1.Application{}
 		if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: DefaultNamespace}, app); err != nil {
 			if !apierrors.IsNotFound(err) {

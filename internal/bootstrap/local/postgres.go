@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"time"
 
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
@@ -22,7 +23,6 @@ import (
 )
 
 const (
-	cnpgRepoURL             = "https://cloudnative-pg.github.io/charts"
 	cnpgReleaseName         = "cnpg"
 	cnpgDatabaseClusterName = "masterdata"
 	cnpgDatabaseName        = "masterdata"
@@ -44,20 +44,26 @@ func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
 		return fmt.Errorf("CloudNativePG chart is missing from BOM component %q", cnpgBOMComponent)
 	}
 
-	return b.installHelmApplication(helmApplicationConfig{
-		Name: cnpgReleaseName, Chart: "cloudnative-pg", RepoURL: cnpgRepoURL,
+	return b.installPrerequisiteChart(prerequisiteChartConfig{
+		Name: cnpgReleaseName, Chart: path.Base(chart.Name()), RepoURL: path.Dir(chart.Name()),
 		TargetRevision: chart.Tag(), Namespace: codesphereNamespace,
 		Values: map[string]interface{}{
-			"config": map[string]interface{}{
-				"clusterWide": true,
-				"data": map[string]interface{}{
-					"INHERITED_LABELS": "teamId",
+			"cloudnative-pg": map[string]interface{}{
+				"priorityClassName": "",
+				"config": map[string]interface{}{
+					"clusterWide": true,
+					"data": map[string]interface{}{
+						"INHERITED_LABELS": "teamId",
+					},
 				},
-			},
-			"resources": map[string]interface{}{
-				"requests": map[string]interface{}{
-					"cpu":    "0",
-					"memory": "0",
+				"monitoring": map[string]interface{}{
+					"podMonitorEnabled": false,
+				},
+				"resources": map[string]interface{}{
+					"requests": map[string]interface{}{
+						"cpu":    "0",
+						"memory": "0",
+					},
 				},
 			},
 		},
@@ -77,7 +83,7 @@ func (b *LocalBootstrapper) DeployPostgresDatabase() error {
 			ImageName: fmt.Sprintf("ghcr.io/cloudnative-pg/postgresql:%s-system-trixie", cnpgDatabaseVersion),
 			Instances: 1,
 			StorageConfiguration: cnpgv1.StorageConfiguration{
-				StorageClass: ptr.To(cephStorageClassName),
+				StorageClass: ptr.To(b.storageClassName()),
 				Size:         cnpgDatabaseStorageSize,
 			},
 			EnableSuperuserAccess: ptr.To(true),

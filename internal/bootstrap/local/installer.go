@@ -4,13 +4,10 @@
 package local
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -24,10 +21,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
-
-// installerComponentSteps lists the install-components.js steps executed
-// locally (in order) instead of running the full private-cloud-installer.
-var installerComponentSteps = []string{"setUpCluster", "codesphere", "msBackends"}
 
 // installerArtifactFilename is the artifact to download from the OMS portal.
 const installerArtifactFilename = "installer-lite.tar.gz"
@@ -137,85 +130,6 @@ func (b *LocalBootstrapper) PrepareInstaller() error {
 	b.installerBundleDir = bundleDir
 	b.installerBOM = bomConfig
 
-	return nil
-}
-
-// symlinkLocalBinaries replaces bundled node, helm and kubectl binaries with
-// symlinks to the locally installed versions. This is only done on non-Linux
-// hosts because the bundled binaries are Linux x86_64 binaries that cannot run
-// on macOS or other platforms.
-func symlinkLocalBinaries(bundleDir string) error {
-	if runtime.GOOS == "linux" {
-		return nil
-	}
-
-	for _, name := range []string{"node", "helm", "kubectl"} {
-		target := filepath.Join(bundleDir, name)
-		if err := symlinkBinary(name, target); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// symlinkDepsBinaries replaces bundled dependency binaries inside the
-// extracted deps directory with symlinks to locally installed versions.
-// This covers tools like sops and age which live under <depsDir>/sops/files/.
-func symlinkDepsBinaries(depsDir string) error {
-	if runtime.GOOS == "linux" {
-		return nil
-	}
-
-	// sops and age are resolved by install-components.js via
-	// resolveFileDependency(dependenciesDir, "sops", "<binary>")
-	// which maps to <depsDir>/sops/files/<binary>.
-	sopsFilesDir := filepath.Join(depsDir, "sops", "files")
-	for _, name := range []string{"sops", "age", "age-keygen"} {
-		target := filepath.Join(sopsFilesDir, name)
-		if err := symlinkBinary(name, target); err != nil {
-			return err
-		}
-	}
-
-	// sops and age are resolved by install-components.js via
-	// resolveFileDependency(dependenciesDir, "installer", "<binary>")
-	// which maps to <depsDir>/installer/files/<binary>.
-	installerFilesDir := filepath.Join(depsDir, "installer", "files")
-	for _, name := range []string{"kubectl", "helm", "node"} {
-		target := filepath.Join(installerFilesDir, name)
-		if err := symlinkBinary(name, target); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// symlinkBinary creates a symlink at target pointing to the locally installed
-// binary identified by name (looked up via $PATH).
-func symlinkBinary(name, target string) error {
-	localPath, err := exec.LookPath(name)
-	if err != nil {
-		return fmt.Errorf("cannot find %q on the host system: %w", name, err)
-	}
-
-	// Resolve to an absolute path so the symlink is stable.
-	localPath, err = filepath.Abs(localPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path for %q: %w", name, err)
-	}
-
-	// Remove the bundled binary (or an existing symlink) if present.
-	if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to remove bundled %q: %w", name, err)
-	}
-
-	if err := os.Symlink(localPath, target); err != nil {
-		return fmt.Errorf("failed to symlink %q → %q: %w", target, localPath, err)
-	}
-
-	log.Printf("Symlinked %s → %s", target, localPath)
 	return nil
 }
 
@@ -368,119 +282,4 @@ func (b *LocalBootstrapper) configurePostgresForMigration(host string, port int3
 		}
 		return nil
 	}, nil
-}
-
-// RunInstaller runs the install-components.js script directly on the local machine for each
-// required component step (setUpCluster, codesphere), instead of running
-// the private-cloud-installer.js which orchestrates remote nodes via SSH.
-func (b *LocalBootstrapper) RunInstaller() (err error) {
-	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
-		log.Println("No installer package specified, skipping Codesphere installation.")
-		return nil
-	}
-
-	bundleDir := b.installerBundleDir
-	if bundleDir == "" {
-		return fmt.Errorf("installer bundle is not prepared")
-	}
-
-	// On non-Linux hosts the bundled binaries are Linux ELF executables that
-	// cannot run natively. Replace them with symlinks to the host's versions.
-	if err := symlinkLocalBinaries(bundleDir); err != nil {
-		return fmt.Errorf("failed to symlink local binaries: %w", err)
-	}
-
-	depsDir := filepath.Join(bundleDir, "deps")
-
-	if b.argoCDAndAppsInstall == nil {
-		return fmt.Errorf("ArgoCD and apps installer is not initialized")
-	}
-
-	if err := b.stlog.Substep("Sync vault secret", func() error {
-		return b.argoCDAndAppsInstall.SyncVaultSecret(b.ctx)
-	}); err != nil {
-		return fmt.Errorf("failed to sync vault secret: %w", err)
-	}
-
-	if err := b.stlog.Substep("Register pc-apps app-of-apps", func() error {
-		return b.argoCDAndAppsInstall.InstallPCApps(b.ctx, b.installerBOM)
-	}); err != nil {
-		return fmt.Errorf("failed to register pc-apps app-of-apps: %w", err)
-	}
-
-	// Symlink sops and age inside the extracted deps directory so that
-	// install-components.js uses the locally installed versions.
-	if err := symlinkDepsBinaries(depsDir); err != nil {
-		return fmt.Errorf("failed to symlink deps binaries: %w", err)
-	}
-
-	nodePath := filepath.Join(bundleDir, "node")
-	installerPath := filepath.Join(bundleDir, "install-components.js")
-
-	// Resolve absolute paths so install-components.js finds them
-	// regardless of its working directory.
-	absDepsDir, err := filepath.Abs(depsDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute deps dir: %w", err)
-	}
-
-	configPath, err := filepath.Abs(b.Env.InstallConfigPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute config path: %w", err)
-	}
-
-	privKeyPath := b.ageKeyPath
-	if privKeyPath == "" {
-		return fmt.Errorf("age key path is not set; cannot pass private key to installer")
-	}
-	privKeyPath, err = filepath.Abs(privKeyPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute key path: %w", err)
-	}
-
-	// Create a temporary NodePort service for PostgreSQL so that
-	// install-components.js can reach the database without a long-lived
-	// kubectl port-forward session.
-	dbHost, dbPort, cleanupNodePortSvc, err := b.createTemporaryPostgresNodePortEndpoint()
-	if err != nil {
-		return err
-	}
-	defer cleanupNodePortSvc()
-
-	log.Printf("Temporary PostgreSQL NodePort service ready (%s:%d)", dbHost, dbPort)
-
-	restoreMigrationConfig, err := b.configurePostgresForMigration(dbHost, dbPort)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		err = errors.Join(err, restoreMigrationConfig())
-	}()
-
-	// Run each component step locally via install-components.js.
-	for _, component := range installerComponentSteps {
-		cmdArgs := []string{
-			installerPath,
-			"--component", component,
-			"--configDir", filepath.Join(b.Env.InstallDir, "config"),
-			"--dependenciesDir", absDepsDir,
-			"--config", configPath,
-			"--privKey", privKeyPath,
-		}
-
-		log.Printf("Running install-components.js --component %s", component)
-		log.Printf("  %s %s", nodePath, strings.Join(cmdArgs, " "))
-		cmd := exec.Command(nodePath, cmdArgs...)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("install-components.js --component %s failed: %w", component, err)
-		}
-
-		log.Printf("Component %s installed successfully.", component)
-	}
-
-	log.Println("Codesphere installer finished successfully.")
-	return nil
 }

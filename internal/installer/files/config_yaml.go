@@ -756,6 +756,7 @@ type PgManagedServiceConfig struct {
 }
 
 type S3ManagedServiceConfig struct {
+	Enabled  *bool         `yaml:"enabled,omitempty"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
