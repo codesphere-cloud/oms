@@ -553,12 +553,12 @@ func (_c *MockInstallConfigManager_LoadVaultFromFile_Call) RunAndReturn(run func
 	return _c
 }
 
-// LoadVaultFromUnecryptedFile provides a mock function for the type MockInstallConfigManager
-func (_mock *MockInstallConfigManager) LoadVaultFromUnecryptedFile(vaultPath string) error {
+// LoadVaultFromFileOrCreate provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) LoadVaultFromFileOrCreate(vaultPath string) error {
 	ret := _mock.Called(vaultPath)
 
 	if len(ret) == 0 {
-		panic("no return value specified for LoadVaultFromUnecryptedFile")
+		panic("no return value specified for LoadVaultFromFileOrCreate")
 	}
 
 	var r0 error
@@ -570,18 +570,18 @@ func (_mock *MockInstallConfigManager) LoadVaultFromUnecryptedFile(vaultPath str
 	return r0
 }
 
-// MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadVaultFromUnecryptedFile'
-type MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call struct {
+// MockInstallConfigManager_LoadVaultFromFileOrCreate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LoadVaultFromFileOrCreate'
+type MockInstallConfigManager_LoadVaultFromFileOrCreate_Call struct {
 	*mock.Call
 }
 
-// LoadVaultFromUnecryptedFile is a helper method to define mock.On call
+// LoadVaultFromFileOrCreate is a helper method to define mock.On call
 //   - vaultPath string
-func (_e *MockInstallConfigManager_Expecter) LoadVaultFromUnecryptedFile(vaultPath any) *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call {
-	return &MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call{Call: _e.mock.On("LoadVaultFromUnecryptedFile", vaultPath)}
+func (_e *MockInstallConfigManager_Expecter) LoadVaultFromFileOrCreate(vaultPath any) *MockInstallConfigManager_LoadVaultFromFileOrCreate_Call {
+	return &MockInstallConfigManager_LoadVaultFromFileOrCreate_Call{Call: _e.mock.On("LoadVaultFromFileOrCreate", vaultPath)}
 }
 
-func (_c *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call) Run(run func(vaultPath string)) *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call {
+func (_c *MockInstallConfigManager_LoadVaultFromFileOrCreate_Call) Run(run func(vaultPath string)) *MockInstallConfigManager_LoadVaultFromFileOrCreate_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -594,12 +594,12 @@ func (_c *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call) Run(run fun
 	return _c
 }
 
-func (_c *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call) Return(err error) *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call {
+func (_c *MockInstallConfigManager_LoadVaultFromFileOrCreate_Call) Return(err error) *MockInstallConfigManager_LoadVaultFromFileOrCreate_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call) RunAndReturn(run func(vaultPath string) error) *MockInstallConfigManager_LoadVaultFromUnecryptedFile_Call {
+func (_c *MockInstallConfigManager_LoadVaultFromFileOrCreate_Call) RunAndReturn(run func(vaultPath string) error) *MockInstallConfigManager_LoadVaultFromFileOrCreate_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -829,6 +829,63 @@ func (_c *MockInstallConfigManager_WriteInstallConfig_Call) Return(err error) *M
 }
 
 func (_c *MockInstallConfigManager_WriteInstallConfig_Call) RunAndReturn(run func(configPath string, withComments bool) error) *MockInstallConfigManager_WriteInstallConfig_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// WriteUnencryptedVault provides a mock function for the type MockInstallConfigManager
+func (_mock *MockInstallConfigManager) WriteUnencryptedVault(vaultPath string, withComments bool) error {
+	ret := _mock.Called(vaultPath, withComments)
+
+	if len(ret) == 0 {
+		panic("no return value specified for WriteUnencryptedVault")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, bool) error); ok {
+		r0 = returnFunc(vaultPath, withComments)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInstallConfigManager_WriteUnencryptedVault_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WriteUnencryptedVault'
+type MockInstallConfigManager_WriteUnencryptedVault_Call struct {
+	*mock.Call
+}
+
+// WriteUnencryptedVault is a helper method to define mock.On call
+//   - vaultPath string
+//   - withComments bool
+func (_e *MockInstallConfigManager_Expecter) WriteUnencryptedVault(vaultPath any, withComments any) *MockInstallConfigManager_WriteUnencryptedVault_Call {
+	return &MockInstallConfigManager_WriteUnencryptedVault_Call{Call: _e.mock.On("WriteUnencryptedVault", vaultPath, withComments)}
+}
+
+func (_c *MockInstallConfigManager_WriteUnencryptedVault_Call) Run(run func(vaultPath string, withComments bool)) *MockInstallConfigManager_WriteUnencryptedVault_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 bool
+		if args[1] != nil {
+			arg1 = args[1].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInstallConfigManager_WriteUnencryptedVault_Call) Return(err error) *MockInstallConfigManager_WriteUnencryptedVault_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInstallConfigManager_WriteUnencryptedVault_Call) RunAndReturn(run func(vaultPath string, withComments bool) error) *MockInstallConfigManager_WriteUnencryptedVault_Call {
 	_c.Call.Return(run)
 	return _c
 }
