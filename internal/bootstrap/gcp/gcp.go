@@ -1076,7 +1076,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 // package ships no images of its own, so the local registry is empty until they are mirrored and
 // the installation would have nothing to pull from.
 func (b *GCPBootstrapper) mirrorPackageToLocalRegistry(packageFilename string) error {
-	registryServer := b.Env.InstallConfig.EnsureRegistry().Server
+	registryServer := b.Env.ContainerRegistryURL
 	if registryServer == "" {
 		return errors.New("local container registry has no server address")
 	}

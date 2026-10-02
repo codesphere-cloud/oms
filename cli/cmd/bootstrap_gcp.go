@@ -235,7 +235,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeLocalContainer {
 		log.Printf("The local registry is empty until the package artifacts are mirrored into it (run from jumpbox):\noms copy package -p <package-name>-%s --dest %s --yes",
-			gcp.InstallerArchiveName, bs.Env.InstallConfig.EnsureRegistry().Server)
+			gcp.InstallerArchiveName, bs.Env.ContainerRegistryURL)
 	}
 
 	// The command the bootstrapper would have run itself, so that an operator running it by hand

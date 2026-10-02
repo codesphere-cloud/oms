@@ -290,7 +290,7 @@ func (b *GCPBootstrapper) distributeRegistryCert(registryNode *node.Node, nodes 
 // images into the local registry.
 func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, server, username, password string) error {
 	commands := []string{
-		"cp /root/registry.crt /usr/local/share/ca-certificates/registry.crt",
+		"cp /root/registry.crt " + registryCertPath,
 		"update-ca-certificates",
 		"mkdir -p " + path.Dir(jumpboxRegistryAuthFile),
 		// A freshly started registry container is not serving yet when podman returns, so wait
