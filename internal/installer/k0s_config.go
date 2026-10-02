@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"cmp"
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -66,6 +67,7 @@ type K0sKonnectivity struct {
 	AgentPort int `yaml:"agentPort,omitempty"`
 }
 
+// GenerateK0sConfig generates a K0sConfig based on the provided RootConfig.
 func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 	if installConfig == nil {
 		return nil, fmt.Errorf("installConfig cannot be nil")
@@ -88,6 +90,7 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 			for _, cp := range installConfig.Kubernetes.ControlPlanes {
 				sans = append(sans, cp.IPAddress)
 			}
+
 			if installConfig.Kubernetes.APIServerHost != "" {
 				sans = append(sans, installConfig.Kubernetes.APIServerHost)
 			}
@@ -109,8 +112,8 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 
 		k0sConfig.Spec.Network = &K0sNetwork{
 			Provider:      "calico",
-			PodCIDR:       defaultIfEmpty(installConfig.Kubernetes.PodCIDR, "100.96.0.0/11"),
-			ServiceCIDR:   defaultIfEmpty(installConfig.Kubernetes.ServiceCIDR, "100.64.0.0/13"),
+			PodCIDR:       cmp.Or(installConfig.Kubernetes.PodCIDR, "100.96.0.0/11"),
+			ServiceCIDR:   cmp.Or(installConfig.Kubernetes.ServiceCIDR, "100.64.0.0/13"),
 			ClusterDomain: "cluster.local",
 		}
 
@@ -129,13 +132,6 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 	}
 
 	return k0sConfig, nil
-}
-
-func defaultIfEmpty(value, defaultValue string) string {
-	if value != "" {
-		return value
-	}
-	return defaultValue
 }
 
 func (c *K0sConfig) Marshal() ([]byte, error) {

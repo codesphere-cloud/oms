@@ -153,6 +153,7 @@ type CodesphereEnvironment struct {
 	InstallSkipSteps              []string     `json:"install_skip_steps"`
 	Preemptible                   bool         `json:"preemptible"`
 	SpotVMs                       bool         `json:"spot_vms"`
+	Airgapped                     bool         `json:"airgapped"`
 	WriteConfig                   bool         `json:"-"`
 	RecoverConfig                 bool         `json:"-"`
 	GatewayIP                     string       `json:"gateway_ip"`

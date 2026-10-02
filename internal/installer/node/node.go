@@ -1,6 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package node manages the remote hosts of an installation over SSH.
 package node
 
 import (
@@ -31,6 +32,7 @@ type Node struct {
 	Name         string     `json:"name"`
 	ExternalIP   string     `json:"external_ip"`
 	InternalIP   string     `json:"internal_ip"`
+	cachedKey    any        `json:"-"`
 	cachedSigner ssh.Signer `json:"-"`
 	sshQuiet     bool       `json:"-"`
 
@@ -623,8 +625,7 @@ func (n *Node) getAuthMethods() ([]ssh.AuthMethod, error) {
 
 		// Else load from file with passphrase prompt if needed
 		if shouldLoad {
-			if signer, err := n.loadPrivateKey(); err == nil {
-				n.cachedSigner = signer
+			if _, signer, err := n.loadKey(); err == nil {
 				signers = append(signers, signer)
 			} else {
 				log.Printf("Warning: failed to load private key: %v\n", err)
@@ -639,16 +640,39 @@ func (n *Node) getAuthMethods() ([]ssh.AuthMethod, error) {
 	return []ssh.AuthMethod{ssh.PublicKeys(signers...)}, nil
 }
 
-// loadPrivateKey reads and parses the private key, prompting for passphrase if needed.
-func (n *Node) loadPrivateKey() (ssh.Signer, error) {
+// loadKey returns the private key at KeyPath and its signer. The key is read only once, so an
+// encrypted key prompts for its passphrase at most once.
+func (n *Node) loadKey() (any, ssh.Signer, error) {
+	if n.cachedSigner != nil && n.cachedKey != nil {
+		return n.cachedKey, n.cachedSigner, nil
+	}
+
+	key, err := n.loadPrivateKey()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	signer, err := ssh.NewSignerFromKey(key)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create signer from private key: %v", err)
+	}
+
+	n.cachedKey = key
+	n.cachedSigner = signer
+
+	return key, signer, nil
+}
+
+// loadPrivateKey reads and parses the raw private key, prompting for passphrase if needed.
+func (n *Node) loadPrivateKey() (any, error) {
 	key, err := n.FileIO.ReadFile(n.KeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key file %s: %v", n.KeyPath, err)
 	}
 
-	signer, err := ssh.ParsePrivateKey(key)
+	rawKey, err := ssh.ParseRawPrivateKey(key)
 	if err == nil {
-		return signer, nil
+		return rawKey, nil
 	}
 
 	if _, ok := err.(*ssh.PassphraseMissingError); !ok {
@@ -663,7 +687,7 @@ func (n *Node) loadPrivateKey() (ssh.Signer, error) {
 		return nil, fmt.Errorf("failed to read passphrase: %v", err)
 	}
 
-	signer, err = ssh.ParsePrivateKeyWithPassphrase(key, passphrase)
+	rawKey, err = ssh.ParseRawPrivateKeyWithPassphrase(key, passphrase)
 	// Clear passphrase from memory
 	for i := range passphrase {
 		passphrase[i] = 0
@@ -672,20 +696,148 @@ func (n *Node) loadPrivateKey() (ssh.Signer, error) {
 		return nil, fmt.Errorf("failed to parse private key with passphrase: %v", err)
 	}
 
-	return signer, nil
+	return rawKey, nil
 }
 
-// setupAgentForwarding sets up SSH agent forwarding on the client (best effort)
+// setupAgentForwarding sets up SSH agent forwarding on the client (best effort). Tools on the
+// remote host, such as k0sctl on the jumpbox, authenticate to further hosts through the
+// forwarded agent, so it always offers the key at KeyPath, even when the local agent lacks it.
 func (n *Node) setupAgentForwarding(client *ssh.Client) error {
-	authSocket := os.Getenv("SSH_AUTH_SOCK")
-	if authSocket == "" {
+	var localAgent agent.ExtendedAgent
+
+	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
+		conn, err := net.Dial("unix", authSocket)
+		if err != nil {
+			log.Printf("Warning: failed to connect to SSH agent: %v", err)
+		} else {
+			localAgent = agent.NewClient(conn)
+		}
+	}
+
+	forwarded, err := n.forwardedAgent(localAgent)
+	if err != nil {
+		return err
+	}
+
+	if forwarded == nil {
 		return nil
 	}
 
-	conn, err := net.Dial("unix", authSocket)
-	if err != nil {
-		return fmt.Errorf("failed to connect to SSH agent: %v", err)
+	if err := agent.ForwardToAgent(client, forwarded); err != nil {
+		return fmt.Errorf("failed to forward SSH agent: %w", err)
 	}
 
-	return agent.ForwardToAgent(client, agent.NewClient(conn))
+	return nil
+}
+
+// forwardedAgent returns the agent to forward to remote hosts: the local agent when it already
+// holds the key at KeyPath, otherwise an agent that adds that key to the local agent's keys.
+func (n *Node) forwardedAgent(localAgent agent.ExtendedAgent) (agent.Agent, error) {
+	if n.KeyPath == "" || (localAgent != nil && agentHoldsKey(localAgent, n.KeyPath, n.FileIO)) {
+		return localAgent, nil
+	}
+
+	key, signer, err := n.loadKey()
+	if err != nil {
+		if localAgent == nil {
+			return nil, fmt.Errorf("no SSH agent to forward and failed to load private key: %w", err)
+		}
+
+		log.Printf("Warning: forwarding SSH agent without the key at %s: %v", n.KeyPath, err)
+
+		return localAgent, nil
+	}
+
+	keyring := agent.NewKeyring()
+	if err := keyring.Add(agent.AddedKey{PrivateKey: key, Comment: n.KeyPath}); err != nil {
+		return nil, fmt.Errorf("failed to add private key to forwarded agent: %w", err)
+	}
+
+	if localAgent == nil {
+		return keyring, nil
+	}
+
+	return &keyAddingAgent{
+		ExtendedAgent: localAgent,
+		keyring:       keyring.(agent.ExtendedAgent),
+		keyBlob:       signer.PublicKey().Marshal(),
+	}, nil
+}
+
+// agentHoldsKey reports whether the agent holds the private key whose public key is stored next
+// to keyPath.
+func agentHoldsKey(a agent.Agent, keyPath string, fileIO util.FileIO) bool {
+	pubBytes, err := fileIO.ReadFile(keyPath + ".pub")
+	if err != nil {
+		return false
+	}
+
+	pub, _, _, _, err := ssh.ParseAuthorizedKey(pubBytes)
+	if err != nil {
+		return false
+	}
+
+	keys, err := a.List()
+	if err != nil {
+		return false
+	}
+
+	target := string(pub.Marshal())
+	for _, k := range keys {
+		if string(k.Marshal()) == target {
+			return true
+		}
+	}
+
+	return false
+}
+
+// keyAddingAgent serves the local agent with one extra key from a keyring. Signing requests for
+// that key go to the keyring, everything else to the local agent.
+type keyAddingAgent struct {
+	agent.ExtendedAgent
+	keyring agent.ExtendedAgent
+	keyBlob []byte
+}
+
+func (a *keyAddingAgent) List() ([]*agent.Key, error) {
+	return withExtra(a.keyring.List, a.ExtendedAgent.List)
+}
+
+func (a *keyAddingAgent) Sign(key ssh.PublicKey, data []byte) (*ssh.Signature, error) {
+	return a.SignWithFlags(key, data, 0)
+}
+
+func (a *keyAddingAgent) SignWithFlags(key ssh.PublicKey, data []byte, flags agent.SignatureFlags) (*ssh.Signature, error) {
+	signer := a.ExtendedAgent
+	if bytes.Equal(key.Marshal(), a.keyBlob) {
+		signer = a.keyring
+	}
+
+	signature, err := signer.SignWithFlags(key, data, flags)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign with SSH agent: %w", err)
+	}
+
+	return signature, nil
+}
+
+func (a *keyAddingAgent) Signers() ([]ssh.Signer, error) {
+	return withExtra(a.keyring.Signers, a.ExtendedAgent.Signers)
+}
+
+// withExtra prepends the keyring's entries to the local agent's. A failing local agent is
+// ignored, as it may be locked or broken while the extra key still works.
+func withExtra[T any](extra, local func() ([]T, error)) ([]T, error) {
+	extraItems, err := extra()
+	if err != nil {
+		return nil, err
+	}
+
+	localItems, err := local()
+	if err != nil {
+		return extraItems, nil
+	}
+
+	return append(extraItems, localItems...), nil
 }

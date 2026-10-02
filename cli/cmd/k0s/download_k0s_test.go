@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -23,11 +24,13 @@ var _ = Describe("DownloadK0sk0s", func() {
 		globalOpts     *util.GlobalOptions
 		mockEnv        *env.MockEnv
 		mockFileWriter *intutil.MockFileIO
+		mockK0sManager *installer.MockK0sManager
 	)
 
 	BeforeEach(func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		mockFileWriter = intutil.NewMockFileIO(GinkgoT())
+		mockK0sManager = installer.NewMockK0sManager(GinkgoT())
 		globalOpts = &util.GlobalOptions{}
 		opts = &k0s.DownloadK0sOpts{
 			GlobalOptions: globalOpts,
@@ -48,9 +51,8 @@ var _ = Describe("DownloadK0sk0s", func() {
 
 	Context("DownloadK0s method", func() {
 		It("fails when k0s manager fails to get latest version", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
-
 			c.Opts.Version = "" // Test auto-version detection
+
 			mockK0sManager.EXPECT().GetLatestVersion().Return("", errors.New("network error"))
 
 			err := c.DownloadK0s(mockK0sManager)
@@ -60,11 +62,9 @@ var _ = Describe("DownloadK0sk0s", func() {
 		})
 
 		It("fails when k0s manager fails to download", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
-
 			c.Opts.Version = "v1.29.1+k0s.0"
 
-			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", false, true).Return("", errors.New("download failed"))
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Quiet: true}).Return("", errors.New("download failed"))
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).To(HaveOccurred())
@@ -73,27 +73,65 @@ var _ = Describe("DownloadK0sk0s", func() {
 		})
 
 		It("succeeds when version is specified and download works", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
-
 			c.Opts.Version = "v1.29.1+k0s.0"
 
-			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", false, true).Return("/test/workdir/k0s", nil)
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Quiet: true}).Return("/test/workdir/k0s", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("succeeds when version is auto-detected and download works", func() {
-			mockK0sManager := installer.NewMockK0sManager(GinkgoT())
+		It("requests the airgap bundle when --airgapped is set", func() {
+			c.Opts.Version = "v1.29.1+k0s.0"
+			c.Opts.Airgap = true
 
-			c.Opts.Version = "" // Test auto-version detection
-			c.Opts.Force = true
-			c.Opts.Verbose = true
-			mockK0sManager.EXPECT().GetLatestVersion().Return("v1.29.1+k0s.0", nil)
-			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", true, false).Return("/test/workdir/k0s", nil)
+			opts := installer.DownloadOptions{Quiet: true}
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", opts).Return("/test/workdir/k0s", nil)
+			mockK0sManager.EXPECT().EnsureAirgapBundle("v1.29.1+k0s.0", opts).Return("/cache/k0s-airgap-bundle-amd64", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("reports airgap bundle download failures", func() {
+			c.Opts.Version = "v1.29.1+k0s.0"
+			c.Opts.Airgap = true
+
+			opts := installer.DownloadOptions{Quiet: true}
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", opts).Return("/test/workdir/k0s", nil)
+			mockK0sManager.EXPECT().EnsureAirgapBundle("v1.29.1+k0s.0", opts).Return("", errors.New("network error"))
+
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("failed to download k0s airgap bundle"))
+			Expect(err.Error()).To(ContainSubstring("network error"))
+		})
+
+		It("succeeds when version is auto-detected and download works", func() {
+			c.Opts.Version = "" // Test auto-version detection
+			c.Opts.Force = true
+			c.Opts.Verbose = true
+
+			mockK0sManager.EXPECT().GetLatestVersion().Return("v1.29.1+k0s.0", nil)
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Force: true, Quiet: false}).Return("/test/workdir/k0s", nil)
+
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("AddDownloadCmd", func() {
+		It("registers --airgapped with the -a shorthand and default false", func() {
+			download := &cobra.Command{Use: "download"}
+
+			k0s.AddDownloadCmd(download, &util.GlobalOptions{})
+
+			Expect(download.Commands()).To(HaveLen(1))
+
+			flag := download.Commands()[0].Flags().Lookup("airgapped")
+			Expect(flag).ToNot(BeNil())
+			Expect(flag.Shorthand).To(Equal("a"))
+			Expect(flag.DefValue).To(Equal("false"))
 		})
 	})
 })
