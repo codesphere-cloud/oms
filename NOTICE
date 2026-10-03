@@ -1744,6 +1744,12 @@ License: Apache-2.0
 License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.24.1/LICENSE
  
 ----------
+Module: sigs.k8s.io/gateway-api/apis/v1
+Version: v1.3.0
+License: Apache-2.0
+License URL: https://github.com/kubernetes-sigs/gateway-api/blob/v1.3.0/LICENSE
+
+----------
 Module: sigs.k8s.io/json
 Version: v0.0.0-20250730193827-2d320260d730
 License: Apache-2.0
@@ -1796,5 +1802,4 @@ Module: sigs.k8s.io/yaml
 Version: v1.6.0
 License: BSD-3-Clause
 License URL: https://github.com/kubernetes-sigs/yaml/blob/v1.6.0/LICENSE
-
 
