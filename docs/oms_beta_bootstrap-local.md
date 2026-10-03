@@ -9,8 +9,6 @@ Rook/Ceph or a local CSI provisioner provides storage, and CNPG is used for the 
 For local setups, use Minikube with a virtual machine on Linux.
 Not for production use.
 
-Installs Rook/Ceph by default. With `--storage-engine local`, it installs `local-csi-provisioner` version `0.2.0` into the `local-csi` namespace and makes `local-rwx` the default storage class for the cluster. PostgreSQL and Codesphere workspace PVCs also use `local-rwx` explicitly. Local storage disables the S3 managed service and its backend. It then installs CloudNativePG and runs `oms install codesphere dependencies` and `oms install codesphere platform`. The dependencies phase installs Argo CD, syncs the vault, and registers pc-apps.
-
 ```
 oms beta bootstrap-local [flags]
 ```
@@ -51,3 +49,4 @@ oms beta bootstrap-local [flags]
 ### SEE ALSO
 
 * [oms beta](oms_beta.md)	 - Commands for early testing
+
