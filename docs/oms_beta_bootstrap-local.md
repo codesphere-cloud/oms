@@ -5,7 +5,7 @@ Bootstrap a local Codesphere environment
 ### Synopsis
 
 Bootstraps a local Codesphere environment using a single Linux x86_64 Kubernetes cluster.
-Rook is used to install Ceph, and CNPG is used for the PostgreSQL database.
+Rook/Ceph or a local CSI provisioner provides storage, and CNPG is used for the PostgreSQL database.
 For local setups, use Minikube with a virtual machine on Linux.
 Not for production use.
 
@@ -19,6 +19,7 @@ oms beta bootstrap-local [flags]
       --base-domain string               Base domain for Codesphere (default "cs.local")
       --ceph-device-filter string        Regular expression selecting Ceph block devices by name
       --ceph-device-path-filter string   Regular expression selecting Ceph block devices by path
+      --expose-shared                    Expose both Envoy Gateways and the SSH workspace proxy through one edge Gateway (single-node k0s)
       --feature-flags stringArray        Feature flags to enable in Codesphere installation (optional)
   -h, --help                             help for bootstrap-local
       --install-config string            Path to install config file (default: <install-dir>/config.yaml)
@@ -35,6 +36,7 @@ oms beta bootstrap-local [flags]
       --registry-user string             Custom Registry username
       --secrets-file string              Path to secrets file (default: <install-dir>/prod.vault.yaml)
       --service-cidr string              Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
+      --storage-engine string            Storage engine (supported: rook-ceph, local) (default "rook-ceph")
   -y, --yes                              Auto-approve the local bootstrapping warning prompt
 ```
 

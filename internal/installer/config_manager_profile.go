@@ -80,18 +80,16 @@ func (g *InstallConfig) applyCommonProperties() {
 	}
 
 	if g.Config.Cluster.Certificates.CA.Algorithm == "" {
-		g.Config.Cluster.Certificates = files.ClusterCertificates{
-			CA: files.CAConfig{
-				Algorithm:   "RSA",
-				KeySizeBits: 2048,
-			},
+		g.Config.Cluster.Certificates.CA = files.CAConfig{
+			Algorithm:   "RSA",
+			KeySizeBits: 2048,
 		}
 	}
 	if g.Config.Cluster.Gateway.ServiceType == "" {
-		g.Config.Cluster.Gateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
+		g.Config.Cluster.Gateway.ServiceType = "LoadBalancer"
 	}
 	if g.Config.Cluster.PublicGateway.ServiceType == "" {
-		g.Config.Cluster.PublicGateway = files.GatewayConfig{ServiceType: "LoadBalancer"}
+		g.Config.Cluster.PublicGateway.ServiceType = "LoadBalancer"
 	}
 
 	if g.Config.Cluster.MetalLB == nil {
