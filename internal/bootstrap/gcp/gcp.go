@@ -131,7 +131,9 @@ type CodesphereEnvironment struct {
 	PostgreSQLNode *node.Node `json:"postgres_node"`
 	// MultiDC bootstraps two data centers that share the PostgreSQL server but run separate
 	// Kubernetes and Ceph clusters.
-	MultiDC bool `json:"multi_dc"`
+	MultiDC             bool   `json:"multi_dc"`
+	SingleVM            bool   `json:"single_vm,omitempty"`
+	SingleVMMachineType string `json:"single_vm_machine_type,omitempty"`
 	// DataCenters holds the per-data-center state. It always has at least one entry.
 	DataCenters []*datacenter.DataCenter `json:"datacenters"`
 	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
@@ -153,6 +155,7 @@ type CodesphereEnvironment struct {
 	InstallSkipSteps              []string     `json:"install_skip_steps"`
 	Preemptible                   bool         `json:"preemptible"`
 	SpotVMs                       bool         `json:"spot_vms"`
+	SpotOnly                      bool         `json:"spot_only,omitempty"`
 	WriteConfig                   bool         `json:"-"`
 	RecoverConfig                 bool         `json:"-"`
 	GatewayIP                     string       `json:"gateway_ip"`
@@ -192,10 +195,14 @@ type CodesphereEnvironment struct {
 	LocalTraceEndpoint     string `json:"-"`
 
 	// Config
-	InstallConfigPath string              `json:"-"`
-	SecretsFilePath   string              `json:"-"`
-	InstallConfig     *files.RootConfig   `json:"-"`
-	Secrets           *files.InstallVault `json:"-"`
+	InstallConfigPath         string              `json:"-"`
+	InstallConfigTemplatePath string              `json:"-"`
+	InstallConfigs            []string            `json:"-"`
+	InstallVaultPath          string              `json:"-"`
+	InstallVaultPrivKey       string              `json:"-"`
+	SecretsFilePath           string              `json:"-"`
+	InstallConfig             *files.RootConfig   `json:"-"`
+	Secrets                   *files.InstallVault `json:"-"`
 
 	// GCP Specific
 	ProjectDisplayName         string `json:"project_display_name"`
@@ -742,13 +749,17 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 	}
 
 	// Allow ingress for web (HTTP/HTTPS)
+	webPorts := []string{"80", "443"}
+	if b.Env.SingleVM {
+		webPorts = append(webPorts, "2222")
+	}
 	webRule := &computepb.Firewall{
 		Name:      protoString("allow-ingress-web"),
 		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
 		Direction: protoString("INGRESS"),
 		Priority:  protoInt32(1000),
 		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("tcp"), Ports: []string{"80", "443"}},
+			{IPProtocol: protoString("tcp"), Ports: webPorts},
 		},
 		SourceRanges: []string{"0.0.0.0/0"},
 		Description:  protoString("Allow HTTP/HTTPS ingress"),

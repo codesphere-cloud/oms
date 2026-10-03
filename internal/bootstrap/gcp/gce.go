@@ -78,6 +78,9 @@ func dataCenterVMDefs(dcID int, suffix string) []VMDef {
 // Ceph and k0s VMs of each data center. When the environment carries no data centers — as with
 // an infra file written before multi-DC support — it falls back to a single unsuffixed one.
 func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
+	if env.SingleVM {
+		return []VMDef{SingleVMDef(env.SingleVMMachineType)}
+	}
 	defs := sharedVMDefs()
 
 	dcs := env.DataCenters
@@ -90,6 +93,50 @@ func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
 	}
 
 	return defs
+}
+
+// SingleVMDef describes the all-in-one test host. The extra disk is reserved for Rook/Ceph.
+func SingleVMDef(machineType string) VMDef {
+	if machineType == "" {
+		machineType = "e2-standard-8"
+	}
+
+	return VMDef{Name: "codesphere", MachineType: machineType, Tags: []string{"ssh", "k0s"}, AdditionalDisks: []int64{100}, ExternalIP: true}
+}
+
+// EnsureSingleVM provisions only the all-in-one host, using the same instance lifecycle and
+// Spot capacity fallback as the regular GCP bootstrap.
+func (b *GCPBootstrapper) EnsureSingleVM() error {
+	existing, err := b.GCPClient.GetInstance(b.Env.ProjectID, b.Env.Zone, "codesphere")
+	if err != nil && !IsNotFoundError(err) {
+		return fmt.Errorf("failed to inspect existing single VM: %w", err)
+	}
+
+	if existing != nil && existing.GetScheduling().GetProvisioningModel() != "SPOT" {
+		return fmt.Errorf("existing codesphere VM is not a Spot VM")
+	}
+
+	sshKeys, err := b.getSSHKeys()
+	if err != nil {
+		return fmt.Errorf("failed to determine SSH keys: %w", err)
+	}
+
+	logs := make(chan string, 1)
+	result, err := b.ensureVM(SingleVMDef(b.Env.SingleVMMachineType), b.Env.RootDiskSize, sshKeys, logs)
+	close(logs)
+
+	for message := range logs {
+		b.stlog.Logf("%s", message)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	b.Env.Jumpbox = &node.Node{NodeClient: b.NodeClient, FileIO: b.fw, KeyPath: util.ExpandPath(b.Env.SSHPrivateKeyPath)}
+	b.Env.Jumpbox.UpdateNode(result.name, result.externalIP, result.internalIP)
+
+	return nil
 }
 
 // validateVMProvisioningOptions checks that spot and preemptible options are not both set
@@ -422,7 +469,7 @@ func (b *GCPBootstrapper) CreateInstanceWithFallback(projectID, zone string, ins
 		return nil
 	}
 
-	if b.Env.SpotVMs && IsSpotCapacityError(err) {
+	if b.Env.SpotVMs && !b.Env.SpotOnly && IsSpotCapacityError(err) {
 		logCh <- fmt.Sprintf("Spot capacity unavailable for %s, falling back to standard VM", vmName)
 
 		instance.Scheduling = &computepb.Scheduling{}
