@@ -6,7 +6,7 @@ Install a Codesphere instance
 
 Install a Codesphere instance with the provided package, configuration file, and private key.
 Uses the private-cloud-installer.js script included in the package to perform the installation.
-For a prepared local cluster, run the dependencies and platform subcommands with --local-components.
+Use the dependencies and platform subcommands with --local-components for a prepared local cluster.
 
 ```
 oms install codesphere [flags]
@@ -58,3 +58,4 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
 * [oms install codesphere dependencies](oms_install_codesphere_dependencies.md)	 - Install Codesphere cluster dependencies (Phase 2)
 * [oms install codesphere infra](oms_install_codesphere_infra.md)	 - Install Codesphere infrastructure (Phase 1)
 * [oms install codesphere platform](oms_install_codesphere_platform.md)	 - Install the Codesphere platform (Phase 3)
+
