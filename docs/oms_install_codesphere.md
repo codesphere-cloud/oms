@@ -35,10 +35,10 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
       --codesphere-only              Install only Codesphere without dependencies
   -c, --config stringArray           Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order
       --direct-connection            Use direct connection for installation, requires having access to the cluster nodes from your machine
-	  --local-components             Run selected install components on the local host
-	  --local-config-dir string      Config directory for local install components
   -f, --force                        Enforce package extraction
   -h, --help                         help for codesphere
+      --local-components             Run selected install components on the local host
+      --local-config-dir string      Config directory for local install components
   -p, --package string               Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load binaries, installer etc. from
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
   -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)
