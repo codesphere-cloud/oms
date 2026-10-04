@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.48.0
+Version: v1.49.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.48.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.49.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -485,9 +485,9 @@ License URL: https://github.com/go-git/go-billy/blob/v5.9.2/LICENSE
  
 ----------
 Module: github.com/go-git/go-git/v5
-Version: v5.19.2
+Version: v5.19.3
 License: Apache-2.0
-License URL: https://github.com/go-git/go-git/blob/v5.19.2/LICENSE
+License URL: https://github.com/go-git/go-git/blob/v5.19.3/LICENSE
  
 ----------
 Module: github.com/go-gorp/gorp/v3
@@ -916,12 +916,6 @@ License: MIT
 License URL: https://github.com/klauspost/compress/blob/v1.19.2/zstd/internal/xxhash/LICENSE.txt
  
 ----------
-Module: github.com/klauspost/cpuid/v2
-Version: v2.3.0
-License: MIT
-License URL: https://github.com/klauspost/cpuid/blob/v2.3.0/LICENSE
- 
-----------
 Module: github.com/kr/fs
 Version: v0.1.0
 License: BSD-3-Clause
@@ -1103,9 +1097,9 @@ License URL: https://github.com/peterbourgon/diskv/blob/v2.0.1/LICENSE
  
 ----------
 Module: github.com/pjbgf/sha1cd
-Version: v0.6.0
+Version: v0.7.0
 License: Apache-2.0
-License URL: https://github.com/pjbgf/sha1cd/blob/v0.6.0/LICENSE
+License URL: https://github.com/pjbgf/sha1cd/blob/v0.7.0/LICENSE
  
 ----------
 Module: github.com/pkg/browser
