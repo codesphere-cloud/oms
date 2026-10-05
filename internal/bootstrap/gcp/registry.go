@@ -55,7 +55,9 @@ func (b *GCPBootstrapper) validateGitHubParams() error {
 // the selected type requires are set.
 func (b *GCPBootstrapper) validateRegistryParams() error {
 	switch b.Env.RegistryType {
-	case RegistryTypeLocalContainer, RegistryTypeArtifactRegistry:
+	case RegistryTypeLocalContainer:
+		return b.validateLocalRegistryMirrorParams()
+	case RegistryTypeArtifactRegistry:
 		return nil
 	case RegistryTypeGitHub:
 		if b.Env.GitHubPAT == "" {
@@ -70,6 +72,26 @@ func (b *GCPBootstrapper) validateRegistryParams() error {
 	default:
 		return fmt.Errorf("unsupported registry type %q (supported: local-container, artifact-registry, github)", b.Env.RegistryType)
 	}
+}
+
+// validateLocalRegistryMirrorParams checks the GHCR credentials the jumpbox mirrors the package
+// artifacts into a local container registry with. An installation mirrors them itself and would
+// fail without them only once the infrastructure is up, so it requires them up front. Without an
+// installation the operator mirrors by hand, and the PAT may be set for GitHub team access alone.
+func (b *GCPBootstrapper) validateLocalRegistryMirrorParams() error {
+	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
+		return nil
+	}
+
+	if b.Env.GitHubPAT == "" {
+		return fmt.Errorf("github-pat must be set to mirror the Codesphere images from ghcr.io into the local container registry")
+	}
+
+	if b.Env.RegistryUser == "" {
+		return fmt.Errorf("registry-user must be set to mirror the Codesphere images from ghcr.io into the local container registry")
+	}
+
+	return nil
 }
 
 // EnsureArtifactRegistry ensures the project's GCP Artifact Registry repository exists and
@@ -131,6 +153,10 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 // registryCertPath is where a node keeps the local registry's certificate among its trusted CAs.
 const registryCertPath = "/usr/local/share/ca-certificates/registry.crt"
+
+// jumpboxRegistryCertFile is where the local registry's self-signed certificate is generated on
+// the jumpbox. The registry serves it from there, and it is copied to every node that trusts it.
+const jumpboxRegistryCertFile = "/root/registry.crt"
 
 // registryClientNodes returns every node that pulls images from the local registry: the cluster
 // nodes of all data centers and the shared Postgres node, which runs Postgres from a registry image.
@@ -217,7 +243,7 @@ func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node) (string
 		"apt-get update",
 		"apt-get install -y podman apache2-utils",
 		"htpasswd -bBc /root/registry.password " + registryUsername + " " + registryPassword,
-		"openssl req -newkey rsa:4096 -nodes -sha256 -keyout /root/registry.key -x509 -days 365 -out /root/registry.crt -subj \"/C=DE/ST=BW/L=Karlsruhe/O=Codesphere/CN=" + registryNode.GetInternalIP() + "\" -addext \"subjectAltName = DNS:" + registryNode.GetName() + ",IP:" + registryNode.GetInternalIP() + "\"",
+		"openssl req -newkey rsa:4096 -nodes -sha256 -keyout /root/registry.key -x509 -days 365 -out " + jumpboxRegistryCertFile + " -subj \"/C=DE/ST=BW/L=Karlsruhe/O=Codesphere/CN=" + registryNode.GetInternalIP() + "\" -addext \"subjectAltName = DNS:" + registryNode.GetName() + ",IP:" + registryNode.GetInternalIP() + "\"",
 		"podman rm -f registry || true",
 		`podman run -d \
 		--restart=always --name registry --net=host\
@@ -228,11 +254,11 @@ func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node) (string
 		-v /root/registry.password:/auth/registry.password \
 		--env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
 		--env REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
-		-v /root/registry.crt:/certs/registry.crt \
+		-v ` + jumpboxRegistryCertFile + `:/certs/registry.crt \
 		-v /root/registry.key:/certs/registry.key \
 		registry:3`,
 		`mkdir -p /etc/docker/certs.d/` + localRegistryServer,
-		`cp /root/registry.crt /etc/docker/certs.d/` + localRegistryServer + `/ca.crt`,
+		`cp ` + jumpboxRegistryCertFile + ` /etc/docker/certs.d/` + localRegistryServer + `/ca.crt`,
 	}
 	for _, cmd := range commands {
 		b.stlog.Logf("Running command on the jumpbox: %s", util.Truncate(cmd, 12))
@@ -263,7 +289,7 @@ func (b *GCPBootstrapper) distributeRegistryCert(registryNode *node.Node, nodes 
 	for _, node := range nodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
 
-		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no /root/registry.crt root@"+node.GetInternalIP()+":"+registryCertPath)
+		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no "+jumpboxRegistryCertFile+" root@"+node.GetInternalIP()+":"+registryCertPath)
 		if err != nil {
 			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.GetInternalIP(), err)
 		}
@@ -282,6 +308,12 @@ func (b *GCPBootstrapper) distributeRegistryCert(registryNode *node.Node, nodes 
 	return nil
 }
 
+// jumpboxStep is a command run on the jumpbox together with the description it is logged by.
+type jumpboxStep struct {
+	description string
+	command     string
+}
+
 // ensureJumpboxRegistryAccess lets the jumpbox itself talk to the registries a local container
 // registry setup involves. Go tools such as OMS and the crane library it copies images with read
 // the system trust store and the Docker config instead of the podman locations the registry
@@ -289,28 +321,35 @@ func (b *GCPBootstrapper) distributeRegistryCert(registryNode *node.Node, nodes 
 // find them. The upstream login is what allows 'oms copy package' to mirror the Codesphere
 // images into the local registry.
 func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, server, username, password string) error {
-	commands := []string{
-		"cp /root/registry.crt " + registryCertPath,
-		"update-ca-certificates",
-		"mkdir -p " + path.Dir(jumpboxRegistryAuthFile),
+	// Each step is logged by its description rather than its command, since the login commands
+	// carry the registry passwords.
+	steps := []jumpboxStep{
+		{"trusting the registry certificate", "cp " + jumpboxRegistryCertFile + " " + registryCertPath},
+		{"updating the system CA certificates", "update-ca-certificates"},
+		{"creating the Docker config directory", "mkdir -p " + path.Dir(jumpboxRegistryAuthFile)},
 		// A freshly started registry container is not serving yet when podman returns, so wait
 		// for it to answer before logging in.
-		fmt.Sprintf("timeout 120 sh -c 'until curl -s -o /dev/null https://%s/v2/; do sleep 2; done'", server),
-		registryLoginCommand(server, username, password),
+		{"waiting for the registry at " + server + " to answer",
+			fmt.Sprintf("timeout 120 sh -c 'until curl -s -o /dev/null https://%s/v2/; do sleep 2; done'", server)},
+		{"logging in to the local registry at " + server + " as " + username,
+			registryLoginCommand(server, username, password)},
 	}
 
 	if b.Env.RegistryUser != "" && b.Env.GitHubPAT != "" {
-		commands = append(commands, registryLoginCommand("ghcr.io", b.Env.RegistryUser, b.Env.GitHubPAT))
+		steps = append(steps, jumpboxStep{
+			"logging in to ghcr.io as " + b.Env.RegistryUser,
+			registryLoginCommand("ghcr.io", b.Env.RegistryUser, b.Env.GitHubPAT),
+		})
 	} else {
 		b.stlog.Logf("Skipping ghcr.io login on the jumpbox, set --registry-user and --github-pat to mirror the Codesphere images into the local registry")
 	}
 
-	for _, cmd := range commands {
-		b.stlog.Logf("Running command on the jumpbox: %s", util.Truncate(cmd, 12))
+	for _, step := range steps {
+		b.stlog.Logf("Jumpbox registry access: %s", step.description)
 
-		err := registryNode.RunSSHCommand("root", cmd)
+		err := registryNode.RunSSHCommand("root", step.command)
 		if err != nil {
-			return fmt.Errorf("failed to configure registry access on the jumpbox: %w", err)
+			return fmt.Errorf("failed to configure registry access on the jumpbox while %s: %w", step.description, err)
 		}
 	}
 
@@ -321,8 +360,15 @@ func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, s
 // piped in from the shell built-in printf instead of being passed as an argument, which keeps it
 // out of podman's own process arguments, though the shell running the command still carries it.
 func registryLoginCommand(server, username, password string) string {
-	return fmt.Sprintf("printf '%%s' '%s' | podman login --authfile %s --username '%s' --password-stdin %s",
-		password, jumpboxRegistryAuthFile, username, server)
+	return fmt.Sprintf("printf '%%s' %s | podman login --authfile %s --username %s --password-stdin %s",
+		shellQuote(password), jumpboxRegistryAuthFile, shellQuote(username), server)
+}
+
+// shellQuote passes s to a POSIX shell as a single literal word. Nothing inside single quotes is
+// expanded, so only a single quote itself needs care: it closes the quoted part, is added escaped,
+// and the quoted part is reopened.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // EnsureGitHubAccessConfigured resolves ghcr.io as the registry all data centers pull from. The

@@ -167,6 +167,53 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Expect(bs.ValidateInput()).To(Succeed())
 		})
 
+		// The PAT also grants GitHub team access, which needs no registry user.
+		It("accepts a PAT alone for a local container registry it does not install into", func() {
+			csEnv.GitHubPAT = "fake-pat"
+
+			Expect(bs.ValidateInput()).To(Succeed())
+		})
+
+		// The installation mirrors the package images from ghcr.io into the local registry.
+		Context("when the local container registry is installed into", func() {
+			BeforeEach(func() {
+				csEnv.InstallVersion = "v1.2.3"
+				csEnv.GitHubPAT = "fake-pat"
+				csEnv.RegistryUser = "fake-registry-user"
+
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "v1.2.3", mock.Anything).Return(portal.Build{
+					Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
+				}, nil).Maybe()
+			})
+
+			It("accepts full GitHub credentials", func() {
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("rejects a missing PAT", func() {
+				csEnv.GitHubPAT = ""
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("github-pat must be set to mirror")))
+			})
+
+			It("rejects a missing registry user", func() {
+				csEnv.RegistryUser = ""
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("registry-user must be set to mirror")))
+			})
+
+			It("requires the credentials for a local package too", func() {
+				csEnv.InstallVersion = ""
+				csEnv.InstallLocal = "installer-lite.tar.gz"
+				csEnv.GitHubPAT = ""
+				csEnv.RegistryUser = ""
+
+				fw.EXPECT().Exists(mock.Anything).Return(true).Maybe()
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("github-pat must be set to mirror")))
+			})
+		})
+
 		Context("when the GitHub registry is selected", func() {
 			BeforeEach(func() {
 				csEnv.RegistryType = gcp.RegistryTypeGitHub
@@ -525,6 +572,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Context("when the local file exists", func() {
 					BeforeEach(func() {
 						fw.EXPECT().Exists(csEnv.InstallLocal).Return(true)
+						// Installing into the local container registry mirrors the images from ghcr.io.
+						csEnv.GitHubPAT = "fake-pat"
+						csEnv.RegistryUser = "fake-registry-user"
 					})
 					It("succeeds", func() {
 						err := bs.ValidateInput()
@@ -1063,6 +1113,29 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(bs.Env.RegistryUsername).To(Equal("custom-registry"))
 				Expect(bs.Env.RegistryPassword).NotTo(Equal("github-pat"))
 				Expect(bs.Env.RegistryPassword).NotTo(BeEmpty())
+			})
+
+			// The login commands carry the registry passwords, so a failure is reported by what
+			// failed rather than by the command.
+			It("names the failed jumpbox step without exposing the credentials", func() {
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				bs.Env.RegistryUser = "codesphere"
+				bs.Env.GitHubPAT = "secret-pat"
+				bs.Env.ControlPlaneNodes = []*node.Node{fakeNode("k0s-1", nodeClient)}
+				bs.Env.CephNodes = []*node.Node{}
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(fmt.Errorf("not running"))
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.HasSuffix(cmd, "ghcr.io")
+				})).Return(fmt.Errorf("unauthorized")).Once()
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).Return(nil)
+
+				err := bs.EnsureLocalContainerRegistry()
+				Expect(err).To(MatchError(ContainSubstring("while logging in to ghcr.io as codesphere: unauthorized")))
+				Expect(err.Error()).NotTo(ContainSubstring("secret-pat"))
 			})
 
 			It("trusts the registry CA and logs in to both registries on the jumpbox", func() {
@@ -1720,6 +1793,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			Expect(bs.UpdateInstallConfig()).To(Succeed())
 			Expect(bs.Env.InstallConfig.PcApps).To(HaveKeyWithValue("chartsRegistry", "10.0.0.1/codesphere-cloud/charts"))
+		})
+
+		// A re-run reads the config the previous run wrote, whose jumpbox may have had another IP.
+		It("replaces a charts registry left from a previous registry address", func() {
+			bs.Env.RegistryType = gcp.RegistryTypeLocalContainer
+			bs.Env.InstallConfig.Registry.Server = "10.0.0.8"
+			bs.Env.InstallConfig.PcApps = files.ChartValues{"chartsRegistry": "10.0.0.7/codesphere-cloud/charts"}
+
+			Expect(bs.UpdateInstallConfig()).To(Succeed())
+			Expect(bs.Env.InstallConfig.PcApps).To(HaveKeyWithValue("chartsRegistry", "10.0.0.8/codesphere-cloud/charts"))
 		})
 
 		DescribeTable("leaves the applications' charts on GHCR without a mirror",

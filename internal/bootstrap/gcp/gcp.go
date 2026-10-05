@@ -1118,7 +1118,7 @@ func (b *GCPBootstrapper) generateRegistryTrustArg() string {
 		return ""
 	}
 
-	return " --argo-registry-ca /root/registry.crt"
+	return " --argo-registry-ca " + jumpboxRegistryCertFile
 }
 
 func (b *GCPBootstrapper) generateSkipStepsArg() string {

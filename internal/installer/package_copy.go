@@ -134,6 +134,11 @@ func PackageImageDestination(source, dest string) (string, error) {
 	return packageArtifactDestination(source, dest, true)
 }
 
+// ChartsRepositoryPath is the repository path the Codesphere Helm charts keep below a mirror they
+// are copied into by PackageChartDestination, and so where ArgoCD and pc-applications pull them
+// from on a mirrored registry.
+const ChartsRepositoryPath = "/codesphere-cloud/charts"
+
 // PackageChartDestination maps an OCI Helm chart below a destination registry or repository
 // prefix. An installation does not rewrite its chart references and addresses them by their
 // repository path alone, so the source registry is dropped.

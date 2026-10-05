@@ -8,6 +8,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -164,13 +165,20 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 
 	// The pc-applications chart pulls the chart of every application it creates from
 	// chartsRegistry and defaults it to GHCR. Only a local container registry is filled with the
-	// package's artifacts, so only it can serve those charts as well.
+	// package's artifacts, so only it can serve those charts as well. The bootstrap owns that
+	// registry's address and rewrites registry.server on every run, so chartsRegistry follows it
+	// too: a value kept from an earlier run would still name a previous jumpbox's IP.
 	if b.Env.RegistryType == RegistryTypeLocalContainer {
 		if dc.InstallConfig.PcApps == nil {
 			dc.InstallConfig.PcApps = files.ChartValues{}
 		}
 
-		dc.InstallConfig.PcApps["chartsRegistry"] = dc.InstallConfig.Registry.Server + "/codesphere-cloud/charts"
+		chartsRegistry := dc.InstallConfig.Registry.Server + installer.ChartsRepositoryPath
+		if existing, _ := dc.InstallConfig.PcApps["chartsRegistry"].(string); existing != "" && existing != chartsRegistry {
+			b.stlog.Logf("Replacing pcApps.chartsRegistry %s from the install config with the local registry at %s", existing, chartsRegistry)
+		}
+
+		dc.InstallConfig.PcApps["chartsRegistry"] = chartsRegistry
 	}
 
 	if dc.InstallConfig.Postgres.Primary == nil {

@@ -142,7 +142,7 @@ func installArgoCDAndApps(opts *InstallCodesphereOpts, cfg files.RootConfig, pm 
 
 		registryURL := opts.ArgoCDRegistryURL
 		if registryURL == "" && cfg.Registry != nil {
-			registryURL = cfg.Registry.Server + "/codesphere-cloud/charts"
+			registryURL = cfg.Registry.Server + installer.ChartsRepositoryPath
 		}
 		argoCDInstall, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
 			Version:           opts.ArgoCDVersion,
