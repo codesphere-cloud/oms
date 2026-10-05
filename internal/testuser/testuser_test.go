@@ -250,4 +250,41 @@ var _ = Describe("createInDB", func() {
 		Expect(result.Email).To(Equal(TestEmail))
 		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
 	})
+
+	It("queues the OpenFGA membership tuple when SeedAuthz is enabled", func() {
+		sqlDB, m, err := sqlmock.New()
+		Expect(err).NotTo(HaveOccurred())
+
+		defer func() { _ = sqlDB.Close() }()
+
+		m.ExpectQuery(`SELECT EXISTS`).
+			WithArgs(TestEmail).
+			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
+
+		m.ExpectBegin()
+		m.ExpectQuery(`INSERT INTO authservice.credentials`).
+			WithArgs(TestEmail, hashedPassword).
+			WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(42))
+		m.ExpectExec(`INSERT INTO authservice.email_confirmations`).
+			WithArgs(TestEmail).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		m.ExpectQuery(`INSERT INTO "teamService".teams`).
+			WithArgs(TestTeamName, DefaultDatacenterID).
+			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
+		m.ExpectExec(`INSERT INTO "teamService".team_members`).
+			WithArgs(42, 7).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		m.ExpectExec(`INSERT INTO "teamService".fga_outbox`).
+			WithArgs("user:42", "resource_group:7").
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		m.ExpectExec(`INSERT INTO public_api_service.tokens`).
+			WithArgs(hashedToken, 42).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		m.ExpectCommit()
+
+		result, err := (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test", SeedAuthz: true}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.Email).To(Equal(TestEmail))
+		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
+	})
 })

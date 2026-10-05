@@ -5,6 +5,7 @@ package gcp
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
@@ -48,6 +49,7 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 		}
 
 		dc.ExistingConfigUsed = true
+		warnOnReusedInstallConfig(dc.InstallConfigPath, dc.ConfigManager.GetInstallConfig())
 	} else {
 		err := dc.ConfigManager.ApplyProfile("minimal")
 		if err != nil {
@@ -60,6 +62,40 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 	b.mirrorPrimaryDataCenter()
 
 	return nil
+}
+
+// warnOnReusedInstallConfig warns when the bootstrap reuses an existing install config
+// instead of generating one. The minimal profile, which injects the noRequests resource
+// overrides, is only applied to a new config, so a reused config keeps its own request
+// settings. On a small cluster those can over-commit CPU and leave core services such as
+// OpenFGA unschedulable, which surfaces later as workspace creation failures.
+func warnOnReusedInstallConfig(path string, config *files.RootConfig) {
+	log.Printf("Warning: reusing existing install config %q; the built-in profile is not applied.", path)
+
+	if hasNoRequestsResourceProfile(config) {
+		return
+	}
+
+	log.Printf("Warning: %q has no CPU/memory request overrides (noRequests resource profile). On small "+
+		"clusters this can leave core services unschedulable. Regenerate it with "+
+		"`oms init install-config --profile minimal`, or remove the file so the bootstrap creates one.", path)
+}
+
+// hasNoRequestsResourceProfile reports whether the config carries the minimal/dev profile's
+// noRequests overrides, which are written as codesphere.override.global.underprovisionFactors.
+func hasNoRequestsResourceProfile(config *files.RootConfig) bool {
+	if config == nil {
+		return false
+	}
+
+	global, ok := config.Codesphere.Override["global"].(map[string]any)
+	if !ok {
+		return false
+	}
+
+	_, ok = global["underprovisionFactors"]
+
+	return ok
 }
 
 func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *datacenter.DataCenter) error {
