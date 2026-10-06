@@ -64,12 +64,17 @@ var _ = Describe("InstallK0sCmd", func() {
 	Context("RunE method", func() {
 		It("fails when install-config is not provided", func() {
 			c.Opts.InstallConfig = ""
-			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir").Times(2)
-			mockFileWriter.EXPECT().MkdirAll("/test/workdir", os.FileMode(0755)).Return(nil)
 
 			err := c.RunE(nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("install-config"))
+		})
+
+		It("rejects an install-config in single-node mode", func() {
+			c.Opts.Single = true
+			c.Opts.InstallConfig = "config.yaml"
+			err := c.RunE(nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("cannot be used with --single")))
 		})
 	})
 
@@ -146,6 +151,17 @@ var _ = Describe("InstallK0sCmd", func() {
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to load install-config"))
+		})
+
+		It("rejects remote SSH settings in single-node mode without invoking k0sctl", func() {
+			c.Opts.Single = true
+			c.Opts.SSHKeyPath = "/tmp/key"
+
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).To(MatchError(ContainSubstring("not supported with --single")))
 		})
 
 		It("fails when install-config specifies external Kubernetes", func() {

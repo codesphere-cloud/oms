@@ -60,13 +60,14 @@ func (b *GCPBootstrapper) generateK0sConfigScript(dc *datacenter.DataCenter) err
 	}
 
 	script := fmt.Sprintf(`#!/bin/bash
+set -e
 
 cat <<EOF > cloud.conf
 [Global]
-project-id = "$PROJECT_ID"
+project-id = "%s"
 EOF
 
-cat <<EOF >> cc-deployment.yaml
+cat <<EOF > cc-deployment.yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -136,10 +137,10 @@ set +e
 
 %s
 
-sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
+grep -q -- '--enable-cloud-provider' /etc/systemd/system/k0scontroller.service || sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
 systemctl daemon-reload
 systemctl restart k0scontroller
-`, dc.PublicGatewayIP, dc.GatewayIP, enableWorkerDaemonsCmds.String())
+`, b.Env.ProjectID, dc.PublicGatewayIP, dc.GatewayIP, enableWorkerDaemonsCmds.String())
 
 	// Probably we need to enable the cloud provider plugin in k0s configuration.
 	// --enable-cloud-provider on worker nodes systemd file /etc/systemd/system/k0sworker.service

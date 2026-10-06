@@ -50,7 +50,8 @@ type NodeClient interface {
 }
 
 type SSHNodeClient struct {
-	Quiet bool
+	Quiet                   bool
+	ForwardRegistryPassword bool
 }
 
 func NewSSHNodeClient(quiet bool) *SSHNodeClient {
@@ -92,6 +93,9 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 
 	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
 	_ = session.Setenv("OMS_PORTAL_API", os.Getenv("OMS_PORTAL_API"))
+	if r.ForwardRegistryPassword {
+		_ = session.Setenv("OMS_REGISTRY_PASSWORD", os.Getenv("OMS_REGISTRY_PASSWORD"))
+	}
 	_ = agent.RequestAgentForwarding(session) // Best effort, ignore errors
 
 	var stderrBuf bytes.Buffer
@@ -243,7 +247,7 @@ func (n *Node) EnsureOmsDependencies() error {
 
 // HasAcceptEnvConfigured checks if AcceptEnv is configured
 func (n *Node) HasAcceptEnvConfigured() bool {
-	checkCommand := "sudo grep -qxF 'AcceptEnv OMS_PORTAL_API_KEY OMS_PORTAL_API' /etc/ssh/sshd_config >/dev/null 2>&1"
+	checkCommand := "sudo grep -qxF 'AcceptEnv OMS_PORTAL_API_KEY OMS_PORTAL_API OMS_REGISTRY_PASSWORD' /etc/ssh/sshd_config >/dev/null 2>&1"
 	err := n.RunSSHCommand("ubuntu", checkCommand)
 	if err != nil {
 		// If the command returns a NON-zero exit status, it means AcceptEnv is not configured
@@ -252,10 +256,10 @@ func (n *Node) HasAcceptEnvConfigured() bool {
 	return true
 }
 
-// ConfigureAcceptEnv configures AcceptEnv for OMS_PORTAL_API_KEY and OMS_PORTAL_API
+// ConfigureAcceptEnv configures the environment variables used by remote OMS commands.
 func (n *Node) ConfigureAcceptEnv() error {
 	cmds := []string{
-		"sudo sh -c \"grep -qxF 'AcceptEnv OMS_PORTAL_API_KEY OMS_PORTAL_API' /etc/ssh/sshd_config || printf '\\nAcceptEnv OMS_PORTAL_API_KEY OMS_PORTAL_API\\n' >> /etc/ssh/sshd_config\"",
+		"sudo sh -c \"grep -qxF 'AcceptEnv OMS_PORTAL_API_KEY OMS_PORTAL_API OMS_REGISTRY_PASSWORD' /etc/ssh/sshd_config || printf '\\nAcceptEnv OMS_PORTAL_API_KEY OMS_PORTAL_API OMS_REGISTRY_PASSWORD\\n' >> /etc/ssh/sshd_config\"",
 		"sudo systemctl restart sshd",
 	}
 	for _, cmd := range cmds {
@@ -264,6 +268,9 @@ func (n *Node) ConfigureAcceptEnv() error {
 			return fmt.Errorf("failed to run command '%s': %w", cmd, err)
 		}
 	}
+
+	n.invalidateClient("root")
+	n.invalidateClient("ubuntu")
 	return nil
 }
 
@@ -321,6 +328,20 @@ func (n *Node) HasMemoryMapConfigured() bool {
 
 func (n *Node) ConfigureMemoryMap() error {
 	return n.configureSysctlLines([]string{"vm.max_map_count=262144"})
+}
+
+// HasUnprivilegedGatewayPortsConfigured reports whether the host permits binding ports 80 and above.
+func (n *Node) HasUnprivilegedGatewayPortsConfigured() bool {
+	return n.hasSysctlLine("net.ipv4.ip_unprivileged_port_start=80") &&
+		n.isSysctlActive("net.ipv4.ip_unprivileged_port_start", "80")
+}
+
+// ConfigureUnprivilegedGatewayPorts lets the non-root edge gateway bind both
+// HTTP (80) and HTTPS (443) without NET_BIND_SERVICE. Its host network means
+// Kubernetes cannot set this net.* sysctl in the Pod security context:
+// https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/
+func (n *Node) ConfigureUnprivilegedGatewayPorts() error {
+	return n.configureSysctlLines([]string{"net.ipv4.ip_unprivileged_port_start=80"})
 }
 
 // HasFile checks if a file exists on the remote node via SSH
