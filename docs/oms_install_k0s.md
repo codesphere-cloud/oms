@@ -44,7 +44,7 @@ $ oms install k0s --no-download
 $ oms install k0s --airgapped
 
 # Install k0s airgapped from a local airgap image bundle
-$ oms install k0s --airgapped --airgap-bundle <path>
+$ oms install k0s --airgap-bundle <path>
 
 # Only generate the k0sctl config without installing k0s
 $ oms install k0s --install-config <path> --config-only --k0sctl-config <path>
@@ -57,7 +57,7 @@ $ oms install k0s --k0sctl-config <path>
 ### Options
 
 ```
-      --airgap-bundle string    Path to the k0s airgap image bundle to install from (requires --airgapped)
+      --airgap-bundle string    Path to the k0s airgap image bundle to install from (implies --airgapped)
       --airgapped               Install k0s without internet access by uploading the airgap image bundle to the workers
       --config-only             Only generate the k0sctl config, without installing k0s
   -f, --force                   Force new download and installation
