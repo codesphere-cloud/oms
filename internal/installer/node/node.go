@@ -615,18 +615,8 @@ func (n *Node) getAuthMethods() ([]ssh.AuthMethod, func(), error) {
 		}
 
 		// Check if key is already in agent (requires .pub file)
-		if shouldLoad && len(signers) > 0 {
-			if pubBytes, err := n.FileIO.ReadFile(n.KeyPath + ".pub"); err == nil {
-				if targetPub, _, _, _, err := ssh.ParseAuthorizedKey(pubBytes); err == nil {
-					targetMarshaled := string(targetPub.Marshal())
-					for _, s := range signers {
-						if string(s.PublicKey().Marshal()) == targetMarshaled {
-							shouldLoad = false
-							break
-						}
-					}
-				}
-			}
+		if shouldLoad && localAgent != nil && agentHoldsKey(localAgent, n.KeyPath, n.FileIO) {
+			shouldLoad = false
 		}
 
 		// Else load from file with passphrase prompt if needed
@@ -667,7 +657,7 @@ func dialLocalAgent() (agent.ExtendedAgent, func(), error) {
 // loadKey returns the private key at KeyPath and its signer. The key is read only once, so an
 // encrypted key prompts for its passphrase at most once.
 func (n *Node) loadKey() (any, ssh.Signer, error) {
-	if n.cachedSigner != nil && n.cachedKey != nil {
+	if n.cachedKey != nil {
 		return n.cachedKey, n.cachedSigner, nil
 	}
 

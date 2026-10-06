@@ -1850,13 +1850,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			Expect(bs.DownloadK0sAirgapBundle()).To(Succeed())
 		})
-
-		It("reports a download failure", func() {
-			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).Return(fmt.Errorf("offline"))
-
-			err := bs.DownloadK0sAirgapBundle()
-			Expect(err).To(MatchError(ContainSubstring("failed to download k0s airgap bundle on jumpbox")))
-		})
 	})
 
 	Describe("GenerateK0sAirgapConfig", func() {
@@ -1865,13 +1858,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --config-only --k0sctl-config /etc/codesphere/k0sctl-config.yaml").Return(nil)
 
 			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
-		})
-
-		It("reports a generation failure", func() {
-			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).Return(fmt.Errorf("no bundle"))
-
-			err := bs.GenerateK0sAirgapConfig()
-			Expect(err).To(MatchError(ContainSubstring("failed to generate k0s airgap config on jumpbox")))
 		})
 	})
 

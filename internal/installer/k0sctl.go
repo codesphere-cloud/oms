@@ -22,8 +22,9 @@ const (
 	k0sctlReleaseAPIURL = "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
 )
 
-// DefaultK0sctlVersion is the currently verified k0sctl version, mirroring
-// DefaultK0sVersion in k0s.go. Users can override it via --k0sctl-version.
+// DefaultK0sctlVersion is the currently verified k0sctl version. It mirrors
+// DefaultK0sVersion in k0s.go: the pair is the version combination we test
+// against, while users can override k0sctl via --k0sctl-version.
 //
 // renovate: datasource=github-releases depName=k0sproject/k0sctl
 const DefaultK0sctlVersion = "v0.33.1"
@@ -108,15 +109,15 @@ func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) 
 	return cachePath, nil
 }
 
+// requireBinaryAndConfig checks that both the k0sctl binary and config exist,
+// returning an error if either is missing.
 func (k *K0sctl) requireBinaryAndConfig(configPath, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return fmt.Errorf("k0sctl binary does not exist at '%s', please download first", k0sctlPath)
 	}
-
 	if !k.FileWriter.Exists(configPath) {
 		return fmt.Errorf("k0sctl config does not exist at '%s'", configPath)
 	}
-
 	return nil
 }
 
@@ -131,6 +132,7 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 		args = append(args, "--force")
 	}
 
+	// Add debug flag for more verbose output
 	args = append(args, "--debug")
 
 	log.Printf("Running k0sctl apply with config: %s", configPath)
@@ -141,7 +143,6 @@ func (k *K0sctl) Apply(configPath string, k0sctlPath string, force bool) error {
 	}
 
 	log.Println("k0sctl apply completed successfully")
-
 	return nil
 }
 
@@ -149,7 +150,6 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 	if !k.FileWriter.Exists(k0sctlPath) {
 		return nil
 	}
-
 	if err := k.requireBinaryAndConfig(configPath, k0sctlPath); err != nil {
 		return err
 	}
@@ -164,7 +164,6 @@ func (k *K0sctl) Reset(configPath string, k0sctlPath string) error {
 	}
 
 	log.Println("k0sctl reset completed successfully")
-
 	return nil
 }
 
@@ -176,7 +175,6 @@ func (k *K0sctl) GetKubeconfig(configPath string, k0sctlPath string) (string, er
 	args := []string{"kubeconfig", "--config", configPath}
 
 	log.Println("Retrieving kubeconfig from k0sctl...")
-
 	output, err := util.RunCommandWithOutput(k0sctlPath, args, "")
 	if err != nil {
 		return "", fmt.Errorf("k0sctl kubeconfig failed: %w", err)

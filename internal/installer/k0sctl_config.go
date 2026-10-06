@@ -100,7 +100,6 @@ func (k *K0sctlSpec) addUniqueK0sctlHost(node files.K8sNode, role string, instal
 			return
 		}
 	}
-
 	host := K0sctlHost{
 		Role: role,
 		SSH: K0sctlSSH{
@@ -138,6 +137,7 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, options K0sctlOptions
 		return nil, fmt.Errorf("k0sctl is only supported for Codesphere-managed Kubernetes")
 	}
 
+	// Generate k0s config that will be embedded in k0sctl config
 	k0sConfig, err := GenerateK0sConfig(installConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate k0s config: %w", err)
@@ -174,6 +174,7 @@ func GenerateK0sctlConfig(installConfig *files.RootConfig, options K0sctlOptions
 		k0sctlConfig.Spec.addUniqueK0sctlHost(cp, "controller", installFlags, runsWorker, options)
 	}
 
+	// Add dedicated worker nodes if present
 	for _, worker := range installConfig.Kubernetes.Workers {
 		k0sctlConfig.Spec.addUniqueK0sctlHost(worker, "worker", nil, true, options)
 	}

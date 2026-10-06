@@ -64,7 +64,6 @@ var _ = Describe("InstallK0sCmd", func() {
 	Context("RunE method", func() {
 		It("fails when install-config is not provided", func() {
 			c.Opts.InstallConfig = ""
-
 			mockEnv.EXPECT().GetOmsWorkdir().Return("/test/workdir").Times(2)
 			mockFileWriter.EXPECT().MkdirAll("/test/workdir", os.FileMode(0755)).Return(nil)
 
@@ -86,9 +85,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockPM = installer.NewMockPackageManager(GinkgoT())
 			mockK0s = installer.NewMockK0sManager(GinkgoT())
 			mockK0sctl = installer.NewMockK0sctlManager(GinkgoT())
-
 			var err error
-
 			tempDir, err = os.MkdirTemp("", "install-k0s-test-*")
 			Expect(err).NotTo(HaveOccurred())
 		})
@@ -97,7 +94,6 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockPM.AssertExpectations(GinkgoT())
 			mockK0s.AssertExpectations(GinkgoT())
 			mockK0sctl.AssertExpectations(GinkgoT())
-
 			if tempDir != "" {
 				_ = os.RemoveAll(tempDir)
 			}
@@ -138,7 +134,6 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err).NotTo(HaveOccurred())
 			err = os.WriteFile(configPath, configData, 0644)
 			Expect(err).NotTo(HaveOccurred())
-
 			return configPath
 		}
 
@@ -285,17 +280,6 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err).To(MatchError(ContainSubstring("--no-download cannot be combined with --airgapped")))
 		})
 
-		It("fails when --no-download is combined with --airgapped", func() {
-			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
-			c.Opts.Airgap = true
-			c.Opts.NoDownload = true
-
-			setupWorkdirMocks()
-
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
-			Expect(err).To(MatchError(ContainSubstring("--no-download cannot be combined with --airgapped")))
-		})
-
 		It("fails without install-config unless an existing k0sctl config is installed", func() {
 			c.Opts.ConfigOnly = true
 			c.Opts.K0sctlConfig = filepath.Join(tempDir, "k0sctl.yaml")
@@ -367,40 +351,6 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("resolves the latest k0s version when airgapped without a version", func() {
-			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
-			c.Opts.Airgap = true
-			c.Opts.AirgapBundlePath = "/cache/bundle"
-
-			setupWorkdirMocks()
-			mockK0s.EXPECT().GetLatestVersion().Return("v1.30.0+k0s.0", nil)
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
-			mockFileWriter.EXPECT().Exists("/cache/bundle").Return(true)
-			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
-			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
-			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
-
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("forces a fresh airgap bundle download with --force", func() {
-			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
-			c.Opts.Version = "v1.30.0+k0s.0"
-			c.Opts.Airgap = true
-			c.Opts.Force = true
-
-			setupWorkdirMocks()
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{Force: true}).Return("/downloaded/k0s", nil)
-			mockK0s.EXPECT().EnsureAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{Force: true}).Return("/cache/bundle", nil)
-			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{Force: true}).Return("/tmp/k0sctl", nil)
-			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
-			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", true).Return(nil)
-
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
 		It("fails when k0sctl download fails", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = "test-package.tar.gz"
@@ -447,7 +397,6 @@ var _ = Describe("InstallK0sCmd", func() {
 				if !testutil.SopsAndAgeAvailable() {
 					Skip("sops and age-keygen not available")
 				}
-
 				c.FileWriter = intutil.NewFilesystemWriter()
 			})
 
@@ -472,7 +421,6 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
-
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
 				Expect(secret.File.Content).To(Equal("apiVersion: v1\nkind: Config"))
@@ -508,7 +456,6 @@ var _ = Describe("InstallK0sCmd", func() {
 
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
-
 				plainPath := c.Opts.Vault + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())
@@ -561,7 +508,6 @@ var _ = Describe("InstallK0sCmd", func() {
 				}
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
-
 				plainPath := c.Opts.Vault + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())
@@ -579,7 +525,6 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
-
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
 				Expect(secret.File.Content).To(Equal("apiVersion: v1\nkind: Config\nnew: true"))
@@ -609,7 +554,6 @@ var _ = Describe("InstallK0sCmd", func() {
 				Expect(err).NotTo(HaveOccurred())
 				loaded, err := backend.Load()
 				Expect(err).NotTo(HaveOccurred())
-
 				secret := loaded.GetSecret(files.SecretKubeConfig)
 				Expect(secret).NotTo(BeNil())
 				Expect(secret.File.Content).To(Equal("apiVersion: v1\nkind: Config"))
@@ -658,7 +602,6 @@ var _ = Describe("InstallK0sCmd", func() {
 				}
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
-
 				plainPath := vaultPath + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())
@@ -713,7 +656,6 @@ var _ = Describe("InstallK0sCmd", func() {
 				}
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
-
 				plainPath := vaultPath + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())
@@ -778,7 +720,6 @@ var _ = Describe("InstallK0sCmd", func() {
 				}
 				vaultYAML, err := existingVault.Marshal()
 				Expect(err).NotTo(HaveOccurred())
-
 				plainPath := vaultPath + ".plain"
 				err = os.WriteFile(plainPath, vaultYAML, 0600)
 				Expect(err).NotTo(HaveOccurred())

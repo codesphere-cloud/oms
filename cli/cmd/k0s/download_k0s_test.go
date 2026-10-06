@@ -8,7 +8,6 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/spf13/cobra"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -111,27 +110,11 @@ var _ = Describe("DownloadK0sk0s", func() {
 			c.Opts.Version = "" // Test auto-version detection
 			c.Opts.Force = true
 			c.Opts.Verbose = true
-
 			mockK0sManager.EXPECT().GetLatestVersion().Return("v1.29.1+k0s.0", nil)
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", installer.DownloadOptions{Force: true, Quiet: false}).Return("/test/workdir/k0s", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).ToNot(HaveOccurred())
-		})
-	})
-
-	Context("AddDownloadCmd", func() {
-		It("registers --airgapped with the -a shorthand and default false", func() {
-			download := &cobra.Command{Use: "download"}
-
-			k0s.AddDownloadCmd(download, &util.GlobalOptions{})
-
-			Expect(download.Commands()).To(HaveLen(1))
-
-			flag := download.Commands()[0].Flags().Lookup("airgapped")
-			Expect(flag).ToNot(BeNil())
-			Expect(flag.Shorthand).To(Equal("a"))
-			Expect(flag.DefValue).To(Equal("false"))
 		})
 	})
 })

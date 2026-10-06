@@ -10,34 +10,16 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Install config reuse - Unexported", func() {
-	Describe("hasNoRequestsResourceProfile", func() {
-		It("is false for a nil config", func() {
-			Expect(hasNoRequestsResourceProfile(nil)).To(BeFalse())
-		})
-
-		It("is false when the config has no overrides", func() {
-			Expect(hasNoRequestsResourceProfile(&files.RootConfig{})).To(BeFalse())
-		})
-
-		It("is false when the global overrides lack underprovisionFactors", func() {
-			config := &files.RootConfig{}
-			config.Codesphere.Override = files.ChartOverride{
-				"global": map[string]any{"services": map[string]any{}},
-			}
-
-			Expect(hasNoRequestsResourceProfile(config)).To(BeFalse())
-		})
-
-		It("is true when the noRequests overrides are present", func() {
-			config := &files.RootConfig{}
-			config.Codesphere.Override = files.ChartOverride{
-				"global": map[string]any{
-					"underprovisionFactors": map[string]string{"cpu": "0.01", "memory": "0.01"},
-				},
-			}
-
-			Expect(hasNoRequestsResourceProfile(config)).To(BeTrue())
-		})
-	})
-})
+var _ = DescribeTable("hasNoRequestsResourceProfile",
+	func(config *files.RootConfig, expected bool) {
+		Expect(hasNoRequestsResourceProfile(config)).To(Equal(expected))
+	},
+	Entry("nil config", nil, false),
+	Entry("no overrides", &files.RootConfig{}, false),
+	Entry("global overrides without underprovisionFactors", &files.RootConfig{Codesphere: files.CodesphereConfig{
+		Override: files.ChartOverride{"global": map[string]any{"services": map[string]any{}}},
+	}}, false),
+	Entry("noRequests overrides", &files.RootConfig{Codesphere: files.CodesphereConfig{
+		Override: files.ChartOverride{"global": map[string]any{"underprovisionFactors": map[string]string{"cpu": "0.01"}}},
+	}}, true),
+)

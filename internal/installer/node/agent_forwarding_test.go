@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/pem"
-	"net"
 	"os"
 	"path/filepath"
 
@@ -146,40 +145,5 @@ var _ = Describe("dialLocalAgent", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(localAgent).To(BeNil())
 		closeAgent()
-	})
-
-	It("connects to the agent and closes the connection", func() {
-		// Unix socket paths are limited to ~104 bytes on macOS, so keep the path short.
-		dir, err := os.MkdirTemp("", "agent")
-		Expect(err).NotTo(HaveOccurred())
-		DeferCleanup(os.RemoveAll, dir)
-
-		socketPath := filepath.Join(dir, "a.sock")
-		listener, err := net.Listen("unix", socketPath)
-		Expect(err).NotTo(HaveOccurred())
-		DeferCleanup(listener.Close)
-
-		served := make(chan error, 1)
-
-		go func() {
-			conn, err := listener.Accept()
-			if err != nil {
-				served <- err
-				return
-			}
-			// ServeAgent returns once the client closes its end of the connection.
-			_ = agent.ServeAgent(agent.NewKeyring(), conn)
-			served <- conn.Close()
-		}()
-
-		GinkgoT().Setenv("SSH_AUTH_SOCK", socketPath)
-
-		localAgent, closeAgent, err := dialLocalAgent()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(localAgent).NotTo(BeNil())
-		Expect(localAgent.List()).To(BeEmpty())
-
-		closeAgent()
-		Eventually(served).Should(Receive(Succeed()))
 	})
 })

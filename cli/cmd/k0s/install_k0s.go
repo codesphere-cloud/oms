@@ -21,7 +21,7 @@ import (
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
-// InstallK0sCmd represents the k0s command
+// InstallK0sCmd represents the k0s download command
 type InstallK0sCmd struct {
 	cmd        *cobra.Command
 	Opts       InstallK0sOpts
@@ -29,7 +29,6 @@ type InstallK0sCmd struct {
 	FileWriter intutil.FileIO
 }
 
-// InstallK0sOpts holds the flags of the k0s install command
 type InstallK0sOpts struct {
 	*util.GlobalOptions
 	Version          string
@@ -48,7 +47,6 @@ type InstallK0sOpts struct {
 	VaultType        string
 }
 
-// RunE runs the k0s install command.
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	hw := portal.NewHttpWrapper()
 	env := c.Env
@@ -59,7 +57,6 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	return c.InstallK0s(pm, k0s, k0sctl)
 }
 
-// AddInstallCmd registers the k0s install command in the parent command
 func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s := InstallK0sCmd{
 		cmd: &cobra.Command{
@@ -90,7 +87,6 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
 	}
-
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", installer.DefaultK0sctlVersion, "Version of k0sctl to use")
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from")
@@ -243,7 +239,6 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 		if err := pm.ExtractDependency(defaultK0sPath, c.Opts.Force, c.Opts.Verbose); err != nil {
 			return "", fmt.Errorf("failed to extract k0s from package: %w", err)
 		}
-
 		return pm.GetDependencyPath(defaultK0sPath), nil
 	}
 
@@ -251,7 +246,6 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}
-
 	return k0sBinaryPath, nil
 }
 
@@ -279,13 +273,12 @@ func (c *InstallK0sCmd) getAirgapBundlePath(k0s installer.K0sManager, k0sVersion
 }
 
 func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
-	log.Println("Preparing k0sctl...")
+	log.Println("Downloading k0sctl...")
 
 	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}
-
 	return k0sctlPath, nil
 }
 
@@ -312,13 +305,11 @@ func (c *InstallK0sCmd) generateK0sctlConfig(config *files.RootConfig, options i
 	}
 
 	log.Printf("Generated k0sctl configuration at %s", k0sctlConfigPath)
-
 	return k0sctlConfigPath, nil
 }
 
 func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlPath string, k0sctlConfigPath string) error {
 	log.Println("Applying k0sctl configuration to deploy k0s cluster...")
-
 	if err := k0sctl.Apply(k0sctlConfigPath, k0sctlPath, c.Opts.Force); err != nil {
 		return fmt.Errorf("failed to apply k0sctl config: %w", err)
 	}
@@ -331,12 +322,10 @@ func (c *InstallK0sCmd) deployK0sCluster(k0sctl installer.K0sctlManager, k0sctlP
 
 func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0sctlConfigPath, k0sctlPath string) error {
 	log.Println("Retrieving kubeconfig from k0sctl for vault...")
-
 	kubeconfigContent, err := k0sctl.GetKubeconfig(k0sctlConfigPath, k0sctlPath)
 	if err != nil {
 		return fmt.Errorf("failed to retrieve kubeconfig from k0sctl: %w", err)
 	}
-
 	kubeconfigContent = strings.TrimRight(kubeconfigContent, "\n\r")
 
 	store, err := c.vaultStore()
@@ -366,15 +355,13 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	}
 
 	log.Printf("Saved kubeconfig to %s", c.Opts.Vault)
-
 	return nil
 }
 
 func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
-	store, err := vault.NewFromString(c.Opts.VaultType, vault.Options{Path: c.Opts.Vault, AgeKey: c.Opts.VaultPrivKey})
+	vault, err := vault.NewFromString(c.Opts.VaultType, vault.Options{Path: c.Opts.Vault, AgeKey: c.Opts.VaultPrivKey})
 	if err != nil {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}
-
-	return store, nil
+	return vault, nil
 }

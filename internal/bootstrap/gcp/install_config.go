@@ -64,14 +64,10 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 	return nil
 }
 
-// warnOnReusedInstallConfig warns when the bootstrap reuses an existing install config
-// instead of generating one. The minimal profile, which injects the noRequests resource
-// overrides, is only applied to a new config, so a reused config keeps its own request
-// settings. On a small cluster those can over-commit CPU and leave core services such as
-// OpenFGA unschedulable, which surfaces later as workspace creation failures.
+// warnOnReusedInstallConfig warns when a reused install config lacks the noRequests resource
+// overrides that the minimal profile adds to new configs. On a small cluster its own request
+// settings can over-commit CPU and leave core services such as OpenFGA unschedulable.
 func warnOnReusedInstallConfig(path string, config *files.RootConfig) {
-	log.Printf("Warning: reusing existing install config %q; the built-in profile is not applied.", path)
-
 	if hasNoRequestsResourceProfile(config) {
 		return
 	}
@@ -88,12 +84,8 @@ func hasNoRequestsResourceProfile(config *files.RootConfig) bool {
 		return false
 	}
 
-	global, ok := config.Codesphere.Override["global"].(map[string]any)
-	if !ok {
-		return false
-	}
-
-	_, ok = global["underprovisionFactors"]
+	global, _ := config.Codesphere.Override["global"].(map[string]any)
+	_, ok := global["underprovisionFactors"]
 
 	return ok
 }

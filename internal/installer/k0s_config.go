@@ -67,7 +67,6 @@ type K0sKonnectivity struct {
 	AgentPort int `yaml:"agentPort,omitempty"`
 }
 
-// GenerateK0sConfig generates a K0sConfig based on the provided RootConfig.
 func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 	if installConfig == nil {
 		return nil, fmt.Errorf("installConfig cannot be nil")
@@ -90,7 +89,6 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 			for _, cp := range installConfig.Kubernetes.ControlPlanes {
 				sans = append(sans, cp.IPAddress)
 			}
-
 			if installConfig.Kubernetes.APIServerHost != "" {
 				sans = append(sans, installConfig.Kubernetes.APIServerHost)
 			}

@@ -66,6 +66,7 @@ func (k *K0s) resolveAirgapBundleAssetName(version string) (string, error) {
 	}
 
 	prefix := fmt.Sprintf("%s-%s-", AirgapBundleName, version)
+
 	i := slices.IndexFunc(release.Assets, func(asset githubReleaseAsset) bool {
 		platform, ok := strings.CutPrefix(asset.Name, prefix)
 		platform = strings.TrimSuffix(platform, ".tar")
