@@ -14,6 +14,9 @@ type ResourceProfile string
 
 const (
 	ResourceProfileNoRequests ResourceProfile = "noRequests"
+	// ResourceProfileNoRequestsSingleReplica is ResourceProfileNoRequests with a
+	// single replica for the Codesphere services, for setups with a single node.
+	ResourceProfileNoRequestsSingleReplica ResourceProfile = "noRequestsSingleReplica"
 )
 
 // ApplyResourceProfile mutates a RootConfig in-place to apply the requested
@@ -25,14 +28,19 @@ func ApplyResourceProfile(config *files.RootConfig, profile ResourceProfile) err
 
 	switch profile {
 	case ResourceProfileNoRequests:
-		applyNoRequestsProfile(config)
+		applyNoRequestsProfile(config, 2)
+		return nil
+	case ResourceProfileNoRequestsSingleReplica:
+		applyNoRequestsProfile(config, 1)
 		return nil
 	default:
 		return fmt.Errorf("unsupported resource profile %q", profile)
 	}
 }
 
-func applyNoRequestsProfile(config *files.RootConfig) {
+// applyNoRequestsProfile zeroes resource requests and sets serviceReplicas for
+// the Codesphere services that run more than one replica by default.
+func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 	if config.Cluster.CertManager == nil {
 		config.Cluster.CertManager = &files.CertManagerConfig{}
 	}
@@ -240,11 +248,11 @@ func applyNoRequestsProfile(config *files.RootConfig) {
 			"requests": zeroRequests(),
 		}
 	}
-	serviceProfiles["deployment_service"].(map[string]any)["replicas"] = 2
-	serviceProfiles["public_api_service"].(map[string]any)["replicas"] = 2
-	serviceProfiles["team_service"].(map[string]any)["replicas"] = 2
-	serviceProfiles["workspace_service"].(map[string]any)["replicas"] = 2
-	serviceProfiles["auth_service"].(map[string]any)["replicas"] = 2
+	serviceProfiles["deployment_service"].(map[string]any)["replicas"] = serviceReplicas
+	serviceProfiles["public_api_service"].(map[string]any)["replicas"] = serviceReplicas
+	serviceProfiles["team_service"].(map[string]any)["replicas"] = serviceReplicas
+	serviceProfiles["workspace_service"].(map[string]any)["replicas"] = serviceReplicas
+	serviceProfiles["auth_service"].(map[string]any)["replicas"] = serviceReplicas
 
 	if config.Codesphere.Override == nil {
 		config.Codesphere.Override = map[string]any{}
