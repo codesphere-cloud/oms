@@ -257,7 +257,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 
 			Expect(bs.Bootstrap()).To(Succeed())
 
-			server := bs.Env.Jumpbox.GetInternalIP() + ":5000"
+			server := bs.Env.Jumpbox.GetInternalIP()
 
 			primary, secondary := bs.Env.DataCenters[0], bs.Env.DataCenters[1]
 			for _, dc := range []*datacenter.DataCenter{primary, secondary} {
