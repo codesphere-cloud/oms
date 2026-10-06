@@ -99,7 +99,7 @@ func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) 
 
 	io.Verbosef(!opts.Quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 
-	if err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sctlBinaryName, downloadURL, opts.Quiet); err != nil {
+	if err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet); err != nil {
 		return "", err
 	}
 

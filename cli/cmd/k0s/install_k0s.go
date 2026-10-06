@@ -48,23 +48,6 @@ type InstallK0sOpts struct {
 	VaultType        string
 }
 
-// resolveK0sVersion returns the requested k0s version, or the latest version when
-// none was requested.
-func resolveK0sVersion(k0s installer.K0sManager, version string) (string, error) {
-	if version != "" {
-		return version, nil
-	}
-
-	latestVersion, err := k0s.GetLatestVersion()
-	if err != nil {
-		return "", fmt.Errorf("failed to get latest k0s version: %w", err)
-	}
-
-	log.Printf("Using latest k0s version: %s", latestVersion)
-
-	return latestVersion, nil
-}
-
 // RunE runs the k0s install command.
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	hw := portal.NewHttpWrapper()

@@ -83,8 +83,8 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
 	downloadURL := releaseAssetURL(k0sReleaseURL, version, assetName)
 
-	if err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, k0sBinaryName, downloadURL, opts.Quiet); err != nil {
-		return "", fmt.Errorf("failed to download k0s binary: %w", err)
+	if err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet); err != nil {
+		return "", err
 	}
 
 	log.Printf("k0s binary downloaded and made executable at '%s'", cachePath)

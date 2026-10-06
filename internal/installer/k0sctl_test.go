@@ -49,9 +49,10 @@ var _ = Describe("K0sctl", func() {
 		url := "https://github.com/k0sproject/k0sctl/releases/download/" + version + "/k0sctl-linux-amd64"
 		downloadFile, err := os.CreateTemp(cacheDir, "k0sctl-download")
 		Expect(err).NotTo(HaveOccurred())
-		mockFileWriter.EXPECT().Create(cachedPath).Return(downloadFile, nil)
+		mockFileWriter.EXPECT().Create(cachedPath + ".partial").Return(downloadFile, nil)
 		mockHTTP.EXPECT().Download(url, downloadFile, false).Return(nil)
-		mockFileWriter.EXPECT().Chmod(cachedPath, os.FileMode(0755)).Return(nil)
+		mockFileWriter.EXPECT().Chmod(cachedPath+".partial", os.FileMode(0755)).Return(nil)
+		mockFileWriter.EXPECT().Rename(cachedPath+".partial", cachedPath).Return(nil)
 	}
 
 	It("reuses a cached binary with the requested version", func() {

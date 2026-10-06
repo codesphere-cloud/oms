@@ -405,11 +405,12 @@ func (n *Node) configureSysctlLines(lines []string) error {
 
 // getOrCreateClient returns a cached SSH client or creates a new one if not cached.
 func (n *Node) getOrCreateClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
+	n.clientMu.Lock()
+	defer n.clientMu.Unlock()
+
 	if n.clientCache == nil {
 		n.clientCache = make(map[string]*ssh.Client)
 	}
-	n.clientMu.Lock()
-	defer n.clientMu.Unlock()
 
 	if client, ok := n.clientCache[username]; ok {
 		if _, _, err := client.SendRequest("keepalive@openssh.com", true, nil); err == nil {
@@ -447,10 +448,11 @@ func (n *Node) invalidateClient(username string) {
 
 // createClient creates and returns a new SSH client connected to the node (internal, no caching)
 func (n *Node) createClient(jumpboxIp string, ip string, username string) (*ssh.Client, error) {
-	authMethods, err := n.getAuthMethods()
+	authMethods, closeAgent, err := n.getAuthMethods()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get authentication methods: %w", err)
 	}
+	defer closeAgent()
 
 	if jumpboxIp != "" {
 		// Use the Jumpbox's cached client if available
@@ -585,16 +587,20 @@ func (n *Node) downloadFile(jumpboxIp, ip, username, src, dst string) error {
 }
 
 // getAuthMethods constructs a slice of ssh.AuthMethod, prioritizing the SSH agent.
-func (n *Node) getAuthMethods() ([]ssh.AuthMethod, error) {
+// The agent signers sign during the SSH handshake, so the caller must keep the agent
+// connection open until the handshake is done and then call the returned close function.
+func (n *Node) getAuthMethods() ([]ssh.AuthMethod, func(), error) {
 	var signers []ssh.Signer
 
 	// 1. Get Agent Signers
-	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
-		if conn, err := net.Dial("unix", authSocket); err == nil {
-			agentClient := agent.NewClient(conn)
-			if s, err := agentClient.Signers(); err == nil {
-				signers = append(signers, s...)
-			}
+	localAgent, closeAgent, err := dialLocalAgent()
+	if err != nil {
+		log.Printf("Warning: failed to connect to SSH agent: %v", err)
+	}
+
+	if localAgent != nil {
+		if s, err := localAgent.Signers(); err == nil {
+			signers = append(signers, s...)
 		}
 	}
 
@@ -634,10 +640,28 @@ func (n *Node) getAuthMethods() ([]ssh.AuthMethod, error) {
 	}
 
 	if len(signers) == 0 {
-		return nil, fmt.Errorf("no valid authentication methods configured. Check SSH_AUTH_SOCK and private key path")
+		closeAgent()
+
+		return nil, nil, fmt.Errorf("no valid authentication methods configured. Check SSH_AUTH_SOCK and private key path")
 	}
 
-	return []ssh.AuthMethod{ssh.PublicKeys(signers...)}, nil
+	return []ssh.AuthMethod{ssh.PublicKeys(signers...)}, closeAgent, nil
+}
+
+// dialLocalAgent connects to the SSH agent at SSH_AUTH_SOCK. Without an agent it returns a
+// nil agent. The returned close function is always safe to call.
+func dialLocalAgent() (agent.ExtendedAgent, func(), error) {
+	authSocket := os.Getenv("SSH_AUTH_SOCK")
+	if authSocket == "" {
+		return nil, func() {}, nil
+	}
+
+	conn, err := net.Dial("unix", authSocket)
+	if err != nil {
+		return nil, func() {}, fmt.Errorf("failed to dial SSH agent at %s: %w", authSocket, err)
+	}
+
+	return agent.NewClient(conn), func() { util.IgnoreError(conn.Close) }, nil
 }
 
 // loadKey returns the private key at KeyPath and its signer. The key is read only once, so an
@@ -702,32 +726,34 @@ func (n *Node) loadPrivateKey() (any, error) {
 // setupAgentForwarding sets up SSH agent forwarding on the client (best effort). Tools on the
 // remote host, such as k0sctl on the jumpbox, authenticate to further hosts through the
 // forwarded agent, so it always offers the key at KeyPath, even when the local agent lacks it.
+//
+// The local agent connection stays open as long as the client, which serves the forwarded
+// agent requests over it.
 func (n *Node) setupAgentForwarding(client *ssh.Client) error {
-	var localAgent agent.ExtendedAgent
-
-	if authSocket := os.Getenv("SSH_AUTH_SOCK"); authSocket != "" {
-		conn, err := net.Dial("unix", authSocket)
-		if err != nil {
-			log.Printf("Warning: failed to connect to SSH agent: %v", err)
-		} else {
-			localAgent = agent.NewClient(conn)
-		}
+	localAgent, closeAgent, err := dialLocalAgent()
+	if err != nil {
+		log.Printf("Warning: failed to connect to SSH agent: %v", err)
 	}
 
 	forwarded, err := n.forwardedAgent(localAgent)
-	if err != nil {
-		return err
+	if err == nil && forwarded != nil {
+		err = agent.ForwardToAgent(client, forwarded)
+		if err == nil {
+			go func() {
+				_ = client.Wait()
+
+				closeAgent()
+			}()
+
+			return nil
+		}
+
+		err = fmt.Errorf("failed to forward SSH agent: %w", err)
 	}
 
-	if forwarded == nil {
-		return nil
-	}
+	closeAgent()
 
-	if err := agent.ForwardToAgent(client, forwarded); err != nil {
-		return fmt.Errorf("failed to forward SSH agent: %w", err)
-	}
-
-	return nil
+	return err
 }
 
 // forwardedAgent returns the agent to forward to remote hosts: the local agent when it already

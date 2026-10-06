@@ -6,6 +6,7 @@ package installer
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -57,7 +58,7 @@ func ensureCacheDir(fw util.FileIO, environment env.Env) (string, error) {
 	}
 
 	if err := fw.MkdirAll(cacheDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create workdir: %w", err)
+		return "", fmt.Errorf("failed to create cache directory %s: %w", cacheDir, err)
 	}
 
 	return cacheDir, nil
@@ -90,29 +91,48 @@ func releaseAssetURL(releaseURL, version, assetName string) string {
 	return fmt.Sprintf("%s/%s/%s", releaseURL, version, assetName)
 }
 
+const partialSuffix = ".partial"
+
 func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool) error {
-	dstFile, err := fw.Create(path)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %s: %w", path, err)
-	}
-	defer util.CloseFileIgnoreError(dstFile)
-
-	if err := http.Download(downloadURL, dstFile, quiet); err != nil {
-		_ = fw.Remove(path)
-
-		return fmt.Errorf("failed to download %s: %w", path, err)
-	}
-
-	return nil
+	return downloadAtomically(fw, http, path, downloadURL, quiet, 0)
 }
 
-func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, binaryName, downloadURL string, quiet bool) error {
-	if err := downloadToPath(fw, http, binaryPath, downloadURL, quiet); err != nil {
-		return fmt.Errorf("failed to download: %w", err)
+func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, downloadURL string, quiet bool) error {
+	return downloadAtomically(fw, http, binaryPath, downloadURL, quiet, 0755)
+}
+
+func downloadAtomically(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool, perm os.FileMode) (err error) {
+	partialPath := path + partialSuffix
+
+	dstFile, err := fw.Create(partialPath)
+	if err != nil {
+		return fmt.Errorf("failed to create %s: %w", partialPath, err)
 	}
 
-	if err := fw.Chmod(binaryPath, 0755); err != nil {
-		return fmt.Errorf("failed to make %s binary executable: %w", binaryName, err)
+	defer func() {
+		if err != nil {
+			_ = fw.Remove(partialPath)
+		}
+	}()
+
+	if err := http.Download(downloadURL, dstFile, quiet); err != nil {
+		util.CloseFileIgnoreError(dstFile)
+
+		return fmt.Errorf("failed to download %s: %w", downloadURL, err)
+	}
+
+	if err := dstFile.Close(); err != nil {
+		return fmt.Errorf("failed to write %s: %w", partialPath, err)
+	}
+
+	if perm != 0 {
+		if err := fw.Chmod(partialPath, perm); err != nil {
+			return fmt.Errorf("failed to set permissions of %s: %w", partialPath, err)
+		}
+	}
+
+	if err := fw.Rename(partialPath, path); err != nil {
+		return fmt.Errorf("failed to move download to %s: %w", path, err)
 	}
 
 	return nil
