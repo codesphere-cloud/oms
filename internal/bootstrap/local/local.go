@@ -242,6 +242,7 @@ func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*argocd.AppInstaller, err
 	// renovate: datasource=helm depName=argo-cd registryUrl=https://argoproj.github.io/argo-helm
 	argoCDInstall, err := argocd.NewInstaller(argocd.InstallerConfig{
 		Version:        "9.5.21",
+		OciUsername:    b.Env.RegistryUser,
 		OciPassword:    b.Env.RegistryPassword,
 		OciRegistryURL: strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://"),
 		FullInstall:    true,

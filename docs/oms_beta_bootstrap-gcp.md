@@ -43,7 +43,7 @@ oms beta bootstrap-gcp [flags]
       --github-app-client-id string               GitHub App Client ID (required)
       --github-app-client-secret string           GitHub App Client Secret (required)
       --github-app-name string                    GitHub App Name (optional)
-      --github-pat string                         GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug. Required scopes: read:packages, read:org.
+      --github-pat string                         GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.
       --github-team-org string                    GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.
       --github-team-slug string                   GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.
       --gitlab-app-client-id string               GitLab App Client ID (optional)
@@ -75,7 +75,7 @@ oms beta bootstrap-gcp [flags]
       --recover-config                            Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                             GCP Region (default: europe-west4) (default "europe-west4")
       --registry-type string                      Container registry type to use (options: local-container, artifact-registry, github) (default: github) (default "github")
-      --registry-user string                      Custom Registry username (only for GitHub registry type) (optional)
+      --registry-user string                      Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)
       --remote-oms-binary string                  Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)
       --root-disk-size int                        Instance root disk size in GB (default: 50) (default 50)
       --secrets-dir string                        Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")

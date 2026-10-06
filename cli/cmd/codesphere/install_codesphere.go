@@ -49,6 +49,7 @@ type InstallCodesphereOpts struct {
 	// ArgoCD deployment (pre-step in Phase 2)
 	ArgoCDVersion        string
 	ArgoCDRegistryURL    string
+	ArgoCDRegistryCA     string
 	ArgoCDForceConflicts bool
 	ArgoCDRepoURL        string
 	ArgoCDValues         []string
@@ -137,6 +138,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDVersion, "argo-version", "", "ArgoCD Helm chart version to install")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryURL, "argo-registry-url", "", "OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryCA, "argo-registry-ca", "", "Path to the certificate authority of the OCI registry, needed when its certificate is self-signed")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.ArgoCDForceConflicts, "argo-force-conflicts", false, "Force SSA ownership conflicts during ArgoCD install")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRepoURL, "argo-repo", argocd.DefaultRepoURL, "ArgoCD Helm chart repository URL")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
