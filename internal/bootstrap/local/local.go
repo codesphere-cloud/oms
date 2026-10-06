@@ -244,7 +244,7 @@ func (b *LocalBootstrapper) newArgoCDAndAppsInstall() (*argocd.AppInstaller, err
 		Version:        "9.5.21",
 		OciUsername:    b.Env.RegistryUser,
 		OciPassword:    b.Env.RegistryPassword,
-		OciRegistryURL: strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://"),
+		OciRegistryURL: b.argoCDOCIRegistryURL(),
 		FullInstall:    true,
 		ForceConflicts: true,
 		RESTConfig:     b.restConfig,

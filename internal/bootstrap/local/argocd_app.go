@@ -7,6 +7,7 @@ package local
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
@@ -19,6 +20,12 @@ import (
 type helmApplicationConfig struct {
 	Name, Chart, RepoURL, TargetRevision, Namespace string
 	Values                                          map[string]interface{}
+}
+
+// argoCDOCIRegistryURL returns the OCI registry ArgoCD has credentials for. An
+// Application's repoURL has to equal it verbatim for ArgoCD to match them.
+func (b *LocalBootstrapper) argoCDOCIRegistryURL() string {
+	return strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://")
 }
 
 func (b *LocalBootstrapper) installHelmApplication(cfg helmApplicationConfig) error {
