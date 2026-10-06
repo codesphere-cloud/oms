@@ -508,6 +508,9 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 
 		b.Env.ExistingConfigUsed = true
 	}
+	// Has to run before the profile: profiles only set monitoring defaults for
+	// components that aren't configured yet.
+	disableLokiMonitoring(b.icg.GetInstallConfig())
 	err := b.icg.ApplyProfile(b.Env.Profile)
 	if err != nil {
 		return fmt.Errorf("failed to apply profile: %w", err)
@@ -516,6 +519,27 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 	b.Env.InstallConfig = b.icg.GetInstallConfig()
 
 	return nil
+}
+
+// disableLokiMonitoring turns off Loki, Grafana and Grafana Alloy unless the
+// config already says otherwise. Loki stores its logs in a Ceph RGW bucket whose
+// user and credentials the multi-host Ceph setup creates; bootstrap-local doesn't,
+// so the installer fails with a missing "rgwLokiSecretKey" vault item. Grafana and
+// Alloy can't be installed without Loki.
+func disableLokiMonitoring(config *files.RootConfig) {
+	if config.Cluster.Monitoring == nil {
+		config.Cluster.Monitoring = &files.MonitoringConfig{}
+	}
+	monitoring := config.Cluster.Monitoring
+	if monitoring.Loki == nil {
+		monitoring.Loki = &files.LokiConfig{Enabled: false}
+	}
+	if monitoring.Grafana == nil {
+		monitoring.Grafana = &files.GrafanaConfig{Enabled: false}
+	}
+	if monitoring.GrafanaAlloy == nil {
+		monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{Enabled: false}
+	}
 }
 
 func (b *LocalBootstrapper) loadVaultForConfigTemplating() error {
