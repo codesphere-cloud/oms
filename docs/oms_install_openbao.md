@@ -46,6 +46,7 @@ $ oms install openbao --dr-backup-path ./backups/cluster-1.enc.json --timeout 10
       --secrets-engine string   Name of the KV-v2 secrets engine to provision (default "cs-secrets-engine")
       --storage-size string     PVC storage size for each OpenBao replica (default "10Gi")
       --timeout duration        Timeout for waiting on initialization (default 5m0s)
+      --timer                   Show how long each step took after it finishes
   -y, --yes                     Auto-approve re-initialization of an existing deployment when no DR backup is found
 ```
 
