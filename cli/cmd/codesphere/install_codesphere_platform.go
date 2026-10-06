@@ -6,6 +6,7 @@ package codesphere
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"runtime"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -28,6 +29,9 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
+	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {
+		return fmt.Errorf("--local-config-dir is required with --local-components")
+	}
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
@@ -44,20 +48,27 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
+	if opts.LocalComponents {
+		pm = installer.NewPackage(filepath.Dir(opts.Package), opts.Package)
+	}
 	cm := installer.NewConfig()
 	im := system.NewImage(ctx)
 
 	ci := &installer.CodesphereInstaller{
-		ConfigPath:       opts.ConfigPath,
-		VaultPath:        opts.Vault,
-		PrivKey:          opts.PrivKey,
-		Force:            opts.Force,
-		Verbose:          opts.Verbose,
-		SkipSteps:        opts.SkipSteps,
-		AllowedSteps:     installer.PlatformSteps,
-		CodesphereOnly:   true,
-		DirectConnection: opts.DirectConnection,
-		AutoApprove:      opts.AutoApprove,
+		ConfigPath:        opts.ConfigPath,
+		VaultPath:         opts.Vault,
+		PrivKey:           opts.PrivKey,
+		Force:             opts.Force,
+		Verbose:           opts.Verbose,
+		SkipSteps:         opts.SkipSteps,
+		AllowedSteps:      installer.PlatformSteps,
+		CodesphereOnly:    true,
+		DirectConnection:  opts.DirectConnection,
+		AutoApprove:       opts.AutoApprove,
+		LocalComponents:   opts.LocalComponents,
+		LocalConfigDir:    opts.LocalConfigDir,
+		SkipImageBuilding: opts.LocalComponents,
+		Context:           ctx,
 	}
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)

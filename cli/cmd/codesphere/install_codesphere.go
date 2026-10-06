@@ -46,6 +46,8 @@ type InstallCodesphereOpts struct {
 	CodesphereOnly   bool
 	DirectConnection bool
 	AutoApprove      bool
+	LocalComponents  bool
+	LocalConfigDir   string
 	// ArgoCD deployment (pre-step in Phase 2)
 	ArgoCDVersion        string
 	ArgoCDRegistryURL    string
@@ -56,6 +58,9 @@ type InstallCodesphereOpts struct {
 }
 
 func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
+	if c.Opts.LocalComponents {
+		return fmt.Errorf("--local-components requires install codesphere dependencies or install codesphere platform")
+	}
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
@@ -93,7 +98,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	if dependenciesInstaller.HasExecutableSteps(cfg) || !installer.IsStepSkipped(cfg, c.Opts.SkipSteps, installer.ArgoCDStep) {
-		if err := installCodesphereDepencies(effectiveOpts, cfg, c.Env); err != nil {
+		if err := installCodesphereDepencies(ctx, effectiveOpts, cfg, c.Env); err != nil {
 			return err
 		}
 	}
@@ -111,7 +116,8 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 			Use:   "codesphere",
 			Short: "Install a Codesphere instance",
 			Long: io.Long(`Install a Codesphere instance with the provided package, configuration file, and private key.
-			Uses the private-cloud-installer.js script included in the package to perform the installation.`),
+			Uses the private-cloud-installer.js script included in the package to perform the installation.
+			Use the dependencies and platform subcommands with --local-components for a prepared local cluster.`),
 			Example: util.FormatExamples("install codesphere", []io.Example{
 				{
 					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s copy-dependencies,extract-dependencies,load-container-images,ceph,postgres,kubernetes,docker",
@@ -134,6 +140,8 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringSliceVarP(&codesphere.Opts.SkipSteps, "skip-steps", "s", []string{}, "Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
+	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.LocalComponents, "local-components", false, "Run selected install components on the local host")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.LocalConfigDir, "local-config-dir", "", "Config directory for local install components")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDVersion, "argo-version", "", "ArgoCD Helm chart version to install")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryURL, "argo-registry-url", "", "OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)")
