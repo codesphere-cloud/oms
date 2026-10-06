@@ -136,15 +136,13 @@ func localBinaryVersion(binaryPath string) (string, error) {
 
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
 		if version, found := strings.CutPrefix(line, "version:"); found {
 			return strings.TrimSpace(version), nil
 		}
 
-		return line, nil
+		if line != "" {
+			return line, nil
+		}
 	}
 
 	return "", fmt.Errorf("version output is empty")

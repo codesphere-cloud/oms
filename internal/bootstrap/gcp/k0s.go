@@ -30,7 +30,7 @@ func (b *GCPBootstrapper) EnsureK0s() error {
 
 		err = b.GenerateK0sAirgapConfig()
 		if err != nil {
-			return fmt.Errorf("failed to generate k0s airgap config: %w", err)
+			return err
 		}
 	}
 

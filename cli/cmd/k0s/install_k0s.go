@@ -129,8 +129,6 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return err
 	}
 
-	c.warnAboutNetworkAccess()
-
 	k0sctlConfigPath, err := c.prepareK0sctlConfig(pm, k0s)
 	if err != nil {
 		return err
@@ -183,10 +181,6 @@ func (c *InstallK0sCmd) validateOptions() error {
 		return fmt.Errorf("--k0sctl-config without --config-only installs an existing k0sctl config and cannot be combined with --install-config, --package, --no-download or --airgapped")
 	}
 
-	if !c.FileWriter.Exists(c.Opts.K0sctlConfig) {
-		return fmt.Errorf("k0sctl config '%s' does not exist", c.Opts.K0sctlConfig)
-	}
-
 	return nil
 }
 
@@ -225,22 +219,6 @@ func (c *InstallK0sCmd) prepareK0sctlConfig(pm installer.PackageManager, k0s ins
 	}
 
 	return c.generateK0sctlConfig(config, k0sctlOptions)
-}
-
-// warnAboutNetworkAccess logs the steps of an airgapped installation that still
-// require internet access, so they can be prepared before going offline.
-func (c *InstallK0sCmd) warnAboutNetworkAccess() {
-	if !c.Opts.Airgap {
-		return
-	}
-
-	if c.Opts.AirgapBundlePath == "" {
-		log.Println("Warning: --airgapped without --airgap-bundle uses the cached airgap bundle or downloads it from the internet; pre-download it with 'oms download k0s --airgapped' or pass --airgap-bundle for a truly offline installation")
-	}
-
-	if !c.Opts.ConfigOnly && (c.Opts.K0sctlVersion == "" || c.Opts.K0sctlVersion == installer.DefaultK0sctlVersion) {
-		log.Println("Warning: k0sctl is downloaded from the internet unless it is already cached; pass --k0sctl-version with a pre-cached version for a truly offline installation")
-	}
 }
 
 func (c *InstallK0sCmd) loadInstallConfig() (*files.RootConfig, error) {

@@ -332,22 +332,11 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.K0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
 
 			setupWorkdirMocks()
-			mockFileWriter.EXPECT().Exists("/etc/codesphere/k0sctl-config.yaml").Return(true)
 			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockK0sctl.EXPECT().Apply("/etc/codesphere/k0sctl-config.yaml", "/tmp/k0sctl", false).Return(nil)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("fails when the existing k0sctl config does not exist", func() {
-			c.Opts.K0sctlConfig = "/nonexistent/k0sctl-config.yaml"
-
-			setupWorkdirMocks()
-			mockFileWriter.EXPECT().Exists("/nonexistent/k0sctl-config.yaml").Return(false)
-
-			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
-			Expect(err).To(MatchError(ContainSubstring("k0sctl config '/nonexistent/k0sctl-config.yaml' does not exist")))
 		})
 
 		It("fails when an existing k0sctl config is combined with generation flags", func() {
