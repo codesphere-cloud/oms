@@ -81,7 +81,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 				{Cmd: "--force", Desc: "Force new download and installation"},
 				{Cmd: "--no-download", Desc: "Skip downloading k0s binary (expects it to be on remote nodes)"},
 				{Cmd: "--airgapped", Desc: "Install k0s without internet access using an airgap image bundle"},
-				{Cmd: "--airgapped --airgap-bundle <path>", Desc: "Install k0s airgapped from a local airgap image bundle"},
+				{Cmd: "--airgap-bundle <path>", Desc: "Install k0s airgapped from a local airgap image bundle"},
 				{Cmd: "--install-config <path> --config-only --k0sctl-config <path>", Desc: "Only generate the k0sctl config without installing k0s"},
 				{Cmd: "--k0sctl-config <path>", Desc: "Install k0s from a previously generated k0sctl config"},
 			}),
@@ -99,7 +99,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.NoDownload, "no-download", false, "Skip downloading k0s binary")
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.Airgap, "airgapped", false, "Install k0s without internet access by uploading the airgap image bundle to the workers")
-	k0s.cmd.Flags().StringVar(&k0s.Opts.AirgapBundlePath, "airgap-bundle", "", "Path to the k0s airgap image bundle to install from (requires --airgapped)")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.AirgapBundlePath, "airgap-bundle", "", "Path to the k0s airgap image bundle to install from (implies --airgapped)")
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.ConfigOnly, "config-only", false, "Only generate the k0sctl config, without installing k0s")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlConfig, "k0sctl-config", "", "With --config-only, where to write the generated k0sctl config; otherwise an existing k0sctl config to install k0s from instead of generating one")
 
@@ -165,9 +165,7 @@ func (c *InstallK0sCmd) installsExistingConfig() bool {
 }
 
 func (c *InstallK0sCmd) validateOptions() error {
-	if c.Opts.AirgapBundlePath != "" && !c.Opts.Airgap {
-		return fmt.Errorf("--airgap-bundle requires --airgapped")
-	}
+	c.Opts.Airgap = c.Opts.Airgap || c.Opts.AirgapBundlePath != ""
 
 	if c.Opts.NoDownload && c.Opts.Airgap {
 		return fmt.Errorf("--no-download cannot be combined with --airgapped, as the nodes would download k0s from the internet")
@@ -229,10 +227,6 @@ func (c *InstallK0sCmd) prepareK0sctlConfig(pm installer.PackageManager, k0s ins
 	return c.generateK0sctlConfig(config, k0sctlOptions)
 }
 
-func (c *InstallK0sCmd) downloadOptions() installer.DownloadOptions {
-	return installer.DownloadOptions{Force: c.Opts.Force}
-}
-
 // warnAboutNetworkAccess logs the steps of an airgapped installation that still
 // require internet access, so they can be prepared before going offline.
 func (c *InstallK0sCmd) warnAboutNetworkAccess() {
@@ -275,7 +269,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 		return pm.GetDependencyPath(defaultK0sPath), nil
 	}
 
-	k0sBinaryPath, err := k0s.Download(k0sVersion, c.downloadOptions())
+	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}
@@ -298,7 +292,7 @@ func (c *InstallK0sCmd) getAirgapBundlePath(k0s installer.K0sManager, k0sVersion
 		return c.Opts.AirgapBundlePath, nil
 	}
 
-	bundlePath, err := k0s.EnsureAirgapBundle(k0sVersion, c.downloadOptions())
+	bundlePath, err := k0s.EnsureAirgapBundle(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s airgap bundle: %w", err)
 	}
@@ -309,7 +303,7 @@ func (c *InstallK0sCmd) getAirgapBundlePath(k0s installer.K0sManager, k0sVersion
 func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
 	log.Println("Preparing k0sctl...")
 
-	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, c.downloadOptions())
+	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}

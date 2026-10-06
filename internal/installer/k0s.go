@@ -76,14 +76,14 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 	}
 
 	cachePath := filepath.Join(cacheDir, k0sBinaryName)
-	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts); cached {
-		return cachedPath, nil
+	if reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts) {
+		return cachePath, nil
 	}
 
 	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
 	downloadURL := releaseAssetURL(k0sReleaseURL, version, assetName)
 
-	if err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet); err != nil {
+	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {
 		return "", err
 	}
 

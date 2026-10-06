@@ -274,15 +274,15 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err.Error()).To(ContainSubstring("does not exist"))
 		})
 
-		It("fails when an airgap bundle is given without --airgapped", func() {
+		It("treats an airgap bundle as implying --airgapped", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.AirgapBundlePath = "/cache/k0s-airgap-bundle-amd64"
+			c.Opts.NoDownload = true
 
 			setupWorkdirMocks()
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("--airgap-bundle requires --airgapped"))
+			Expect(err).To(MatchError(ContainSubstring("--no-download cannot be combined with --airgapped")))
 		})
 
 		It("fails when --no-download is combined with --airgapped", func() {

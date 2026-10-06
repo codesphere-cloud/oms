@@ -90,8 +90,8 @@ func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) 
 	}
 
 	cachePath := filepath.Join(cacheDir, k0sctlBinaryName)
-	if cachedPath, cached := reuseCachedBinary(k.FileWriter, cachePath, version, k0sctlBinaryName, opts); cached {
-		return cachedPath, nil
+	if reuseCachedBinary(k.FileWriter, cachePath, version, k0sctlBinaryName, opts) {
+		return cachePath, nil
 	}
 
 	assetName := fmt.Sprintf("%s-%s-%s", k0sctlBinaryName, k.Goos, k.Goarch)
@@ -99,7 +99,7 @@ func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) 
 
 	io.Verbosef(!opts.Quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 
-	if err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet); err != nil {
+	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {
 		return "", err
 	}
 

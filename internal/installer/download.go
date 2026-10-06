@@ -64,18 +64,18 @@ func ensureCacheDir(fw util.FileIO, environment env.Env) (string, error) {
 	return cacheDir, nil
 }
 
-// reuseCachedBinary returns the cached binary at cachePath and true when it exists,
-// matches requestedVersion and opts do not force a fresh download.
-func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string, opts DownloadOptions) (string, bool) {
+// reuseCachedBinary reports whether the cached binary at cachePath exists, matches
+// requestedVersion and opts do not force a fresh download.
+func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string, opts DownloadOptions) bool {
 	if !fw.Exists(cachePath) || opts.Force {
-		return "", false
+		return false
 	}
 
 	cachedVersion, versionErr := localBinaryVersion(cachePath)
 	if versionErr == nil && cachedVersion == requestedVersion {
 		io.Verbosef(!opts.Quiet, "Using cached %s %s at %s", name, requestedVersion, cachePath)
 
-		return cachePath, true
+		return true
 	}
 
 	if versionErr != nil {
@@ -84,25 +84,17 @@ func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string,
 		io.Verbosef(!opts.Quiet, "Replacing cached %s %s: requested version %s", name, cachedVersion, requestedVersion)
 	}
 
-	return "", false
+	return false
 }
 
 func releaseAssetURL(releaseURL, version, assetName string) string {
 	return fmt.Sprintf("%s/%s/%s", releaseURL, version, assetName)
 }
 
-const partialSuffix = ".partial"
-
-func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool) error {
-	return downloadAtomically(fw, http, path, downloadURL, quiet, 0)
-}
-
-func downloadBinaryToPath(fw util.FileIO, http portal.Http, binaryPath, downloadURL string, quiet bool) error {
-	return downloadAtomically(fw, http, binaryPath, downloadURL, quiet, 0755)
-}
-
-func downloadAtomically(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool, perm os.FileMode) (err error) {
-	partialPath := path + partialSuffix
+// downloadToPath downloads to a partial file next to path and moves it into place with
+// perm once complete, so an interrupted download never leaves a file at path.
+func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool, perm os.FileMode) (err error) {
+	partialPath := path + ".partial"
 
 	dstFile, err := fw.Create(partialPath)
 	if err != nil {
@@ -125,10 +117,8 @@ func downloadAtomically(fw util.FileIO, http portal.Http, path, downloadURL stri
 		return fmt.Errorf("failed to write %s: %w", partialPath, err)
 	}
 
-	if perm != 0 {
-		if err := fw.Chmod(partialPath, perm); err != nil {
-			return fmt.Errorf("failed to set permissions of %s: %w", partialPath, err)
-		}
+	if err := fw.Chmod(partialPath, perm); err != nil {
+		return fmt.Errorf("failed to set permissions of %s: %w", partialPath, err)
 	}
 
 	if err := fw.Rename(partialPath, path); err != nil {

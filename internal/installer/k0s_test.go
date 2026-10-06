@@ -357,33 +357,40 @@ var _ = Describe("K0s", func() {
 			modernAsset = "k0s-airgap-bundle-" + modernVersion + "-linux-amd64.tar"
 		)
 
-		// expectAirgapDownload sets up the file and http mocks for a fresh download of
-		// assetName and returns the expected bundle path. otherAssets are listed by the
-		// release before assetName.
-		expectAirgapDownload := func(version, assetName string, otherAssets ...string) string {
-			bundlePath := filepath.Join(workDir, assetName)
+		// bundlePath is the fixed name under which the bundle of version is cached.
+		bundlePath := func(version string) string {
+			return filepath.Join(workDir, "k0s-airgap-bundle-"+version+"-linux-amd64.tar")
+		}
 
-			mockFileWriter.EXPECT().ReadDir(workDir).Return(nil, nil)
+		// expectAirgapDownload sets up the http and file mocks for downloading assetName,
+		// which the release lists after otherAssets. The transfer fails with downloadErr.
+		expectAirgapDownload := func(version, assetName string, downloadErr error, otherAssets ...string) {
+			path := bundlePath(version)
+
 			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+version).
 				Return(releaseJSON(append(otherAssets, assetName)...), nil)
 
-			err := os.MkdirAll(workDir, 0755)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(os.MkdirAll(workDir, 0755)).To(Succeed())
 
-			realFile, err := os.Create(bundlePath)
+			realFile, err := os.Create(path)
 			Expect(err).ToNot(HaveOccurred())
 
 			// The file is closed by the code under test; this only covers early failures.
 			DeferCleanup(util.CloseFileIgnoreError, realFile)
 
-			mockFileWriter.EXPECT().Exists(bundlePath).Return(false)
-			mockFileWriter.EXPECT().Create(bundlePath + ".partial").Return(realFile, nil)
+			mockFileWriter.EXPECT().Create(path + ".partial").Return(realFile, nil)
 			mockHttp.EXPECT().Download(
 				"https://github.com/k0sproject/k0s/releases/download/"+version+"/"+assetName, realFile, false,
-			).Return(nil)
-			mockFileWriter.EXPECT().Rename(bundlePath+".partial", bundlePath).Return(nil)
+			).Return(downloadErr)
 
-			return bundlePath
+			if downloadErr != nil {
+				mockFileWriter.EXPECT().Remove(path + ".partial").Return(nil)
+
+				return
+			}
+
+			mockFileWriter.EXPECT().Chmod(path+".partial", os.FileMode(0644)).Return(nil)
+			mockFileWriter.EXPECT().Rename(path+".partial", path).Return(nil)
 		}
 
 		BeforeEach(func() {
@@ -394,179 +401,63 @@ var _ = Describe("K0s", func() {
 			mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(nil)
 		})
 
-		It("resolves the legacy asset name used up to k0s v1.35", func() {
-			bundlePath := expectAirgapDownload(legacyVersion, legacyAsset)
+		DescribeTable("resolves the release asset of the platform",
+			func(version, assetName string, otherAssets ...string) {
+				mockFileWriter.EXPECT().Exists(bundlePath(version)).Return(false)
+				expectAirgapDownload(version, assetName, nil, otherAssets...)
 
-			path, err := k0s.EnsureAirgapBundle(legacyVersion, installer.DownloadOptions{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(path).To(Equal(bundlePath))
-		})
-
-		It("resolves the current asset name with OS and extension used since k0s v1.36", func() {
-			bundlePath := expectAirgapDownload(modernVersion, modernAsset)
-
-			path, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(path).To(Equal(bundlePath))
-		})
-
-		It("accepts the legacy asset name with a tar extension", func() {
-			bundlePath := expectAirgapDownload(legacyVersion, legacyAsset+".tar")
-
-			path, err := k0s.EnsureAirgapBundle(legacyVersion, installer.DownloadOptions{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(path).To(Equal(bundlePath))
-		})
-
-		It("ignores assets of other platforms", func() {
-			bundlePath := expectAirgapDownload(
-				modernVersion,
-				modernAsset,
+				path, err := k0s.EnsureAirgapBundle(version, installer.DownloadOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(path).To(Equal(bundlePath(version)))
+			},
+			Entry("legacy name used up to k0s v1.35", legacyVersion, legacyAsset),
+			Entry("current name with OS and extension used since k0s v1.36", modernVersion, modernAsset),
+			Entry("legacy name with a tar extension", legacyVersion, legacyAsset+".tar"),
+			Entry("ignoring assets of other platforms", modernVersion, modernAsset,
 				"k0s-airgap-bundle-"+modernVersion+"-linux-arm64.tar",
-				"k0s-airgap-bundle-"+modernVersion+"-windows2022-amd64.tar",
-			)
-
-			path, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(path).To(Equal(bundlePath))
-		})
+				"k0s-airgap-bundle-"+modernVersion+"-windows2022-amd64.tar"),
+		)
 
 		It("reuses a cached bundle without contacting the release API", func() {
-			bundlePath := filepath.Join(workDir, modernAsset)
-
-			mockFileWriter.EXPECT().ReadDir(workDir).Return([]os.DirEntry{fakeDirEntry{name: modernAsset}}, nil)
-			mockFileWriter.EXPECT().Exists(bundlePath).Return(true)
+			mockFileWriter.EXPECT().Exists(bundlePath(modernVersion)).Return(true)
 
 			path, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(path).To(Equal(bundlePath))
-		})
-
-		It("does not reuse the partial file of an interrupted download", func() {
-			bundlePath := filepath.Join(workDir, modernAsset)
-
-			mockFileWriter.EXPECT().ReadDir(workDir).Return([]os.DirEntry{fakeDirEntry{name: modernAsset + ".partial"}}, nil)
-			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+modernVersion).
-				Return(releaseJSON(modernAsset), nil)
-
-			err := os.MkdirAll(workDir, 0755)
-			Expect(err).ToNot(HaveOccurred())
-
-			realFile, err := os.Create(bundlePath)
-			Expect(err).ToNot(HaveOccurred())
-
-			defer util.CloseFileIgnoreError(realFile)
-
-			mockFileWriter.EXPECT().Exists(bundlePath).Return(false)
-			mockFileWriter.EXPECT().Create(bundlePath + ".partial").Return(realFile, nil)
-			mockHttp.EXPECT().Download(
-				"https://github.com/k0sproject/k0s/releases/download/"+modernVersion+"/"+modernAsset, realFile, false,
-			).Return(nil)
-			mockFileWriter.EXPECT().Rename(bundlePath+".partial", bundlePath).Return(nil)
-
-			path, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(path).To(Equal(bundlePath))
+			Expect(path).To(Equal(bundlePath(modernVersion)))
 		})
 
 		It("re-downloads a cached bundle when force is set", func() {
-			bundlePath := filepath.Join(workDir, modernAsset)
-
-			mockFileWriter.EXPECT().ReadDir(workDir).Return([]os.DirEntry{fakeDirEntry{name: modernAsset}}, nil)
-
-			err := os.MkdirAll(workDir, 0755)
-			Expect(err).ToNot(HaveOccurred())
-
-			realFile, err := os.Create(bundlePath)
-			Expect(err).ToNot(HaveOccurred())
-
-			defer util.CloseFileIgnoreError(realFile)
-
-			mockFileWriter.EXPECT().Exists(bundlePath).Return(true)
-			mockFileWriter.EXPECT().Create(bundlePath + ".partial").Return(realFile, nil)
-			mockHttp.EXPECT().Download(
-				"https://github.com/k0sproject/k0s/releases/download/"+modernVersion+"/"+modernAsset, realFile, false,
-			).Return(nil)
-			mockFileWriter.EXPECT().Rename(bundlePath+".partial", bundlePath).Return(nil)
+			expectAirgapDownload(modernVersion, modernAsset, nil)
 
 			path, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{Force: true})
 			Expect(err).ToNot(HaveOccurred())
-			Expect(path).To(Equal(bundlePath))
-		})
-
-		It("falls back to the release API when the cache cannot be read", func() {
-			bundlePath := filepath.Join(workDir, modernAsset)
-
-			mockFileWriter.EXPECT().ReadDir(workDir).Return(nil, errors.New("permission denied"))
-			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+modernVersion).
-				Return(releaseJSON(modernAsset), nil)
-
-			err := os.MkdirAll(workDir, 0755)
-			Expect(err).ToNot(HaveOccurred())
-
-			realFile, err := os.Create(bundlePath)
-			Expect(err).ToNot(HaveOccurred())
-
-			defer util.CloseFileIgnoreError(realFile)
-
-			mockFileWriter.EXPECT().Exists(bundlePath).Return(false)
-			mockFileWriter.EXPECT().Create(bundlePath + ".partial").Return(realFile, nil)
-			mockHttp.EXPECT().Download(
-				"https://github.com/k0sproject/k0s/releases/download/"+modernVersion+"/"+modernAsset, realFile, false,
-			).Return(nil)
-			mockFileWriter.EXPECT().Rename(bundlePath+".partial", bundlePath).Return(nil)
-
-			path, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
-			Expect(err).ToNot(HaveOccurred())
-			Expect(path).To(Equal(bundlePath))
+			Expect(path).To(Equal(bundlePath(modernVersion)))
 		})
 
 		It("removes a partial bundle when the transfer fails", func() {
-			bundlePath := filepath.Join(workDir, modernAsset)
+			mockFileWriter.EXPECT().Exists(bundlePath(modernVersion)).Return(false)
+			expectAirgapDownload(modernVersion, modernAsset, errors.New("connection reset"))
 
-			mockFileWriter.EXPECT().ReadDir(workDir).Return(nil, nil)
-			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+modernVersion).
-				Return(releaseJSON(modernAsset), nil)
-
-			err := os.MkdirAll(workDir, 0755)
-			Expect(err).ToNot(HaveOccurred())
-
-			realFile, err := os.Create(bundlePath)
-			Expect(err).ToNot(HaveOccurred())
-
-			defer util.CloseFileIgnoreError(realFile)
-
-			mockFileWriter.EXPECT().Exists(bundlePath).Return(false)
-			mockFileWriter.EXPECT().Create(bundlePath + ".partial").Return(realFile, nil)
-			mockHttp.EXPECT().Download(
-				"https://github.com/k0sproject/k0s/releases/download/"+modernVersion+"/"+modernAsset, realFile, false,
-			).Return(errors.New("connection reset"))
-			// The cache only checks for existence, so the partial bundle must go.
-			mockFileWriter.EXPECT().Remove(bundlePath + ".partial").Return(nil)
-
-			_, err = k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to download"))
+			_, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
+			Expect(err).To(MatchError(ContainSubstring("failed to download")))
 		})
 
 		It("fails when the release metadata cannot be fetched", func() {
-			mockFileWriter.EXPECT().ReadDir(workDir).Return(nil, nil)
+			mockFileWriter.EXPECT().Exists(bundlePath(legacyVersion)).Return(false)
 			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+legacyVersion).
 				Return(nil, errors.New("network error"))
 
 			_, err := k0s.EnsureAirgapBundle(legacyVersion, installer.DownloadOptions{})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to fetch k0s release"))
+			Expect(err).To(MatchError(ContainSubstring("failed to fetch k0s release")))
 		})
 
 		It("fails when the release has no airgap bundle for the platform", func() {
-			mockFileWriter.EXPECT().ReadDir(workDir).Return(nil, nil)
+			mockFileWriter.EXPECT().Exists(bundlePath(legacyVersion)).Return(false)
 			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+legacyVersion).
 				Return(releaseJSON("k0s-v1.31.14+k0s.0-amd64"), nil)
 
 			_, err := k0s.EnsureAirgapBundle(legacyVersion, installer.DownloadOptions{})
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("no airgap bundle for linux/amd64"))
+			Expect(err).To(MatchError(ContainSubstring("no airgap bundle for linux/amd64")))
 		})
 	})
 
@@ -594,16 +485,6 @@ var _ = Describe("K0s", func() {
 		})
 	})
 })
-
-// fakeDirEntry is a minimal os.DirEntry for cache lookups in tests.
-type fakeDirEntry struct {
-	name string
-}
-
-func (f fakeDirEntry) Name() string               { return f.name }
-func (f fakeDirEntry) IsDir() bool                { return false }
-func (f fakeDirEntry) Type() os.FileMode          { return 0 }
-func (f fakeDirEntry) Info() (os.FileInfo, error) { return nil, nil }
 
 // releaseJSON renders a GitHub release API response listing the given assets.
 func releaseJSON(names ...string) []byte {
