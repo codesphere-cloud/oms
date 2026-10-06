@@ -264,7 +264,7 @@ func (g *InstallConfig) applyProfileMinimal() error {
 		}
 	}
 
-	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequestsSingleReplica); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
 	}
 	return nil
