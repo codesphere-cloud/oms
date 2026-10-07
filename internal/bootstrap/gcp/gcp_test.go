@@ -1983,6 +1983,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
 			csEnv.InstallHash = "abc1234567890"
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
 		})
 
 		It("downloads k0s and lets k0sctl distribute it independently of the Codesphere package", func() {
