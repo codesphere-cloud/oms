@@ -100,11 +100,19 @@ jobs:
             exit 1
           fi
 
-          ./oms init install-config \
+          if ! ./oms init install-config \
             --validate \
             --age-key generated_age_key.txt \
             -c config-generated-key.yaml \
-            --vault prod-generated-key.vault.yaml
+            --vault prod-generated-key.vault.yaml 2>&1 | tee validate.log; then
+            echo "expected the vault to be decryptable with the printed age key" >&2
+            exit 1
+          fi
+
+          if ! grep -q 'Configuration is valid!' validate.log; then
+            echo "expected validation to succeed with the printed age key" >&2
+            exit 1
+          fi
 
       - name: Slack Notification on Failure
         if: ${{ failure() && github.ref == 'refs/heads/main' }}
