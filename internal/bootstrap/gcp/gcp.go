@@ -240,6 +240,9 @@ type CodesphereEnvironment struct {
 	OpenfgaBackupBucket      string `json:"openfga_backup_bucket"`
 	OpenfgaBackupAccessKeyID string `json:"-"`
 	OpenfgaBackupSecret      string `json:"-"`
+
+	// K0s
+	K0sVersion string `json:"k0s_version"`
 }
 
 func NewGCPBootstrapper(

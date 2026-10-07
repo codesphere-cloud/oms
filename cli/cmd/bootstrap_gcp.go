@@ -148,6 +148,8 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.LocalTraceEndpoint, "local-trace-endpoint", "", "Endpoint for exporting traces to an in-cluster storage (optional)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelSpanMetrics, "central-otel-span-metrics", false, "Enable span metrics in Central OpenTelemetry export (default: false)")
 
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.K0sVersion, "k0s-version", installer.DefaultK0sVersion, "K0s version to use for bootstrapping (optional)")
+
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
