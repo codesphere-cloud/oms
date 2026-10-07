@@ -612,6 +612,7 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	if err := b.GCPClient.EnsureStorageBucket(b.Env.ProjectID, bucketName, b.Env.Region); err != nil {
 		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
 	}
+
 	b.Env.OpenfgaBackupBucket = bucketName
 
 	// The HMAC secret cannot be retrieved after creation, so only create a new key
@@ -622,10 +623,12 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	}
 
 	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", openfgaBackupSAName, b.Env.ProjectID)
+
 	accessID, secret, err := b.GCPClient.CreateHMACKey(b.Env.ProjectID, saEmail)
 	if err != nil {
 		return fmt.Errorf("failed to create openfga backup HMAC key: %w", err)
 	}
+
 	b.Env.OpenfgaBackupAccessKeyID = accessID
 	b.Env.OpenfgaBackupSecret = secret
 
