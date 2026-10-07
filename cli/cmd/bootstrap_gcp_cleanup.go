@@ -26,6 +26,7 @@ type BootstrapGcpCleanupOpts struct {
 	ProjectID      string
 	Force          bool
 	SkipDNSCleanup bool
+	StepTimer      bool
 	BaseDomain     string
 	DNSZoneName    string
 	DNSProjectID   string
@@ -33,7 +34,7 @@ type BootstrapGcpCleanupOpts struct {
 
 func (c *BootstrapGcpCleanupCmd) RunE(_ *cobra.Command, args []string) error {
 	ctx := c.cmd.Context()
-	stlog := bootstrap.NewStepLogger(false)
+	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.Opts.StepTimer))
 	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 	fw := intutil.NewFilesystemWriter()
 
@@ -109,6 +110,7 @@ func AddBootstrapGcpCleanupCmd(bootstrapGcp *cobra.Command, opts *util.GlobalOpt
 	}
 
 	flags := cleanup.cmd.Flags()
+	flags.BoolVar(&cleanup.Opts.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	flags.StringVar(&cleanup.Opts.ProjectID, "project-id", "", "GCP Project ID to delete (optional, will use infra file if not provided)")
 	flags.BoolVar(&cleanup.Opts.Force, "force", false, "Skip confirmation prompt and OMS-managed check")
 	flags.BoolVar(&cleanup.Opts.SkipDNSCleanup, "skip-dns-cleanup", false, "Skip cleaning up DNS records")

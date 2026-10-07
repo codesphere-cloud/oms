@@ -31,6 +31,7 @@ type BootstrapGcpCmd struct {
 	CodesphereEnv     *gcp.CodesphereEnvironment
 	InputRegistryType string
 	SSHQuiet          bool
+	StepTimer         bool
 
 	// experiments backs the deprecated --experiments flag; its values
 	// are folded into the internal bucket for backwards compatibility.
@@ -66,6 +67,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
 
 	flags := bootstrapGcpCmd.cmd.Flags()
+	flags.BoolVar(&bootstrapGcpCmd.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP Project Name (required)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectTTL, "project-ttl", "2h", "Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.BillingAccount, "billing-account", "", "GCP Billing Account ID (required)")
@@ -88,7 +90,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppClientSecret, "github-app-client-secret", "", "GitHub App Client Secret (required)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitLabAppClientID, "gitlab-app-client-id", "", "GitLab App Client ID (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitLabAppClientSecret, "gitlab-app-client-secret", "", "GitLab App Client Secret (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug. Required scopes: read:packages, read:org.")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppName, "github-app-name", "", "GitHub App Name (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamOrg, "github-team-org", "", "GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamSlug, "github-team-slug", "", "GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.")
@@ -117,7 +119,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Custom Registry username (only for GitHub registry type) (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "github", "Container registry type to use (options: local-container, artifact-registry, github) (default: github)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
@@ -146,6 +148,8 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.LocalTraceEndpoint, "local-trace-endpoint", "", "Endpoint for exporting traces to an in-cluster storage (optional)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelSpanMetrics, "central-otel-span-metrics", false, "Enable span metrics in Central OpenTelemetry export (default: false)")
 
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.K0sVersion, "k0s-version", installer.DefaultK0sVersion, "K0s version to use for bootstrapping (optional)")
+
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
 	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
@@ -160,7 +164,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 // Returns an error if validation or github client connection fails
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	ctx := c.cmd.Context()
-	stlog := bootstrap.NewStepLogger(false)
+	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
 
 	icg, err := installer.NewInstallConfigManager("plain", "")
 	if err != nil {
@@ -229,15 +233,21 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return nil
 	}
 
-	installCmd := "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml"
-
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
 		log.Printf("Images are pulled directly from GHCR, so container images are not loaded from the package.")
-
-		installCmd += " -s load-container-images"
 	}
 
-	log.Printf("example install command (run from jumpbox):\n%s -p <package-name>-%s", installCmd, gcp.InstallerArchiveName)
+	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeLocalContainer {
+		log.Printf("The local registry is empty until the package artifacts are mirrored into it (run from jumpbox):\noms copy package -p <package-name>-%s --dest %s --yes",
+			gcp.InstallerArchiveName, bs.Env.ContainerRegistryURL)
+	}
+
+	// The command the bootstrapper would have run itself, so that an operator running it by hand
+	// gets the same one instead of a copy that drifts from it.
+	if len(bs.Env.DataCenters) > 0 {
+		log.Printf("example install command (run from jumpbox):\n%s",
+			bs.InstallCommand(bs.Env.DataCenters[0], "<package-name>-"+gcp.InstallerArchiveName))
+	}
 
 	return nil
 }

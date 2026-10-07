@@ -62,7 +62,7 @@ var _ = Describe("CopyPackageCmd", func() {
 		Expect(command.CopyPackage(context.Background(), packageManager, copier)).To(Succeed())
 		Expect(copier.copies).To(Equal([]installer.PackageArtifact{{
 			Source:      "ghcr.io/codesphere/api:v1",
-			Destination: "registry.example.com/mirror/codesphere/api:v1",
+			Destination: "registry.example.com/mirror/ghcr_io/codesphere/api:v1",
 		}}))
 	})
 

@@ -6,8 +6,9 @@ package bom
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/distribution/reference"
@@ -19,34 +20,37 @@ type Config struct {
 	Migrations MigrationsConfig           `json:"migrations"`
 }
 
-// GetOCIArtifacts returns every container image and OCI Helm chart referenced
-// by the BOM. Duplicate references are returned only once and the result is
-// sorted so callers can present a stable transfer plan.
-func (b *Config) GetOCIArtifacts() []string {
-	artifacts := map[string]struct{}{}
+// GetContainerImages returns every container image referenced by the BOM. Duplicate references
+// are returned only once and the result is sorted so callers can present a stable transfer plan.
+// Images are kept apart from the Helm charts because an installation addresses the two
+// differently: only the images are rewritten onto the configured registry.
+func (b *Config) GetContainerImages() []string {
+	images := map[string]struct{}{}
 
 	for _, component := range b.Components {
 		for _, image := range component.ContainerImages {
 			if image != "" {
-				artifacts[image] = struct{}{}
+				images[image] = struct{}{}
 			}
 		}
+	}
 
+	return slices.Sorted(maps.Keys(images))
+}
+
+// GetChartRefs returns every OCI Helm chart referenced by the BOM, deduplicated and sorted.
+func (b *Config) GetChartRefs() []string {
+	charts := map[string]struct{}{}
+
+	for _, component := range b.Components {
 		for _, file := range component.Files {
 			if file.OciRef != "" {
-				artifacts[file.OciRef] = struct{}{}
+				charts[file.OciRef] = struct{}{}
 			}
 		}
 	}
 
-	result := make([]string, 0, len(artifacts))
-	for artifact := range artifacts {
-		result = append(result, artifact)
-	}
-
-	sort.Strings(result)
-
-	return result
+	return slices.Sorted(maps.Keys(charts))
 }
 
 // ComponentConfig represents a component in the BOM.

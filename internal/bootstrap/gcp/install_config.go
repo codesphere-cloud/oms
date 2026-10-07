@@ -8,6 +8,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -162,8 +163,27 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		dc.InstallConfig.Registry.LoadContainerImages = true
 	}
 
+	// The pc-applications chart pulls the chart of every application it creates from
+	// chartsRegistry and defaults it to GHCR. Only a local container registry is filled with the
+	// package's artifacts, so only it can serve those charts as well. The bootstrap owns that
+	// registry's address and rewrites registry.server on every run, so chartsRegistry follows it
+	// too: a value kept from an earlier run would still name a previous jumpbox's IP.
+	if b.Env.RegistryType == RegistryTypeLocalContainer {
+		if dc.InstallConfig.PcApps == nil {
+			dc.InstallConfig.PcApps = files.ChartValues{}
+		}
+
+		chartsRegistry := dc.InstallConfig.Registry.Server + installer.ChartsRepositoryPath
+		if existing, _ := dc.InstallConfig.PcApps["chartsRegistry"].(string); existing != "" && existing != chartsRegistry {
+			b.stlog.Logf("Replacing pcApps.chartsRegistry %s from the install config with the local registry at %s", existing, chartsRegistry)
+		}
+
+		dc.InstallConfig.PcApps["chartsRegistry"] = chartsRegistry
+	}
+
 	if dc.InstallConfig.Postgres.Primary == nil {
 		dc.InstallConfig.Postgres.Primary = &files.PostgresPrimaryConfig{
+
 			Hostname: b.Env.PostgreSQLNode.GetName(),
 		}
 	}
@@ -592,6 +612,7 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	if err := b.GCPClient.EnsureStorageBucket(b.Env.ProjectID, bucketName, b.Env.Region); err != nil {
 		return fmt.Errorf("failed to ensure openfga backup bucket: %w", err)
 	}
+
 	b.Env.OpenfgaBackupBucket = bucketName
 
 	// The HMAC secret cannot be retrieved after creation, so only create a new key
@@ -602,10 +623,12 @@ func (b *GCPBootstrapper) EnsureOpenfgaBackupBucket() error {
 	}
 
 	saEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", openfgaBackupSAName, b.Env.ProjectID)
+
 	accessID, secret, err := b.GCPClient.CreateHMACKey(b.Env.ProjectID, saEmail)
 	if err != nil {
 		return fmt.Errorf("failed to create openfga backup HMAC key: %w", err)
 	}
+
 	b.Env.OpenfgaBackupAccessKeyID = accessID
 	b.Env.OpenfgaBackupSecret = secret
 

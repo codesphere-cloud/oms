@@ -32,7 +32,7 @@ require (
 	filippo.io/age v1.3.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/argoproj/argo-cd/v3 v3.5.3
+	github.com/argoproj/argo-cd/v3 v3.5.4
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/codesphere-cloud/cs-go v1.49.0
 	github.com/creativeprojects/go-selfupdate v1.6.0
@@ -46,7 +46,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.33.0
 	github.com/onsi/gomega v1.44.0
 	github.com/pkg/sftp v1.13.11
-	github.com/rook/rook/pkg/apis v0.0.0-20261005180753-9f8960d3dd08
+	github.com/rook/rook/pkg/apis v0.0.0-20261006161354-f8a40f4c9a71
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5

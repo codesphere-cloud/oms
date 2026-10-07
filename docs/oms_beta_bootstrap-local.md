@@ -35,6 +35,7 @@ oms beta bootstrap-local [flags]
       --registry-user string             Custom Registry username
       --secrets-file string              Path to secrets file (default: <install-dir>/prod.vault.yaml)
       --service-cidr string              Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
+      --timer                            Show how long each step took after it finishes
   -y, --yes                              Auto-approve the local bootstrapping warning prompt
 ```
 

@@ -22,13 +22,15 @@ type InstallArgoCDCmd struct {
 
 type InstallArgoCDOpts struct {
 	*util.GlobalOptions
-	Version        string
-	DatacenterId   string
-	RegistryURL    string
-	FullInstall    bool
-	ForceConflicts bool
-	RepoURL        string
-	ValueFiles     []string
+	Version          string
+	DatacenterID     string
+	RegistryURL      string
+	RegistryUsername string
+	RegistryCA       string
+	FullInstall      bool
+	ForceConflicts   bool
+	RepoURL          string
+	ValueFiles       []string
 }
 
 func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
@@ -44,15 +46,17 @@ func (c *InstallArgoCDCmd) RunE(_ *cobra.Command, args []string) error {
 	}
 
 	install, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
-		Version:        c.Opts.Version,
-		DatacenterId:   c.Opts.DatacenterId,
-		OciPassword:    ociPassword,
-		OciRegistryURL: c.Opts.RegistryURL,
-		GitPassword:    gitPassword,
-		FullInstall:    c.Opts.FullInstall,
-		ForceConflicts: c.Opts.ForceConflicts,
-		RepoURL:        c.Opts.RepoURL,
-		ValueFiles:     c.Opts.ValueFiles,
+		Version:           c.Opts.Version,
+		DatacenterID:      c.Opts.DatacenterID,
+		OciUsername:       c.Opts.RegistryUsername,
+		OciRegistryCAFile: c.Opts.RegistryCA,
+		OciPassword:       ociPassword,
+		OciRegistryURL:    c.Opts.RegistryURL,
+		GitPassword:       gitPassword,
+		FullInstall:       c.Opts.FullInstall,
+		ForceConflicts:    c.Opts.ForceConflicts,
+		RepoURL:           c.Opts.RepoURL,
+		ValueFiles:        c.Opts.ValueFiles,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
@@ -115,8 +119,10 @@ func AddArgoCDCmd(parentCmd *cobra.Command, opts *util.GlobalOptions) {
 			}),
 		},
 	}
-	argocd.cmd.Flags().StringVar(&argocd.Opts.DatacenterId, "dc-id", "", "Codesphere Datacenter ID (optional, registers local cluster in ArgoCD)")
+	argocd.cmd.Flags().StringVar(&argocd.Opts.DatacenterID, "dc-id", "", "Codesphere Datacenter ID (optional, registers local cluster in ArgoCD)")
 	argocd.cmd.Flags().StringVar(&argocd.Opts.RegistryURL, "registry-url", "ghcr.io/codesphere-cloud/charts", "OCI registry URL for the Helm chart repository")
+	argocd.cmd.Flags().StringVar(&argocd.Opts.RegistryUsername, "registry-username", "", "Username of the OCI registry (default: the Codesphere GHCR user)")
+	argocd.cmd.Flags().StringVar(&argocd.Opts.RegistryCA, "registry-ca", "", "Path to the certificate authority of the OCI registry, needed when its certificate is self-signed")
 	argocd.cmd.Flags().StringVarP(&argocd.Opts.Version, "version", "v", "", "Version of the ArgoCD helm chart to install")
 	argocd.cmd.Flags().BoolVar(&argocd.Opts.FullInstall, "deploy-dc-config", false, "Apply Codesphere-managed resources (Repo Creds, ...) after installing the chart")
 	argocd.cmd.Flags().StringArrayVarP(&argocd.Opts.ValueFiles, "values", "f", nil, "Specify values in a YAML file (can be specified multiple times)")

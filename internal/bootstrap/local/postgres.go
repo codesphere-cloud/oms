@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	cnpgRepoURL             = "https://cloudnative-pg.github.io/charts"
 	cnpgReleaseName         = "cnpg"
 	cnpgDatabaseClusterName = "masterdata"
 	cnpgDatabaseName        = "masterdata"
@@ -44,20 +43,31 @@ func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
 		return fmt.Errorf("CloudNativePG chart is missing from BOM component %q", cnpgBOMComponent)
 	}
 
+	// The BOM component is Codesphere's wrapper chart around the upstream
+	// cloudnative-pg chart. Its tag is the wrapper's own version, so it must be
+	// installed from the OCI registry the BOM references, not from the upstream repo.
 	return b.installHelmApplication(helmApplicationConfig{
-		Name: cnpgReleaseName, Chart: "cloudnative-pg", RepoURL: cnpgRepoURL,
+		Name: cnpgReleaseName, Chart: cnpgBOMComponent, RepoURL: b.argoCDOCIRegistryURL(),
 		TargetRevision: chart.Tag(), Namespace: codesphereNamespace,
 		Values: map[string]interface{}{
-			"config": map[string]interface{}{
-				"clusterWide": true,
-				"data": map[string]interface{}{
-					"INHERITED_LABELS": "teamId",
+			// Values for the upstream chart are nested below its dependency name.
+			"cloudnative-pg": map[string]interface{}{
+				// Reset the wrapper's production defaults that don't exist on a local cluster.
+				"priorityClassName": "",
+				"monitoring": map[string]interface{}{
+					"podMonitorEnabled": false,
 				},
-			},
-			"resources": map[string]interface{}{
-				"requests": map[string]interface{}{
-					"cpu":    "0",
-					"memory": "0",
+				"config": map[string]interface{}{
+					"clusterWide": true,
+					"data": map[string]interface{}{
+						"INHERITED_LABELS": "teamId",
+					},
+				},
+				"resources": map[string]interface{}{
+					"requests": map[string]interface{}{
+						"cpu":    "0",
+						"memory": "0",
+					},
 				},
 			},
 		},

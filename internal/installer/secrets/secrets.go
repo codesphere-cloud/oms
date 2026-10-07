@@ -83,6 +83,7 @@ var codesphereServiceUsers = []serviceUser{
 	{tokenName: "sshWorkspaceProxyUserToken", serviceID: "ssh-workspace-proxy", email: "ssh.workspace.proxy@codesphere.com"},
 	{tokenName: "workspaceServerUserToken", serviceID: "workspace-server", email: "workspace.server@codesphere.com"},
 	{tokenName: "ideServiceUserToken", serviceID: "ide-service", email: "ide.service@codesphere.com"},
+	{tokenName: "teamServiceUserToken", serviceID: "team-service", email: "team.service@codesphere.com"},
 }
 
 // EnsureServiceAccountTokens signs RS512 JWTs for all Codesphere internal service accounts
