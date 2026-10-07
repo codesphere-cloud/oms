@@ -16,6 +16,7 @@ oms beta bootstrap-local [flags]
 ### Options
 
 ```
+      --age-key string                   Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
       --base-domain string               Base domain for Codesphere (default "cs.local")
       --ceph-device-filter string        Regular expression selecting Ceph block devices by name
       --ceph-device-path-filter string   Regular expression selecting Ceph block devices by path

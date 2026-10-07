@@ -18,6 +18,7 @@ oms beta bootstrap-gcp [flags]
 
 ```
       --acme-staging                              Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)
+      --age-key string                            Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
       --azure-devops-app-client-id string         Azure DevOps App Client ID (optional)
       --azure-devops-app-client-secret string     Azure DevOps App Client Secret (optional)
       --base-domain string                        Base domain for Codesphere (required)
