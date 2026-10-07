@@ -241,6 +241,9 @@ type CodesphereEnvironment struct {
 	OpenfgaBackupBucket      string `json:"openfga_backup_bucket"`
 	OpenfgaBackupAccessKeyID string `json:"-"`
 	OpenfgaBackupSecret      string `json:"-"`
+
+	// K0s
+	K0sVersion string `json:"k0s_version"`
 }
 
 func NewGCPBootstrapper(
@@ -1011,6 +1014,16 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 	}
 
 	packageFilename := b.codespherePackageFilename()
+
+	if b.Env.RegistryType == RegistryTypeLocalContainer {
+		err := b.stlog.Step("Mirror package artifacts into the local registry", func() error {
+			return b.mirrorPackageToLocalRegistry(packageFilename)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to mirror package artifacts into the local registry: %w", err)
+		}
+	}
+
 	for _, dc := range b.Env.DataCenters {
 		err := b.stlog.Step(dc.StepName("Install Codesphere"), func() error {
 			return b.runInstallCommand(dc, packageFilename)
@@ -1063,6 +1076,26 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 	return nil
 }
 
+// mirrorPackageToLocalRegistry copies the container images and Helm charts the installer package
+// references from their upstream registry into the registry running on the jumpbox. The lite
+// package ships no images of its own, so the local registry is empty until they are mirrored and
+// the installation would have nothing to pull from.
+func (b *GCPBootstrapper) mirrorPackageToLocalRegistry(packageFilename string) error {
+	registryServer := b.Env.ContainerRegistryURL
+	if registryServer == "" {
+		return errors.New("local container registry has no server address")
+	}
+
+	b.stlog.Logf("Copying package artifacts to %s, this takes several minutes...", registryServer)
+
+	copyCmd := fmt.Sprintf("oms copy package -p %s --dest %s --yes", packageFilename, registryServer)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", copyCmd); err != nil {
+		return fmt.Errorf("failed to copy package artifacts from the jumpbox: %w", err)
+	}
+
+	return nil
+}
+
 func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere in data center %d...", dc.ID)
 
@@ -1076,8 +1109,21 @@ func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFi
 // InstallCommand returns the command that installs Codesphere into the given data center from
 // the jumpbox. It is also printed for the operator when the bootstrap does not install itself.
 func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilename string) string {
-	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s",
-		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename, b.generateSkipStepsArg())
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s%s",
+		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename,
+		b.generateRegistryTrustArg(), b.generateSkipStepsArg())
+}
+
+// generateRegistryTrustArg points the installation at the certificate authority of the local
+// container registry, which EnsureLocalContainerRegistry leaves on the jumpbox. ArgoCD pulls the
+// Helm charts from that registry and verifies its certificate inside its own containers, where the
+// jumpbox's trust store does not reach.
+func (b *GCPBootstrapper) generateRegistryTrustArg() string {
+	if b.Env.RegistryType != RegistryTypeLocalContainer {
+		return ""
+	}
+
+	return " --argo-registry-ca " + jumpboxRegistryCertFile
 }
 
 func (b *GCPBootstrapper) generateSkipStepsArg() string {

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
-	"github.com/codesphere-cloud/oms/internal/installer"
 )
 
 // EnsureK0s executed all steps to ensure a k0s cluster in gcp for every data center.
@@ -213,7 +212,7 @@ func (b *GCPBootstrapper) runK0sConfigScript(dc *datacenter.DataCenter) error {
 // DownloadK0sAirgapBundle caches the k0s binary and its airgap image bundle on the jumpbox. All
 // data centers install the same k0s version, so they share the cached bundle.
 func (b *GCPBootstrapper) DownloadK0sAirgapBundle() error {
-	downloadCmd := fmt.Sprintf("oms download k0s --version %s --airgapped", installer.DefaultK0sVersion)
+	downloadCmd := fmt.Sprintf("oms download k0s --version %s --airgapped", b.Env.K0sVersion)
 	if err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd); err != nil {
 		return fmt.Errorf("failed to download k0s airgap bundle on jumpbox: %w", err)
 	}
@@ -242,7 +241,7 @@ func (b *GCPBootstrapper) GenerateK0sAirgapConfig() error {
 
 func (b *GCPBootstrapper) generateK0sAirgapConfig(dc *datacenter.DataCenter) error {
 	generateCmd := fmt.Sprintf("oms install k0s --version %s --install-config %s --airgapped --config-only --k0sctl-config %s",
-		installer.DefaultK0sVersion, dc.RemoteConfigPath, dc.RemoteK0sctlConfigPath())
+		b.Env.K0sVersion, dc.RemoteConfigPath, dc.RemoteK0sctlConfigPath())
 	if err := b.Env.Jumpbox.RunSSHCommand("root", generateCmd); err != nil {
 		return fmt.Errorf("failed to generate k0s airgap config on jumpbox (data center %d): %w", dc.ID, err)
 	}
@@ -274,7 +273,7 @@ func (b *GCPBootstrapper) InstallK0s() error {
 func (b *GCPBootstrapper) installK0s(dc *datacenter.DataCenter) error {
 	// Reuse matching cached binaries and let k0sctl reconcile normally. Without
 	// --force, an unchanged cluster remains untouched on bootstrap retries.
-	configFlags := fmt.Sprintf("--version %s --install-config %s", installer.DefaultK0sVersion, dc.RemoteConfigPath)
+	configFlags := fmt.Sprintf("--version %s --install-config %s", b.Env.K0sVersion, dc.RemoteConfigPath)
 	if b.Env.Airgapped {
 		configFlags = "--k0sctl-config " + dc.RemoteK0sctlConfigPath()
 	}

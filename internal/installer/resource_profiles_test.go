@@ -109,6 +109,21 @@ var _ = Describe("ApplyResourceProfile", func() {
 		})
 	})
 
+	Describe("noRequestsSingleReplica", func() {
+		It("runs a single replica of the Codesphere services and still zeroes requests", func() {
+			config := &files.RootConfig{}
+
+			Expect(installer.ApplyResourceProfile(config, installer.ResourceProfileNoRequestsSingleReplica)).To(Succeed())
+
+			services := MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])
+			for _, name := range []string{"deployment_service", "public_api_service", "team_service", "workspace_service", "auth_service"} {
+				service := MustMap[any](services[name])
+				Expect(service["replicas"]).To(Equal(1), name)
+				AssertZeroRequests(service["requests"])
+			}
+		})
+	})
+
 	It("returns an error for an invalid profile", func() {
 		config := &files.RootConfig{}
 		Expect(installer.ApplyResourceProfile(config, installer.ResourceProfile("invalid"))).To(MatchError(ContainSubstring("unsupported resource profile")))

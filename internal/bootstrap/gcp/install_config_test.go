@@ -453,6 +453,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				accessKey := vault.GetSecret(files.SecretOpenfgaDbBackupAccessKeyId)
 				Expect(accessKey).NotTo(BeNil())
 				Expect(accessKey.Fields.Password).To(Equal("access-id"))
+
 				secretKey := vault.GetSecret(files.SecretOpenfgaDbBackupSecretAccessKey)
 				Expect(secretKey).NotTo(BeNil())
 				Expect(secretKey.Fields.Password).To(Equal("secret-key"))

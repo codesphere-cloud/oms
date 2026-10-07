@@ -44,6 +44,7 @@ type InstallOpenBaoOpts struct {
 	Timeout           time.Duration
 	AgeKeyFile        string
 	Yes               bool
+	StepTimer         bool
 }
 
 func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
@@ -75,6 +76,7 @@ func (c *InstallOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 		Timeout:           c.Opts.Timeout,
 		AgeRecipient:      recipient,
 		AgeKeyPath:        keyPath,
+		StepTimer:         c.Opts.StepTimer,
 	}
 
 	inst, err := installer.NewOpenBaoInstaller(cfg)
@@ -147,6 +149,7 @@ func AddInstallOpenBaoCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	openbao.cmd.Flags().DurationVar(&openbao.Opts.Timeout, "timeout", 5*time.Minute, "Timeout for waiting on initialization")
 	openbao.cmd.Flags().StringVarP(&openbao.Opts.AgeKeyFile, "age-key-file", "k", "", "Path to age private key file for SOPS encryption/decryption (auto-detected if not set)")
 	openbao.cmd.Flags().BoolVarP(&openbao.Opts.Yes, "yes", "y", false, "Auto-approve re-initialization of an existing deployment when no DR backup is found")
+	openbao.cmd.Flags().BoolVar(&openbao.Opts.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 
 	util.MarkFlagRequired(openbao.cmd, "dr-backup-path")
 

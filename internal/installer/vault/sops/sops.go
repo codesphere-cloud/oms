@@ -180,6 +180,16 @@ func ValidateConfiguration(ageKey string) error {
 	return fmt.Errorf("SOPS vault requires an age key; set an age key argument or %s/%s", sopsage.SopsAgeKeyEnv, sopsage.SopsAgeKeyFileEnv)
 }
 
+// SetGeneratedAgeKey makes secretKey the age key used by SOPS operations in this
+// process via SOPS_AGE_KEY. The variable only lives in the OMS process environment.
+func SetGeneratedAgeKey(secretKey string) error {
+	if err := os.Setenv(sopsage.SopsAgeKeyEnv, secretKey); err != nil {
+		return fmt.Errorf("failed to set %s: %w", sopsage.SopsAgeKeyEnv, err)
+	}
+
+	return nil
+}
+
 func resolveConfiguredAgeKey(fileIO util.FileIO, explicit string) (recipient, keyPath string, err error) {
 	if explicit != "" {
 		recipient, err := readRecipientFromFile(fileIO, explicit)

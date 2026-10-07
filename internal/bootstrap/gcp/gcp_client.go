@@ -944,14 +944,17 @@ func (c *GCPClient) EnsureStorageBucket(projectID, bucketName, location string) 
 		Name:     bucketName,
 		Location: location,
 	}
+
 	_, err = svc.Buckets.Insert(projectID, bucket).Context(c.ctx).Do()
 	if err != nil {
 		if apiErr, ok := err.(*googleapi.Error); ok && apiErr.Code == 409 {
 			// Bucket already exists (owned by this project on re-runs).
 			return nil
 		}
+
 		return fmt.Errorf("failed to create storage bucket %s: %w", bucketName, err)
 	}
+
 	return nil
 }
 
@@ -969,9 +972,11 @@ func (c *GCPClient) CreateHMACKey(projectID, serviceAccountEmail string) (string
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create HMAC key: %w", err)
 	}
+
 	if key.Metadata == nil {
 		return "", "", fmt.Errorf("HMAC key response missing metadata")
 	}
+
 	return key.Metadata.AccessId, key.Secret, nil
 }
 
