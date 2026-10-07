@@ -473,6 +473,7 @@ var _ = Describe("EnsureServiceAccountTokens", func() {
 			"workspaceServiceUserToken",
 			"workspaceProxyUserToken",
 			"ideServiceUserToken",
+			"teamServiceUserToken",
 		} {
 			s := vault.GetSecret(name)
 			Expect(s).NotTo(BeNil(), "missing %s", name)
