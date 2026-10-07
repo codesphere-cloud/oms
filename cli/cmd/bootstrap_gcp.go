@@ -111,6 +111,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 
 	flags.IntVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterID, "datacenter-id", 1, "Datacenter ID (default: 1)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterName, "datacenter-name", "dev", "Datacenter name (default: dev)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.MultiDC, "multi-dc", false, "Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CustomPgIP, "custom-pg-ip", "", "Custom PostgreSQL IP (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Region, "region", "europe-west4", "GCP Region (default: europe-west4)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
@@ -200,6 +201,8 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	c.CodesphereEnv.RegistryType = gcp.RegistryType(c.InputRegistryType)
 
 	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
+	// The value alone cannot distinguish the default 1 from an explicit --datacenter-id=1.
+	c.CodesphereEnv.DatacenterIDExplicit = c.cmd.Flags().Changed("datacenter-id")
 
 	if c.cmd.Flags().Changed("experiments") {
 		if c.cmd.Flags().Changed("internal-flags") {
@@ -230,9 +233,14 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	if bs.Env.InstallVersion != "" {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
 
+		for _, dc := range bs.Env.DataCenters {
+			log.Printf("Data center %d hosts workspaces under %s", dc.ID, dc.WorkspaceHostingBaseDomain)
+		}
+
 		return nil
 	}
 
+	packageFile := "<package-name>-" + gcp.InstallerArchiveName
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
 		log.Printf("Images are pulled directly from GHCR, so container images are not loaded from the package.")
 	}
@@ -242,11 +250,16 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 			gcp.InstallerArchiveName, bs.Env.ContainerRegistryURL)
 	}
 
-	// The command the bootstrapper would have run itself, so that an operator running it by hand
-	// gets the same one instead of a copy that drifts from it.
-	if len(bs.Env.DataCenters) > 0 {
-		log.Printf("example install command (run from jumpbox):\n%s",
-			bs.InstallCommand(bs.Env.DataCenters[0], "<package-name>-"+gcp.InstallerArchiveName))
+	// The commands the bootstrapper would have run itself, so that an operator running them by hand
+	// gets the same ones instead of copies that drift from them.
+	if len(bs.Env.DataCenters) > 1 {
+		log.Printf("example install commands (run from jumpbox). Run the data center 1 command to completion first — the other data centers share its database:")
+	} else {
+		log.Printf("example install command (run from jumpbox):")
+	}
+
+	for _, dc := range bs.Env.DataCenters {
+		log.Printf("# data center %d\n%s", dc.ID, bs.InstallCommand(dc, packageFile))
 	}
 
 	return nil

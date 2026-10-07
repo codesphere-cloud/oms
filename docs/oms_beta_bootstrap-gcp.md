@@ -58,6 +58,7 @@ oms beta bootstrap-gcp [flags]
       --internal-flags stringArray                Internal flags to enable in Codesphere installation (optional) (default [headless-services,vcluster,custom-service-image,ms-in-ls])
       --k0s-version string                        K0s version to use for bootstrapping (optional) (default "v1.31.14+k0s.0")
       --local-trace-endpoint string               Endpoint for exporting traces to an in-cluster storage (optional)
+      --multi-dc                                  Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)
       --oidc-client-id string                     OIDC OAuth provider Client ID (optional)
       --oidc-client-secret string                 OIDC OAuth provider Client Secret (optional)
       --oidc-issuer-url string                    OIDC OAuth provider issuer URL (optional)
