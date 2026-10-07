@@ -59,7 +59,7 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --acme-enabled                               Enable ACME certificate issuer
       --acme-issuer-name string                    Name for the ACME ClusterIssuer (default "acme-issuer")
       --acme-server string                         ACME server URL (default "https://acme-v02.api.letsencrypt.org/directory")
-      --age-key string                             Path to the age private key (required for sops unless SOPS_AGE_KEY or SOPS_AGE_KEY_FILE is set)
+      --age-key string                             Path to the age private key for the sops vault (falls back to SOPS_AGE_KEY or SOPS_AGE_KEY_FILE; if none is set, a new key is generated and printed once)
       --ansible-inventory string                   Path to Ansible inventory file to import host information from
       --ceph-csi-kubelet-dir string                Directory of kubelet for ceph csi. Required for some cloud providers
       --ceph-nodes-subnet string                   CIDR subnet for ceph nodes
