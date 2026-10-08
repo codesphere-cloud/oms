@@ -620,7 +620,7 @@ var _ = Describe("ManagedService plan parameters", func() {
 codesphere:
   managedServices:
     - name: ferretdb
-      version: v0
+      schemaVersion: v0
       plans:
         - id: 0
           name: Small
@@ -636,6 +636,7 @@ codesphere:
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
 
 		Expect(config.Codesphere.ManagedServices).To(HaveLen(1))
+		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v0"))
 		storage := config.Codesphere.ManagedServices[0].Plans[0].Parameters["storage"]
 		Expect(storage.IsScalar).To(BeFalse())
 		Expect(storage.Legacy.PricedAs).To(Equal("storage-mib"))
@@ -647,7 +648,7 @@ codesphere:
 codesphere:
   managedServices:
     - name: ferretdb
-      version: v0
+      schemaVersion: v0
       resourceParameters:
         storage:
           pricedAs: storage-mib
@@ -665,6 +666,7 @@ codesphere:
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
 
 		svc := config.Codesphere.ManagedServices[0]
+		Expect(svc.SchemaVersion).To(Equal("v0"))
 		resource := svc.ResourceParameters["storage"]
 		Expect(resource.PricedAs).To(Equal("storage-mib"))
 		Expect(resource.Schema).To(HaveKeyWithValue("type", "integer"))
@@ -681,7 +683,7 @@ codesphere:
 codesphere:
   managedServices:
     - name: virtual-k8s
-      version: v1
+      schemaVersion: v1
       resourceParameters:
         cpu:
           pricedAs: cpu-tenths
@@ -703,10 +705,12 @@ codesphere:
 `
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
+		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v1"))
 
 		clone, err := config.Clone()
 		Expect(err).NotTo(HaveOccurred())
 
+		Expect(clone.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v1"))
 		Expect(clone.Codesphere.ManagedServices).To(Equal(config.Codesphere.ManagedServices))
 	})
 
@@ -715,7 +719,7 @@ codesphere:
 codesphere:
   managedServices:
     - name: ferretdb
-      version: v0
+      schemaVersion: v0
       plans:
         - id: 0
           name: Small
@@ -724,6 +728,7 @@ codesphere:
 `
 		var config files.RootConfig
 		Expect(config.Unmarshal([]byte(yamlData))).NotTo(HaveOccurred())
+		Expect(config.Codesphere.ManagedServices[0].SchemaVersion).To(Equal("v0"))
 
 		clone, err := config.Clone()
 		Expect(err).NotTo(HaveOccurred())
@@ -737,7 +742,7 @@ codesphere:
 codesphere:
   managedServices:
     - name: ferretdb
-      version: v0
+      schemaVersion: v0
       plans:
         - id: 0
           name: Small
