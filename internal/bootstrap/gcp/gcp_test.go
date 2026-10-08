@@ -150,6 +150,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput pc-apps values", func() {
+		It("rejects a missing values file", func() {
+			csEnv.PCAppsValues = []string{"base.yaml"}
+			fw.EXPECT().Exists("base.yaml").Return(false)
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("pc-apps values file not found at path: base.yaml")))
+		})
+	})
+
 	Describe("ValidateInput registry params", func() {
 		It("rejects an unknown registry type", func() {
 			csEnv.RegistryType = "guthub"
@@ -1874,6 +1883,29 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("copies the pc-apps values files to the jumpbox and passes them in order", func() {
+				csEnv.PCAppsValues = []string{"values/base.yaml", "overlay/base.yaml"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "values/base.yaml", "/root/pc-apps-values/0-base.yaml").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "overlay/base.yaml", "/root/pc-apps-values/1-base.yaml").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --pc-apps-values /root/pc-apps-values/0-base.yaml --pc-apps-values /root/pc-apps-values/1-base.yaml -s kubernetes").Return(nil)
+
+				err := bs.InstallCodesphere()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("fails when a pc-apps values file cannot be copied", func() {
+				csEnv.PCAppsValues = []string{"base.yaml"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "base.yaml", "/root/pc-apps-values/0-base.yaml").Return(fmt.Errorf("copy error"))
+
+				err := bs.InstallCodesphere()
+				Expect(err).To(MatchError(ContainSubstring("failed to copy pc-apps values file base.yaml to jumpbox")))
 			})
 
 			It("preserves requested skip steps without duplicating kubernetes", func() {

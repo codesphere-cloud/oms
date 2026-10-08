@@ -67,6 +67,7 @@ oms beta bootstrap-gcp [flags]
       --openbao-password string                   OpenBao password (optional)
       --openbao-uri string                        URI for OpenBao (optional)
       --openbao-user string                       OpenBao username (optional) (default "admin")
+      --pc-apps-values stringArray                pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)
       --preemptible                               Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)
       --preview-flags stringArray                 Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,cluster-admin,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
       --project-name string                       Unique GCP Project Name (required)
