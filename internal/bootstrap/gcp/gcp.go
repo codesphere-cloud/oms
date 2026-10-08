@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -33,6 +34,9 @@ const InstallerArchiveName = "installer-lite.tar.gz"
 // that data center's first control plane node. Data centers have separate nodes, so the path can
 // be the same for all of them.
 const remoteK0sConfigScriptPath = "/root/configure-k0s.sh"
+
+// remotePCAppsValuesDir is where the --pc-apps-values files are copied to on the jumpbox.
+const remotePCAppsValuesDir = "/root/pc-apps-values"
 
 // installerNodeSecretsDir is where the Codesphere installer uploads a data center's age key on
 // every one of that data center's nodes. The path is fixed even though the installer reads the key
@@ -238,6 +242,9 @@ type CodesphereEnvironment struct {
 	RootDiskSize   int64  `json:"root_disk_size"`
 	// Local OMS binary copied to the jumpbox instead of installing a release.
 	RemoteOmsBinaryPath string `json:"-"`
+	// PCAppsValues are local pc-apps values files. They are copied to the jumpbox unchanged and
+	// passed to the install command in the given order, so later files win.
+	PCAppsValues []string `json:"-"`
 
 	// OpenFGA database backups. The bucket lives in the project and is removed
 	// together with the project on cleanup. Access key/secret are populated only
@@ -509,6 +516,12 @@ func (b *GCPBootstrapper) ValidateInput() error {
 
 	if b.Env.RemoteOmsBinaryPath != "" && !b.fw.Exists(b.Env.RemoteOmsBinaryPath) {
 		return fmt.Errorf("remote OMS binary not found at path: %s", b.Env.RemoteOmsBinaryPath)
+	}
+
+	for _, valuesFile := range b.Env.PCAppsValues {
+		if !b.fw.Exists(valuesFile) {
+			return fmt.Errorf("pc-apps values file not found at path: %s", valuesFile)
+		}
 	}
 
 	err := b.validateInstallVersion()
@@ -1079,6 +1092,10 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
+	if err := b.CopyPCAppsValuesToJumpbox(); err != nil {
+		return err
+	}
+
 	packageFilename := b.codespherePackageFilename()
 
 	if b.Env.RegistryType == RegistryTypeLocalContainer {
@@ -1142,26 +1159,6 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 	return nil
 }
 
-// mirrorPackageToLocalRegistry copies the container images and Helm charts the installer package
-// references from their upstream registry into the registry running on the jumpbox. The lite
-// package ships no images of its own, so the local registry is empty until they are mirrored and
-// the installation would have nothing to pull from.
-func (b *GCPBootstrapper) mirrorPackageToLocalRegistry(packageFilename string) error {
-	registryServer := b.Env.ContainerRegistryURL
-	if registryServer == "" {
-		return errors.New("local container registry has no server address")
-	}
-
-	b.stlog.Logf("Copying package artifacts to %s, this takes several minutes...", registryServer)
-
-	copyCmd := fmt.Sprintf("oms copy package -p %s --dest %s --yes", packageFilename, registryServer)
-	if err := b.Env.Jumpbox.RunSSHCommand("root", copyCmd); err != nil {
-		return fmt.Errorf("failed to copy package artifacts from the jumpbox: %w", err)
-	}
-
-	return nil
-}
-
 func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere in data center %d...", dc.ID)
 
@@ -1175,9 +1172,40 @@ func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFi
 // InstallCommand returns the command that installs Codesphere into the given data center from
 // the jumpbox. It is also printed for the operator when the bootstrap does not install itself.
 func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilename string) string {
-	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s%s",
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s%s%s",
 		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename,
-		b.generateRegistryTrustArg(), b.generateSkipStepsArg())
+		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg())
+}
+
+// remotePCAppsValuesPath is where the i-th pc-apps values file is stored on the jumpbox. The index
+// keeps files with the same name apart.
+func remotePCAppsValuesPath(i int, localPath string) string {
+	return fmt.Sprintf("%s/%d-%s", remotePCAppsValuesDir, i, filepath.Base(localPath))
+}
+
+// CopyPCAppsValuesToJumpbox copies the pc-apps values files to the jumpbox unchanged, so the
+// install command can pass them on to the installer.
+func (b *GCPBootstrapper) CopyPCAppsValuesToJumpbox() error {
+	for i, valuesFile := range b.Env.PCAppsValues {
+		remotePath := remotePCAppsValuesPath(i, valuesFile)
+		b.stlog.Logf("Copying pc-apps values %s to jumpbox at %s...", valuesFile, remotePath)
+
+		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, valuesFile, remotePath)
+		if err != nil {
+			return fmt.Errorf("failed to copy pc-apps values file %s to jumpbox: %w", valuesFile, err)
+		}
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) generatePCAppsValuesArg() string {
+	var arg strings.Builder
+	for i, valuesFile := range b.Env.PCAppsValues {
+		arg.WriteString(" --pc-apps-values " + remotePCAppsValuesPath(i, valuesFile))
+	}
+
+	return arg.String()
 }
 
 // generateRegistryTrustArg points the installation at the certificate authority of the local

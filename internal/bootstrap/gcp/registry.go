@@ -4,6 +4,7 @@
 package gcp
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"slices"
@@ -329,10 +330,14 @@ func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, s
 		{"creating the Docker config directory", "mkdir -p " + path.Dir(jumpboxRegistryAuthFile)},
 		// A freshly started registry container is not serving yet when podman returns, so wait
 		// for it to answer before logging in.
-		{"waiting for the registry at " + server + " to answer",
-			fmt.Sprintf("timeout 120 sh -c 'until curl -s -o /dev/null https://%s/v2/; do sleep 2; done'", server)},
-		{"logging in to the local registry at " + server + " as " + username,
-			registryLoginCommand(server, username, password)},
+		{
+			"waiting for the registry at " + server + " to answer",
+			fmt.Sprintf("timeout 120 sh -c 'until curl -s -o /dev/null https://%s/v2/; do sleep 2; done'", server),
+		},
+		{
+			"logging in to the local registry at " + server + " as " + username,
+			registryLoginCommand(server, username, password),
+		},
 	}
 
 	if b.Env.RegistryUser != "" && b.Env.GitHubPAT != "" {
@@ -381,6 +386,26 @@ func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
 	b.Env.ContainerRegistryURL = "ghcr.io"
 	b.Env.RegistryUsername = b.Env.RegistryUser
 	b.Env.RegistryPassword = b.Env.GitHubPAT
+
+	return nil
+}
+
+// mirrorPackageToLocalRegistry copies the container images and Helm charts the installer package
+// references from their upstream registry into the registry running on the jumpbox. The lite
+// package ships no images of its own, so the local registry is empty until they are mirrored and
+// the installation would have nothing to pull from.
+func (b *GCPBootstrapper) mirrorPackageToLocalRegistry(packageFilename string) error {
+	registryServer := b.Env.ContainerRegistryURL
+	if registryServer == "" {
+		return errors.New("local container registry has no server address")
+	}
+
+	b.stlog.Logf("Copying package artifacts to %s, this takes several minutes...", registryServer)
+
+	copyCmd := fmt.Sprintf("oms copy package -p %s --dest %s --yes", packageFilename, registryServer)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", copyCmd); err != nil {
+		return fmt.Errorf("failed to copy package artifacts from the jumpbox: %w", err)
+	}
 
 	return nil
 }
