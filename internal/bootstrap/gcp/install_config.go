@@ -705,18 +705,18 @@ func (b *GCPBootstrapper) applyPcAppsDefaults(dc *datacenter.DataCenter) {
 func (b *GCPBootstrapper) applyManagedServiceDefaults(dc *datacenter.DataCenter) {
 	if dc.InstallConfig.Codesphere.ManagedServices == nil {
 		ms := []files.ManagedServiceConfig{
-			{Name: "postgres", Version: "v1"},
-			{Name: "babelfish", Version: "v1"},
-			{Name: "s3", Version: "v1"},
-			{Name: "virtual-k8s", Version: "v1"},
-			{Name: "ferretdb", Version: "v0"},
-			{Name: "opensearch", Version: "v0"},
-			{Name: "valkey", Version: "v0"},
-			{Name: "rabbitmq", Version: "v0"},
+			{Name: "postgres", SchemaVersion: "v1"},
+			{Name: "babelfish", SchemaVersion: "v1"},
+			{Name: "s3", SchemaVersion: "v1"},
+			{Name: "virtual-k8s", SchemaVersion: "v1"},
+			{Name: "ferretdb", SchemaVersion: "v0"},
+			{Name: "opensearch", SchemaVersion: "v0"},
+			{Name: "valkey", SchemaVersion: "v0"},
+			{Name: "rabbitmq", SchemaVersion: "v0"},
 		}
 
 		if util.InstallVersionAtLeast(b.Env.InstallVersion, "v1.106.0") {
-			ms = append(ms, files.ManagedServiceConfig{Name: "url-shortener", Version: "v0"})
+			ms = append(ms, files.ManagedServiceConfig{Name: "url-shortener", SchemaVersion: "v0"})
 		}
 
 		dc.InstallConfig.Codesphere.ManagedServices = ms
