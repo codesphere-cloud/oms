@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 )
 
 // openFgaPresharedKeysSecret is the Secret the openfga chart reads the preshared key from.
@@ -30,7 +31,7 @@ func OpenFgaPcAppsValues(config *files.RootConfig, vault *files.InstallVault) fi
 		}
 	}
 
-	if authn := authnValues(vault); authn != nil {
+	if authn := authnValues(config, vault); authn != nil {
 		chartValues["openfga"] = files.ChartValues{"authn": authn}
 	}
 
@@ -54,8 +55,14 @@ func OpenFgaPcAppsValues(config *files.RootConfig, vault *files.InstallVault) fi
 // it as optional too. Returns nil for an installation without the key, which runs an
 // unauthenticated OpenFGA. Services that started before the key existed only send it once
 // their pods roll.
-func authnValues(vault *files.InstallVault) files.ChartValues {
-	if !hasOpenFgaPresharedKey(vault) {
+func authnValues(config *files.RootConfig, vault *files.InstallVault) files.ChartValues {
+	if secrets.OpenFgaPresharedKeyMustBeCopied(vault, config) {
+		log.Printf("OpenFGA: %s\n", secrets.CopyOpenFgaPresharedKeyHint)
+
+		return nil
+	}
+
+	if !secrets.HasOpenFgaPresharedKey(vault) {
 		log.Printf(
 			"OpenFGA: %s is not in the vault, deploying OpenFGA without authentication."+
 				" Add the key with `oms update install-config` — a future version will require it.\n",
@@ -91,18 +98,6 @@ func gatewayValues(config *files.RootConfig, expose *files.OpenFgaExposeConfig) 
 	}
 
 	return gateway
-}
-
-// hasOpenFgaPresharedKey reports whether the vault holds a usable preshared key. A vault
-// written by an older oms has no entry at all; `oms update install-config` adds one.
-func hasOpenFgaPresharedKey(vault *files.InstallVault) bool {
-	if vault == nil {
-		return false
-	}
-
-	secret := vault.GetSecret(files.SecretOpenFgaPresharedKey)
-
-	return secret != nil && secret.Fields != nil && secret.Fields.Password != ""
 }
 
 // certIssuerName returns the name of the ClusterIssuer for this installation, matching the
