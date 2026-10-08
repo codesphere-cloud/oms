@@ -1,0 +1,90 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Publish CLI reference to Codesphere Docs
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'OMS release tag to publish (for example v2.104.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  OMS_VERSION: ${{ github.event.release.tag_name || inputs.release_tag }}
+
+concurrency:
+  group: publish-cli-docs
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout OMS
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.OMS_VERSION }}
+          path: oms
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: oms/go.mod
+          cache-dependency-path: oms/go.sum
+
+      - name: Generate CLI reference
+        working-directory: oms
+        run: make docs-docusaurus DOCS_VERSION="$OMS_VERSION"
+
+      - name: Checkout Codesphere Docs
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: codesphere-cloud/codesphere-docs
+          ref: main
+          path: codesphere-docs
+          token: ${{ secrets.CODESPHERE_DOCS_TOKEN || secrets.PAT_UPDATE_DOCS }}
+
+      - name: Prepare Docusaurus command pages
+        run: bash oms/hack/sync-cli-docs.sh oms/docs-docusaurus codesphere-docs
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: codesphere-docs/package-lock.json
+
+      - name: Verify docs render
+        working-directory: codesphere-docs
+        run: |
+          npm ci
+          npm run build -- --locale en
+
+      - name: Create or update docs PR
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          path: codesphere-docs
+          token: ${{ secrets.CODESPHERE_DOCS_TOKEN || secrets.PAT_UPDATE_DOCS }}
+          branch: automation/oms-cli-reference
+          base: main
+          add-paths: |
+            docs/Private_Cloud/reference/oms-cli/
+            docs/Private_Cloud/reference/oms-commands.mdx
+          commit-message: 'docs: sync OMS CLI reference for ${{ env.OMS_VERSION }}'
+          signoff: true
+          title: 'docs: update OMS CLI reference for ${{ env.OMS_VERSION }}'
+          body: |
+            Update the Private Cloud CLI reference generated from [OMS ${{ env.OMS_VERSION }}](https://github.com/codesphere-cloud/oms/releases/tag/${{ env.OMS_VERSION }}).
+
+            Command pages preserve relative navigation and use Docusaurus CommonMark parsing for CLI syntax. Obsolete command pages are removed; the installation overview links to the published reference.
+
+            Validation: English Docusaurus production build passed.
