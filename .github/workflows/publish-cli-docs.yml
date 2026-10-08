@@ -57,7 +57,7 @@ jobs:
         run: bash oms/hack/sync-cli-docs.sh oms/docs-docusaurus codesphere-docs
 
       - name: Set up Node
-        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
           cache: npm
