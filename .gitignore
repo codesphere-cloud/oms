@@ -34,6 +34,7 @@ tmp
 bin/
 oms
 dist/
+docs-docusaurus/
 oms-workdir/
 
 # Ignore internal util testdata fixtures

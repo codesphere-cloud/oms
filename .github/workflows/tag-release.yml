@@ -34,7 +34,8 @@ jobs:
       - name: Tag
         run: hack/tag-release.sh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT-published releases trigger the CLI reference release workflow.
+          GITHUB_TOKEN: ${{ secrets.PAT_UPDATE_DOCS }}
 
       - name: Slack Notification on Failure
         if: ${{ failure() }}
