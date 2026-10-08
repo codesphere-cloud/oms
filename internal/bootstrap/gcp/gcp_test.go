@@ -167,6 +167,30 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Expect(bs.ValidateInput()).To(Succeed())
 		})
 
+		Context("when the installation is airgapped", func() {
+			BeforeEach(func() {
+				csEnv.Airgapped = true
+			})
+
+			It("accepts the local container registry", func() {
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("rejects the GitHub registry", func() {
+				csEnv.RegistryType = gcp.RegistryTypeGitHub
+				csEnv.GitHubPAT = "fake-pat"
+				csEnv.RegistryUser = "fake-registry-user"
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring(`airgapped installations require the local-container registry type, got "github"`)))
+			})
+
+			It("rejects the Artifact Registry", func() {
+				csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring(`airgapped installations require the local-container registry type, got "artifact-registry"`)))
+			})
+		})
+
 		// The PAT also grants GitHub team access, which needs no registry user.
 		It("accepts a PAT alone for a local container registry it does not install into", func() {
 			csEnv.GitHubPAT = "fake-pat"

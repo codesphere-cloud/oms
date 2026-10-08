@@ -164,6 +164,7 @@ type CodesphereEnvironment struct {
 	PublicGatewayIP               string       `json:"public_gateway_ip"`
 	SshProxyIP                    string       `json:"ssh_proxy_ip"`
 	RegistryType                  RegistryType `json:"registry_type"`
+	Airgapped                     bool         `json:"airgapped,omitempty"`
 	GitHubPAT                     string       `json:"-"`
 	GitHubAppName                 string       `json:"-"`
 	GitHubTeamOrg                 string       `json:"github_team_org"`

@@ -32,6 +32,18 @@ const (
 // podman's own auth file, so every login on the jumpbox is pointed here explicitly.
 const jumpboxRegistryAuthFile = "/root/.docker/config.json"
 
+// ResolveRegistryType returns the registry type the bootstrap uses. An airgapped installation can
+// only pull from the local container registry, so it selects that registry unless another type was
+// requested explicitly. An explicit type is kept as it is, and validation rejects it instead of
+// silently overriding it.
+func ResolveRegistryType(input string, explicit bool, airgapped bool) RegistryType {
+	if airgapped && !explicit {
+		return RegistryTypeLocalContainer
+	}
+
+	return RegistryType(input)
+}
+
 // validateGitHubParams checks if the GitHub credentials are fully specified if GitHub registry is selected
 func (b *GCPBootstrapper) validateGitHubParams() error {
 	if b.Env.GitHubTeamSlug != "" && b.Env.GitHubTeamOrg != "" && b.Env.GitHubPAT == "" {
@@ -54,6 +66,10 @@ func (b *GCPBootstrapper) validateGitHubParams() error {
 // validateRegistryParams checks that the registry type is supported and that the credentials
 // the selected type requires are set.
 func (b *GCPBootstrapper) validateRegistryParams() error {
+	if b.Env.Airgapped && b.Env.RegistryType != RegistryTypeLocalContainer {
+		return fmt.Errorf("airgapped installations require the %s registry type, got %q", RegistryTypeLocalContainer, b.Env.RegistryType)
+	}
+
 	switch b.Env.RegistryType {
 	case RegistryTypeLocalContainer:
 		return b.validateLocalRegistryMirrorParams()
