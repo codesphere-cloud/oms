@@ -1,6 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package node provides SSH-based access to installer target nodes.
 package node
 
 import (
