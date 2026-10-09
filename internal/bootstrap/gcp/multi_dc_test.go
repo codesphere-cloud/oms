@@ -201,7 +201,13 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		gc.EXPECT().EnsureStorageBucket(projectID, projectID+"-openfga-backup", "us-central1").Return(nil)
 		gc.EXPECT().CreateHMACKey(projectID, openfgaSA).Return("fake-access-id", "fake-secret", nil)
 		gc.EXPECT().CreateVPC(projectID, "us-central1", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(5)
+		// Only the local container registry cuts the VMs off from the internet.
+		if csEnv.RegistryType == gcp.RegistryTypeLocalContainer {
+			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(7)
+		} else {
+			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(5)
+			gc.EXPECT().DeleteFirewallRule(projectID, mock.Anything).Return(nil).Times(2)
+		}
 
 		mockGetInstanceNotFoundThenRunning(gc, projectID, "us-central1-a", makeRunningInstance("10.10.0.2", "1.2.3.4"), vmCount)
 		gc.EXPECT().CreateInstance(projectID, "us-central1-a", mock.Anything).Return(nil).Times(vmCount)

@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
@@ -342,8 +343,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// EnsureVPC
 			gc.EXPECT().CreateVPC(projectID, "us-central1", projectID+"-vpc", projectID+"-us-central1-subnet", projectID+"-router", projectID+"-nat-gateway").Return(nil)
 
-			// EnsureFirewallRules (5 times)
+			// EnsureFirewallRules: the artifact registry keeps internet egress, so the airgapped
+			// egress rules are removed instead of created.
 			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(5)
+			gc.EXPECT().DeleteFirewallRule(projectID, "deny-external-egress").Return(nil)
+			gc.EXPECT().DeleteFirewallRule(projectID, "allow-internal-egress").Return(nil)
 
 			// EnsureComputeInstances
 			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
@@ -1363,29 +1367,53 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("EnsureFirewallRules", func() {
+		expectBaseRules := func() {
+			for _, name := range []string{"allow-ssh-ext", "allow-internal", "allow-all-egress", "allow-ingress-web", "allow-ingress-postgres"} {
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == name
+				})).Return(nil).Once()
+			}
+		}
+
 		Describe("Valid EnsureFirewallRules", func() {
-			It("creates required firewall rules", func() {
-				// Expect 4 rules: allow-ssh-ext, allow-internal, allow-all-egress, allow-ingress-web, allow-ingress-postgres
-				// Wait, code showed 5 blocks? ssh, internal, egress, web, postgres.
+			It("creates the base rules and blocks internet egress of all VMs but the jumpbox with the local container registry", func() {
+				expectBaseRules()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ssh-ext"
-				})).Return(nil)
+					return r.GetName() == "allow-internal-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 800 &&
+						len(r.GetAllowed()) == 1 && r.GetAllowed()[0].GetIPProtocol() == "all" &&
+						slices.Equal(r.GetDestinationRanges(), []string{"10.10.0.0/20"}) &&
+						slices.Equal(r.GetTargetTags(), []string{"ceph", "k0s", "postgres"})
+				})).Return(nil).Once()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-internal"
-				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-all-egress"
-				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ingress-web"
-				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ingress-postgres"
-				})).Return(nil)
+					return r.GetName() == "deny-external-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 900 &&
+						len(r.GetDenied()) == 1 && r.GetDenied()[0].GetIPProtocol() == "all" &&
+						len(r.GetAllowed()) == 0 &&
+						slices.Equal(r.GetDestinationRanges(), []string{"0.0.0.0/0"}) &&
+						slices.Equal(r.GetTargetTags(), []string{"ceph", "k0s", "postgres"}) &&
+						!slices.Contains(r.GetTargetTags(), "jumpbox")
+				})).Return(nil).Once()
 
 				err := bs.EnsureFirewallRules()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			DescribeTable("removes the airgapped egress rules with a registry reachable over the internet",
+				func(registryType gcp.RegistryType) {
+					csEnv.RegistryType = registryType
+					expectBaseRules()
+					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(nil).Once()
+					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-internal-egress").Return(nil).Once()
+
+					err := bs.EnsureFirewallRules()
+					Expect(err).NotTo(HaveOccurred())
+				},
+				Entry("GitHub", gcp.RegistryTypeGitHub),
+				Entry("artifact registry", gcp.RegistryTypeArtifactRegistry),
+			)
 		})
 
 		Describe("Invalid cases", func() {
@@ -1395,6 +1423,34 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.EnsureFirewallRules()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to create jumpbox ssh firewall rule"))
+			})
+
+			It("fails when the egress deny rule creation fails", func() {
+				expectBaseRules()
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == "allow-internal-egress"
+				})).Return(nil).Once()
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == "deny-external-egress"
+				})).Return(fmt.Errorf("firewall error")).Once()
+
+				err := bs.EnsureFirewallRules()
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to create external egress deny firewall rule"),
+					ContainSubstring("firewall error"),
+				)))
+			})
+
+			It("fails when removing the egress deny rule fails", func() {
+				csEnv.RegistryType = gcp.RegistryTypeGitHub
+				expectBaseRules()
+				gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(fmt.Errorf("delete error")).Once()
+
+				err := bs.EnsureFirewallRules()
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to delete deny-external-egress firewall rule"),
+					ContainSubstring("delete error"),
+				)))
 			})
 		})
 	})

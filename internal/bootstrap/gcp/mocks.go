@@ -930,6 +930,63 @@ func (_c *MockGCPClientManager_DeleteDNSRecordSets_Call) RunAndReturn(run func(p
 	return _c
 }
 
+// DeleteFirewallRule provides a mock function for the type MockGCPClientManager
+func (_mock *MockGCPClientManager) DeleteFirewallRule(projectID string, ruleName string) error {
+	ret := _mock.Called(projectID, ruleName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteFirewallRule")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = returnFunc(projectID, ruleName)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGCPClientManager_DeleteFirewallRule_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteFirewallRule'
+type MockGCPClientManager_DeleteFirewallRule_Call struct {
+	*mock.Call
+}
+
+// DeleteFirewallRule is a helper method to define mock.On call
+//   - projectID string
+//   - ruleName string
+func (_e *MockGCPClientManager_Expecter) DeleteFirewallRule(projectID any, ruleName any) *MockGCPClientManager_DeleteFirewallRule_Call {
+	return &MockGCPClientManager_DeleteFirewallRule_Call{Call: _e.mock.On("DeleteFirewallRule", projectID, ruleName)}
+}
+
+func (_c *MockGCPClientManager_DeleteFirewallRule_Call) Run(run func(projectID string, ruleName string)) *MockGCPClientManager_DeleteFirewallRule_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGCPClientManager_DeleteFirewallRule_Call) Return(err error) *MockGCPClientManager_DeleteFirewallRule_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGCPClientManager_DeleteFirewallRule_Call) RunAndReturn(run func(projectID string, ruleName string) error) *MockGCPClientManager_DeleteFirewallRule_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteProject provides a mock function for the type MockGCPClientManager
 func (_mock *MockGCPClientManager) DeleteProject(projectID string) error {
 	ret := _mock.Called(projectID)
