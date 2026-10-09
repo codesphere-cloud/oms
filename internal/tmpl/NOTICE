@@ -1475,15 +1475,15 @@ License URL: https://cs.opensource.google/go/x/sync/+/v0.23.0:LICENSE
  
 ----------
 Module: golang.org/x/sys
-Version: v0.48.0
+Version: v0.49.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sys/+/v0.48.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sys/+/v0.49.0:LICENSE
  
 ----------
 Module: golang.org/x/term
-Version: v0.46.0
+Version: v0.47.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/term/+/v0.46.0:LICENSE
+License URL: https://cs.opensource.google/go/x/term/+/v0.47.0:LICENSE
  
 ----------
 Module: golang.org/x/text
