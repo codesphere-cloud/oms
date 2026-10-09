@@ -56,6 +56,7 @@ type GCPClientManager interface {
 	RemoveIAMRoleBinding(projectID, saName string, saProjectID string, roles []string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
+	DeleteFirewallRule(projectID, ruleName string) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
 	GetInstance(projectID, zone, instanceName string) (*computepb.Instance, error)
 	StartInstance(projectID, zone, instanceName string) error
@@ -703,6 +704,30 @@ func (c *GCPClient) CreateFirewallRule(projectID string, rule *computepb.Firewal
 	}
 
 	return nil
+}
+
+// DeleteFirewallRule deletes the named firewall rule from the specified project. A rule that does
+// not exist counts as deleted.
+func (c *GCPClient) DeleteFirewallRule(projectID, ruleName string) error {
+	firewallsClient, err := compute.NewFirewallsRESTClient(c.ctx)
+	if err != nil {
+		return err
+	}
+	defer util.IgnoreError(firewallsClient.Close)
+
+	op, err := firewallsClient.Delete(c.ctx, &computepb.DeleteFirewallRequest{
+		Project:  projectID,
+		Firewall: ruleName,
+	})
+	if IsNotFoundError(err) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return op.Wait(c.ctx)
 }
 
 // CreateInstance creates a new Compute Engine instance in the specified project and zone.
