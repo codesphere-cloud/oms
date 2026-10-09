@@ -7,6 +7,7 @@ import (
 	"context"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +16,20 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
+
+type tokenVaultStore struct {
+	data  *files.InstallVault
+	saves int
+}
+
+func (s *tokenVaultStore) Load() (*files.InstallVault, error)         { return s.data.Clone(), nil }
+func (s *tokenVaultStore) LoadOrCreate() (*files.InstallVault, error) { return s.Load() }
+func (s *tokenVaultStore) Save(data *files.InstallVault) error {
+	s.data = data.Clone()
+	s.saves++
+
+	return nil
+}
 
 var _ = Describe("VaultSecretCreator", func() {
 	var (
@@ -61,6 +76,23 @@ var _ = Describe("VaultSecretCreator", func() {
 		secret := &corev1.Secret{}
 		Expect(kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: VaultSecretNamespace, Name: VaultSecretName}, secret)).To(Succeed())
 		Expect(secret.Data).To(HaveKeyWithValue("registry.password", []byte("updated")))
+	})
+
+	It("renews service tokens on every sync", func() {
+		store := &tokenVaultStore{data: &files.InstallVault{}}
+		Expect(secrets.EnsureAuthKeys(store.data)).To(Succeed())
+		Expect(creator.CreateSecretFromStore(ctx, store, VaultSecretNamespace, VaultSecretName)).To(Succeed())
+
+		secret := &corev1.Secret{}
+		key := ctrlclient.ObjectKey{Namespace: VaultSecretNamespace, Name: VaultSecretName}
+		Expect(kubeClient.Get(ctx, key, secret)).To(Succeed())
+		original := secret.Data["authServiceUserToken.password"]
+		Expect(original).NotTo(BeEmpty())
+
+		Expect(creator.CreateSecretFromStore(ctx, store, VaultSecretNamespace, VaultSecretName)).To(Succeed())
+		Expect(kubeClient.Get(ctx, key, secret)).To(Succeed())
+		Expect(secret.Data["authServiceUserToken.password"]).NotTo(Equal(original))
+		Expect(store.saves).To(Equal(0))
 	})
 })
 
