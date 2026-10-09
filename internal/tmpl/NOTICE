@@ -1445,9 +1445,9 @@ License URL: https://github.com/yaml/go-yaml/blob/v3.0.5/LICENSE
  
 ----------
 Module: golang.org/x/crypto
-Version: v0.57.0
+Version: v0.58.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/crypto/+/v0.57.0:LICENSE
+License URL: https://cs.opensource.google/go/x/crypto/+/v0.58.0:LICENSE
  
 ----------
 Module: golang.org/x/mod/semver
@@ -1457,9 +1457,9 @@ License URL: https://cs.opensource.google/go/x/mod/+/v0.41.0:LICENSE
  
 ----------
 Module: golang.org/x/net
-Version: v0.59.0
+Version: v0.60.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/net/+/v0.59.0:LICENSE
+License URL: https://cs.opensource.google/go/x/net/+/v0.60.0:LICENSE
  
 ----------
 Module: golang.org/x/oauth2
@@ -1469,9 +1469,9 @@ License URL: https://cs.opensource.google/go/x/oauth2/+/v0.37.0:LICENSE
  
 ----------
 Module: golang.org/x/sync
-Version: v0.23.0
+Version: v0.24.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/sync/+/v0.23.0:LICENSE
+License URL: https://cs.opensource.google/go/x/sync/+/v0.24.0:LICENSE
  
 ----------
 Module: golang.org/x/sys
@@ -1487,9 +1487,9 @@ License URL: https://cs.opensource.google/go/x/term/+/v0.47.0:LICENSE
  
 ----------
 Module: golang.org/x/text
-Version: v0.42.0
+Version: v0.43.0
 License: BSD-3-Clause
-License URL: https://cs.opensource.google/go/x/text/+/v0.42.0:LICENSE
+License URL: https://cs.opensource.google/go/x/text/+/v0.43.0:LICENSE
  
 ----------
 Module: golang.org/x/time/rate
