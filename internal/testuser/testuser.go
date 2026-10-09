@@ -40,7 +40,6 @@ type CreateTestUserOpts struct {
 	DBName       string
 	SSLMode      string
 	DatacenterID int
-	SeedAuthz    bool
 }
 
 // TestUserResult contains the result of creating a test user.
@@ -192,12 +191,6 @@ func (c *TestUserCreator) createInDB(hashedPassword, hashedToken string) (*TestU
 		return nil, err
 	}
 
-	if c.opts.SeedAuthz {
-		if err := c.insertAuthzOutbox(tx, userID, teamID); err != nil {
-			return nil, err
-		}
-	}
-
 	if err := c.insertAPIToken(tx, hashedToken, userID); err != nil {
 		return nil, err
 	}
@@ -277,24 +270,6 @@ func (c *TestUserCreator) insertTeamMember(tx *sql.Tx, userID, teamID int) error
 	if err != nil {
 		return fmt.Errorf("failed to insert team member: %w", err)
 	}
-	return nil
-}
-
-// insertAuthzOutbox queues the OpenFGA tuple that makes the test team visible to the
-// authorization-filtered API. The team service drains teamService.fga_outbox and writes
-// the tuple to OpenFGA, so no OpenFGA credentials are needed here.
-func (c *TestUserCreator) insertAuthzOutbox(tx *sql.Tx, userID, teamID int) error {
-	_, err := tx.Exec(`
-		INSERT INTO "teamService".fga_outbox
-			(subject, relation, object, operation)
-		VALUES($1, 'member', $2, 'write')`,
-		fmt.Sprintf("user:%d", userID),
-		fmt.Sprintf("resource_group:%d", teamID),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to insert authz outbox entry: %w", err)
-	}
-
 	return nil
 }
 

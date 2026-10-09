@@ -466,7 +466,6 @@ func (b *GCPBootstrapper) createTestUser() error {
 		DBName:       testuser.DefaultDBName,
 		SSLMode:      "require",
 		DatacenterID: primary.ID,
-		SeedAuthz:    primary.InstallConfig.Codesphere.Preview["openfga-authz"],
 	})
 	if err != nil {
 		return err

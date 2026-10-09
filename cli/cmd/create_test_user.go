@@ -66,7 +66,6 @@ func AddCreateTestUserCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&c.Opts.DBName, "postgres-db", testuser.DefaultDBName, "PostgreSQL database name")
 	flags.StringVar(&c.Opts.SSLMode, "ssl-mode", testuser.DefaultSSLMode, "PostgreSQL SSL mode")
 	flags.IntVar(&c.Opts.DatacenterID, "datacenter-id", 1, "Datacenter ID for the created test team")
-	flags.BoolVar(&c.Opts.SeedAuthz, "seed-authz", false, "Queue the OpenFGA membership tuple for the created team (required when the installation enforces openfga-authz)")
 
 	util.MarkFlagRequired(c.cmd, "postgres-host")
 	util.MarkFlagRequired(c.cmd, "postgres-password")
