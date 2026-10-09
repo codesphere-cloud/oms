@@ -12,11 +12,25 @@ import (
 
 // EnsureK0s executed all steps to ensure a k0s cluster in gcp for every data center.
 // Only executing the config script needs to be done after installing codesphere, as crucial parts are still in the ts-installer.
+// Airgapped bootstraps download the airgap bundle and generate an airgap k0sctl config first,
+// which InstallK0s then installs.
 // Returns an error if k0s could not be ensured.
 func (b *GCPBootstrapper) EnsureK0s() error {
 	err := b.GenerateK0sConfigScript()
 	if err != nil {
 		return fmt.Errorf("failed to generate k0s config script: %w", err)
+	}
+
+	if b.Env.Airgapped {
+		err = b.stlog.Step("Download k0s airgap bundle", b.DownloadK0sAirgapBundle)
+		if err != nil {
+			return fmt.Errorf("failed to download k0s airgap bundle: %w", err)
+		}
+
+		err = b.GenerateK0sAirgapConfig()
+		if err != nil {
+			return err
+		}
 	}
 
 	err = b.InstallK0s()
@@ -195,9 +209,50 @@ func (b *GCPBootstrapper) runK0sConfigScript(dc *datacenter.DataCenter) error {
 	return nil
 }
 
+// DownloadK0sAirgapBundle caches the k0s binary and its airgap image bundle on the jumpbox. All
+// data centers install the same k0s version, so they share the cached bundle.
+func (b *GCPBootstrapper) DownloadK0sAirgapBundle() error {
+	downloadCmd := fmt.Sprintf("oms download k0s --version %s --airgapped", b.Env.K0sVersion)
+	if err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd); err != nil {
+		return fmt.Errorf("failed to download k0s airgap bundle on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// GenerateK0sAirgapConfig generates every data center's airgap k0sctl config on the jumpbox from
+// the cached airgap bundle, without installing it yet.
+func (b *GCPBootstrapper) GenerateK0sAirgapConfig() error {
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
+
+	for _, dc := range b.Env.DataCenters {
+		err := b.stlog.Step(dc.StepName("Generate k0s airgap config"), func() error {
+			return b.generateK0sAirgapConfig(dc)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to generate k0s airgap config (data center %d): %w", dc.ID, err)
+		}
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) generateK0sAirgapConfig(dc *datacenter.DataCenter) error {
+	generateCmd := fmt.Sprintf("oms install k0s --version %s --install-config %s --airgapped --config-only --k0sctl-config %s",
+		b.Env.K0sVersion, dc.RemoteConfigPath, dc.RemoteK0sctlConfigPath())
+	if err := b.Env.Jumpbox.RunSSHCommand("root", generateCmd); err != nil {
+		return fmt.Errorf("failed to generate k0s airgap config on jumpbox (data center %d): %w", dc.ID, err)
+	}
+
+	return nil
+}
+
 // InstallK0s deploys k0s into every data center with the native OMS installer. Each data center
 // gets its own cluster, so every run stores its kubeconfig in that data center's encrypted
-// install vault for the remaining installer steps.
+// install vault for the remaining installer steps. Airgapped bootstraps install the k0sctl config
+// that GenerateK0sAirgapConfig generated.
 func (b *GCPBootstrapper) InstallK0s() error {
 	if err := b.ensureDataCenters(); err != nil {
 		return err
@@ -218,8 +273,13 @@ func (b *GCPBootstrapper) InstallK0s() error {
 func (b *GCPBootstrapper) installK0s(dc *datacenter.DataCenter) error {
 	// Reuse matching cached binaries and let k0sctl reconcile normally. Without
 	// --force, an unchanged cluster remains untouched on bootstrap retries.
-	installCmd := fmt.Sprintf("oms install k0s --version %s --install-config %s --vault %s --vault-priv-key %s",
-		b.Env.K0sVersion, dc.RemoteConfigPath, dc.RemoteVaultPath(), dc.RemoteAgeKeyPath())
+	configFlags := fmt.Sprintf("--version %s --install-config %s", b.Env.K0sVersion, dc.RemoteConfigPath)
+	if b.Env.Airgapped {
+		configFlags = "--k0sctl-config " + dc.RemoteK0sctlConfigPath()
+	}
+
+	installCmd := fmt.Sprintf("oms install k0s %s --vault %s --vault-priv-key %s",
+		configFlags, dc.RemoteVaultPath(), dc.RemoteAgeKeyPath())
 	if err := b.Env.Jumpbox.RunSSHCommand("root", installCmd); err != nil {
 		return fmt.Errorf("failed to install k0s from jumpbox (data center %d): %w", dc.ID, err)
 	}

@@ -2061,6 +2061,42 @@ var _ = Describe("GCP Bootstrapper", func() {
 			err := bs.InstallK0s()
 			Expect(err).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
 		})
+
+		It("installs the generated airgap k0sctl config when airgapped", func() {
+			csEnv.Airgapped = true
+
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms install k0s --k0sctl-config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
+
+			err := bs.InstallK0s()
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("DownloadK0sAirgapBundle", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+		})
+
+		It("caches the k0s binary and airgap bundle on the jumpbox", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms download k0s --version v1.31.14+k0s.0 --airgapped").Return(nil)
+
+			Expect(bs.DownloadK0sAirgapBundle()).To(Succeed())
+		})
+	})
+
+	Describe("GenerateK0sAirgapConfig", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+		})
+
+		It("generates the airgap k0sctl config on the jumpbox without installing it", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --config-only --k0sctl-config /etc/codesphere/k0sctl-config.yaml").Return(nil)
+
+			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
+		})
 	})
 
 	Describe("WaitForK0sNodes", func() {

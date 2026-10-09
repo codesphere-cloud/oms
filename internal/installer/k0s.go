@@ -10,20 +10,24 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-// DefaultK0sVersion is the currently verified k0s version
-// Use of newer versions should work in most cases but can't be guaranteed
-const DefaultK0sVersion = "v1.31.14+k0s.0"
+const (
+	// DefaultK0sVersion is the k0s version installed unless another one is requested.
+	DefaultK0sVersion = "v1.31.14+k0s.0"
+	k0sReleaseURL     = "https://github.com/k0sproject/k0s/releases/download"
+	k0sReleaseAPIURL  = "https://api.github.com/repos/k0sproject/k0s/releases/tags"
+	k0sBinaryName     = "k0s"
+)
 
 //mockery:generate: true
 type K0sManager interface {
 	GetLatestVersion() (string, error)
-	Download(version string, force bool, quiet bool) (string, error)
+	Download(version string, opts DownloadOptions) (string, error)
+	EnsureAirgapBundle(version string, opts DownloadOptions) (string, error)
 }
 
 type K0s struct {
@@ -59,46 +63,31 @@ func (k *K0s) GetLatestVersion() (string, error) {
 }
 
 // Download downloads the k0s binary for the specified version and saves it to the OMS cache dir.
-func (k *K0s) Download(version string, force bool, quiet bool) (string, error) {
+func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 	if k.Goos != "linux" || k.Goarch != "amd64" {
 		return "", fmt.Errorf("codesphere installation is only supported on Linux amd64. Current platform: %s/%s", k.Goos, k.Goarch)
 	}
 
 	log.Printf("Downloading k0s version %s", version)
 
-	cacheDir, err := k.Env.GetOmsCacheDir()
-	if err != nil {
-		return "", fmt.Errorf("failed to determine cache directory: %w", err)
-	}
-
-	if err := k.FileWriter.MkdirAll(cacheDir, 0755); err != nil {
-		return "", fmt.Errorf("failed to create workdir: %w", err)
-	}
-
-	cachePath := filepath.Join(cacheDir, "k0s")
-	if k.FileWriter.Exists(cachePath) && !force {
-		cachedVersion, versionErr := localBinaryVersion(cachePath)
-		if versionErr == nil && cachedVersion == version {
-			io.Verbosef(!quiet, "Using cached k0s %s at %s", version, cachePath)
-			return cachePath, nil
-		}
-
-		replaceReason := fmt.Sprintf("Cached k0s version %s does not match requested version %s; replacing it", cachedVersion, version)
-		if versionErr != nil {
-			replaceReason = "Cached k0s version could not be determined: " + versionErr.Error()
-		}
-
-		io.Verbosef(!quiet, "Replacing existing k0s binary: %s", replaceReason)
-	}
-
-	downloadURL := fmt.Sprintf("https://github.com/k0sproject/k0s/releases/download/%s/k0s-%s-%s", version, version, k.Goarch)
-
-	path, err := downloadBinaryToPath(k.FileWriter, k.Http, cachePath, "k0s", downloadURL, quiet)
+	cacheDir, err := ensureCacheDir(k.FileWriter, k.Env)
 	if err != nil {
 		return "", err
 	}
 
-	log.Printf("k0s binary downloaded and made executable at '%s'", path)
+	cachePath := filepath.Join(cacheDir, k0sBinaryName)
+	if reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts) {
+		return cachePath, nil
+	}
 
-	return path, nil
+	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
+	downloadURL := releaseAssetURL(k0sReleaseURL, version, assetName)
+
+	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {
+		return "", err
+	}
+
+	log.Printf("k0s binary downloaded and made executable at '%s'", cachePath)
+
+	return cachePath, nil
 }

@@ -6,6 +6,7 @@ package gcp
 import (
 	"errors"
 	"fmt"
+	"log"
 	"reflect"
 	"slices"
 
@@ -67,6 +68,7 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 
 		dc.ExistingConfigUsed = true
 		dc.InstallConfig = dc.ConfigManager.GetInstallConfig()
+		warnOnReusedInstallConfig(dc.InstallConfigPath, dc.InstallConfig)
 	} else if dc.IsPrimary() {
 		err := dc.ConfigManager.ApplyProfile("minimal")
 		if err != nil {
@@ -79,6 +81,32 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 	// seedSecondaryDataCenter can derive it from the primary data center instead of the profile.
 
 	return nil
+}
+
+// warnOnReusedInstallConfig warns when a reused install config lacks the noRequests resource
+// overrides that the minimal profile adds to new configs. On a small cluster its own request
+// settings can over-commit CPU and leave core services such as OpenFGA unschedulable.
+func warnOnReusedInstallConfig(path string, config *files.RootConfig) {
+	if hasNoRequestsResourceProfile(config) {
+		return
+	}
+
+	log.Printf("Warning: %q has no CPU/memory request overrides (noRequests resource profile). On small "+
+		"clusters this can leave core services unschedulable. Regenerate it with "+
+		"`oms init install-config --profile minimal`, or remove the file so the bootstrap creates one.", path)
+}
+
+// hasNoRequestsResourceProfile reports whether the config carries the minimal/dev profile's
+// noRequests overrides, which are written as codesphere.override.global.underprovisionFactors.
+func hasNoRequestsResourceProfile(config *files.RootConfig) bool {
+	if config == nil {
+		return false
+	}
+
+	global, _ := config.Codesphere.Override["global"].(map[string]any)
+	_, ok := global["underprovisionFactors"]
+
+	return ok
 }
 
 func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *datacenter.DataCenter) error {
