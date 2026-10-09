@@ -613,7 +613,7 @@ type ManagedServiceConfig struct {
 	IconURL            string                   `yaml:"iconUrl,omitempty"`
 	ResourceParameters map[string]ResourceParam `yaml:"resourceParameters,omitempty"`
 	Plans              []ServicePlan            `yaml:"plans,omitempty"`
-	Version            string                   `yaml:"version"`
+	SchemaVersion      string                   `yaml:"schemaVersion"`
 }
 
 type ManagedServiceAPI struct {

@@ -45,6 +45,13 @@ docs:
 	cp docs/oms.md docs/README.md
 	cp hack/gendocs/static/*.md docs/
 
+DOCS_OUTPUT ?= docs-docusaurus
+DOCS_VERSION ?= development
+.PHONY: docs-docusaurus
+docs-docusaurus:
+	rm -rf "$(DOCS_OUTPUT)"
+	go run -ldflags="-X 'github.com/codesphere-cloud/oms/internal/version.binName=oms'" hack/gendocs/main.go --docusaurus --output "$(DOCS_OUTPUT)" --version "$(DOCS_VERSION)"
+
 generate-license: generate
 	go tool go-licenses report --template .NOTICE.template ./... > NOTICE
 	copywrite headers apply

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -33,6 +34,9 @@ const InstallerArchiveName = "installer-lite.tar.gz"
 // that data center's first control plane node. Data centers have separate nodes, so the path can
 // be the same for all of them.
 const remoteK0sConfigScriptPath = "/root/configure-k0s.sh"
+
+// remotePCAppsValuesDir is where the --pc-apps-values files are copied to on the jumpbox.
+const remotePCAppsValuesDir = "/root/pc-apps-values"
 
 // installerNodeSecretsDir is where the Codesphere installer uploads a data center's age key on
 // every one of that data center's nodes. The path is fixed even though the installer reads the key
@@ -103,6 +107,11 @@ func (b *GCPBootstrapper) primaryDC() *datacenter.DataCenter {
 	return b.Env.DataCenters[0]
 }
 
+// secondaryDCs returns every data center apart from the primary one.
+func (b *GCPBootstrapper) secondaryDCs() []*datacenter.DataCenter {
+	return b.Env.DataCenters[1:]
+}
+
 // allNodes returns every node of the project: the jumpbox, the shared postgres node and all
 // data centers' Ceph and k0s nodes.
 func (b *GCPBootstrapper) allNodes() []*node.Node {
@@ -137,11 +146,12 @@ type CodesphereEnvironment struct {
 	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
 	// those instead of recomputing the list.
 	DNSRecords []DNSRecordName `json:"dns_records,omitempty"`
-	// ControlPlaneNodes and CephNodes are where the primary data center's nodes lived before
-	// multi-DC support. The steps that have not been migrated to DataCenters yet still use
-	// them, and infra files written by an earlier OMS carry the nodes here.
-	ControlPlaneNodes []*node.Node `json:"control_plane_nodes"`
-	CephNodes         []*node.Node `json:"ceph_nodes"`
+	// ControlPlaneNodes, CephNodes, GatewayIP, PublicGatewayIP and SSHProxyIP are where the
+	// primary data center's nodes and addresses lived before multi-DC support. Nothing writes
+	// them any more; they are only read, by ensureDataCenters, so an infra file written by an
+	// earlier OMS still yields a usable primary data center.
+	ControlPlaneNodes []*node.Node `json:"control_plane_nodes,omitempty"`
+	CephNodes         []*node.Node `json:"ceph_nodes,omitempty"`
 	// ContainerRegistryURL is the resolved registry server all data centers pull images from.
 	ContainerRegistryURL          string       `json:"container_registry_url,omitempty"`
 	RegistryUsername              string       `json:"-"`
@@ -153,13 +163,13 @@ type CodesphereEnvironment struct {
 	InstallSkipSteps              []string     `json:"install_skip_steps"`
 	Preemptible                   bool         `json:"preemptible"`
 	SpotVMs                       bool         `json:"spot_vms"`
-	Airgapped                     bool         `json:"airgapped"`
 	WriteConfig                   bool         `json:"-"`
 	RecoverConfig                 bool         `json:"-"`
-	GatewayIP                     string       `json:"gateway_ip"`
-	PublicGatewayIP               string       `json:"public_gateway_ip"`
-	SshProxyIP                    string       `json:"ssh_proxy_ip"`
+	GatewayIP                     string       `json:"gateway_ip,omitempty"`
+	PublicGatewayIP               string       `json:"public_gateway_ip,omitempty"`
+	SSHProxyIP                    string       `json:"ssh_proxy_ip,omitempty"`
 	RegistryType                  RegistryType `json:"registry_type"`
+	Airgapped                     bool         `json:"airgapped,omitempty"`
 	GitHubPAT                     string       `json:"-"`
 	GitHubAppName                 string       `json:"-"`
 	GitHubTeamOrg                 string       `json:"github_team_org"`
@@ -234,6 +244,9 @@ type CodesphereEnvironment struct {
 	RootDiskSize   int64  `json:"root_disk_size"`
 	// Local OMS binary copied to the jumpbox instead of installing a release.
 	RemoteOmsBinaryPath string `json:"-"`
+	// PCAppsValues are local pc-apps values files. They are copied to the jumpbox unchanged and
+	// passed to the install command in the given order, so later files win.
+	PCAppsValues []string `json:"-"`
 
 	// OpenFGA database backups. The bucket lives in the project and is removed
 	// together with the project on cleanup. Access key/secret are populated only
@@ -381,19 +394,41 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.WriteConfig {
-		err = b.stlog.Step("Update install config", b.UpdateInstallConfig)
+		err = b.writeDataCenterConfig(b.primaryDC())
 		if err != nil {
-			return fmt.Errorf("failed to update install config: %w", err)
+			return err
+		}
+	}
+
+	// Secondary data centers fall back to deriving their config and vault from the primary one,
+	// so this has to run after the primary's secrets were generated above.
+	for _, dc := range b.secondaryDCs() {
+		err = b.stlog.Step(dc.StepName("Ensure install config"), func() error {
+			return b.ensureInstallConfig(dc)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to ensure install config of data center %d: %w", dc.ID, err)
 		}
 
-		err = b.stlog.Step("Ensure age key", b.EnsureAgeKey)
+		err = b.stlog.Step(dc.StepName("Ensure secrets"), func() error {
+			return b.ensureSecrets(dc)
+		})
 		if err != nil {
-			return fmt.Errorf("failed to ensure age key: %w", err)
+			return fmt.Errorf("failed to ensure secrets of data center %d: %w", dc.ID, err)
 		}
 
-		err = b.stlog.Step("Encrypt vault", b.EncryptVault)
+		err = b.stlog.Step(dc.StepName("Derive config and vault"), func() error {
+			return b.seedSecondaryDataCenter(b.primaryDC(), dc)
+		})
 		if err != nil {
-			return fmt.Errorf("failed to encrypt vault: %w", err)
+			return fmt.Errorf("failed to derive data center %d: %w", dc.ID, err)
+		}
+
+		if b.Env.WriteConfig {
+			err = b.writeDataCenterConfig(dc)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -485,6 +520,12 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return fmt.Errorf("remote OMS binary not found at path: %s", b.Env.RemoteOmsBinaryPath)
 	}
 
+	for _, valuesFile := range b.Env.PCAppsValues {
+		if !b.fw.Exists(valuesFile) {
+			return fmt.Errorf("pc-apps values file not found at path: %s", valuesFile)
+		}
+	}
+
 	err := b.validateInstallVersion()
 	if err != nil {
 		return err
@@ -530,7 +571,48 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
+	err = b.validateMultiDC()
+	if err != nil {
+		return err
+	}
+
 	return b.validateTelemetryExportParams()
+}
+
+// validateMultiDC rejects flag combinations a multi-data-center bootstrap cannot satisfy.
+func (b *GCPBootstrapper) validateMultiDC() error {
+	if !b.Env.MultiDC {
+		return nil
+	}
+
+	// A secondary data center's config and vault are derived from the primary's, which only
+	// happens when configs are written.
+	if !b.Env.WriteConfig {
+		return fmt.Errorf("multi-dc requires write-config to be enabled")
+	}
+
+	// The data center IDs are derived (1 and 2) and drive the workspace hosting domains.
+	if b.Env.DatacenterIDExplicit {
+		return fmt.Errorf("datacenter-id cannot be combined with multi-dc, the IDs are derived")
+	}
+
+	// The k0s cluster is named codesphere-<datacenter name>, so both names must be set and
+	// distinct. BuildDataCenters derives the second one by suffixing the first.
+	if b.Env.DatacenterName == "" {
+		return fmt.Errorf("datacenter-name is required with multi-dc")
+	}
+
+	// Every data center gets its own local config and vault, derived by suffixing these paths.
+	for name, path := range map[string]string{
+		"install-config": b.Env.InstallConfigPath,
+		"secrets-file":   b.Env.SecretsFilePath,
+	} {
+		if path == "" {
+			return fmt.Errorf("cannot derive a per-data-center path: %s is empty", name)
+		}
+	}
+
+	return nil
 }
 
 func (b *GCPBootstrapper) validateClusterAdminEmail() error {
@@ -798,8 +880,6 @@ func (b *GCPBootstrapper) EnsureGatewayIPAddresses() error {
 		}
 	}
 
-	b.mirrorPrimaryDataCenter()
-
 	return nil
 }
 
@@ -1012,6 +1092,10 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 		return fmt.Errorf("failed to ensure Codesphere package on jumpbox: %w", err)
 	}
 
+	if err := b.CopyPCAppsValuesToJumpbox(); err != nil {
+		return err
+	}
+
 	packageFilename := b.codespherePackageFilename()
 
 	if b.Env.RegistryType == RegistryTypeLocalContainer {
@@ -1075,26 +1159,6 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 	return nil
 }
 
-// mirrorPackageToLocalRegistry copies the container images and Helm charts the installer package
-// references from their upstream registry into the registry running on the jumpbox. The lite
-// package ships no images of its own, so the local registry is empty until they are mirrored and
-// the installation would have nothing to pull from.
-func (b *GCPBootstrapper) mirrorPackageToLocalRegistry(packageFilename string) error {
-	registryServer := b.Env.ContainerRegistryURL
-	if registryServer == "" {
-		return errors.New("local container registry has no server address")
-	}
-
-	b.stlog.Logf("Copying package artifacts to %s, this takes several minutes...", registryServer)
-
-	copyCmd := fmt.Sprintf("oms copy package -p %s --dest %s --yes", packageFilename, registryServer)
-	if err := b.Env.Jumpbox.RunSSHCommand("root", copyCmd); err != nil {
-		return fmt.Errorf("failed to copy package artifacts from the jumpbox: %w", err)
-	}
-
-	return nil
-}
-
 func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFilename string) error {
 	b.stlog.Logf("Installing Codesphere in data center %d...", dc.ID)
 
@@ -1108,9 +1172,40 @@ func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFi
 // InstallCommand returns the command that installs Codesphere into the given data center from
 // the jumpbox. It is also printed for the operator when the bootstrap does not install itself.
 func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilename string) string {
-	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s%s",
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s%s%s",
 		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename,
-		b.generateRegistryTrustArg(), b.generateSkipStepsArg())
+		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg())
+}
+
+// remotePCAppsValuesPath is where the i-th pc-apps values file is stored on the jumpbox. The index
+// keeps files with the same name apart.
+func remotePCAppsValuesPath(i int, localPath string) string {
+	return fmt.Sprintf("%s/%d-%s", remotePCAppsValuesDir, i, filepath.Base(localPath))
+}
+
+// CopyPCAppsValuesToJumpbox copies the pc-apps values files to the jumpbox unchanged, so the
+// install command can pass them on to the installer.
+func (b *GCPBootstrapper) CopyPCAppsValuesToJumpbox() error {
+	for i, valuesFile := range b.Env.PCAppsValues {
+		remotePath := remotePCAppsValuesPath(i, valuesFile)
+		b.stlog.Logf("Copying pc-apps values %s to jumpbox at %s...", valuesFile, remotePath)
+
+		err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, valuesFile, remotePath)
+		if err != nil {
+			return fmt.Errorf("failed to copy pc-apps values file %s to jumpbox: %w", valuesFile, err)
+		}
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) generatePCAppsValuesArg() string {
+	var arg strings.Builder
+	for i, valuesFile := range b.Env.PCAppsValues {
+		arg.WriteString(" --pc-apps-values " + remotePCAppsValuesPath(i, valuesFile))
+	}
+
+	return arg.String()
 }
 
 // generateRegistryTrustArg points the installation at the certificate authority of the local

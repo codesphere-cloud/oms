@@ -99,7 +99,6 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSZoneName, "dns-zone-name", "oms-testing", "Cloud DNS Zone Name (optional)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Preemptible, "preemptible", false, "Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.SpotVMs, "spot-vms", false, "Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. Mutually exclusive with --preemptible (default: false)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Airgapped, "airgapped", false, "Install k0s from the k0s airgap image bundle, so the cluster nodes pull no k0s images from the internet (default: false)")
 	flags.Int64Var(&bootstrapGcpCmd.CodesphereEnv.RootDiskSize, "root-disk-size", 50, "Instance root disk size in GB (default: 50)")
 
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
@@ -112,6 +111,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 
 	flags.IntVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterID, "datacenter-id", 1, "Datacenter ID (default: 1)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterName, "datacenter-name", "dev", "Datacenter name (default: dev)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.MultiDC, "multi-dc", false, "Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CustomPgIP, "custom-pg-ip", "", "Custom PostgreSQL IP (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Region, "region", "europe-west4", "GCP Region (default: europe-west4)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
@@ -119,9 +119,11 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (default: none)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "github", "Container registry type to use (options: local-container, artifact-registry, github) (default: github)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Airgapped, "airgapped", false, "Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Selects the local-container registry type and fails if another --registry-type is given. (default: false)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
 	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
@@ -198,9 +200,11 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return fmt.Errorf("failed to create gcp bootstrapper: %w", err)
 	}
 
-	c.CodesphereEnv.RegistryType = gcp.RegistryType(c.InputRegistryType)
+	c.CodesphereEnv.RegistryType = gcp.ResolveRegistryType(c.InputRegistryType, c.cmd.Flags().Changed("registry-type"), c.CodesphereEnv.Airgapped)
 
 	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
+	// The value alone cannot distinguish the default 1 from an explicit --datacenter-id=1.
+	c.CodesphereEnv.DatacenterIDExplicit = c.cmd.Flags().Changed("datacenter-id")
 
 	if c.cmd.Flags().Changed("experiments") {
 		if c.cmd.Flags().Changed("internal-flags") {
@@ -231,9 +235,14 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	if bs.Env.InstallVersion != "" {
 		log.Printf("Access Codesphere in your web browser at https://cs.%s", bs.Env.BaseDomain)
 
+		for _, dc := range bs.Env.DataCenters {
+			log.Printf("Data center %d hosts workspaces under %s", dc.ID, dc.WorkspaceHostingBaseDomain)
+		}
+
 		return nil
 	}
 
+	packageFile := "<package-name>-" + gcp.InstallerArchiveName
 	if gcp.RegistryType(bs.Env.RegistryType) == gcp.RegistryTypeGitHub {
 		log.Printf("Images are pulled directly from GHCR, so container images are not loaded from the package.")
 	}
@@ -243,11 +252,16 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 			gcp.InstallerArchiveName, bs.Env.ContainerRegistryURL)
 	}
 
-	// The command the bootstrapper would have run itself, so that an operator running it by hand
-	// gets the same one instead of a copy that drifts from it.
-	if len(bs.Env.DataCenters) > 0 {
-		log.Printf("example install command (run from jumpbox):\n%s",
-			bs.InstallCommand(bs.Env.DataCenters[0], "<package-name>-"+gcp.InstallerArchiveName))
+	// The commands the bootstrapper would have run itself, so that an operator running them by hand
+	// gets the same ones instead of copies that drift from them.
+	if len(bs.Env.DataCenters) > 1 {
+		log.Printf("example install commands (run from jumpbox). Run the data center 1 command to completion first — the other data centers share its database:")
+	} else {
+		log.Printf("example install command (run from jumpbox):")
+	}
+
+	for _, dc := range bs.Env.DataCenters {
+		log.Printf("# data center %d\n%s", dc.ID, bs.InstallCommand(dc, packageFile))
 	}
 
 	return nil

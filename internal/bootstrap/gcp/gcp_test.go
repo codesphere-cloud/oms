@@ -150,6 +150,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput pc-apps values", func() {
+		It("rejects a missing values file", func() {
+			csEnv.PCAppsValues = []string{"base.yaml"}
+			fw.EXPECT().Exists("base.yaml").Return(false)
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("pc-apps values file not found at path: base.yaml")))
+		})
+	})
+
 	Describe("ValidateInput registry params", func() {
 		It("rejects an unknown registry type", func() {
 			csEnv.RegistryType = "guthub"
@@ -165,6 +174,30 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		It("accepts the local container registry without GitHub credentials", func() {
 			Expect(bs.ValidateInput()).To(Succeed())
+		})
+
+		Context("when the installation is airgapped", func() {
+			BeforeEach(func() {
+				csEnv.Airgapped = true
+			})
+
+			It("accepts the local container registry", func() {
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("rejects the GitHub registry", func() {
+				csEnv.RegistryType = gcp.RegistryTypeGitHub
+				csEnv.GitHubPAT = "fake-pat"
+				csEnv.RegistryUser = "fake-registry-user"
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring(`airgapped installations require the local-container registry type, got "github"`)))
+			})
+
+			It("rejects the Artifact Registry", func() {
+				csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring(`airgapped installations require the local-container registry type, got "artifact-registry"`)))
+			})
 		})
 
 		// The PAT also grants GitHub team access, which needs no registry user.
@@ -364,8 +397,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// Verify nodes are properly set in the environment
 			Expect(bs.Env.Jumpbox).NotTo(BeNil())
 			Expect(bs.Env.PostgreSQLNode).NotTo(BeNil())
-			Expect(bs.Env.CephNodes).To(HaveLen(3))
-			Expect(bs.Env.ControlPlaneNodes).To(HaveLen(3))
+			primary := bs.Env.DataCenters[0]
+			Expect(primary.CephNodes).To(HaveLen(3))
+			Expect(primary.ControlPlaneNodes).To(HaveLen(3))
 
 			// Verify mock returns expected values
 			Expect(bs.Env.Jumpbox.GetName()).To(Equal("jumpbox"))
@@ -376,13 +410,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Expect(bs.Env.PostgreSQLNode.GetExternalIP()).To(Equal("1.2.3.4"))
 			Expect(bs.Env.PostgreSQLNode.GetInternalIP()).To(Equal("10.0.0.1"))
 
-			for _, cephNode := range bs.Env.CephNodes {
+			for _, cephNode := range primary.CephNodes {
 				Expect(cephNode.GetName()).To(MatchRegexp("ceph-\\d+"))
 				Expect(cephNode.GetExternalIP()).To(Equal("1.2.3.4"))
 				Expect(cephNode.GetInternalIP()).To(Equal("10.0.0.1"))
 			}
 
-			for _, cpNode := range bs.Env.ControlPlaneNodes {
+			for _, cpNode := range primary.ControlPlaneNodes {
 				Expect(cpNode.GetName()).To(MatchRegexp("k0s-\\d+"))
 				Expect(cpNode.GetExternalIP()).To(Equal("1.2.3.4"))
 				Expect(cpNode.GetInternalIP()).To(Equal("10.0.0.1"))
@@ -1388,9 +1422,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.EnsureGatewayIPAddresses()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(bs.Env.GatewayIP).To(Equal("1.1.1.1"))
-				Expect(bs.Env.PublicGatewayIP).To(Equal("2.2.2.2"))
-				Expect(bs.Env.SshProxyIP).To(Equal("3.3.3.3"))
+
+				primary := bs.Env.DataCenters[0]
+				Expect(primary.GatewayIP).To(Equal("1.1.1.1"))
+				Expect(primary.PublicGatewayIP).To(Equal("2.2.2.2"))
+				Expect(primary.SSHProxyIP).To(Equal("3.3.3.3"))
 			})
 		})
 
@@ -1874,6 +1910,29 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("copies the pc-apps values files to the jumpbox and passes them in order", func() {
+				csEnv.PCAppsValues = []string{"values/base.yaml", "overlay/base.yaml"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "values/base.yaml", "/root/pc-apps-values/0-base.yaml").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "overlay/base.yaml", "/root/pc-apps-values/1-base.yaml").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --pc-apps-values /root/pc-apps-values/0-base.yaml --pc-apps-values /root/pc-apps-values/1-base.yaml -s kubernetes").Return(nil)
+
+				err := bs.InstallCodesphere()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("fails when a pc-apps values file cannot be copied", func() {
+				csEnv.PCAppsValues = []string{"base.yaml"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, "base.yaml", "/root/pc-apps-values/0-base.yaml").Return(fmt.Errorf("copy error"))
+
+				err := bs.InstallCodesphere()
+				Expect(err).To(MatchError(ContainSubstring("failed to copy pc-apps values file base.yaml to jumpbox")))
 			})
 
 			It("preserves requested skip steps without duplicating kubernetes", func() {
