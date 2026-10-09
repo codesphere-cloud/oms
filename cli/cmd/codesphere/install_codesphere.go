@@ -95,7 +95,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	if dependenciesInstaller.HasExecutableSteps(cfg) || !installer.IsStepSkipped(cfg, c.Opts.SkipSteps, installer.ArgoCDStep) {
-		if err := installCodesphereDepencies(effectiveOpts, cfg, c.Env); err != nil {
+		if err := installCodesphereDepencies(laterPhaseOpts(effectiveOpts), cfg, c.Env); err != nil {
 			return err
 		}
 	}
@@ -104,7 +104,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	return installCodespherePlatform(ctx, effectiveOpts, cfg, c.Env)
+	return installCodespherePlatform(ctx, laterPhaseOpts(effectiveOpts), cfg, c.Env)
 }
 
 func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
@@ -175,6 +175,14 @@ func validateInstallCodesphereVault(opts *InstallCodesphereOpts) error {
 
 func sharedInstallCodesphereSteps() []string {
 	return []string{"copy-dependencies", "extract-dependencies"}
+}
+
+// laterPhaseOpts returns the options for the dependencies and platform phases of a full install,
+// which must not copy and extract the package again after the infrastructure phase did.
+func laterPhaseOpts(opts *InstallCodesphereOpts) *InstallCodesphereOpts {
+	later := *opts
+	later.SkipSteps = append(sharedInstallCodesphereSteps(), opts.SkipSteps...)
+	return &later
 }
 
 // prepareInstallConfig resolves the install command's repeated --config inputs
