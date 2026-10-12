@@ -87,10 +87,6 @@ func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string,
 	return false
 }
 
-func releaseAssetURL(releaseURL, version, assetName string) string {
-	return fmt.Sprintf("%s/%s/%s", releaseURL, version, assetName)
-}
-
 // downloadToPath downloads to a partial file next to path and moves it into place with
 // perm once complete, so an interrupted download never leaves a file at path.
 func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool, perm os.FileMode) (err error) {
