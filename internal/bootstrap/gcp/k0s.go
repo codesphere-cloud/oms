@@ -12,7 +12,7 @@ import (
 
 // EnsureK0s executed all steps to ensure a k0s cluster in gcp for every data center.
 // Only executing the config script needs to be done after installing codesphere, as crucial parts are still in the ts-installer.
-// Airgapped bootstraps cache the k0s airgap bundle on the jumpbox first.
+// Airgapped bootstraps download the airgap bundle and generate an airgap k0sctl config first.
 // Returns an error if k0s could not be ensured.
 func (b *GCPBootstrapper) EnsureK0s() error {
 	err := b.GenerateK0sConfigScript()
@@ -24,6 +24,11 @@ func (b *GCPBootstrapper) EnsureK0s() error {
 		err = b.stlog.Step("Download k0s airgap bundle", b.DownloadK0sAirgapBundle)
 		if err != nil {
 			return fmt.Errorf("failed to download k0s airgap bundle: %w", err)
+		}
+
+		err = b.GenerateK0sAirgapConfig()
+		if err != nil {
+			return err
 		}
 	}
 
@@ -209,6 +214,35 @@ func (b *GCPBootstrapper) DownloadK0sAirgapBundle() error {
 	downloadCmd := fmt.Sprintf("oms download k0s --version %s --airgapped", b.Env.K0sVersion)
 	if err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd); err != nil {
 		return fmt.Errorf("failed to download k0s airgap bundle on jumpbox: %w", err)
+	}
+
+	return nil
+}
+
+// GenerateK0sAirgapConfig generates every data center's airgap k0sctl config on the jumpbox from
+// the cached airgap bundle, without installing it yet.
+func (b *GCPBootstrapper) GenerateK0sAirgapConfig() error {
+	if err := b.ensureDataCenters(); err != nil {
+		return err
+	}
+
+	for _, dc := range b.Env.DataCenters {
+		err := b.stlog.Step(dc.StepName("Generate k0s airgap config"), func() error {
+			return b.generateK0sAirgapConfig(dc)
+		})
+		if err != nil {
+			return fmt.Errorf("failed to generate k0s airgap config (data center %d): %w", dc.ID, err)
+		}
+	}
+
+	return nil
+}
+
+func (b *GCPBootstrapper) generateK0sAirgapConfig(dc *datacenter.DataCenter) error {
+	generateCmd := fmt.Sprintf("oms install k0s --version %s --install-config %s --airgapped --config-only --k0sctl-config %s",
+		b.Env.K0sVersion, dc.RemoteConfigPath, dc.RemoteK0sctlConfigPath())
+	if err := b.Env.Jumpbox.RunSSHCommand("root", generateCmd); err != nil {
+		return fmt.Errorf("failed to generate k0s airgap config on jumpbox (data center %d): %w", dc.ID, err)
 	}
 
 	return nil
