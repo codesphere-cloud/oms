@@ -330,7 +330,7 @@ var _ = Describe("K0s", func() {
 		})
 	})
 
-	Describe("EnsureAirgapBundle", func() {
+	Describe("DownloadAirgapBundle", func() {
 		const (
 			legacyVersion = "v1.31.14+k0s.0"
 			modernVersion = "v1.36.3+k0s.2"
@@ -392,7 +392,7 @@ var _ = Describe("K0s", func() {
 				mockFileWriter.EXPECT().Exists(bundlePath(version)).Return(false)
 				expectAirgapDownload(version, assetName, nil, otherAssets...)
 
-				path, err := k0s.EnsureAirgapBundle(version, installer.DownloadOptions{})
+				path, err := k0s.DownloadAirgapBundle(version, installer.DownloadOptions{})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(path).To(Equal(bundlePath(version)))
 			},
@@ -407,7 +407,7 @@ var _ = Describe("K0s", func() {
 		It("reuses a cached bundle without contacting the release API", func() {
 			mockFileWriter.EXPECT().Exists(bundlePath(modernVersion)).Return(true)
 
-			path, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
+			path, err := k0s.DownloadAirgapBundle(modernVersion, installer.DownloadOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal(bundlePath(modernVersion)))
 		})
@@ -415,7 +415,7 @@ var _ = Describe("K0s", func() {
 		It("re-downloads a cached bundle when force is set", func() {
 			expectAirgapDownload(modernVersion, modernAsset, nil)
 
-			path, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{Force: true})
+			path, err := k0s.DownloadAirgapBundle(modernVersion, installer.DownloadOptions{Force: true})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal(bundlePath(modernVersion)))
 		})
@@ -424,7 +424,7 @@ var _ = Describe("K0s", func() {
 			mockFileWriter.EXPECT().Exists(bundlePath(modernVersion)).Return(false)
 			expectAirgapDownload(modernVersion, modernAsset, errors.New("connection reset"))
 
-			_, err := k0s.EnsureAirgapBundle(modernVersion, installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle(modernVersion, installer.DownloadOptions{})
 			Expect(err).To(MatchError(ContainSubstring("failed to download")))
 		})
 
@@ -433,7 +433,7 @@ var _ = Describe("K0s", func() {
 			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+legacyVersion).
 				Return(nil, errors.New("network error"))
 
-			_, err := k0s.EnsureAirgapBundle(legacyVersion, installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle(legacyVersion, installer.DownloadOptions{})
 			Expect(err).To(MatchError(ContainSubstring("failed to fetch k0s release")))
 		})
 
@@ -442,7 +442,7 @@ var _ = Describe("K0s", func() {
 			mockHttp.EXPECT().Get("https://api.github.com/repos/k0sproject/k0s/releases/tags/"+legacyVersion).
 				Return(releaseJSON("k0s-v1.31.14+k0s.0-amd64"), nil)
 
-			_, err := k0s.EnsureAirgapBundle(legacyVersion, installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle(legacyVersion, installer.DownloadOptions{})
 			Expect(err).To(MatchError(ContainSubstring("no airgap bundle for linux/amd64")))
 		})
 	})
@@ -456,7 +456,7 @@ var _ = Describe("K0s", func() {
 		It("fails when the cache directory cannot be determined", func() {
 			mockEnv.EXPECT().GetOmsCacheDir().Return("", errors.New("no cache dir"))
 
-			_, err := k0s.EnsureAirgapBundle("v1.31.14+k0s.0", installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle("v1.31.14+k0s.0", installer.DownloadOptions{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to determine cache directory"))
 		})
@@ -465,7 +465,7 @@ var _ = Describe("K0s", func() {
 			mockEnv.EXPECT().GetOmsCacheDir().Return(workDir, nil)
 			mockFileWriter.EXPECT().MkdirAll(workDir, os.FileMode(0755)).Return(errors.New("permission denied"))
 
-			_, err := k0s.EnsureAirgapBundle("v1.31.14+k0s.0", installer.DownloadOptions{})
+			_, err := k0s.DownloadAirgapBundle("v1.31.14+k0s.0", installer.DownloadOptions{})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to create cache directory"))
 		})

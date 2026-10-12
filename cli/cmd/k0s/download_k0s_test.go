@@ -86,7 +86,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 
 			opts := installer.DownloadOptions{Quiet: true}
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", opts).Return("/test/workdir/k0s", nil)
-			mockK0sManager.EXPECT().EnsureAirgapBundle("v1.29.1+k0s.0", opts).Return("/cache/k0s-airgap-bundle-amd64", nil)
+			mockK0sManager.EXPECT().DownloadAirgapBundle("v1.29.1+k0s.0", opts).Return("/cache/k0s-airgap-bundle-amd64", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).ToNot(HaveOccurred())
@@ -98,7 +98,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 
 			opts := installer.DownloadOptions{Quiet: true}
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", opts).Return("/test/workdir/k0s", nil)
-			mockK0sManager.EXPECT().EnsureAirgapBundle("v1.29.1+k0s.0", opts).Return("", errors.New("network error"))
+			mockK0sManager.EXPECT().DownloadAirgapBundle("v1.29.1+k0s.0", opts).Return("", errors.New("network error"))
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).To(HaveOccurred())

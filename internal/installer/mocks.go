@@ -1273,12 +1273,12 @@ func (_c *MockK0sManager_Download_Call) RunAndReturn(run func(version string, op
 	return _c
 }
 
-// EnsureAirgapBundle provides a mock function for the type MockK0sManager
-func (_mock *MockK0sManager) EnsureAirgapBundle(version string, opts DownloadOptions) (string, error) {
+// DownloadAirgapBundle provides a mock function for the type MockK0sManager
+func (_mock *MockK0sManager) DownloadAirgapBundle(version string, opts DownloadOptions) (string, error) {
 	ret := _mock.Called(version, opts)
 
 	if len(ret) == 0 {
-		panic("no return value specified for EnsureAirgapBundle")
+		panic("no return value specified for DownloadAirgapBundle")
 	}
 
 	var r0 string
@@ -1299,19 +1299,19 @@ func (_mock *MockK0sManager) EnsureAirgapBundle(version string, opts DownloadOpt
 	return r0, r1
 }
 
-// MockK0sManager_EnsureAirgapBundle_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EnsureAirgapBundle'
-type MockK0sManager_EnsureAirgapBundle_Call struct {
+// MockK0sManager_DownloadAirgapBundle_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DownloadAirgapBundle'
+type MockK0sManager_DownloadAirgapBundle_Call struct {
 	*mock.Call
 }
 
-// EnsureAirgapBundle is a helper method to define mock.On call
+// DownloadAirgapBundle is a helper method to define mock.On call
 //   - version string
 //   - opts DownloadOptions
-func (_e *MockK0sManager_Expecter) EnsureAirgapBundle(version any, opts any) *MockK0sManager_EnsureAirgapBundle_Call {
-	return &MockK0sManager_EnsureAirgapBundle_Call{Call: _e.mock.On("EnsureAirgapBundle", version, opts)}
+func (_e *MockK0sManager_Expecter) DownloadAirgapBundle(version any, opts any) *MockK0sManager_DownloadAirgapBundle_Call {
+	return &MockK0sManager_DownloadAirgapBundle_Call{Call: _e.mock.On("DownloadAirgapBundle", version, opts)}
 }
 
-func (_c *MockK0sManager_EnsureAirgapBundle_Call) Run(run func(version string, opts DownloadOptions)) *MockK0sManager_EnsureAirgapBundle_Call {
+func (_c *MockK0sManager_DownloadAirgapBundle_Call) Run(run func(version string, opts DownloadOptions)) *MockK0sManager_DownloadAirgapBundle_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -1329,12 +1329,12 @@ func (_c *MockK0sManager_EnsureAirgapBundle_Call) Run(run func(version string, o
 	return _c
 }
 
-func (_c *MockK0sManager_EnsureAirgapBundle_Call) Return(s string, err error) *MockK0sManager_EnsureAirgapBundle_Call {
+func (_c *MockK0sManager_DownloadAirgapBundle_Call) Return(s string, err error) *MockK0sManager_DownloadAirgapBundle_Call {
 	_c.Call.Return(s, err)
 	return _c
 }
 
-func (_c *MockK0sManager_EnsureAirgapBundle_Call) RunAndReturn(run func(version string, opts DownloadOptions) (string, error)) *MockK0sManager_EnsureAirgapBundle_Call {
+func (_c *MockK0sManager_DownloadAirgapBundle_Call) RunAndReturn(run func(version string, opts DownloadOptions) (string, error)) *MockK0sManager_DownloadAirgapBundle_Call {
 	_c.Call.Return(run)
 	return _c
 }
