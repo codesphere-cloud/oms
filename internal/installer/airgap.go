@@ -12,8 +12,14 @@ import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 )
 
-// AirgapBundleName is the name of target airgap-bundle for oms to download to
-const AirgapBundleName = "k0s-airgap-bundle"
+const (
+	// AirgapBundleName is the name of target airgap-bundle for oms to download to
+	AirgapBundleName = "k0s-airgap-bundle"
+
+	// AirgapImagesDir is the k0s data dir from which worker nodes import the
+	// images of an airgap bundle. Controllers that do not run a worker ignore it.
+	AirgapImagesDir = "/var/lib/k0s/images"
+)
 
 // DownloadAirgapBundle downloads the airgap image bundle of the given version to path,
 // unless a file already exists there, and returns its path. An empty path stores the

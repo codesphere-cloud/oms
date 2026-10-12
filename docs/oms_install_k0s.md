@@ -40,14 +40,27 @@ $ oms install k0s --force
 # Skip downloading k0s binary (expects it to be on remote nodes)
 $ oms install k0s --no-download
 
+# Install k0s without internet access using an airgap image bundle
+$ oms install k0s --airgapped
+
+# Install k0s airgapped from a local airgap image bundle
+$ oms install k0s --airgap-bundle <path>
+
+# Only generate the k0sctl config without installing k0s
+$ oms install k0s --install-config <path> --config-only --k0sctl-config <path>
+
 ```
 
 ### Options
 
 ```
+      --airgap-bundle string    Path to the k0s airgap image bundle to install from (implies --airgapped)
+      --airgapped               Install k0s without internet access by uploading the airgap image bundle to the workers
+      --config-only             Only generate the k0sctl config, without installing k0s
   -f, --force                   Force new download and installation
   -h, --help                    help for k0s
       --install-config string   Path to Codesphere install-config file (required)
+      --k0sctl-config string    Where to write the generated k0sctl config (requires --config-only)
       --k0sctl-version string   Version of k0sctl to use (default "v0.33.1")
       --no-download             Skip downloading k0s binary
   -p, --package string          Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
