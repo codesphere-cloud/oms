@@ -11,18 +11,18 @@ import (
 )
 
 // resolveK0sVersion returns the requested k0s version, or the latest version when
-// none was requested.
+// none was requested, and logs the version that is used.
 func resolveK0sVersion(k0s installer.K0sManager, version string) (string, error) {
-	if version != "" {
-		return version, nil
+	if version == "" {
+		latestVersion, err := k0s.GetLatestVersion()
+		if err != nil {
+			return "", fmt.Errorf("failed to get latest k0s version: %w", err)
+		}
+
+		version = latestVersion
 	}
 
-	latestVersion, err := k0s.GetLatestVersion()
-	if err != nil {
-		return "", fmt.Errorf("failed to get latest k0s version: %w", err)
-	}
+	log.Printf("Using k0s version %s", version)
 
-	log.Printf("Using latest k0s version: %s", latestVersion)
-
-	return latestVersion, nil
+	return version, nil
 }

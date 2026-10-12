@@ -83,7 +83,7 @@ func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
 	log.Printf("k0s binary downloaded successfully to '%s'", k0sPath)
 
 	if c.Opts.Airgap {
-		bundlePath, err := k0s.EnsureAirgapBundle(version, opts)
+		bundlePath, err := k0s.DownloadAirgapBundle(version, opts)
 		if err != nil {
 			return fmt.Errorf("failed to download k0s airgap bundle: %w", err)
 		}
