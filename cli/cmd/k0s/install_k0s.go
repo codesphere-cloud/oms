@@ -248,7 +248,7 @@ func (c *InstallK0sCmd) getAirgapBundlePath(k0s installer.K0sManager, k0sVersion
 		return c.Opts.AirgapBundlePath, nil
 	}
 
-	bundlePath, err := k0s.EnsureAirgapBundle(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
+	bundlePath, err := k0s.DownloadAirgapBundle(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s airgap bundle: %w", err)
 	}
