@@ -151,6 +151,8 @@ var _ = Describe("K0s", func() {
 				Expect(err).ToNot(HaveOccurred())
 				defer util.CloseFileIgnoreError(realFile)
 
+				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
+
 				mockFileWriter.EXPECT().Create(k0sPath + ".partial").Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath+".partial", os.FileMode(0755)).Return(nil)
@@ -194,6 +196,8 @@ var _ = Describe("K0s", func() {
 
 				defer util.CloseFileIgnoreError(realFile)
 
+				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
+
 				mockFileWriter.EXPECT().Create(k0sPath + ".partial").Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath+".partial", os.FileMode(0755)).Return(nil)
@@ -216,6 +220,8 @@ var _ = Describe("K0s", func() {
 				Expect(err).ToNot(HaveOccurred())
 				defer util.CloseFileIgnoreError(realFile)
 
+				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
+
 				mockFileWriter.EXPECT().Create(k0sPath + ".partial").Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
 				mockFileWriter.EXPECT().Chmod(k0sPath+".partial", os.FileMode(0755)).Return(nil)
@@ -237,7 +243,7 @@ var _ = Describe("K0s", func() {
 			})
 
 			It("should fail when file creation fails", func() {
-				mockFileWriter.EXPECT().Create(k0sPath + ".partial").Return(nil, errors.New("permission denied"))
+				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), "k0s.*.partial").Return("", errors.New("permission denied"))
 
 				_, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{})
 				Expect(err).To(HaveOccurred())
@@ -253,6 +259,8 @@ var _ = Describe("K0s", func() {
 					_ = os.Remove(mockFile.Name())
 				}()
 				defer util.CloseFileIgnoreError(mockFile)
+
+				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
 
 				mockFileWriter.EXPECT().Create(k0sPath + ".partial").Return(mockFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", mockFile, false).Return(errors.New("download failed"))
@@ -273,6 +281,8 @@ var _ = Describe("K0s", func() {
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
 				defer util.CloseFileIgnoreError(realFile)
+
+				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
 
 				mockFileWriter.EXPECT().Create(k0sPath + ".partial").Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
@@ -305,6 +315,8 @@ var _ = Describe("K0s", func() {
 				realFile, err := os.Create(k0sPath)
 				Expect(err).ToNot(HaveOccurred())
 				defer util.CloseFileIgnoreError(realFile)
+
+				mockFileWriter.EXPECT().CreateTemp(filepath.Dir(k0sPath), filepath.Base(k0sPath)+".*.partial").Return(k0sPath+".partial", nil)
 
 				mockFileWriter.EXPECT().Create(k0sPath + ".partial").Return(realFile, nil)
 				mockHttp.EXPECT().Download("https://github.com/k0sproject/k0s/releases/download/v1.29.1+k0s.0/k0s-v1.29.1+k0s.0-amd64", realFile, false).Return(nil)
@@ -349,6 +361,8 @@ var _ = Describe("K0s", func() {
 
 			// The file is closed by the code under test; this only covers early failures.
 			DeferCleanup(util.CloseFileIgnoreError, realFile)
+
+			mockFileWriter.EXPECT().CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.partial").Return(path+".partial", nil)
 
 			mockFileWriter.EXPECT().Create(path + ".partial").Return(realFile, nil)
 			mockHttp.EXPECT().Download(
