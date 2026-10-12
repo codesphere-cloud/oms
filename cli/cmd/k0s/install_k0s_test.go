@@ -213,10 +213,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.InstallConfig = writeTestConfig(config)
 			c.Opts.Version = "v1.30.0+k0s.0"
 			c.Opts.Airgap = true
-			c.Opts.AirgapBundlePath = filepath.Join(tempDir, "k0s-airgap-bundle-amd64")
-
-			err := os.WriteFile(c.Opts.AirgapBundlePath, []byte("bundle"), 0644)
-			Expect(err).NotTo(HaveOccurred())
+			c.Opts.AirgapBundlePath = "/cache/k0s-airgap-bundle-amd64"
 
 			setupWorkdirMocks()
 			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
@@ -234,7 +231,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
-			err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -280,9 +277,8 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err).To(MatchError(ContainSubstring("--no-download cannot be combined with --airgapped")))
 		})
 
-		It("fails without install-config unless an existing k0sctl config is installed", func() {
-			c.Opts.ConfigOnly = true
-			c.Opts.K0sctlConfig = filepath.Join(tempDir, "k0sctl.yaml")
+		It("fails without install-config when only writing the k0sctl config", func() {
+			c.Opts.WriteK0sctlConfig = filepath.Join(tempDir, "k0sctl.yaml")
 
 			setupWorkdirMocks()
 
@@ -290,12 +286,11 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err).To(MatchError(ContainSubstring("--install-config is required")))
 		})
 
-		It("only generates the airgap k0sctl config with --config-only", func() {
+		It("only generates the airgap k0sctl config with --write-k0sctl-config", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Version = "v1.30.0+k0s.0"
 			c.Opts.Airgap = true
-			c.Opts.ConfigOnly = true
-			c.Opts.K0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
+			c.Opts.WriteK0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
 
 			setupWorkdirMocks()
 			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)

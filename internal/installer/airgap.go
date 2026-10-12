@@ -42,7 +42,7 @@ func (k *K0s) EnsureAirgapBundle(version string, opts DownloadOptions) (string, 
 		return "", err
 	}
 
-	downloadURL := releaseAssetURL(k0sReleaseURL, version, assetName)
+	downloadURL := fmt.Sprintf("%s/%s/%s", k0sReleaseURL, version, assetName)
 	io.Verbosef(!opts.Quiet, "Downloading k0s airgap bundle from %s", downloadURL)
 
 	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0644); err != nil {
