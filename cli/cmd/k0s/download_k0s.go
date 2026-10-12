@@ -60,7 +60,7 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", "", "Version of k0s to download")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force download even if k0s binary exists")
-	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Airgap, "airgapped", "a", false, "Downloads the airgapped bundle for that version")
+	k0s.cmd.Flags().BoolVar(&k0s.Opts.Airgap, "airgapped", false, "Also download the airgap image bundle for that version")
 
 	util.AddCmd(download, k0s.cmd)
 
@@ -80,6 +80,8 @@ func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
 		return fmt.Errorf("failed to download k0s: %w", err)
 	}
 
+	log.Printf("k0s binary downloaded successfully to '%s'", k0sPath)
+
 	if c.Opts.Airgap {
 		bundlePath, err := k0s.EnsureAirgapBundle(version, opts)
 		if err != nil {
@@ -88,8 +90,6 @@ func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
 
 		log.Printf("k0s airgap bundle downloaded to '%s'", bundlePath)
 	}
-
-	log.Printf("k0s binary downloaded successfully to '%s'", k0sPath)
 
 	return nil
 }
