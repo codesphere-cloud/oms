@@ -2061,6 +2061,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 			err := bs.InstallK0s()
 			Expect(err).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
 		})
+
+		It("installs the generated airgap k0sctl config when airgapped", func() {
+			csEnv.Airgapped = true
+
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms install k0s --k0sctl-config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
+
+			err := bs.InstallK0s()
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 
 	Describe("DownloadK0sAirgapBundle", func() {

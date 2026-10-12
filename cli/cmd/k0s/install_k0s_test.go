@@ -280,7 +280,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err).To(MatchError(ContainSubstring("--no-download cannot be combined with --airgapped")))
 		})
 
-		It("fails without install-config when only generating the k0sctl config", func() {
+		It("fails without install-config unless an existing k0sctl config is installed", func() {
 			c.Opts.ConfigOnly = true
 			c.Opts.K0sctlConfig = filepath.Join(tempDir, "k0sctl.yaml")
 
@@ -312,14 +312,25 @@ var _ = Describe("InstallK0sCmd", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("fails when --k0sctl-config is given without --config-only", func() {
-			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
+		It("installs an existing k0sctl config without generating one", func() {
 			c.Opts.K0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
+
+			setupWorkdirMocks()
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Apply("/etc/codesphere/k0sctl-config.yaml", "/tmp/k0sctl", false).Return(nil)
+
+			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("fails when an existing k0sctl config is combined with generation flags", func() {
+			c.Opts.K0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
+			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 
 			setupWorkdirMocks()
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
-			Expect(err).To(MatchError(ContainSubstring("--k0sctl-config requires --config-only")))
+			Expect(err).To(MatchError(ContainSubstring("cannot be combined with --install-config")))
 		})
 
 		It("takes the k0s binary from the package but still ensures the airgap bundle", func() {
