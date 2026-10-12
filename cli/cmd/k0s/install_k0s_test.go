@@ -137,11 +137,15 @@ var _ = Describe("InstallK0sCmd", func() {
 			return configPath
 		}
 
+		setupWorkdirMocks := func() {
+			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
+			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+		}
+
 		It("fails when install-config file does not exist", func() {
 			c.Opts.InstallConfig = "/nonexistent/install-config.yaml"
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
@@ -151,8 +155,7 @@ var _ = Describe("InstallK0sCmd", func() {
 		It("fails when install-config specifies external Kubernetes", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(false))
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
@@ -165,11 +168,10 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Version = "v1.30.0+k0s.0"
 			c.Opts.Force = true
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", true, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", true, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{Force: true}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", true).Return(nil)
 
@@ -182,10 +184,9 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Package = ""
 			c.Opts.Version = "v1.29.0+k0s.0"
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
-			mockK0s.EXPECT().Download("v1.29.0+k0s.0", false, false).Return("/downloaded/k0s", nil)
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			setupWorkdirMocks()
+			mockK0s.EXPECT().Download("v1.29.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 
@@ -197,10 +198,9 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.InstallConfig = writeTestConfig(createTestConfig(true))
 			c.Opts.Package = ""
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
 			mockK0s.EXPECT().GetLatestVersion().Return("v1.30.0+k0s.0", nil)
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", false, false).Return("", os.ErrNotExist)
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("", os.ErrNotExist)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
@@ -212,11 +212,10 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Package = "test-package.tar.gz"
 			c.Opts.Version = "v1.30.0+k0s.0"
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", false, false).Return("", os.ErrPermission)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("", os.ErrPermission)
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
@@ -228,11 +227,10 @@ var _ = Describe("InstallK0sCmd", func() {
 			c.Opts.Package = "test-package.tar.gz"
 			c.Opts.Version = "v1.30.0+k0s.0"
 
-			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
-			mockFileWriter.EXPECT().MkdirAll(tempDir, os.FileMode(0755)).Return(nil)
+			setupWorkdirMocks()
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(os.ErrPermission)
 
@@ -245,7 +243,7 @@ var _ = Describe("InstallK0sCmd", func() {
 			mockEnv.EXPECT().GetOmsWorkdir().Return(tempDir)
 			mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 			mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-			mockK0sctl.EXPECT().Download("", false, false).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
 			mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 		}
 
@@ -595,7 +593,8 @@ var _ = Describe("InstallK0sCmd", func() {
 				c.Opts.Vault = vaultPath
 				c.Opts.VaultPrivKey = ageKeyPath
 
-				// Use mockFileWriter to simulate an I/O error during encryption.
+				// The vault itself is written through the real filesystem, so the
+				// failure is provoked on the filesystem instead of via the mock.
 				c.FileWriter = mockFileWriter
 
 				setupCommonMocks()
@@ -607,28 +606,21 @@ var _ = Describe("InstallK0sCmd", func() {
 				}), mock.Anything, mock.Anything).Return(nil)
 				mockK0sctl.EXPECT().Apply(mock.Anything, "/tmp/k0sctl", false).Return(nil)
 				mockK0sctl.EXPECT().GetKubeconfig(mock.Anything, "/tmp/k0sctl").Return("apiVersion: v1\nkind: Config\n", nil)
-				mockFileWriter.EXPECT().MkdirAll(mock.Anything, os.FileMode(0755)).Return(nil)
 
-				// Vault exists and is encrypted.
-				mockFileWriter.EXPECT().Exists(vaultPath).Return(true)
-
-				// Simulate encryption failure: writing the temporary vault file fails.
-				mockFileWriter.EXPECT().WriteFile(vaultPath+".tmp", mock.Anything, os.FileMode(0600)).
-					Return(os.ErrPermission)
+				// Make the vault directory unwritable so the SOPS backend cannot create
+				// its temporary files while the existing vault file stays readable.
+				Expect(os.Chmod(tempDir, 0500)).To(Succeed())
+				DeferCleanup(func() { _ = os.Chmod(tempDir, 0755) })
 
 				err = c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to write temporary vault file"))
+				Expect(err.Error()).To(ContainSubstring("failed to create temporary plaintext vault"))
 
 				// Verify the vault file is unchanged.
 				currentData, err := os.ReadFile(vaultPath)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(string(currentData)).To(Equal(string(origData)),
 					"vault should be untouched when encryption fails")
-
-				// Verify no tmp file is left behind.
-				tmpPath := vaultPath + ".tmp"
-				Expect(tmpPath).NotTo(BeAnExistingFile())
 			})
 		})
 	})
