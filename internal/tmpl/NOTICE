@@ -299,9 +299,9 @@ License URL: https://github.com/cloudnative-pg/machinery/blob/v0.5.0/LICENSE
  
 ----------
 Module: github.com/codesphere-cloud/cs-go
-Version: v1.54.0
+Version: v1.55.0
 License: Apache-2.0
-License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.54.0/LICENSE
+License URL: https://github.com/codesphere-cloud/cs-go/blob/v1.55.0/LICENSE
    
 ----------
 Module: github.com/codesphere-cloud/oms/internal/tmpl
@@ -1549,37 +1549,37 @@ License URL: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.12/LICENS
 Module: gopkg.in/evanphx/json-patch.v4
 Version: v4.13.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://github.com/evanphx/json-patch/blob/v4.13.0/LICENSE
  
 ----------
 Module: gopkg.in/inf.v0
 Version: v0.9.1
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://github.com/go-inf/inf/blob/v0.9.1/LICENSE
  
 ----------
 Module: gopkg.in/validator.v2
 Version: v2.0.1
 License: Apache-2.0
-License URL: Unknown
+License URL: https://github.com/go-validator/validator/blob/v2.0.1/LICENSE
  
 ----------
 Module: gopkg.in/warnings.v0
 Version: v0.1.2
 License: BSD-2-Clause
-License URL: Unknown
+License URL: https://github.com/go-warnings/warnings/blob/v0.1.2/LICENSE
  
 ----------
 Module: gopkg.in/yaml.v2
 Version: v2.4.0
 License: Apache-2.0
-License URL: Unknown
+License URL: https://github.com/go-yaml/yaml/blob/v2.4.0/LICENSE
  
 ----------
 Module: gopkg.in/yaml.v3
 Version: v3.0.1
 License: MIT
-License URL: Unknown
+License URL: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
  
 ----------
 Module: helm.sh/helm/v4
