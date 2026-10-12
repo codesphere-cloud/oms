@@ -26,3 +26,14 @@ var _ = Describe("SuffixedPath", func() {
 		Entry("absolute path", "/etc/codesphere/config.yaml", "-dc2", "/etc/codesphere/config-dc2.yaml"),
 	)
 })
+
+var _ = Describe("RemoteK0sctlConfigPath", func() {
+	DescribeTable("places the k0sctl config next to the install config",
+		func(remoteConfigPath, suffix, expected string) {
+			dc := &datacenter.DataCenter{RemoteConfigPath: remoteConfigPath, Suffix: suffix}
+			Expect(dc.RemoteK0sctlConfigPath()).To(Equal(expected))
+		},
+		Entry("primary", "/etc/codesphere/config.yaml", "", "/etc/codesphere/k0sctl-config.yaml"),
+		Entry("secondary", "/etc/codesphere/config-dc2.yaml", "-dc2", "/etc/codesphere/k0sctl-config-dc2.yaml"),
+	)
+})
