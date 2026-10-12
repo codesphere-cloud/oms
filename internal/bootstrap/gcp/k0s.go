@@ -12,7 +12,8 @@ import (
 
 // EnsureK0s executed all steps to ensure a k0s cluster in gcp for every data center.
 // Only executing the config script needs to be done after installing codesphere, as crucial parts are still in the ts-installer.
-// Airgapped bootstraps download the airgap bundle and generate an airgap k0sctl config first.
+// Airgapped bootstraps download the airgap bundle and generate an airgap k0sctl config first,
+// which InstallK0s then installs.
 // Returns an error if k0s could not be ensured.
 func (b *GCPBootstrapper) EnsureK0s() error {
 	err := b.GenerateK0sConfigScript()
@@ -250,7 +251,8 @@ func (b *GCPBootstrapper) generateK0sAirgapConfig(dc *datacenter.DataCenter) err
 
 // InstallK0s deploys k0s into every data center with the native OMS installer. Each data center
 // gets its own cluster, so every run stores its kubeconfig in that data center's encrypted
-// install vault for the remaining installer steps.
+// install vault for the remaining installer steps. Airgapped bootstraps install the k0sctl config
+// that GenerateK0sAirgapConfig generated.
 func (b *GCPBootstrapper) InstallK0s() error {
 	if err := b.ensureDataCenters(); err != nil {
 		return err
@@ -271,8 +273,13 @@ func (b *GCPBootstrapper) InstallK0s() error {
 func (b *GCPBootstrapper) installK0s(dc *datacenter.DataCenter) error {
 	// Reuse matching cached binaries and let k0sctl reconcile normally. Without
 	// --force, an unchanged cluster remains untouched on bootstrap retries.
-	installCmd := fmt.Sprintf("oms install k0s --version %s --install-config %s --vault %s --vault-priv-key %s",
-		b.Env.K0sVersion, dc.RemoteConfigPath, dc.RemoteVaultPath(), dc.RemoteAgeKeyPath())
+	configFlags := fmt.Sprintf("--version %s --install-config %s", b.Env.K0sVersion, dc.RemoteConfigPath)
+	if b.Env.Airgapped {
+		configFlags = "--k0sctl-config " + dc.RemoteK0sctlConfigPath()
+	}
+
+	installCmd := fmt.Sprintf("oms install k0s %s --vault %s --vault-priv-key %s",
+		configFlags, dc.RemoteVaultPath(), dc.RemoteAgeKeyPath())
 	if err := b.Env.Jumpbox.RunSSHCommand("root", installCmd); err != nil {
 		return fmt.Errorf("failed to install k0s from jumpbox (data center %d): %w", dc.ID, err)
 	}
