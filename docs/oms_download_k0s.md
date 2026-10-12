@@ -31,7 +31,7 @@ $ oms download k0s --airgapped
 ### Options
 
 ```
-  -a, --airgapped        Downloads the airgapped bundle for that version
+      --airgapped        Also download the airgap image bundle for that version
   -f, --force            Force download even if k0s binary exists
   -h, --help             help for k0s
   -v, --version string   Version of k0s to download
