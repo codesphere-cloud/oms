@@ -30,6 +30,7 @@ oms create test-user [flags]
       --postgres-password string   PostgreSQL password (required)
       --postgres-port int          PostgreSQL port (default 5432)
       --postgres-user string       PostgreSQL username (default "postgres")
+      --seed-authz                 Queue the OpenFGA membership tuple for the created team (required when the installation enforces openfga-authz)
       --ssl-mode string            PostgreSQL SSL mode (default "disable")
 ```
 
