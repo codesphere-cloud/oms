@@ -15,10 +15,10 @@ import (
 // AirgapBundleName is the name of target airgap-bundle for oms to download to
 const AirgapBundleName = "k0s-airgap-bundle"
 
-// EnsureAirgapBundle makes sure the airgap image bundle of the given version is
-// available in the OMS cache dir and returns its path. The bundle is cached under a
-// fixed name, so a cached bundle is found without contacting the release API.
-func (k *K0s) EnsureAirgapBundle(version string, opts DownloadOptions) (string, error) {
+// DownloadAirgapBundle downloads the airgap image bundle of the given version into the
+// OMS cache dir, unless it is already cached, and returns its path. The bundle is cached
+// under a fixed name, so a cached bundle is found without contacting the release API.
+func (k *K0s) DownloadAirgapBundle(version string, opts DownloadOptions) (string, error) {
 	cacheDir, err := ensureCacheDir(k.FileWriter, k.Env)
 	if err != nil {
 		return "", err
