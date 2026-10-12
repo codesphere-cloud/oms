@@ -2063,6 +2063,19 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("DownloadK0sAirgapBundle", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+		})
+
+		It("caches the k0s binary and airgap bundle on the jumpbox", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms download k0s --version v1.31.14+k0s.0 --airgapped").Return(nil)
+
+			Expect(bs.DownloadK0sAirgapBundle()).To(Succeed())
+		})
+	})
+
 	Describe("WaitForK0sNodes", func() {
 		const command = "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m"
 
