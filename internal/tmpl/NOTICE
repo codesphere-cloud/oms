@@ -1549,7 +1549,7 @@ License URL: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.12/LICENS
 Module: gopkg.in/evanphx/json-patch.v4
 Version: v4.13.0
 License: BSD-3-Clause
-License URL: https://github.com/evanphx/json-patch/blob/v4.13.0/LICENSE
+License URL: Unknown
  
 ----------
 Module: gopkg.in/inf.v0
@@ -1561,7 +1561,7 @@ License URL: https://github.com/go-inf/inf/blob/v0.9.1/LICENSE
 Module: gopkg.in/validator.v2
 Version: v2.0.1
 License: Apache-2.0
-License URL: https://github.com/go-validator/validator/blob/v2.0.1/LICENSE
+License URL: Unknown
  
 ----------
 Module: gopkg.in/warnings.v0
@@ -1579,7 +1579,7 @@ License URL: https://github.com/go-yaml/yaml/blob/v2.4.0/LICENSE
 Module: gopkg.in/yaml.v3
 Version: v3.0.1
 License: MIT
-License URL: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
+License URL: Unknown
  
 ----------
 Module: helm.sh/helm/v4
