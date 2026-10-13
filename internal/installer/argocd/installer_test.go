@@ -4,12 +4,17 @@
 package argocd_test
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -255,6 +260,213 @@ var _ = Describe("Installer.Install", func() {
 			}, Helm: helmMock}
 
 			Expect(a.Install()).To(MatchError(ContainSubstring("reading registry certificate authority")))
+		})
+	})
+
+	Context("BOM chart", func() {
+		var bomConfig *bom.Config
+
+		BeforeEach(func() {
+			bomPath := filepath.Join(GinkgoT().TempDir(), "bom.json")
+			Expect(os.WriteFile(bomPath, []byte(`{"components":{"argocd":{
+				"files":{"chart":{"ociRef":"ghcr.io/codesphere-cloud/charts/argocd:1.2.3"}},
+				"containerImages":{"argocd":"quay.io/argoproj/argocd:v3.1.0","redis":"public.ecr.aws/docker/library/redis:7.2"}
+			}}}`), 0o600)).To(Succeed())
+
+			var err error
+
+			bomConfig, err = bom.Parse(bomPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("uses the argocd OCI chart and version from the BOM with an OCI mirror", func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				argoValues, ok := cfg.Values["argo-cd"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+
+				dex, ok := argoValues["dex"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+
+				global, ok := argoValues["global"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+
+				image, ok := global["image"].(map[string]interface{})
+				if !ok {
+					return false
+				}
+
+				repository, ok := image["repository"].(string)
+
+				return cfg.ChartName == "oci://10.10.0.6:5000/codesphere-cloud/charts/argocd" &&
+					cfg.RepoURL == "" && cfg.Version == "1.2.3" &&
+					dex["enabled"] == false && cfg.Values["dex"] == nil &&
+					ok && strings.HasPrefix(repository, "10.10.0.6:5000/")
+			}), mock.Anything).Return(nil)
+
+			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+				BOM:     bomConfig,
+				RepoURL: "oci://10.10.0.6:5000/codesphere-cloud/charts",
+			}, Helm: helmMock}
+			Expect(a.Install()).To(Succeed())
+		})
+
+		It("uses the upstream chart when the BOM comes without an OCI repository", func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ChartName == "argo-cd" && cfg.RepoURL == argocd.DefaultRepoURL
+			}), mock.Anything).Return(nil)
+
+			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{BOM: bomConfig}, Helm: helmMock}
+			Expect(a.Install()).To(Succeed())
+		})
+
+		It("falls back to the upstream chart when no BOM is provided", func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ChartName == "argo-cd" && cfg.RepoURL == argocd.DefaultRepoURL
+			}), mock.Anything).Return(nil)
+
+			a = &argocd.Installer{Helm: helmMock}
+			Expect(a.Install()).To(Succeed())
+		})
+
+		Context("installing from a mirror", func() {
+			const mirrorURL = "oci://10.10.0.6:5000/codesphere-cloud/charts"
+
+			var installed installer.ChartConfig
+
+			captureInstall := func() {
+				helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+				helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).
+					RunAndReturn(func(_ context.Context, cfg installer.ChartConfig, _ installer.InstallChartOptions) error {
+						installed = cfg
+						return nil
+					})
+			}
+
+			// dockerConfigAuth decodes the login a dockerconfigjson secret holds for host.
+			dockerConfigAuth := func(host string) func(string) string {
+				return func(encoded string) string {
+					raw, err := base64.StdEncoding.DecodeString(encoded)
+					Expect(err).NotTo(HaveOccurred())
+
+					var config struct {
+						Auths map[string]struct {
+							Auth string `json:"auth"`
+						} `json:"auths"`
+					}
+					Expect(json.Unmarshal(raw, &config)).To(Succeed())
+
+					auth, err := base64.StdEncoding.DecodeString(config.Auths[host].Auth)
+					Expect(err).NotTo(HaveOccurred())
+
+					return string(auth)
+				}
+			}
+
+			It("points the images at the mirror and creates their pull secret ahead of the chart's hooks", func() {
+				captureInstall()
+
+				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+					BOM:         bomConfig,
+					RepoURL:     mirrorURL,
+					OciUsername: "oms",
+					OciPassword: "secret",
+				}, Helm: helmMock}
+				Expect(a.Install()).To(Succeed())
+
+				Expect(installed.Values).To(HaveKeyWithValue("extraSecrets", BeEmpty()))
+				Expect(installed.Values).To(HaveKeyWithValue("argo-cd", And(
+					HaveKeyWithValue("global", And(
+						HaveKeyWithValue("image", HaveKeyWithValue("repository", "10.10.0.6:5000/quay_io/argoproj/argocd")),
+						HaveKeyWithValue("imagePullSecrets", ConsistOf(HaveKeyWithValue("name", "argocd-registry-pull"))),
+					)),
+					HaveKeyWithValue("redis", HaveKeyWithValue("image", HaveKeyWithValue("repository", "10.10.0.6:5000/public_ecr_aws/docker/library/redis"))),
+					HaveKeyWithValue("dex", Not(HaveKey("image"))),
+					HaveKeyWithValue("extraObjects", ConsistOf(And(
+						HaveKeyWithValue("type", "kubernetes.io/dockerconfigjson"),
+						HaveKeyWithValue("metadata", And(
+							HaveKeyWithValue("name", "argocd-registry-pull"),
+							HaveKeyWithValue("annotations", And(
+								HaveKeyWithValue("helm.sh/hook", "pre-install,pre-upgrade"),
+								HaveKeyWithValue("helm.sh/hook-weight", "-10"),
+							)),
+						)),
+						HaveKeyWithValue("data", HaveKeyWithValue(".dockerconfigjson",
+							WithTransform(dockerConfigAuth("10.10.0.6:5000"), Equal("oms:secret")))),
+					))),
+				)))
+			})
+
+			It("installs the version given over the one the BOM pins", func() {
+				captureInstall()
+
+				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+					Version: "2.0.0",
+					BOM:     bomConfig,
+					RepoURL: mirrorURL,
+				}, Helm: helmMock}
+				Expect(a.Install()).To(Succeed())
+
+				Expect(installed.ChartName).To(Equal("oci://10.10.0.6:5000/codesphere-cloud/charts/argocd"))
+				Expect(installed.Version).To(Equal("2.0.0"))
+			})
+
+			It("installs the same chart and version when run again", func() {
+				helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil).Twice()
+				helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+					return cfg.ChartName == "oci://10.10.0.6:5000/codesphere-cloud/charts/argocd" && cfg.Version == "1.2.3"
+				}), mock.Anything).Return(nil).Twice()
+
+				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{BOM: bomConfig, RepoURL: mirrorURL}, Helm: helmMock}
+				Expect(a.Install()).To(Succeed())
+				Expect(a.Install()).To(Succeed())
+			})
+
+			It("lets a value file override the mirror defaults", func() {
+				captureInstall()
+
+				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+					BOM:        bomConfig,
+					RepoURL:    mirrorURL,
+					ValueFiles: []string{writeValuesFile("argo-cd:\n  redis:\n    image:\n      repository: registry.example.com/redis\n")},
+				}, Helm: helmMock}
+				Expect(a.Install()).To(Succeed())
+
+				Expect(installed.Values).To(HaveKeyWithValue("argo-cd", And(
+					HaveKeyWithValue("redis", HaveKeyWithValue("image", HaveKeyWithValue("repository", "registry.example.com/redis"))),
+					HaveKeyWithValue("global", HaveKeyWithValue("image", HaveKeyWithValue("repository", "10.10.0.6:5000/quay_io/argoproj/argocd"))),
+				)))
+			})
+
+			chart := map[string]bom.FileRef{"chart": {OciRef: "ghcr.io/codesphere-cloud/charts/argocd:1.2.3"}}
+
+			DescribeTable("fails without touching helm when the BOM cannot serve the mirror",
+				func(component bom.ComponentConfig, message string) {
+					a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+						BOM:     &bom.Config{Components: map[string]bom.ComponentConfig{"argocd": component}},
+						RepoURL: mirrorURL,
+					}, Helm: helmMock}
+
+					Expect(a.Install()).To(MatchError(ContainSubstring(message)))
+				},
+				Entry("without a tagged argocd chart", bom.ComponentConfig{}, "BOM has no tagged argocd chart"),
+				Entry("without the argocd image", bom.ComponentConfig{
+					Files:           chart,
+					ContainerImages: map[string]string{"redis": "redis:7.2"},
+				}, "BOM lists no argoproj/argocd image"),
+				Entry("without the redis image", bom.ComponentConfig{
+					Files:           chart,
+					ContainerImages: map[string]string{"argocd": "quay.io/argoproj/argocd:v3.1.0"},
+				}, "BOM lists no redis image"),
+			)
 		})
 	})
 
