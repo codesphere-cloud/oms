@@ -1561,7 +1561,7 @@ License URL: https://github.com/go-inf/inf/blob/v0.9.1/LICENSE
 Module: gopkg.in/validator.v2
 Version: v2.0.1
 License: Apache-2.0
-License URL: Unknown
+License URL: https://github.com/go-validator/validator/blob/v2.0.1/LICENSE
  
 ----------
 Module: gopkg.in/warnings.v0
@@ -1573,7 +1573,7 @@ License URL: https://github.com/go-warnings/warnings/blob/v0.1.2/LICENSE
 Module: gopkg.in/yaml.v2
 Version: v2.4.0
 License: Apache-2.0
-License URL: Unknown
+License URL: https://github.com/go-yaml/yaml/blob/v2.4.0/LICENSE
  
 ----------
 Module: gopkg.in/yaml.v3
