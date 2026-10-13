@@ -5,6 +5,7 @@ package cmd
 
 import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/spf13/cobra"
 )
@@ -23,4 +24,5 @@ func AddInitCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 	}
 	util.AddCmd(rootCmd, init.cmd)
 	AddInitInstallConfigCmd(init.cmd, opts)
+	k0s.AddInitK0sConfigCmd(init.cmd, opts)
 }

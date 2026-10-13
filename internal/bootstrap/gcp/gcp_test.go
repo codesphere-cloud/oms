@@ -2083,7 +2083,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		It("generates the airgap k0sctl config on the jumpbox without installing it", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --write-k0sctl-config /etc/codesphere/k0sctl-config.yaml").Return(nil)
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --config /etc/codesphere/k0sctl-config.yaml").Return(nil)
 
 			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
 		})
