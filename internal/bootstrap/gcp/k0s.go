@@ -239,7 +239,7 @@ func (b *GCPBootstrapper) GenerateK0sAirgapConfig() error {
 }
 
 func (b *GCPBootstrapper) generateK0sAirgapConfig(dc *datacenter.DataCenter) error {
-	generateCmd := fmt.Sprintf("oms install k0s --version %s --install-config %s --airgapped --write-k0sctl-config %s",
+	generateCmd := fmt.Sprintf("oms init k0s-config --version %s --install-config %s --airgapped --config %s",
 		b.Env.K0sVersion, dc.RemoteConfigPath, dc.RemoteK0sctlConfigPath())
 	if err := b.Env.Jumpbox.RunSSHCommand("root", generateCmd); err != nil {
 		return fmt.Errorf("failed to generate k0s airgap config on jumpbox (data center %d): %w", dc.ID, err)
