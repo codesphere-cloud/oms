@@ -27,7 +27,7 @@ const (
 type K0sManager interface {
 	GetLatestVersion() (string, error)
 	Download(version string, opts DownloadOptions) (string, error)
-	DownloadAirgapBundle(version string, opts DownloadOptions) (string, error)
+	DownloadAirgapBundle(version, path string, opts DownloadOptions) (string, error)
 }
 
 type K0s struct {

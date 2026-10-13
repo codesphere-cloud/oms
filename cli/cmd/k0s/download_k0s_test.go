@@ -86,10 +86,30 @@ var _ = Describe("DownloadK0sk0s", func() {
 
 			opts := installer.DownloadOptions{Quiet: true}
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", opts).Return("/test/workdir/k0s", nil)
-			mockK0sManager.EXPECT().DownloadAirgapBundle("v1.29.1+k0s.0", opts).Return("/cache/k0s-airgap-bundle-amd64", nil)
+			mockK0sManager.EXPECT().DownloadAirgapBundle("v1.29.1+k0s.0", "", opts).Return("/cache/k0s-airgap-bundle-amd64", nil)
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("saves the airgap bundle to --path", func() {
+			c.Opts.Version = "v1.29.1+k0s.0"
+			c.Opts.Airgap = true
+			c.Opts.Path = "/opt/k0s/bundle.tar"
+
+			opts := installer.DownloadOptions{Quiet: true}
+			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", opts).Return("/test/workdir/k0s", nil)
+			mockK0sManager.EXPECT().DownloadAirgapBundle("v1.29.1+k0s.0", "/opt/k0s/bundle.tar", opts).Return("/opt/k0s/bundle.tar", nil)
+
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("fails when --path is given without --airgapped", func() {
+			c.Opts.Path = "/opt/k0s/bundle.tar"
+
+			err := c.DownloadK0s(mockK0sManager)
+			Expect(err).To(MatchError("--path requires --airgapped"))
 		})
 
 		It("reports airgap bundle download failures", func() {
@@ -98,7 +118,7 @@ var _ = Describe("DownloadK0sk0s", func() {
 
 			opts := installer.DownloadOptions{Quiet: true}
 			mockK0sManager.EXPECT().Download("v1.29.1+k0s.0", opts).Return("/test/workdir/k0s", nil)
-			mockK0sManager.EXPECT().DownloadAirgapBundle("v1.29.1+k0s.0", opts).Return("", errors.New("network error"))
+			mockK0sManager.EXPECT().DownloadAirgapBundle("v1.29.1+k0s.0", "", opts).Return("", errors.New("network error"))
 
 			err := c.DownloadK0s(mockK0sManager)
 			Expect(err).To(HaveOccurred())
