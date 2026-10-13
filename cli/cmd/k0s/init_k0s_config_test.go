@@ -79,7 +79,7 @@ var _ = Describe("InitK0sConfigCmd", func() {
 
 		setupWorkdirMocks()
 		mockK0s.EXPECT().Download("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/downloaded/k0s", nil)
-		mockK0s.EXPECT().DownloadAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/cache/bundle.tar", nil)
+		mockK0s.EXPECT().DownloadAirgapBundle("v1.30.0+k0s.0", "", installer.DownloadOptions{}).Return("/cache/bundle.tar", nil)
 		mockFileWriter.EXPECT().WriteFile("/etc/codesphere/k0sctl-config.yaml", isAirgapConfig, os.FileMode(0644)).Return(nil)
 
 		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
@@ -106,7 +106,7 @@ var _ = Describe("InitK0sConfigCmd", func() {
 		setupWorkdirMocks()
 		mockPM.EXPECT().ExtractDependency("kubernetes/files/k0s", false, false).Return(nil)
 		mockPM.EXPECT().GetDependencyPath("kubernetes/files/k0s").Return("/test/path/k0s")
-		mockK0s.EXPECT().DownloadAirgapBundle("v1.30.0+k0s.0", installer.DownloadOptions{}).Return("/cache/bundle.tar", nil)
+		mockK0s.EXPECT().DownloadAirgapBundle("v1.30.0+k0s.0", "", installer.DownloadOptions{}).Return("/cache/bundle.tar", nil)
 		mockFileWriter.EXPECT().WriteFile(mock.Anything, isAirgapConfig, os.FileMode(0644)).Return(nil)
 
 		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
