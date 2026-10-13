@@ -1404,6 +1404,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			DescribeTable("removes the airgapped egress rules with a registry reachable over the internet",
 				func(registryType gcp.RegistryType) {
 					csEnv.RegistryType = registryType
+
 					expectBaseRules()
 					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(nil).Once()
 					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-internal-egress").Return(nil).Once()
@@ -1443,6 +1444,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when removing the egress deny rule fails", func() {
 				csEnv.RegistryType = gcp.RegistryTypeGitHub
+
 				expectBaseRules()
 				gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(fmt.Errorf("delete error")).Once()
 
