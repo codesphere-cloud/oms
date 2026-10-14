@@ -116,7 +116,7 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 		return fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 	creator := vault.NewVaultSecretCreator(i.cfg.KubeClient)
-	if err := creator.CreateSecretFromVault(ctx, i.cfg.Vault, vault.VaultSecretNamespace, vault.VaultSecretName); err != nil {
+	if err := creator.CreateSecretFromVault(ctx, i.cfg.Vault, vault.VaultSecretNamespace, vault.VaultSecretName, nil); err != nil {
 		return fmt.Errorf("failed to sync vault secret: %w", err)
 	}
 	return nil

@@ -9,7 +9,6 @@ import (
 	"os"
 	"runtime"
 
-	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
@@ -20,8 +19,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
-	k8sruntime "k8s.io/apimachinery/pkg/runtime"
-	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -70,16 +67,7 @@ func installCodesphereDepencies(opts *InstallCodesphereOpts, cfg files.RootConfi
 		return fmt.Errorf("failed to get vault and Kubernetes config: %w", err)
 	}
 
-	scheme := k8sruntime.NewScheme()
-	if err := k8sscheme.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add Kubernetes core scheme: %w", err)
-	}
-
-	if err := argov1alpha1.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add ArgoCD scheme: %w", err)
-	}
-
-	kubeClient, err := ctrlclient.New(restConfig, ctrlclient.Options{Scheme: scheme})
+	kubeClient, err := installer.NewKubeClient(restConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
