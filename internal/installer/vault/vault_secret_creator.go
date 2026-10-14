@@ -57,7 +57,7 @@ func (v *VaultSecretCreator) CreateSecretFromStore(ctx context.Context, store Va
 		return fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 
-	return v.CreateSecretFromVault(ctx, data, namespace, secretName)
+	return v.CreateSecretFromVault(ctx, data, namespace, secretName, nil)
 }
 
 // CreateSecretFromVault creates or updates a Kubernetes secret with the contents of a Vault in the target cluster.
@@ -65,7 +65,9 @@ func (v *VaultSecretCreator) CreateSecretFromStore(ctx context.Context, store Va
 // Each vault entry is mapped to one or more secret keys:
 //   - File entries produce a single key equal to the entry name.
 //   - Field entries produce "entryName.password" and, when present, "entryName.username".
-func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *files.InstallVault, namespace, secretName string) error {
+//
+// Labels are added to the secret; labels it already has are kept.
+func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *files.InstallVault, namespace, secretName string, labels map[string]string) error {
 	secretData, err := vaultToSecretData(vault)
 	if err != nil {
 		return err
@@ -85,6 +87,9 @@ func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *f
 	_, err = controllerutil.CreateOrUpdate(ctx, v.client, secret, func() error {
 		secret.Type = corev1.SecretTypeOpaque
 		secret.Data = secretData
+		for key, value := range labels {
+			metav1.SetMetaDataLabel(&secret.ObjectMeta, key, value)
+		}
 		return nil
 	})
 	if err != nil {
