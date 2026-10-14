@@ -113,7 +113,7 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 		return err
 	}
 
-	k0sVersion, err := c.determineK0sVersion(k0s)
+	k0sVersion, err := resolveK0sVersion(k0s, c.Opts.Version)
 	if err != nil {
 		return err
 	}
@@ -159,22 +159,6 @@ func (c *InstallK0sCmd) loadInstallConfig() (*files.RootConfig, error) {
 	return &config, nil
 }
 
-func (c *InstallK0sCmd) determineK0sVersion(k0s installer.K0sManager) (string, error) {
-	k0sVersion := c.Opts.Version
-	if k0sVersion == "" {
-		var err error
-
-		k0sVersion, err = k0s.GetLatestVersion()
-		if err != nil {
-			return "", fmt.Errorf("failed to get latest k0s version: %w", err)
-		}
-
-		log.Printf("Using latest k0s version: %s", k0sVersion)
-	}
-
-	return k0sVersion, nil
-}
-
 func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
 	if c.Opts.NoDownload {
 		return "", nil
@@ -187,7 +171,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 		return pm.GetDependencyPath(defaultK0sPath), nil
 	}
 
-	k0sBinaryPath, err := k0s.Download(k0sVersion, c.Opts.Force, false)
+	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}
@@ -197,7 +181,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
 	log.Println("Downloading k0sctl...")
 
-	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, c.Opts.Force, false)
+	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, installer.DownloadOptions{Force: c.Opts.Force})
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
 	}
@@ -245,19 +229,21 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 	}
 	kubeconfigContent = strings.TrimRight(kubeconfigContent, "\n\r")
 
-	vault, err := c.loadOrCreateVault()
+	store, err := c.vaultStore()
+	if err != nil {
+		return err
+	}
+
+	vaultData, err := store.LoadOrCreate()
 	if err != nil {
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
 
-	for _, s := range vault.Secrets {
-		if s.Name == vaultSecretNameKubeconfig {
-			log.Printf("Updating existing %s secret in vault", vaultSecretNameKubeconfig)
-			break
-		}
+	if vaultData.GetSecret(vaultSecretNameKubeconfig) != nil {
+		log.Printf("Updating existing %s secret in vault", vaultSecretNameKubeconfig)
 	}
 
-	vault.SetSecret(files.SecretEntry{
+	vaultData.SetSecret(files.SecretEntry{
 		Name: vaultSecretNameKubeconfig,
 		File: &files.SecretFile{
 			Name:    vaultSecretNameKubeconfig,
@@ -265,31 +251,12 @@ func (c *InstallK0sCmd) saveKubeconfigToVault(k0sctl installer.K0sctlManager, k0
 		},
 	})
 
-	store, err := c.vaultStore()
-	if err != nil {
-		return err
-	}
-
-	if err := store.Save(vault); err != nil {
+	if err := store.Save(vaultData); err != nil {
 		return err
 	}
 
 	log.Printf("Saved kubeconfig to %s", c.Opts.Vault)
 	return nil
-}
-
-func (c *InstallK0sCmd) loadOrCreateVault() (*files.InstallVault, error) {
-	store, err := c.vaultStore()
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := store.LoadOrCreate()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load vault: %w", err)
-	}
-
-	return data, nil
 }
 
 func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
