@@ -872,6 +872,7 @@ func airgappedEgressRules() []*computepb.Firewall {
 func (b *GCPBootstrapper) createFirewallRules(network string, rules []*computepb.Firewall) error {
 	for _, rule := range rules {
 		rule.Network = protoString(network)
+
 		err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, rule)
 		if err != nil {
 			return fmt.Errorf("failed to create %s firewall rule: %w", rule.GetName(), err)

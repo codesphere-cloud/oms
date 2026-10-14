@@ -1418,6 +1418,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					csEnv.RegistryType = registryType
 
 					expectBaseRules()
+
 					deny := gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(nil).Once()
 					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-internal-egress").Return(nil).Once().NotBefore(deny)
 					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-jumpbox-egress").Return(nil).Once().NotBefore(deny)
