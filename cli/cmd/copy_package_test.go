@@ -143,7 +143,8 @@ var _ = Describe("CopyPackageCmd", func() {
 			mockPortal.EXPECT().GetBuild(portal.CodesphereProduct, build.Version, "").Return(build, nil)
 
 			destination := filepath.Join(workdir, build.BuildPackageFilename(defaultInstallerPackageArtifact))
-			fakeFile := os.NewFile(uintptr(0), destination)
+			fakeFile, err := os.CreateTemp(GinkgoT().TempDir(), "download-*")
+			Expect(err).NotTo(HaveOccurred())
 			mockFileWriter.EXPECT().Create(destination).Return(fakeFile, nil)
 			mockFileWriter.EXPECT().Open(destination).Return(fakeFile, nil)
 			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, mock.Anything, mock.Anything, 0, false).Return(nil)
