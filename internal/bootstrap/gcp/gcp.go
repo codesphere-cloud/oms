@@ -52,13 +52,12 @@ const installerNodeSecretsDir = "/etc/codesphere/secrets"
 const vpcSubnetCIDR = "10.10.0.0/20"
 
 // The firewall rules that cut an installation using the local container registry off from the
-// internet, and the VM tags they apply to: every VM except the jumpbox, which hosts the registry.
+// internet: every VM except the jumpbox, which hosts the registry.
 const (
-	airgappedAllowEgressRule = "allow-internal-egress"
-	airgappedDenyEgressRule  = "deny-external-egress"
+	airgappedAllowJumpboxEgressRule  = "allow-jumpbox-egress"
+	airgappedAllowInternalEgressRule = "allow-internal-egress"
+	airgappedDenyEgressRule          = "deny-external-egress"
 )
-
-var airgappedEgressTargetTags = []string{"ceph", "k0s", "postgres"}
 
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
 // A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
@@ -779,157 +778,126 @@ func (b *GCPBootstrapper) EnsureVPC() error {
 func (b *GCPBootstrapper) EnsureFirewallRules() error {
 	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", b.Env.ProjectID, b.Env.ProjectID)
 
-	// Allow external SSH to Jumpbox
-	sshRule := &computepb.Firewall{
-		Name:      protoString("allow-ssh-ext"),
-		Network:   protoString(network),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{
-				IPProtocol: protoString("tcp"),
-				Ports:      []string{"22"},
-			},
-		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		TargetTags:   []string{"ssh"},
-		Description:  protoString("Allow external SSH to Jumpbox"),
-	}
-
-	err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, sshRule)
+	err := b.createFirewallRules(network, baseFirewallRules())
 	if err != nil {
-		return fmt.Errorf("failed to create jumpbox ssh firewall rule: %w", err)
-	}
-
-	// Allow all internal traffic
-	internalRule := &computepb.Firewall{
-		Name:      protoString("allow-internal"),
-		Network:   protoString(network),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("all")},
-		},
-		SourceRanges: []string{vpcSubnetCIDR},
-		Description:  protoString("Allow all internal traffic"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, internalRule)
-	if err != nil {
-		return fmt.Errorf("failed to create internal firewall rule: %w", err)
-	}
-
-	// Allow all egress
-	egressRule := &computepb.Firewall{
-		Name:      protoString("allow-all-egress"),
-		Network:   protoString(network),
-		Direction: protoString("EGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("all")},
-		},
-		DestinationRanges: []string{"0.0.0.0/0"},
-		Description:       protoString("Allow all egress"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, egressRule)
-	if err != nil {
-		return fmt.Errorf("failed to create egress firewall rule: %w", err)
-	}
-
-	// Allow ingress for web (HTTP/HTTPS)
-	webRule := &computepb.Firewall{
-		Name:      protoString("allow-ingress-web"),
-		Network:   protoString(network),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("tcp"), Ports: []string{"80", "443"}},
-		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		Description:  protoString("Allow HTTP/HTTPS ingress"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, webRule)
-	if err != nil {
-		return fmt.Errorf("failed to create web firewall rule: %w", err)
-	}
-
-	// Allow ingress for PostgreSQL
-	postgresRule := &computepb.Firewall{
-		Name:      protoString("allow-ingress-postgres"),
-		Network:   protoString(network),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("tcp"), Ports: []string{"5432"}},
-		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		TargetTags:   []string{"postgres"},
-		Description:  protoString("Allow external access to PostgreSQL"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, postgresRule)
-	if err != nil {
-		return fmt.Errorf("failed to create postgres firewall rule: %w", err)
+		return err
 	}
 
 	return b.ensureAirgappedEgressRules(network)
 }
 
-// ensureAirgappedEgressRules cuts the cluster and postgres VMs off from the internet when they pull
+// baseFirewallRules returns the firewall rules every installation gets, whatever its registry type.
+func baseFirewallRules() []*computepb.Firewall {
+	return []*computepb.Firewall{
+		{
+			Name:         protoString("allow-ssh-ext"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"22"}}},
+			SourceRanges: []string{"0.0.0.0/0"},
+			TargetTags:   []string{"ssh"},
+			Description:  protoString("Allow external SSH to Jumpbox"),
+		},
+		{
+			Name:         protoString("allow-internal"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			SourceRanges: []string{vpcSubnetCIDR},
+			Description:  protoString("Allow all internal traffic"),
+		},
+		{
+			Name:              protoString("allow-all-egress"),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(1000),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{"0.0.0.0/0"},
+			Description:       protoString("Allow all egress"),
+		},
+		{
+			Name:         protoString("allow-ingress-web"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"80", "443"}}},
+			SourceRanges: []string{"0.0.0.0/0"},
+			Description:  protoString("Allow HTTP/HTTPS ingress"),
+		},
+		{
+			Name:         protoString("allow-ingress-postgres"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"5432"}}},
+			SourceRanges: []string{"0.0.0.0/0"},
+			TargetTags:   []string{"postgres"},
+			Description:  protoString("Allow external access to PostgreSQL"),
+		},
+	}
+}
+
+// airgappedEgressRules returns the firewall rules that cut every VM but the jumpbox off from the
+// internet. The deny applies to all VMs, so a VM type added later is air-gapped as well; the
+// higher priority allows keep traffic inside the VPC and give the jumpbox its internet access.
+// All of them take precedence over allow-all-egress.
+func airgappedEgressRules() []*computepb.Firewall {
+	return []*computepb.Firewall{
+		{
+			Name:              protoString(airgappedAllowJumpboxEgressRule),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(800),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{"0.0.0.0/0"},
+			TargetTags:        []string{jumpboxTag},
+			Description:       protoString("Allow internet egress of the jumpbox, which hosts the local container registry"),
+		},
+		{
+			Name:              protoString(airgappedAllowInternalEgressRule),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(800),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{vpcSubnetCIDR},
+			Description:       protoString("Allow egress of air-gapped VMs inside the VPC"),
+		},
+		{
+			Name:              protoString(airgappedDenyEgressRule),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(900),
+			Denied:            []*computepb.Denied{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{"0.0.0.0/0"},
+			Description:       protoString("Simulate an air-gapped installation: block internet egress of all VMs but the jumpbox"),
+		},
+	}
+}
+
+// createFirewallRules creates the given rules in the project's VPC network.
+func (b *GCPBootstrapper) createFirewallRules(network string, rules []*computepb.Firewall) error {
+	for _, rule := range rules {
+		rule.Network = protoString(network)
+		err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, rule)
+		if err != nil {
+			return fmt.Errorf("failed to create %s firewall rule: %w", rule.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
+// ensureAirgappedEgressRules cuts all VMs but the jumpbox off from the internet when they pull
 // from the local container registry, which simulates an air-gapped installation. They keep
 // reaching each other and the jumpbox inside the VPC, and the jumpbox keeps its internet access to
 // download the package and mirror the images into its registry. Replies to inbound connections
 // still pass, since GCP firewall rules are stateful. With any other registry type the rules are
 // removed, so a re-run that switches away from the local registry can pull again.
 func (b *GCPBootstrapper) ensureAirgappedEgressRules(network string) error {
-	if b.Env.RegistryType != RegistryTypeLocalContainer {
-		for _, name := range []string{airgappedDenyEgressRule, airgappedAllowEgressRule} {
-			err := b.GCPClient.DeleteFirewallRule(b.Env.ProjectID, name)
-			if err != nil {
-				return fmt.Errorf("failed to delete %s firewall rule: %w", name, err)
-			}
+	if b.Env.RegistryType == RegistryTypeLocalContainer {
+		return b.createFirewallRules(network, airgappedEgressRules())
+	}
+
+	// Delete the deny first, so the jumpbox and internal traffic are never blocked in between.
+	for _, name := range []string{airgappedDenyEgressRule, airgappedAllowInternalEgressRule, airgappedAllowJumpboxEgressRule} {
+		err := b.GCPClient.DeleteFirewallRule(b.Env.ProjectID, name)
+		if err != nil {
+			return fmt.Errorf("failed to delete %s firewall rule: %w", name, err)
 		}
-
-		return nil
-	}
-
-	// Both rules take precedence over allow-all-egress, and the internal allow over the deny.
-	allowInternalRule := &computepb.Firewall{
-		Name:      protoString(airgappedAllowEgressRule),
-		Network:   protoString(network),
-		Direction: protoString("EGRESS"),
-		Priority:  protoInt32(800),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("all")},
-		},
-		DestinationRanges: []string{vpcSubnetCIDR},
-		TargetTags:        airgappedEgressTargetTags,
-		Description:       protoString("Allow egress of air-gapped cluster and postgres VMs inside the VPC"),
-	}
-
-	err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, allowInternalRule)
-	if err != nil {
-		return fmt.Errorf("failed to create internal egress firewall rule: %w", err)
-	}
-
-	denyExternalRule := &computepb.Firewall{
-		Name:      protoString(airgappedDenyEgressRule),
-		Network:   protoString(network),
-		Direction: protoString("EGRESS"),
-		Priority:  protoInt32(900),
-		Denied: []*computepb.Denied{
-			{IPProtocol: protoString("all")},
-		},
-		DestinationRanges: []string{"0.0.0.0/0"},
-		TargetTags:        airgappedEgressTargetTags,
-		Description:       protoString("Simulate an air-gapped installation: block internet egress of cluster and postgres VMs"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, denyExternalRule)
-	if err != nil {
-		return fmt.Errorf("failed to create external egress deny firewall rule: %w", err)
 	}
 
 	return nil

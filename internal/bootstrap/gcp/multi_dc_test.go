@@ -203,10 +203,10 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		gc.EXPECT().CreateVPC(projectID, "us-central1", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
 		// Only the local container registry cuts the VMs off from the internet.
 		if csEnv.RegistryType == gcp.RegistryTypeLocalContainer {
-			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(7)
+			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(8)
 		} else {
 			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(5)
-			gc.EXPECT().DeleteFirewallRule(projectID, mock.Anything).Return(nil).Times(2)
+			gc.EXPECT().DeleteFirewallRule(projectID, mock.Anything).Return(nil).Times(3)
 		}
 
 		mockGetInstanceNotFoundThenRunning(gc, projectID, "us-central1-a", makeRunningInstance("10.10.0.2", "1.2.3.4"), vmCount)

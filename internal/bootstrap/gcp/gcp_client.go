@@ -699,7 +699,7 @@ func (c *GCPClient) CreateFirewallRule(projectID string, rule *computepb.Firewal
 		Project:          projectID,
 		FirewallResource: rule,
 	})
-	if err != nil && !strings.Contains(err.Error(), "already exists") {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return err
 	}
 
