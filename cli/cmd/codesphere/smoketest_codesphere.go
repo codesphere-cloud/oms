@@ -4,12 +4,8 @@
 package codesphere
 
 import (
-	"context"
 	"fmt"
-	"log"
-	"slices"
 	"strings"
-	"time"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -18,50 +14,34 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	defaultTimeout = 10 * time.Minute
-	defaultProfile = "ci.yml"
-)
-
-var availableSteps = []teststeps.SmokeTestStep{
-	&teststeps.CreateWorkspaceStep{},
-	&teststeps.SetEnvVarStep{},
-	&teststeps.CreateFilesStep{},
-	&teststeps.SyncLandscapeStep{},
-	&teststeps.ExecuteRunStageStep{},
-	&teststeps.DeleteWorkspaceStep{},
-}
-
 type SmoketestCodesphereCmd struct {
 	cmd           *cobra.Command
 	GlobalOptions *util.GlobalOptions
-	// TODO (Simon)for now I kept the opts in the teststeps package,
-	// but if we add more tests we should move unified opts here and probably use seperate
-	// structs for the different test types (base smoke test, ui test etc.)
-	Opts *teststeps.SmoketestCodesphereOpts
+	Opts          *teststeps.SmoketestCodesphereOpts
 }
 
-func (c *SmoketestCodesphereCmd) RunE(_ *cobra.Command, args []string) error {
-	c.Opts.Verbose = c.GlobalOptions.Verbose
+// RunE runs the smoke test against the installation selected by the flags.
+func (c *SmoketestCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
+	c.Opts.Quiet = !c.GlobalOptions.Verbose
 	client, err := codesphere.NewClient(c.Opts.BaseURL, c.Opts.Token)
 	if err != nil {
 		return fmt.Errorf("failed to create Codesphere client: %w", err)
 	}
 	c.Opts.Client = client
 
-	return c.RunSmoketest()
+	if err := teststeps.RunSmoketest(cmd.Context(), c.Opts); err != nil {
+		return fmt.Errorf("failed to run smoke test: %w", err)
+	}
+
+	return nil
 }
 
 func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
-	var stepNames []string
-	for _, s := range availableSteps {
-		stepNames = append(stepNames, s.Name())
-	}
-
 	c := SmoketestCodesphereCmd{
 		cmd: &cobra.Command{
-			Use:   "codesphere",
-			Short: "Run smoke tests for a Codesphere installation",
+			Use:        "codesphere",
+			Short:      "Run smoke tests for a Codesphere installation",
+			Deprecated: "use 'oms test codesphere --tests smoketest' instead.",
 			Long: io.Long(`Run automated smoke tests for a Codesphere installation by creating a workspace,
 				setting environment variables, executing commands, syncing landscape, and running a pipeline stage.
 				The workspace is automatically deleted after the test completes.`),
@@ -99,9 +79,9 @@ func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.Flags().StringVar(&c.Opts.Token, "token", "", "API token for authentication")
 	c.cmd.Flags().StringVar(&c.Opts.TeamID, "team-id", "", "Team ID for workspace creation")
 	c.cmd.Flags().StringVar(&c.Opts.PlanID, "plan-id", "", "Plan ID for workspace creation")
-	c.cmd.Flags().DurationVar(&c.Opts.Timeout, "timeout", defaultTimeout, "Timeout for the entire smoke test")
-	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", defaultProfile, "CI profile to use for landscape and pipeline")
-	c.cmd.Flags().StringSliceVar(&c.Opts.Steps, "steps", []string{}, fmt.Sprintf("Comma-separated list of steps to run (%s). If empty, all steps including deleteWorkspace are run. If specified without deleteWorkspace, the workspace will be kept for manual inspection.", strings.Join(stepNames, ",")))
+	c.cmd.Flags().DurationVar(&c.Opts.Timeout, "timeout", teststeps.DefaultTimeout, "Timeout for the entire smoke test")
+	c.cmd.Flags().StringVar(&c.Opts.Profile, "profile", teststeps.DefaultProfile, "CI profile to use for landscape and pipeline")
+	c.cmd.Flags().StringSliceVar(&c.Opts.Steps, "steps", []string{}, fmt.Sprintf("Comma-separated list of steps to run (%s). If empty, all steps including deleteWorkspace are run. If specified without deleteWorkspace, the workspace will be kept for manual inspection.", strings.Join(teststeps.StepNames(), ",")))
 
 	util.MarkFlagRequired(c.cmd, "baseurl")
 	util.MarkFlagRequired(c.cmd, "token")
@@ -109,65 +89,4 @@ func AddSmoketestCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	c.cmd.RunE = c.RunE
 
 	util.AddCmd(parent, c.cmd)
-}
-
-func (c *SmoketestCodesphereCmd) RunSmoketest() (err error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.Opts.Timeout)
-	defer cancel()
-
-	availableStepsMap := make(map[string]teststeps.SmokeTestStep)
-	for _, s := range availableSteps {
-		availableStepsMap[s.Name()] = s
-	}
-
-	stepsToRun := make([]teststeps.SmokeTestStep, len(availableSteps))
-	copy(stepsToRun, availableSteps)
-
-	if len(c.Opts.Steps) > 0 {
-		stepsToRun = slices.DeleteFunc(stepsToRun, func(s teststeps.SmokeTestStep) bool {
-			return !slices.Contains(c.Opts.Steps, s.Name())
-		})
-	}
-
-	var workspaceID int
-	deleteStep := &teststeps.DeleteWorkspaceStep{}
-	defer func() {
-		if err != nil {
-			log.Printf("Smoketest failed: %s", err.Error())
-		}
-
-		shouldDelete := false
-		for _, s := range stepsToRun {
-			if s.Name() == deleteStep.Name() {
-				shouldDelete = true
-				break
-			}
-		}
-
-		if workspaceID != 0 && shouldDelete {
-			deleteErr := deleteStep.Run(context.Background(), c.Opts, &workspaceID)
-			if deleteErr != nil {
-				if err == nil {
-					err = deleteErr
-				}
-			}
-		}
-
-		if err == nil {
-			log.Println("Smoketest completed successfully!")
-		}
-	}()
-
-	// Execute steps
-	for _, step := range stepsToRun {
-		// Skip deleteWorkspace in the main loop as it's handled in defer
-		if step.Name() == deleteStep.Name() {
-			continue
-		}
-		if err = step.Run(ctx, c.Opts, &workspaceID); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
