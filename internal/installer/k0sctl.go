@@ -57,6 +57,7 @@ type githubRelease struct {
 
 func (k *K0sctl) GetLatestVersion() (string, error) {
 	releaseURL := "https://api.github.com/repos/k0sproject/k0sctl/releases/latest"
+
 	responseBody, err := k.Http.Get(releaseURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch latest k0sctl release: %w", err)
@@ -74,6 +75,8 @@ func (k *K0sctl) GetLatestVersion() (string, error) {
 	return release.TagName, nil
 }
 
+// Download returns the path of the k0sctl binary for version, the latest release when version is
+// empty, in the OMS cache directory. A cached binary of that version is reused unless force is set.
 func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error) {
 	cacheDir, err := k.Env.GetOmsCacheDir()
 	if err != nil {
@@ -90,6 +93,7 @@ func (k *K0sctl) Download(version string, force bool, quiet bool) (string, error
 		if err != nil {
 			return "", fmt.Errorf("failed to get latest version: %w", err)
 		}
+
 		io.Verbosef(!quiet, "Using latest k0sctl version: %s", version)
 	}
 

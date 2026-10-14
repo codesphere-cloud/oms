@@ -343,7 +343,7 @@ var _ = Describe("Installer.Install", func() {
 		})
 
 		DescribeTable("compares the OCI repository with the registry URL",
-			func(registryURL, chartName string) {
+			func(repoURL, registryURL, chartName string) {
 				helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 				helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 					return cfg.ChartName == chartName
@@ -351,13 +351,15 @@ var _ = Describe("Installer.Install", func() {
 
 				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
 					BOM:            bomConfig,
-					RepoURL:        "oci://10.10.0.6:5000/codesphere-cloud/charts",
+					RepoURL:        repoURL,
 					OciRegistryURL: registryURL,
 				}, Helm: helmMock}
 				Expect(a.Install()).To(Succeed())
 			},
-			Entry("naming its scheme", "oci://10.10.0.6:5000/codesphere-cloud/charts", "oci://10.10.0.6:5000/codesphere-cloud/charts/argocd"),
-			Entry("left empty", "", "oci://10.10.0.6:5000/codesphere-cloud/charts/argo-cd"),
+			Entry("naming its scheme", "oci://10.10.0.6:5000/codesphere-cloud/charts", "oci://10.10.0.6:5000/codesphere-cloud/charts", "oci://10.10.0.6:5000/codesphere-cloud/charts/argocd"),
+			Entry("ending the repository in a slash", "oci://10.10.0.6:5000/codesphere-cloud/charts/", "10.10.0.6:5000/codesphere-cloud/charts", "oci://10.10.0.6:5000/codesphere-cloud/charts/argocd"),
+			Entry("ending the registry URL in a slash", "oci://10.10.0.6:5000/codesphere-cloud/charts", "10.10.0.6:5000/codesphere-cloud/charts/", "oci://10.10.0.6:5000/codesphere-cloud/charts/argocd"),
+			Entry("left empty", "oci://10.10.0.6:5000/codesphere-cloud/charts", "", "oci://10.10.0.6:5000/codesphere-cloud/charts/argo-cd"),
 		)
 
 		It("falls back to the upstream chart when no BOM is provided", func() {

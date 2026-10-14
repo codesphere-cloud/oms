@@ -119,8 +119,8 @@ func (a *Installer) Install() error {
 
 	var mirrorValues map[string]any
 
-	mirror := strings.TrimPrefix(a.OciRegistryURL, "oci://")
-	if a.BOM != nil && mirror != "" && a.RepoURL == "oci://"+mirror {
+	mirror := strings.TrimRight(strings.TrimPrefix(a.OciRegistryURL, "oci://"), "/")
+	if a.BOM != nil && mirror != "" && strings.TrimRight(a.RepoURL, "/") == "oci://"+mirror {
 		var err error
 
 		chartName = mirrorChartName

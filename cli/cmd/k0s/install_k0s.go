@@ -163,12 +163,15 @@ func (c *InstallK0sCmd) determineK0sVersion(k0s installer.K0sManager) (string, e
 	k0sVersion := c.Opts.Version
 	if k0sVersion == "" {
 		var err error
+
 		k0sVersion, err = k0s.GetLatestVersion()
 		if err != nil {
 			return "", fmt.Errorf("failed to get latest k0s version: %w", err)
 		}
+
 		log.Printf("Using latest k0s version: %s", k0sVersion)
 	}
+
 	return k0sVersion, nil
 }
 
@@ -193,6 +196,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 
 func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
 	log.Println("Downloading k0sctl...")
+
 	k0sctlPath, err := k0sctl.Download(c.Opts.K0sctlVersion, c.Opts.Force, false)
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0sctl: %w", err)
