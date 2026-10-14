@@ -112,14 +112,15 @@ func (a *Installer) Install() error {
 		return err
 	}
 
-	// An OCI repository together with a BOM is a registry the package was mirrored into, which
-	// serves the Codesphere chart and its images instead of the upstream chart.
+	// A repository naming the registry the package was mirrored into serves the Codesphere chart
+	// and its images instead of the upstream chart.
 	chartName := "argo-cd"
 	version := a.Version
 
 	var mirrorValues map[string]any
 
-	if a.BOM != nil && strings.HasPrefix(a.RepoURL, "oci://") {
+	mirror := strings.TrimPrefix(a.OciRegistryURL, "oci://")
+	if a.BOM != nil && mirror != "" && a.RepoURL == "oci://"+mirror {
 		var err error
 
 		chartName = mirrorChartName
@@ -302,9 +303,6 @@ func (a *Installer) mirrorChart() (string, map[string]any, error) {
 		"redis":        map[string]any{"image": map[string]any{"repository": repositories["redis"]}},
 		"extraObjects": []any{pullSecret},
 	}
-	if dex, ok := repositories["dexidp/dex"]; ok {
-		argoCD["dex"] = map[string]any{"image": map[string]any{"repository": dex}}
-	}
 
 	return version, map[string]any{
 		// The Codesphere chart syncs the Dex client secret through an ExternalSecret, which needs
@@ -316,9 +314,10 @@ func (a *Installer) mirrorChart() (string, map[string]any, error) {
 
 // mirrorImageRepositories returns the mirror repositories of the images the Codesphere chart
 // runs, keyed by the end of their upstream name, which the BOM keeps below whichever path the
-// chart mirrors them to. They are named the way 'oms copy package' copied them below host. The
-// argocd and redis images are required, Dex is only used when it is enabled.
+// chart mirrors them to. They are named the way 'oms copy package' copied them below host. Both
+// images are required.
 func (a *Installer) mirrorImageRepositories(host string) (map[string]string, error) {
+	names := []string{"argoproj/argocd", "redis"}
 	repositories := map[string]string{}
 
 	for _, image := range a.BOM.Components[mirrorChartName].ContainerImages {
@@ -327,7 +326,7 @@ func (a *Installer) mirrorImageRepositories(host string) (map[string]string, err
 			return nil, fmt.Errorf("parsing %s image %q from the BOM: %w", mirrorChartName, image, err)
 		}
 
-		for _, name := range []string{"argoproj/argocd", "redis", "dexidp/dex"} {
+		for _, name := range names {
 			if !strings.HasSuffix("/"+reference.Path(named), "/"+name) {
 				continue
 			}
@@ -346,7 +345,7 @@ func (a *Installer) mirrorImageRepositories(host string) (map[string]string, err
 		}
 	}
 
-	for _, name := range []string{"argoproj/argocd", "redis"} {
+	for _, name := range names {
 		if _, ok := repositories[name]; !ok {
 			return nil, fmt.Errorf("BOM lists no %s image for the %s chart", name, mirrorChartName)
 		}

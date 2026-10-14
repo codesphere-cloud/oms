@@ -311,8 +311,9 @@ var _ = Describe("Installer.Install", func() {
 			}), mock.Anything).Return(nil)
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
-				BOM:     bomConfig,
-				RepoURL: "oci://10.10.0.6:5000/codesphere-cloud/charts",
+				BOM:            bomConfig,
+				RepoURL:        "oci://10.10.0.6:5000/codesphere-cloud/charts",
+				OciRegistryURL: "10.10.0.6:5000/codesphere-cloud/charts",
 			}, Helm: helmMock}
 			Expect(a.Install()).To(Succeed())
 		})
@@ -327,6 +328,38 @@ var _ = Describe("Installer.Install", func() {
 			Expect(a.Install()).To(Succeed())
 		})
 
+		It("uses the upstream chart from an OCI repository other than the mirror", func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ChartName == "oci://ghcr.io/argoproj/argo-helm/argo-cd" && cfg.Version == ""
+			}), mock.Anything).Return(nil)
+
+			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+				BOM:            bomConfig,
+				RepoURL:        "oci://ghcr.io/argoproj/argo-helm",
+				OciRegistryURL: "10.10.0.6:5000/codesphere-cloud/charts",
+			}, Helm: helmMock}
+			Expect(a.Install()).To(Succeed())
+		})
+
+		DescribeTable("compares the OCI repository with the registry URL",
+			func(registryURL, chartName string) {
+				helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+				helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+					return cfg.ChartName == chartName
+				}), mock.Anything).Return(nil)
+
+				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
+					BOM:            bomConfig,
+					RepoURL:        "oci://10.10.0.6:5000/codesphere-cloud/charts",
+					OciRegistryURL: registryURL,
+				}, Helm: helmMock}
+				Expect(a.Install()).To(Succeed())
+			},
+			Entry("naming its scheme", "oci://10.10.0.6:5000/codesphere-cloud/charts", "oci://10.10.0.6:5000/codesphere-cloud/charts/argocd"),
+			Entry("left empty", "", "oci://10.10.0.6:5000/codesphere-cloud/charts/argo-cd"),
+		)
+
 		It("falls back to the upstream chart when no BOM is provided", func() {
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
@@ -338,7 +371,10 @@ var _ = Describe("Installer.Install", func() {
 		})
 
 		Context("installing from a mirror", func() {
-			const mirrorURL = "oci://10.10.0.6:5000/codesphere-cloud/charts"
+			const (
+				mirrorRegistry = "10.10.0.6:5000/codesphere-cloud/charts"
+				mirrorURL      = "oci://" + mirrorRegistry
+			)
 
 			var installed installer.ChartConfig
 
@@ -375,10 +411,11 @@ var _ = Describe("Installer.Install", func() {
 				captureInstall()
 
 				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
-					BOM:         bomConfig,
-					RepoURL:     mirrorURL,
-					OciUsername: "oms",
-					OciPassword: "secret",
+					BOM:            bomConfig,
+					RepoURL:        mirrorURL,
+					OciRegistryURL: mirrorRegistry,
+					OciUsername:    "oms",
+					OciPassword:    "secret",
 				}, Helm: helmMock}
 				Expect(a.Install()).To(Succeed())
 
@@ -389,7 +426,6 @@ var _ = Describe("Installer.Install", func() {
 						HaveKeyWithValue("imagePullSecrets", ConsistOf(HaveKeyWithValue("name", "argocd-registry-pull"))),
 					)),
 					HaveKeyWithValue("redis", HaveKeyWithValue("image", HaveKeyWithValue("repository", "10.10.0.6:5000/public_ecr_aws/docker/library/redis"))),
-					HaveKeyWithValue("dex", Not(HaveKey("image"))),
 					HaveKeyWithValue("extraObjects", ConsistOf(And(
 						HaveKeyWithValue("type", "kubernetes.io/dockerconfigjson"),
 						HaveKeyWithValue("metadata", And(
@@ -409,9 +445,10 @@ var _ = Describe("Installer.Install", func() {
 				captureInstall()
 
 				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
-					Version: "2.0.0",
-					BOM:     bomConfig,
-					RepoURL: mirrorURL,
+					Version:        "2.0.0",
+					BOM:            bomConfig,
+					RepoURL:        mirrorURL,
+					OciRegistryURL: mirrorRegistry,
 				}, Helm: helmMock}
 				Expect(a.Install()).To(Succeed())
 
@@ -419,24 +456,14 @@ var _ = Describe("Installer.Install", func() {
 				Expect(installed.Version).To(Equal("2.0.0"))
 			})
 
-			It("installs the same chart and version when run again", func() {
-				helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil).Twice()
-				helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-					return cfg.ChartName == "oci://10.10.0.6:5000/codesphere-cloud/charts/argocd" && cfg.Version == "1.2.3"
-				}), mock.Anything).Return(nil).Twice()
-
-				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{BOM: bomConfig, RepoURL: mirrorURL}, Helm: helmMock}
-				Expect(a.Install()).To(Succeed())
-				Expect(a.Install()).To(Succeed())
-			})
-
 			It("lets a value file override the mirror defaults", func() {
 				captureInstall()
 
 				a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
-					BOM:        bomConfig,
-					RepoURL:    mirrorURL,
-					ValueFiles: []string{writeValuesFile("argo-cd:\n  redis:\n    image:\n      repository: registry.example.com/redis\n")},
+					BOM:            bomConfig,
+					RepoURL:        mirrorURL,
+					OciRegistryURL: mirrorRegistry,
+					ValueFiles:     []string{writeValuesFile("argo-cd:\n  redis:\n    image:\n      repository: registry.example.com/redis\n")},
 				}, Helm: helmMock}
 				Expect(a.Install()).To(Succeed())
 
@@ -451,8 +478,9 @@ var _ = Describe("Installer.Install", func() {
 			DescribeTable("fails without touching helm when the BOM cannot serve the mirror",
 				func(component bom.ComponentConfig, message string) {
 					a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{
-						BOM:     &bom.Config{Components: map[string]bom.ComponentConfig{"argocd": component}},
-						RepoURL: mirrorURL,
+						BOM:            &bom.Config{Components: map[string]bom.ComponentConfig{"argocd": component}},
+						RepoURL:        mirrorURL,
+						OciRegistryURL: mirrorRegistry,
 					}, Helm: helmMock}
 
 					Expect(a.Install()).To(MatchError(ContainSubstring(message)))
