@@ -199,7 +199,7 @@ License URL: https://github.com/beorn7/perks/blob/v1.0.1/LICENSE
 Module: github.com/blang/semver/v4
 Version: v4.0.0
 License: MIT
-License URL: https://github.com/blang/semver/blob/v4.0.0/v4/LICENSE
+License URL: https://github.com/blang/semver/blob/v4.0.0/LICENSE
  
 ----------
 Module: github.com/bmatcuk/doublestar/v4
@@ -721,7 +721,7 @@ License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.
 Module: github.com/googleapis/gax-go/v2
 Version: v2.26.2
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/gax-go/blob/v2.26.2/v2/LICENSE
+License URL: https://github.com/googleapis/gax-go/blob/v2.26.2/LICENSE
  
 ----------
 Module: github.com/gorilla/websocket
@@ -1501,7 +1501,7 @@ License URL: https://cs.opensource.google/go/x/time/+/v0.16.0:LICENSE
 Module: gomodules.xyz/jsonpatch/v2
 Version: v2.5.0
 License: Apache-2.0
-License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
+License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/LICENSE
  
 ----------
 Module: google.golang.org/api
@@ -1549,37 +1549,37 @@ License URL: https://github.com/protocolbuffers/protobuf-go/blob/v1.36.12/LICENS
 Module: gopkg.in/evanphx/json-patch.v4
 Version: v4.13.0
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://github.com/evanphx/json-patch/blob/v4.13.0/LICENSE
  
 ----------
 Module: gopkg.in/inf.v0
 Version: v0.9.1
 License: BSD-3-Clause
-License URL: Unknown
+License URL: https://github.com/go-inf/inf/blob/v0.9.1/LICENSE
  
 ----------
 Module: gopkg.in/validator.v2
 Version: v2.0.1
 License: Apache-2.0
-License URL: Unknown
+License URL: https://github.com/go-validator/validator/blob/v2.0.1/LICENSE
  
 ----------
 Module: gopkg.in/warnings.v0
 Version: v0.1.2
 License: BSD-2-Clause
-License URL: Unknown
+License URL: https://github.com/go-warnings/warnings/blob/v0.1.2/LICENSE
  
 ----------
 Module: gopkg.in/yaml.v2
 Version: v2.4.0
 License: Apache-2.0
-License URL: Unknown
+License URL: https://github.com/go-yaml/yaml/blob/v2.4.0/LICENSE
  
 ----------
 Module: gopkg.in/yaml.v3
 Version: v3.0.1
 License: MIT
-License URL: Unknown
+License URL: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
  
 ----------
 Module: helm.sh/helm/v4
