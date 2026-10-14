@@ -23,13 +23,21 @@ $ oms download k0s --version 1.22.0
 # Force download even if k0s binary exists
 $ oms download k0s --force
 
+# Also download the airgap image bundle for that version into the OMS cache
+$ oms download k0s --airgapped
+
+# Also download the airgap image bundle for that version to the given file
+$ oms download k0s --airgapped --path <file>
+
 ```
 
 ### Options
 
 ```
+      --airgapped        Also download the airgap image bundle for that version
   -f, --force            Force download even if k0s binary exists
   -h, --help             help for k0s
+      --path string      File to save the airgap image bundle to (requires --airgapped; default: the OMS cache)
   -v, --version string   Version of k0s to download
 ```
 

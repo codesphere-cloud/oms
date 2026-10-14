@@ -4715,8 +4715,8 @@ github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWN
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/rogpeppe/go-internal v1.16.0 h1:O9DK+vNMDVGLr2BeZqmpLeMjiMNkuXfcqntWbZV6S5g=
 github.com/rogpeppe/go-internal v1.16.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/rook/rook/pkg/apis v0.0.0-20261012174133-a96ef96a9ccf h1:qDdHDTavm5qog5ufKU+Rr6CoBjmSWk/aVHV3FSe+1hI=
-github.com/rook/rook/pkg/apis v0.0.0-20261012174133-a96ef96a9ccf/go.mod h1:jbdPDb54L0CYGVIYI6MsBPN916+g0z3Pm/JvwphYSTc=
+github.com/rook/rook/pkg/apis v0.0.0-20261013163528-f6fe4dd1403a h1:TtLPR02/U3Ez39ESPQYrK72DNHHPp8cnnYygsduXSsw=
+github.com/rook/rook/pkg/apis v0.0.0-20261013163528-f6fe4dd1403a/go.mod h1:G6ksSVAnogY0XH9yvy14ucQ8OK6utsZtgs4qDc5laLM=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937 h1:1TpdIqF9mtQfhNfwOpXdpJTMhx66PonVCCvYcGWvu/I=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937/go.mod h1:jOxzr6jXuSz9UztMhEpcBi1/vPygUA4z9kFuFj+6zd8=
 github.com/rs/xid v1.2.1/go.mod h1:+uKXf+4Djp6Md1KODXJxgGQPKngRmWyn10oCKFzNHOQ=
@@ -6265,8 +6265,8 @@ google.golang.org/api v0.220.0/go.mod h1:26ZAlY6aN/8WgpCzjPNy18QpYaz7Zgg1h0qe1Gk
 google.golang.org/api v0.222.0/go.mod h1:efZia3nXpWELrwMlN5vyQrD4GmJN1Vw0x68Et3r+a9c=
 google.golang.org/api v0.224.0/go.mod h1:3V39my2xAGkodXy0vEqcEtkqgw2GtrFL5WuBZlCTCOQ=
 google.golang.org/api v0.228.0/go.mod h1:wNvRS1Pbe8r4+IfBIniV8fwCpGwTrYa+kMUDiC5z5a4=
-google.golang.org/api v0.302.0 h1:/eENsEv3+GE0QiEmXjdaLI84Mt76LNjGz4vp4E7sRVw=
-google.golang.org/api v0.302.0/go.mod h1:dcjRWAy1QdjGb3Z67Qu0gdBWH2gL8Qoy/RI2ZVuvdeE=
+google.golang.org/api v0.303.0 h1:W0OL6l18x57wvSVOCeG4dyqV0xc8AucBnFqA3gH22YE=
+google.golang.org/api v0.303.0/go.mod h1:dcjRWAy1QdjGb3Z67Qu0gdBWH2gL8Qoy/RI2ZVuvdeE=
 google.golang.org/appengine v1.1.0/go.mod h1:EbEs0AVv82hx2wNQdGPgUI5lhzA/G0D9YwlJXL52JkM=
 google.golang.org/appengine v1.2.0/go.mod h1:xpcJRLb0r/rnEns0DIKYYv+WjYCduHsrkT7/EB5XEv4=
 google.golang.org/appengine v1.4.0/go.mod h1:xpcJRLb0r/rnEns0DIKYYv+WjYCduHsrkT7/EB5XEv4=
