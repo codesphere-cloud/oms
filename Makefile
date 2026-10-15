@@ -53,11 +53,11 @@ docs-docusaurus:
 	go run -ldflags="-X 'github.com/codesphere-cloud/oms/internal/version.binName=oms'" hack/gendocs/main.go --docusaurus --output "$(DOCS_OUTPUT)" --version "$(DOCS_VERSION)"
 
 generate-license: generate
-	go tool go-licenses report --template .NOTICE.template ./... > NOTICE
+	$(MAKE) generate-notice
 	copywrite headers apply
 
 generate-notice:
-	go tool go-licenses report --template .NOTICE.template ./... > NOTICE
+	go run ./hack/gennotice
 
 run-lima:
 	limactl start ./hack/lima-oms.yaml

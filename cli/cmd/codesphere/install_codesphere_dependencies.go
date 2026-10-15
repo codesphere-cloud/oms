@@ -43,6 +43,10 @@ func (c *InstallCodesphereDepenciesCmd) RunE(_ *cobra.Command, _ []string) error
 	}
 	defer cleanup()
 
+	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+		return err
+	}
+
 	return installCodesphereDepencies(effectiveOpts, cfg, c.Env)
 }
 

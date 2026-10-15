@@ -10,12 +10,21 @@ import (
 	"path/filepath"
 	"strings"
 
+	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
+	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
+	"github.com/codesphere-cloud/oms/internal/portal"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
+	"net/http"
+	"net/http/httptest"
 )
 
 var _ = Describe("prepareInstallConfig", func() {
@@ -244,5 +253,72 @@ var _ = Describe("install codesphere vault type", func() {
 		opts := &InstallCodesphereOpts{VaultType: string(vault.TypePlain), PrivKey: "age-key.txt"}
 		err := validateInstallCodesphereVault(opts)
 		Expect(err).To(MatchError(`install codesphere requires vault type "sops"`))
+	})
+})
+
+var _ = Describe("ensureCodespherePackageForVersion", func() {
+	It("accepts an install command without the legacy package flag", func() {
+		parent := &cobra.Command{Use: "install"}
+		AddInstallCmd(parent, &util.GlobalOptions{})
+		child, _, err := parent.Find([]string{"codesphere"})
+		Expect(err).NotTo(HaveOccurred())
+
+		child.RunE = func(_ *cobra.Command, _ []string) error { return nil }
+
+		parent.SetArgs([]string{"codesphere", "-c", "config.yaml"})
+		Expect(parent.Execute()).To(Succeed())
+	})
+	It("preserves an explicit package without requiring operations or portal access", func() {
+		opts := &InstallCodesphereOpts{Package: "offline-package.tar.gz"}
+		Expect(ensureCodespherePackageForVersion(opts, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(Succeed())
+		Expect(opts.Package).To(Equal("offline-package.tar.gz"))
+	})
+	It("rejects a missing version before accessing the workdir", func() {
+		Expect(ensureCodespherePackageForVersion(&InstallCodesphereOpts{}, files.RootConfig{}, env.NewMockEnv(GinkgoT()))).To(MatchError(ContainSubstring("operations.codesphere is required")))
+	})
+	It("uses the version from the merged config and preserves configured skip steps", func() {
+		dir := GinkgoT().TempDir()
+		base := filepath.Join(dir, "base.yaml")
+		overlay := filepath.Join(dir, "overlay.yaml")
+
+		Expect(os.WriteFile(base, []byte("operations:\n  codesphere: 1.94.0\n  skip: [ceph]\n"), 0600)).To(Succeed())
+		Expect(os.WriteFile(overlay, []byte("operations:\n  codesphere: 1.95.0\n"), 0600)).To(Succeed())
+		original := &InstallCodesphereOpts{Configs: []string{base, overlay}}
+		effective, cfg, cleanup, err := prepareInstallConfig(original, installer.NewConfig())
+		Expect(err).NotTo(HaveOccurred())
+
+		defer cleanup()
+
+		build := portal.Build{Version: "codesphere-v1.95.0", Hash: "abc123", Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}}}
+		sum := md5.Sum([]byte("cached package"))
+		build.Artifacts[0].Md5Sum = hex.EncodeToString(sum[:])
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer GinkgoRecover()
+
+			switch r.URL.Path {
+			case "/packages/codesphere":
+				Expect(json.NewEncoder(w).Encode(portal.Builds{Builds: []portal.Build{build}})).To(Succeed())
+			case "/packages/codesphere/download":
+				Expect(r.Header.Get("Range")).To(Equal("bytes=14-"))
+				w.WriteHeader(http.StatusPartialContent)
+			default:
+				Fail("unexpected package portal request: " + r.URL.Path)
+			}
+		}))
+		defer server.Close()
+
+		GinkgoT().Setenv("OMS_PORTAL_API", server.URL)
+		GinkgoT().Setenv("OMS_PORTAL_API_KEY", "test-key")
+
+		cached := filepath.Join(dir, build.BuildPackageFilename("installer-lite.tar.gz"))
+		Expect(os.WriteFile(cached, []byte("cached package"), 0600)).To(Succeed())
+
+		environment := env.NewMockEnv(GinkgoT())
+		environment.EXPECT().GetOmsWorkdir().Return(dir)
+		Expect(ensureCodespherePackageForVersion(effective, cfg, environment)).To(Succeed())
+		Expect(effective.Package).To(Equal(cached))
+		Expect(original.Package).To(BeEmpty())
+		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
 	})
 })
