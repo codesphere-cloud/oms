@@ -138,11 +138,11 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
-	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDVersion, "argo-version", "", "ArgoCD Helm chart version to install")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDVersion, "argo-version", "", "ArgoCD Helm chart version to install. When --argo-repo is oci:// followed by --argo-registry-url it is the version of the Codesphere argocd chart and defaults to the one the package pins")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryURL, "argo-registry-url", "", "OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryCA, "argo-registry-ca", "", "Path to the certificate authority of the OCI registry, needed when its certificate is self-signed")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.ArgoCDForceConflicts, "argo-force-conflicts", false, "Force SSA ownership conflicts during ArgoCD install")
-	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRepoURL, "argo-repo", argocd.DefaultRepoURL, "ArgoCD Helm chart repository URL")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRepoURL, "argo-repo", argocd.DefaultRepoURL, "ArgoCD Helm chart repository URL. Set to oci:// followed by --argo-registry-url, the registry the package was mirrored into, ArgoCD is installed from it with the Codesphere argocd chart and its images. Values of the upstream chart from --argo-values then go below argo-cd")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file (can be specified multiple times)")
 

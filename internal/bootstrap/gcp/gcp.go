@@ -1175,7 +1175,7 @@ func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFi
 func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilename string) string {
 	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s%s%s",
 		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename,
-		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg())
+		b.generateLocalRegistryArgs(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg())
 }
 
 // remotePCAppsValuesPath is where the i-th pc-apps values file is stored on the jumpbox. The index
@@ -1209,16 +1209,18 @@ func (b *GCPBootstrapper) generatePCAppsValuesArg() string {
 	return arg.String()
 }
 
-// generateRegistryTrustArg points the installation at the certificate authority of the local
-// container registry, which EnsureLocalContainerRegistry leaves on the jumpbox. ArgoCD pulls the
-// Helm charts from that registry and verifies its certificate inside its own containers, where the
-// jumpbox's trust store does not reach.
-func (b *GCPBootstrapper) generateRegistryTrustArg() string {
+// generateLocalRegistryArgs points the installation at the local container registry. ArgoCD pulls
+// the Helm charts from that registry and verifies its certificate inside its own containers, where
+// the jumpbox's trust store does not reach, so it is given the certificate authority that
+// EnsureLocalContainerRegistry leaves on the jumpbox. ArgoCD itself is installed from the
+// registry's copy of the Codesphere chart and its images.
+func (b *GCPBootstrapper) generateLocalRegistryArgs() string {
 	if b.Env.RegistryType != RegistryTypeLocalContainer {
 		return ""
 	}
 
-	return " --argo-registry-ca " + jumpboxRegistryCertFile
+	return " --argo-registry-ca " + jumpboxRegistryCertFile +
+		" --argo-repo oci://" + b.Env.ContainerRegistryURL + installer.ChartsRepositoryPath
 }
 
 func (b *GCPBootstrapper) generateSkipStepsArg() string {

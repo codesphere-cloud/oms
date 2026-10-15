@@ -1896,7 +1896,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-def9876543210-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --argo-repo oci://10.10.0.2/codesphere-cloud/charts -s kubernetes").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1906,7 +1906,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("downloads and installs codesphere with hash", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --argo-repo oci://10.10.0.2/codesphere-cloud/charts -s kubernetes").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1919,7 +1919,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().CopyFile(mock.Anything, "values/base.yaml", "/root/pc-apps-values/0-base.yaml").Return(nil)
 				nodeClient.EXPECT().CopyFile(mock.Anything, "overlay/base.yaml", "/root/pc-apps-values/1-base.yaml").Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --pc-apps-values /root/pc-apps-values/0-base.yaml --pc-apps-values /root/pc-apps-values/1-base.yaml -s kubernetes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --argo-repo oci://10.10.0.2/codesphere-cloud/charts --pc-apps-values /root/pc-apps-values/0-base.yaml --pc-apps-values /root/pc-apps-values/1-base.yaml -s kubernetes").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1940,7 +1940,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes,postgres").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --argo-repo oci://10.10.0.2/codesphere-cloud/charts -s kubernetes,postgres").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1975,7 +1975,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 							"oms copy package -p local-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
 						nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
+							"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p local-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --argo-repo oci://10.10.0.2/codesphere-cloud/charts -s kubernetes").Return(nil)
 
 						err := bs.InstallCodesphere()
 						Expect(err).NotTo(HaveOccurred())
@@ -2029,7 +2029,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("fails when install codesphere fails", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(fmt.Errorf("install error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --argo-repo oci://10.10.0.2/codesphere-cloud/charts -s kubernetes").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
