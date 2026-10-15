@@ -446,6 +446,20 @@ var _ = Describe("PortalClient", func() {
 				Expect(build.Version).To(Equal("1.42.1"))
 			})
 
+			DescribeTable("rejects hashes that do not contain the stored hash as a prefix", func(hash string) {
+				_, err := client.GetBuild(portal.OmsProduct, "1.42.1", hash)
+				Expect(err).To(MatchError(ContainSubstring("not found")))
+			},
+				Entry("prefix", "last"),
+				Entry("different hash", "otherBuild"),
+			)
+
+			It("accepts a full hash when the portal stores an abbreviated hash", func() {
+				build, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuildExtra")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(build.Hash).To(Equal("lastBuild"))
+			})
+
 			It("returns the build matching version and hash", func() {
 				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
 				build, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuild")

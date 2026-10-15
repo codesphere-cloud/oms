@@ -39,34 +39,21 @@ const temporaryPostgresNodePortPrefix = "oms-masterdata-nodeport"
 // The package is downloaded into the directory that contains the config/secrets
 // files and its on-disk filename is returned.
 func (b *LocalBootstrapper) DownloadInstallerPackage() (string, error) {
-	version := b.Env.InstallVersion
-	hash := b.Env.InstallHash
-
-	if version == "" {
-		return "", fmt.Errorf("install version is required to download from the portal")
+	if b.Env.InstallConfig == nil {
+		return "", fmt.Errorf("install config must be prepared before downloading a package")
 	}
 
-	log.Printf("Downloading Codesphere package %s from the OMS portal...", version)
-
-	p := portal.NewPortalClient()
-
-	build, err := p.GetBuild(portal.CodesphereProduct, version, hash)
+	version, err := b.Env.InstallConfig.CodespherePackageVersion()
 	if err != nil {
-		return "", fmt.Errorf("failed to get build from portal: %w", err)
-	}
-	fullFilename := build.BuildPackageFilename(installerArtifactFilename)
-	destPath := filepath.Join(b.Env.InstallDir, fullFilename)
-
-	if b.fw.Exists(destPath) {
-		log.Printf("Installer package already exists at %s, skipping download", destPath)
-		return destPath, nil
+		return "", fmt.Errorf("resolve installer package version: %w", err)
 	}
 
-	if err := portal.DownloadAndVerifyBuild(p, b.fw, portal.CodesphereProduct, build, installerArtifactFilename, destPath, portal.DownloadOptions{Resume: true}); err != nil {
-		return "", fmt.Errorf("failed to download installer package: %w", err)
+	filename, err := portal.EnsureCodespherePackage(portal.NewPortalClient(), b.Env.InstallDir, version, b.Env.InstallConfig.Operations.Codesphere.Hash, installerArtifactFilename, false)
+	if err != nil {
+		return "", fmt.Errorf("prepare installer package: %w", err)
 	}
 
-	return destPath, nil
+	return filename, nil
 }
 
 // PrepareInstallerBundle resolves the installer package to a directory.

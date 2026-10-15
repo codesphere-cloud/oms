@@ -106,7 +106,9 @@ Set the package version alongside the existing operation skip steps:
 
 ```yaml
 operations:
-  codesphere: 1.95.0
+  codesphere:
+    version: 1.111.0
+    hash: abc123 # Optional: omit to select the latest build of this version.
   skip: [load-container-images]
 ```
 
@@ -126,3 +128,24 @@ An explicit `oms install codesphere --package <archive>` overrides the configure
 version and supports offline installation. `oms download package <version>` and
 `--version <version>` retain their existing behavior of downloading to the current
 directory and continue requiring an explicit version.
+
+The existing scalar form, `operations: {codesphere: 1.111.0}`, remains supported.
+Config generation writes the explicit object form. Branch names such as `master`
+are supported in either form. A supplied full Git hash can also match the abbreviated hash stored by the portal.
+Quote numeric-looking versions such as `"1.10"` to preserve them as YAML strings.
+
+```sh
+oms init install-config --codesphere-version 1.111.0 --codesphere-hash abc123
+```
+
+`--codesphere-hash` is optional. In interactive mode these flags provide defaults for
+the version and hash questions; entered answers take precedence. In non-interactive
+mode they set the generated values directly. Bootstrap's `--install-version` and optional
+`--install-hash` are also written to the generated config. GCP installations then
+read that config instead of passing a package override; local package overrides
+and the download required before registry mirroring remain supported.
+
+When a bootstrap install config contains `operations.codesphere.version`, bootstrap
+automatically installs that version using the optional configured hash. Explicit
+`--install-version` or `--install-local` options override the config selection;
+`--install-hash` overrides the configured hash.

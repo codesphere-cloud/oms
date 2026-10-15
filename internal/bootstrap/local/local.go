@@ -119,14 +119,14 @@ func NewLocalBootstrapper(ctx context.Context, stlog *bootstrap.StepLogger, kube
 }
 
 func (b *LocalBootstrapper) Bootstrap() error {
-	err := b.stlog.Step("Prepare installer bundle", b.PrepareInstaller)
-	if err != nil {
-		return fmt.Errorf("failed to prepare installer bundle: %w", err)
-	}
-
-	err = b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
+	err := b.stlog.Step("Ensure install config", b.EnsureInstallConfig)
 	if err != nil {
 		return fmt.Errorf("failed to ensure install config: %w", err)
+	}
+
+	err = b.stlog.Step("Prepare installer bundle", b.PrepareInstaller)
+	if err != nil {
+		return fmt.Errorf("failed to prepare installer bundle: %w", err)
 	}
 
 	err = b.stlog.Step("Ensure secrets", b.EnsureSecrets)
@@ -517,6 +517,16 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 	}
 
 	b.Env.InstallConfig = b.icg.GetInstallConfig()
+	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" && b.Env.InstallConfig.Operations != nil {
+		b.Env.InstallVersion = b.Env.InstallConfig.Operations.Codesphere.Version
+		if b.Env.InstallHash == "" {
+			b.Env.InstallHash = b.Env.InstallConfig.Operations.Codesphere.Hash
+		}
+	}
+
+	if b.Env.InstallVersion != "" {
+		b.Env.InstallConfig.SetCodespherePackage(b.Env.InstallVersion, b.Env.InstallHash)
+	}
 
 	return nil
 }

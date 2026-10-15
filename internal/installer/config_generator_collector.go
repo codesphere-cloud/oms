@@ -14,6 +14,7 @@ import (
 func (g *InstallConfig) CollectInteractively() error {
 	prompter := prompt.NewPrompter(true)
 
+	g.collectCodespherePackageConfig(prompter)
 	g.collectDatacenterConfig(prompter)
 	g.collectRegistryConfig(prompter)
 	g.collectPostgresConfig(prompter)
@@ -57,6 +58,27 @@ func stringSliceToK8sNodes(ips []string) []files.K8sNode {
 		nodes[i] = files.K8sNode{IPAddress: ip}
 	}
 	return nodes
+}
+
+func (g *InstallConfig) collectCodespherePackageConfig(prompter prompt.Prompter) {
+	log.Println("=== Codesphere Package ===")
+
+	selection := files.CodespherePackageConfig{}
+	if g.Config.Operations != nil {
+		selection = g.Config.Operations.Codesphere
+	}
+
+	version := g.collectString(prompter, "Codesphere version (optional)", selection.Version)
+	if version == "" {
+		return
+	}
+	// A hash from the previous version must not become the default for a new version.
+	if version != selection.Version {
+		selection.Hash = ""
+	}
+
+	hash := g.collectString(prompter, "Codesphere build hash (optional)", selection.Hash)
+	g.Config.SetCodespherePackage(version, hash)
 }
 
 func (g *InstallConfig) collectDatacenterConfig(prompter prompt.Prompter) {

@@ -28,6 +28,24 @@ import (
 )
 
 var _ = Describe("prepareInstallConfig", func() {
+	DescribeTable("merges legacy and object selections", func(base, overlay, version, hash string) {
+		dir := GinkgoT().TempDir()
+		basePath := filepath.Join(dir, "base.yaml")
+		overlayPath := filepath.Join(dir, "overlay.yaml")
+
+		Expect(os.WriteFile(basePath, []byte("operations:\n  skip: [ceph]\n  codesphere: "+base), 0600)).To(Succeed())
+		Expect(os.WriteFile(overlayPath, []byte("operations:\n  codesphere: "+overlay), 0600)).To(Succeed())
+		_, cfg, cleanup, err := prepareInstallConfig(&InstallCodesphereOpts{Configs: []string{basePath, overlayPath}}, installer.NewConfig())
+		Expect(err).NotTo(HaveOccurred())
+
+		defer cleanup()
+
+		Expect(cfg.Operations.Codesphere).To(Equal(files.CodespherePackageConfig{Version: version, Hash: hash}))
+		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+	},
+		Entry("object overlay adds a hash to a legacy version", "1.111.0", "{hash: abc123}", "1.111.0", "abc123"),
+		Entry("legacy override replaces the version and clears the prior hash", "{version: 1.111.0, hash: abc123}", "1.112.0", "1.112.0", ""),
+	)
 	It("merges multiple config files in order and returns a single parsed config path", func() {
 		tmpDir, err := os.MkdirTemp("", "install-config-merge-*")
 		Expect(err).ToNot(HaveOccurred())
@@ -282,7 +300,7 @@ var _ = Describe("ensureCodespherePackageForVersion", func() {
 		overlay := filepath.Join(dir, "overlay.yaml")
 
 		Expect(os.WriteFile(base, []byte("operations:\n  codesphere: 1.94.0\n  skip: [ceph]\n"), 0600)).To(Succeed())
-		Expect(os.WriteFile(overlay, []byte("operations:\n  codesphere: 1.95.0\n"), 0600)).To(Succeed())
+		Expect(os.WriteFile(overlay, []byte("operations:\n  codesphere: {version: 1.95.0, hash: abc123}\n"), 0600)).To(Succeed())
 		original := &InstallCodesphereOpts{Configs: []string{base, overlay}}
 		effective, cfg, cleanup, err := prepareInstallConfig(original, installer.NewConfig())
 		Expect(err).NotTo(HaveOccurred())
@@ -298,7 +316,9 @@ var _ = Describe("ensureCodespherePackageForVersion", func() {
 
 			switch r.URL.Path {
 			case "/packages/codesphere":
-				Expect(json.NewEncoder(w).Encode(portal.Builds{Builds: []portal.Build{build}})).To(Succeed())
+				other := build
+				other.Hash = "other-build"
+				Expect(json.NewEncoder(w).Encode(portal.Builds{Builds: []portal.Build{build, other}})).To(Succeed())
 			case "/packages/codesphere/download":
 				Expect(r.Header.Get("Range")).To(Equal("bytes=14-"))
 				w.WriteHeader(http.StatusPartialContent)
