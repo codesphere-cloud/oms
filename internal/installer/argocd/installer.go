@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// Defaults for the ArgoCD Helm chart repository and the namespace ArgoCD is installed into.
 const (
 	DefaultRepoURL   = "https://argoproj.github.io/argo-helm"
 	DefaultNamespace = "argocd"
@@ -50,9 +51,11 @@ type InstallerConfig struct {
 type Installer struct {
 	InstallerConfig
 	Helm      installer.HelmClient
-	Resources ArgoCDResources
+	Resources Resources
 }
 
+// NewInstaller creates an Installer with Helm and Kubernetes clients. It uses cfg.RESTConfig
+// when set and falls back to the default kubeconfig otherwise.
 func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 	if cfg.RESTConfig != nil {
 		helm, err := installer.NewHelmClientWithRESTConfig(DefaultNamespace, cfg.RESTConfig)

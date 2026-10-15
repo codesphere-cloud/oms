@@ -14,8 +14,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// Resources applies the Codesphere-managed Kubernetes resources an ArgoCD installation needs.
+//
 //mockery:generate: true
-type ArgoCDResources interface {
+type Resources interface {
 	ApplyAll(ctx context.Context) error
 }
 
@@ -36,7 +38,7 @@ type argoCDResources struct {
 // NewArgoCDResources collects the Codesphere-managed resources an ArgoCD installation needs, above
 // all the repository credentials it pulls the Helm charts with. An empty ociUsername falls back to
 // the GHCR user.
-func NewArgoCDResources(clientset kubernetes.Interface, dataCenterID string, ociUsername string, ociPassword string, ociRegistryURL string, gitPassword string) (ArgoCDResources, error) {
+func NewArgoCDResources(clientset kubernetes.Interface, dataCenterID string, ociUsername string, ociPassword string, ociRegistryURL string, gitPassword string) (Resources, error) {
 	if ociUsername == "" {
 		ociUsername = defaultOciUsername
 	}
