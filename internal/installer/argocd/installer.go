@@ -150,7 +150,7 @@ func (a *Installer) Install() error {
 
 	existing, err := a.Helm.FindRelease(cfg.Namespace, cfg.ReleaseName)
 	if err != nil {
-		return err
+		return fmt.Errorf("finding existing ArgoCD release: %w", err)
 	}
 
 	if existing != nil {
@@ -220,7 +220,7 @@ func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) erro
 	log.Println("No existing ArgoCD release found, performing fresh install")
 
 	if err := a.Helm.InstallChart(ctx, cfg, installer.InstallChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
-		return err
+		return fmt.Errorf("installing ArgoCD chart: %w", err)
 	}
 
 	if cfg.Version != "" {
@@ -260,7 +260,7 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 	}
 
 	if err := a.Helm.UpgradeChart(ctx, cfg, installer.UpgradeChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
-		return err
+		return fmt.Errorf("upgrading ArgoCD chart: %w", err)
 	}
 
 	if cfg.Version != "" {

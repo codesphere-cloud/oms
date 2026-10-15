@@ -96,7 +96,11 @@ func (a *argoCDResources) applyLocalCluster(ctx context.Context) error {
 		return fmt.Errorf("rendering local cluster template: %w", err)
 	}
 
-	return k8s.ApplySecretFromYAML(ctx, a.clientset, rendered)
+	if err := k8s.ApplySecretFromYAML(ctx, a.clientset, rendered); err != nil {
+		return fmt.Errorf("applying local cluster secret: %w", err)
+	}
+
+	return nil
 }
 
 func (a *argoCDResources) applyHelmRegistrySecret(ctx context.Context) error {
@@ -111,7 +115,11 @@ func (a *argoCDResources) applyHelmRegistrySecret(ctx context.Context) error {
 		return fmt.Errorf("rendering helm registry template: %w", err)
 	}
 
-	return k8s.ApplySecretFromYAML(ctx, a.clientset, rendered)
+	if err := k8s.ApplySecretFromYAML(ctx, a.clientset, rendered); err != nil {
+		return fmt.Errorf("applying helm registry secret: %w", err)
+	}
+
+	return nil
 }
 
 func (a *argoCDResources) applyGitRepoSecret(ctx context.Context) error {
@@ -124,5 +132,9 @@ func (a *argoCDResources) applyGitRepoSecret(ctx context.Context) error {
 		return fmt.Errorf("rendering git repo template: %w", err)
 	}
 
-	return k8s.ApplySecretFromYAML(ctx, a.clientset, rendered)
+	if err := k8s.ApplySecretFromYAML(ctx, a.clientset, rendered); err != nil {
+		return fmt.Errorf("applying git repo secret: %w", err)
+	}
+
+	return nil
 }
