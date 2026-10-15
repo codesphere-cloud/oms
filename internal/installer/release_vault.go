@@ -31,11 +31,6 @@ func releaseName(cfg files.CodesphereConfig) string {
 	return cfg.ReleaseName
 }
 
-// releaseVaultSecretName returns the name of the secret ESO reads the release's secrets from.
-func releaseVaultSecretName(releaseName string) string {
-	return releaseName + "-vault"
-}
-
 // UsesExternalSecrets reports whether the install config turns on external secrets via
 // codesphere.override.global.externalSecrets. The TS installer passes that override to the
 // umbrella chart as Helm values.
@@ -63,7 +58,8 @@ func WriteReleaseVaultSecret(
 		return "", fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 
-	secretName := releaseVaultSecretName(releaseName(cfg))
+	// ESO reads the release's secrets from here.
+	secretName := releaseName(cfg) + "-vault"
 
 	creator := vault.NewVaultSecretCreator(kubeClient)
 	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, secretName); err != nil {
