@@ -28,11 +28,22 @@ var _ = Describe("laterPhaseOpts", func() {
 		Expect(executableSteps(laterPhaseOpts(opts), installer.DependenciesSteps)).To(Equal([]string{"set-up-cluster"}))
 	})
 
-	It("given options for the infrastructure phase, when the later phase options are derived, then the original skip steps are unchanged", func() {
+	It("given options for the infrastructure phase, when the later phase options are derived, then only the derived options get the shared skips", func() {
 		opts := &InstallCodesphereOpts{SkipSteps: []string{"ceph"}}
 
-		laterPhaseOpts(opts)
+		later := laterPhaseOpts(opts)
 
+		Expect(later.SkipSteps).To(Equal([]string{"copy-dependencies", "extract-dependencies", "ceph"}))
 		Expect(opts.SkipSteps).To(Equal([]string{"ceph"}))
+	})
+
+	It("given skip steps with spare capacity, when the original options are extended afterwards, then the derived options do not change", func() {
+		// Spare capacity is where an append onto opts.SkipSteps would share its backing array.
+		opts := &InstallCodesphereOpts{SkipSteps: append(make([]string, 0, 4), "ceph")}
+		later := laterPhaseOpts(opts)
+
+		opts.SkipSteps = append(opts.SkipSteps, "postgres", "kubernetes")
+
+		Expect(later.SkipSteps).To(Equal([]string{"copy-dependencies", "extract-dependencies", "ceph"}))
 	})
 })
