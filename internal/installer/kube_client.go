@@ -26,7 +26,7 @@ func NewKubeClient(restConfig *rest.Config) (ctrlclient.Client, error) {
 
 	kubeClient, err := ctrlclient.New(restConfig, ctrlclient.Options{Scheme: scheme})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
+		return nil, fmt.Errorf("failed to build controller-runtime client: %w", err)
 	}
 
 	return kubeClient, nil
