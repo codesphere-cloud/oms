@@ -46,6 +46,11 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 
+	// Each release gets its own vault Secret: releases sharing a cluster (master-dev and
+	// previews) would otherwise overwrite or drop each other's keys. It is written here,
+	// right before the release is deployed, not with cs-vault in the dependencies phase:
+	// previews and master-dev only run this phase, and the deploy must see the vault it
+	// was started with. cs-vault stays for the cluster-wide pc-applications charts.
 	if installer.UsesExternalSecrets(cfg.Codesphere) {
 		if err := writeReleaseVault(ctx, opts, cfg); err != nil {
 			return err
