@@ -25,13 +25,13 @@ func writeValuesFile(content string) string {
 var _ = Describe("Installer.Install", func() {
 	var (
 		helmMock            *installer.MockHelmClient
-		argoCDResourcesMock *argocd.MockArgoCDResources
+		argoCDResourcesMock *argocd.MockResources
 		a                   *argocd.Installer
 	)
 
 	BeforeEach(func() {
 		helmMock = installer.NewMockHelmClient(GinkgoT())
-		argoCDResourcesMock = argocd.NewMockArgoCDResources(GinkgoT())
+		argoCDResourcesMock = argocd.NewMockResources(GinkgoT())
 		a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0"}, Helm: helmMock, Resources: argoCDResourcesMock}
 	})
 
