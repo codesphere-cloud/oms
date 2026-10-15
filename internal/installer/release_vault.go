@@ -75,8 +75,10 @@ func WriteReleaseVaultSecret(
 }
 
 // AddExternalSecretsChecksum sets codesphere.override.global.externalSecretsChecksum in the
-// config file. The chart puts it on its ExternalSecrets, which ESO only re-syncs when they
-// change, so a changed vault reaches the release in the same deploy.
+// merged config file OMS hands to the TS installer. The chart puts it on its ExternalSecrets,
+// which ESO only re-syncs when they change, so a changed vault reaches the release in the
+// same deploy. Rewriting the merged config is a stopgap: once OMS deploys through the
+// cs-applications app of apps, it sets the checksum in the values it builds instead.
 func AddExternalSecretsChecksum(configPath, checksum string) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
