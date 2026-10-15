@@ -40,14 +40,14 @@ var _ = Describe("Environment", func() {
 			GinkgoT().Setenv("OMS_PORTAL_API_KEY", strings.Repeat("a", 25))
 
 			_, err := e.GetOmsPortalApiKey()
-			Expect(err).To(MatchError(env.ErrLegacyApiKey))
+			Expect(err).To(MatchError(env.ErrLegacyAPIKey))
 		})
 	})
 
-	Describe("IsLegacyApiKey", func() {
+	Describe("IsLegacyAPIKey", func() {
 		DescribeTable("detects old API keys",
 			func(apiKey string, expected bool) {
-				Expect(env.IsLegacyApiKey(apiKey)).To(Equal(expected))
+				Expect(env.IsLegacyAPIKey(apiKey)).To(Equal(expected))
 			},
 			Entry("old format", strings.Repeat("a", 25), true),
 			Entry("new format", "new-long-api-key-format-very-long-string", false),

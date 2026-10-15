@@ -20,14 +20,15 @@ type Env interface {
 type Environment struct {
 }
 
-// legacyApiKeyLength is the length of API keys in the old format, which are no longer supported.
-const legacyApiKeyLength = 25
+// legacyAPIKeyLength is the length of API keys in the old format, which are no longer supported.
+const legacyAPIKeyLength = 25
 
-var ErrLegacyApiKey = errors.New("OMS_PORTAL_API_KEY uses the old API key format, which is no longer supported. Please request a new API key")
+// ErrLegacyAPIKey is returned when the configured API key uses the old, unsupported format.
+var ErrLegacyAPIKey = errors.New("OMS_PORTAL_API_KEY uses the old API key format, which is no longer supported. Please request a new API key")
 
-// IsLegacyApiKey reports whether the given API key uses the old, unsupported format.
-func IsLegacyApiKey(apiKey string) bool {
-	return len(apiKey) == legacyApiKeyLength
+// IsLegacyAPIKey reports whether the given API key uses the old, unsupported format.
+func IsLegacyAPIKey(apiKey string) bool {
+	return len(apiKey) == legacyAPIKeyLength
 }
 
 func NewEnv() *Environment {
@@ -39,8 +40,9 @@ func (e *Environment) GetOmsPortalApiKey() (string, error) {
 	if apiToken == "" {
 		return "", errors.New("OMS_PORTAL_API_KEY env var required, but not set")
 	}
-	if IsLegacyApiKey(apiToken) {
-		return "", ErrLegacyApiKey
+
+	if IsLegacyAPIKey(apiToken) {
+		return "", ErrLegacyAPIKey
 	}
 	return apiToken, nil
 }
