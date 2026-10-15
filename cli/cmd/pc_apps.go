@@ -6,14 +6,10 @@ package cmd
 import (
 	"fmt"
 
-	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/spf13/cobra"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
@@ -37,15 +33,7 @@ func (c *InstallPCAppsCmd) RunE(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load kubernetes config: %w", err)
 	}
 
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add kubernetes core scheme: %w", err)
-	}
-	if err := argov1alpha1.AddToScheme(scheme); err != nil {
-		return fmt.Errorf("failed to add ArgoCD scheme: %w", err)
-	}
-
-	kubeClient, err := ctrlclient.New(kubeConfig, ctrlclient.Options{Scheme: scheme})
+	kubeClient, err := installer.NewKubeClient(kubeConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create kubernetes client: %w", err)
 	}
