@@ -70,7 +70,13 @@ func (v *VaultSecretCreator) CreateSecretFromStore(ctx context.Context, store Va
 //   - Field entries produce "entryName.password" and, when present, "entryName.username".
 //
 // Labels are added to the secret; labels it already has are kept.
-func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *files.InstallVault, namespace, secretName string, labels map[string]string) error {
+func (v *VaultSecretCreator) CreateSecretFromVault(
+	ctx context.Context,
+	vault *files.InstallVault,
+	namespace string,
+	secretName string,
+	labels map[string]string,
+) error {
 	secretData, err := vaultToSecretData(vault)
 	if err != nil {
 		return err

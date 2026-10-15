@@ -46,14 +46,9 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 
-	vaultChecksum, err := installer.EnsureReleaseVaultSecret(ctx, opts.Vault, opts.PrivKey, opts.VaultType, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to write release vault secret: %w", err)
-	}
-
-	if vaultChecksum != "" {
-		if err := installer.AddExternalSecretsChecksum(opts.ConfigPath, vaultChecksum); err != nil {
-			return fmt.Errorf("failed to pass the vault checksum to the chart: %w", err)
+	if installer.UsesExternalSecrets(cfg.Codesphere) {
+		if err := writeReleaseVault(ctx, opts, cfg); err != nil {
+			return err
 		}
 	}
 
@@ -77,6 +72,35 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
+	return nil
+}
+
+// writeReleaseVault writes the vault into the release's own secret, which the umbrella chart's
+// ExternalSecrets read, and passes its checksum to the chart through the merged config.
+func writeReleaseVault(
+	ctx context.Context,
+	opts *InstallCodesphereOpts,
+	cfg files.RootConfig,
+) error {
+	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to load vault and Kubernetes config: %w", err)
+	}
+
+	kubeClient, err := installer.NewKubeClient(restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create Kubernetes client: %w", err)
+	}
+
+	checksum, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, cfg.Codesphere)
+	if err != nil {
+		return fmt.Errorf("failed to write release vault secret: %w", err)
+	}
+
+	if err := installer.AddExternalSecretsChecksum(opts.ConfigPath, checksum); err != nil {
+		return fmt.Errorf("failed to pass the vault checksum to the chart: %w", err)
+	}
+
 	return nil
 }
 

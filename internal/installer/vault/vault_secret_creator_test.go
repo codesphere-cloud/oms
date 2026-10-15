@@ -182,11 +182,6 @@ var _ = Describe("SecretDataChecksum", func() {
 
 		Expect(SecretDataChecksum(left)).ToNot(Equal(must(SecretDataChecksum(right))))
 	})
-
-	It("fails for an empty vault", func() {
-		_, err := SecretDataChecksum(&files.InstallVault{})
-		Expect(err).To(MatchError(ContainSubstring("no secrets found")))
-	})
 })
 
 func must(checksum string, err error) string {

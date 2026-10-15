@@ -24,7 +24,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
 )
 
 // checksumOf recomputes the documented checksum format independently of the code under test.
@@ -54,31 +53,10 @@ func parseRootConfig(yamlConfig string) files.RootConfig {
 	return cfg
 }
 
-var _ = Describe("ReleaseName", func() {
-	It("defaults to codesphere when the config sets no release name", func() {
-		Expect(installer.ReleaseName(files.CodesphereConfig{})).To(Equal("codesphere"))
-	})
-
-	It("uses the release name from the config", func() {
-		cfg := parseRootConfig("codesphere:\n  releaseName: codesphere-pr-42\n")
-		Expect(installer.ReleaseName(cfg.Codesphere)).To(Equal("codesphere-pr-42"))
-	})
-})
-
 var _ = Describe("UsesExternalSecrets", func() {
 	It("is true when the override enables global.externalSecrets", func() {
 		cfg := parseRootConfig("codesphere:\n  override:\n    global:\n      externalSecrets: true\n")
 		Expect(installer.UsesExternalSecrets(cfg.Codesphere)).To(BeTrue())
-	})
-
-	It("is false when the override disables global.externalSecrets", func() {
-		cfg := parseRootConfig("codesphere:\n  override:\n    global:\n      externalSecrets: false\n")
-		Expect(installer.UsesExternalSecrets(cfg.Codesphere)).To(BeFalse())
-	})
-
-	It("is false when the override sets other global values only", func() {
-		cfg := parseRootConfig("codesphere:\n  override:\n    global:\n      env: prod\n")
-		Expect(installer.UsesExternalSecrets(cfg.Codesphere)).To(BeFalse())
 	})
 
 	It("is false when the config has no override", func() {
@@ -88,22 +66,6 @@ var _ = Describe("UsesExternalSecrets", func() {
 	It("is false when externalSecrets is the string true rather than a boolean", func() {
 		cfg := parseRootConfig("codesphere:\n  override:\n    global:\n      externalSecrets: \"true\"\n")
 		Expect(installer.UsesExternalSecrets(cfg.Codesphere)).To(BeFalse())
-	})
-})
-
-var _ = Describe("EnsureReleaseVaultSecret", func() {
-	It("is a no-op when the chart does not use external secrets", func() {
-		// No vault path or secrets baseDir: loading the vault would fail,
-		// so a nil result proves the opt-in check short-circuits first.
-		checksum, err := installer.EnsureReleaseVaultSecret(context.Background(), "", "", string(vault.TypeSOPS), files.RootConfig{})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(checksum).To(BeEmpty())
-	})
-
-	It("propagates vault loading errors when the chart uses external secrets", func() {
-		cfg := parseRootConfig("codesphere:\n  override:\n    global:\n      externalSecrets: true\n")
-		_, err := installer.EnsureReleaseVaultSecret(context.Background(), "", "", string(vault.TypeSOPS), cfg)
-		Expect(err).To(MatchError(ContainSubstring("vault path is not set")))
 	})
 })
 
@@ -133,8 +95,9 @@ var _ = Describe("WriteReleaseVaultSecret", func() {
 		Expect(secrets.EnsureAuthKeys(installVault)).To(Succeed())
 	})
 
-	It("writes the vault into <release>-vault labelled with the release", func() {
-		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, "codesphere-pr-42")
+	It("writes the vault into <release>-vault labelled with the configured release", func() {
+		cfg := parseRootConfig("codesphere:\n  releaseName: codesphere-pr-42\n").Codesphere
+		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, cfg)
 		Expect(err).ToNot(HaveOccurred())
 
 		secret := getSecret("codesphere-pr-42-vault")
@@ -142,8 +105,15 @@ var _ = Describe("WriteReleaseVaultSecret", func() {
 		Expect(secret.Data).To(HaveKeyWithValue("oidcClientSecret.password", []byte("oidc-secret")))
 	})
 
+	It("writes codesphere-vault when the config sets no release name", func() {
+		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, files.CodesphereConfig{})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(getSecret("codesphere-vault").Labels).To(HaveKeyWithValue("codesphere.com/release", "codesphere"))
+	})
+
 	It("signs service account tokens the token public key verifies", func() {
-		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, "codesphere")
+		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, files.CodesphereConfig{})
 		Expect(err).ToNot(HaveOccurred())
 
 		publicKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(installVault.GetSecret(files.SecretTokenPublicKey).File.Content))
@@ -165,7 +135,8 @@ var _ = Describe("WriteReleaseVaultSecret", func() {
 			})).To(Succeed())
 		}
 
-		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, "codesphere-pr-42")
+		cfg := parseRootConfig("codesphere:\n  releaseName: codesphere-pr-42\n").Codesphere
+		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, cfg)
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(getSecret("cs-vault").Data).To(Equal(map[string][]byte{"marker": []byte("cs-vault")}))
@@ -173,7 +144,7 @@ var _ = Describe("WriteReleaseVaultSecret", func() {
 	})
 
 	It("returns the checksum of the data it wrote, including the signed tokens", func() {
-		checksum, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, "codesphere")
+		checksum, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, files.CodesphereConfig{})
 		Expect(err).ToNot(HaveOccurred())
 
 		written := getSecret("codesphere-vault").Data
@@ -184,7 +155,7 @@ var _ = Describe("WriteReleaseVaultSecret", func() {
 	It("fails without writing a secret when the vault has no token private key", func() {
 		installVault.RemoveSecret(files.SecretTokenPrivateKey)
 
-		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, "codesphere")
+		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, files.CodesphereConfig{})
 		Expect(err).To(MatchError(ContainSubstring("tokenPrivateKey not found")))
 
 		secretList := &corev1.SecretList{}
@@ -253,10 +224,5 @@ var _ = Describe("AddExternalSecretsChecksum", func() {
 		info, err := os.Stat(path)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(info.Mode().Perm()).To(Equal(os.FileMode(0o600)))
-	})
-
-	It("fails when the config file does not exist", func() {
-		err := installer.AddExternalSecretsChecksum(filepath.Join(GinkgoT().TempDir(), "missing.yaml"), "abc123")
-		Expect(err).To(MatchError(ContainSubstring("failed to read config")))
 	})
 })

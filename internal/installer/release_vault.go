@@ -16,26 +16,25 @@ import (
 )
 
 const (
-	// DefaultReleaseName matches the release name the TS installer falls back to.
-	DefaultReleaseName = "codesphere"
-	// ReleaseLabel marks objects that belong to one Codesphere release.
-	ReleaseLabel = "codesphere.com/release"
+	// defaultReleaseName matches the release name the TS installer falls back to.
+	defaultReleaseName = "codesphere"
+	// releaseLabelKey marks objects that belong to one Codesphere release.
+	releaseLabelKey = "codesphere.com/release"
 
 	// configFileMode matches the merged install config, which can hold rendered vault values.
 	configFileMode = 0o600
 )
 
-// ReleaseName returns the Helm release name of the Codesphere umbrella chart.
-func ReleaseName(cfg files.CodesphereConfig) string {
+func releaseName(cfg files.CodesphereConfig) string {
 	if cfg.ReleaseName == "" {
-		return DefaultReleaseName
+		return defaultReleaseName
 	}
 
 	return cfg.ReleaseName
 }
 
-// ReleaseVaultSecretName returns the name of the secret the release's ExternalSecrets read from.
-func ReleaseVaultSecretName(releaseName string) string {
+// releaseVaultSecretName returns the name of the secret ESO reads the release's secrets from.
+func releaseVaultSecretName(releaseName string) string {
 	return releaseName + "-vault"
 }
 
@@ -51,39 +50,24 @@ func UsesExternalSecrets(cfg files.CodesphereConfig) bool {
 	return ok && enabled
 }
 
-// EnsureReleaseVaultSecret writes the vault into the secret the umbrella chart's
-// ExternalSecrets read from and returns the checksum of what it wrote. It is a no-op
-// returning an empty checksum unless the chart uses external secrets.
-func EnsureReleaseVaultSecret(ctx context.Context, vaultPath, privKey, vaultType string, cfg files.RootConfig) (string, error) {
-	if !UsesExternalSecrets(cfg.Codesphere) {
-		return "", nil
-	}
-
-	installVault, restConfig, err := VaultAndRESTConfig(vaultPath, privKey, vaultType, cfg)
-	if err != nil {
-		return "", err
-	}
-
-	kubeClient, err := NewKubeClient(restConfig)
-	if err != nil {
-		return "", err
-	}
-
-	return WriteReleaseVaultSecret(ctx, kubeClient, installVault, ReleaseName(cfg.Codesphere))
-}
-
 // WriteReleaseVaultSecret signs fresh service account tokens, writes the vault into the
 // release's own secret and returns the checksum of the written data. Each release has its
 // own secret, so deploying one release never changes or removes what another release reads.
-func WriteReleaseVaultSecret(ctx context.Context, kubeClient ctrlclient.Client, installVault *files.InstallVault, releaseName string) (string, error) {
+func WriteReleaseVaultSecret(
+	ctx context.Context,
+	kubeClient ctrlclient.Client,
+	installVault *files.InstallVault,
+	cfg files.CodesphereConfig,
+) (string, error) {
 	if err := secrets.EnsureServiceAccountTokens(installVault); err != nil {
 		return "", fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 
-	creator := vault.NewVaultSecretCreator(kubeClient)
-	secretName := ReleaseVaultSecretName(releaseName)
+	release := releaseName(cfg)
+	secretName := releaseVaultSecretName(release)
+	labels := map[string]string{releaseLabelKey: release}
 
-	labels := map[string]string{ReleaseLabel: releaseName}
+	creator := vault.NewVaultSecretCreator(kubeClient)
 	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, secretName, labels); err != nil {
 		return "", fmt.Errorf("failed to write vault secret %q: %w", secretName, err)
 	}
