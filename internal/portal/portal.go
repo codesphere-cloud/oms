@@ -20,6 +20,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 )
 
+var errDownloadRangeNotSatisfiable = errors.New("download range not satisfiable")
+
 //mockery:generate: true
 type Portal interface {
 	ListBuilds(product Product, sort string) (availablePackages Builds, err error)
@@ -77,6 +79,9 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 
 	err = c.isOKResponseStatus(resp)
 	if err != nil {
+		if resp.Body != nil {
+			_ = resp.Body.Close()
+		}
 		return nil, fmt.Errorf("unexpected response: %w", err)
 	}
 
@@ -86,6 +91,10 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 // isOKResponseStatus checks the status code in the response
 // if status is not a 2xx response it returns an error and logs some info for the user depending on the required steps
 func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
+	if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
+		return fmt.Errorf("HTTP %d: %w", resp.StatusCode, errDownloadRangeNotSatisfiable)
+	}
+
 	if resp.StatusCode == http.StatusUnauthorized {
 		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
 		log.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")

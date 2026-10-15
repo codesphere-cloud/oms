@@ -16,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"github.com/codesphere-cloud/oms/internal/portal"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
@@ -68,6 +69,10 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 	defer cleanup()
 
+	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+		return err
+	}
+
 	infraInstaller := &installer.CodesphereInstaller{
 		SkipSteps:    c.Opts.SkipSteps,
 		AllowedSteps: installer.InfraSteps,
@@ -112,9 +117,12 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 		cmd: &cobra.Command{
 			Use:   "codesphere",
 			Short: "Install a Codesphere instance",
-			Long: io.Long(`Install a Codesphere instance with the provided package, configuration file, and private key.
+			Long: io.Long(`Install a Codesphere instance with the provided configuration file and private key.
+			When --package is omitted, operations.codesphere selects the version to download
+			and reuse in OMS_WORKDIR. An explicit --package overrides the configured version.
 			Uses the private-cloud-installer.js script included in the package to perform the installation.`),
 			Example: util.FormatExamples("install codesphere", []io.Example{
+				{Cmd: "-c config.yaml -k <path-to-private-key>", Desc: "Install the operations.codesphere version, downloading it to OMS_WORKDIR if needed"},
 				{
 					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s copy-dependencies,extract-dependencies,load-container-images,ceph,postgres,kubernetes,docker",
 					Desc: "Skip most pre-installation steps. E.g. if you only need to re-apply Codesphere's helm charts",
@@ -128,7 +136,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 		Opts: &InstallCodesphereOpts{GlobalOptions: opts, VaultType: string(vault.TypeSOPS)},
 		Env:  env.NewEnv(),
 	}
-	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load binaries, installer etc. from")
+	codesphere.cmd.PersistentFlags().StringVarP(&codesphere.Opts.Package, "package", "p", "", "Package file to use. This flag overrides the version specified in the configuration file.")
 	codesphere.cmd.PersistentFlags().BoolVarP(&codesphere.Opts.Force, "force", "f", false, "Enforce package extraction")
 	codesphere.cmd.PersistentFlags().StringArrayVarP(&codesphere.Opts.Configs, "config", "c", nil, "Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.Vault, "vault", "", "Path to the prod.vault.yaml file used for config templating")
@@ -146,7 +154,6 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file (can be specified multiple times)")
 
-	util.MarkPersistentFlagRequired(codesphere.cmd, "package")
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
 
 	util.AddCmd(install, codesphere.cmd)
@@ -284,4 +291,24 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	effectiveOpts.Configs = append([]string(nil), configFiles...)
 
 	return &effectiveOpts, cfg, cleanup, nil
+}
+
+// ensureCodespherePackageForVersion preserves explicit packages and resolves config-selected
+// packages before any installation phase starts.
+func ensureCodespherePackageForVersion(opts *InstallCodesphereOpts, cfg files.RootConfig, environment env.Env) error {
+	if opts.Package != "" {
+		return nil
+	}
+
+	version, err := cfg.CodespherePackageVersion()
+	if err != nil {
+		return fmt.Errorf("failed to resolve install package version: %w", err)
+	}
+
+	opts.Package, err = portal.EnsureCodespherePackage(portal.NewPortalClient(), environment.GetOmsWorkdir(), version, "", "installer-lite.tar.gz", false)
+	if err != nil {
+		return fmt.Errorf("failed to prepare install package: %w", err)
+	}
+
+	return nil
 }
