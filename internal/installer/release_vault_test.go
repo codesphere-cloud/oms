@@ -95,21 +95,19 @@ var _ = Describe("WriteReleaseVaultSecret", func() {
 		Expect(secrets.EnsureAuthKeys(installVault)).To(Succeed())
 	})
 
-	It("writes the vault into <release>-vault labelled with the configured release", func() {
+	It("writes the vault into <release>-vault for the configured release", func() {
 		cfg := parseRootConfig("codesphere:\n  releaseName: codesphere-pr-42\n").Codesphere
 		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, cfg)
 		Expect(err).ToNot(HaveOccurred())
 
-		secret := getSecret("codesphere-pr-42-vault")
-		Expect(secret.Labels).To(HaveKeyWithValue("codesphere.com/release", "codesphere-pr-42"))
-		Expect(secret.Data).To(HaveKeyWithValue("oidcClientSecret.password", []byte("oidc-secret")))
+		Expect(getSecret("codesphere-pr-42-vault").Data).To(HaveKeyWithValue("oidcClientSecret.password", []byte("oidc-secret")))
 	})
 
 	It("writes codesphere-vault when the config sets no release name", func() {
 		_, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, files.CodesphereConfig{})
 		Expect(err).ToNot(HaveOccurred())
 
-		Expect(getSecret("codesphere-vault").Labels).To(HaveKeyWithValue("codesphere.com/release", "codesphere"))
+		Expect(getSecret("codesphere-vault").Data).To(HaveKey("oidcClientSecret.password"))
 	})
 
 	It("signs service account tokens the token public key verifies", func() {

@@ -36,7 +36,7 @@ var _ = Describe("VaultSecretCreator", func() {
 			{Name: "registry", Fields: &files.SecretFields{Password: "first"}},
 		}}
 
-		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName, nil)).To(Succeed())
+		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName)).To(Succeed())
 
 		namespace := &corev1.Namespace{}
 		Expect(kubeClient.Get(ctx, ctrlclient.ObjectKey{Name: VaultSecretNamespace}, namespace)).To(Succeed())
@@ -53,36 +53,14 @@ var _ = Describe("VaultSecretCreator", func() {
 		installVault := &files.InstallVault{Secrets: []files.SecretEntry{
 			{Name: "registry", Fields: &files.SecretFields{Password: "first"}},
 		}}
-		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName, nil)).To(Succeed())
+		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName)).To(Succeed())
 
 		installVault.SetSecret(files.SecretEntry{Name: "registry", Fields: &files.SecretFields{Password: "updated"}})
-		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName, nil)).To(Succeed())
+		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName)).To(Succeed())
 
 		secret := &corev1.Secret{}
 		Expect(kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: VaultSecretNamespace, Name: VaultSecretName}, secret)).To(Succeed())
 		Expect(secret.Data).To(HaveKeyWithValue("registry.password", []byte("updated")))
-	})
-
-	It("adds the given labels and keeps the ones the secret already has", func() {
-		existing := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
-			Name:      VaultSecretName,
-			Namespace: VaultSecretNamespace,
-			Labels:    map[string]string{"owner": "someone-else"},
-		}}
-		Expect(kubeClient.Create(ctx, existing)).To(Succeed())
-
-		installVault := &files.InstallVault{Secrets: []files.SecretEntry{
-			{Name: "registry", Fields: &files.SecretFields{Password: "first"}},
-		}}
-		labels := map[string]string{"codesphere.com/release": "codesphere"}
-		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName, labels)).To(Succeed())
-
-		secret := &corev1.Secret{}
-		Expect(kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: VaultSecretNamespace, Name: VaultSecretName}, secret)).To(Succeed())
-		Expect(secret.Labels).To(Equal(map[string]string{
-			"owner":                  "someone-else",
-			"codesphere.com/release": "codesphere",
-		}))
 	})
 })
 

@@ -18,8 +18,6 @@ import (
 const (
 	// defaultReleaseName matches the release name the TS installer falls back to.
 	defaultReleaseName = "codesphere"
-	// releaseLabelKey marks objects that belong to one Codesphere release.
-	releaseLabelKey = "codesphere.com/release"
 
 	// configFileMode matches the merged install config, which can hold rendered vault values.
 	configFileMode = 0o600
@@ -65,12 +63,10 @@ func WriteReleaseVaultSecret(
 		return "", fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 
-	release := releaseName(cfg)
-	secretName := releaseVaultSecretName(release)
-	labels := map[string]string{releaseLabelKey: release}
+	secretName := releaseVaultSecretName(releaseName(cfg))
 
 	creator := vault.NewVaultSecretCreator(kubeClient)
-	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, secretName, labels); err != nil {
+	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, secretName); err != nil {
 		return "", fmt.Errorf("failed to write vault secret %q: %w", secretName, err)
 	}
 
