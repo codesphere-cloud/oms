@@ -126,17 +126,12 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config) error {
-	// Values derived from the install config (OpenFGA, ceph.csiKubeletDir) form the base; an explicit pcApps block in
-	// config.yaml wins over them, and the --pc-apps-values files win over both.
-	values := util.DeepMergeMaps(pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault), pcapps.RookCephPcAppsValues(&i.cfg.Config))
-	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
-
 	pcApps, err := installer.NewPcAppsFromBom(
 		i.cfg.KubeClient,
 		bomConfig,
 		DefaultNamespace,
 		i.cfg.PCAppsValues,
-		values,
+		i.getPcAppsValues(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
@@ -145,4 +140,18 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 		return fmt.Errorf("failed to install pc-apps: %w", err)
 	}
 	return nil
+}
+
+// getPcAppsValues collects the base values for some apps from the config (OpenFGA, Rook) and merges these with
+// explicit pcApps block in the config.yaml.
+// The pcApps block in the config.yaml and --pc-apps-values always win over derived values from the config.yaml.
+// Returns a ChartValues map
+func (i *AppInstaller) getPcAppsValues() files.ChartValues {
+	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
+	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
+
+	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
+	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
+
+	return values
 }

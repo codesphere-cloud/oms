@@ -7,11 +7,11 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-// RookCephPcAppsValues derives the pc-applications values for rook-ceph from ceph.csiKubeletDir,
-// so distributions with a non-default kubelet root (e.g. k0s) get working CSI mounts. Like
-// OpenFgaPcAppsValues they are only a *base*: a kubeletDirPath set under `pcApps` in config.yaml
-// or in a --pc-apps-values file wins. Returns nil when the directory is not configured, leaving
-// the chart default untouched.
+// RookCephPcAppsValues derives the pc-applications values for rook-ceph from the ceph block in the config.yaml,
+// so distributions with a non-default kubelet root (e.g. k0s) get working CSI mounts.
+// They are the *base* of the pc-apps values: an explicit `pcApps` block in config.yaml and any --pc-apps-values file
+// still override them.
+// Returns nil when no related value is set, leaving the chart default's untouched.
 func RookCephPcAppsValues(config *files.RootConfig) files.ChartValues {
 	if config.Ceph.CsiKubeletDir == "" {
 		return nil
@@ -20,10 +20,8 @@ func RookCephPcAppsValues(config *files.RootConfig) files.ChartValues {
 	return files.ChartValues{
 		"applications": files.ChartValues{
 			"rook-ceph": files.ChartValues{
-				"valuesObject": files.ChartValues{
-					"csi": files.ChartValues{
-						"kubeletDirPath": config.Ceph.CsiKubeletDir,
-					},
+				"csi": files.ChartValues{
+					"kubeletDirPath": config.Ceph.CsiKubeletDir,
 				},
 			},
 		},
