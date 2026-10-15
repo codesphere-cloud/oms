@@ -757,3 +757,29 @@ codesphere:
 		Expect(err.Error()).To(ContainSubstring("unsupported plan parameter shape"))
 	})
 })
+
+var _ = Describe("CodespherePackageVersion", func() {
+	DescribeTable("resolves the configured portal version", func(input, expected string) {
+		cfg := files.NewRootConfig()
+		Expect(cfg.Unmarshal([]byte("operations:\n  codesphere: " + input + "\n  skip: [ceph]\n"))).To(Succeed())
+		version, err := cfg.CodespherePackageVersion()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(version).To(Equal(expected))
+		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+	},
+		Entry("plain version", "1.95.0", "codesphere-v1.95.0"),
+		Entry("v version", "v1.95.0", "codesphere-v1.95.0"),
+		Entry("portal tag", "codesphere-v1.95.0", "codesphere-v1.95.0"),
+		Entry("prerelease", "1.95.0-rc.1", "codesphere-v1.95.0-rc.1"),
+		Entry("branch", "release/test", "release/test"),
+	)
+	DescribeTable("rejects a missing version", func(operations *files.OperationsConfig) {
+		cfg := files.RootConfig{Operations: operations}
+		_, err := cfg.CodespherePackageVersion()
+		Expect(err).To(MatchError(ContainSubstring("operations.codesphere is required")))
+	},
+		Entry("no operations", nil),
+		Entry("only skip steps", &files.OperationsConfig{Skip: []string{"ceph"}}),
+		Entry("empty version", &files.OperationsConfig{}),
+	)
+})

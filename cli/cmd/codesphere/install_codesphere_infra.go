@@ -27,11 +27,16 @@ func (c *InstallCodesphereInfraCmd) RunE(_ *cobra.Command, _ []string) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
-	effectiveOpts, _, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
+
+	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
 	}
 	defer cleanup()
+
+	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+		return err
+	}
 
 	return installCodesphereInfra(effectiveOpts, c.Env)
 }

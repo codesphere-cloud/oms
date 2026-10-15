@@ -10,7 +10,6 @@ import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
-	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/spf13/cobra"
 )
 
@@ -25,33 +24,6 @@ func GetRootCmd() *cobra.Command {
 			This command can be used to run common tasks related to managing codesphere installations,
 			like downloading new versions.`),
 		Args: cobra.NoArgs,
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			apiKey := os.Getenv("OMS_PORTAL_API_KEY")
-
-			if len(apiKey) == 25 {
-				log.Println("Warning: You used an old API key format.")
-				log.Println("Attempting to upgrade to the new format...")
-
-				portalClient := portal.NewPortalClient()
-				keyId, err := portalClient.GetApiKeyId(apiKey)
-
-				if err != nil {
-					log.Printf("Error: Failed to upgrade old API key: %v\n", err)
-					return
-				}
-
-				newApiKey := keyId + apiKey
-
-				if err := os.Setenv("OMS_PORTAL_API_KEY", newApiKey); err != nil {
-					log.Printf("Error: Failed to set environment variable: %v\n", err)
-					return
-				}
-				opts.OmsPortalApiKey = newApiKey
-
-				log.Println("Please update your environment variable:")
-				log.Printf("  export OMS_PORTAL_API_KEY='%s'\n\n", newApiKey)
-			}
-		},
 	}
 
 	rootCmd.PersistentFlags().BoolVarP(&opts.Verbose, "verbose", "", false, "Enable verbose output")

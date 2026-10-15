@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v3"
+	"golang.org/x/mod/semver"
 )
 
 // Vault
@@ -113,7 +114,23 @@ type RootConfig struct {
 }
 
 type OperationsConfig struct {
-	Skip []string `yaml:"skip"`
+	Codesphere string   `yaml:"codesphere,omitempty"`
+	Skip       []string `yaml:"skip"`
+}
+
+// CodespherePackageVersion returns the portal version selected by operations.codesphere.
+// Plain release versions are expanded to the portal's codesphere-v tag format.
+func (c *RootConfig) CodespherePackageVersion() (string, error) {
+	if c.Operations == nil || c.Operations.Codesphere == "" {
+		return "", fmt.Errorf("operations.codesphere is required when no package is specified")
+	}
+
+	release := "v" + strings.TrimPrefix(c.Operations.Codesphere, "v")
+	if semver.IsValid(release) {
+		return "codesphere-" + release, nil
+	}
+
+	return c.Operations.Codesphere, nil
 }
 
 // DatacenterConfig describes one data center. RootConfig.Datacenter is the data center an installer

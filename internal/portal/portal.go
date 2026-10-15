@@ -20,6 +20,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 )
 
+var errDownloadRangeNotSatisfiable = errors.New("download range not satisfiable")
+
 //mockery:generate: true
 type Portal interface {
 	ListBuilds(product Product, sort string) (availablePackages Builds, err error)
@@ -30,7 +32,6 @@ type Portal interface {
 	RevokeAPIKey(key string) error
 	UpdateAPIKey(key string, expiresAt time.Time) error
 	ListAPIKeys() ([]ApiKey, error)
-	GetApiKeyId(oldKey string) (string, error)
 }
 
 type PortalClient struct {
@@ -78,6 +79,9 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 
 	err = c.isOKResponseStatus(resp)
 	if err != nil {
+		if resp.Body != nil {
+			_ = resp.Body.Close()
+		}
 		return nil, fmt.Errorf("unexpected response: %w", err)
 	}
 
@@ -87,6 +91,10 @@ func (c *PortalClient) AuthorizedHttpRequest(req *http.Request) (resp *http.Resp
 // isOKResponseStatus checks the status code in the response
 // if status is not a 2xx response it returns an error and logs some info for the user depending on the required steps
 func (c *PortalClient) isOKResponseStatus(resp *http.Response) error {
+	if resp.StatusCode == http.StatusRequestedRangeNotSatisfiable {
+		return fmt.Errorf("HTTP %d: %w", resp.StatusCode, errDownloadRangeNotSatisfiable)
+	}
+
 	if resp.StatusCode == http.StatusUnauthorized {
 		log.Println("You need a valid OMS API Key, please reach out to the Codesphere support at support@codesphere.com to request a new API Key.")
 		log.Println("If you already have an API Key, make sure to set it using the environment variable OMS_PORTAL_API_KEY")
@@ -408,42 +416,6 @@ func (c *PortalClient) ListAPIKeys() ([]ApiKey, error) {
 	}
 
 	return keys, nil
-}
-
-// GetApiKeyId retrieves the key ID by sending the old key in the request header.
-func (c *PortalClient) GetApiKeyId(oldKey string) (string, error) {
-	url, err := url.JoinPath(c.Env.GetOmsPortalApi(), "/key")
-	if err != nil {
-		return "", fmt.Errorf("failed to generate URL: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("X-API-Key", oldKey)
-
-	resp, err := c.HttpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to send request: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode >= 300 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("unexpected response status: %d - %s, %s", resp.StatusCode, http.StatusText(resp.StatusCode), string(respBody))
-	}
-
-	var result struct {
-		KeyID string `json:"keyId"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return result.KeyID, nil
 }
 
 // GetHealth checks the response of the OMS-Portal health endpoint

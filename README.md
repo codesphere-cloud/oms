@@ -99,3 +99,30 @@ make build-service
 
 Please review our [Code of Conduct](CODE_OF_CONDUCT.md) to understand our community expectations.
 We welcome contributions! All contributions to this project must be made in accordance with the Developer Certificate of Origin (DCO). See our full [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+## Select the Codesphere version through config.yaml
+
+Set the package version alongside the existing operation skip steps:
+
+```yaml
+operations:
+  codesphere: 1.95.0
+  skip: [load-container-images]
+```
+
+```sh
+oms install codesphere --config config.yaml --priv-key age-key.txt
+```
+
+The install command resolves the configured build through the package portal and
+downloads its `installer-lite.tar.gz` archive into `OMS_WORKDIR` (default
+`./oms-workdir`). Existing archives use the shared downloader's resume support,
+and the checksum is verified after downloading.
+Plain versions such as `1.95.0` resolve to portal tags such as `codesphere-v1.95.0`.
+The install command also supports merged configuration files; the last configured
+version wins. Existing skip-step behavior is unchanged.
+
+An explicit `oms install codesphere --package <archive>` overrides the configured
+version and supports offline installation. `oms download package <version>` and
+`--version <version>` retain their existing behavior of downloading to the current
+directory and continue requiring an explicit version.

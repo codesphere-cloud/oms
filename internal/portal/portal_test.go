@@ -474,57 +474,6 @@ var _ = Describe("PortalClient", func() {
 		})
 	})
 
-	Describe("GetApiKeyId", func() {
-		BeforeEach(func() {
-			mockEnv.EXPECT().GetOmsPortalApi().Return(apiUrl)
-		})
-
-		Context("when the request succeeds", func() {
-			BeforeEach(func() {
-				response := map[string]string{"keyId": "test-key-id"}
-				responseBody, _ := json.Marshal(response)
-
-				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(bytes.NewReader(responseBody)),
-				}, nil)
-			})
-
-			It("returns the key ID", func() {
-				result, err := client.GetApiKeyId("old-key")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(Equal("test-key-id"))
-			})
-		})
-
-		Context("when the HTTP request fails", func() {
-			BeforeEach(func() {
-				mockHttpClient.EXPECT().Do(mock.Anything).Return(nil, errors.New("network error"))
-			})
-
-			It("returns an error", func() {
-				_, err := client.GetApiKeyId("old-key")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("network error"))
-			})
-		})
-
-		Context("when the server returns an error status", func() {
-			BeforeEach(func() {
-				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
-					StatusCode: http.StatusUnauthorized,
-					Body:       io.NopCloser(bytes.NewReader([]byte("Unauthorized"))),
-				}, nil)
-			})
-
-			It("returns an error", func() {
-				_, err := client.GetApiKeyId("old-key")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unexpected response status: 401"))
-			})
-		})
-	})
-
 	Describe("RegisterAPIKey", func() {
 		var (
 			owner, organization, role string
