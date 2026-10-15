@@ -38,7 +38,9 @@ func releaseVaultSecretName(releaseName string) string {
 	return releaseName + "-vault"
 }
 
-// UsesExternalSecrets reports whether the umbrella chart is set to read its secrets through ESO.
+// UsesExternalSecrets reports whether the install config turns on external secrets via
+// codesphere.override.global.externalSecrets. The TS installer passes that override to the
+// umbrella chart as Helm values; the chart's own defaults are not visible here.
 func UsesExternalSecrets(cfg files.CodesphereConfig) bool {
 	global, ok := cfg.Override["global"].(map[string]interface{})
 	if !ok {
