@@ -6,10 +6,12 @@ package installer
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
+	"go.yaml.in/yaml/v3"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -18,6 +20,9 @@ const (
 	DefaultReleaseName = "codesphere"
 	// ReleaseLabel marks objects that belong to one Codesphere release.
 	ReleaseLabel = "codesphere.com/release"
+
+	// configFileMode matches the merged install config, which can hold rendered vault values.
+	configFileMode = 0o600
 )
 
 // ReleaseName returns the Helm release name of the Codesphere umbrella chart.
@@ -47,31 +52,32 @@ func UsesExternalSecrets(cfg files.CodesphereConfig) bool {
 }
 
 // EnsureReleaseVaultSecret writes the vault into the secret the umbrella chart's
-// ExternalSecrets read from. It is a no-op unless the chart uses external secrets.
-func EnsureReleaseVaultSecret(ctx context.Context, vaultPath, privKey, vaultType string, cfg files.RootConfig) error {
+// ExternalSecrets read from and returns the checksum of what it wrote. It is a no-op
+// returning an empty checksum unless the chart uses external secrets.
+func EnsureReleaseVaultSecret(ctx context.Context, vaultPath, privKey, vaultType string, cfg files.RootConfig) (string, error) {
 	if !UsesExternalSecrets(cfg.Codesphere) {
-		return nil
+		return "", nil
 	}
 
 	installVault, restConfig, err := VaultAndRESTConfig(vaultPath, privKey, vaultType, cfg)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	kubeClient, err := NewKubeClient(restConfig)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	return WriteReleaseVaultSecret(ctx, kubeClient, installVault, ReleaseName(cfg.Codesphere))
 }
 
-// WriteReleaseVaultSecret signs fresh service account tokens and writes the vault
-// into the release's own secret. Each release has its own secret, so deploying one
-// release never changes or removes what another release reads.
-func WriteReleaseVaultSecret(ctx context.Context, kubeClient ctrlclient.Client, installVault *files.InstallVault, releaseName string) error {
+// WriteReleaseVaultSecret signs fresh service account tokens, writes the vault into the
+// release's own secret and returns the checksum of the written data. Each release has its
+// own secret, so deploying one release never changes or removes what another release reads.
+func WriteReleaseVaultSecret(ctx context.Context, kubeClient ctrlclient.Client, installVault *files.InstallVault, releaseName string) (string, error) {
 	if err := secrets.EnsureServiceAccountTokens(installVault); err != nil {
-		return fmt.Errorf("failed to ensure service account tokens: %w", err)
+		return "", fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 
 	creator := vault.NewVaultSecretCreator(kubeClient)
@@ -79,8 +85,53 @@ func WriteReleaseVaultSecret(ctx context.Context, kubeClient ctrlclient.Client, 
 
 	labels := map[string]string{ReleaseLabel: releaseName}
 	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, secretName, labels); err != nil {
-		return fmt.Errorf("failed to write vault secret %q: %w", secretName, err)
+		return "", fmt.Errorf("failed to write vault secret %q: %w", secretName, err)
+	}
+
+	checksum, err := vault.SecretDataChecksum(installVault)
+	if err != nil {
+		return "", fmt.Errorf("failed to checksum vault secret %q: %w", secretName, err)
+	}
+
+	return checksum, nil
+}
+
+// AddExternalSecretsChecksum sets codesphere.override.global.externalSecretsChecksum in the
+// config file. The chart puts it on its ExternalSecrets, which ESO only re-syncs when they
+// change, so a changed vault reaches the release in the same deploy.
+func AddExternalSecretsChecksum(configPath, checksum string) error {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config %s: %w", configPath, err)
+	}
+
+	config := map[string]any{}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse config %s: %w", configPath, err)
+	}
+
+	global := childMap(childMap(childMap(config, "codesphere"), "override"), "global")
+	global["externalSecretsChecksum"] = checksum
+
+	updated, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, updated, configFileMode); err != nil {
+		return fmt.Errorf("failed to write config %s: %w", configPath, err)
 	}
 
 	return nil
+}
+
+// childMap returns parent[key], replacing anything that is not a map with an empty one.
+func childMap(parent map[string]any, key string) map[string]any {
+	child, ok := parent[key].(map[string]any)
+	if !ok {
+		child = map[string]any{}
+		parent[key] = child
+	}
+
+	return child
 }

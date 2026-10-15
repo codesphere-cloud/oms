@@ -5,8 +5,11 @@ package vault
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
+	"sort"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
@@ -109,6 +112,32 @@ func (v *VaultSecretCreator) ensureNamespace(ctx context.Context, namespace stri
 	}
 
 	return nil
+}
+
+// SecretDataChecksum returns a SHA-256 over the secret data CreateSecretFromVault writes for vault.
+func SecretDataChecksum(vault *files.InstallVault) (string, error) {
+	secretData, err := vaultToSecretData(vault)
+	if err != nil {
+		return "", err
+	}
+
+	keys := make([]string, 0, len(secretData))
+	for key := range secretData {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	hash := sha256.New()
+	for _, key := range keys {
+		// The separator keeps "ab"+"c" and "a"+"bc" from hashing alike.
+		hash.Write([]byte(key))
+		hash.Write([]byte{0})
+		hash.Write(secretData[key])
+		hash.Write([]byte{0})
+	}
+
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // vaultToSecretData converts the entries of an InstallVault into Kubernetes secret data.

@@ -46,8 +46,15 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 
-	if err := installer.EnsureReleaseVaultSecret(ctx, opts.Vault, opts.PrivKey, opts.VaultType, cfg); err != nil {
+	vaultChecksum, err := installer.EnsureReleaseVaultSecret(ctx, opts.Vault, opts.PrivKey, opts.VaultType, cfg)
+	if err != nil {
 		return fmt.Errorf("failed to write release vault secret: %w", err)
+	}
+
+	if vaultChecksum != "" {
+		if err := installer.AddExternalSecretsChecksum(opts.ConfigPath, vaultChecksum); err != nil {
+			return fmt.Errorf("failed to pass the vault checksum to the chart: %w", err)
+		}
 	}
 
 	workdir := env.GetOmsWorkdir()
