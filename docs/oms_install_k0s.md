@@ -12,6 +12,8 @@ You must provide a Codesphere install-config file, which will:
 - Generate a k0sctl configuration for cluster deployment
 - Deploy k0s to all nodes defined in the install-config using k0sctl
 
+Alternatively, apply a k0sctl config created with 'oms init k0s-config' with --config.
+
 ```
 oms install k0s [flags]
 ```
@@ -21,6 +23,9 @@ oms install k0s [flags]
 ```
 # Path to Codesphere install-config file to generate k0s config from
 $ oms install k0s --install-config <path>
+
+# Path to an existing k0sctl config to apply
+$ oms install k0s --config <path>
 
 # Version of k0s to install (e.g., v1.31.14+k0s.0)
 $ oms install k0s --version <version>
@@ -45,9 +50,10 @@ $ oms install k0s --no-download
 ### Options
 
 ```
+      --config string           Path to an existing k0sctl config to apply, e.g. created with 'oms init k0s-config'
   -f, --force                   Force new download and installation
   -h, --help                    help for k0s
-      --install-config string   Path to Codesphere install-config file (required)
+      --install-config string   Path to Codesphere install-config file to generate the k0sctl config from
       --k0sctl-version string   Version of k0sctl to use (default "v0.33.1")
       --no-download             Skip downloading k0s binary
   -p, --package string          Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
