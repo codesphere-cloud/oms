@@ -27,9 +27,7 @@ postgres:
   serverAddress: postgres.example.com
   altName: postgres-rw.codesphere.svc
   port: 5433
-  useSsl: false
   database: masterdata
-  rolesPrefix: cs_
 ceph:
   csiKubeletDir: /var/lib/k0s/kubelet
   cephAdmSshKey:
@@ -51,9 +49,7 @@ ceph:
   volumes:
     codesphere:
       mds:
-        count: 4
         active: 3
-      secret: cephfsAdminCodesphere
 kubernetes:
   managedByCodesphere: true
   apiServerHost: apiserver.example.com
@@ -129,9 +125,6 @@ codesphere:
   customCertificate:
     cert: cert-pem
     key: key-pem
-  workspaceHostingCustomCertificate:
-    cert: ws-cert-pem
-    key: ws-key-pem
   sshWorkspaceProxy:
     baseDomain: ssh.example.com
   vpnLeftPeerId: peer-1
@@ -197,8 +190,6 @@ codesphere:
     workspacePlans:
       20:
         name: Micro
-        priceUsd: 9.5
-        deprecated: true
         hostingPlanId: 8
         maxReplicas: 3
         onDemand: true
@@ -283,8 +274,6 @@ codesphere:
     expose:
       enabled: true
       host: fga.example.com
-  maintenanceMode: false
-  skipDatabaseSetup: true
   migration:
     postgres:
       host: 10.0.0.25

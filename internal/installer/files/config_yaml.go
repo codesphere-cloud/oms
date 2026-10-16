@@ -169,12 +169,6 @@ func (r *RegistryConfig) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-// IsZero leaves an unset registry out of the marshaled config. The Codesphere installer treats any
-// registry block as configured.
-func (r RegistryConfig) IsZero() bool {
-	return r.Server == ""
-}
-
 type PostgresConfig struct {
 	Mode          string                 `yaml:"mode,omitempty"`
 	CACertPem     string                 `yaml:"caCertPem,omitempty"`
@@ -183,9 +177,7 @@ type PostgresConfig struct {
 	ServerAddress string                 `yaml:"serverAddress,omitempty"`
 	AltName       string                 `yaml:"altName,omitempty"`
 	Port          int                    `yaml:"port,omitempty"`
-	UseSSL        *bool                  `yaml:"useSsl,omitempty"`
 	Database      string                 `yaml:"database,omitempty"`
-	RolesPrefix   string                 `yaml:"rolesPrefix,omitempty"`
 }
 
 type PostgresPrimaryConfig struct {
@@ -215,13 +207,11 @@ type CephConfig struct {
 
 // CephVolume is a CephFS volume for workspace storage, named by its key in CephConfig.Volumes.
 type CephVolume struct {
-	MDS    CephMDS `yaml:"mds"`
-	Secret string  `yaml:"secret,omitempty"`
+	MDS CephMDS `yaml:"mds"`
 }
 
 // CephMDS sets how many metadata servers a CephFS volume runs and how many of them are active.
 type CephMDS struct {
-	Count  int `yaml:"count"`
 	Active int `yaml:"active"`
 }
 
@@ -288,8 +278,7 @@ type ClusterConfig struct {
 }
 
 type ClusterCertificates struct {
-	// Left out when unset: the Codesphere installer rejects an empty ca block in any config.
-	CA       CAConfig      `yaml:"ca,omitempty"`
+	CA       CAConfig      `yaml:"ca"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
@@ -400,17 +389,16 @@ type MetalLBBGPConfig struct {
 }
 
 type CodesphereConfig struct {
-	Domain                            string                   `yaml:"domain"`
-	WorkspaceHostingBaseDomain        string                   `yaml:"workspaceHostingBaseDomain"`
-	PublicIP                          string                   `yaml:"publicIp"`
-	Branding                          *BrandingConfig          `yaml:"branding,omitempty"`
-	CertIssuer                        *CertIssuerConfig        `yaml:"certIssuer,omitempty"`
-	CustomCertificate                 *CustomCertificate       `yaml:"customCertificate,omitempty"`
-	WorkspaceHostingCustomCertificate *CustomCertificate       `yaml:"workspaceHostingCustomCertificate,omitempty"`
-	SSHWorkspaceProxy                 *SSHWorkspaceProxyConfig `yaml:"sshWorkspaceProxy,omitempty"`
-	VPNLeftPeerID                     string                   `yaml:"vpnLeftPeerId,omitempty"`
-	CustomDomains                     CustomDomainsConfig      `yaml:"customDomains"`
-	DNSServers                        []string                 `yaml:"dnsServers,omitempty"`
+	Domain                     string                   `yaml:"domain"`
+	WorkspaceHostingBaseDomain string                   `yaml:"workspaceHostingBaseDomain"`
+	PublicIP                   string                   `yaml:"publicIp"`
+	Branding                   *BrandingConfig          `yaml:"branding,omitempty"`
+	CertIssuer                 *CertIssuerConfig        `yaml:"certIssuer,omitempty"`
+	CustomCertificate          *CustomCertificate       `yaml:"customCertificate,omitempty"`
+	SSHWorkspaceProxy          *SSHWorkspaceProxyConfig `yaml:"sshWorkspaceProxy,omitempty"`
+	VPNLeftPeerID              string                   `yaml:"vpnLeftPeerId,omitempty"`
+	CustomDomains              CustomDomainsConfig      `yaml:"customDomains"`
+	DNSServers                 []string                 `yaml:"dnsServers"`
 	// Deprecated: use Internal.
 	Experiments                   []string               `yaml:"experiments,omitempty"`
 	Internal                      []string               `yaml:"internal"`
@@ -421,7 +409,7 @@ type CodesphereConfig struct {
 	ExtraWorkspaceEnvVars         map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
 	ExtraWorkspaceFiles           []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
 	WorkspaceImages               *WorkspaceImagesConfig `yaml:"workspaceImages,omitempty"`
-	DeployConfig                  DeployConfig           `yaml:"deployConfig,omitempty"`
+	DeployConfig                  DeployConfig           `yaml:"deployConfig"`
 	PrePullImages                 *bool                  `yaml:"prePullImages,omitempty"`
 	IPService                     *IPServiceConfig       `yaml:"ipService,omitempty"`
 	Plans                         PlansConfig            `yaml:"plans"`
@@ -435,8 +423,6 @@ type CodesphereConfig struct {
 	OpenBao                       *OpenBaoConfig         `yaml:"openBao,omitempty"`
 	OpenfgaBackups                *OpenfgaBackupsConfig  `yaml:"openfgaBackups,omitempty"`
 	OpenFga                       *OpenFgaConfig         `yaml:"openFga,omitempty"`
-	MaintenanceMode               *bool                  `yaml:"maintenanceMode,omitempty"`
-	SkipDatabaseSetup             *bool                  `yaml:"skipDatabaseSetup,omitempty"`
 	Migration                     *MigrationConfig       `yaml:"migration,omitempty"`
 	// ReleaseName is only set in dev, where several Codesphere releases share one cluster.
 	ReleaseName     string           `yaml:"releaseName,omitempty"`
@@ -628,7 +614,7 @@ type FlavorConfig struct {
 }
 
 type TelemetryExport struct {
-	RemoteEndpoint string `yaml:"remoteEndpoint,omitempty"`
+	RemoteEndpoint string `yaml:"remoteEndpoint"`
 	RemoteExport   bool   `yaml:"remoteExport"`
 	Traces         bool   `yaml:"traces"`
 	TraceEndpoint  string `yaml:"traceEndpoint,omitempty"`
@@ -700,12 +686,10 @@ type HostingPlan struct {
 }
 
 type WorkspacePlan struct {
-	Name          string   `yaml:"name"`
-	PriceUSD      *float64 `yaml:"priceUsd,omitempty"`
-	Deprecated    *bool    `yaml:"deprecated,omitempty"`
-	HostingPlanID int      `yaml:"hostingPlanId"`
-	MaxReplicas   int      `yaml:"maxReplicas"`
-	OnDemand      bool     `yaml:"onDemand"`
+	Name          string `yaml:"name"`
+	HostingPlanID int    `yaml:"hostingPlanId"`
+	MaxReplicas   int    `yaml:"maxReplicas"`
+	OnDemand      bool   `yaml:"onDemand"`
 }
 
 type UnderprovisionFactors struct {
