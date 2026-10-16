@@ -5,8 +5,10 @@ package codesphere
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -286,6 +288,25 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to parse merged config.yaml: %w", err)
 	}
 
+	// Test only: the installer gets the config as OMS models it, to check that nothing it reads is lost.
+	roundTripped, err := cfg.Marshal()
+	if err != nil {
+		cleanup()
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to marshal parsed config.yaml: %w", err)
+	}
+	var roundTrippedMap map[string]any
+	if err := yaml.Unmarshal(roundTripped, &roundTrippedMap); err != nil {
+		cleanup()
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to parse re-marshaled config.yaml: %w", err)
+	}
+	for _, path := range droppedPaths(merged, roundTrippedMap, "") {
+		log.Printf("config round-trip dropped %s", path)
+	}
+	if err := os.WriteFile(mergedPath, roundTripped, 0600); err != nil {
+		cleanup()
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to write re-marshaled config.yaml: %w", err)
+	}
+
 	effectiveOpts := *opts
 	effectiveOpts.ConfigPath = mergedPath
 	effectiveOpts.Configs = append([]string(nil), configFiles...)
@@ -311,4 +332,27 @@ func ensureCodespherePackageForVersion(opts *InstallCodesphereOpts, cfg files.Ro
 	}
 
 	return nil
+}
+
+// droppedPaths lists the keys of original that are missing or changed in saved.
+func droppedPaths(original, saved map[string]any, prefix string) []string {
+	var paths []string
+	for key, value := range original {
+		path := prefix + "." + key
+		savedValue, ok := saved[key]
+		if !ok {
+			paths = append(paths, path)
+			continue
+		}
+		originalMap, isMap := value.(map[string]any)
+		savedMap, savedIsMap := savedValue.(map[string]any)
+		if isMap && savedIsMap {
+			paths = append(paths, droppedPaths(originalMap, savedMap, path)...)
+			continue
+		}
+		if !reflect.DeepEqual(value, savedValue) {
+			paths = append(paths, path+" (changed)")
+		}
+	}
+	return paths
 }
