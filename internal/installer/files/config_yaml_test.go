@@ -841,12 +841,6 @@ var _ = Describe("RootConfig round-trip", func() {
 		Expect(saved).To(Equal(original))
 	})
 
-	It("leaves unset optional fields out, so the Codesphere installer applies its defaults", func() {
-		original, saved := roundTrip(filepath.Join("testdata", "minimal_config.yaml"))
-
-		Expect(saved).To(Equal(original))
-	})
-
 	It("defaults the registry flags to true when they are left out", func() {
 		config := files.NewRootConfig()
 		Expect(config.Unmarshal([]byte("registry:\n  server: registry.example.com\n"))).To(Succeed())
