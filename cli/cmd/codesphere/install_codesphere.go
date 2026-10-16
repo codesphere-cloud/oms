@@ -302,6 +302,12 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	for _, path := range droppedPaths(merged, roundTrippedMap, "") {
 		log.Printf("config round-trip dropped %s", path)
 	}
+	// Fields OMS does not model, e.g. the ones only the database setup reads, stay as they were.
+	roundTripped, err = yaml.Marshal(intutil.DeepMergeMaps(stringKeys(merged).(map[string]any), stringKeys(roundTrippedMap).(map[string]any)))
+	if err != nil {
+		cleanup()
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to marshal round-tripped config.yaml: %w", err)
+	}
 	if err := os.WriteFile(mergedPath, roundTripped, 0600); err != nil {
 		cleanup()
 		return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to write re-marshaled config.yaml: %w", err)
@@ -360,4 +366,30 @@ func droppedPaths(original, saved map[string]any, prefix string) []string {
 		}
 	}
 	return paths
+}
+
+// stringKeys turns maps with non-string keys, like plans keyed by id, into string-keyed maps so they merge key by key.
+func stringKeys(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		converted := make(map[string]any, len(typed))
+		for key, v := range typed {
+			converted[key] = stringKeys(v)
+		}
+		return converted
+	case map[any]any:
+		converted := make(map[string]any, len(typed))
+		for key, v := range typed {
+			converted[fmt.Sprint(key)] = stringKeys(v)
+		}
+		return converted
+	case []any:
+		converted := make([]any, len(typed))
+		for i, v := range typed {
+			converted[i] = stringKeys(v)
+		}
+		return converted
+	default:
+		return value
+	}
 }
