@@ -83,6 +83,36 @@ var _ = Describe("Config templating", func() {
 		Expect(err.Error()).To(ContainSubstring(`secret "missing" not found`))
 	})
 
+	It("renders a vault reference instead of the secret value", func() {
+		rendered, err := configtemplating.RenderInstallConfigTemplate(
+			[]byte(`password: "{{ vaultRef "apiToken" }}"`),
+			vault.NewVaultTemplatingSecretStore(installVault),
+		)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(rendered)).To(Equal(`password: "vaultRef:apiToken"`))
+	})
+
+	It("returns an error for vault references to missing secrets", func() {
+		_, err := configtemplating.RenderInstallConfigTemplate(
+			[]byte(`password: "{{ vaultRef "missing" }}"`),
+			vault.NewVaultTemplatingSecretStore(installVault),
+		)
+
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`secret "missing" not found`))
+	})
+
+	It("returns an error for vault references to names External Secrets cannot read", func() {
+		_, err := configtemplating.RenderInstallConfigTemplate(
+			[]byte(`password: "{{ vaultRef "api-token" }}"`),
+			vault.NewVaultTemplatingSecretStore(installVault),
+		)
+
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(`vault entry name "api-token"`))
+	})
+
 	It("renders a config file using an explicit prod.vault.yaml path", func() {
 		if !sopsAndAgeAvailable() {
 			Skip("sops and age-keygen not available")

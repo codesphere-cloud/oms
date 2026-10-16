@@ -65,6 +65,9 @@ Template syntax in config.yaml:
   # Inject a file secret's content
   caCert: '{{ secret "caCert" "file.content" }}'
 
+  # Reference a secret's password under codesphere.override, resolved by the Codesphere installer
+  clientSecret: '{{ vaultRef "mySecret" }}'
+
 Secret names and selectors must match entries in the prod.vault.yaml file.`),
 			Example: util.FormatExamples("template config", []io.Example{
 				{

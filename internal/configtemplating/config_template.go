@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"text/template"
 )
 
@@ -28,6 +29,9 @@ func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error)
 				}
 				return store.LookupSecret(name, selector...)
 			},
+			"vaultRef": func(name string) (string, error) {
+				return vaultRef(name, store)
+			},
 		}).
 		Parse(string(data))
 	if err != nil {
@@ -40,6 +44,29 @@ func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error)
 	}
 
 	return rendered.Bytes(), nil
+}
+
+// vaultEntryName matches the names a reference can name: the umbrella chart reads them as
+// External Secrets template keys.
+var vaultEntryName = regexp.MustCompile(`^\w+$`)
+
+// vaultRef renders a reference to a vault entry instead of its value. The Codesphere
+// installer resolves it, or the umbrella chart lets External Secrets fill it, so the value
+// stays out of the rendered config and the values derived from it.
+func vaultRef(name string, store SecretStore) (string, error) {
+	if !vaultEntryName.MatchString(name) {
+		return "", fmt.Errorf("vault entry name %q must only contain letters, digits and underscores", name)
+	}
+
+	if store == nil {
+		return "", fmt.Errorf("secret store is required to render config template")
+	}
+
+	if _, err := store.LookupSecret(name); err != nil {
+		return "", fmt.Errorf("failed to look up vault reference: %w", err)
+	}
+
+	return "vaultRef:" + name, nil
 }
 
 // RenderConfigFileToTemp renders configPath with store into a temporary
