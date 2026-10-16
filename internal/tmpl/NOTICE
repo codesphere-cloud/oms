@@ -1175,9 +1175,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20261012174133-a96ef96a9ccf
+Version: v0.0.0-20261013163528-f6fe4dd1403a
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/a96ef96a9ccf/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/f6fe4dd1403a/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1505,15 +1505,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.302.0
+Version: v0.303.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.302.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.303.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.302.0
+Version: v0.303.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.302.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.303.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
