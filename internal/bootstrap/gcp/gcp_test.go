@@ -2092,6 +2092,22 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("RunK0sConfigScript", func() {
+		It("runs the script on the first control plane node", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil)
+
+			Expect(bs.RunK0sConfigScript()).To(Succeed())
+		})
+
+		It("fails when the script exits with an error", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(fmt.Errorf("command failed: exit status 1"))
+
+			err := bs.RunK0sConfigScript()
+			Expect(err).To(MatchError(ContainSubstring("failed to run k0s config script")))
+			Expect(err).To(MatchError(ContainSubstring("exit status 1")))
+		})
+	})
+
 	Describe("GenerateK0sConfigScript", func() {
 		Describe("Valid GenerateK0sConfigScript", func() {
 			It("generates script", func() {
@@ -2121,8 +2137,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 					Expect(script).NotTo(ContainSubstring("/etc/codesphere/deps/kubernetes"))
 				})
 
-				It("given a failing kubectl call, when the script runs, then it exits before reporting success", func() {
-					Expect(script).To(MatchRegexp(`(?s)set -eo pipefail\s+KUBECTL=.*patch svc gateway-controller.*set \+e`))
+				It("given any failing command, when the script runs, then it exits with an error", func() {
+					Expect(script).To(HavePrefix("#!/bin/bash\n\nset -eo pipefail\n"))
+					Expect(script).NotTo(ContainSubstring("set +e"))
 				})
 
 				It("given a rerun on an existing cluster, when the script runs, then the cloud-config configmap is applied instead of created", func() {

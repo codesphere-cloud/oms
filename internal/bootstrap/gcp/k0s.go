@@ -60,20 +60,25 @@ func (b *GCPBootstrapper) GenerateK0sConfigScript() error {
 func (b *GCPBootstrapper) generateK0sConfigScript(dc *datacenter.DataCenter) error {
 	var enableWorkerDaemonsCmds strings.Builder
 
+	// The first control plane node runs k0scontroller with an enabled worker, the others are
+	// dedicated workers running k0sworker. ssh joins its arguments and the remote shell parses
+	// them again, so the whole remote command is passed as a single quoted word.
 	for i := 1; i < len(dc.ControlPlaneNodes); i++ {
 		internalIP := dc.ControlPlaneNodes[i].GetInternalIP()
-		fmt.Fprintf(&enableWorkerDaemonsCmds, "ssh -o StrictHostKeyChecking=no root@%s sed -i 's/k0sworker/k0sworker --enable-cloud-provider/g' /etc/systemd/system/k0sworker.service; systemctl daemon-reload; systemctl restart k0sworker", internalIP)
-		fmt.Fprint(&enableWorkerDaemonsCmds, "\n")
+		fmt.Fprintf(&enableWorkerDaemonsCmds, "ssh -o StrictHostKeyChecking=no root@%s %s\n",
+			internalIP, shellQuote(enableCloudProviderCmd("k0sworker")))
 	}
 
 	script := fmt.Sprintf(`#!/bin/bash
+
+set -eo pipefail
 
 cat <<EOF > cloud.conf
 [Global]
 project-id = "$PROJECT_ID"
 EOF
 
-cat <<EOF >> cc-deployment.yaml
+cat <<EOF > cc-deployment.yaml
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -123,8 +128,6 @@ spec:
         effect: NoSchedule
 EOF
 
-set -eo pipefail
-
 KUBECTL="k0s kubectl"
 $KUBECTL create configmap cloud-config --from-file=cloud.conf -n kube-system --dry-run=client -o yaml | $KUBECTL apply -f -
 echo alias kubectl=\"$KUBECTL\" >> /root/.bashrc
@@ -138,19 +141,9 @@ $KUBECTL apply -f cc-deployment.yaml
 $KUBECTL patch svc public-gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'%s'"}}'
 $KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerIP": "'%s'"}}'
 
-# The worker loop's "systemctl restart k0sworker" also runs here on the controller, which has no such unit.
-set +e
-
 %s
-
-sed -i 's/k0scontroller/k0scontroller --enable-cloud-provider/g' /etc/systemd/system/k0scontroller.service
-systemctl daemon-reload
-systemctl restart k0scontroller
-`, dc.PublicGatewayIP, dc.GatewayIP, enableWorkerDaemonsCmds.String())
-
-	// Probably we need to enable the cloud provider plugin in k0s configuration.
-	// --enable-cloud-provider on worker nodes systemd file /etc/systemd/system/k0sworker.service
-	// in addition on the first node: /etc/systemd/system/k0scontroller.service the flag --enable-cloud-provider
+%s
+`, dc.PublicGatewayIP, dc.GatewayIP, enableWorkerDaemonsCmds.String(), enableCloudProviderCmd("k0scontroller"))
 
 	localScript := dc.K0sConfigScriptPath()
 
@@ -172,6 +165,19 @@ systemctl restart k0scontroller
 	}
 
 	return nil
+}
+
+// enableCloudProviderCmd returns a shell command that adds --enable-cloud-provider to the k0s
+// systemd service's ExecStart line and restarts the service. The unit starts k0s as
+// "k0s worker ..." or "k0s controller ...", so the flag is appended to the end of that line.
+// A rerun leaves an already patched unit unchanged, and the command fails if the flag is not
+// present afterwards.
+func enableCloudProviderCmd(service string) string {
+	unit := "/etc/systemd/system/" + service + ".service"
+
+	return fmt.Sprintf("sed -i '/^ExecStart=/{/--enable-cloud-provider/!s/$/ --enable-cloud-provider/}' %[1]s"+
+		" && grep -q '^ExecStart=.*--enable-cloud-provider' %[1]s"+
+		" && systemctl daemon-reload && systemctl restart %[2]s", unit, service)
 }
 
 // RunK0sConfigScript runs every data center's k0s configuration script on its first control
