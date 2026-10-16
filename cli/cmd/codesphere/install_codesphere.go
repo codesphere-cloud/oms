@@ -334,9 +334,14 @@ func ensureCodespherePackageForVersion(opts *InstallCodesphereOpts, cfg files.Ro
 	return nil
 }
 
-// droppedPaths lists the keys of original that are missing or changed in saved.
+// droppedPaths lists the keys of original that are missing or changed in saved, and the keys saved adds.
 func droppedPaths(original, saved map[string]any, prefix string) []string {
 	var paths []string
+	for key := range saved {
+		if _, ok := original[key]; !ok {
+			paths = append(paths, prefix+"."+key+" (added)")
+		}
+	}
 	for key, value := range original {
 		path := prefix + "." + key
 		savedValue, ok := saved[key]
