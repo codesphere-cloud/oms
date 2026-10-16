@@ -16,12 +16,9 @@ dataCenters:
     city: Frankfurt
     countryCode: DE
 defaultDataCenterId: 2
-secrets:
-  baseDir: /etc/codesphere/secrets
 registry:
   server: registry.example.com
   replaceImagesInBom: false
-  loadContainerImages: true
 postgres:
   caCertPem: ca-pem
   serverAddress: postgres.example.com
@@ -29,80 +26,27 @@ postgres:
   port: 5433
   database: masterdata
 ceph:
-  csiKubeletDir: /var/lib/k0s/kubelet
-  cephAdmSshKey:
-    publicKey: ssh-ed25519 AAAA
-  nodesSubnet: 10.0.0.0/24
-  hosts:
-    - hostname: ceph-1
-      ipAddress: 10.0.0.10
-      isMaster: true
-  osds:
-    - specId: default
-      placement:
-        host_pattern: "*"
-      dataDevices:
-        size: "100G:"
-        limit: 4
-      dbDevices:
-        size: ":50G"
   volumes:
     codesphere:
       mds:
         active: 3
 kubernetes:
-  managedByCodesphere: true
-  apiServerHost: apiserver.example.com
-  controlPlanes:
-    - ipAddress: 10.0.0.20
-  workers:
-    - ipAddress: 10.0.0.21
   podCidr: 100.96.0.0/11
   serviceCidr: 100.64.0.0/13
 cluster:
-  certificates:
-    ca:
-      algorithm: RSA
-      keySizeBits: 2048
-      certPem: cert-pem
-    override:
-      issuers:
-        acme:
-          solverSecret: acme-secret
   gateway:
     gatewayApi:
       enabled: true
       use: false
-    serviceType: LoadBalancer
-    annotations:
-      lb.example.com/class: internal
-    ipAddresses:
-      - 203.0.113.11
-    override:
-      replicaCount: 2
   publicGateway:
     gatewayApi:
       enabled: false
-    serviceType: NodePort
   metallb:
     enabled: true
     pools:
       - name: public
         ipAddresses:
           - 203.0.113.0/28
-    l2:
-      - name: public-l2
-        pools:
-          - public
-    bgp:
-      - name: public-bgp
-        pools:
-          - public
-        config:
-          myASN: 64500
-          peerASN: 64501
-          peerAddress: 10.0.0.1
-          bfdProfile: fast
 codesphere:
   domain: codesphere.example.com
   workspaceHostingBaseDomain: ws.example.com
@@ -117,7 +61,6 @@ codesphere:
   certIssuer:
     type: acme
     acme:
-      enabled: true
       email: ops@example.com
       server: https://acme.example.com/directory
       eabKeyId: eab-key
@@ -144,7 +87,6 @@ codesphere:
     preview-flag: true
   features:
     feature-flag: false
-  clusterAdminEmail: admin@example.com
   extraCaPem: extra-ca-pem
   extraWorkspaceEnvVars:
     FOO: bar
@@ -269,17 +211,7 @@ codesphere:
     uri: https://bao.example.com
     user: codesphere
   openFga:
-    deploy: false
     apiUrl: https://fga.example.com
-    expose:
-      enabled: true
-      host: fga.example.com
-  migration:
-    postgres:
-      host: 10.0.0.25
-      port: 30432
-      database: masterdata
-      altName: masterdata-rw
   releaseName: codesphere-dev
   telemetryExport:
     remoteEndpoint: https://otel.example.com
@@ -290,4 +222,3 @@ codesphere:
   override:
     global:
       replicaCount: 2
-managedServiceBackends: {}
