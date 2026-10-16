@@ -611,7 +611,7 @@ func setLocalClusterComponents(config *files.RootConfig) {
 		Enabled:           false,
 		ManagedExternally: true,
 	}
-	config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
+	config.ManagedServiceBackends.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
 		Enabled: false,
 	}
 }
