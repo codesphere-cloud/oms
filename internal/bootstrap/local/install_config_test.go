@@ -191,3 +191,16 @@ cluster:
 		Entry("virtual machines absent", nil, nil, nil, false),
 	)
 })
+
+var _ = Describe("local bootstrap cluster components", func() {
+	It("with the minimal profile and OpenFGA deployed, setting the local cluster components passes the pgOperator validation", func() {
+		manager, err := installer.NewInstallConfigManager("plain", "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(manager.ApplyProfile(installer.PROFILE_MINIMAL)).To(Succeed())
+
+		setLocalClusterComponents(manager.GetInstallConfig())
+
+		Expect(manager.GetInstallConfig().Cluster.PgOperator.Enabled).To(BeFalse())
+		Expect(manager.ValidateInstallConfig()).NotTo(ContainElement(ContainSubstring("pgOperator")))
+	})
+})

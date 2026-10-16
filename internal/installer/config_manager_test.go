@@ -441,6 +441,13 @@ var _ = Describe("ConfigManager", func() {
 				Expect(errors).NotTo(ContainElement(ContainSubstring("pgOperator")))
 			})
 
+			It("with OpenFGA deployed and pgOperator disabled but managed externally, validating accepts the operator setting", func() {
+				configManager.Config.Codesphere.OpenFga = nil
+				configManager.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false, ManagedExternally: true}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).NotTo(ContainElement(ContainSubstring("pgOperator")))
+			})
+
 			It("with OpenFGA deployed and pgOperator unset, validating accepts the operator setting", func() {
 				configManager.Config.Codesphere.OpenFga = nil
 				configManager.Config.Cluster.PgOperator = nil
