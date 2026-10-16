@@ -127,6 +127,49 @@ var _ = Describe("OpenBaoBootstrapper", func() {
 		})
 	})
 
+	Describe("restore guards", func() {
+		newBootstrapper := func() *installer.OpenBaoBootstrapper {
+			b := &installer.OpenBaoBootstrapper{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoBootstrapConfig{Namespace: "vault", Timeout: 1 * time.Second},
+			}
+			b.SetCtx(ctx)
+			b.SetBackupUnsealKeys(map[string][]byte{"vault-unseal-0": []byte("backup-key")})
+			return b
+		}
+		createSecret := func(data map[string][]byte) {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "openbao-unseal-keys", Namespace: "vault"},
+				Data:       data,
+			}
+			_, err := clientset.CoreV1().Secrets("vault").Create(ctx, secret, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		It("refuses to overwrite unseal keys that differ from the backup", func() {
+			createSecret(map[string][]byte{"vault-unseal-0": []byte("live-key")})
+
+			err := newBootstrapper().CheckNoForeignUnsealKeys()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("refusing to overwrite"))
+		})
+
+		It("allows an empty secret or one already holding the backup keys", func() {
+			Expect(newBootstrapper().CheckNoForeignUnsealKeys()).To(Succeed())
+			createSecret(map[string][]byte{"vault-unseal-0": []byte("backup-key")})
+			Expect(newBootstrapper().CheckNoForeignUnsealKeys()).To(Succeed())
+		})
+
+		It("fails initialization when bank-vaults wrote different keys", func() {
+			createSecret(map[string][]byte{"vault-unseal-0": []byte("fresh-key")})
+
+			err := newBootstrapper().WaitForInitialization()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("initialized a new instance"))
+		})
+	})
+
 	Describe("WaitForVaultCR", func() {
 		newBootstrapper := func(objs ...runtime.Object) *installer.OpenBaoBootstrapper {
 			b := &installer.OpenBaoBootstrapper{

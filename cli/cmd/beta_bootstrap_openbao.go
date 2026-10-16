@@ -102,7 +102,7 @@ func AddBetaBootstrapOpenBaoCmd(beta *cobra.Command, opts *util.GlobalOptions) {
 	openbao.cmd.Flags().StringVarP(&openbao.Opts.Namespace, "namespace", "n", installer.DefaultOpenBaoNamespace, "Kubernetes namespace of the OpenBao deployment")
 	openbao.cmd.Flags().StringVar(&openbao.Opts.DRBackupPath, "dr-backup-path", "", "Path of the SOPS-encrypted DR backup file (required)")
 	openbao.cmd.Flags().BoolVar(&openbao.Opts.Restore, "restore", false, "Seed the unseal keys from the DR backup instead of exporting them")
-	openbao.cmd.Flags().DurationVar(&openbao.Opts.Timeout, "timeout", 5*time.Minute, "Timeout for waiting on the Vault CR and initialization")
+	openbao.cmd.Flags().DurationVar(&openbao.Opts.Timeout, "timeout", 5*time.Minute, "Timeout for waiting on the Vault CR and initialization; pod readiness additionally allows 3m per replica")
 	openbao.cmd.Flags().StringVarP(&openbao.Opts.AgeKeyFile, "age-key-file", "k", "", "Path to age private key file for SOPS encryption/decryption (auto-detected if not set)")
 	openbao.cmd.Flags().BoolVar(&openbao.Opts.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 

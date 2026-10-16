@@ -4,9 +4,11 @@
 package installer
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"time"
@@ -182,7 +184,11 @@ func (o *OpenBaoBootstrapper) restore() error {
 		if err := o.ensureNamespace(); err != nil {
 			return err
 		}
-		return o.ensureUnsealSecret(o.Clientset.CoreV1().Secrets(o.Config.Namespace))
+		secretsClient := o.Clientset.CoreV1().Secrets(o.Config.Namespace)
+		if err := o.checkNoForeignUnsealKeys(secretsClient); err != nil {
+			return err
+		}
+		return o.ensureUnsealSecret(secretsClient)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to seed unseal keys: %w", err)
@@ -306,6 +312,9 @@ func (o *OpenBaoBootstrapper) WaitForInitialization() error {
 		// present, indicating bank-vaults has completed initialization and
 		// written the unseal keys.
 		if len(secret.Data) > 0 {
+			if o.backupUnsealKeys != nil && !unsealKeysEqual(secret.Data, o.backupUnsealKeys) {
+				return false, fmt.Errorf("secret %s holds unseal keys that differ from the DR backup: bank-vaults initialized a new instance instead of restoring", openBaoUnsealSecretName)
+			}
 			o.unsealSecret = secret
 			return true, nil
 		}
@@ -318,6 +327,26 @@ func (o *OpenBaoBootstrapper) WaitForInitialization() error {
 		}
 		return false, nil
 	})
+}
+
+// checkNoForeignUnsealKeys refuses to restore over an initialized instance:
+// replacing its keys would make its Raft data unsealable after the next restart.
+func (o *OpenBaoBootstrapper) checkNoForeignUnsealKeys(secretsClient corev1client.SecretInterface) error {
+	existing, err := secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("checking unseal secret: %w", err)
+	}
+	if len(existing.Data) > 0 && !unsealKeysEqual(existing.Data, o.backupUnsealKeys) {
+		return fmt.Errorf("secret %s/%s already holds unseal keys that differ from the DR backup: refusing to overwrite an initialized instance", o.Config.Namespace, openBaoUnsealSecretName)
+	}
+	return nil
+}
+
+func unsealKeysEqual(a, b map[string][]byte) bool {
+	return maps.EqualFunc(a, b, bytes.Equal)
 }
 
 // ensureUnsealSecret creates or updates the unseal keys secret from the DR backup.
