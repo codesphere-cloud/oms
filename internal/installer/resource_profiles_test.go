@@ -81,12 +81,12 @@ var _ = Describe("ApplyResourceProfile", func() {
 			Expect(config.Cluster.Monitoring.PushGateway).NotTo(BeNil())
 			Expect(config.Cluster.PublicGateway.Override).NotTo(BeNil())
 			Expect(config.Cluster.PgOperator).NotTo(BeNil())
-			Expect(config.Cluster.BarmanCloudPlugin).NotTo(BeNil())
 			Expect(config.Cluster.RgwLoadBalancer).NotTo(BeNil())
 			Expect(config.Cluster.RgwLoadBalancer.Override).NotTo(BeNil())
 			Expect(config.ManagedServiceBackends).NotTo(BeNil())
 			Expect(config.ManagedServiceBackends.Postgres).NotTo(BeNil())
 			Expect(config.ManagedServiceBackends.S3).NotTo(BeNil())
+			Expect(config.ManagedServiceBackends.BarmanCloudPlugin).NotTo(BeNil())
 
 			trustManager := MustMap[any](config.Cluster.TrustManager.Override["trust-manager"])
 			AssertZeroRequests(MustMap[any](trustManager["resources"])["requests"])
@@ -94,7 +94,7 @@ var _ = Describe("ApplyResourceProfile", func() {
 			pgOperator := MustMap[any](config.Cluster.PgOperator.Override["cloudnative-pg"])
 			AssertZeroRequests(MustMap[any](pgOperator["resources"])["requests"])
 
-			barmanCloud := MustMap[any](config.Cluster.BarmanCloudPlugin.Override["plugin-barman-cloud"])
+			barmanCloud := MustMap[any](config.ManagedServiceBackends.BarmanCloudPlugin.Override["plugin-barman-cloud"])
 			AssertZeroRequests(MustMap[any](barmanCloud["resources"])["requests"])
 
 			Expect(config.Cluster.RgwLoadBalancer.Override["replicas"]).To(Equal(1))
@@ -116,13 +116,15 @@ var _ = Describe("ApplyResourceProfile", func() {
 			Expect(installer.ApplyResourceProfile(config, installer.ResourceProfileNoRequests)).To(Succeed())
 
 			Expect(config.Cluster.PgOperator.Enabled).To(BeTrue())
-			Expect(config.Cluster.BarmanCloudPlugin.Enabled).To(BeTrue())
+			Expect(config.ManagedServiceBackends.BarmanCloudPlugin.Enabled).To(BeTrue())
 		})
 
 		It("with pgOperator and barman plugin disabled, applying noRequests keeps them disabled", func() {
 			config := &files.RootConfig{
 				Cluster: files.ClusterConfig{
-					PgOperator:        &files.PgOperatorConfig{Enabled: false},
+					PgOperator: &files.PgOperatorConfig{Enabled: false},
+				},
+				ManagedServiceBackends: &files.ManagedServiceBackendsConfig{
 					BarmanCloudPlugin: &files.BarmanCloudPluginConfig{Enabled: false},
 				},
 			}
@@ -130,7 +132,7 @@ var _ = Describe("ApplyResourceProfile", func() {
 			Expect(installer.ApplyResourceProfile(config, installer.ResourceProfileNoRequests)).To(Succeed())
 
 			Expect(config.Cluster.PgOperator.Enabled).To(BeFalse())
-			Expect(config.Cluster.BarmanCloudPlugin.Enabled).To(BeFalse())
+			Expect(config.ManagedServiceBackends.BarmanCloudPlugin.Enabled).To(BeFalse())
 		})
 	})
 
