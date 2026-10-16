@@ -253,14 +253,12 @@ type SSLConfig struct {
 }
 
 type CephConfig struct {
-	CsiKubeletDir    string                `yaml:"csiKubeletDir,omitempty"`
-	CephAdmSSHKey    CephSSHKey            `yaml:"cephAdmSshKey"`
-	NodesSubnet      string                `yaml:"nodesSubnet"`
-	Hosts            []CephHost            `yaml:"hosts"`
-	OSDs             []CephOSD             `yaml:"osds"`
-	Volumes          map[string]CephVolume `yaml:"volumes,omitempty"`
-	RBDPoolName      string                `yaml:"rbdPoolName,omitempty"`
-	ExpectedOSDCount *int                  `yaml:"expectedOsdCount,omitempty"`
+	CsiKubeletDir string                `yaml:"csiKubeletDir,omitempty"`
+	CephAdmSSHKey CephSSHKey            `yaml:"cephAdmSshKey"`
+	NodesSubnet   string                `yaml:"nodesSubnet"`
+	Hosts         []CephHost            `yaml:"hosts"`
+	OSDs          []CephOSD             `yaml:"osds"`
+	Volumes       map[string]CephVolume `yaml:"volumes,omitempty"`
 }
 
 // CephVolume is a CephFS volume for workspace storage, named by its key in CephConfig.Volumes.
@@ -286,28 +284,23 @@ type CephHost struct {
 }
 
 type CephOSD struct {
-	SpecID        string          `yaml:"specId"`
-	Placement     CephPlacement   `yaml:"placement"`
-	DataDevices   CephDataDevices `yaml:"dataDevices"`
-	DBDevices     CephDBDevices   `yaml:"dbDevices,omitempty"`
-	BlockDBSize   string          `yaml:"blockDbSize,omitempty"`
-	OSDsPerDevice *int            `yaml:"osdsPerDevice,omitempty"`
+	SpecID      string          `yaml:"specId"`
+	Placement   CephPlacement   `yaml:"placement"`
+	DataDevices CephDataDevices `yaml:"dataDevices"`
+	DBDevices   CephDBDevices   `yaml:"dbDevices"`
 }
 
 type CephPlacement struct {
-	HostPattern string   `yaml:"host_pattern,omitempty"`
-	Hosts       []string `yaml:"hosts,omitempty"`
+	HostPattern string `yaml:"host_pattern"`
 }
 
 type CephDataDevices struct {
-	Model string `yaml:"model,omitempty"`
-	Size  string `yaml:"size,omitempty"`
+	Size  string `yaml:"size"`
 	Limit int    `yaml:"limit,omitempty"`
 }
 
 type CephDBDevices struct {
-	Model string `yaml:"model,omitempty"`
-	Size  string `yaml:"size,omitempty"`
+	Size  string `yaml:"size"`
 	Limit int    `yaml:"limit,omitempty"`
 }
 
@@ -318,18 +311,9 @@ type KubernetesConfig struct {
 	Workers             []K8sNode `yaml:"workers,omitempty"`
 	PodCIDR             string    `yaml:"podCidr,omitempty"`
 	ServiceCIDR         string    `yaml:"serviceCidr,omitempty"`
-	OIDC                *K8sOIDC  `yaml:"oidc,omitempty"`
 
 	// Internal flag
 	NeedsKubeConfig bool `yaml:"-"`
-}
-
-// K8sOIDC lets the Kubernetes API server authenticate users through an OIDC provider.
-type K8sOIDC struct {
-	IssuerURL     string `yaml:"issuerUrl"`
-	ClientID      string `yaml:"clientId,omitempty"`
-	UsernameClaim string `yaml:"usernameClaim,omitempty"`
-	GroupsClaim   string `yaml:"groupsClaim,omitempty"`
 }
 
 type K8sNode struct {
@@ -352,7 +336,7 @@ type ClusterConfig struct {
 }
 
 type ClusterCertificates struct {
-	CA       CAConfig      `yaml:"ca,omitempty"`
+	CA       CAConfig      `yaml:"ca"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
@@ -386,12 +370,11 @@ type ACMEDNS01Solver struct {
 }
 
 type GatewayConfig struct {
-	GatewayAPI   *GatewayAPIConfig `yaml:"gatewayApi,omitempty"`
-	NodeSelector map[string]string `yaml:"nodeSelector,omitempty"`
-	ServiceType  string            `yaml:"serviceType,omitempty"`
-	Annotations  map[string]string `yaml:"annotations,omitempty"`
-	IPAddresses  []string          `yaml:"ipAddresses,omitempty"`
-	Override     ChartOverride     `yaml:"override,omitempty"`
+	GatewayAPI  *GatewayAPIConfig `yaml:"gatewayApi,omitempty"`
+	ServiceType string            `yaml:"serviceType"`
+	Annotations map[string]string `yaml:"annotations,omitempty"`
+	IPAddresses []string          `yaml:"ipAddresses,omitempty"`
+	Override    ChartOverride     `yaml:"override,omitempty"`
 }
 
 // GatewayAPIConfig switches the gateway to the Gateway API. Use defaults to true when Enabled is set.
@@ -432,11 +415,10 @@ type KyvernoConfig struct {
 }
 
 type MetalLBConfig struct {
-	Enabled  bool             `yaml:"enabled"`
-	Pools    []MetalLBPoolDef `yaml:"pools"`
-	L2       []MetalLBL2      `yaml:"l2,omitempty"`
-	BGP      []MetalLBBGP     `yaml:"bgp,omitempty"`
-	Override ChartOverride    `yaml:"override,omitempty"`
+	Enabled bool             `yaml:"enabled"`
+	Pools   []MetalLBPoolDef `yaml:"pools"`
+	L2      []MetalLBL2      `yaml:"l2,omitempty"`
+	BGP     []MetalLBBGP     `yaml:"bgp,omitempty"`
 }
 
 type MetalLBPoolDef struct {
@@ -445,21 +427,16 @@ type MetalLBPoolDef struct {
 }
 
 type MetalLBL2 struct {
-	Name          string                `yaml:"name"`
-	Pools         []string              `yaml:"pools"`
-	NodeSelectors []MetalLBNodeSelector `yaml:"nodeSelectors,omitempty"`
+	Name          string              `yaml:"name"`
+	Pools         []string            `yaml:"pools"`
+	NodeSelectors []map[string]string `yaml:"nodeSelectors,omitempty"`
 }
 
 type MetalLBBGP struct {
-	Name          string                `yaml:"name"`
-	Pools         []string              `yaml:"pools"`
-	Config        MetalLBBGPConfig      `yaml:"config"`
-	NodeSelectors []MetalLBNodeSelector `yaml:"nodeSelectors,omitempty"`
-}
-
-// MetalLBNodeSelector limits an advertisement to the nodes matching its labels.
-type MetalLBNodeSelector struct {
-	MatchLabels map[string]string `yaml:"matchLabels"`
+	Name          string              `yaml:"name"`
+	Pools         []string            `yaml:"pools"`
+	Config        MetalLBBGPConfig    `yaml:"config"`
+	NodeSelectors []map[string]string `yaml:"nodeSelectors,omitempty"`
 }
 
 type MetalLBBGPConfig struct {
