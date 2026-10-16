@@ -25,7 +25,7 @@ replace (
 
 require (
 	cloud.google.com/go/artifactregistry v1.27.0
-	cloud.google.com/go/compute v1.72.0
+	cloud.google.com/go/compute v1.73.0
 	cloud.google.com/go/iam v1.14.0
 	cloud.google.com/go/resourcemanager v1.17.0
 	cloud.google.com/go/serviceusage v1.16.0
@@ -46,7 +46,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.33.1
 	github.com/onsi/gomega v1.44.0
 	github.com/pkg/sftp v1.13.11
-	github.com/rook/rook/pkg/apis v0.0.0-20261014203837-3b0cdbefc747
+	github.com/rook/rook/pkg/apis v0.0.0-20261015192809-0fc6c0844a85
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5

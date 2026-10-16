@@ -693,8 +693,8 @@ cloud.google.com/go/compute v1.29.0/go.mod h1:HFlsDurE5DpQZClAGf/cYh+gxssMhBxBov
 cloud.google.com/go/compute v1.31.0/go.mod h1:4SCUCDAvOQvMGu4ze3YIJapnY0UQa5+WvJJeYFsQRoo=
 cloud.google.com/go/compute v1.31.1/go.mod h1:hyOponWhXviDptJCJSoEh89XO1cfv616wbwbkde1/+8=
 cloud.google.com/go/compute v1.34.0/go.mod h1:zWZwtLwZQyonEvIQBuIa0WvraMYK69J5eDCOw9VZU4g=
-cloud.google.com/go/compute v1.72.0 h1:cwmwK/ADu7G1DNRN2Dt+qTpdg1hrAqzArBSmgSFumXE=
-cloud.google.com/go/compute v1.72.0/go.mod h1:L8Z2360/cq2L/Z3q1o/D/jTFkzbgKLbgERpOm4/cepE=
+cloud.google.com/go/compute v1.73.0 h1:HuSpGukmPtVE0OUbvE38aa7yCHU8LdG5wB0mKgpG36k=
+cloud.google.com/go/compute v1.73.0/go.mod h1:L8Z2360/cq2L/Z3q1o/D/jTFkzbgKLbgERpOm4/cepE=
 cloud.google.com/go/compute/metadata v0.1.0/go.mod h1:Z1VN+bulIf6bt4P/C37K4DyZYZEXYonfTBHHFPO/4UU=
 cloud.google.com/go/compute/metadata v0.2.0/go.mod h1:zFmK7XCadkQkj6TtorcaGlCW1hT1fIilQDwofLpJ20k=
 cloud.google.com/go/compute/metadata v0.2.1/go.mod h1:jgHgmJd2RKBGzXqF5LR2EZMGxBkeanZ9wwa75XHJgOM=
@@ -4715,8 +4715,8 @@ github.com/rogpeppe/go-internal v1.13.1/go.mod h1:uMEvuHeurkdAXX61udpOXGD/AzZDWN
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/rogpeppe/go-internal v1.16.0 h1:O9DK+vNMDVGLr2BeZqmpLeMjiMNkuXfcqntWbZV6S5g=
 github.com/rogpeppe/go-internal v1.16.0/go.mod h1:DrUVZyrJU+txYW5/1kwtXQSMFio52ZOxX7yM1VHvnxs=
-github.com/rook/rook/pkg/apis v0.0.0-20261014203837-3b0cdbefc747 h1:TDYlVOXowYDjEjSNZVdLr9oSagz7kyuspiaeXuDGLwY=
-github.com/rook/rook/pkg/apis v0.0.0-20261014203837-3b0cdbefc747/go.mod h1:G6ksSVAnogY0XH9yvy14ucQ8OK6utsZtgs4qDc5laLM=
+github.com/rook/rook/pkg/apis v0.0.0-20261015192809-0fc6c0844a85 h1:nL42h7sQujLE2rFSPS4qprwxMM381umhlo7LZDKufmU=
+github.com/rook/rook/pkg/apis v0.0.0-20261015192809-0fc6c0844a85/go.mod h1:G6ksSVAnogY0XH9yvy14ucQ8OK6utsZtgs4qDc5laLM=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937 h1:1TpdIqF9mtQfhNfwOpXdpJTMhx66PonVCCvYcGWvu/I=
 github.com/rook/secrets v0.0.0-20240315053144-3195f6906937/go.mod h1:jOxzr6jXuSz9UztMhEpcBi1/vPygUA4z9kFuFj+6zd8=
 github.com/rs/xid v1.2.1/go.mod h1:+uKXf+4Djp6Md1KODXJxgGQPKngRmWyn10oCKFzNHOQ=
