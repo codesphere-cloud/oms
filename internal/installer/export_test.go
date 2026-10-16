@@ -52,3 +52,7 @@ func (o *OpenBaoBootstrapper) ValidateConfig() error {
 func (o *OpenBaoBootstrapper) ReadinessTimeout() time.Duration {
 	return o.readinessTimeout()
 }
+
+func (o *OpenBaoBootstrapper) CheckNoForeignUnsealKeys() error {
+	return o.checkNoForeignUnsealKeys(o.Clientset.CoreV1().Secrets(o.Config.Namespace))
+}

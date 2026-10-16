@@ -40,7 +40,7 @@ $ oms beta bootstrap-openbao --dr-backup-path ./backups/cluster-1.enc.json --tim
   -h, --help                    help for bootstrap-openbao
   -n, --namespace string        Kubernetes namespace of the OpenBao deployment (default "vault")
       --restore                 Seed the unseal keys from the DR backup instead of exporting them
-      --timeout duration        Timeout for waiting on the Vault CR and initialization (default 5m0s)
+      --timeout duration        Timeout for waiting on the Vault CR and initialization; pod readiness additionally allows 3m per replica (default 5m0s)
       --timer                   Show how long each step took after it finishes
 ```
 
