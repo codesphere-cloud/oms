@@ -31,11 +31,7 @@ kubernetes:
   podCidr: 100.96.0.0/11
   serviceCidr: 100.64.0.0/13
 cluster:
-  certificates:
-    ca:
-      algorithm: RSA
-      keySizeBits: 2048
-      certPem: cert-pem
+  certificates: {}
   gateway:
     serviceType: LoadBalancer
   publicGateway:
