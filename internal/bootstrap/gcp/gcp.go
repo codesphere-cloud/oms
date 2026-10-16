@@ -80,7 +80,6 @@ var DefaultInternalFlags []string = []string{
 
 var DefaultPreviewFlags []string = []string{
 	"openfga-authz",
-	"cluster-admin",
 	"secret-management",
 	"sub-path-mount",
 	"workspace-ssh",
