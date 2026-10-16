@@ -1,3 +1,6 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
 dataCenter:
   id: 1
   name: main
