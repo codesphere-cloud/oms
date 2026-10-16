@@ -45,6 +45,13 @@ func UsesExternalSecrets(cfg files.CodesphereConfig) bool {
 	return ok && enabled
 }
 
+// NeedsReleaseVault reports whether this run deploys a release that reads its vault through
+// external secrets. A skipped deploy must not rewrite the Secret: the freshly signed tokens
+// change its data, and Reloader would restart the running release.
+func NeedsReleaseVault(cfg files.RootConfig, skipSteps []string) bool {
+	return UsesExternalSecrets(cfg.Codesphere) && !IsStepSkipped(cfg, skipSteps, CodesphereStep)
+}
+
 // WriteReleaseVaultSecret signs fresh service account tokens, writes the vault into the
 // release's own secret and returns the checksum of the written data. Each release has its
 // own secret, so deploying one release never changes or removes what another release reads.

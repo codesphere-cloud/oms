@@ -52,7 +52,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	// previews and master-dev only run this phase, and a release can bring vault entries
 	// that did not exist when the dependencies phase last ran. cs-vault stays for the
 	// cluster-wide pc-applications charts.
-	if installer.UsesExternalSecrets(cfg.Codesphere) {
+	if installer.NeedsReleaseVault(cfg, opts.SkipSteps) {
 		if err := writeReleaseVault(ctx, opts, cfg); err != nil {
 			return err
 		}

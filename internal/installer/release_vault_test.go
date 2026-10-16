@@ -69,6 +69,27 @@ var _ = Describe("UsesExternalSecrets", func() {
 	})
 })
 
+var _ = Describe("NeedsReleaseVault", func() {
+	const externalSecretsConfig = "codesphere:\n  override:\n    global:\n      externalSecrets: true\n"
+
+	It("is true when external secrets are on and the codesphere step runs", func() {
+		Expect(installer.NeedsReleaseVault(parseRootConfig(externalSecretsConfig), nil)).To(BeTrue())
+	})
+
+	It("is false when the codesphere step is skipped on the command line", func() {
+		Expect(installer.NeedsReleaseVault(parseRootConfig(externalSecretsConfig), []string{installer.CodesphereStep})).To(BeFalse())
+	})
+
+	It("is false when the config skips the codesphere step", func() {
+		cfg := parseRootConfig(externalSecretsConfig + "operations:\n  skip:\n    - codesphere\n")
+		Expect(installer.NeedsReleaseVault(cfg, nil)).To(BeFalse())
+	})
+
+	It("is false when external secrets are off", func() {
+		Expect(installer.NeedsReleaseVault(files.RootConfig{}, nil)).To(BeFalse())
+	})
+})
+
 func setupReleaseVault() (ctrlclient.Client, *files.InstallVault) {
 	scheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
