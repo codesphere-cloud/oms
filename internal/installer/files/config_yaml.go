@@ -357,6 +357,8 @@ type MetalLBBGPConfig struct {
 }
 
 type CodesphereConfig struct {
+	// ReleaseName is only set in dev, where several Codesphere releases share one cluster.
+	ReleaseName                string                 `yaml:"releaseName,omitempty"`
 	Domain                     string                 `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                 `yaml:"workspaceHostingBaseDomain"`
 	PublicIP                   string                 `yaml:"publicIp"`

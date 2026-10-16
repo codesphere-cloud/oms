@@ -135,3 +135,34 @@ var _ = Describe("vaultToSecretData", func() {
 		Expect(data).To(HaveKey("real.password"))
 	})
 })
+
+var _ = Describe("SecretDataChecksum", func() {
+	It("does not depend on the order of the vault entries", func() {
+		first := &files.InstallVault{Secrets: []files.SecretEntry{
+			{Name: "a", Fields: &files.SecretFields{Password: "1"}},
+			{Name: "b", File: &files.SecretFile{Name: "b", Content: "2"}},
+		}}
+		second := &files.InstallVault{Secrets: []files.SecretEntry{first.Secrets[1], first.Secrets[0]}}
+
+		Expect(SecretDataChecksum(first)).To(Equal(must(SecretDataChecksum(second))))
+	})
+
+	It("changes when a value changes", func() {
+		before := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "a", Fields: &files.SecretFields{Password: "1"}}}}
+		after := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "a", Fields: &files.SecretFields{Password: "2"}}}}
+
+		Expect(SecretDataChecksum(before)).ToNot(Equal(must(SecretDataChecksum(after))))
+	})
+
+	It("tells apart data that only differs in where a key ends and its value starts", func() {
+		left := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "ab", File: &files.SecretFile{Content: "c"}}}}
+		right := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "a", File: &files.SecretFile{Content: "bc"}}}}
+
+		Expect(SecretDataChecksum(left)).ToNot(Equal(must(SecretDataChecksum(right))))
+	})
+})
+
+func must(checksum string, err error) string {
+	Expect(err).ToNot(HaveOccurred())
+	return checksum
+}
