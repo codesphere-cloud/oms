@@ -1,0 +1,224 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+dataCenter:
+  id: 1
+  name: main
+  city: Karlsruhe
+  countryCode: DE
+dataCenters:
+  - id: 1
+    name: main
+    city: Karlsruhe
+    countryCode: DE
+  - id: 2
+    name: second
+    city: Frankfurt
+    countryCode: DE
+defaultDataCenterId: 2
+registry:
+  server: registry.example.com
+  replaceImagesInBom: false
+postgres:
+  caCertPem: ca-pem
+  serverAddress: postgres.example.com
+  altName: postgres-rw.codesphere.svc
+  port: 5433
+  database: masterdata
+ceph:
+  volumes:
+    codesphere:
+      mds:
+        active: 3
+kubernetes:
+  podCidr: 100.96.0.0/11
+  serviceCidr: 100.64.0.0/13
+cluster:
+  gateway:
+    gatewayApi:
+      enabled: true
+      use: false
+  publicGateway:
+    gatewayApi:
+      enabled: false
+  metallb:
+    enabled: true
+    pools:
+      - name: public
+        ipAddresses:
+          - 203.0.113.0/28
+codesphere:
+  domain: codesphere.example.com
+  workspaceHostingBaseDomain: ws.example.com
+  publicIp: 203.0.113.10
+  branding:
+    desc: Cloud IDE
+    docsUrl: https://docs.example.com
+    faviconHref: https://example.com/favicon.ico
+    showOnboarding: true
+    title: Example IDE
+    tosUrl: https://example.com/tos
+  certIssuer:
+    type: acme
+    acme:
+      email: ops@example.com
+      server: https://acme.example.com/directory
+      eabKeyId: eab-key
+      customDomainsEabKeyId: custom-eab-key
+  customCertificate:
+    cert: cert-pem
+    key: key-pem
+  sshWorkspaceProxy:
+    baseDomain: ssh.example.com
+  vpnLeftPeerId: peer-1
+  customDomains:
+    cNameBaseDomain: custom.example.com
+    insecureSkipDomainControlVerify: true
+    cert:
+      algorithm: ECDSA
+      size: 256
+  dnsServers:
+    - 1.1.1.1
+  experiments:
+    - legacy-experiment
+  internal:
+    - internal-flag
+  preview:
+    preview-flag: true
+  features:
+    feature-flag: false
+  extraCaPem: extra-ca-pem
+  extraWorkspaceEnvVars:
+    FOO: bar
+  extraWorkspaceFiles:
+    - name: .npmrc
+      content: cmVnaXN0cnk=
+      encoded: true
+  workspaceImages:
+    agent:
+      bomRef: workspace-agent-24.04
+      dockerfile: Dockerfile.agent
+    agentGpu: registry.example.com/agent-gpu:1
+    server:
+      bomRef: workspace-server
+    vpn:
+      bomRef: vpn
+  deployConfig:
+    images:
+      ubuntu-24.04:
+        name: Ubuntu 24.04
+        supportedUntil: "2029-04-01"
+        default: true
+        flavors:
+          default:
+            image:
+              bomRef: workspace-agent-24.04
+            pool:
+              8: 2
+  prePullImages: false
+  ipService:
+    loadBalancerKind: metallb
+    addressPools:
+      - public
+  plans:
+    hostingPlans:
+      8:
+        cpuTenth: 10
+        gpuParts: 0
+        memoryMb: 2048
+        storageMb: 20480
+        tempStorageMb: 1500
+        pooledInstances: 2
+    workspacePlans:
+      20:
+        name: Micro
+        hostingPlanId: 8
+        maxReplicas: 3
+        onDemand: true
+  signUp:
+    email:
+      allowedDomains:
+        - example.com
+  email:
+    provider: smtp
+    smtp:
+      host: smtp.example.com
+      port: 587
+      secure: true
+      username: mailer
+  underprovisionFactors:
+    cpu: 0.5
+    memory: 0.75
+  gitProviders:
+    github:
+      enabled: true
+      url: https://github.com
+      api:
+        baseUrl: https://api.github.com
+      oauth:
+        issuer: https://github.com
+        authorizationEndpoint: https://github.com/login/oauth/authorize
+        tokenEndpoint: https://github.com/login/oauth/access_token
+        clientAuthMethod: client_secret_post
+        scope: repo
+        redirectUri: https://codesphere.example.com/ide/auth/github/callback
+        installationUri: https://github.com/apps/codesphere/installations/new
+    scmManager:
+      enabled: true
+      url: https://scm.example.com
+      api:
+        baseUrl: https://scm.example.com/api
+  oauth:
+    oidc:
+      type: oidc
+      enabled: true
+      name: Dex
+      issuerUrl: https://dex.example.com
+      scopes:
+        - openid
+  managedServices:
+    - name: postgres
+      schemaVersion: v1
+      scope: team
+      teamSingleton: true
+      documentationUrl: https://docs.example.com/postgres
+      labels:
+        - sql
+      capabilities:
+        backup: true
+      backups:
+        configSchema:
+          type: object
+        secretsSchema:
+          type: object
+      backend:
+        api:
+          endpoint: https://postgres-provider.example.com
+      versions:
+        1.0.0:
+          ref: v1
+      resourceParameters:
+        storage: null
+      plans:
+        - id: 1
+          description: Small
+          name: small
+          parameters:
+            cpu: 1
+  managedServiceWorkspacePlanId: 21
+  openBao:
+    engine: kv
+    uri: https://bao.example.com
+    user: codesphere
+  openFga:
+    apiUrl: https://fga.example.com
+  releaseName: codesphere-dev
+  telemetryExport:
+    remoteEndpoint: https://otel.example.com
+    remoteExport: true
+    traces: true
+    traceEndpoint: https://tempo.example.com
+    spanMetrics: true
+  override:
+    global:
+      replicaCount: 2

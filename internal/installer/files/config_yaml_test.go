@@ -12,6 +12,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("ConfigYaml", func() {
@@ -814,4 +815,41 @@ var _ = Describe("CodespherePackageVersion", func() {
 		Entry("empty version", &files.OperationsConfig{}),
 		Entry("hash without version", &files.OperationsConfig{Codesphere: files.CodespherePackageConfig{Hash: "abc123"}}),
 	)
+})
+
+var _ = Describe("RootConfig round-trip", func() {
+	roundTrip := func(path string) (map[string]interface{}, map[string]interface{}) {
+		data, err := os.ReadFile(path)
+		Expect(err).NotTo(HaveOccurred())
+
+		var original map[string]interface{}
+		Expect(yaml.Unmarshal(data, &original)).To(Succeed())
+
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal(data)).To(Succeed())
+		marshaled, err := config.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+
+		var saved map[string]interface{}
+		Expect(yaml.Unmarshal(marshaled, &saved)).To(Succeed())
+
+		return original, saved
+	}
+
+	It("keeps every field the Codesphere values are built from", func() {
+		original, saved := roundTrip(filepath.Join("testdata", "values_config.yaml"))
+
+		// Merging the original over the saved config only changes it if a field was lost or altered.
+		// Fields OMS always writes, like secrets.baseDir, are allowed to be added.
+		_, savedCopy := roundTrip(filepath.Join("testdata", "values_config.yaml"))
+		Expect(util.DeepMergeMaps(savedCopy, original)).To(Equal(saved))
+	})
+
+	It("defaults the registry flags to true when they are left out", func() {
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal([]byte("registry:\n  server: registry.example.com\n"))).To(Succeed())
+
+		Expect(config.Registry.ReplaceImagesInBom).To(BeTrue())
+		Expect(config.Registry.LoadContainerImages).To(BeTrue())
+	})
 })
