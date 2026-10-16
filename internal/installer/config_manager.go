@@ -248,6 +248,11 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 
 	errors = append(errors, validateOpenFga(g.Config.Codesphere.OpenFga)...)
 
+	// OpenFGA's database is a CloudNativePG cluster; without the operator's CRDs ArgoCD cannot sync it.
+	if pg := g.Config.Cluster.PgOperator; pg != nil && !pg.Enabled && g.Config.Codesphere.OpenFga.DeploysOpenFga() {
+		errors = append(errors, "cluster.pgOperator.enabled must be true when this data center deploys OpenFGA (codesphere.openFga.deploy unset or true)")
+	}
+
 	return errors
 }
 

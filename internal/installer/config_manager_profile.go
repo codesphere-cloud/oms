@@ -187,6 +187,15 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Secrets.BaseDir == "" {
 		g.Config.Secrets.BaseDir = "/root/secrets"
 	}
+
+	// OpenFGA's database is a CloudNativePG cluster, so every profile needs the operator.
+	if g.Config.Cluster.PgOperator == nil {
+		g.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: true}
+	}
+
+	if g.Config.Cluster.BarmanCloudPlugin == nil {
+		g.Config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
+	}
 }
 
 // ensureMonitoringDefaults populates the monitoring stack with the given enabled
@@ -246,16 +255,6 @@ func (g *InstallConfig) applyProfileMinimal() error {
 
 	g.ensureMonitoringDefaults("dev", true, true, true)
 	g.ensureWorkspacePlans("Standard Developer", 1)
-	if g.Config.Cluster.BarmanCloudPlugin == nil {
-		g.Config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
-			Enabled: true,
-		}
-	}
-	if g.Config.Cluster.PgOperator == nil {
-		g.Config.Cluster.PgOperator = &files.PgOperatorConfig{
-			Enabled: true,
-		}
-	}
 	if g.Config.Cluster.RgwLoadBalancer == nil {
 		g.Config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
 			Enabled: true,

@@ -158,6 +158,27 @@ var _ = Describe("ConfigManagerProfile", func() {
 			}
 		})
 
+		Context("CloudNativePG operator", func() {
+			for _, profile := range []string{installer.PROFILE_DEV, installer.PROFILE_MINIMAL, installer.PROFILE_PROD} {
+				It("with an empty config, applying the "+profile+" profile enables the pgOperator and barman plugin", func() {
+					Expect(manager.ApplyProfile(profile)).To(Succeed())
+
+					config := manager.GetInstallConfig()
+					Expect(config.Cluster.PgOperator.Enabled).To(BeTrue())
+					Expect(config.Cluster.BarmanCloudPlugin.Enabled).To(BeTrue())
+					Expect(manager.ValidateInstallConfig()).NotTo(ContainElement(ContainSubstring("pgOperator")))
+				})
+			}
+
+			It("with an explicitly disabled pgOperator, applying the dev profile keeps it disabled", func() {
+				manager.GetInstallConfig().Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false}
+
+				Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+
+				Expect(manager.GetInstallConfig().Cluster.PgOperator.Enabled).To(BeFalse())
+			})
+		})
+
 		Context("profile-specific differences", func() {
 			It("should have the expected datacenter names", func() {
 				devManager := newPlainInstallConfigManager()

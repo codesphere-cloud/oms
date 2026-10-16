@@ -178,8 +178,10 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 		},
 	})
 
+	// The PC installer installs an unset component, so creating one to hold the
+	// override must not disable it.
 	if config.Cluster.PgOperator == nil {
-		config.Cluster.PgOperator = &files.PgOperatorConfig{}
+		config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: true}
 	}
 	config.Cluster.PgOperator.Override = util.DeepMergeMaps(config.Cluster.PgOperator.Override, map[string]any{
 		"cloudnative-pg": map[string]any{
@@ -190,7 +192,7 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 	})
 
 	if config.Cluster.BarmanCloudPlugin == nil {
-		config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{}
+		config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
 	}
 	config.Cluster.BarmanCloudPlugin.Override = util.DeepMergeMaps(config.Cluster.BarmanCloudPlugin.Override, map[string]any{
 		"plugin-barman-cloud": map[string]any{
