@@ -295,9 +295,11 @@ type ClusterConfig struct {
 	MetalLB             *MetalLBConfig             `yaml:"metallb,omitempty"`
 	RookExternalCluster *RookExternalClusterConfig `yaml:"rookExternalCluster,omitempty"`
 	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
-	BarmanCloudPlugin   *BarmanCloudPluginConfig   `yaml:"BarmanCloudPluginConfig,omitempty"`
-	RgwLoadBalancer     *RgwLoadBalancerConfig     `yaml:"rgwLoadBalancer,omitempty"`
-	Kyverno             *KyvernoConfig             `yaml:"kyverno,omitempty"`
+	// LegacyBarmanCloudPlugin is only read: Unmarshal moves it to
+	// managedServiceBackends.barmanCloudPlugin, the key the PC installer reads.
+	LegacyBarmanCloudPlugin *BarmanCloudPluginConfig `yaml:"BarmanCloudPluginConfig,omitempty"`
+	RgwLoadBalancer         *RgwLoadBalancerConfig   `yaml:"rgwLoadBalancer,omitempty"`
+	Kyverno                 *KyvernoConfig           `yaml:"kyverno,omitempty"`
 }
 
 type ClusterCertificates struct {
@@ -743,8 +745,9 @@ func (p PlanParam) MarshalYAML() (interface{}, error) {
 }
 
 type ManagedServiceBackendsConfig struct {
-	Postgres *PgManagedServiceConfig `yaml:"postgres,omitempty"`
-	S3       *S3ManagedServiceConfig `yaml:"s3,omitempty"`
+	Postgres          *PgManagedServiceConfig  `yaml:"postgres,omitempty"`
+	S3                *S3ManagedServiceConfig  `yaml:"s3,omitempty"`
+	BarmanCloudPlugin *BarmanCloudPluginConfig `yaml:"barmanCloudPlugin,omitempty"`
 }
 
 type MonitoringConfig struct {
@@ -857,6 +860,7 @@ func (c *RootConfig) Unmarshal(data []byte) error {
 		return err
 	}
 	c.extractACMESolverFromOverride()
+	c.migrateLegacyBarmanCloudPlugin()
 	return nil
 }
 
@@ -1015,6 +1019,33 @@ func (c *RootConfig) buildOpenfgaBackupValues() {
 	openfga["valuesObject"] = valuesObject
 	applications["openfga"] = openfga
 	c.PcApps["applications"] = applications
+}
+
+// migrateLegacyBarmanCloudPlugin moves cluster.BarmanCloudPluginConfig to
+// managedServiceBackends.barmanCloudPlugin. The new key wins when both are set.
+func (c *RootConfig) migrateLegacyBarmanCloudPlugin() {
+	legacy := c.Cluster.LegacyBarmanCloudPlugin
+	if legacy == nil {
+		return
+	}
+
+	c.Cluster.LegacyBarmanCloudPlugin = nil
+
+	if c.ManagedServiceBackends == nil {
+		c.ManagedServiceBackends = &ManagedServiceBackendsConfig{}
+	}
+
+	if c.ManagedServiceBackends.BarmanCloudPlugin != nil {
+		return
+	}
+
+	// The PC installer never read the legacy key, so every install that has it runs the
+	// plugin; its enabled: false, which the dev profile wrote by accident, must not now
+	// stop installing the plugin that database backups depend on.
+	c.ManagedServiceBackends.BarmanCloudPlugin = &BarmanCloudPluginConfig{
+		Enabled:  true,
+		Override: legacy.Override,
+	}
 }
 
 // extractACMESolverFromOverride populates the ACMEConfig.Solver from

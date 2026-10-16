@@ -195,8 +195,8 @@ func (g *InstallConfig) applyCommonProperties() {
 		g.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: true}
 	}
 
-	if g.Config.Cluster.BarmanCloudPlugin == nil {
-		g.Config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
+	if g.Config.ManagedServiceBackends.BarmanCloudPlugin == nil {
+		g.Config.ManagedServiceBackends.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
 	}
 }
 
