@@ -33,16 +33,18 @@ type VMDef struct {
 // cephNodesPerDataCenter and k0sNodesPerDataCenter are the per-data-center node counts. Three
 // Ceph nodes are the minimum for replication; three k0s nodes give one control plane and three
 // workers, as written into the install config.
+// jumpboxTag is the network tag of the jumpbox VM, which the air-gapped egress rules exempt.
 const (
 	cephNodesPerDataCenter = 3
 	k0sNodesPerDataCenter  = 3
+	jumpboxTag             = "jumpbox"
 )
 
 // sharedVMDefs returns the VMs that exist once per project, regardless of how many data centers
 // are bootstrapped. The postgres node hosts the database both data centers share.
 func sharedVMDefs() []VMDef {
 	return []VMDef{
-		{Name: "jumpbox", MachineType: "e2-medium", Tags: []string{"jumpbox", "ssh"}, AdditionalDisks: []int64{}, ExternalIP: true},
+		{Name: "jumpbox", MachineType: "e2-medium", Tags: []string{jumpboxTag, "ssh"}, AdditionalDisks: []int64{}, ExternalIP: true},
 		{Name: "postgres", MachineType: "e2-standard-2", Tags: []string{"postgres"}, AdditionalDisks: []int64{}, ExternalIP: true},
 	}
 }

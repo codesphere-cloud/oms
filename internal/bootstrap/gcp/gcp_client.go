@@ -56,6 +56,7 @@ type GCPClientManager interface {
 	RemoveIAMRoleBinding(projectID, saName string, saProjectID string, roles []string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
+	DeleteFirewallRule(projectID, ruleName string) error
 	CreateInstance(projectID, zone string, instance *computepb.Instance) error
 	GetInstance(projectID, zone, instanceName string) (*computepb.Instance, error)
 	StartInstance(projectID, zone, instanceName string) error
@@ -698,8 +699,36 @@ func (c *GCPClient) CreateFirewallRule(projectID string, rule *computepb.Firewal
 		Project:          projectID,
 		FirewallResource: rule,
 	})
-	if err != nil && !strings.Contains(err.Error(), "already exists") {
+	if err != nil && !IsAlreadyExistsError(err) {
 		return err
+	}
+
+	return nil
+}
+
+// DeleteFirewallRule deletes the named firewall rule from the specified project. A rule that does
+// not exist counts as deleted.
+func (c *GCPClient) DeleteFirewallRule(projectID, ruleName string) error {
+	firewallsClient, err := compute.NewFirewallsRESTClient(c.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to create firewalls client: %w", err)
+	}
+	defer util.IgnoreError(firewallsClient.Close)
+
+	op, err := firewallsClient.Delete(c.ctx, &computepb.DeleteFirewallRequest{
+		Project:  projectID,
+		Firewall: ruleName,
+	})
+	if IsNotFoundError(err) {
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("failed to delete firewall rule %s: %w", ruleName, err)
+	}
+
+	if err := op.Wait(c.ctx); err != nil {
+		return fmt.Errorf("failed to wait for deletion of firewall rule %s: %w", ruleName, err)
 	}
 
 	return nil
