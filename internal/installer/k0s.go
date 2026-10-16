@@ -80,6 +80,10 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 		return cachePath, nil
 	}
 
+	if opts.CacheOnly {
+		return "", fmt.Errorf("k0s %s not found in OMS cache at '%s', download it first with 'oms download k0s --version %s'", version, cachePath, version)
+	}
+
 	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
 	downloadURL := fmt.Sprintf("%s/%s/%s", k0sReleaseURL, version, assetName)
 
