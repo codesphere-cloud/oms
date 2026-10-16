@@ -155,6 +155,10 @@ type RegistryConfig struct {
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
 }
 
+func (r RegistryConfig) IsZero() bool {
+	return r.Server == ""
+}
+
 type registryConfigAlias RegistryConfig
 
 // UnmarshalYAML defaults both flags to true when they are left out, as the Codesphere installer does.
@@ -278,7 +282,7 @@ type ClusterConfig struct {
 }
 
 type ClusterCertificates struct {
-	CA       CAConfig      `yaml:"ca"`
+	CA       CAConfig      `yaml:"ca,omitempty"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
@@ -398,7 +402,7 @@ type CodesphereConfig struct {
 	SSHWorkspaceProxy          *SSHWorkspaceProxyConfig `yaml:"sshWorkspaceProxy,omitempty"`
 	VPNLeftPeerID              string                   `yaml:"vpnLeftPeerId,omitempty"`
 	CustomDomains              CustomDomainsConfig      `yaml:"customDomains"`
-	DNSServers                 []string                 `yaml:"dnsServers"`
+	DNSServers                 []string                 `yaml:"dnsServers,omitempty"`
 	// Deprecated: use Internal.
 	Experiments                   []string               `yaml:"experiments,omitempty"`
 	Internal                      []string               `yaml:"internal"`
@@ -409,7 +413,7 @@ type CodesphereConfig struct {
 	ExtraWorkspaceEnvVars         map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
 	ExtraWorkspaceFiles           []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
 	WorkspaceImages               *WorkspaceImagesConfig `yaml:"workspaceImages,omitempty"`
-	DeployConfig                  DeployConfig           `yaml:"deployConfig"`
+	DeployConfig                  DeployConfig           `yaml:"deployConfig,omitempty"`
 	PrePullImages                 *bool                  `yaml:"prePullImages,omitempty"`
 	IPService                     *IPServiceConfig       `yaml:"ipService,omitempty"`
 	Plans                         PlansConfig            `yaml:"plans"`
@@ -614,7 +618,7 @@ type FlavorConfig struct {
 }
 
 type TelemetryExport struct {
-	RemoteEndpoint string `yaml:"remoteEndpoint"`
+	RemoteEndpoint string `yaml:"remoteEndpoint,omitempty"`
 	RemoteExport   bool   `yaml:"remoteExport"`
 	Traces         bool   `yaml:"traces"`
 	TraceEndpoint  string `yaml:"traceEndpoint,omitempty"`
