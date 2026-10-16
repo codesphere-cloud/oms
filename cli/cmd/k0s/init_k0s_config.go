@@ -101,7 +101,9 @@ func (c *InitK0sConfigCmd) InitK0sConfig(pm installer.PackageManager, k0s instal
 		CacheOnly:  true,
 	}
 
-	_, err := generator.Generate(pm, k0s, c.Opts.Output)
+	if _, err := generator.Generate(pm, k0s, c.Opts.Output); err != nil {
+		return fmt.Errorf("failed to generate k0sctl config: %w", err)
+	}
 
-	return err
+	return nil
 }

@@ -149,7 +149,12 @@ func (c *InstallK0sCmd) getK0sctlConfigPath(pm installer.PackageManager, k0s ins
 		FileWriter: c.FileWriter,
 	}
 
-	return generator.Generate(pm, k0s, "")
+	path, err := generator.Generate(pm, k0s, "")
+	if err != nil {
+		return "", fmt.Errorf("failed to generate k0sctl config: %w", err)
+	}
+
+	return path, nil
 }
 
 func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {
