@@ -1,7 +1,8 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer
+// Package pcapps provides app specific logic to configure apps that are part of the pc-applications.
+package pcapps
 
 import (
 	"log"

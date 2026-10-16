@@ -10,6 +10,7 @@ import (
 
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd/pcapps"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
@@ -103,9 +104,11 @@ func (i *AppInstaller) InstallArgoCD() error {
 	if i.cfg.Installer == nil {
 		return fmt.Errorf("ArgoCD installer is required")
 	}
+
 	if err := i.cfg.Installer.Install(); err != nil {
 		return fmt.Errorf("failed to install ArgoCD: %w", err)
 	}
+
 	return nil
 }
 
@@ -115,32 +118,46 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 	if err := secrets.EnsureServiceAccountTokens(i.cfg.Vault); err != nil {
 		return fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
+
 	creator := vault.NewVaultSecretCreator(i.cfg.KubeClient)
 	if err := creator.CreateSecretFromVault(ctx, i.cfg.Vault, vault.VaultSecretNamespace, vault.VaultSecretName); err != nil {
 		return fmt.Errorf("failed to sync vault secret: %w", err)
 	}
+
 	return nil
 }
 
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config) error {
-	// Values derived from the install config form the base; an explicit pcApps block in
-	// config.yaml wins over them, and the --pc-apps-values files win over both.
-	values := util.DeepMergeMaps(installer.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault), i.cfg.Config.PcApps)
-
 	pcApps, err := installer.NewPcAppsFromBom(
 		i.cfg.KubeClient,
 		bomConfig,
 		DefaultNamespace,
 		i.cfg.PCAppsValues,
-		values,
+		i.getPcAppsValues(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
 	}
+
 	if err := pcApps.Install(ctx); err != nil {
 		return fmt.Errorf("failed to install pc-apps: %w", err)
 	}
+
 	return nil
+}
+
+// getPcAppsValues collects the base values for some apps from the config (OpenFGA, Rook) and merges these with
+// explicit pcApps block in the config.yaml.
+// The pcApps block in the config.yaml and --pc-apps-values always win over derived values from the config.yaml.
+// Returns a ChartValues map
+func (i *AppInstaller) getPcAppsValues() files.ChartValues {
+	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
+	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
+
+	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
+	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
+
+	return values
 }

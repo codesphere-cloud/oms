@@ -17,7 +17,7 @@ var _ = Describe("ArgoCDResources", func() {
 	registrySecret := func(username string) map[string]string {
 		clientset := fake.NewSimpleClientset()
 
-		resources, err := argocd.NewArgoCDResources(clientset, "", username, "registry-password", "10.10.0.7:5000/codesphere-cloud/charts", "")
+		resources, err := argocd.NewResources(clientset, "", username, "registry-password", "10.10.0.7:5000/codesphere-cloud/charts", "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(resources.ApplyAll(context.Background())).To(Succeed())
 
