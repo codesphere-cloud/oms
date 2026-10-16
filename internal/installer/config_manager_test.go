@@ -417,6 +417,38 @@ var _ = Describe("ConfigManager", func() {
 			})
 		})
 
+		Context("pgOperator validation", func() {
+			It("with OpenFGA deployed by default and pgOperator disabled, validating reports the disabled operator", func() {
+				configManager.Config.Codesphere.OpenFga = nil
+				configManager.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("cluster.pgOperator.enabled must be true when this data center deploys OpenFGA")))
+			})
+
+			It("with OpenFGA deploy true and pgOperator disabled, validating reports the disabled operator", func() {
+				deploy := true
+				configManager.Config.Codesphere.OpenFga = &files.OpenFgaConfig{Deploy: &deploy}
+				configManager.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).To(ContainElement(ContainSubstring("cluster.pgOperator.enabled must be true")))
+			})
+
+			It("with OpenFGA not deployed and pgOperator disabled, validating accepts the operator setting", func() {
+				deploy := false
+				configManager.Config.Codesphere.OpenFga = &files.OpenFgaConfig{Deploy: &deploy, APIURL: "https://openfga.1.cs.example.com"}
+				configManager.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false}
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).NotTo(ContainElement(ContainSubstring("pgOperator")))
+			})
+
+			It("with OpenFGA deployed and pgOperator unset, validating accepts the operator setting", func() {
+				configManager.Config.Codesphere.OpenFga = nil
+				configManager.Config.Cluster.PgOperator = nil
+				errors := configManager.ValidateInstallConfig()
+				Expect(errors).NotTo(ContainElement(ContainSubstring("pgOperator")))
+			})
+		})
+
 		Context("ceph validation", func() {
 			It("should require at least one Ceph host", func() {
 				configManager.Config.Ceph.Hosts = []files.CephHost{}
