@@ -781,23 +781,20 @@ type OAuthConfig struct {
 	InstallationURI       string `yaml:"installationUri,omitempty"`
 }
 
-// ManagedServiceConfig overrides the defaults of a known managed service provider or defines a custom
-// one. Nested schemas are kept as plain values: the marketplace validates them.
 type ManagedServiceConfig struct {
-	Name          string                 `yaml:"name"`
-	Scope         string                 `yaml:"scope,omitempty"`
-	Author        string                 `yaml:"author,omitempty"`
-	Backups       map[string]interface{} `yaml:"backups,omitempty"`
-	Capabilities  map[string]interface{} `yaml:"capabilities,omitempty"`
-	Category      string                 `yaml:"category,omitempty"`
-	ConfigSchema  map[string]interface{} `yaml:"configSchema,omitempty"`
-	DetailsSchema map[string]interface{} `yaml:"detailsSchema,omitempty"`
-	SecretsSchema map[string]interface{} `yaml:"secretsSchema,omitempty"`
-	Description   string                 `yaml:"description,omitempty"`
-	DisplayName   string                 `yaml:"displayName,omitempty"`
-	IconURL       string                 `yaml:"iconUrl,omitempty"`
-	Labels        interface{}            `yaml:"labels,omitempty"`
-	// ResourceParameters are merged into the provider's defaults, where null removes a parameter.
+	Name               string                    `yaml:"name"`
+	Scope              string                    `yaml:"scope,omitempty"`
+	Author             string                    `yaml:"author,omitempty"`
+	Backups            map[string]interface{}    `yaml:"backups,omitempty"`
+	Capabilities       map[string]interface{}    `yaml:"capabilities,omitempty"`
+	Category           string                    `yaml:"category,omitempty"`
+	ConfigSchema       map[string]interface{}    `yaml:"configSchema,omitempty"`
+	DetailsSchema      map[string]interface{}    `yaml:"detailsSchema,omitempty"`
+	SecretsSchema      map[string]interface{}    `yaml:"secretsSchema,omitempty"`
+	Description        string                    `yaml:"description,omitempty"`
+	DisplayName        string                    `yaml:"displayName,omitempty"`
+	IconURL            string                    `yaml:"iconUrl,omitempty"`
+	Labels             interface{}               `yaml:"labels,omitempty"`
 	ResourceParameters map[string]*ResourceParam `yaml:"resourceParameters,omitempty"`
 	Plans              []ServicePlan             `yaml:"plans,omitempty"`
 	SchemaVersion      string                    `yaml:"schemaVersion"`
