@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestArgocd(t *testing.T) {
+func TestPcApps(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "PC-Apps Suite")
 }

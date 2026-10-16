@@ -68,7 +68,7 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 			return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 		}
 
-		resources, err := NewArgoCDResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+		resources, err := NewResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 		if err != nil {
 			return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 		}
@@ -90,7 +90,7 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 	}
 
-	resources, err := NewArgoCDResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+	resources, err := NewResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}

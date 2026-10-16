@@ -35,10 +35,10 @@ type argoCDResources struct {
 	GitPassword    string
 }
 
-// NewArgoCDResources collects the Codesphere-managed resources an ArgoCD installation needs, above
+// NewResources collects the Codesphere-managed resources an ArgoCD installation needs, above
 // all the repository credentials it pulls the Helm charts with. An empty ociUsername falls back to
 // the GHCR user.
-func NewArgoCDResources(clientset kubernetes.Interface, dataCenterID string, ociUsername string, ociPassword string, ociRegistryURL string, gitPassword string) (Resources, error) {
+func NewResources(clientset kubernetes.Interface, dataCenterID string, ociUsername string, ociPassword string, ociRegistryURL string, gitPassword string) (Resources, error) {
 	if ociUsername == "" {
 		ociUsername = defaultOciUsername
 	}
