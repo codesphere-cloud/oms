@@ -156,7 +156,7 @@ func (o *OpenBaoBootstrapper) export() error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed checking for Vault CR: %w", err)
 	}
 
 	if err := o.waitUntilReady(); err != nil {
