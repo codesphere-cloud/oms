@@ -165,7 +165,27 @@ var _ = Describe("InstallK0sCmd", func() {
 
 			err := c.InstallK0s(mockPM, mockK0s, mockK0sctl)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("failed to download k0s"))
+			Expect(err.Error()).To(ContainSubstring("failed to get k0s binary"))
+		})
+
+		It("applies the k0sctl config given with --config without generating one", func() {
+			c.Opts.K0sctlConfig = "/etc/codesphere/k0sctl-config.yaml"
+
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists("/etc/codesphere/k0sctl-config.yaml").Return(true)
+			mockK0sctl.EXPECT().Download("", installer.DownloadOptions{}).Return("/tmp/k0sctl", nil)
+			mockK0sctl.EXPECT().Apply("/etc/codesphere/k0sctl-config.yaml", "/tmp/k0sctl", false).Return(nil)
+
+			Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(Succeed())
+		})
+
+		It("fails when the k0sctl config given with --config does not exist", func() {
+			c.Opts.K0sctlConfig = "/nonexistent/k0sctl-config.yaml"
+
+			setupWorkdirMocks()
+			mockFileWriter.EXPECT().Exists("/nonexistent/k0sctl-config.yaml").Return(false)
+
+			Expect(c.InstallK0s(mockPM, mockK0s, mockK0sctl)).To(MatchError(ContainSubstring("k0sctl config '/nonexistent/k0sctl-config.yaml' does not exist")))
 		})
 
 		It("fails when k0sctl download fails", func() {

@@ -1,7 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package k0s
+package installer
 
 import (
 	"fmt"
@@ -9,9 +9,8 @@ import (
 	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/env"
-	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	intutil "github.com/codesphere-cloud/oms/internal/util"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 const defaultK0sPath = "kubernetes/files/k0s"
@@ -31,17 +30,20 @@ type K0sctlConfigOpts struct {
 	AirgapBundlePath string
 }
 
-// k0sctlConfigGenerator generates a k0sctl config and writes it to disk.
-type k0sctlConfigGenerator struct {
+// K0sctlConfigGenerator generates a k0sctl config and writes it to disk.
+type K0sctlConfigGenerator struct {
 	Opts       K0sctlConfigOpts
 	Verbose    bool
 	Env        env.Env
-	FileWriter intutil.FileIO
+	FileWriter util.FileIO
+	// CacheOnly takes the k0s binary and the airgap bundle from the OMS cache and fails
+	// if they are missing, instead of downloading them.
+	CacheOnly bool
 }
 
 // Generate writes the k0sctl config to outputPath, or to the OMS workdir when outputPath
 // is empty, and returns its path.
-func (g *k0sctlConfigGenerator) Generate(pm installer.PackageManager, k0s installer.K0sManager, outputPath string) (string, error) {
+func (g *K0sctlConfigGenerator) Generate(pm PackageManager, k0s K0sManager, outputPath string) (string, error) {
 	if g.Opts.InstallConfig == "" {
 		return "", fmt.Errorf("--install-config is required")
 	}
@@ -55,7 +57,7 @@ func (g *k0sctlConfigGenerator) Generate(pm installer.PackageManager, k0s instal
 		return "", err
 	}
 
-	k0sVersion, err := resolveK0sVersion(k0s, g.Opts.Version)
+	k0sVersion, err := ResolveK0sVersion(k0s, g.Opts.Version)
 	if err != nil {
 		return "", err
 	}
@@ -70,7 +72,7 @@ func (g *k0sctlConfigGenerator) Generate(pm installer.PackageManager, k0s instal
 		return "", err
 	}
 
-	k0sctlOptions := installer.K0sctlOptions{
+	k0sctlOptions := K0sctlOptions{
 		K0sVersion:       k0sVersion,
 		SSHKeyPath:       g.Opts.SSHKeyPath,
 		K0sBinaryPath:    k0sBinaryPath,
@@ -84,8 +86,25 @@ func (g *k0sctlConfigGenerator) Generate(pm installer.PackageManager, k0s instal
 	return g.writeK0sctlConfig(config, k0sctlOptions, outputPath)
 }
 
-func (g *k0sctlConfigGenerator) loadInstallConfig() (*files.RootConfig, error) {
-	config, err := installer.NewConfig().ParseConfigYaml(g.Opts.InstallConfig)
+// ResolveK0sVersion returns the requested k0s version, or the latest version when
+// none was requested, and logs the version that is used.
+func ResolveK0sVersion(k0s K0sManager, version string) (string, error) {
+	if version == "" {
+		latestVersion, err := k0s.GetLatestVersion()
+		if err != nil {
+			return "", fmt.Errorf("failed to get latest k0s version: %w", err)
+		}
+
+		version = latestVersion
+	}
+
+	log.Printf("Using k0s version %s", version)
+
+	return version, nil
+}
+
+func (g *K0sctlConfigGenerator) loadInstallConfig() (*files.RootConfig, error) {
+	config, err := NewConfig().ParseConfigYaml(g.Opts.InstallConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load install-config: %w", err)
 	}
@@ -97,7 +116,17 @@ func (g *k0sctlConfigGenerator) loadInstallConfig() (*files.RootConfig, error) {
 	return &config, nil
 }
 
-func (g *k0sctlConfigGenerator) getK0sBinaryPath(pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
+// downloadOptions returns the options for fetching the k0s binary and the airgap bundle.
+// A cache-only lookup never forces a download.
+func (g *K0sctlConfigGenerator) downloadOptions() DownloadOptions {
+	if g.CacheOnly {
+		return DownloadOptions{CacheOnly: true}
+	}
+
+	return DownloadOptions{Force: g.Opts.Force}
+}
+
+func (g *K0sctlConfigGenerator) getK0sBinaryPath(pm PackageManager, k0s K0sManager, k0sVersion string) (string, error) {
 	if g.Opts.NoDownload {
 		return "", nil
 	}
@@ -110,9 +139,9 @@ func (g *k0sctlConfigGenerator) getK0sBinaryPath(pm installer.PackageManager, k0
 		return pm.GetDependencyPath(defaultK0sPath), nil
 	}
 
-	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: g.Opts.Force})
+	k0sBinaryPath, err := k0s.Download(k0sVersion, g.downloadOptions())
 	if err != nil {
-		return "", fmt.Errorf("failed to download k0s: %w", err)
+		return "", fmt.Errorf("failed to get k0s binary: %w", err)
 	}
 
 	return k0sBinaryPath, nil
@@ -120,7 +149,7 @@ func (g *k0sctlConfigGenerator) getK0sBinaryPath(pm installer.PackageManager, k0
 
 // getAirgapBundlePath returns the local airgap image bundle that k0sctl uploads to the
 // worker nodes. It is empty for installations with internet access.
-func (g *k0sctlConfigGenerator) getAirgapBundlePath(k0s installer.K0sManager, k0sVersion string) (string, error) {
+func (g *K0sctlConfigGenerator) getAirgapBundlePath(k0s K0sManager, k0sVersion string) (string, error) {
 	if !g.Opts.Airgap {
 		return "", nil
 	}
@@ -133,18 +162,18 @@ func (g *k0sctlConfigGenerator) getAirgapBundlePath(k0s installer.K0sManager, k0
 		return g.Opts.AirgapBundlePath, nil
 	}
 
-	bundlePath, err := k0s.DownloadAirgapBundle(k0sVersion, "", installer.DownloadOptions{Force: g.Opts.Force})
+	bundlePath, err := k0s.DownloadAirgapBundle(k0sVersion, "", g.downloadOptions())
 	if err != nil {
-		return "", fmt.Errorf("failed to download k0s airgap bundle: %w", err)
+		return "", fmt.Errorf("failed to get k0s airgap bundle: %w", err)
 	}
 
 	return bundlePath, nil
 }
 
-func (g *k0sctlConfigGenerator) writeK0sctlConfig(config *files.RootConfig, options installer.K0sctlOptions, path string) (string, error) {
+func (g *K0sctlConfigGenerator) writeK0sctlConfig(config *files.RootConfig, options K0sctlOptions, path string) (string, error) {
 	log.Println("Generating k0sctl configuration from install-config...")
 
-	k0sctlConfig, err := installer.GenerateK0sctlConfig(config, options)
+	k0sctlConfig, err := GenerateK0sctlConfig(config, options)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate k0sctl config: %w", err)
 	}

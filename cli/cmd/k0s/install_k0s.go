@@ -30,7 +30,9 @@ type InstallK0sCmd struct {
 
 type InstallK0sOpts struct {
 	*util.GlobalOptions
-	K0sctlConfigOpts
+	installer.K0sctlConfigOpts
+	// K0sctlConfig is an existing k0sctl config to apply instead of generating one.
+	K0sctlConfig  string
 	K0sctlVersion string
 	Vault         string
 	VaultPrivKey  string
@@ -58,9 +60,12 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 			You must provide a Codesphere install-config file, which will:
 			- Generate a k0s configuration from the install-config
 			- Generate a k0sctl configuration for cluster deployment
-			- Deploy k0s to all nodes defined in the install-config using k0sctl`),
+			- Deploy k0s to all nodes defined in the install-config using k0sctl
+
+			Alternatively, apply a k0sctl config created with 'oms init k0s-config' with --config.`),
 			Example: util.FormatExamples("install k0s", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
+				{Cmd: "--config <path>", Desc: "Path to an existing k0sctl config to apply"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.31.14+k0s.0)"},
 				{Cmd: "--k0sctl-version <version>", Desc: "Version of k0sctl to use (e.g., v0.17.4)"},
 				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from"},
@@ -76,7 +81,8 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", installer.DefaultK0sctlVersion, "Version of k0sctl to use")
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from")
-	k0s.cmd.Flags().StringVar(&k0s.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file (required)")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file to generate the k0sctl config from")
+	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlConfig, "config", "", "Path to an existing k0sctl config to apply, e.g. created with 'oms init k0s-config'")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.SSHKeyPath, "ssh-key-path", "", "SSH private key path for remote installation")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.NoDownload, "no-download", false, "Skip downloading k0s binary")
@@ -85,7 +91,8 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().StringVar(&k0s.Opts.VaultPrivKey, "vault-priv-key", "", "Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
 
-	_ = k0s.cmd.MarkFlagRequired("install-config")
+	k0s.cmd.MarkFlagsOneRequired("install-config", "config")
+	k0s.cmd.MarkFlagsMutuallyExclusive("install-config", "config")
 
 	util.AddCmd(install, k0s.cmd)
 
@@ -94,20 +101,14 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 
 const vaultSecretNameKubeconfig = "kubeConfig"
 
-// InstallK0s generates a k0sctl config from the command options and installs k0s.
+// InstallK0s installs k0s with the given k0sctl config, or with one generated from the
+// command options.
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
 	if err := c.FileWriter.MkdirAll(c.Env.GetOmsWorkdir(), 0755); err != nil {
 		return fmt.Errorf("failed to create oms workdir: %w", err)
 	}
 
-	generator := k0sctlConfigGenerator{
-		Opts:       c.Opts.K0sctlConfigOpts,
-		Verbose:    c.Opts.Verbose,
-		Env:        c.Env,
-		FileWriter: c.FileWriter,
-	}
-
-	k0sctlConfigPath, err := generator.Generate(pm, k0s, "")
+	k0sctlConfigPath, err := c.getK0sctlConfigPath(pm, k0s)
 	if err != nil {
 		return err
 	}
@@ -128,6 +129,27 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 	}
 
 	return nil
+}
+
+// getK0sctlConfigPath returns the k0sctl config given with --config, or generates one
+// into the OMS workdir.
+func (c *InstallK0sCmd) getK0sctlConfigPath(pm installer.PackageManager, k0s installer.K0sManager) (string, error) {
+	if c.Opts.K0sctlConfig != "" {
+		if !c.FileWriter.Exists(c.Opts.K0sctlConfig) {
+			return "", fmt.Errorf("k0sctl config '%s' does not exist", c.Opts.K0sctlConfig)
+		}
+
+		return c.Opts.K0sctlConfig, nil
+	}
+
+	generator := installer.K0sctlConfigGenerator{
+		Opts:       c.Opts.K0sctlConfigOpts,
+		Verbose:    c.Opts.Verbose,
+		Env:        c.Env,
+		FileWriter: c.FileWriter,
+	}
+
+	return generator.Generate(pm, k0s, "")
 }
 
 func (c *InstallK0sCmd) downloadK0sctl(k0sctl installer.K0sctlManager) (string, error) {

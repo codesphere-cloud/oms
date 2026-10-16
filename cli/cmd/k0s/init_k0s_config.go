@@ -27,9 +27,9 @@ type InitK0sConfigCmd struct {
 // InitK0sConfigOpts are the options of the init k0s-config command.
 type InitK0sConfigOpts struct {
 	*util.GlobalOptions
-	K0sctlConfigOpts
-	// Config is the path the generated k0sctl config is written to.
-	Config string
+	installer.K0sctlConfigOpts
+	// Output is the path the generated k0sctl config is written to.
+	Output string
 }
 
 // RunE generates the k0sctl config with the real package, k0s and filesystem implementations.
@@ -48,13 +48,14 @@ func AddInitK0sConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 			Use:   "k0s-config",
 			Short: "Generate a k0sctl config for installing k0s",
 			Long: packageio.Long(`Generate a k0sctl configuration from a Codesphere install-config without
-			installing k0s.
+			installing k0s. Nothing is downloaded: the k0s binary is taken from the package or
+			the OMS cache, see 'oms download k0s'.
 
-			With --airgapped, the config uploads the k0s airgap image bundle to every node
-			that runs a worker and stops k0s from pulling images.`),
+			With --airgapped, the generated config makes k0sctl upload the k0s airgap image
+			bundle to every node that runs a worker and stops k0s from pulling images.`),
 			Example: util.FormatExamples("init k0s-config", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Generate a k0sctl config into the OMS workdir"},
-				{Cmd: "--install-config <path> --config <path>", Desc: "Generate a k0sctl config at the given path"},
+				{Cmd: "--install-config <path> --output <path>", Desc: "Generate a k0sctl config at the given path"},
 				{Cmd: "--install-config <path> --airgapped", Desc: "Generate an airgap k0sctl config using the airgap bundle from the OMS cache"},
 				{Cmd: "--install-config <path> --airgapped --path <bundle>", Desc: "Generate an airgap k0sctl config using the given airgap bundle"},
 			}),
@@ -65,14 +66,14 @@ func AddInitK0sConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	}
 	flags := k0sConfig.cmd.Flags()
 	flags.StringVar(&k0sConfig.Opts.InstallConfig, "install-config", "", "Path to Codesphere install-config file (required)")
-	flags.StringVar(&k0sConfig.Opts.Config, "config", "", "Output file path for the k0sctl config (default: k0sctl-config-<datacenter>.yaml in the OMS workdir)")
+	flags.StringVarP(&k0sConfig.Opts.Output, "output", "o", "", "Output file path for the k0sctl config (default: k0sctl-config-<datacenter>.yaml in the OMS workdir)")
 	flags.StringVarP(&k0sConfig.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
 	flags.StringVarP(&k0sConfig.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from")
 	flags.StringVar(&k0sConfig.Opts.SSHKeyPath, "ssh-key-path", "", "SSH private key path for remote installation")
-	flags.BoolVarP(&k0sConfig.Opts.Force, "force", "f", false, "Force new downloads even if cached copies exist")
-	flags.BoolVar(&k0sConfig.Opts.NoDownload, "no-download", false, "Skip downloading k0s binary (expects it to be on remote nodes)")
+	flags.BoolVarP(&k0sConfig.Opts.Force, "force", "f", false, "Force extracting k0s from the package even if it was extracted before")
+	flags.BoolVar(&k0sConfig.Opts.NoDownload, "no-download", false, "Do not upload a k0s binary, the nodes download k0s themselves")
 	flags.BoolVar(&k0sConfig.Opts.Airgap, "airgapped", false, "Generate a config for installing k0s without internet access from the airgap image bundle")
-	flags.StringVar(&k0sConfig.Opts.AirgapBundlePath, "path", "", "Path to the k0s airgap image bundle (requires --airgapped; default: the bundle in the OMS cache, downloaded if missing)")
+	flags.StringVar(&k0sConfig.Opts.AirgapBundlePath, "path", "", "Path to the k0s airgap image bundle (requires --airgapped; default: the bundle in the OMS cache)")
 
 	_ = k0sConfig.cmd.MarkFlagRequired("install-config")
 
@@ -81,7 +82,8 @@ func AddInitK0sConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	k0sConfig.cmd.RunE = k0sConfig.RunE
 }
 
-// InitK0sConfig generates the k0sctl config from the command options.
+// InitK0sConfig generates the k0sctl config from the command options. It only uses local
+// files and fails if the k0s binary or the airgap bundle have not been downloaded yet.
 func (c *InitK0sConfigCmd) InitK0sConfig(pm installer.PackageManager, k0s installer.K0sManager) error {
 	if c.Opts.AirgapBundlePath != "" && !c.Opts.Airgap {
 		return fmt.Errorf("--path requires --airgapped")
@@ -91,14 +93,15 @@ func (c *InitK0sConfigCmd) InitK0sConfig(pm installer.PackageManager, k0s instal
 		return fmt.Errorf("failed to create oms workdir: %w", err)
 	}
 
-	generator := k0sctlConfigGenerator{
+	generator := installer.K0sctlConfigGenerator{
 		Opts:       c.Opts.K0sctlConfigOpts,
 		Verbose:    c.Opts.Verbose,
 		Env:        c.Env,
 		FileWriter: c.FileWriter,
+		CacheOnly:  true,
 	}
 
-	_, err := generator.Generate(pm, k0s, c.Opts.Config)
+	_, err := generator.Generate(pm, k0s, c.Opts.Output)
 
 	return err
 }

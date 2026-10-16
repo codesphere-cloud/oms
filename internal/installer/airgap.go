@@ -43,6 +43,10 @@ func (k *K0s) DownloadAirgapBundle(version, path string, opts DownloadOptions) (
 		return path, nil
 	}
 
+	if opts.CacheOnly {
+		return "", fmt.Errorf("k0s airgap bundle %s not found at '%s', download it first with 'oms download k0s --version %s --airgapped'", version, path, version)
+	}
+
 	assetName, err := k.resolveAirgapBundleAssetName(version)
 	if err != nil {
 		return "", err

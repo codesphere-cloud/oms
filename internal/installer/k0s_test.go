@@ -208,6 +208,13 @@ var _ = Describe("K0s", func() {
 				Expect(path).To(Equal(k0sPath))
 			})
 
+			It("should fail instead of downloading a missing k0s binary when cache only is set", func() {
+				mockFileWriter.EXPECT().Exists(k0sPath).Return(false)
+
+				_, err := k0s.Download("v1.29.1+k0s.0", installer.DownloadOptions{CacheOnly: true})
+				Expect(err).To(MatchError(ContainSubstring("k0s v1.29.1+k0s.0 not found in OMS cache")))
+			})
+
 			It("should proceed when k0s binary exists and force is true", func() {
 				mockFileWriter.EXPECT().Exists(k0sPath).Return(true)
 
@@ -410,6 +417,13 @@ var _ = Describe("K0s", func() {
 			path, err := k0s.DownloadAirgapBundle(modernVersion, "", installer.DownloadOptions{})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(path).To(Equal(bundlePath(modernVersion)))
+		})
+
+		It("fails instead of downloading a missing bundle when cache only is set", func() {
+			mockFileWriter.EXPECT().Exists(bundlePath(modernVersion)).Return(false)
+
+			_, err := k0s.DownloadAirgapBundle(modernVersion, "", installer.DownloadOptions{CacheOnly: true})
+			Expect(err).To(MatchError(ContainSubstring("k0s airgap bundle " + modernVersion + " not found")))
 		})
 
 		It("re-downloads a cached bundle when force is set", func() {
