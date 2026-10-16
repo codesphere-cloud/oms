@@ -288,7 +288,8 @@ type ClusterConfig struct {
 }
 
 type ClusterCertificates struct {
-	CA       CAConfig      `yaml:"ca"`
+	// Left out when unset: the Codesphere installer rejects an empty ca block in any config.
+	CA       CAConfig      `yaml:"ca,omitempty"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
