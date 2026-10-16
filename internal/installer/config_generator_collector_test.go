@@ -5,6 +5,7 @@ package installer_test
 
 import (
 	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,6 +25,29 @@ var _ = Describe("ConfigGeneratorCollector", func() {
 	})
 
 	Describe("CollectInteractively", func() {
+		DescribeTable("asks for the Codesphere version and optional hash", func(initial files.CodespherePackageConfig, input string, expected files.CodespherePackageConfig) {
+			Expect(manager.ApplyProfile("dev")).To(Succeed())
+			cfg := manager.GetInstallConfig()
+			cfg.Operations = &files.OperationsConfig{Codesphere: initial, Skip: []string{"ceph"}}
+			inputPath := filepath.Join(GinkgoT().TempDir(), "stdin")
+			Expect(os.WriteFile(inputPath, []byte(input), 0600)).To(Succeed())
+			stdin, err := os.Open(inputPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			oldStdin := os.Stdin
+			os.Stdin = stdin
+
+			DeferCleanup(func() { os.Stdin = oldStdin; Expect(stdin.Close()).To(Succeed()) })
+			Expect(manager.CollectInteractively()).To(Succeed())
+			Expect(cfg.Operations.Codesphere).To(Equal(expected))
+			Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+		},
+			Entry("version with no hash", files.CodespherePackageConfig{}, "1.111.0\n\n", files.CodespherePackageConfig{Version: "1.111.0"}),
+			Entry("branch with hash", files.CodespherePackageConfig{}, "master\nabc123\n", files.CodespherePackageConfig{Version: "master", Hash: "abc123"}),
+			Entry("accept supplied defaults", files.CodespherePackageConfig{Version: "1.111.0", Hash: "abc123"}, "\n\n", files.CodespherePackageConfig{Version: "1.111.0", Hash: "abc123"}),
+			Entry("new version clears previous hash default", files.CodespherePackageConfig{Version: "1.111.0", Hash: "abc123"}, "1.112.0\n\n", files.CodespherePackageConfig{Version: "1.112.0"}),
+			Entry("leave optional selection empty", files.CodespherePackageConfig{}, "\n", files.CodespherePackageConfig{}),
+		)
 		It("should collect configuration after applying profile", func() {
 			err := manager.ApplyProfile("dev")
 			Expect(err).ToNot(HaveOccurred())

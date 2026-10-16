@@ -30,6 +30,9 @@ import (
 // InstallerArchiveName is the package artifact bootstrapping downloads and installs.
 const InstallerArchiveName = "installer-lite.tar.gz"
 
+// jumpboxOmsWorkdir is shared by package mirroring and config-based installation.
+const jumpboxOmsWorkdir = "oms-workdir"
+
 // remoteK0sConfigScriptPath is where each data center's k0s configuration script is placed on
 // that data center's first control plane node. Data centers have separate nodes, so the path can
 // be the same for all of them.
@@ -655,14 +658,14 @@ func (b *GCPBootstrapper) validateInstallVersion() error {
 		return nil
 	}
 
-	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.Env.InstallVersion, b.Env.InstallHash)
+	build, err := b.PortalClient.GetBuild(portal.CodesphereProduct, b.codesphereVersionForPortal(), b.Env.InstallHash)
 	if err != nil {
 		return fmt.Errorf("failed to get codesphere package: %w", err)
 	}
 
-	if b.Env.InstallHash == "" {
-		b.Env.InstallHash = build.Hash
-	}
+	// Persist the resolved hash so config, archive paths and registry mirroring
+	// all refer to the same build when no hash was supplied.
+	b.Env.InstallHash = build.Hash
 
 	requiredFilename := InstallerArchiveName
 	filenames := []string{}
@@ -1120,12 +1123,16 @@ func (b *GCPBootstrapper) InstallCodesphere() error {
 	return nil
 }
 
+func (b *GCPBootstrapper) codesphereVersionForPortal() string {
+	return (files.CodespherePackageConfig{Version: b.Env.InstallVersion}).FormatVersionForPortal()
+}
+
 func (b *GCPBootstrapper) codespherePackageFilename() string {
 	if b.Env.InstallLocal != "" {
 		return "local-" + InstallerArchiveName
 	}
 
-	return portal.BuildPackageFilenameFromParts(b.Env.InstallVersion, b.Env.InstallHash, InstallerArchiveName)
+	return filepath.Join(jumpboxOmsWorkdir, portal.BuildPackageFilenameFromParts(b.codesphereVersionForPortal(), b.Env.InstallHash, InstallerArchiveName))
 }
 
 func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
@@ -1144,13 +1151,18 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 		return errors.New("either install version or a local package must be specified to install Codesphere")
 	}
 
+	// Installation downloads from config itself. Only local-registry mirroring
+	// needs the archive beforehand, because it runs before installation.
+	if b.Env.RegistryType != RegistryTypeLocalContainer {
+		return nil
+	}
 	if b.Env.InstallHash == "" {
 		return fmt.Errorf("install hash must be set when install version is set")
 	}
 
 	b.stlog.Logf("Downloading Codesphere package...")
-	downloadCmd := fmt.Sprintf("oms download package -f %s -H %s %s",
-		InstallerArchiveName, b.Env.InstallHash, b.Env.InstallVersion)
+	downloadCmd := fmt.Sprintf("mkdir -p %[1]s && cd %[1]s && oms download package -f %[2]s -H %[3]s %[4]s",
+		jumpboxOmsWorkdir, InstallerArchiveName, b.Env.InstallHash, b.codesphereVersionForPortal())
 
 	err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd)
 	if err != nil {
@@ -1173,8 +1185,15 @@ func (b *GCPBootstrapper) runInstallCommand(dc *datacenter.DataCenter, packageFi
 // InstallCommand returns the command that installs Codesphere into the given data center from
 // the jumpbox. It is also printed for the operator when the bootstrap does not install itself.
 func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilename string) string {
-	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s -p %s%s%s%s",
-		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageFilename,
+	packageArg := ""
+	// Without a selected version this also renders the manual install command
+	// with its package placeholder after an infrastructure-only bootstrap.
+	if b.Env.InstallVersion == "" || b.Env.InstallLocal != "" {
+		packageArg = " -p " + packageFilename
+	}
+
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s%s%s%s%s",
+		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageArg,
 		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg())
 }
 

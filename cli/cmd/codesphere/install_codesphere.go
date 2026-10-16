@@ -244,6 +244,12 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		if partial == nil {
 			partial = map[string]any{}
 		}
+		// Normalize legacy versions so an object overlay can supply only a hash.
+		if operations, ok := partial["operations"].(map[string]any); ok {
+			if version, ok := operations["codesphere"].(string); ok {
+				operations["codesphere"] = map[string]any{"version": version, "hash": ""}
+			}
+		}
 		merged = intutil.DeepMergeMaps(merged, partial)
 	}
 
@@ -305,7 +311,7 @@ func ensureCodespherePackageForVersion(opts *InstallCodesphereOpts, cfg files.Ro
 		return fmt.Errorf("failed to resolve install package version: %w", err)
 	}
 
-	opts.Package, err = portal.EnsureCodespherePackage(portal.NewPortalClient(), environment.GetOmsWorkdir(), version, "", "installer-lite.tar.gz", false)
+	opts.Package, err = portal.EnsureCodespherePackage(portal.NewPortalClient(), environment.GetOmsWorkdir(), version, cfg.Operations.Codesphere.Hash, "installer-lite.tar.gz", false)
 	if err != nil {
 		return fmt.Errorf("failed to prepare install package: %w", err)
 	}

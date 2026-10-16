@@ -36,7 +36,22 @@ func (b *GCPBootstrapper) EnsureInstallConfig() error {
 		return err
 	}
 
-	return b.ensureInstallConfig(b.primaryDC())
+	if err := b.ensureInstallConfig(b.primaryDC()); err != nil {
+		return err
+	}
+
+	cfg := b.primaryDC().InstallConfig
+	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" && cfg != nil && cfg.Operations != nil && cfg.Operations.Codesphere.Version != "" {
+		b.Env.InstallVersion = cfg.Operations.Codesphere.Version
+		if b.Env.InstallHash == "" {
+			b.Env.InstallHash = cfg.Operations.Codesphere.Hash
+		}
+		// Config is loaded after the initial validation. Validate the selected
+		// package and installation credentials before provisioning infrastructure.
+		return b.ValidateInput()
+	}
+
+	return nil
 }
 
 // ensureInstallConfig uses the data center's local config or recovers it from an existing
@@ -161,6 +176,9 @@ func (b *GCPBootstrapper) UpdateInstallConfig() error {
 }
 
 func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
+	if b.Env.InstallVersion != "" {
+		dc.InstallConfig.SetCodespherePackage(b.Env.InstallVersion, b.Env.InstallHash)
+	}
 	// Update install config with necessary values
 	dc.InstallConfig.Datacenter = datacenterConfig(dc)
 	// Each data center reads and writes its own vault. The installer resolves the vault from

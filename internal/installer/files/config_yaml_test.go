@@ -768,11 +768,42 @@ var _ = Describe("CodespherePackageVersion", func() {
 		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
 	},
 		Entry("plain version", "1.95.0", "codesphere-v1.95.0"),
+		Entry("quoted two-component version", `"1.10"`, "codesphere-v1.10"),
 		Entry("v version", "v1.95.0", "codesphere-v1.95.0"),
 		Entry("portal tag", "codesphere-v1.95.0", "codesphere-v1.95.0"),
 		Entry("prerelease", "1.95.0-rc.1", "codesphere-v1.95.0-rc.1"),
 		Entry("branch", "release/test", "release/test"),
 	)
+	DescribeTable("reads object selections with optional hashes", func(input, version, hash string) {
+		cfg := files.NewRootConfig()
+		Expect(cfg.Unmarshal([]byte(input))).To(Succeed())
+		selected, err := cfg.CodespherePackageVersion()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(selected).To(Equal(version))
+		Expect(cfg.Operations.Codesphere.Hash).To(Equal(hash))
+		encoded, err := yaml.Marshal(cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		clone := files.NewRootConfig()
+		Expect(clone.Unmarshal(encoded)).To(Succeed())
+		Expect(clone.Operations.Codesphere).To(Equal(cfg.Operations.Codesphere))
+	},
+		Entry("version only", "operations:\n  codesphere: {version: 1.111.0}\n", "codesphere-v1.111.0", ""),
+		Entry("quoted two-component version", "operations:\n  codesphere: {version: \"1.10\"}\n", "codesphere-v1.10", ""),
+		Entry("version and hash", "operations:\n  codesphere: {version: 1.111.0, hash: abc123}\n", "codesphere-v1.111.0", "abc123"),
+		Entry("branch and hash", "operations:\n  codesphere: {version: master, hash: abc123}\n", "master", "abc123"),
+	)
+	It("preserves skip steps when setting a package", func() {
+		cfg := files.RootConfig{Operations: &files.OperationsConfig{Skip: []string{"ceph"}}}
+		cfg.SetCodespherePackage("1.111.0", "abc123")
+		Expect(cfg.Operations.Codesphere).To(Equal(files.CodespherePackageConfig{Version: "1.111.0", Hash: "abc123"}))
+		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+	})
+	DescribeTable("rejects unsupported selection types", func(selection string) {
+		cfg := files.NewRootConfig()
+		Expect(cfg.Unmarshal([]byte("operations:\n  codesphere: " + selection))).NotTo(Succeed())
+	}, Entry("list", "[1.111.0]"), Entry("boolean", "true"), Entry("unquoted numeric version", "1.10"))
+
 	DescribeTable("rejects a missing version", func(operations *files.OperationsConfig) {
 		cfg := files.RootConfig{Operations: operations}
 		_, err := cfg.CodespherePackageVersion()
@@ -781,5 +812,6 @@ var _ = Describe("CodespherePackageVersion", func() {
 		Entry("no operations", nil),
 		Entry("only skip steps", &files.OperationsConfig{Skip: []string{"ceph"}}),
 		Entry("empty version", &files.OperationsConfig{}),
+		Entry("hash without version", &files.OperationsConfig{Codesphere: files.CodespherePackageConfig{Hash: "abc123"}}),
 	)
 })
