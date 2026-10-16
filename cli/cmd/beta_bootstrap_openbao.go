@@ -38,6 +38,7 @@ type BetaBootstrapOpenBaoOpts struct {
 	StepTimer    bool
 }
 
+// RunE resolves the age key and runs the OpenBao bootstrap.
 func (c *BetaBootstrapOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	if err := validateOpenBaoPrereqs(); err != nil {
 		return err
@@ -73,7 +74,10 @@ func (c *BetaBootstrapOpenBaoCmd) RunE(_ *cobra.Command, _ []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	return b.Bootstrap(ctx)
+	if err := b.Bootstrap(ctx); err != nil {
+		return fmt.Errorf("bootstrapping openbao: %w", err)
+	}
+	return nil
 }
 
 // AddBetaBootstrapOpenBaoCmd registers the bootstrap-openbao subcommand under beta.
