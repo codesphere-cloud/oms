@@ -580,6 +580,24 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 	return nil
 }
 
+// setLocalClusterComponents keeps the PC installer away from the components bootstrap-local
+// brings itself: the Rook cluster and the CNPG operator from InstallCloudNativePGHelmChart.
+func setLocalClusterComponents(config *files.RootConfig) {
+	config.Cluster.RookExternalCluster = &files.RookExternalClusterConfig{
+		Enabled: false,
+	}
+	config.Cluster.PgOperator = &files.PgOperatorConfig{
+		Enabled:           false,
+		ManagedExternally: true,
+	}
+	config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
+		Enabled: false,
+	}
+	config.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
+		Enabled: true,
+	}
+}
+
 func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	b.Env.InstallConfig.Secrets.BaseDir = filepath.Join(b.Env.InstallDir, "secrets")
 	if err := os.MkdirAll(b.Env.InstallConfig.Secrets.BaseDir, 0700); err != nil {
@@ -625,18 +643,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 		},
 	})
 
-	b.Env.InstallConfig.Cluster.RookExternalCluster = &files.RookExternalClusterConfig{
-		Enabled: false,
-	}
-	b.Env.InstallConfig.Cluster.PgOperator = &files.PgOperatorConfig{
-		Enabled: false,
-	}
-	b.Env.InstallConfig.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
-		Enabled: false,
-	}
-	b.Env.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{
-		Enabled: true,
-	}
+	setLocalClusterComponents(b.Env.InstallConfig)
 	cephMonHosts, err := b.ReadCephMonHosts()
 	if err != nil {
 		return fmt.Errorf("failed to read Ceph monitor hosts: %w", err)
