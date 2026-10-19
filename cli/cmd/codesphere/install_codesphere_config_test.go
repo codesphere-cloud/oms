@@ -256,7 +256,7 @@ codesphere:
 		It("rejects a config without a release name", func() {
 			_, err := prepare(basePath)
 
-			Expect(err).To(MatchError(ContainSubstring("found at codesphere.override.clientSecret")))
+			Expect(err).To(MatchError(ContainSubstring("secret templates are not supported in the codesphere block")))
 		})
 
 		It("accepts the secret when an overlay sets the release name", func() {

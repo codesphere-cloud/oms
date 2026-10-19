@@ -17,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
+	"go.yaml.in/yaml/v3"
 )
 
 func sopsAndAgeAvailable() bool {
@@ -82,6 +83,30 @@ var _ = Describe("Config templating", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(`secret "missing" not found`))
 	})
+
+	DescribeTable("validates secret templates in the codesphere block",
+		func(configYAML string, valid bool) {
+			rendered, err := configtemplating.RenderSecretRefs([]byte(configYAML))
+			Expect(err).NotTo(HaveOccurred())
+
+			config := map[string]any{}
+			Expect(yaml.Unmarshal(rendered, &config)).To(Succeed())
+
+			err = configtemplating.ValidateCodesphereSecretRefs(config)
+
+			if valid {
+				Expect(err).NotTo(HaveOccurred())
+			} else {
+				Expect(err).To(MatchError("secret templates are not supported in the codesphere block"))
+			}
+		},
+		Entry("rejects a secret without a release name",
+			"codesphere:\n  override:\n    clientSecret: '{{ secret \"oidc\" }}'\n", false),
+		Entry("accepts a secret in a dev release",
+			"codesphere:\n  releaseName: codesphere-master-dev\n  override:\n    clientSecret: '{{ secret \"oidc\" }}'\n", true),
+		Entry("accepts a secret outside the codesphere block",
+			"cluster:\n  apiToken: '{{ secret \"acme\" }}'\ncodesphere:\n  domain: example.com\n", true),
+	)
 
 	It("renders a config file using an explicit prod.vault.yaml path", func() {
 		if !sopsAndAgeAvailable() {

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strings"
 	"text/template"
 )
 
@@ -33,11 +34,31 @@ func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error)
 }
 
 // RenderSecretRefs renders the given config template data with every `secret` call replaced by
-// a marker, so ValidateCodesphereSecretRefs can find where secrets are used without resolving them.
+// a marker, so ValidateCodesphereSecretRefs can check where secrets are used without resolving them.
 func RenderSecretRefs(data []byte) ([]byte, error) {
 	return render(data, func(string, ...string) (string, error) {
 		return secretRefMarker, nil
 	})
+}
+
+// ValidateCodesphereSecretRefs rejects `secret` calls in the codesphere block of a config
+// rendered with RenderSecretRefs. Their values reach the Codesphere chart's ExternalSecrets in
+// plaintext. Dev releases are exempt; only they set codesphere.releaseName.
+func ValidateCodesphereSecretRefs(config map[string]any) error {
+	codesphere, ok := config["codesphere"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	if releaseName, _ := codesphere["releaseName"].(string); releaseName != "" {
+		return nil
+	}
+
+	if strings.Contains(fmt.Sprint(codesphere), secretRefMarker) {
+		return fmt.Errorf("secret templates are not supported in the codesphere block")
+	}
+
+	return nil
 }
 
 func render(data []byte, secret secretFunc) ([]byte, error) {
