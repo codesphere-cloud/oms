@@ -19,6 +19,7 @@ const (
 	localCSIVersion     = "0.2.0"
 )
 
+// InstallLocalCSIProvisioner installs the chart and selects its storage class as default.
 func (b *LocalBootstrapper) InstallLocalCSIProvisioner() error {
 	if err := b.installPrerequisiteChart(prerequisiteChartConfig{
 		Name:           localCSIReleaseName,
@@ -35,6 +36,7 @@ func (b *LocalBootstrapper) InstallLocalCSIProvisioner() error {
 	}); err != nil {
 		return err
 	}
+
 	return b.setLocalStorageClassDefault()
 }
 
@@ -43,14 +45,17 @@ func (b *LocalBootstrapper) setLocalStorageClassDefault() error {
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		storageClass := &storagev1.StorageClass{}
 		if err := b.kubeClient.Get(b.ctx, key, storageClass); err != nil {
-			return err
+			return fmt.Errorf("failed to get StorageClass %q: %w", key.Name, err)
 		}
+
 		before := storageClass.DeepCopy()
 		if storageClass.Annotations == nil {
 			storageClass.Annotations = map[string]string{}
 		}
+
 		storageClass.Annotations[defaultStorageClassAnnotation] = "true"
 		delete(storageClass.Annotations, legacyDefaultClassAnnotation)
+
 		return b.kubeClient.Patch(b.ctx, storageClass, client.MergeFrom(before))
 	}); err != nil {
 		return fmt.Errorf("failed to make StorageClass %q the default: %w", localStorageClassName, err)
@@ -60,27 +65,33 @@ func (b *LocalBootstrapper) setLocalStorageClassDefault() error {
 	if err := b.kubeClient.List(b.ctx, classes); err != nil {
 		return fmt.Errorf("failed to list StorageClasses: %w", err)
 	}
+
 	for _, class := range classes.Items {
 		if class.Name == localStorageClassName || !isDefaultStorageClass(class.Annotations) {
 			continue
 		}
+
 		key := client.ObjectKey{Name: class.Name}
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			storageClass := &storagev1.StorageClass{}
 			if err := b.kubeClient.Get(b.ctx, key, storageClass); err != nil {
-				return err
+				return fmt.Errorf("failed to get StorageClass %q: %w", key.Name, err)
 			}
+
 			if !isDefaultStorageClass(storageClass.Annotations) {
 				return nil
 			}
+
 			before := storageClass.DeepCopy()
 			delete(storageClass.Annotations, defaultStorageClassAnnotation)
 			delete(storageClass.Annotations, legacyDefaultClassAnnotation)
+
 			return b.kubeClient.Patch(b.ctx, storageClass, client.MergeFrom(before))
 		}); err != nil {
 			return fmt.Errorf("failed to remove default annotation from StorageClass %q: %w", class.Name, err)
 		}
 	}
+
 	return nil
 }
 

@@ -23,55 +23,69 @@ func (b *LocalBootstrapper) RunInstallCodesphereCommand() (err error) {
 	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
 		return nil
 	}
+
 	if b.installerBundleDir == "" {
 		return fmt.Errorf("installer bundle is not prepared")
 	}
+
 	dbHost, dbPort, cleanup, err := b.createTemporaryPostgresNodePortEndpoint()
 	if err != nil {
 		return err
 	}
 	defer cleanup()
+
 	restore, err := b.configurePostgresForMigration(dbHost, dbPort)
 	if err != nil {
 		return err
 	}
+
 	defer func() { err = errors.Join(err, restore()) }()
 
 	configPath, err := filepath.Abs(b.Env.InstallConfigPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resolve install config path: %w", err)
 	}
+
 	vaultPath, err := filepath.Abs(filepath.Join(b.Env.InstallConfig.Secrets.BaseDir, "prod.vault.yaml"))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resolve vault path: %w", err)
 	}
+
 	bundleDir, err := filepath.Abs(b.installerBundleDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resolve installer bundle path: %w", err)
 	}
+
 	if b.ageKeyPath == "" {
 		return fmt.Errorf("age key path is not set; cannot pass private key to installer")
 	}
+
 	privKeyPath, err := filepath.Abs(b.ageKeyPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resolve age key path: %w", err)
 	}
+
 	configDir, err := filepath.Abs(filepath.Join(b.Env.InstallDir, "config"))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resolve local config directory: %w", err)
 	}
+
 	opts := b.localInstallCodesphereOptions(bundleDir, configPath, vaultPath, privKeyPath, configDir)
 	command := &cobra.Command{}
 	command.SetContext(b.ctx)
+
 	commandEnv := env.NewEnv()
+
 	dependencies := &codesphere.InstallCodesphereDepenciesCmd{Opts: opts, Env: commandEnv}
 	if err := dependencies.RunE(command, nil); err != nil {
 		return fmt.Errorf("oms install codesphere dependencies failed: %w", err)
 	}
+
 	platform := &codesphere.InstallCodespherePlatformCmd{Opts: opts, Env: commandEnv}
 	if err := platform.RunE(command, nil); err != nil {
 		return fmt.Errorf("oms install codesphere platform failed: %w", err)
 	}
+
 	return nil
 }
 

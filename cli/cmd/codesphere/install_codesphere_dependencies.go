@@ -20,7 +20,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/rest"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -31,10 +30,12 @@ type InstallCodesphereDepenciesCmd struct {
 	Env  env.Env
 }
 
+// RunE installs the cluster dependencies selected by the command options.
 func (c *InstallCodesphereDepenciesCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
+
 	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {
 		return fmt.Errorf("--local-config-dir is required with --local-components")
 	}
@@ -77,7 +78,7 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 		Context:           ctx,
 	}
 
-	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
+	_, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to get vault and Kubernetes config: %w", err)
 	}
@@ -106,7 +107,7 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 			appsConfig.Codesphere.Migration = nil
 		}
 		err = stlog.Step("Install ArgoCD pre-step", func() error {
-			return installArgoCDAndApps(ctx, opts, appsConfig, pm, installVault, restConfig, kubeClient, stlog)
+			return installArgoCDAndApps(ctx, opts, appsConfig, pm, kubeClient, stlog)
 		})
 		if err != nil {
 			return err
@@ -121,7 +122,7 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
 // before the main dependency steps.
-func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, installVault *files.InstallVault, restConfig *rest.Config, kubeClient ctrlclient.Client, stlog *bootstrap.StepLogger) error {
+func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, kubeClient ctrlclient.Client, stlog *bootstrap.StepLogger) error {
 	bomConfig, err := bom.Parse(pm.GetDependencyPath("bom.json"))
 	if err != nil {
 		return fmt.Errorf("failed to parse installer BOM: %w", err)

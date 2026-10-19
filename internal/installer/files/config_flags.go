@@ -1,6 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package files defines installer configuration and its file formats.
 package files
 
 import "slices"

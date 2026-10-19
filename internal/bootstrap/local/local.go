@@ -35,9 +35,11 @@ const (
 	codesphereSystemNamespace = "codesphere-system"
 	codesphereNamespace       = "codesphere"
 	workspacesNamespace       = "workspaces"
-	StorageEngineRookCeph     = "rook-ceph"
-	StorageEngineLocal        = "local"
-	localStorageClassName     = "local-rwx"
+	// StorageEngineRookCeph uses Rook Ceph for local bootstrap storage.
+	StorageEngineRookCeph = "rook-ceph"
+	// StorageEngineLocal uses PVC-backed local storage.
+	StorageEngineLocal    = "local"
+	localStorageClassName = "local-rwx"
 )
 
 type retryableWaitError struct {
@@ -160,32 +162,32 @@ func (b *LocalBootstrapper) Bootstrap() error {
 		err = b.stlog.Step("Install Rook and test Ceph cluster", func() error {
 			err := b.stlog.Substep("Install Rook operator", b.InstallRookHelmChart)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to install Rook operator: %w", err)
 			}
 
 			err = b.stlog.Substep("Deploy test Ceph cluster (single OSD)", b.DeployTestCephCluster)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to deploy test Ceph cluster: %w", err)
 			}
 
 			err = b.stlog.Substep("Create CephBlockPool and StorageClass", b.DeployCephBlockPoolAndStorageClass)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create CephBlockPool and StorageClass: %w", err)
 			}
 
 			err = b.stlog.Substep("Deploy CephFS filesystem", b.DeployCephFilesystem)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to deploy CephFS filesystem: %w", err)
 			}
 
 			err = b.stlog.Substep("Create CephFS SubVolumeGroup", b.DeployCephFilesystemSubVolumeGroup)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create CephFS SubVolumeGroup: %w", err)
 			}
 
 			err = b.stlog.Substep("Bootstrap RGW gateway", b.DeployRGWGateway)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to bootstrap RGW gateway: %w", err)
 			}
 
 			err = b.stlog.Substep("Ensure Ceph users", func() error {
@@ -193,21 +195,23 @@ func (b *LocalBootstrapper) Bootstrap() error {
 				if err != nil {
 					return err
 				}
+
 				b.cephCredentials = creds
+
 				return nil
 			})
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to ensure Ceph users: %w", err)
 			}
 
 			err = b.stlog.Substep("Create Ceph admin credential secrets", b.CreateCephAdminSecrets)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create Ceph admin credential secrets: %w", err)
 			}
 
 			err = b.stlog.Substep("Sync ceph-mon-endpoints ConfigMap", b.SyncCephMonEndpoints)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to sync ceph-mon-endpoints ConfigMap: %w", err)
 			}
 
 			return nil
@@ -257,6 +261,7 @@ func (b *LocalBootstrapper) storageClassName() string {
 	if b.Env.StorageEngine == StorageEngineLocal {
 		return localStorageClassName
 	}
+
 	return cephStorageClassName
 }
 
@@ -530,6 +535,7 @@ func (b *LocalBootstrapper) EnsureInstallConfig() error {
 	if b.Env.InstallVersion != "" {
 		b.Env.InstallConfig.SetCodespherePackage(b.Env.InstallVersion, b.Env.InstallHash)
 	}
+
 	if b.Env.ExposeShared {
 		if !b.Env.K0s {
 			return fmt.Errorf("--expose-shared requires --k0s")
@@ -659,6 +665,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 		if err != nil {
 			return fmt.Errorf("failed to read Ceph monitor hosts: %w", err)
 		}
+
 		b.Env.InstallConfig.Ceph = files.CephConfig{Hosts: cephMonHosts}
 		if b.cephCredentials != nil {
 			b.addCephSecretsToVault(b.Env.Vault)
@@ -762,19 +769,24 @@ func (b *LocalBootstrapper) configureStorageValues() {
 	if b.Env.StorageEngine != StorageEngineLocal {
 		return
 	}
+
 	if b.Env.InstallConfig.ManagedServiceBackends == nil {
 		b.Env.InstallConfig.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{}
 	}
+
 	if b.Env.InstallConfig.ManagedServiceBackends.S3 == nil {
 		b.Env.InstallConfig.ManagedServiceBackends.S3 = &files.S3ManagedServiceConfig{}
 	}
+
 	b.Env.InstallConfig.ManagedServiceBackends.S3.Enabled = ptr.To(false)
+
 	b.Env.InstallConfig.Codesphere.ManagedServices = slices.DeleteFunc(b.Env.InstallConfig.Codesphere.ManagedServices, func(service files.ManagedServiceConfig) bool {
 		return service.Name == "s3"
 	})
 	if !slices.Contains(b.Env.InstallConfig.Codesphere.Internal, "workspace-pvc-storage") {
 		b.Env.InstallConfig.Codesphere.Internal = append(b.Env.InstallConfig.Codesphere.Internal, "workspace-pvc-storage")
 	}
+
 	b.Env.InstallConfig.Codesphere.Override = util.DeepMergeMaps(b.Env.InstallConfig.Codesphere.Override, map[string]any{
 		"global": map[string]any{
 			"ceph": map[string]any{"storageClass": localStorageClassName},

@@ -6,7 +6,6 @@ package local
 import (
 	"os"
 	"path/filepath"
-	"testing"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -60,56 +59,42 @@ var _ = Describe("local bootstrap install config version", func() {
 	}, Entry("version only", ""), Entry("pinned build", "abc123"))
 })
 
-func TestSuppliedConfigWorksWithoutExistingVault(t *testing.T) {
-	dir := t.TempDir()
+var _ = Describe("local bootstrap install config", func() {
+	It("keeps a supplied config without an existing vault", func() {
+		dir := GinkgoT().TempDir()
 
-	configPath := filepath.Join(dir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  publicIp: 192.0.2.13\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+		configPath := filepath.Join(dir, "config.yaml")
+		Expect(os.WriteFile(configPath, []byte("codesphere:\n  domain: cs.example.com\n  workspaceHostingBaseDomain: ws.example.com\n  publicIp: 192.0.2.13\n"), 0600)).To(Succeed())
 
-	manager, err := installer.NewInstallConfigManager("plain", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+		manager, err := installer.NewInstallConfigManager("plain", "")
+		Expect(err).NotTo(HaveOccurred())
 
-	b := &LocalBootstrapper{
-		fw:  util.NewFilesystemWriter(),
-		icg: manager,
-		Env: &CodesphereEnvironment{
-			BaseDomain:        "cs.local",
-			Profile:           installer.PROFILE_DEV,
-			InstallConfigPath: configPath,
-			SecretsFilePath:   filepath.Join(dir, "prod.vault.yaml"),
-		},
-	}
-	if err := b.EnsureInstallConfig(); err != nil {
-		t.Fatal(err)
-	}
+		b := &LocalBootstrapper{
+			fw:  util.NewFilesystemWriter(),
+			icg: manager,
+			Env: &CodesphereEnvironment{
+				BaseDomain:        "cs.local",
+				Profile:           installer.PROFILE_DEV,
+				InstallConfigPath: configPath,
+				SecretsFilePath:   filepath.Join(dir, "prod.vault.yaml"),
+			},
+		}
+		Expect(b.EnsureInstallConfig()).To(Succeed())
+		Expect(b.EnsureSecrets()).To(Succeed())
+		Expect(b.Env.InstallConfig.Codesphere.Domain).To(Equal("cs.example.com"))
+		Expect(b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain).To(Equal("ws.example.com"))
+		Expect(b.Env.InstallConfig.Codesphere.PublicIP).To(Equal("192.0.2.13"))
+		Expect(b.Env.Vault).NotTo(BeNil())
+		Expect(b.Env.InstallConfig.Codesphere.CertIssuer).NotTo(BeNil())
+		Expect(b.Env.InstallConfig.Codesphere.CertIssuer.Type).To(Equal(files.CertIssuerTypeSelfSigned))
+	})
 
-	if err := b.EnsureSecrets(); err != nil {
-		t.Fatal(err)
-	}
+	It("keeps a supplied Google issuer and vault through the local profile", func() {
+		dir := GinkgoT().TempDir()
+		configPath := filepath.Join(dir, "config.yaml")
+		vaultPath := filepath.Join(dir, "prod.vault.yaml")
 
-	if b.Env.InstallConfig.Codesphere.Domain != "cs.example.com" || b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain != "ws.example.com" || b.Env.InstallConfig.Codesphere.PublicIP != "192.0.2.13" {
-		t.Fatalf("supplied config was not retained: %+v", b.Env.InstallConfig.Codesphere)
-	}
-
-	if b.Env.Vault == nil {
-		t.Fatal("expected an empty vault for the first installation")
-	}
-
-	if b.Env.InstallConfig.Codesphere.CertIssuer == nil || b.Env.InstallConfig.Codesphere.CertIssuer.Type != files.CertIssuerTypeSelfSigned {
-		t.Fatalf("expected the local default to be self signed, got %+v", b.Env.InstallConfig.Codesphere.CertIssuer)
-	}
-}
-
-func TestSuppliedGoogleIssuerAndVaultSurviveLocalProfile(t *testing.T) {
-	dir := t.TempDir()
-	configPath := filepath.Join(dir, "config.yaml")
-	vaultPath := filepath.Join(dir, "prod.vault.yaml")
-
-	config := `codesphere:
+		config := `codesphere:
   domain: cs.example.com
   certIssuer:
     type: acme
@@ -130,11 +115,9 @@ cluster:
               cloudDNS:
                 project: dns-project
 `
-	if err := os.WriteFile(configPath, []byte(config), 0600); err != nil {
-		t.Fatal(err)
-	}
+		Expect(os.WriteFile(configPath, []byte(config), 0600)).To(Succeed())
 
-	vault := `secrets:
+		vault := `secrets:
   - name: acmeEabMacKey
     fields:
       password: default-mac
@@ -142,97 +125,69 @@ cluster:
     fields:
       password: custom-mac
 `
-	if err := os.WriteFile(vaultPath, []byte(vault), 0600); err != nil {
-		t.Fatal(err)
-	}
+		Expect(os.WriteFile(vaultPath, []byte(vault), 0600)).To(Succeed())
 
-	manager, err := installer.NewInstallConfigManager("plain", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+		manager, err := installer.NewInstallConfigManager("plain", "")
+		Expect(err).NotTo(HaveOccurred())
 
-	b := &LocalBootstrapper{
-		fw: util.NewFilesystemWriter(), icg: manager,
-		Env: &CodesphereEnvironment{BaseDomain: "cs.local", Profile: installer.PROFILE_DEV, InstallConfigPath: configPath, SecretsFilePath: vaultPath},
-	}
-	if err := b.EnsureInstallConfig(); err != nil {
-		t.Fatal(err)
-	}
+		b := &LocalBootstrapper{
+			fw: util.NewFilesystemWriter(), icg: manager,
+			Env: &CodesphereEnvironment{BaseDomain: "cs.local", Profile: installer.PROFILE_DEV, InstallConfigPath: configPath, SecretsFilePath: vaultPath},
+		}
+		Expect(b.EnsureInstallConfig()).To(Succeed())
+		Expect(b.EnsureSecrets()).To(Succeed())
 
-	if err := b.EnsureSecrets(); err != nil {
-		t.Fatal(err)
-	}
+		issuer := b.Env.InstallConfig.Codesphere.CertIssuer
+		Expect(issuer).NotTo(BeNil())
+		Expect(issuer.Type).To(Equal(files.CertIssuerTypeACME))
+		Expect(issuer.Acme.EABKeyID).To(Equal("default-id"))
 
-	issuer := b.Env.InstallConfig.Codesphere.CertIssuer
-	if issuer == nil || issuer.Type != files.CertIssuerTypeACME || issuer.Acme.EABKeyID != "default-id" {
-		t.Fatalf("Google issuer was not preserved: %+v", issuer)
-	}
+		issuers := b.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
+		Expect(issuers["acme"].(map[string]interface{})["dnsSolver"].(map[string]interface{})["config"].(map[string]interface{})["cloudDNS"].(map[string]interface{})["project"]).To(Equal("dns-project"))
 
-	issuers := b.Env.InstallConfig.Cluster.Certificates.Override["issuers"].(map[string]interface{})
-	if issuers["acme"].(map[string]interface{})["dnsSolver"].(map[string]interface{})["config"].(map[string]interface{})["cloudDNS"].(map[string]interface{})["project"] != "dns-project" {
-		t.Fatalf("Cloud DNS solver was not preserved: %+v", issuers)
-	}
+		Expect(b.Env.Vault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password).To(Equal("default-mac"))
+		Expect(b.Env.Vault.GetSecret(files.SecretAcmeCustomDomainsEabMacKey).Fields.Password).To(Equal("custom-mac"))
+	})
 
-	if b.Env.Vault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password != "default-mac" || b.Env.Vault.GetSecret(files.SecretAcmeCustomDomainsEabMacKey).Fields.Password != "custom-mac" {
-		t.Fatal("Google EAB MAC keys were not loaded")
-	}
-}
-
-func TestConfigureVirtualMachineApps(t *testing.T) {
-	vmApps := []string{"kubevirt-operator", "kubevirt-cr", "cdi-operator", "cdi-cr"}
-
-	for _, tc := range []struct {
-		name     string
-		internal []string
-		preview  map[string]bool
-		features map[string]bool
-		enabled  bool
-	}{
-		{name: "internal flag", internal: []string{"virtual-machines"}, enabled: true},
-		{name: "preview flag", preview: map[string]bool{"virtual-machines": true}, enabled: true},
-		{name: "feature flag", features: map[string]bool{"virtual-machines": true}, enabled: true},
-		{name: "flag disabled", preview: map[string]bool{"virtual-machines": false}, features: map[string]bool{"virtual-machines": false}},
-		{name: "unrelated flags", internal: []string{"other"}, preview: map[string]bool{"other": true}, features: map[string]bool{"other": true}},
-		{name: "virtual machines absent"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			config := files.NewRootConfig()
-			config.Codesphere.Internal = tc.internal
-			config.Codesphere.Preview = tc.preview
-			config.Codesphere.Features = tc.features
-			config.PcApps = files.ChartValues{
-				"applications": map[string]any{
-					"other-app": map[string]any{"enabled": true},
-					"kubevirt-operator": map[string]any{
-						"enabled":      false,
-						"valuesObject": map[string]any{"custom": "kept"},
-					},
+	DescribeTable("configures virtual machine apps", func(internal []string, preview, features map[string]bool, enabled bool) {
+		vmApps := []string{"kubevirt-operator", "kubevirt-cr", "cdi-operator", "cdi-cr"}
+		config := files.NewRootConfig()
+		config.Codesphere.Internal = internal
+		config.Codesphere.Preview = preview
+		config.Codesphere.Features = features
+		config.PcApps = files.ChartValues{
+			"applications": map[string]any{
+				"other-app": map[string]any{"enabled": true},
+				"kubevirt-operator": map[string]any{
+					"enabled":      false,
+					"valuesObject": map[string]any{"custom": "kept"},
 				},
-			}
+			},
+		}
 
-			configureVirtualMachineApps(&config)
+		configureVirtualMachineApps(&config)
 
-			apps := config.PcApps["applications"].(map[string]any)
-			if apps["other-app"].(map[string]any)["enabled"] != true {
-				t.Fatal("unrelated pc-apps entry was changed")
+		apps := config.PcApps["applications"].(map[string]any)
+		Expect(apps["other-app"].(map[string]any)["enabled"]).To(BeTrue())
+		Expect(apps["kubevirt-operator"].(map[string]any)["valuesObject"].(map[string]any)["custom"]).To(Equal("kept"))
+
+		for _, name := range vmApps {
+			app, exists := apps[name]
+			if enabled {
+				Expect(exists).To(BeTrue(), "%s should be enabled", name)
+				Expect(app.(map[string]any)["enabled"]).To(BeTrue(), "%s should be enabled", name)
+			} else if name == "kubevirt-operator" {
+				Expect(app.(map[string]any)["enabled"]).To(BeFalse())
+			} else {
+				Expect(exists).To(BeFalse(), "%s should not be added", name)
 			}
-			if apps["kubevirt-operator"].(map[string]any)["valuesObject"].(map[string]any)["custom"] != "kept" {
-				t.Fatal("existing KubeVirt values were changed")
-			}
-			for _, name := range vmApps {
-				app, exists := apps[name]
-				if tc.enabled {
-					if !exists || app.(map[string]any)["enabled"] != true {
-						t.Errorf("%s should be enabled", name)
-					}
-				} else if name == "kubevirt-operator" {
-					if app.(map[string]any)["enabled"] != false {
-						t.Errorf("%s should retain its existing setting", name)
-					}
-				} else if exists {
-					t.Errorf("%s should not be added", name)
-				}
-			}
-		})
-	}
-}
+		}
+	},
+		Entry("internal flag", []string{"virtual-machines"}, nil, nil, true),
+		Entry("preview flag", nil, map[string]bool{"virtual-machines": true}, nil, true),
+		Entry("feature flag", nil, nil, map[string]bool{"virtual-machines": true}, true),
+		Entry("flag disabled", nil, map[string]bool{"virtual-machines": false}, map[string]bool{"virtual-machines": false}, false),
+		Entry("unrelated flags", []string{"other"}, map[string]bool{"other": true}, map[string]bool{"other": true}, false),
+		Entry("virtual machines absent", nil, nil, nil, false),
+	)
+})

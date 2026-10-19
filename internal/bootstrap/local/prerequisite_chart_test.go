@@ -5,45 +5,42 @@ package local
 
 import (
 	"context"
-	"testing"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 )
 
-func TestPrerequisiteHTTPChartInstallsWithoutArgoCD(t *testing.T) {
-	helm := installer.NewMockHelmClient(t)
-	helm.EXPECT().FindRelease("rook-ceph", "rook-ceph").Return(nil, nil)
-	helm.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-		return cfg.ChartName == "rook-ceph" && cfg.RepoURL == "https://charts.rook.io/release" &&
-			cfg.Namespace == "rook-ceph" && cfg.CreateNamespace
-	}), installer.InstallChartOptions{}).Return(nil)
-	b := &LocalBootstrapper{ctx: context.Background(), helmClient: helm}
-	if err := b.installPrerequisiteChart(prerequisiteChartConfig{
-		Name: "rook-ceph", Chart: "rook-ceph", RepoURL: "https://charts.rook.io/release", Namespace: "rook-ceph",
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
+var _ = Describe("prerequisite charts", func() {
+	It("installs an HTTP chart before ArgoCD is available", func() {
+		helm := installer.NewMockHelmClient(GinkgoT())
+		helm.EXPECT().FindRelease("rook-ceph", "rook-ceph").Return(nil, nil)
+		helm.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+			return cfg.ChartName == "rook-ceph" && cfg.RepoURL == "https://charts.rook.io/release" &&
+				cfg.Namespace == "rook-ceph" && cfg.CreateNamespace
+		}), installer.InstallChartOptions{}).Return(nil)
+		b := &LocalBootstrapper{ctx: context.Background(), helmClient: helm}
+		Expect(b.installPrerequisiteChart(prerequisiteChartConfig{
+			Name: "rook-ceph", Chart: "rook-ceph", RepoURL: "https://charts.rook.io/release", Namespace: "rook-ceph",
+		})).To(Succeed())
+	})
 
-func TestPrerequisiteChartUpgradesExistingRelease(t *testing.T) {
-	helm := installer.NewMockHelmClient(t)
-	helm.EXPECT().FindRelease("rook-ceph", "rook-ceph").Return(&installer.ReleaseInfo{Name: "rook-ceph"}, nil)
-	helm.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-		return cfg.ReleaseName == "rook-ceph" && cfg.Version == "1.0.0"
-	}), installer.UpgradeChartOptions{}).Return(nil)
-	b := &LocalBootstrapper{ctx: context.Background(), helmClient: helm}
-	if err := b.installPrerequisiteChart(prerequisiteChartConfig{
-		Name: "rook-ceph", Chart: "rook-ceph", RepoURL: "https://charts.rook.io/release",
-		Namespace: "rook-ceph", TargetRevision: "1.0.0",
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
+	It("upgrades an existing release", func() {
+		helm := installer.NewMockHelmClient(GinkgoT())
+		helm.EXPECT().FindRelease("rook-ceph", "rook-ceph").Return(&installer.ReleaseInfo{Name: "rook-ceph"}, nil)
+		helm.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+			return cfg.ReleaseName == "rook-ceph" && cfg.Version == "1.0.0"
+		}), installer.UpgradeChartOptions{}).Return(nil)
+		b := &LocalBootstrapper{ctx: context.Background(), helmClient: helm}
+		Expect(b.installPrerequisiteChart(prerequisiteChartConfig{
+			Name: "rook-ceph", Chart: "rook-ceph", RepoURL: "https://charts.rook.io/release",
+			Namespace: "rook-ceph", TargetRevision: "1.0.0",
+		})).To(Succeed())
+	})
 
-func TestPrerequisiteChartRequiresHelmClient(t *testing.T) {
-	b := &LocalBootstrapper{}
-	if err := b.installPrerequisiteChart(prerequisiteChartConfig{Name: "test"}); err == nil || err.Error() != "helm client is not set" {
-		t.Fatalf("expected missing Helm client error, got %v", err)
-	}
-}
+	It("requires a Helm client", func() {
+		b := &LocalBootstrapper{}
+		Expect(b.installPrerequisiteChart(prerequisiteChartConfig{Name: "test"})).To(MatchError("helm client is not set"))
+	})
+})

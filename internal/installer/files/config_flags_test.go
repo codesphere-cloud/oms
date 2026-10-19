@@ -4,28 +4,20 @@
 package files_test
 
 import (
-	"testing"
-
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestCodesphereConfigIsEnabled(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		config  files.CodesphereConfig
-		enabled bool
-	}{
-		{name: "internal", config: files.CodesphereConfig{Internal: []string{"other", "target"}}, enabled: true},
-		{name: "preview", config: files.CodesphereConfig{Preview: map[string]bool{"target": true}}, enabled: true},
-		{name: "feature", config: files.CodesphereConfig{Features: map[string]bool{"target": true}}, enabled: true},
-		{name: "disabled", config: files.CodesphereConfig{Preview: map[string]bool{"target": false}, Features: map[string]bool{"target": false}}},
-		{name: "unrelated", config: files.CodesphereConfig{Internal: []string{"other"}, Preview: map[string]bool{"other": true}, Features: map[string]bool{"other": true}}},
-		{name: "empty"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.config.IsEnabled("target"); got != tc.enabled {
-				t.Errorf("IsEnabled(target) = %t, want %t", got, tc.enabled)
-			}
-		})
-	}
-}
+var _ = Describe("CodesphereConfig.IsEnabled", func() {
+	DescribeTable("checks each flag source", func(config files.CodesphereConfig, enabled bool) {
+		Expect(config.IsEnabled("target")).To(Equal(enabled))
+	},
+		Entry("internal", files.CodesphereConfig{Internal: []string{"other", "target"}}, true),
+		Entry("preview", files.CodesphereConfig{Preview: map[string]bool{"target": true}}, true),
+		Entry("feature", files.CodesphereConfig{Features: map[string]bool{"target": true}}, true),
+		Entry("disabled", files.CodesphereConfig{Preview: map[string]bool{"target": false}, Features: map[string]bool{"target": false}}, false),
+		Entry("unrelated", files.CodesphereConfig{Internal: []string{"other"}, Preview: map[string]bool{"other": true}, Features: map[string]bool{"other": true}}, false),
+		Entry("empty", files.CodesphereConfig{}, false),
+	)
+})
