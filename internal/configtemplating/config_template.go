@@ -15,20 +15,35 @@ type SecretStore interface {
 	LookupSecret(name string, selector ...string) (string, error)
 }
 
+const secretRefMarker = "__oms_secret_ref__"
+
+type secretFunc func(name string, selector ...string) (string, error)
+
 // RenderInstallConfigTemplate renders the given config template data, resolving
 // any `secret` template calls against store, and returns the rendered bytes.
 // Referencing a missing template key or a missing secret is treated as an error.
 func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error) {
+	return render(data, func(name string, selector ...string) (string, error) {
+		if store == nil {
+			return "", fmt.Errorf("secret store is required to render config template")
+		}
+
+		return store.LookupSecret(name, selector...)
+	})
+}
+
+// RenderSecretRefs renders the given config template data with every `secret` call replaced by
+// a marker, so ValidateCodesphereSecretRefs can find where secrets are used without resolving them.
+func RenderSecretRefs(data []byte) ([]byte, error) {
+	return render(data, func(string, ...string) (string, error) {
+		return secretRefMarker, nil
+	})
+}
+
+func render(data []byte, secret secretFunc) ([]byte, error) {
 	tmpl, err := template.New("install-config").
 		Option("missingkey=error").
-		Funcs(template.FuncMap{
-			"secret": func(name string, selector ...string) (string, error) {
-				if store == nil {
-					return "", fmt.Errorf("secret store is required to render config template")
-				}
-				return store.LookupSecret(name, selector...)
-			},
-		}).
+		Funcs(template.FuncMap{"secret": secret}).
 		Parse(string(data))
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config template: %w", err)

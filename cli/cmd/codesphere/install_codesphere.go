@@ -218,6 +218,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	}
 
 	merged := map[string]any{}
+	mergedSecretRefs := map[string]any{}
 	for _, configPath := range configFiles {
 		renderedPath := configPath
 		if opts.Vault != "" {
@@ -228,6 +229,14 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 			}
 			cleanupFns = append(cleanupFns, renderCleanup)
 			renderedPath = tmpPath
+
+			secretRefs, err := readSecretRefs(configPath)
+			if err != nil {
+				cleanup()
+				return nil, files.RootConfig{}, func() {}, err
+			}
+
+			mergedSecretRefs = intutil.DeepMergeMaps(mergedSecretRefs, secretRefs)
 		}
 
 		data, err := os.ReadFile(renderedPath)
@@ -251,6 +260,11 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 			}
 		}
 		merged = intutil.DeepMergeMaps(merged, partial)
+	}
+
+	if err := configtemplating.ValidateCodesphereSecretRefs(mergedSecretRefs); err != nil {
+		cleanup()
+		return nil, files.RootConfig{}, func() {}, fmt.Errorf("invalid install config: %w", err)
 	}
 
 	mergedBytes, err := yaml.Marshal(merged)
@@ -297,6 +311,26 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	effectiveOpts.Configs = append([]string(nil), configFiles...)
 
 	return &effectiveOpts, cfg, cleanup, nil
+}
+
+// readSecretRefs parses configPath with its secret calls replaced by markers instead of values.
+func readSecretRefs(configPath string) (map[string]any, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
+	}
+
+	rendered, err := configtemplating.RenderSecretRefs(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to render secret references in %s: %w", configPath, err)
+	}
+
+	secretRefs := map[string]any{}
+	if err := yaml.Unmarshal(rendered, &secretRefs); err != nil {
+		return nil, fmt.Errorf("failed to parse config file %s: %w", configPath, err)
+	}
+
+	return secretRefs, nil
 }
 
 // ensureCodespherePackageForVersion preserves explicit packages and resolves config-selected

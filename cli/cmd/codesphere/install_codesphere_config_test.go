@@ -162,6 +162,7 @@ cluster:
   publicGateway:
     serviceType: LoadBalancer
 codesphere:
+  releaseName: codesphere-test
   domain: '{{ secret "baseDomain" }}'
   workspaceHostingBaseDomain: ws.base.example.com
   customDomains:
@@ -212,6 +213,69 @@ pcApps:
 		spec := cfg.PcApps["spec"].(map[string]interface{})
 		source := spec["source"].(map[string]interface{})
 		Expect(source["targetRevision"]).To(Equal("from-vault"))
+	})
+
+	Context("with secret templates in the codesphere block", func() {
+		var (
+			tmpDir    string
+			basePath  string
+			vaultPath string
+		)
+
+		writeConfig := func(name, content string) string {
+			path := filepath.Join(tmpDir, name)
+			Expect(os.WriteFile(path, []byte(content), 0600)).To(Succeed())
+
+			return path
+		}
+
+		prepare := func(configs ...string) (files.RootConfig, error) {
+			opts := &InstallCodesphereOpts{Configs: configs, Vault: vaultPath, VaultType: "plain"}
+			_, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
+			cleanup()
+
+			return cfg, err
+		}
+
+		BeforeEach(func() {
+			tmpDir = GinkgoT().TempDir()
+			testVault := &files.InstallVault{
+				Secrets: []files.SecretEntry{{Name: "oidcClientSecret", File: &files.SecretFile{Content: "from-vault"}}},
+			}
+			vaultYAML, err := testVault.Marshal()
+			Expect(err).ToNot(HaveOccurred())
+
+			vaultPath = writeConfig("prod.vault.yaml", string(vaultYAML))
+			basePath = writeConfig("base.yaml", `
+codesphere:
+  override:
+    clientSecret: '{{ secret "oidcClientSecret" }}'
+`)
+		})
+
+		It("rejects a config without a release name", func() {
+			_, err := prepare(basePath)
+
+			Expect(err).To(MatchError(ContainSubstring("found at codesphere.override.clientSecret")))
+		})
+
+		It("accepts the secret when an overlay sets the release name", func() {
+			overlayPath := writeConfig("overlay.yaml", "codesphere:\n  releaseName: codesphere-preview\n")
+
+			cfg, err := prepare(basePath, overlayPath)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Codesphere.Override).To(HaveKeyWithValue("clientSecret", "from-vault"))
+		})
+
+		It("accepts the config when an overlay replaces the secret with a literal", func() {
+			overlayPath := writeConfig("overlay.yaml", "codesphere:\n  override:\n    clientSecret: literal\n")
+
+			cfg, err := prepare(basePath, overlayPath)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Codesphere.Override).To(HaveKeyWithValue("clientSecret", "literal"))
+		})
 	})
 
 	It("supports a single config path", func() {
