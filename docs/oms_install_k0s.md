@@ -6,8 +6,9 @@ Install k0s Kubernetes distribution
 
 Install k0s either from the package or by downloading it.
 This command uses k0sctl to deploy k0s clusters from a Codesphere install-config.
+With --single, install a controller and worker on this machine without k0sctl or an install-config.
 
-You must provide a Codesphere install-config file, which will:
+For multi-node deployment, provide a Codesphere install-config file, which will:
 - Generate a k0s configuration from the install-config
 - Generate a k0sctl configuration for cluster deployment
 - Deploy k0s to all nodes defined in the install-config using k0sctl
@@ -40,6 +41,9 @@ $ oms install k0s --force
 # Skip downloading k0s binary (expects it to be on remote nodes)
 $ oms install k0s --no-download
 
+# Install a single-node cluster on this machine using bundled k0s
+$ oms install k0s --single --package <file>
+
 ```
 
 ### Options
@@ -47,10 +51,11 @@ $ oms install k0s --no-download
 ```
   -f, --force                   Force new download and installation
   -h, --help                    help for k0s
-      --install-config string   Path to Codesphere install-config file (required)
+      --install-config string   Path to Codesphere install-config file (required unless --single)
       --k0sctl-version string   Version of k0sctl to use (default "v0.33.1")
       --no-download             Skip downloading k0s binary
   -p, --package string          Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
+      --single                  Install a single-node controller and worker on this machine
       --ssh-key-path string     SSH private key path for remote installation
       --vault string            Path to prod.vault.yaml to save the kubeconfig into (optional)
       --vault-priv-key string   Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)
