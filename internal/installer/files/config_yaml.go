@@ -776,9 +776,10 @@ type OAuthConfig struct {
 	AuthorizationEndpoint string `yaml:"authorizationEndpoint"`
 	TokenEndpoint         string `yaml:"tokenEndpoint"`
 	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
-	Scope                 string `yaml:"scope,omitempty"`
-	RedirectURI           string `yaml:"redirectUri,omitempty"`
-	InstallationURI       string `yaml:"installationUri,omitempty"`
+	// Scope is a pointer because configs set it to an empty string, which the installer passes on.
+	Scope           *string `yaml:"scope,omitempty"`
+	RedirectURI     string  `yaml:"redirectUri,omitempty"`
+	InstallationURI string  `yaml:"installationUri,omitempty"`
 }
 
 type ManagedServiceConfig struct {

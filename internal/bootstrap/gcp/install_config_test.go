@@ -711,7 +711,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.AuthorizationEndpoint).To(Equal("https://login.microsoftonline.com/common/oauth2/v2.0/authorize"))
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.TokenEndpoint).To(Equal("https://login.microsoftonline.com/common/oauth2/v2.0/token"))
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.ClientAuthMethod).To(Equal("client_secret_post"))
-					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.Scope).To(Equal("openid offline_access https://app.vssps.visualstudio.com/vso.code_full"))
+					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.Scope).To(HaveValue(Equal("openid offline_access https://app.vssps.visualstudio.com/vso.code_full")))
 					Expect(bs.Env.InstallConfig.Codesphere.GitProviders.AzureDevOps.OAuth.RedirectURI).To(Equal("https://cs.example.com/ide/auth/azure-dev-ops/callback"))
 					Expect(vault.GetSecret(files.SecretAzureDevOpsAppClientId).Fields.Password).To(Equal("azure-devops-app-client-id"))
 					Expect(vault.GetSecret(files.SecretAzureDevOpsAppClientSecret).Fields.Password).To(Equal("azure-devops-app-client-secret"))
