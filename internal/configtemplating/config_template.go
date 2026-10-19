@@ -43,7 +43,9 @@ func RenderSecretRefs(data []byte) ([]byte, error) {
 
 // CheckNoCodesphereSecretRefs rejects `secret` calls in the codesphere block of a config
 // rendered with RenderSecretRefs. Their values reach the Codesphere chart's ExternalSecrets in
-// plaintext. Dev releases are exempt; only they set codesphere.releaseName.
+// plaintext. Dev releases, the only ones that set codesphere.releaseName, are exempt for now
+// (only use case atm.). Long term config and secrets should be more strictly separated, i.e. no
+// secrets in config.yml (requires some changes in auth-service).
 func CheckNoCodesphereSecretRefs(config map[string]any) error {
 	codesphere, ok := config["codesphere"].(map[string]any)
 	if !ok {
