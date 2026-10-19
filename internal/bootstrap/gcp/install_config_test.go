@@ -441,6 +441,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(bs.Env.InstallConfig.Codesphere.Features).To(Equal(map[string]bool{}))
 				Expect(bs.Env.InstallConfig.Codesphere.Internal).To(Equal(gcp.DefaultInternalFlags))
 				Expect(bs.Env.InstallConfig.Codesphere.Preview).To(Equal(util.StringSliceToBoolMap(gcp.DefaultPreviewFlags)))
+				Expect(bs.Env.InstallConfig.SignUp.Email.AllowedDomains).To(Equal([]string{"@codesphere.com"}))
 
 				expectedInstallURI := "https://github.com/apps/" + bs.Env.GitHubAppName + "/installations/new"
 				Expect(bs.Env.InstallConfig.Codesphere.GitProviders.GitHub.OAuth.InstallationURI).To(Equal(expectedInstallURI))
@@ -459,6 +460,79 @@ var _ = Describe("Installconfig & Secrets", func() {
 				Expect(cloudDns["project"]).To(Equal(bs.Env.DNSProjectID))
 
 				Expect(bs.Env.InstallConfig.Codesphere.OpenBao).To(BeNil())
+			})
+
+			It("uses the configured signup email domains", func() {
+				csEnv.SignupAllowedDomains = []string{" @example.com ", "@customer.test"}
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				Expect(bs.UpdateInstallConfig()).To(Succeed())
+				Expect(csEnv.InstallConfig.SignUp.Email.AllowedDomains).To(Equal([]string{"@example.com", "@customer.test"}))
+			})
+
+			It("configures PVC-backed workspaces and skips Ceph for GCP PD", func() {
+				csEnv.StorageBackend = gcp.StorageBackendGCPPD
+				csEnv.CephNodes = nil
+				csEnv.DataCenters = nil
+				// The direct bootstrap applies the minimal profile, which enables all
+				// three components before the storage backend is applied.
+				csEnv.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{
+					Loki:         &files.LokiConfig{Enabled: true},
+					Grafana:      &files.GrafanaConfig{Enabled: true},
+					GrafanaAlloy: &files.GrafanaAlloyConfig{Enabled: true},
+				}
+				csEnv.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{Enabled: true}
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				Expect(bs.UpdateInstallConfig()).To(Succeed())
+
+				Expect(csEnv.InstallConfig.Ceph.Hosts).To(BeEmpty())
+				Expect(csEnv.InstallConfig.Operations.Skip).To(ContainElement("ceph"))
+				Expect(csEnv.InstallConfig.Codesphere.Internal).To(ContainElement("workspace-pvc-storage"))
+				global := csEnv.InstallConfig.Codesphere.Override["global"].(map[string]any)
+				ceph := global["ceph"].(map[string]any)
+				Expect(ceph["storageClass"]).To(Equal("codesphere"))
+				Expect(csEnv.InstallConfig.ManagedServiceBackends.S3.Enabled).NotTo(BeNil())
+				Expect(*csEnv.InstallConfig.ManagedServiceBackends.S3.Enabled).To(BeFalse())
+				Expect(csEnv.InstallConfig.Codesphere.ManagedServices).NotTo(ContainElement(HaveField("Name", "s3")))
+				Expect(csEnv.InstallConfig.Cluster.Monitoring.Loki.Enabled).To(BeFalse())
+				Expect(csEnv.InstallConfig.Cluster.Monitoring.Grafana.Enabled).To(BeFalse())
+				Expect(csEnv.InstallConfig.Cluster.Monitoring.GrafanaAlloy.Enabled).To(BeFalse())
+				prometheus := csEnv.InstallConfig.Cluster.Monitoring.Prometheus.Override["kube-prometheus-stack"].(map[string]any)["prometheus"].(map[string]any)
+				prometheusSpec := prometheus["prometheusSpec"].(map[string]any)
+				storageSpec := prometheusSpec["storageSpec"].(map[string]any)
+				volumeClaimTemplate := storageSpec["volumeClaimTemplate"].(map[string]any)
+				pvcSpec := volumeClaimTemplate["spec"].(map[string]any)
+				Expect(pvcSpec["storageClassName"]).To(Equal("gce-pd-rwo"))
+				Expect(csEnv.InstallConfig.Cluster.RgwLoadBalancer.Enabled).To(BeFalse())
+			})
+
+			It("keeps Alloy enabled with external Loki when using GCP PD", func() {
+				csEnv.StorageBackend = gcp.StorageBackendGCPPD
+				csEnv.CephNodes = nil
+				csEnv.DataCenters = nil
+				csEnv.ExternalLokiEndpoint = "https://loki.example.com/loki/api/v1/push"
+
+				icg.EXPECT().GenerateSecrets().Return(nil)
+				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
+				icg.EXPECT().WriteVault("fake-secret", true).Return(nil)
+				nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+				Expect(bs.UpdateInstallConfig()).To(Succeed())
+
+				monitoring := csEnv.InstallConfig.Cluster.Monitoring
+				Expect(monitoring.Loki.Enabled).To(BeFalse())
+				Expect(monitoring.Grafana.Enabled).To(BeFalse())
+				Expect(monitoring.GrafanaAlloy.Enabled).To(BeTrue())
+				Expect(monitoring.GrafanaAlloy.Loki.Endpoint).To(Equal(csEnv.ExternalLokiEndpoint))
 			})
 			It("uses the configured datacenter name", func() {
 				csEnv.DatacenterName = "staging"

@@ -37,6 +37,15 @@ var _ = Describe("ConfigManagerProfile", func() {
 				Expect(config.Kubernetes.ControlPlanes).To(HaveLen(1))
 				Expect(config.Kubernetes.Workers).To(HaveLen(1))
 				Expect(config.Codesphere.Domain).To(Equal("codesphere.local"))
+				Expect(config.Cluster.PgOperator).NotTo(BeNil())
+				Expect(config.Cluster.PgOperator.Enabled).To(BeTrue())
+			})
+
+			It("should preserve an explicitly disabled PostgreSQL operator", func() {
+				manager.GetInstallConfig().Cluster.PgOperator = &files.PgOperatorConfig{Enabled: false}
+
+				Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+				Expect(manager.GetInstallConfig().Cluster.PgOperator.Enabled).To(BeFalse())
 			})
 
 			It("should set managed Kubernetes configuration", func() {

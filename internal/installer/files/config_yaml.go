@@ -109,9 +109,20 @@ type RootConfig struct {
 	Kubernetes             KubernetesConfig              `yaml:"kubernetes"`
 	Cluster                ClusterConfig                 `yaml:"cluster"`
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
+	SignUp                 *SignUpConfig                 `yaml:"signUp,omitempty"`
 	PcApps                 ChartValues                   `yaml:"pcApps,omitempty"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
 	Operations             *OperationsConfig             `yaml:"operations,omitempty"`
+}
+
+// SignUpConfig controls which account signup mechanisms are permitted.
+type SignUpConfig struct {
+	Email SignUpEmailConfig `yaml:"email"`
+}
+
+// SignUpEmailConfig restricts email signup to addresses ending in an allowed domain.
+type SignUpEmailConfig struct {
+	AllowedDomains []string `yaml:"allowedDomains,omitempty"`
 }
 
 type OperationsConfig struct {
@@ -821,6 +832,7 @@ type PgManagedServiceConfig struct {
 }
 
 type S3ManagedServiceConfig struct {
+	Enabled  *bool         `yaml:"enabled,omitempty"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 

@@ -132,6 +132,29 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput storage backend", func() {
+		It("rejects an unsupported backend", func() {
+			csEnv.StorageBackend = "gcs"
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("unsupported storage backend")))
+		})
+
+		It("rejects the GCP PD backend in airgapped mode", func() {
+			csEnv.StorageBackend = gcp.StorageBackendGCPPD
+			csEnv.Airgapped = true
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("cannot be used with airgapped mode")))
+		})
+
+		It("requires GHCR credentials when installing rwox-csi", func() {
+			csEnv.StorageBackend = gcp.StorageBackendGCPPD
+			csEnv.InstallVersion = "1.2.3"
+			csEnv.RegistryUser = ""
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("registry-user must be set")))
+		})
+	})
+
 	Describe("ValidateInput remote OMS binary", func() {
 		BeforeEach(func() {
 			csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
@@ -332,6 +355,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// EnsureIAMRoles
 			gc.EXPECT().AssignIAMRole(projectID, "artifact-registry-writer", projectID, []string{"roles/artifactregistry.writer"}).Return(nil)
 			gc.EXPECT().AssignIAMRole(projectID, "cloud-controller", projectID, []string{"roles/compute.admin"}).Return(nil)
+			gc.EXPECT().AssignServiceAccountIAMRole(projectID, "cloud-controller", "cloud-controller", projectID, []string{"roles/iam.serviceAccountUser"}).Return(nil)
 			gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", projectID, []string{"roles/dns.admin"}).Return(nil)
 			gc.EXPECT().AssignIAMRole(projectID, "openfga-backup", projectID, []string{"roles/storage.objectAdmin"}).Return(nil)
 
@@ -2193,6 +2217,58 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to make configure-k0s.sh executable"))
 			})
+		})
+	})
+
+	Describe("EnsureGCPStorage", func() {
+		It("installs the GCE PD CSI driver and rwox-csi with k0s paths", func() {
+			csEnv.StorageBackend = gcp.StorageBackendGCPPD
+			csEnv.RegistryUser = "codesphere"
+			csEnv.GitHubPAT = "secret-pat"
+
+			var script string
+
+			fw.EXPECT().WriteFile("configure-gcp-storage.sh", mock.Anything, os.FileMode(0755)).
+				Run(func(_ string, content []byte, _ os.FileMode) { script = string(content) }).
+				Return(nil)
+			nodeClient.EXPECT().CopyFile(csEnv.ControlPlaneNodes[0], "configure-gcp-storage.sh", "/root/configure-gcp-storage.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(csEnv.ControlPlaneNodes[0], "root", "chmod +x /root/configure-gcp-storage.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(csEnv.ControlPlaneNodes[0], "root", mock.MatchedBy(func(command string) bool {
+				return strings.Contains(command, "RWX_REGISTRY_USER='codesphere'") &&
+					strings.Contains(command, "RWX_REGISTRY_PASSWORD='secret-pat'") &&
+					strings.HasSuffix(command, "/root/configure-gcp-storage.sh")
+			})).Return(nil)
+
+			Expect(bs.EnsureGCPStorage()).To(Succeed())
+			Expect(script).To(ContainSubstring("pd.csi.storage.gke.io"))
+			Expect(script).To(ContainSubstring("deploy/kubernetes/overlays/noauth"))
+			Expect(script).To(ContainSubstring("create namespace gce-pd-csi-driver --dry-run=client"))
+			Expect(script).To(ContainSubstring("k0s kubeconfig admin"))
+			Expect(script).To(ContainSubstring("export KUBECONFIG="))
+			Expect(script).To(ContainSubstring(`storageclass.kubernetes.io/is-default-class: "true"`))
+			Expect(script).To(ContainSubstring("volumeBindingMode: WaitForFirstConsumer"))
+			Expect(script).To(ContainSubstring("/var/lib/k0s/kubelet"))
+			Expect(script).To(ContainSubstring("codesphere-cloud/rwox-csi/tarball/7af7126cafcbfbe050ba0f72c7ca482bc678b924"))
+			Expect(script).To(ContainSubstring("image.tag=sha-7af7126"))
+			Expect(script).To(ContainSubstring("storageClass.name=codesphere"))
+			Expect(script).To(ContainSubstring("storageClass.backingStorageClass=gce-pd-rwo"))
+			Expect(script).NotTo(ContainSubstring("secret-pat"))
+		})
+
+		It("does not expose credentials when the remote setup fails", func() {
+			csEnv.StorageBackend = gcp.StorageBackendGCPPD
+			csEnv.RegistryUser = "codesphere"
+			csEnv.GitHubPAT = "secret-pat"
+
+			fw.EXPECT().WriteFile("configure-gcp-storage.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.Anything, "root", "chmod +x /root/configure-gcp-storage.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("setup failed"))
+
+			err := bs.EnsureGCPStorage()
+
+			Expect(err).To(MatchError(ContainSubstring("setup failed")))
+			Expect(err.Error()).NotTo(ContainSubstring("secret-pat"))
 		})
 	})
 })

@@ -238,6 +238,16 @@ func (b *GCPBootstrapper) EnsureIAMRoles() error {
 	if err != nil {
 		return fmt.Errorf("failed to ensure cloud-controller role bindings: %w", err)
 	}
+	err = b.ensureServiceAccountIAMRoleWithRetry(
+		b.Env.ProjectID,
+		"cloud-controller",
+		"cloud-controller",
+		b.Env.ProjectID,
+		[]string{"roles/iam.serviceAccountUser"},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to allow cloud-controller to use its VM service account: %w", err)
+	}
 
 	err = b.ensureDNSPermissions()
 	if err != nil {
@@ -278,4 +288,19 @@ func (b *GCPBootstrapper) ensureIAMRoleWithRetry(projectID string, serviceAccoun
 	}
 
 	return fmt.Errorf("failed to assign roles %v to service account %s: %w", roles, serviceAccount, err)
+}
+
+func (b *GCPBootstrapper) ensureServiceAccountIAMRoleWithRetry(projectID, targetServiceAccount, memberServiceAccount, memberServiceAccountProjectID string, roles []string) error {
+	var err error
+	for retries := range 5 {
+		err = b.GCPClient.AssignServiceAccountIAMRole(projectID, targetServiceAccount, memberServiceAccount, memberServiceAccountProjectID, roles)
+		if err == nil {
+			return nil
+		}
+		if retries < 4 {
+			b.stlog.LogRetry()
+			b.Time.Sleep(5 * time.Second)
+		}
+	}
+	return fmt.Errorf("failed to assign roles %v on service account %s to %s: %w", roles, targetServiceAccount, memberServiceAccount, err)
 }

@@ -50,6 +50,19 @@ var _ = Describe("GCE", func() {
 			}))
 		})
 
+		It("omits Ceph nodes when GCE Persistent Disk backs rwox-csi", func() {
+			env := &gcp.CodesphereEnvironment{MultiDC: true, StorageBackend: gcp.StorageBackendGCPPD}
+			env.DataCenters = gcp.BuildDataCenters(env)
+
+			defs := gcp.VMDefsForEnv(env)
+
+			Expect(vmNames(defs)).To(Equal([]string{
+				"jumpbox", "postgres",
+				"k0s-1", "k0s-2", "k0s-3",
+				"k0s-1-dc2", "k0s-2-dc2", "k0s-3-dc2",
+			}))
+		})
+
 		It("assigns the shared VMs to no data center and the rest to theirs", func() {
 			env := &gcp.CodesphereEnvironment{MultiDC: true}
 			env.DataCenters = gcp.BuildDataCenters(env)

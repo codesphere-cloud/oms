@@ -53,6 +53,7 @@ type GCPClientManager interface {
 	CreateServiceAccount(projectID, name, displayName string) (string, bool, error)
 	CreateServiceAccountKey(projectID, saEmail string) (string, error)
 	AssignIAMRole(projectID, saEmail string, saProjectID string, roles []string) error
+	AssignServiceAccountIAMRole(projectID, targetSAName, memberSAName, memberSAProjectID string, roles []string) error
 	RemoveIAMRoleBinding(projectID, saName string, saProjectID string, roles []string) error
 	CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error
 	CreateFirewallRule(projectID string, rule *computepb.Firewall) error
@@ -434,6 +435,51 @@ func (c *GCPClient) AssignIAMRole(projectID, saName string, saProjectID string, 
 	resource := fmt.Sprintf("projects/%s", projectID)
 
 	return c.addRoleBindingToProject(member, roles, resource)
+}
+
+// AssignServiceAccountIAMRole adds roles on one service account rather than on
+// the whole project. This is used for permissions such as iam.serviceAccounts.actAs
+// that should be scoped to the exact identity a workload needs to use.
+func (c *GCPClient) AssignServiceAccountIAMRole(projectID, targetSAName, memberSAName, memberSAProjectID string, roles []string) error {
+	iamService, err := iam.NewService(c.ctx)
+	if err != nil {
+		return err
+	}
+
+	targetEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", targetSAName, projectID)
+	resource := fmt.Sprintf("projects/%s/serviceAccounts/%s", projectID, targetEmail)
+	policy, err := iamService.Projects.ServiceAccounts.GetIamPolicy(resource).Context(c.ctx).Do()
+	if err != nil {
+		return err
+	}
+
+	memberEmail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", memberSAName, memberSAProjectID)
+	member := fmt.Sprintf("serviceAccount:%s", memberEmail)
+	updated := false
+	for _, role := range roles {
+		found := false
+		for _, binding := range policy.Bindings {
+			if binding.Role != role {
+				continue
+			}
+			found = true
+			if !slices.Contains(binding.Members, member) {
+				binding.Members = append(binding.Members, member)
+				updated = true
+			}
+			break
+		}
+		if !found {
+			policy.Bindings = append(policy.Bindings, &iam.Binding{Role: role, Members: []string{member}})
+			updated = true
+		}
+	}
+	if !updated {
+		return nil
+	}
+
+	_, err = iamService.Projects.ServiceAccounts.SetIamPolicy(resource, &iam.SetIamPolicyRequest{Policy: policy}).Context(c.ctx).Do()
+	return err
 }
 
 func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resource string) error {

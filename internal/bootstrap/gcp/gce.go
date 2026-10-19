@@ -47,18 +47,20 @@ func sharedVMDefs() []VMDef {
 	}
 }
 
-// dataCenterVMDefs returns the Ceph and k0s VMs of one data center. The suffix is empty for the
+// dataCenterVMDefs returns the storage and k0s VMs of one data center. The suffix is empty for the
 // primary data center, so single-DC bootstraps keep the names ceph-1..3 and k0s-1..3.
-func dataCenterVMDefs(dcID int, suffix string) []VMDef {
+func dataCenterVMDefs(dcID int, suffix string, includeCeph bool) []VMDef {
 	defs := make([]VMDef, 0, cephNodesPerDataCenter+k0sNodesPerDataCenter)
-	for i := 1; i <= cephNodesPerDataCenter; i++ {
-		defs = append(defs, VMDef{
-			Name:            fmt.Sprintf("ceph-%d%s", i, suffix),
-			MachineType:     "e2-standard-8",
-			Tags:            []string{"ceph"},
-			AdditionalDisks: []int64{10, 100},
-			DataCenterID:    dcID,
-		})
+	if includeCeph {
+		for i := 1; i <= cephNodesPerDataCenter; i++ {
+			defs = append(defs, VMDef{
+				Name:            fmt.Sprintf("ceph-%d%s", i, suffix),
+				MachineType:     "e2-standard-8",
+				Tags:            []string{"ceph"},
+				AdditionalDisks: []int64{10, 100},
+				DataCenterID:    dcID,
+			})
+		}
 	}
 
 	for i := 1; i <= k0sNodesPerDataCenter; i++ {
@@ -86,7 +88,7 @@ func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
 	}
 
 	for _, dc := range dcs {
-		defs = append(defs, dataCenterVMDefs(dc.ID, dc.Suffix)...)
+		defs = append(defs, dataCenterVMDefs(dc.ID, dc.Suffix, !env.usesGCPPDStorage())...)
 	}
 
 	return defs

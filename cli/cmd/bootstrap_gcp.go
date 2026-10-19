@@ -62,7 +62,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 		},
 		Opts:          opts,
 		Env:           env.NewEnv(),
-		CodesphereEnv: &gcp.CodesphereEnvironment{},
+		CodesphereEnv: &gcp.CodesphereEnvironment{StorageBackend: gcp.StorageBackendCeph},
 	}
 	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
 
@@ -90,7 +90,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppClientSecret, "github-app-client-secret", "", "GitHub App Client Secret (required)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitLabAppClientID, "gitlab-app-client-id", "", "GitLab App Client ID (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitLabAppClientSecret, "gitlab-app-client-secret", "", "GitLab App Client Secret (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --storage-backend=gcp-pd, --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppName, "github-app-name", "", "GitHub App Name (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamOrg, "github-team-org", "", "GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamSlug, "github-team-slug", "", "GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.")
@@ -100,6 +100,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Preemptible, "preemptible", false, "Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.SpotVMs, "spot-vms", false, "Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. Mutually exclusive with --preemptible (default: false)")
 	flags.Int64Var(&bootstrapGcpCmd.CodesphereEnv.RootDiskSize, "root-disk-size", 50, "Instance root disk size in GB (default: 50)")
+	flags.Var(&bootstrapGcpCmd.CodesphereEnv.StorageBackend, "storage-backend", "Storage backend (supported: ceph, gcp-pd). gcp-pd installs GCE PD CSI and rwox-csi without Ceph nodes")
 
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.RecoverConfig, "recover-config", false, "Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)")
@@ -111,7 +112,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 
 	flags.IntVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterID, "datacenter-id", 1, "Datacenter ID (default: 1)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterName, "datacenter-name", "dev", "Datacenter name (default: dev)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.MultiDC, "multi-dc", false, "Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.MultiDC, "multi-dc", false, "Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and storage clusters. With the default Ceph backend this doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs); gcp-pd creates 8 VMs. Reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CustomPgIP, "custom-pg-ip", "", "Custom PostgreSQL IP (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Region, "region", "europe-west4", "GCP Region (default: europe-west4)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
@@ -121,7 +122,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Registry username for ghcr.io. Required for the GitHub registry type, --storage-backend=gcp-pd, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "github", "Container registry type to use (options: local-container, artifact-registry, github) (default: github)")
 	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Airgapped, "airgapped", false, "Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. Selects the local-container registry type and fails if another --registry-type is given. (default: false)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
@@ -129,6 +130,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
+	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.SignupAllowedDomains, "signup-allowed-domain", gcp.DefaultSignupAllowedDomains, "Email domain allowed for account signup; repeat for multiple domains, or pass an empty value to allow any domain")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiEndpoint, "external-loki-endpoint", "", "External Loki endpoint for Grafana Alloy log forwarding (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiSecret, "external-loki-secret", "", "External Loki password stored in the generated vault (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiUser, "external-loki-user", "", "External Loki username for Grafana Alloy log forwarding (optional)")

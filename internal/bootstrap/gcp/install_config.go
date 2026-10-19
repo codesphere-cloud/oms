@@ -223,40 +223,45 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	previousPrimaryIP, previousPrimaryHostname := b.applyPostgresConfig(dc)
 	b.applyDataCenterTopology(dc)
 
-	dc.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
-	// All data centers share the project's subnet; their Ceph clusters stay separate because
-	// each has its own hosts, monitors and FSID.
-	dc.InstallConfig.Ceph.NodesSubnet = vpcSubnetCIDR
-	dc.InstallConfig.Ceph.Hosts = []files.CephHost{
-		{
-			Hostname:  dc.CephNodes[0].GetName(),
-			IsMaster:  true,
-			IPAddress: dc.CephNodes[0].GetInternalIP(),
-		},
-		{
-			Hostname:  dc.CephNodes[1].GetName(),
-			IPAddress: dc.CephNodes[1].GetInternalIP(),
-		},
-		{
-			Hostname:  dc.CephNodes[2].GetName(),
-			IPAddress: dc.CephNodes[2].GetInternalIP(),
-		},
-	}
-	dc.InstallConfig.Ceph.OSDs = []files.CephOSD{
-		{
-			SpecID: "default",
-			Placement: files.CephPlacement{
-				HostPattern: "*",
+	if b.Env.usesGCPPDStorage() {
+		dc.InstallConfig.Ceph = files.CephConfig{}
+		b.skipInstallerStep(dc, "ceph")
+	} else {
+		dc.InstallConfig.Ceph.CsiKubeletDir = "/var/lib/k0s/kubelet"
+		// All data centers share the project's subnet; their Ceph clusters stay separate because
+		// each has its own hosts, monitors and FSID.
+		dc.InstallConfig.Ceph.NodesSubnet = vpcSubnetCIDR
+		dc.InstallConfig.Ceph.Hosts = []files.CephHost{
+			{
+				Hostname:  dc.CephNodes[0].GetName(),
+				IsMaster:  true,
+				IPAddress: dc.CephNodes[0].GetInternalIP(),
 			},
-			DataDevices: files.CephDataDevices{
-				Size:  "50G:",
-				Limit: 1,
+			{
+				Hostname:  dc.CephNodes[1].GetName(),
+				IPAddress: dc.CephNodes[1].GetInternalIP(),
 			},
-			DBDevices: files.CephDBDevices{
-				Size:  "10G:50G",
-				Limit: 1,
+			{
+				Hostname:  dc.CephNodes[2].GetName(),
+				IPAddress: dc.CephNodes[2].GetInternalIP(),
 			},
-		},
+		}
+		dc.InstallConfig.Ceph.OSDs = []files.CephOSD{
+			{
+				SpecID: "default",
+				Placement: files.CephPlacement{
+					HostPattern: "*",
+				},
+				DataDevices: files.CephDataDevices{
+					Size:  "50G:",
+					Limit: 1,
+				},
+				DBDevices: files.CephDBDevices{
+					Size:  "10G:50G",
+					Limit: 1,
+				},
+			},
+		}
 	}
 
 	dc.InstallConfig.Kubernetes = files.KubernetesConfig{
@@ -318,6 +323,9 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	dc.InstallConfig.Codesphere.DNSServers = []string{"8.8.8.8"}
 	dc.InstallConfig.Codesphere.DeployConfig = bootstrap.DefaultCodesphereDeployConfig()
 	dc.InstallConfig.Codesphere.Plans = bootstrap.DefaultCodespherePlans()
+	dc.InstallConfig.SignUp = &files.SignUpConfig{
+		Email: files.SignUpEmailConfig{AllowedDomains: b.Env.effectiveSignupAllowedDomains()},
+	}
 
 	dc.InstallConfig.Codesphere.GitProviders = &files.GitProvidersConfig{}
 	if b.Env.GitHubAppName != "" && b.Env.GitHubAppClientID != "" && b.Env.GitHubAppClientSecret != "" {
@@ -430,6 +438,7 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	dc.InstallConfig.Codesphere.Internal = b.Env.InternalFlags
 	dc.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
 	dc.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
+	b.applyPVCStorageConfig(dc)
 	// Only set when the flag is provided so a recovered config keeps its value on re-runs.
 	if b.Env.ClusterAdminEmail != "" {
 		dc.InstallConfig.Codesphere.ClusterAdminEmail = b.Env.ClusterAdminEmail
@@ -739,6 +748,86 @@ func (b *GCPBootstrapper) applyManagedServiceDefaults(dc *datacenter.DataCenter)
 
 		dc.InstallConfig.Codesphere.ManagedServices = ms
 	}
+}
+
+func (b *GCPBootstrapper) applyPVCStorageConfig(dc *datacenter.DataCenter) {
+	if !b.Env.usesGCPPDStorage() {
+		return
+	}
+
+	// The in-cluster Loki stores data in a Ceph RGW bucket. Its access key and
+	// secret are created by the Ceph installation step, which GCP PD deliberately
+	// skips. Disable the Ceph-backed monitoring components so a direct bootstrap
+	// using the minimal profile does not try to read nonexistent rgwLoki secrets.
+	// A configured external Loki endpoint is applied later and re-enables Alloy.
+	if dc.InstallConfig.Cluster.Monitoring == nil {
+		dc.InstallConfig.Cluster.Monitoring = &files.MonitoringConfig{}
+	}
+	monitoring := dc.InstallConfig.Cluster.Monitoring
+	if monitoring.Prometheus == nil {
+		monitoring.Prometheus = &files.PrometheusConfig{}
+	}
+	// Prometheus requests ReadWriteOnce storage. The codesphere StorageClass is
+	// backed by rwox-csi and deliberately accepts RWX claims only, so keep
+	// Prometheus directly on the native GCE PD class.
+	monitoring.Prometheus.Override = util.DeepMergeMaps(monitoring.Prometheus.Override, map[string]any{
+		"kube-prometheus-stack": map[string]any{
+			"prometheus": map[string]any{
+				"prometheusSpec": map[string]any{
+					"storageSpec": map[string]any{
+						"volumeClaimTemplate": map[string]any{
+							"spec": map[string]any{
+								"storageClassName": gcePDRWOStorageClassName,
+							},
+						},
+					},
+				},
+			},
+		},
+	})
+	if monitoring.Loki == nil {
+		monitoring.Loki = &files.LokiConfig{}
+	}
+	monitoring.Loki.Enabled = false
+	if monitoring.Grafana == nil {
+		monitoring.Grafana = &files.GrafanaConfig{}
+	}
+	monitoring.Grafana.Enabled = false
+	if monitoring.GrafanaAlloy == nil {
+		monitoring.GrafanaAlloy = &files.GrafanaAlloyConfig{}
+	}
+	if monitoring.GrafanaAlloy.Loki == nil || monitoring.GrafanaAlloy.Loki.Endpoint == "" {
+		monitoring.GrafanaAlloy.Enabled = false
+	}
+	// The minimal profile also enables the RGW load balancer. It cannot render
+	// without Ceph-provided external RGW endpoints.
+	if dc.InstallConfig.Cluster.RgwLoadBalancer == nil {
+		dc.InstallConfig.Cluster.RgwLoadBalancer = &files.RgwLoadBalancerConfig{}
+	}
+	dc.InstallConfig.Cluster.RgwLoadBalancer.Enabled = false
+
+	dc.InstallConfig.Codesphere.Internal = util.AppendUnique(dc.InstallConfig.Codesphere.Internal, "workspace-pvc-storage")
+	dc.InstallConfig.Codesphere.Override = util.DeepMergeMaps(dc.InstallConfig.Codesphere.Override, map[string]any{
+		"global": map[string]any{
+			"ceph": map[string]any{
+				"storageClass": rwoxStorageClassName,
+			},
+		},
+	})
+
+	if dc.InstallConfig.ManagedServiceBackends == nil {
+		dc.InstallConfig.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{}
+	}
+
+	if dc.InstallConfig.ManagedServiceBackends.S3 == nil {
+		dc.InstallConfig.ManagedServiceBackends.S3 = &files.S3ManagedServiceConfig{}
+	}
+
+	disabled := false
+	dc.InstallConfig.ManagedServiceBackends.S3.Enabled = &disabled
+	dc.InstallConfig.Codesphere.ManagedServices = slices.DeleteFunc(dc.InstallConfig.Codesphere.ManagedServices, func(service files.ManagedServiceConfig) bool {
+		return service.Name == "s3"
+	})
 }
 
 // openfgaBackupSAName is the service account whose HMAC key authenticates OpenFGA

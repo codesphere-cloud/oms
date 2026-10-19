@@ -30,6 +30,35 @@ import (
 // InstallerArchiveName is the package artifact bootstrapping downloads and installs.
 const InstallerArchiveName = "installer-lite.tar.gz"
 
+// StorageBackend selects the storage infrastructure created by bootstrap-gcp.
+type StorageBackend string
+
+const (
+	// StorageBackendCeph provisions the existing dedicated Ceph node pool.
+	StorageBackendCeph StorageBackend = "ceph"
+	// StorageBackendGCPPD uses GCE Persistent Disk behind rwox-csi and provisions no Ceph nodes.
+	StorageBackendGCPPD StorageBackend = "gcp-pd"
+)
+
+// DefaultSignupAllowedDomains is the signup allowlist used by bootstrap-gcp unless overridden.
+var DefaultSignupAllowedDomains = []string{"@codesphere.com"}
+
+// String returns the command-line representation of the storage backend.
+func (s StorageBackend) String() string {
+	return string(s)
+}
+
+// Set implements pflag.Value.
+func (s *StorageBackend) Set(value string) error {
+	*s = StorageBackend(value)
+	return nil
+}
+
+// Type returns the value name used in generated command help.
+func (s StorageBackend) Type() string {
+	return "storage-backend"
+}
+
 // jumpboxOmsWorkdir is shared by package mirroring and config-based installation.
 const jumpboxOmsWorkdir = "oms-workdir"
 
@@ -155,38 +184,40 @@ type CodesphereEnvironment struct {
 	ControlPlaneNodes []*node.Node `json:"control_plane_nodes,omitempty"`
 	CephNodes         []*node.Node `json:"ceph_nodes,omitempty"`
 	// ContainerRegistryURL is the resolved registry server all data centers pull images from.
-	ContainerRegistryURL          string       `json:"container_registry_url,omitempty"`
-	RegistryUsername              string       `json:"-"`
-	RegistryPassword              string       `json:"-"`
-	ExistingConfigUsed            bool         `json:"-"`
-	InstallVersion                string       `json:"install_version"`
-	InstallLocal                  string       `json:"install_local"`
-	InstallHash                   string       `json:"install_hash"`
-	InstallSkipSteps              []string     `json:"install_skip_steps"`
-	Preemptible                   bool         `json:"preemptible"`
-	SpotVMs                       bool         `json:"spot_vms"`
-	WriteConfig                   bool         `json:"-"`
-	RecoverConfig                 bool         `json:"-"`
-	GatewayIP                     string       `json:"gateway_ip,omitempty"`
-	PublicGatewayIP               string       `json:"public_gateway_ip,omitempty"`
-	SSHProxyIP                    string       `json:"ssh_proxy_ip,omitempty"`
-	RegistryType                  RegistryType `json:"registry_type"`
-	Airgapped                     bool         `json:"airgapped,omitempty"`
-	GitHubPAT                     string       `json:"-"`
-	GitHubAppName                 string       `json:"-"`
-	GitHubTeamOrg                 string       `json:"github_team_org"`
-	GitHubTeamSlug                string       `json:"github_team_slug"`
-	RegistryUser                  string       `json:"-"`
-	InternalFlags                 []string     `json:"internal"`
-	PreviewFlags                  []string     `json:"preview"`
-	FeatureFlags                  []string     `json:"feature_flags"`
-	ExternalLokiEndpoint          string       `json:"external_loki_endpoint,omitempty"`
-	ExternalLokiSecret            string       `json:"-"`
-	ExternalLokiUser              string       `json:"external_loki_user,omitempty"`
-	PrometheusRemoteWriteUser     string       `json:"prometheus_remote_write_user,omitempty"`
-	PrometheusRemoteWritePassword string       `json:"-"`
-	PrometheusRemoteWriteURL      string       `json:"prometheus_remote_write_url,omitempty"`
-	ClusterAdminEmail             string       `json:"cluster_admin_email,omitempty"`
+	ContainerRegistryURL          string         `json:"container_registry_url,omitempty"`
+	RegistryUsername              string         `json:"-"`
+	RegistryPassword              string         `json:"-"`
+	ExistingConfigUsed            bool           `json:"-"`
+	InstallVersion                string         `json:"install_version"`
+	InstallLocal                  string         `json:"install_local"`
+	InstallHash                   string         `json:"install_hash"`
+	InstallSkipSteps              []string       `json:"install_skip_steps"`
+	StorageBackend                StorageBackend `json:"storage_backend,omitempty"`
+	Preemptible                   bool           `json:"preemptible"`
+	SpotVMs                       bool           `json:"spot_vms"`
+	WriteConfig                   bool           `json:"-"`
+	RecoverConfig                 bool           `json:"-"`
+	GatewayIP                     string         `json:"gateway_ip,omitempty"`
+	PublicGatewayIP               string         `json:"public_gateway_ip,omitempty"`
+	SSHProxyIP                    string         `json:"ssh_proxy_ip,omitempty"`
+	RegistryType                  RegistryType   `json:"registry_type"`
+	Airgapped                     bool           `json:"airgapped,omitempty"`
+	GitHubPAT                     string         `json:"-"`
+	GitHubAppName                 string         `json:"-"`
+	GitHubTeamOrg                 string         `json:"github_team_org"`
+	GitHubTeamSlug                string         `json:"github_team_slug"`
+	RegistryUser                  string         `json:"-"`
+	InternalFlags                 []string       `json:"internal"`
+	PreviewFlags                  []string       `json:"preview"`
+	FeatureFlags                  []string       `json:"feature_flags"`
+	SignupAllowedDomains          []string       `json:"signup_allowed_domains,omitempty"`
+	ExternalLokiEndpoint          string         `json:"external_loki_endpoint,omitempty"`
+	ExternalLokiSecret            string         `json:"-"`
+	ExternalLokiUser              string         `json:"external_loki_user,omitempty"`
+	PrometheusRemoteWriteUser     string         `json:"prometheus_remote_write_user,omitempty"`
+	PrometheusRemoteWritePassword string         `json:"-"`
+	PrometheusRemoteWriteURL      string         `json:"prometheus_remote_write_url,omitempty"`
+	ClusterAdminEmail             string         `json:"cluster_admin_email,omitempty"`
 
 	// ACME Issuer
 	GoogleACMEIssuer bool `json:"google_acme_issuer,omitempty"`
@@ -445,6 +476,13 @@ func (b *GCPBootstrapper) Bootstrap() error {
 			return fmt.Errorf("failed to install k0s: %w", err)
 		}
 
+		if b.Env.usesGCPPDStorage() {
+			err = b.EnsureGCPStorage()
+			if err != nil {
+				return fmt.Errorf("failed to install GCP storage: %w", err)
+			}
+		}
+
 		err = b.InstallCodesphere()
 		if err != nil {
 			return fmt.Errorf("failed to install Codesphere: %w", err)
@@ -523,6 +561,10 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return fmt.Errorf("remote OMS binary not found at path: %s", b.Env.RemoteOmsBinaryPath)
 	}
 
+	if err := b.validateStorageBackend(); err != nil {
+		return err
+	}
+
 	for _, valuesFile := range b.Env.PCAppsValues {
 		if !b.fw.Exists(valuesFile) {
 			return fmt.Errorf("pc-apps values file not found at path: %s", valuesFile)
@@ -580,6 +622,59 @@ func (b *GCPBootstrapper) ValidateInput() error {
 	}
 
 	return b.validateTelemetryExportParams()
+}
+
+func (e *CodesphereEnvironment) effectiveStorageBackend() StorageBackend {
+	if e.StorageBackend == "" {
+		return StorageBackendCeph
+	}
+
+	return e.StorageBackend
+}
+
+func (e *CodesphereEnvironment) usesGCPPDStorage() bool {
+	return e.effectiveStorageBackend() == StorageBackendGCPPD
+}
+
+func (e *CodesphereEnvironment) effectiveSignupAllowedDomains() []string {
+	domains := e.SignupAllowedDomains
+	if domains == nil {
+		domains = DefaultSignupAllowedDomains
+	}
+
+	normalized := make([]string, 0, len(domains))
+	for _, domain := range domains {
+		if domain = strings.TrimSpace(domain); domain != "" {
+			normalized = append(normalized, domain)
+		}
+	}
+
+	return normalized
+}
+
+func (b *GCPBootstrapper) validateStorageBackend() error {
+	switch b.Env.effectiveStorageBackend() {
+	case StorageBackendCeph:
+		return nil
+	case StorageBackendGCPPD:
+		if b.Env.Airgapped {
+			return fmt.Errorf("storage-backend %q cannot be used with airgapped mode", StorageBackendGCPPD)
+		}
+
+		if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
+			if b.Env.RegistryUser == "" {
+				return fmt.Errorf("registry-user must be set when using storage-backend %q", StorageBackendGCPPD)
+			}
+
+			if b.Env.GitHubPAT == "" {
+				return fmt.Errorf("github-pat must be set when using storage-backend %q", StorageBackendGCPPD)
+			}
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("unsupported storage backend %q (supported: %s, %s)", b.Env.StorageBackend, StorageBackendCeph, StorageBackendGCPPD)
+	}
 }
 
 // validateMultiDC rejects flag combinations a multi-data-center bootstrap cannot satisfy.
@@ -1243,6 +1338,9 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 	// k0s is installed by OMS before the TypeScript installer runs, so the
 	// TypeScript Kubernetes step must never run during GCP bootstrapping.
 	skipSteps := []string{"kubernetes"}
+	if b.Env.usesGCPPDStorage() {
+		skipSteps = append(skipSteps, "ceph")
+	}
 	skipSteps = util.AppendUnique(skipSteps, b.Env.InstallSkipSteps...)
 
 	if b.Env.RegistryType == RegistryTypeGitHub {

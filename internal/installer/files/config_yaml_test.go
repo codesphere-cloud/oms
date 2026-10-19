@@ -34,6 +34,11 @@ var _ = Describe("ConfigYaml", func() {
 		sampleYaml = `registry:
   server: registry.example.com
 
+signUp:
+  email:
+    allowedDomains:
+      - "@example.com"
+
 codesphere:
   migration:
     postgres:
@@ -110,6 +115,7 @@ pcApps:
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(rootConfig.Registry.Server).To(Equal("registry.example.com"))
+			Expect(rootConfig.SignUp.Email.AllowedDomains).To(Equal([]string{"@example.com"}))
 			Expect(rootConfig.PcApps).To(HaveKey("spec"))
 			Expect(rootConfig.Codesphere.Migration).NotTo(BeNil())
 			Expect(rootConfig.Codesphere.Migration.Postgres).NotTo(BeNil())

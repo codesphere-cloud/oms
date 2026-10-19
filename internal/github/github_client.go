@@ -68,8 +68,8 @@ func NewGitHubClient(ctx context.Context, token string) (*RealGitHubClient, erro
 // graphQLResponse mirrors the shape of the teamMemberSSHKeysQuery response.
 type graphQLResponse struct {
 	Data struct {
-		Organization struct {
-			Team struct {
+		Organization *struct {
+			Team *struct {
 				Members struct {
 					PageInfo struct {
 						HasNextPage bool   `json:"hasNextPage"`
@@ -103,6 +103,12 @@ func (c *RealGitHubClient) GetTeamMemberSSHKeys(ctx context.Context, org, teamSl
 		resp, err := c.queryTeamMembers(ctx, org, teamSlug, after)
 		if err != nil {
 			return nil, err
+		}
+		if resp.Data.Organization == nil {
+			return nil, fmt.Errorf("GitHub organization %q was not found or is not visible to the token; verify the organization name and grant read:org to a classic token, or Members: read with organization approval to a fine-grained token; if the organization enforces SAML SSO, authorize the token for it", org)
+		}
+		if resp.Data.Organization.Team == nil {
+			return nil, fmt.Errorf("GitHub team %q was not found or is not visible in organization %q; verify the team slug (not its display name) and the token's organization permissions", teamSlug, org)
 		}
 
 		team := resp.Data.Organization.Team

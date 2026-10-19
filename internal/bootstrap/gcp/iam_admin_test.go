@@ -292,6 +292,7 @@ var _ = Describe("IAM & Admin", func() {
 			})
 			It("assigns roles correctly", func() {
 				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/compute.admin"}).Return(nil)
+				gc.EXPECT().AssignServiceAccountIAMRole(csEnv.ProjectID, "cloud-controller", "cloud-controller", csEnv.ProjectID, []string{"roles/iam.serviceAccountUser"}).Return(nil)
 				gc.EXPECT().AssignIAMRole(csEnv.DNSProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/dns.admin"}).Return(nil)
 				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "openfga-backup", csEnv.ProjectID, []string{"roles/storage.objectAdmin"}).Return(nil)
 				gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", csEnv.ProjectID, []string{"roles/artifactregistry.writer"}).Return(nil)
@@ -306,6 +307,7 @@ var _ = Describe("IAM & Admin", func() {
 				})
 				It("assigns DNS role to cloud-controller in main project", func() {
 					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/compute.admin"}).Return(nil)
+					gc.EXPECT().AssignServiceAccountIAMRole(csEnv.ProjectID, "cloud-controller", "cloud-controller", csEnv.ProjectID, []string{"roles/iam.serviceAccountUser"}).Return(nil)
 					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "cloud-controller", csEnv.ProjectID, []string{"roles/dns.admin"}).Return(nil)
 					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "openfga-backup", csEnv.ProjectID, []string{"roles/storage.objectAdmin"}).Return(nil)
 					gc.EXPECT().AssignIAMRole(csEnv.ProjectID, "artifact-registry-writer", csEnv.ProjectID, []string{"roles/artifactregistry.writer"}).Return(nil)

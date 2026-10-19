@@ -233,6 +233,11 @@ func (g *InstallConfig) applyProfileDev() error {
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "dev"
 	}
+	if g.Config.Cluster.PgOperator == nil {
+		g.Config.Cluster.PgOperator = &files.PgOperatorConfig{
+			Enabled: true,
+		}
+	}
 
 	g.ensureMonitoringDefaults("dev", false, false, false)
 	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {

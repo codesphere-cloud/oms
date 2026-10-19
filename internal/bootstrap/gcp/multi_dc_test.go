@@ -193,6 +193,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		gc.EXPECT().EnableAPIs(projectID, mock.Anything).Return(nil)
 		gc.EXPECT().CreateServiceAccount(projectID, "cloud-controller", "cloud-controller").Return("cc@p.iam.gserviceaccount.com", false, nil)
 		gc.EXPECT().AssignIAMRole(projectID, "cloud-controller", projectID, []string{"roles/compute.admin"}).Return(nil)
+		gc.EXPECT().AssignServiceAccountIAMRole(projectID, "cloud-controller", "cloud-controller", projectID, []string{"roles/iam.serviceAccountUser"}).Return(nil)
 		gc.EXPECT().AssignIAMRole("dns-project", "cloud-controller", projectID, []string{"roles/dns.admin"}).Return(nil)
 		// OpenFGA database backups: service account, storage role, bucket and HMAC key.
 		openfgaSA := "openfga-backup@" + projectID + ".iam.gserviceaccount.com"
