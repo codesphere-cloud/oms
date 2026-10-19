@@ -92,7 +92,7 @@ var _ = Describe("Config templating", func() {
 			config := map[string]any{}
 			Expect(yaml.Unmarshal(rendered, &config)).To(Succeed())
 
-			err = configtemplating.ValidateCodesphereSecretRefs(config)
+			err = configtemplating.CheckNoCodesphereSecretRefs(config)
 
 			if valid {
 				Expect(err).NotTo(HaveOccurred())

@@ -262,7 +262,7 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		merged = intutil.DeepMergeMaps(merged, partial)
 	}
 
-	if err := configtemplating.ValidateCodesphereSecretRefs(mergedSecretRefs); err != nil {
+	if err := configtemplating.CheckNoCodesphereSecretRefs(mergedSecretRefs); err != nil {
 		cleanup()
 		return nil, files.RootConfig{}, func() {}, fmt.Errorf("invalid install config: %w", err)
 	}

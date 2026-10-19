@@ -18,7 +18,7 @@ type SecretStore interface {
 
 const secretRefMarker = "__oms_secret_ref__"
 
-type secretFunc func(name string, selector ...string) (string, error)
+type secretResolver func(name string, selector ...string) (string, error)
 
 // RenderInstallConfigTemplate renders the given config template data, resolving
 // any `secret` template calls against store, and returns the rendered bytes.
@@ -34,17 +34,17 @@ func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error)
 }
 
 // RenderSecretRefs renders the given config template data with every `secret` call replaced by
-// a marker, so ValidateCodesphereSecretRefs can check where secrets are used without resolving them.
+// a marker, so CheckNoCodesphereSecretRefs can find where secrets are used without resolving them.
 func RenderSecretRefs(data []byte) ([]byte, error) {
 	return render(data, func(string, ...string) (string, error) {
 		return secretRefMarker, nil
 	})
 }
 
-// ValidateCodesphereSecretRefs rejects `secret` calls in the codesphere block of a config
+// CheckNoCodesphereSecretRefs rejects `secret` calls in the codesphere block of a config
 // rendered with RenderSecretRefs. Their values reach the Codesphere chart's ExternalSecrets in
 // plaintext. Dev releases are exempt; only they set codesphere.releaseName.
-func ValidateCodesphereSecretRefs(config map[string]any) error {
+func CheckNoCodesphereSecretRefs(config map[string]any) error {
 	codesphere, ok := config["codesphere"].(map[string]any)
 	if !ok {
 		return nil
@@ -61,7 +61,7 @@ func ValidateCodesphereSecretRefs(config map[string]any) error {
 	return nil
 }
 
-func render(data []byte, secret secretFunc) ([]byte, error) {
+func render(data []byte, secret secretResolver) ([]byte, error) {
 	tmpl, err := template.New("install-config").
 		Option("missingkey=error").
 		Funcs(template.FuncMap{"secret": secret}).
