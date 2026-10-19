@@ -321,7 +321,7 @@ func (c *PortalClient) RegisterAPIKey(owner string, organization string, role st
 		Owner        string    `json:"owner"`
 		Organization string    `json:"organization"`
 		Role         string    `json:"role"`
-		ExpiresAt    time.Time `json:"expires_at"`
+		ExpiresAt    time.Time `json:"expiresAt"`
 	}{
 		Owner:        owner,
 		Organization: organization,

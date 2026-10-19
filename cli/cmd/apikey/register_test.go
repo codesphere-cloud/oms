@@ -44,14 +44,15 @@ var _ = Describe("RegisterCmd", func() {
 	})
 
 	Context("when valid-for duration is valid", func() {
-		It("registers the API key successfully", func() {
+		DescribeTable("registers the API key with the requested validity", func(validFor string, days int) {
+			c.Opts.ValidFor = validFor
 			start := time.Now()
 			mockPortal.EXPECT().RegisterAPIKey(
 				owner,
 				organization,
 				role,
 				mock.MatchedBy(func(expiresAt time.Time) bool {
-					expected := start.Add(10 * 24 * time.Hour)
+					expected := start.Add(time.Duration(days) * 24 * time.Hour)
 					// Allow a small delta to avoid flakiness from runtime overhead.
 					return expiresAt.After(expected.Add(-2*time.Second)) && expiresAt.Before(expected.Add(2*time.Second))
 				}),
@@ -59,7 +60,10 @@ var _ = Describe("RegisterCmd", func() {
 			ak, err := c.Register(mockPortal)
 			Expect(err).To(BeNil())
 			Expect(ak).NotTo(BeNil())
-		})
+		},
+			Entry("two days", "2d", 2),
+			Entry("ten days", "10d", 10),
+		)
 
 		It("returns error if Register fails", func() {
 			mockPortal.EXPECT().RegisterAPIKey(owner, organization, role, mock.Anything).Return((*portal.ApiKey)(nil), fmt.Errorf("some error"))
