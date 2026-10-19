@@ -150,7 +150,9 @@ type CodesphereEnvironment struct {
 	PostgreSQLNode *node.Node `json:"postgres_node"`
 	// MultiDC bootstraps two data centers that share the PostgreSQL server but run separate
 	// Kubernetes and Ceph clusters.
-	MultiDC bool `json:"multi_dc"`
+	MultiDC             bool   `json:"multi_dc"`
+	SingleVM            bool   `json:"single_vm,omitempty"`
+	SingleVMMachineType string `json:"single_vm_machine_type,omitempty"`
 	// DataCenters holds the per-data-center state. It always has at least one entry.
 	DataCenters []*datacenter.DataCenter `json:"datacenters"`
 	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
@@ -174,6 +176,7 @@ type CodesphereEnvironment struct {
 	InstallCodesphereOnly         bool         `json:"-"`
 	Preemptible                   bool         `json:"preemptible"`
 	SpotVMs                       bool         `json:"spot_vms"`
+	SpotOnly                      bool         `json:"spot_only,omitempty"`
 	WriteConfig                   bool         `json:"-"`
 	RecoverConfig                 bool         `json:"-"`
 	GatewayIP                     string       `json:"gateway_ip,omitempty"`
@@ -214,10 +217,14 @@ type CodesphereEnvironment struct {
 	LocalTraceEndpoint     string `json:"-"`
 
 	// Config
-	InstallConfigPath string              `json:"-"`
-	SecretsFilePath   string              `json:"-"`
-	InstallConfig     *files.RootConfig   `json:"-"`
-	Secrets           *files.InstallVault `json:"-"`
+	InstallConfigPath         string              `json:"-"`
+	InstallConfigTemplatePath string              `json:"-"`
+	InstallConfigs            []string            `json:"-"`
+	InstallVaultPath          string              `json:"-"`
+	InstallVaultPrivKey       string              `json:"-"`
+	SecretsFilePath           string              `json:"-"`
+	InstallConfig             *files.RootConfig   `json:"-"`
+	Secrets                   *files.InstallVault `json:"-"`
 
 	// GCP Specific
 	ProjectDisplayName         string `json:"project_display_name"`
@@ -794,7 +801,15 @@ func (b *GCPBootstrapper) EnsureVPC() error {
 func (b *GCPBootstrapper) EnsureFirewallRules() error {
 	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", b.Env.ProjectID, b.Env.ProjectID)
 
-	err := b.createFirewallRules(network, baseFirewallRules())
+	rules := baseFirewallRules()
+	if b.Env.SingleVM {
+		for _, rule := range rules {
+			if rule.GetName() == "allow-ingress-web" {
+				rule.Allowed[0].Ports = append(rule.Allowed[0].Ports, "2222")
+			}
+		}
+	}
+	err := b.createFirewallRules(network, rules)
 	if err != nil {
 		return err
 	}

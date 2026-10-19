@@ -4,9 +4,15 @@
 package k0s
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 
 	packageio "github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/spf13/cobra"
@@ -33,6 +39,7 @@ type InstallK0sOpts struct {
 	installer.K0sctlConfigOpts
 	// K0sctlConfig is an existing k0sctl config to apply instead of generating one.
 	K0sctlConfig  string
+	Single        bool
 	K0sctlVersion string
 	Vault         string
 	VaultPrivKey  string
@@ -40,6 +47,12 @@ type InstallK0sOpts struct {
 }
 
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
+	if c.Opts.Single && (c.Opts.InstallConfig != "" || c.Opts.K0sctlConfig != "") {
+		return fmt.Errorf("--install-config and --config cannot be used with --single")
+	}
+	if !c.Opts.Single && c.Opts.InstallConfig == "" && c.Opts.K0sctlConfig == "" {
+		return fmt.Errorf("--install-config or --config is required unless --single is set")
+	}
 	hw := portal.NewHttpWrapper()
 	env := c.Env
 	pm := installer.NewPackage(env.GetOmsWorkdir(), c.Opts.Package)
@@ -56,8 +69,9 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 			Short: "Install k0s Kubernetes distribution",
 			Long: packageio.Long(`Install k0s either from the package or by downloading it.
 			This command uses k0sctl to deploy k0s clusters from a Codesphere install-config.
+			With --single, install a controller and worker on this machine without k0sctl or an install-config.
 			
-			You must provide a Codesphere install-config file, which will:
+			For multi-node deployment, provide a Codesphere install-config file, which will:
 			- Generate a k0s configuration from the install-config
 			- Generate a k0sctl configuration for cluster deployment
 			- Deploy k0s to all nodes defined in the install-config using k0sctl
@@ -72,6 +86,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 				{Cmd: "--ssh-key-path <path>", Desc: "SSH private key path for remote installation"},
 				{Cmd: "--force", Desc: "Force new download and installation"},
 				{Cmd: "--no-download", Desc: "Skip downloading k0s binary (expects it to be on remote nodes)"},
+				{Cmd: "--single --package <file>", Desc: "Install a single-node cluster on this machine using bundled k0s"},
 			}),
 		},
 		Opts:       InstallK0sOpts{GlobalOptions: opts},
@@ -87,12 +102,14 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.NoDownload, "no-download", false, "Skip downloading k0s binary")
 
+	k0s.cmd.Flags().BoolVar(&k0s.Opts.Single, "single", false, "Install a single-node controller and worker on this machine")
+
 	k0s.cmd.Flags().StringVar(&k0s.Opts.Vault, "vault", "", "Path to prod.vault.yaml to save the kubeconfig into (optional)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.VaultPrivKey, "vault-priv-key", "", "Path to the age private key to decrypt the vault (optional, for SOPS-encrypted vaults)")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
 
-	k0s.cmd.MarkFlagsOneRequired("install-config", "config")
-	k0s.cmd.MarkFlagsMutuallyExclusive("install-config", "config")
+	k0s.cmd.MarkFlagsOneRequired("install-config", "config", "single")
+	k0s.cmd.MarkFlagsMutuallyExclusive("install-config", "config", "single")
 
 	for _, flag := range []string{"version", "package", "ssh-key-path", "no-download"} {
 		k0s.cmd.MarkFlagsMutuallyExclusive("config", flag)
@@ -110,6 +127,10 @@ const vaultSecretNameKubeconfig = "kubeConfig"
 func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
 	if err := c.FileWriter.MkdirAll(c.Env.GetOmsWorkdir(), 0755); err != nil {
 		return fmt.Errorf("failed to create oms workdir: %w", err)
+	}
+
+	if c.Opts.Single {
+		return c.installSingle(pm, k0s)
 	}
 
 	k0sctlConfigPath, err := c.getK0sctlConfigPath(pm, k0s)
@@ -227,4 +248,178 @@ func (c *InstallK0sCmd) vaultStore() (vault.Vault, error) {
 		return nil, fmt.Errorf("failed to load vault: %w", err)
 	}
 	return vault, nil
+}
+
+func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer.K0sManager) error {
+	if c.Opts.SSHKeyPath != "" || c.Opts.Vault != "" {
+		return fmt.Errorf("--ssh-key-path and --vault are not supported with --single")
+	}
+
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("--single requires root privileges")
+	}
+
+	version, err := installer.ResolveK0sVersion(k0s, c.Opts.Version)
+	if err != nil {
+		return err
+	}
+
+	path, err := c.getK0sBinaryPath(pm, k0s, version)
+	if err != nil {
+		return err
+	}
+
+	const installedPath = "/usr/local/bin/k0s"
+	if path != "" && path != installedPath {
+		stagedPath := installedPath + ".new"
+		if out, err := exec.Command("install", "-m", "0755", path, stagedPath).CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to install k0s binary: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+
+		if err := os.Rename(stagedPath, installedPath); err != nil {
+			return fmt.Errorf("failed to activate k0s binary: %w", err)
+		}
+	}
+
+	if _, err := os.Stat(installedPath); err != nil {
+		return fmt.Errorf("k0s binary is unavailable at %s: %w", installedPath, err)
+	}
+
+	if _, err := os.Stat("/etc/systemd/system/k0scontroller.service"); os.IsNotExist(err) {
+		if out, err := exec.Command(installedPath, "install", "controller", "--single", "--enable-worker", "--no-taints=true").CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to install k0s controller: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+	} else if err != nil {
+		return fmt.Errorf("failed to inspect k0s service: %w", err)
+	}
+
+	if err := exec.Command("systemctl", "is-active", "--quiet", "k0scontroller").Run(); err != nil {
+		if out, err := exec.Command(installedPath, "start").CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to start k0s: %w: %s", err, strings.TrimSpace(string(out)))
+		}
+	}
+
+	statusCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	if err := waitForK0sReady(statusCtx, 2*time.Second, func(ctx context.Context) ([]byte, error) {
+		return exec.CommandContext(ctx, installedPath, "status", "-o", "json").CombinedOutput()
+	}); err != nil {
+		return fmt.Errorf("failed to wait for k0s installation: %w", err)
+	}
+
+	nodeCtx, cancelNodeWait := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancelNodeWait()
+
+	node, err := waitForK0sNode(nodeCtx, 2*time.Second, func(ctx context.Context) ([]byte, error) {
+		return exec.CommandContext(ctx, installedPath, "kubectl", "get", "nodes", "-o", "name").CombinedOutput()
+	})
+	if err != nil {
+		return fmt.Errorf("failed to wait for k0s node registration: %w", err)
+	}
+
+	if out, err := exec.CommandContext(nodeCtx, installedPath, "kubectl", "wait", "--for=condition=Ready", node, "--timeout=30m").CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to wait for k0s node: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	kubeconfig, err := exec.Command(installedPath, "kubeconfig", "admin").Output()
+	if err != nil {
+		return fmt.Errorf("failed to get k0s kubeconfig: %w", err)
+	}
+
+	kubeDir := "/root/.kube"
+	if err := os.MkdirAll(kubeDir, 0700); err != nil {
+		return fmt.Errorf("failed to create kubeconfig directory: %w", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(kubeDir, "config"), kubeconfig, 0600); err != nil {
+		return fmt.Errorf("failed to write kubeconfig: %w", err)
+	}
+
+	return nil
+}
+
+func waitForK0sNode(ctx context.Context, interval time.Duration, listNodes func(context.Context) ([]byte, error)) (string, error) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	var lastResult string
+
+	for {
+		out, err := listNodes(ctx)
+		if err == nil {
+			for _, node := range strings.Fields(string(out)) {
+				if strings.HasPrefix(node, "node/") {
+					return node, nil
+				}
+			}
+
+			lastResult = "no nodes registered: " + strings.TrimSpace(string(out))
+		} else {
+			lastResult = fmt.Sprintf("%v: %s", err, strings.TrimSpace(string(out)))
+		}
+
+		select {
+		case <-ctx.Done():
+			return "", fmt.Errorf("%w (last node query: %s)", ctx.Err(), lastResult)
+		case <-ticker.C:
+		}
+	}
+}
+
+func waitForK0sReady(ctx context.Context, interval time.Duration, status func(context.Context) ([]byte, error)) error {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	var lastStatus string
+
+	for {
+		out, err := status(ctx)
+		if err == nil {
+			var state struct {
+				Pid                         int
+				Role                        string
+				WorkerToAPIConnectionStatus struct {
+					Success bool
+					Message string
+				}
+			}
+			if err = json.Unmarshal(out, &state); err == nil && state.Pid > 0 && state.Role == "controller" && state.WorkerToAPIConnectionStatus.Success {
+				return nil
+			}
+
+			if err == nil {
+				lastStatus = fmt.Sprintf("pid=%d role=%q apiReady=%t: %s", state.Pid, state.Role, state.WorkerToAPIConnectionStatus.Success, state.WorkerToAPIConnectionStatus.Message)
+			}
+		}
+
+		if err != nil {
+			lastStatus = fmt.Sprintf("%v: %s", err, strings.TrimSpace(string(out)))
+		}
+
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("%w (last k0s status: %s)", ctx.Err(), lastStatus)
+		case <-ticker.C:
+		}
+	}
+}
+
+func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s installer.K0sManager, k0sVersion string) (string, error) {
+	if c.Opts.NoDownload {
+		return "", nil
+	}
+
+	if c.Opts.Package != "" {
+		if err := pm.ExtractDependency("kubernetes/files/k0s", c.Opts.Force, c.Opts.Verbose); err != nil {
+			return "", fmt.Errorf("failed to extract k0s from package: %w", err)
+		}
+		return pm.GetDependencyPath("kubernetes/files/k0s"), nil
+	}
+
+	k0sBinaryPath, err := k0s.Download(k0sVersion, installer.DownloadOptions{Force: c.Opts.Force})
+	if err != nil {
+		return "", fmt.Errorf("failed to download k0s: %w", err)
+	}
+	return k0sBinaryPath, nil
 }
