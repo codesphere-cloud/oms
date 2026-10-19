@@ -216,76 +216,65 @@ pcApps:
 	})
 
 	Context("with secret templates in the codesphere block", func() {
-		var (
-			tmpDir    string
-			basePath  string
-			vaultPath string
-		)
+		const codesphereSecretConfig = `
+codesphere:
+  override:
+    clientSecret: '{{ secret "oidcClientSecret" }}'
+`
 
-		writeConfig := func(name, content string) string {
-			path := filepath.Join(tmpDir, name)
-			Expect(os.WriteFile(path, []byte(content), 0600)).To(Succeed())
-
-			return path
-		}
-
-		prepare := func(configs ...string) (files.RootConfig, error) {
-			opts := &InstallCodesphereOpts{Configs: configs, Vault: vaultPath, VaultType: "plain"}
-			_, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
-			cleanup()
-
-			return cfg, err
-		}
-
-		BeforeEach(func() {
-			tmpDir = GinkgoT().TempDir()
+		prepareWithVault := func(configs ...string) (files.RootConfig, error) {
+			tmpDir := GinkgoT().TempDir()
 			testVault := &files.InstallVault{
 				Secrets: []files.SecretEntry{{Name: "oidcClientSecret", File: &files.SecretFile{Content: "from-vault"}}},
 			}
 			vaultYAML, err := testVault.Marshal()
 			Expect(err).ToNot(HaveOccurred())
 
-			vaultPath = writeConfig("prod.vault.yaml", string(vaultYAML))
-			basePath = writeConfig("base.yaml", `
-codesphere:
-  override:
-    clientSecret: '{{ secret "oidcClientSecret" }}'
-`)
-		})
+			vaultPath := filepath.Join(tmpDir, "prod.vault.yaml")
+			Expect(os.WriteFile(vaultPath, vaultYAML, 0600)).To(Succeed())
+
+			configPaths := []string{}
+
+			for i, config := range configs {
+				configPath := filepath.Join(tmpDir, fmt.Sprintf("config-%d.yaml", i))
+				Expect(os.WriteFile(configPath, []byte(config), 0600)).To(Succeed())
+				configPaths = append(configPaths, configPath)
+			}
+
+			opts := &InstallCodesphereOpts{Configs: configPaths, Vault: vaultPath, VaultType: "plain"}
+			_, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
+			cleanup()
+
+			return cfg, err
+		}
 
 		It("rejects a config without a release name", func() {
-			_, err := prepare(basePath)
+			_, err := prepareWithVault(codesphereSecretConfig)
 
 			Expect(err).To(MatchError(ContainSubstring("secret templates are not supported in the codesphere block")))
 		})
 
 		It("accepts a secret outside the codesphere block", func() {
-			configPath := writeConfig("cluster.yaml", `
+			cfg, err := prepareWithVault(`
 cluster:
   certificates:
     override:
       api-token: '{{ secret "oidcClientSecret" }}'
 `)
 
-			cfg, err := prepare(configPath)
-
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.Cluster.Certificates.Override).To(HaveKeyWithValue("api-token", "from-vault"))
 		})
 
 		It("accepts the secret when an overlay sets the release name", func() {
-			overlayPath := writeConfig("overlay.yaml", "codesphere:\n  releaseName: codesphere-preview\n")
-
-			cfg, err := prepare(basePath, overlayPath)
+			cfg, err := prepareWithVault(codesphereSecretConfig, "codesphere:\n  releaseName: codesphere-preview\n")
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.Codesphere.Override).To(HaveKeyWithValue("clientSecret", "from-vault"))
 		})
 
 		It("accepts the config when an overlay replaces the secret with a literal", func() {
-			overlayPath := writeConfig("overlay.yaml", "codesphere:\n  override:\n    clientSecret: literal\n")
-
-			cfg, err := prepare(basePath, overlayPath)
+			cfg, err := prepareWithVault(codesphereSecretConfig, "codesphere:\n  override:\n    clientSecret: literal\n")
 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cfg.Codesphere.Override).To(HaveKeyWithValue("clientSecret", "literal"))
