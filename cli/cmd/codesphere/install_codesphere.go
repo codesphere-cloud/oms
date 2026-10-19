@@ -203,6 +203,10 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	var store *vault.VaultTemplatingSecretStore
 
 	if opts.Vault != "" {
+		if err := checkNoCodesphereSecretRefs(configFiles); err != nil {
+			return nil, files.RootConfig{}, func() {}, err
+		}
+
 		backend, err := vault.NewFromString(opts.VaultType, vault.Options{Path: opts.Vault, AgeKey: opts.PrivKey})
 		if err != nil {
 			return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to load vault: %w", err)
@@ -218,7 +222,6 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	}
 
 	merged := map[string]any{}
-	mergedSecretRefs := map[string]any{}
 	for _, configPath := range configFiles {
 		renderedPath := configPath
 		if opts.Vault != "" {
@@ -229,14 +232,6 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 			}
 			cleanupFns = append(cleanupFns, renderCleanup)
 			renderedPath = tmpPath
-
-			secretRefs, err := readSecretRefs(configPath)
-			if err != nil {
-				cleanup()
-				return nil, files.RootConfig{}, func() {}, err
-			}
-
-			mergedSecretRefs = intutil.DeepMergeMaps(mergedSecretRefs, secretRefs)
 		}
 
 		data, err := os.ReadFile(renderedPath)
@@ -260,11 +255,6 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 			}
 		}
 		merged = intutil.DeepMergeMaps(merged, partial)
-	}
-
-	if err := configtemplating.CheckNoCodesphereSecretRefs(mergedSecretRefs); err != nil {
-		cleanup()
-		return nil, files.RootConfig{}, func() {}, fmt.Errorf("invalid install config: %w", err)
 	}
 
 	mergedBytes, err := yaml.Marshal(merged)
@@ -311,6 +301,27 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	effectiveOpts.Configs = append([]string(nil), configFiles...)
 
 	return &effectiveOpts, cfg, cleanup, nil
+}
+
+// checkNoCodesphereSecretRefs merges the configs like prepareInstallConfig does, because an
+// overlay can set the release name that exempts the base config's secrets.
+func checkNoCodesphereSecretRefs(configFiles []string) error {
+	merged := map[string]any{}
+
+	for _, configPath := range configFiles {
+		secretRefs, err := readSecretRefs(configPath)
+		if err != nil {
+			return err
+		}
+
+		merged = intutil.DeepMergeMaps(merged, secretRefs)
+	}
+
+	if err := configtemplating.CheckNoCodesphereSecretRefs(merged); err != nil {
+		return fmt.Errorf("invalid install config: %w", err)
+	}
+
+	return nil
 }
 
 // readSecretRefs parses configPath with its secret calls replaced by markers instead of values.
