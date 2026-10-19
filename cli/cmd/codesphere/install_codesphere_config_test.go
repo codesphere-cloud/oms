@@ -259,6 +259,20 @@ codesphere:
 			Expect(err).To(MatchError(ContainSubstring("secret templates are not supported in the codesphere block")))
 		})
 
+		It("accepts a secret outside the codesphere block", func() {
+			configPath := writeConfig("cluster.yaml", `
+cluster:
+  certificates:
+    override:
+      api-token: '{{ secret "oidcClientSecret" }}'
+`)
+
+			cfg, err := prepare(configPath)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Cluster.Certificates.Override).To(HaveKeyWithValue("api-token", "from-vault"))
+		})
+
 		It("accepts the secret when an overlay sets the release name", func() {
 			overlayPath := writeConfig("overlay.yaml", "codesphere:\n  releaseName: codesphere-preview\n")
 
