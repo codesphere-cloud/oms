@@ -8,6 +8,7 @@ Install a Codesphere instance with the provided configuration file and private k
 When --package is omitted, operations.codesphere selects the version to download
 and reuse in OMS_WORKDIR. An explicit --package overrides the configured version.
 Uses the private-cloud-installer.js script included in the package to perform the installation.
+Use the dependencies and platform subcommands with --local-components for a prepared local cluster.
 
 ```
 oms install codesphere [flags]
@@ -42,6 +43,8 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
       --direct-connection            Use direct connection for installation, requires having access to the cluster nodes from your machine
   -f, --force                        Enforce package extraction
   -h, --help                         help for codesphere
+      --local-components             Run selected install components on the local host
+      --local-config-dir string      Config directory for local install components
   -p, --package string               Package file to use. This flag overrides the version specified in the configuration file.
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
   -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)
