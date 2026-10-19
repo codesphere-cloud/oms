@@ -30,6 +30,10 @@ func TestBootstrapGcpSingleVMCommandIsSeparate(t *testing.T) {
 		t.Fatal("single VM install-version flag missing")
 	}
 
+	if flag := single.Flags().Lookup("spot-vms"); flag == nil || flag.DefValue != "false" {
+		t.Fatal("single VM spot-vms flag missing or has wrong default")
+	}
+
 	if flag := single.Flags().Lookup("storage-engine"); flag == nil || flag.DefValue != "rook-ceph" {
 		t.Fatal("single VM storage-engine flag missing or has wrong default")
 	}

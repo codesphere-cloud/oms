@@ -314,7 +314,7 @@ func TestSingleVMForwardsStorageEngine(t *testing.T) {
 			strings.Contains(command, "--ceph-device-filter '^sdb$'")
 	})).Return(nil)
 
-	if err := b.installSingleVMCodesphere("user", "^sdb$", "local"); err != nil {
+	if err := b.installSingleVMCodesphere("user", "^sdb$", "local", false); err != nil {
 		t.Fatal(err)
 	}
 }

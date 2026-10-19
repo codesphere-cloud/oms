@@ -107,15 +107,6 @@ func SingleVMDef(machineType string) VMDef {
 // EnsureSingleVM provisions only the all-in-one host, using the same instance lifecycle and
 // Spot capacity fallback as the regular GCP bootstrap.
 func (b *GCPBootstrapper) EnsureSingleVM() error {
-	existing, err := b.GCPClient.GetInstance(b.Env.ProjectID, b.Env.Zone, "codesphere")
-	if err != nil && !IsNotFoundError(err) {
-		return fmt.Errorf("failed to inspect existing single VM: %w", err)
-	}
-
-	if existing != nil && existing.GetScheduling().GetProvisioningModel() != "SPOT" {
-		return fmt.Errorf("existing codesphere VM is not a Spot VM")
-	}
-
 	sshKeys, err := b.getSSHKeys()
 	if err != nil {
 		return fmt.Errorf("failed to determine SSH keys: %w", err)

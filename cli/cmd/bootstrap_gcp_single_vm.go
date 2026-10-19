@@ -30,6 +30,7 @@ type BootstrapGcpSingleVMCmd struct {
 	CephDeviceFilter string
 	StorageEngine    string
 	SSHQuiet         bool
+	StepTimer        bool
 }
 
 // AddBootstrapGcpSingleVMCmd registers the all-in-one test installation separately from
@@ -37,17 +38,18 @@ type BootstrapGcpSingleVMCmd struct {
 func AddBootstrapGcpSingleVMCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	c := &BootstrapGcpSingleVMCmd{
 		Env:              env.NewEnv(),
-		CodesphereEnv:    &gcp.CodesphereEnvironment{SpotVMs: true},
+		CodesphereEnv:    &gcp.CodesphereEnvironment{},
 		CephDeviceFilter: "^sdb$",
 	}
 	c.cmd = &cobra.Command{
 		Use:   "bootstrap-gcp-single-vm",
-		Short: "Bootstrap Codesphere on one GCP Spot VM",
-		Long:  "Create a single GCP Spot VM, install k0s, and run the local Codesphere bootstrap on it. For testing only.",
+		Short: "Bootstrap Codesphere on one GCP VM",
+		Long:  "Create a single GCP VM, install k0s, and run the local Codesphere bootstrap on it. For testing only.",
 		Args:  cobra.NoArgs,
 		RunE:  c.RunE,
 	}
 	f := c.cmd.Flags()
+	f.BoolVar(&c.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	f.StringVar(&c.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP project name")
 	f.StringVar(&c.CodesphereEnv.ProjectTTL, "project-ttl", "2h", "Project lifetime before cleanup")
 	f.StringVar(&c.CodesphereEnv.BillingAccount, "billing-account", "", "GCP billing account ID")
@@ -67,6 +69,7 @@ func AddBootstrapGcpSingleVMCmd(parent *cobra.Command, opts *util.GlobalOptions)
 	f.StringVar(&c.CodesphereEnv.InstallVaultPrivKey, "priv-key", "", "Age private key for --vault (or use the age key environment variable)")
 	f.StringVar(&c.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Local Linux amd64 OMS binary to run on the VM")
 	f.StringVar(&c.CodesphereEnv.SingleVMMachineType, "machine-type", "e2-standard-8", "GCP machine type")
+	f.BoolVar(&c.CodesphereEnv.SpotVMs, "spot-vms", false, "Use a Spot VM. Falls back to a standard VM if spot capacity unavailable (default: false)")
 	f.Int64Var(&c.CodesphereEnv.RootDiskSize, "root-disk-size", 100, "Boot disk size in GB; an additional 100 GB Ceph disk is created")
 	f.StringVar(&c.RegistryUser, "registry-user", "", "GHCR username for the local Codesphere installer")
 	f.StringVar(&c.CephDeviceFilter, "ceph-device-filter", "^sdb$", "Rook device name filter for the extra disk")
@@ -92,7 +95,7 @@ func (c *BootstrapGcpSingleVMCmd) RunE(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("OMS_REGISTRY_PASSWORD must be set for the local Codesphere installer")
 	}
 
-	stlog := bootstrap.NewStepLogger(false)
+	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
 
 	icg, err := installer.NewInstallConfigManager("plain", "")
 	if err != nil {
@@ -118,7 +121,7 @@ func (c *BootstrapGcpSingleVMCmd) RunE(_ *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to create GCP bootstrapper: %w", err)
 	}
 
-	if err := bs.BootstrapSingleVM(c.RegistryUser, c.CephDeviceFilter, c.StorageEngine); err != nil {
+	if err := bs.BootstrapSingleVM(c.RegistryUser, c.CephDeviceFilter, c.StorageEngine, c.StepTimer); err != nil {
 		return fmt.Errorf("failed to bootstrap single VM: %w", err)
 	}
 

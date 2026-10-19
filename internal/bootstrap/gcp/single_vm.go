@@ -24,13 +24,11 @@ const singleVMConfigPath = "/root/codesphere/config.yaml"
 const singleVMConfigTemplatePath = "/root/codesphere/config-template.yaml"
 const singleVMVaultPath = "/root/codesphere/prod.vault.yaml"
 
-// BootstrapSingleVM provisions one Spot VM and runs the local Codesphere installer there.
+// BootstrapSingleVM provisions one VM and runs the local Codesphere installer there.
 // It deliberately uses the local bootstrap's Rook and CloudNativePG setup instead of the
 // multi-host GCP bootstrap's dedicated Ceph and PostgreSQL machines.
-func (b *GCPBootstrapper) BootstrapSingleVM(registryUser, cephDeviceFilter, storageEngine string) error {
+func (b *GCPBootstrapper) BootstrapSingleVM(registryUser, cephDeviceFilter, storageEngine string, stepTimer bool) error {
 	b.Env.SingleVM = true
-	b.Env.SpotVMs = true
-	b.Env.SpotOnly = true
 
 	b.Env.GoogleACMEIssuer = true
 	if err := b.validateSingleVMPackageSource(); err != nil {
@@ -102,7 +100,9 @@ func (b *GCPBootstrapper) BootstrapSingleVM(registryUser, cephDeviceFilter, stor
 		{"Ensure installer package", b.ensureSingleVMPackage},
 		{"Provide install config", b.provideSingleVMConfig},
 		{"Install k0s", b.installSingleVMK0s},
-		{"Install Codesphere", func() error { return b.installSingleVMCodesphere(registryUser, cephDeviceFilter, storageEngine) }},
+		{"Install Codesphere", func() error {
+			return b.installSingleVMCodesphere(registryUser, cephDeviceFilter, storageEngine, stepTimer)
+		}},
 		{"Ensure DNS records", b.EnsureDNSRecords},
 		{"Write infrastructure file", b.WriteInfraFile},
 	}
@@ -352,7 +352,7 @@ func (b *GCPBootstrapper) installSingleVMK0s() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) installSingleVMCodesphere(registryUser, cephDeviceFilter, storageEngine string) error {
+func (b *GCPBootstrapper) installSingleVMCodesphere(registryUser, cephDeviceFilter, storageEngine string, stepTimer bool) error {
 	n := b.Env.Jumpbox
 	if err := n.RunSSHCommand("root", "test -n \"$OMS_REGISTRY_PASSWORD\""); err != nil {
 		return fmt.Errorf("registry password was not forwarded to the VM: %w", err)
@@ -367,6 +367,9 @@ func (b *GCPBootstrapper) installSingleVMCodesphere(registryUser, cephDeviceFilt
 		"--ceph-device-filter " + shellQuote(cephDeviceFilter),
 		"--storage-engine " + shellQuote(storageEngine),
 		"--expose-shared",
+	}
+	if stepTimer {
+		args = append(args, "--timer")
 	}
 
 	command := "KUBECONFIG=/root/.kube/config " + strings.Join(args, " ")

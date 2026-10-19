@@ -1,10 +1,10 @@
 ## oms beta bootstrap-gcp-single-vm
 
-Bootstrap Codesphere on one GCP Spot VM
+Bootstrap Codesphere on one GCP VM
 
 ### Synopsis
 
-Create a single GCP Spot VM, install k0s, and run the local Codesphere bootstrap on it. For testing only.
+Create a single GCP VM, install k0s, and run the local Codesphere bootstrap on it. For testing only.
 
 ```
 oms beta bootstrap-gcp-single-vm [flags]
@@ -32,10 +32,12 @@ oms beta bootstrap-gcp-single-vm [flags]
       --registry-user string             GHCR username for the local Codesphere installer
       --remote-oms-binary string         Local Linux amd64 OMS binary to run on the VM
       --root-disk-size int               Boot disk size in GB; an additional 100 GB Ceph disk is created (default 100)
+      --spot-vms                         Use a Spot VM. Falls back to a standard VM if spot capacity unavailable (default: false)
       --ssh-private-key-path string      SSH private key path (default "~/.ssh/id_rsa")
       --ssh-public-key-path string       SSH public key path (default "~/.ssh/id_rsa.pub")
       --ssh-quiet                        Suppress SSH command output
       --storage-engine string            Storage engine for the local installer (supported: rook-ceph, local) (default "rook-ceph")
+      --timer                            Show how long each step took after it finishes
       --vault string                     SOPS vault for config templating and initial install secrets
       --zone string                      GCP zone (default "europe-west4-a")
 ```
@@ -51,3 +53,4 @@ oms beta bootstrap-gcp-single-vm [flags]
 * [oms beta](oms_beta.md)	 - Commands for early testing
 * [oms beta bootstrap-gcp-single-vm cleanup](oms_beta_bootstrap-gcp-single-vm_cleanup.md)	 - Clean up GCP infrastructure created by bootstrap-gcp
 * [oms beta bootstrap-gcp-single-vm restart-vms](oms_beta_bootstrap-gcp-single-vm_restart-vms.md)	 - Restart stopped or terminated GCP VMs
+
