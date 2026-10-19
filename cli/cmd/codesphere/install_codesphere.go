@@ -309,12 +309,12 @@ func checkNoCodesphereSecretRefs(configFiles []string) error {
 	merged := map[string]any{}
 
 	for _, configPath := range configFiles {
-		secretRefs, err := readSecretRefs(configPath)
+		config, err := readConfigWithSecretMarkers(configPath)
 		if err != nil {
 			return err
 		}
 
-		merged = intutil.DeepMergeMaps(merged, secretRefs)
+		merged = intutil.DeepMergeMaps(merged, config)
 	}
 
 	if err := configtemplating.CheckNoCodesphereSecretRefs(merged); err != nil {
@@ -324,24 +324,23 @@ func checkNoCodesphereSecretRefs(configFiles []string) error {
 	return nil
 }
 
-// readSecretRefs parses configPath with its secret calls replaced by markers instead of values.
-func readSecretRefs(configPath string) (map[string]any, error) {
+func readConfigWithSecretMarkers(configPath string) (map[string]any, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	}
 
-	rendered, err := configtemplating.RenderSecretRefs(data)
+	rendered, err := configtemplating.RenderSecretMarkers(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to render secret references in %s: %w", configPath, err)
+		return nil, fmt.Errorf("failed to render secret markers in %s: %w", configPath, err)
 	}
 
-	secretRefs := map[string]any{}
-	if err := yaml.Unmarshal(rendered, &secretRefs); err != nil {
+	config := map[string]any{}
+	if err := yaml.Unmarshal(rendered, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file %s: %w", configPath, err)
 	}
 
-	return secretRefs, nil
+	return config, nil
 }
 
 // ensureCodespherePackageForVersion preserves explicit packages and resolves config-selected

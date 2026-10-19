@@ -33,16 +33,16 @@ func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error)
 	})
 }
 
-// RenderSecretRefs renders the given config template data with every `secret` call replaced by
+// RenderSecretMarkers renders the given config template data with every `secret` call replaced by
 // a marker, so CheckNoCodesphereSecretRefs can find where secrets are used without resolving them.
-func RenderSecretRefs(data []byte) ([]byte, error) {
+func RenderSecretMarkers(data []byte) ([]byte, error) {
 	return render(data, func(string, ...string) (string, error) {
 		return secretRefMarker, nil
 	})
 }
 
 // CheckNoCodesphereSecretRefs rejects `secret` calls in the codesphere block of a config
-// rendered with RenderSecretRefs. Their values reach the Codesphere chart's ExternalSecrets in
+// rendered with RenderSecretMarkers. Their values reach the Codesphere chart's ExternalSecrets in
 // plaintext. Dev releases, the only ones that set codesphere.releaseName, are exempt for now
 // (only use case atm.). Long term config and secrets should be more strictly separated, i.e. no
 // secrets in config.yml (requires some changes in auth-service).
