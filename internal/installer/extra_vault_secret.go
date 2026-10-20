@@ -13,6 +13,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"go.yaml.in/yaml/v3"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/validation"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -34,36 +36,49 @@ func ValidateExtraVaultSecretName(name string) error {
 	return nil
 }
 
-// NeedsExtraVaultSecret reports whether this run writes the extra vault Secret. A skipped
-// deploy must not rewrite it: the freshly signed tokens change its data, and Reloader would
-// restart the running release.
-func NeedsExtraVaultSecret(cfg files.RootConfig, skipSteps []string, secretName string) bool {
-	return secretName != "" && !IsStepSkipped(cfg, skipSteps, CodesphereStep)
-}
-
-// WriteExtraVaultSecret signs fresh service account tokens, writes the vault into secretName
-// and returns the checksum of the written data.
+// WriteExtraVaultSecret signs fresh service account tokens and writes the vault into secretName.
 func WriteExtraVaultSecret(
 	ctx context.Context,
 	kubeClient ctrlclient.Client,
 	installVault *files.InstallVault,
 	secretName string,
-) (string, error) {
+) error {
 	if err := secrets.EnsureServiceAccountTokens(installVault); err != nil {
-		return "", fmt.Errorf("failed to ensure service account tokens: %w", err)
+		return fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
 
 	creator := vault.NewVaultSecretCreator(kubeClient)
 	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, secretName); err != nil {
-		return "", fmt.Errorf("failed to write vault secret %q: %w", secretName, err)
+		return fmt.Errorf("failed to write vault secret %q: %w", secretName, err)
 	}
 
-	checksum, err := vault.SecretDataChecksum(installVault)
+	return nil
+}
+
+// ChartVaultSecretName returns the vault Secret the chart's ExternalSecrets read.
+func ChartVaultSecretName(extraVaultSecret string) string {
+	if extraVaultSecret == "" {
+		return vault.VaultSecretName
+	}
+
+	return extraVaultSecret
+}
+
+// VaultSecretChecksum reads the vault Secret back from the cluster, so the checksum matches
+// what ESO reads, whichever phase or run wrote it. found is false when the Secret does not exist.
+func VaultSecretChecksum(ctx context.Context, kubeClient ctrlclient.Client, secretName string) (checksum string, found bool, err error) {
+	secret := &corev1.Secret{}
+
+	err = kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: vault.VaultSecretNamespace, Name: secretName}, secret)
+	if apierrors.IsNotFound(err) {
+		return "", false, nil
+	}
+
 	if err != nil {
-		return "", fmt.Errorf("failed to checksum vault secret %q: %w", secretName, err)
+		return "", false, fmt.Errorf("failed to read %q: %w", secretName, err)
 	}
 
-	return checksum, nil
+	return vault.SecretDataChecksum(secret.Data), true, nil
 }
 
 // AddExternalSecretsChecksum sets codesphere.override.global.externalSecretsChecksum in the

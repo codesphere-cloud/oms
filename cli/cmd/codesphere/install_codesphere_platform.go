@@ -6,6 +6,7 @@ package codesphere
 import (
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"runtime"
 
@@ -50,8 +51,10 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 
-	if installer.NeedsExtraVaultSecret(cfg, opts.SkipSteps, opts.ExtraVaultSecret) {
-		if err := writeExtraVaultSecret(ctx, opts, cfg); err != nil {
+	// A skipped deploy must not rewrite the extra Secret: its freshly signed tokens would make
+	// Reloader restart the running release.
+	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep) {
+		if err := prepareChartVaultSecret(ctx, opts, cfg); err != nil {
 			return err
 		}
 	}
@@ -86,9 +89,9 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	return nil
 }
 
-// writeExtraVaultSecret writes the vault into the extra Secret a release's ExternalSecrets read,
-// and passes its checksum to the chart through the merged config.
-func writeExtraVaultSecret(
+// prepareChartVaultSecret writes the extra vault Secret if one is requested and passes the
+// checksum of the Secret the chart reads to the chart through the merged config.
+func prepareChartVaultSecret(
 	ctx context.Context,
 	opts *InstallCodesphereOpts,
 	cfg files.RootConfig,
@@ -103,9 +106,22 @@ func writeExtraVaultSecret(
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
-	checksum, err := installer.WriteExtraVaultSecret(ctx, kubeClient, installVault, opts.ExtraVaultSecret)
+	if opts.ExtraVaultSecret != "" {
+		if err := installer.WriteExtraVaultSecret(ctx, kubeClient, installVault, opts.ExtraVaultSecret); err != nil {
+			return fmt.Errorf("failed to write extra vault secret: %w", err)
+		}
+	}
+
+	secretName := installer.ChartVaultSecretName(opts.ExtraVaultSecret)
+
+	checksum, found, err := installer.VaultSecretChecksum(ctx, kubeClient, secretName)
 	if err != nil {
-		return fmt.Errorf("failed to write extra vault secret: %w", err)
+		return fmt.Errorf("failed to checksum the chart's vault secret: %w", err)
+	}
+
+	if !found {
+		log.Printf("Vault secret %q not found, not passing a vault checksum to the chart", secretName)
+		return nil
 	}
 
 	if err := installer.AddExternalSecretsChecksum(opts.ConfigPath, checksum); err != nil {

@@ -137,32 +137,22 @@ var _ = Describe("vaultToSecretData", func() {
 })
 
 var _ = Describe("SecretDataChecksum", func() {
-	It("does not depend on the order of the vault entries", func() {
-		first := &files.InstallVault{Secrets: []files.SecretEntry{
-			{Name: "a", Fields: &files.SecretFields{Password: "1"}},
-			{Name: "b", File: &files.SecretFile{Name: "b", Content: "2"}},
-		}}
-		second := &files.InstallVault{Secrets: []files.SecretEntry{first.Secrets[1], first.Secrets[0]}}
+	It("does not depend on the order the keys were added in", func() {
+		first := map[string][]byte{}
+		first["a"] = []byte("1")
+		first["b"] = []byte("2")
+		second := map[string][]byte{}
+		second["b"] = []byte("2")
+		second["a"] = []byte("1")
 
-		Expect(SecretDataChecksum(first)).To(Equal(must(SecretDataChecksum(second))))
+		Expect(SecretDataChecksum(first)).To(Equal(SecretDataChecksum(second)))
 	})
 
 	It("changes when a value changes", func() {
-		before := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "a", Fields: &files.SecretFields{Password: "1"}}}}
-		after := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "a", Fields: &files.SecretFields{Password: "2"}}}}
-
-		Expect(SecretDataChecksum(before)).ToNot(Equal(must(SecretDataChecksum(after))))
+		Expect(SecretDataChecksum(map[string][]byte{"a": []byte("1")})).ToNot(Equal(SecretDataChecksum(map[string][]byte{"a": []byte("2")})))
 	})
 
 	It("tells apart data that only differs in where a key ends and its value starts", func() {
-		left := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "ab", File: &files.SecretFile{Content: "c"}}}}
-		right := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "a", File: &files.SecretFile{Content: "bc"}}}}
-
-		Expect(SecretDataChecksum(left)).ToNot(Equal(must(SecretDataChecksum(right))))
+		Expect(SecretDataChecksum(map[string][]byte{"ab": []byte("c")})).ToNot(Equal(SecretDataChecksum(map[string][]byte{"a": []byte("bc")})))
 	})
 })
-
-func must(checksum string, err error) string {
-	Expect(err).ToNot(HaveOccurred())
-	return checksum
-}

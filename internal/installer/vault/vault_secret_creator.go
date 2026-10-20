@@ -109,13 +109,8 @@ func (v *VaultSecretCreator) ensureNamespace(ctx context.Context, namespace stri
 	return nil
 }
 
-// SecretDataChecksum returns a SHA-256 over the secret data CreateSecretFromVault writes for vault.
-func SecretDataChecksum(vault *files.InstallVault) (string, error) {
-	secretData, err := vaultToSecretData(vault)
-	if err != nil {
-		return "", err
-	}
-
+// SecretDataChecksum returns a SHA-256 over the data of a Secret, independent of key order.
+func SecretDataChecksum(secretData map[string][]byte) string {
 	keys := make([]string, 0, len(secretData))
 	for key := range secretData {
 		keys = append(keys, key)
@@ -132,7 +127,7 @@ func SecretDataChecksum(vault *files.InstallVault) (string, error) {
 		hash.Write([]byte{0})
 	}
 
-	return hex.EncodeToString(hash.Sum(nil)), nil
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 // vaultToSecretData converts the entries of an InstallVault into Kubernetes secret data.
