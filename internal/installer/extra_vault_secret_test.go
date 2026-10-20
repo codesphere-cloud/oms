@@ -53,44 +53,40 @@ func parseRootConfig(yamlConfig string) files.RootConfig {
 	return cfg
 }
 
-var _ = Describe("UsesExternalSecrets", func() {
-	It("is true when the override enables global.externalSecrets", func() {
-		cfg := parseRootConfig("codesphere:\n  override:\n    global:\n      externalSecrets: true\n")
-		Expect(installer.UsesExternalSecrets(cfg.Codesphere)).To(BeTrue())
+var _ = Describe("ValidateExtraVaultSecretName", func() {
+	It("accepts an empty name, which turns the extra secret off", func() {
+		Expect(installer.ValidateExtraVaultSecretName("")).To(Succeed())
 	})
 
-	It("is false when the config has no override", func() {
-		Expect(installer.UsesExternalSecrets(files.CodesphereConfig{})).To(BeFalse())
+	It("accepts a valid Secret name", func() {
+		Expect(installer.ValidateExtraVaultSecretName("codesphere-pr-42-vault")).To(Succeed())
 	})
 
-	It("is false when externalSecrets is the string true rather than a boolean", func() {
-		cfg := parseRootConfig("codesphere:\n  override:\n    global:\n      externalSecrets: \"true\"\n")
-		Expect(installer.UsesExternalSecrets(cfg.Codesphere)).To(BeFalse())
+	It("rejects a name Kubernetes would refuse for a Secret", func() {
+		Expect(installer.ValidateExtraVaultSecretName("Codesphere_PR/42")).To(MatchError(ContainSubstring("invalid extra vault secret name")))
 	})
 })
 
-var _ = Describe("NeedsReleaseVault", func() {
-	const externalSecretsConfig = "codesphere:\n  override:\n    global:\n      externalSecrets: true\n"
-
-	It("is true when external secrets are on and the codesphere step runs", func() {
-		Expect(installer.NeedsReleaseVault(parseRootConfig(externalSecretsConfig), nil)).To(BeTrue())
+var _ = Describe("NeedsExtraVaultSecret", func() {
+	It("is true when a secret name is set and the codesphere step runs", func() {
+		Expect(installer.NeedsExtraVaultSecret(files.RootConfig{}, nil, "codesphere-pr-42-vault")).To(BeTrue())
 	})
 
 	It("is false when the codesphere step is skipped on the command line", func() {
-		Expect(installer.NeedsReleaseVault(parseRootConfig(externalSecretsConfig), []string{installer.CodesphereStep})).To(BeFalse())
+		Expect(installer.NeedsExtraVaultSecret(files.RootConfig{}, []string{installer.CodesphereStep}, "codesphere-pr-42-vault")).To(BeFalse())
 	})
 
 	It("is false when the config skips the codesphere step", func() {
-		cfg := parseRootConfig(externalSecretsConfig + "operations:\n  skip:\n    - codesphere\n")
-		Expect(installer.NeedsReleaseVault(cfg, nil)).To(BeFalse())
+		cfg := parseRootConfig("operations:\n  skip:\n    - codesphere\n")
+		Expect(installer.NeedsExtraVaultSecret(cfg, nil, "codesphere-pr-42-vault")).To(BeFalse())
 	})
 
-	It("is false when external secrets are off", func() {
-		Expect(installer.NeedsReleaseVault(files.RootConfig{}, nil)).To(BeFalse())
+	It("is false when no secret name is set", func() {
+		Expect(installer.NeedsExtraVaultSecret(files.RootConfig{}, nil, "")).To(BeFalse())
 	})
 })
 
-func setupReleaseVault() (ctrlclient.Client, *files.InstallVault) {
+func setupExtraVaultSecret() (ctrlclient.Client, *files.InstallVault) {
 	scheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
 	kubeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -110,36 +106,28 @@ func getCodesphereSecret(kubeClient ctrlclient.Client, name string) *corev1.Secr
 	return secret
 }
 
-var _ = Describe("WriteReleaseVaultSecret", func() {
-	It("writes the vault into <release>-vault for the configured release", func() {
-		kubeClient, installVault := setupReleaseVault()
-		cfg := parseRootConfig("codesphere:\n  releaseName: codesphere-pr-42\n").Codesphere
+var _ = Describe("WriteExtraVaultSecret", func() {
+	const secretName = "codesphere-pr-42-vault"
 
-		_, err := installer.WriteReleaseVaultSecret(context.Background(), kubeClient, installVault, cfg)
+	It("writes the vault into the given secret", func() {
+		kubeClient, installVault := setupExtraVaultSecret()
+
+		_, err := installer.WriteExtraVaultSecret(context.Background(), kubeClient, installVault, secretName)
 		Expect(err).ToNot(HaveOccurred())
 
-		Expect(getCodesphereSecret(kubeClient, "codesphere-pr-42-vault").Data).To(HaveKeyWithValue("oidcClientSecret.password", []byte("oidc-secret")))
-	})
-
-	It("writes codesphere-vault when the config sets no release name", func() {
-		kubeClient, installVault := setupReleaseVault()
-
-		_, err := installer.WriteReleaseVaultSecret(context.Background(), kubeClient, installVault, files.CodesphereConfig{})
-		Expect(err).ToNot(HaveOccurred())
-
-		Expect(getCodesphereSecret(kubeClient, "codesphere-vault").Data).To(HaveKey("oidcClientSecret.password"))
+		Expect(getCodesphereSecret(kubeClient, secretName).Data).To(HaveKeyWithValue("oidcClientSecret.password", []byte("oidc-secret")))
 	})
 
 	It("signs service account tokens the token public key verifies", func() {
-		kubeClient, installVault := setupReleaseVault()
+		kubeClient, installVault := setupExtraVaultSecret()
 
-		_, err := installer.WriteReleaseVaultSecret(context.Background(), kubeClient, installVault, files.CodesphereConfig{})
+		_, err := installer.WriteExtraVaultSecret(context.Background(), kubeClient, installVault, secretName)
 		Expect(err).ToNot(HaveOccurred())
 
 		publicKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(installVault.GetSecret(files.SecretTokenPublicKey).File.Content))
 		Expect(err).ToNot(HaveOccurred())
 
-		rawToken := getCodesphereSecret(kubeClient, "codesphere-vault").Data["authServiceUserToken.password"]
+		rawToken := getCodesphereSecret(kubeClient, secretName).Data["authServiceUserToken.password"]
 		claims := jwt.MapClaims{}
 		_, err = jwt.ParseWithClaims(string(rawToken), claims, func(*jwt.Token) (any, error) { return publicKey, nil },
 			jwt.WithValidMethods([]string{jwt.SigningMethodRS512.Alg()}))
@@ -147,40 +135,38 @@ var _ = Describe("WriteReleaseVaultSecret", func() {
 		Expect(claims).To(HaveKeyWithValue("serviceId", "auth-service"))
 	})
 
-	It("leaves the secrets of other releases and cs-vault untouched", func() {
-		kubeClient, installVault := setupReleaseVault()
-		for _, name := range []string{"cs-vault", "codesphere-vault"} {
+	It("leaves cs-vault and other vault secrets untouched", func() {
+		kubeClient, installVault := setupExtraVaultSecret()
+		for _, name := range []string{"cs-vault", "codesphere-pr-7-vault"} {
 			Expect(kubeClient.Create(context.Background(), &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "codesphere"},
 				Data:       map[string][]byte{"marker": []byte(name)},
 			})).To(Succeed())
 		}
 
-		cfg := parseRootConfig("codesphere:\n  releaseName: codesphere-pr-42\n").Codesphere
-
-		_, err := installer.WriteReleaseVaultSecret(context.Background(), kubeClient, installVault, cfg)
+		_, err := installer.WriteExtraVaultSecret(context.Background(), kubeClient, installVault, secretName)
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(getCodesphereSecret(kubeClient, "cs-vault").Data).To(Equal(map[string][]byte{"marker": []byte("cs-vault")}))
-		Expect(getCodesphereSecret(kubeClient, "codesphere-vault").Data).To(Equal(map[string][]byte{"marker": []byte("codesphere-vault")}))
+		Expect(getCodesphereSecret(kubeClient, "codesphere-pr-7-vault").Data).To(Equal(map[string][]byte{"marker": []byte("codesphere-pr-7-vault")}))
 	})
 
 	It("returns the checksum of the data it wrote, including the signed tokens", func() {
-		kubeClient, installVault := setupReleaseVault()
+		kubeClient, installVault := setupExtraVaultSecret()
 
-		checksum, err := installer.WriteReleaseVaultSecret(context.Background(), kubeClient, installVault, files.CodesphereConfig{})
+		checksum, err := installer.WriteExtraVaultSecret(context.Background(), kubeClient, installVault, secretName)
 		Expect(err).ToNot(HaveOccurred())
 
-		written := getCodesphereSecret(kubeClient, "codesphere-vault").Data
+		written := getCodesphereSecret(kubeClient, secretName).Data
 		Expect(written).To(HaveKey("authServiceUserToken.password"))
 		Expect(checksum).To(Equal(checksumOf(written)))
 	})
 
 	It("fails without writing a secret when the vault has no token private key", func() {
-		kubeClient, installVault := setupReleaseVault()
+		kubeClient, installVault := setupExtraVaultSecret()
 		installVault.RemoveSecret(files.SecretTokenPrivateKey)
 
-		_, err := installer.WriteReleaseVaultSecret(context.Background(), kubeClient, installVault, files.CodesphereConfig{})
+		_, err := installer.WriteExtraVaultSecret(context.Background(), kubeClient, installVault, secretName)
 		Expect(err).To(MatchError(ContainSubstring("tokenPrivateKey not found")))
 
 		secretList := &corev1.SecretList{}

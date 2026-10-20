@@ -46,14 +46,8 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 
-	// Each release gets its own vault Secret: releases sharing a cluster (master-dev and
-	// previews) would otherwise overwrite or drop each other's keys. It is written here,
-	// right before the release is deployed, not with cs-vault in the dependencies phase:
-	// previews and master-dev only run this phase, and a release can bring vault entries
-	// that did not exist when the dependencies phase last ran. cs-vault stays for the
-	// cluster-wide pc-applications charts.
-	if installer.NeedsReleaseVault(cfg, opts.SkipSteps) {
-		if err := writeReleaseVault(ctx, opts, cfg); err != nil {
+	if installer.NeedsExtraVaultSecret(cfg, opts.SkipSteps, opts.ExtraVaultSecret) {
+		if err := writeExtraVaultSecret(ctx, opts, cfg); err != nil {
 			return err
 		}
 	}
@@ -81,9 +75,9 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	return nil
 }
 
-// writeReleaseVault writes the vault into the release's own secret, which the umbrella chart's
-// ExternalSecrets read, and passes its checksum to the chart through the merged config.
-func writeReleaseVault(
+// writeExtraVaultSecret writes the vault into the extra Secret a release's ExternalSecrets read,
+// and passes its checksum to the chart through the merged config.
+func writeExtraVaultSecret(
 	ctx context.Context,
 	opts *InstallCodesphereOpts,
 	cfg files.RootConfig,
@@ -98,9 +92,9 @@ func writeReleaseVault(
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
-	checksum, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, cfg.Codesphere)
+	checksum, err := installer.WriteExtraVaultSecret(ctx, kubeClient, installVault, opts.ExtraVaultSecret)
 	if err != nil {
-		return fmt.Errorf("failed to write release vault secret: %w", err)
+		return fmt.Errorf("failed to write extra vault secret: %w", err)
 	}
 
 	if err := installer.AddExternalSecretsChecksum(opts.ConfigPath, checksum); err != nil {

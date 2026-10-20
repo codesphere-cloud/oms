@@ -131,5 +131,9 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 		skipStepFlag := codesphereCmd.PersistentFlags().Lookup("skip-steps")
 		Expect(skipStepFlag).NotTo(BeNil())
 		Expect(skipStepFlag.Shorthand).To(Equal("s"))
+
+		extraVaultSecretFlag := codesphereCmd.PersistentFlags().Lookup("extra-vault-secret")
+		Expect(extraVaultSecretFlag).NotTo(BeNil())
+		Expect(extraVaultSecretFlag.DefValue).To(Equal(""))
 	})
 })

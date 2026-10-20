@@ -7,66 +7,51 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"go.yaml.in/yaml/v3"
+	"k8s.io/apimachinery/pkg/util/validation"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	// defaultReleaseName matches the release name the TS installer falls back to.
-	defaultReleaseName = "codesphere"
+// configFileMode matches the merged install config, which can hold rendered vault values.
+const configFileMode = 0o600
 
-	// configFileMode matches the merged install config, which can hold rendered vault values.
-	configFileMode = 0o600
-)
-
-func releaseName(cfg files.CodesphereConfig) string {
-	if cfg.ReleaseName == "" {
-		return defaultReleaseName
+// ValidateExtraVaultSecretName rejects names Kubernetes would refuse for a Secret before any
+// install step runs.
+func ValidateExtraVaultSecretName(name string) error {
+	if name == "" {
+		return nil
 	}
 
-	return cfg.ReleaseName
-}
-
-// UsesExternalSecrets reports whether the install config turns on external secrets via
-// codesphere.override.global.externalSecrets. The TS installer passes that override to the
-// umbrella chart as Helm values.
-func UsesExternalSecrets(cfg files.CodesphereConfig) bool {
-	global, ok := cfg.Override["global"].(map[string]interface{})
-	if !ok {
-		return false
+	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {
+		return fmt.Errorf("invalid extra vault secret name %q: %s", name, strings.Join(problems, "; "))
 	}
 
-	enabled, ok := global["externalSecrets"].(bool)
-
-	return ok && enabled
+	return nil
 }
 
-// NeedsReleaseVault reports whether this run deploys a release that reads its vault through
-// external secrets. A skipped deploy must not rewrite the Secret: the freshly signed tokens
-// change its data, and Reloader would restart the running release.
-func NeedsReleaseVault(cfg files.RootConfig, skipSteps []string) bool {
-	return UsesExternalSecrets(cfg.Codesphere) && !IsStepSkipped(cfg, skipSteps, CodesphereStep)
+// NeedsExtraVaultSecret reports whether this run writes the extra vault Secret. A skipped
+// deploy must not rewrite it: the freshly signed tokens change its data, and Reloader would
+// restart the running release.
+func NeedsExtraVaultSecret(cfg files.RootConfig, skipSteps []string, secretName string) bool {
+	return secretName != "" && !IsStepSkipped(cfg, skipSteps, CodesphereStep)
 }
 
-// WriteReleaseVaultSecret signs fresh service account tokens, writes the vault into the
-// release's own secret and returns the checksum of the written data. Each release has its
-// own secret, so deploying one release never changes or removes what another release reads.
-func WriteReleaseVaultSecret(
+// WriteExtraVaultSecret signs fresh service account tokens, writes the vault into secretName
+// and returns the checksum of the written data.
+func WriteExtraVaultSecret(
 	ctx context.Context,
 	kubeClient ctrlclient.Client,
 	installVault *files.InstallVault,
-	cfg files.CodesphereConfig,
+	secretName string,
 ) (string, error) {
 	if err := secrets.EnsureServiceAccountTokens(installVault); err != nil {
 		return "", fmt.Errorf("failed to ensure service account tokens: %w", err)
 	}
-
-	// ESO reads the release's secrets from here.
-	secretName := releaseName(cfg) + "-vault"
 
 	creator := vault.NewVaultSecretCreator(kubeClient)
 	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, secretName); err != nil {

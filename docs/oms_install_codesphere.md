@@ -40,6 +40,7 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
       --codesphere-only              Install only Codesphere without dependencies
   -c, --config stringArray           Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order
       --direct-connection            Use direct connection for installation, requires having access to the cluster nodes from your machine
+      --extra-vault-secret string    Also write the vault into this Secret in the codesphere namespace before deploying Codesphere, e.g. for preview releases sharing a cluster
   -f, --force                        Enforce package extraction
   -h, --help                         help for codesphere
   -p, --package string               Package file to use. This flag overrides the version specified in the configuration file.

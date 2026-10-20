@@ -56,6 +56,7 @@ type InstallCodesphereOpts struct {
 	ArgoCDRepoURL        string
 	ArgoCDValues         []string
 	PCAppsValues         []string
+	ExtraVaultSecret     string
 }
 
 func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -153,6 +154,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRepoURL, "argo-repo", argocd.DefaultRepoURL, "ArgoCD Helm chart repository URL")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file (can be specified multiple times)")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ExtraVaultSecret, "extra-vault-secret", "", "Also write the vault into this Secret in the codesphere namespace before deploying Codesphere, e.g. for preview releases sharing a cluster")
 
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
 
@@ -175,6 +177,10 @@ func validateInstallCodesphereVault(opts *InstallCodesphereOpts) error {
 	err := vault.ValidateConfiguration(vault.TypeSOPS, opts.PrivKey)
 	if err != nil {
 		return fmt.Errorf("failed to validate install config: %w", err)
+	}
+
+	if err := installer.ValidateExtraVaultSecretName(opts.ExtraVaultSecret); err != nil {
+		return fmt.Errorf("failed to validate --extra-vault-secret: %w", err)
 	}
 
 	return nil
