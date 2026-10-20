@@ -96,6 +96,7 @@ func (c *BootstrapGcpSingleVMCmd) RunE(_ *cobra.Command, _ []string) error {
 	}
 
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
+	defer stlog.PrintSummary()
 
 	icg, err := installer.NewInstallConfigManager("plain", "")
 	if err != nil {
