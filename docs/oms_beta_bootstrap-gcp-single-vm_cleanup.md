@@ -40,7 +40,7 @@ $ oms beta bootstrap-gcp cleanup --project-id my-project --base-domain example.c
   -h, --help                    help for cleanup
       --project-id string       GCP Project ID to delete (optional, will use infra file if not provided)
       --skip-dns-cleanup        Skip cleaning up DNS records
-      --timer                   Show how long each step took after it finishes
+      --timer                   Show how long each step took and a final timing summary table
 ```
 
 ### Options inherited from parent commands

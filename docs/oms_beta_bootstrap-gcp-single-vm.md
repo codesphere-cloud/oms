@@ -37,7 +37,7 @@ oms beta bootstrap-gcp-single-vm [flags]
       --ssh-public-key-path string       SSH public key path (default "~/.ssh/id_rsa.pub")
       --ssh-quiet                        Suppress SSH command output
       --storage-engine string            Storage engine for the local installer (supported: rook-ceph, local) (default "rook-ceph")
-      --timer                            Show how long each step took after it finishes
+      --timer                            Show how long each step took and a final timing summary table
       --vault string                     SOPS vault for config templating and initial install secrets
       --zone string                      GCP zone (default "europe-west4-a")
 ```
