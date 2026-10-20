@@ -233,13 +233,15 @@ var _ = Describe("local bootstrap cluster components", func() {
 		Expect(manager.ValidateInstallConfig()).NotTo(ContainElement(ContainSubstring("pgOperator")))
 	})
 
-	It("with the minimal profile, setting the local cluster components disables barman where the PC installer reads it", func() {
+	It("with the minimal profile, setting the local cluster components keeps the profile's barman plugin", func() {
 		manager, err := installer.NewInstallConfigManager("plain", "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(manager.ApplyProfile(installer.PROFILE_MINIMAL)).To(Succeed())
+		profileBarman := *manager.GetInstallConfig().ManagedServiceBackends.BarmanCloudPlugin
 
 		setLocalClusterComponents(manager.GetInstallConfig())
 
-		Expect(manager.GetInstallConfig().ManagedServiceBackends.BarmanCloudPlugin.Enabled).To(BeFalse())
+		Expect(manager.GetInstallConfig().ManagedServiceBackends.BarmanCloudPlugin).To(Equal(&profileBarman))
+		Expect(profileBarman.Enabled).To(BeTrue())
 	})
 })
