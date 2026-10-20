@@ -441,7 +441,7 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
-		err = b.EnsureCodesphereInstalled()
+		err = b.InstallK0sAndCodesphere()
 		if err != nil {
 			return err
 		}
@@ -508,8 +508,9 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return fmt.Errorf("acme-staging cannot be combined with google-acme-issuer")
 	}
 
-	if b.Env.InstallCodesphereOnly && b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
-		return fmt.Errorf("install-codesphere-only requires install-version or install-local")
+	err := b.validateCodesphereOnly()
+	if err != nil {
+		return err
 	}
 
 	if b.Env.RemoteOmsBinaryPath != "" && !b.fw.Exists(b.Env.RemoteOmsBinaryPath) {
@@ -522,7 +523,7 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		}
 	}
 
-	err := b.validateInstallVersion()
+	err = b.validateInstallVersion()
 	if err != nil {
 		return err
 	}
@@ -573,6 +574,30 @@ func (b *GCPBootstrapper) ValidateInput() error {
 	}
 
 	return b.validateTelemetryExportParams()
+}
+
+// validateCodesphereOnly rejects a Codesphere-only install that has nothing to install, or that
+// would run without the existing config and vault: the bootstrap would then generate new secrets,
+// copy them to the jumpbox and install Codesphere against a database that expects the old ones.
+func (b *GCPBootstrapper) validateCodesphereOnly() error {
+	if !b.Env.InstallCodesphereOnly {
+		return nil
+	}
+
+	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
+		return fmt.Errorf("install-codesphere-only requires install-version or install-local")
+	}
+
+	if b.Env.RecoverConfig {
+		return nil
+	}
+
+	if !b.fw.Exists(b.Env.InstallConfigPath) || !b.fw.Exists(b.Env.SecretsFilePath) {
+		return fmt.Errorf("install-codesphere-only needs the existing install config and vault: pass --recover-config or keep %s and %s from the first bootstrap",
+			b.Env.InstallConfigPath, b.Env.SecretsFilePath)
+	}
+
+	return nil
 }
 
 // validateMultiDC rejects flag combinations a multi-data-center bootstrap cannot satisfy.
@@ -1076,11 +1101,13 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	return nil
 }
 
-// EnsureCodesphereInstalled installs k0s and Codesphere into every data center and then runs the
+// InstallK0sAndCodesphere installs k0s and Codesphere into every data center and then runs the
 // k0s config scripts. A Codesphere-only install leaves k0s alone, since the config script restarts
 // the k0s services of a cluster that is already running.
-func (b *GCPBootstrapper) EnsureCodesphereInstalled() error {
-	if !b.Env.InstallCodesphereOnly {
+func (b *GCPBootstrapper) InstallK0sAndCodesphere() error {
+	if b.Env.InstallCodesphereOnly {
+		log.Printf("Warning: installing only Codesphere. k0s, PostgreSQL, Ceph and the database keep their current state, so installing an older version than the running one, e.g. for a rollback, can fail or leave the instance broken.")
+	} else {
 		err := b.EnsureK0s()
 		if err != nil {
 			return fmt.Errorf("failed to install k0s: %w", err)

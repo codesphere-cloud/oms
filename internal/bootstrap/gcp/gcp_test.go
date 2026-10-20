@@ -135,19 +135,63 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("ValidateInput Codesphere-only install", func() {
 		BeforeEach(func() {
 			csEnv.InstallCodesphereOnly = true
+			csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
 		})
 
 		It("rejects a Codesphere-only install without a version or local package", func() {
 			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only requires install-version or install-local")))
 		})
 
-		It("accepts a Codesphere-only install of a local package", func() {
-			csEnv.InstallLocal = "installer-lite.tar.gz"
-			csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+		Context("when the config is recovered from the jumpbox", func() {
+			BeforeEach(func() {
+				csEnv.RecoverConfig = true
+			})
 
-			fw.EXPECT().Exists("installer-lite.tar.gz").Return(true)
+			It("accepts a Codesphere-only install of a local package", func() {
+				csEnv.InstallLocal = "installer-lite.tar.gz"
 
-			Expect(bs.ValidateInput()).To(Succeed())
+				fw.EXPECT().Exists("installer-lite.tar.gz").Return(true)
+
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("accepts a Codesphere-only install of a released version", func() {
+				csEnv.InstallVersion = "v1.2.3"
+
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.2.3", "").Return(portal.Build{
+					Hash:      "abc1234567890",
+					Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
+				}, nil)
+
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+		})
+
+		Context("when the config is not recovered", func() {
+			BeforeEach(func() {
+				csEnv.InstallLocal = "installer-lite.tar.gz"
+			})
+
+			It("accepts the install config and vault kept from the first bootstrap", func() {
+				fw.EXPECT().Exists("fake-config-file").Return(true)
+				fw.EXPECT().Exists("fake-secret").Return(true)
+				fw.EXPECT().Exists("installer-lite.tar.gz").Return(true)
+
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("rejects a missing install config, which would be generated anew", func() {
+				fw.EXPECT().Exists("fake-config-file").Return(false)
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only needs the existing install config and vault")))
+			})
+
+			It("rejects a missing vault, whose secrets would be generated anew", func() {
+				fw.EXPECT().Exists("fake-config-file").Return(true)
+				fw.EXPECT().Exists("fake-secret").Return(false)
+
+				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only needs the existing install config and vault")))
+			})
 		})
 	})
 
@@ -2074,7 +2118,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
-	Describe("EnsureCodesphereInstalled", func() {
+	Describe("InstallK0sAndCodesphere", func() {
 		const installCommand = "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images"
 
 		BeforeEach(func() {
@@ -2097,7 +2141,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
 
-			Expect(bs.EnsureCodesphereInstalled()).To(Succeed())
+			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
 		})
 
 		Context("when only Codesphere is installed", func() {
@@ -2108,13 +2152,22 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("given a running cluster, when Codesphere is installed, then only the Codesphere-only install runs and k0s is left untouched", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(nil)
 
-				Expect(bs.EnsureCodesphereInstalled()).To(Succeed())
+				Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+			})
+
+			It("given skip steps, when Codesphere is installed, then they are passed on together with --codesphere-only", func() {
+				csEnv.InstallSkipSteps = []string{"set-up-cluster"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+					"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,set-up-cluster,load-container-images --codesphere-only").Return(nil)
+
+				Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
 			})
 
 			It("given a failing install, when Codesphere is installed, then the install error is returned", func() {
 				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(fmt.Errorf("install error"))
 
-				Expect(bs.EnsureCodesphereInstalled()).To(MatchError(ContainSubstring("failed to install Codesphere")))
+				Expect(bs.InstallK0sAndCodesphere()).To(MatchError(ContainSubstring("failed to install Codesphere")))
 			})
 		})
 	})
