@@ -175,6 +175,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
+	defer stlog.PrintSummary()
 
 	icg, err := installer.NewInstallConfigManager("plain", "")
 	if err != nil {
