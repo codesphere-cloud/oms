@@ -446,6 +446,20 @@ var _ = Describe("PortalClient", func() {
 				Expect(build.Version).To(Equal("1.42.1"))
 			})
 
+			DescribeTable("rejects hashes that do not contain the stored hash as a prefix", func(hash string) {
+				_, err := client.GetBuild(portal.OmsProduct, "1.42.1", hash)
+				Expect(err).To(MatchError(ContainSubstring("not found")))
+			},
+				Entry("prefix", "last"),
+				Entry("different hash", "otherBuild"),
+			)
+
+			It("accepts a full hash when the portal stores an abbreviated hash", func() {
+				build, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuildExtra")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(build.Hash).To(Equal("lastBuild"))
+			})
+
 			It("returns the build matching version and hash", func() {
 				lastBuild, _ := time.Parse("2006-01-02", "2025-05-01")
 				build, err := client.GetBuild(portal.OmsProduct, "1.42.1", "lastBuild")
@@ -503,7 +517,25 @@ var _ = Describe("PortalClient", func() {
 
 		Context("when registration succeeds", func() {
 			BeforeEach(func() {
-				mockHttpClient.EXPECT().Do(mock.Anything).Return(&http.Response{
+				mockHttpClient.EXPECT().Do(mock.Anything).Run(func(req *http.Request) {
+					Expect(req.Method).To(Equal(http.MethodPost))
+					Expect(req.URL.String()).To(Equal(apiUrl + "/key/register"))
+					// Decode using the portal's camelCase API contract so an ignored
+					// expiration cannot silently fall back to the one-year default.
+					var input struct {
+						Owner        string    `json:"owner"`
+						Organization string    `json:"organization"`
+						Role         string    `json:"role"`
+						ExpiresAt    time.Time `json:"expiresAt"`
+					}
+					decoder := json.NewDecoder(req.Body)
+					decoder.DisallowUnknownFields()
+					Expect(decoder.Decode(&input)).To(Succeed())
+					Expect(input.Owner).To(Equal(owner))
+					Expect(input.Organization).To(Equal(organization))
+					Expect(input.Role).To(Equal(role))
+					Expect(input.ExpiresAt).To(Equal(expiresAt))
+				}).Return(&http.Response{
 					StatusCode: http.StatusOK,
 					Body:       io.NopCloser(bytes.NewReader(responseBody)),
 				}, nil)
@@ -514,6 +546,18 @@ var _ = Describe("PortalClient", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(key.KeyID).To(Equal("key-123"))
 				Expect(key.ApiKey).To(Equal("secret-key-data"))
+			})
+
+			It("preserves a two-day expiration in the registration request", func() {
+				expiresAt = time.Date(2026, 10, 18, 15, 12, 46, 273866000, time.UTC).Add(48 * time.Hour)
+				_, err := client.RegisterAPIKey(owner, organization, role, expiresAt)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("passes zero expiration for the portal's default validity", func() {
+				expiresAt = time.Time{}
+				_, err := client.RegisterAPIKey(owner, organization, role, expiresAt)
+				Expect(err).NotTo(HaveOccurred())
 			})
 		})
 	})

@@ -48,6 +48,8 @@ type InstallCodesphereOpts struct {
 	DirectConnection bool
 	AutoApprove      bool
 	StepTimer        bool
+	LocalComponents  bool
+	LocalConfigDir   string
 	// ArgoCD deployment (pre-step in Phase 2)
 	ArgoCDVersion        string
 	ArgoCDRegistryURL    string
@@ -60,6 +62,9 @@ type InstallCodesphereOpts struct {
 }
 
 func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
+	if c.Opts.LocalComponents {
+		return fmt.Errorf("--local-components requires install codesphere dependencies or install codesphere platform")
+	}
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
@@ -101,7 +106,7 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 
 	if dependenciesInstaller.HasExecutableSteps(cfg) || !installer.IsStepSkipped(cfg, c.Opts.SkipSteps, installer.ArgoCDStep) {
-		if err := installCodesphereDepencies(effectiveOpts, cfg, c.Env); err != nil {
+		if err := installCodesphereDepencies(ctx, effectiveOpts, cfg, c.Env); err != nil {
 			return err
 		}
 	}
@@ -121,7 +126,8 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 			Long: io.Long(`Install a Codesphere instance with the provided configuration file and private key.
 			When --package is omitted, operations.codesphere selects the version to download
 			and reuse in OMS_WORKDIR. An explicit --package overrides the configured version.
-			Uses the private-cloud-installer.js script included in the package to perform the installation.`),
+			Uses the private-cloud-installer.js script included in the package to perform the installation.
+			Use the dependencies and platform subcommands with --local-components for a prepared local cluster.`),
 			Example: util.FormatExamples("install codesphere", []io.Example{
 				{Cmd: "-c config.yaml -k <path-to-private-key>", Desc: "Install the operations.codesphere version, downloading it to OMS_WORKDIR if needed"},
 				{
@@ -146,6 +152,8 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.DirectConnection, "direct-connection", false, "Use direct connection for installation, requires having access to the cluster nodes from your machine")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.AutoApprove, "auto-approve", true, "Auto approve confirmation prompts with default values")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
+	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.LocalComponents, "local-components", false, "Run selected install components on the local host")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.LocalConfigDir, "local-config-dir", "", "Config directory for local install components")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDVersion, "argo-version", "", "ArgoCD Helm chart version to install")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryURL, "argo-registry-url", "", "OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)")
@@ -250,6 +258,12 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		if partial == nil {
 			partial = map[string]any{}
 		}
+		// Normalize legacy versions so an object overlay can supply only a hash.
+		if operations, ok := partial["operations"].(map[string]any); ok {
+			if version, ok := operations["codesphere"].(string); ok {
+				operations["codesphere"] = map[string]any{"version": version, "hash": ""}
+			}
+		}
 		merged = intutil.DeepMergeMaps(merged, partial)
 	}
 
@@ -311,7 +325,7 @@ func ensureCodespherePackageForVersion(opts *InstallCodesphereOpts, cfg files.Ro
 		return fmt.Errorf("failed to resolve install package version: %w", err)
 	}
 
-	opts.Package, err = portal.EnsureCodespherePackage(portal.NewPortalClient(), environment.GetOmsWorkdir(), version, "", "installer-lite.tar.gz", false)
+	opts.Package, err = portal.EnsureCodespherePackage(portal.NewPortalClient(), environment.GetOmsWorkdir(), version, cfg.Operations.Codesphere.Hash, "installer-lite.tar.gz", false)
 	if err != nil {
 		return fmt.Errorf("failed to prepare install package: %w", err)
 	}

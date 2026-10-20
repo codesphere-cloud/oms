@@ -10,9 +10,6 @@ This command generates two files:
 - config.yaml: Main configuration (infrastructure, networking, plans)
 - prod.vault.yaml: Secrets file (keys, certificates, passwords)
 
-Note: When --interactive=true (default), all other configuration flags are ignored 
-and you will be prompted for all settings interactively.
-
 Note: When using ansible-inventory make sure the inventory follows our supported structure.
 Supported YAML format (where 'hosts' is a dictionary of hostname keys):
 - <k8s-cp|k8s-workers|ceph>.hosts.<hostname>.private_ip
@@ -34,7 +31,7 @@ oms init install-config [flags]
 $ oms init install-config -c config.yaml --vault prod.vault.yaml
 
 # Use dev profile with defaults
-$ oms init install-config --profile dev -c config.yaml --vault prod.vault.yaml
+$ oms init install-config --profile dev --codesphere-version 1.111.0 --codesphere-hash abc123 -c config.yaml --vault prod.vault.yaml
 
 # Use production profile
 $ oms init install-config --profile production -c config.yaml --vault prod.vault.yaml
@@ -63,6 +60,8 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --ansible-inventory string                   Path to Ansible inventory file to import host information from
       --ceph-csi-kubelet-dir string                Directory of kubelet for ceph csi. Required for some cloud providers
       --ceph-nodes-subnet string                   CIDR subnet for ceph nodes
+      --codesphere-hash string                     Optional Codesphere build hash to write to operations.codesphere.hash
+      --codesphere-version string                  Codesphere version to write to operations.codesphere.version
   -c, --config string                              Output file path for config.yaml (default "config.yaml")
       --dc-city string                             Datacenter city
       --dc-country-code string                     Datacenter country code
@@ -71,7 +70,7 @@ $ oms init install-config --validate -c config.yaml --vault prod.vault.yaml
       --domain string                              Main Codesphere domain
       --generate-keys                              Generate SSH keys and certificates (default true)
   -h, --help                                       help for install-config
-      --interactive                                Enable interactive prompting (when true, other config flags are ignored) (default true)
+      --interactive                                Enable interactive prompting (version and hash flags provide prompt defaults) (default true)
       --k8s-control-plane strings                  K8s control plane IPs (comma-separated)
       --k8s-managed                                Use Codesphere-managed Kubernetes (default true)
       --k8s-pod-cidr string                        Pod CIDR (required when --k8s-managed=false)

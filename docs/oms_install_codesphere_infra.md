@@ -42,6 +42,8 @@ $ oms install codesphere infra -p codesphere-v1.2.3-installer-lite.tar.gz -k <pa
       --direct-connection            Use direct connection for installation, requires having access to the cluster nodes from your machine
       --extra-vault-secret string    Also write the vault into this Secret in the codesphere namespace before deploying Codesphere, e.g. for preview releases sharing a cluster
   -f, --force                        Enforce package extraction
+      --local-components             Run selected install components on the local host
+      --local-config-dir string      Config directory for local install components
   -p, --package string               Package file to use. This flag overrides the version specified in the configuration file.
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
   -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)

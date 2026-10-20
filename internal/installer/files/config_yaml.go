@@ -5,6 +5,7 @@ package files
 
 import (
 	"fmt"
+	"log"
 	"slices"
 	"strings"
 
@@ -114,23 +115,70 @@ type RootConfig struct {
 }
 
 type OperationsConfig struct {
-	Codesphere string   `yaml:"codesphere,omitempty"`
-	Skip       []string `yaml:"skip"`
+	Codesphere CodespherePackageConfig `yaml:"codesphere,omitempty"`
+	Skip       []string                `yaml:"skip"`
+}
+
+// CodespherePackageConfig selects an installer version and optionally a build hash.
+// YAML also accepts the legacy scalar form, e.g. codesphere: 1.111.0.
+type CodespherePackageConfig struct {
+	Version string `yaml:"version"`
+	Hash    string `yaml:"hash,omitempty"`
+}
+
+// UnmarshalYAML accepts a legacy version string or an explicit version/hash object.
+func (c *CodespherePackageConfig) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode && node.Tag == "!!str" {
+		*c = CodespherePackageConfig{Version: node.Value}
+		return nil
+	}
+
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("operations.codesphere must be a version string or an object with version and optional hash")
+	}
+
+	type packageConfig CodespherePackageConfig
+
+	var decoded packageConfig
+	if err := node.Decode(&decoded); err != nil {
+		return fmt.Errorf("decode operations.codesphere: %w", err)
+	}
+
+	*c = CodespherePackageConfig(decoded)
+
+	return nil
+}
+
+// FormatVersionForPortal expands plain releases to the portal tag format and preserves branch names.
+func (c CodespherePackageConfig) FormatVersionForPortal() string {
+	release := "v" + strings.TrimPrefix(c.Version, "v")
+	if semver.IsValid(release) {
+		version := "codesphere-" + release
+		log.Printf("Using portal version %q for Codesphere version %q", version, c.Version)
+
+		return version
+	}
+
+	return c.Version
+}
+
+// SetCodespherePackage updates the package selection without replacing operation skip steps.
+func (c *RootConfig) SetCodespherePackage(version, hash string) {
+	if c.Operations == nil {
+		c.Operations = &OperationsConfig{}
+	}
+
+	c.Operations.Codesphere = CodespherePackageConfig{Version: version, Hash: hash}
 }
 
 // CodespherePackageVersion returns the portal version selected by operations.codesphere.
 // Plain release versions are expanded to the portal's codesphere-v tag format.
 func (c *RootConfig) CodespherePackageVersion() (string, error) {
-	if c.Operations == nil || c.Operations.Codesphere == "" {
+	if c.Operations == nil || c.Operations.Codesphere.Version == "" {
 		return "", fmt.Errorf("operations.codesphere is required when no package is specified")
 	}
 
-	release := "v" + strings.TrimPrefix(c.Operations.Codesphere, "v")
-	if semver.IsValid(release) {
-		return "codesphere-" + release, nil
-	}
-
-	return c.Operations.Codesphere, nil
+	return c.Operations.Codesphere.FormatVersionForPortal(), nil
 }
 
 // DatacenterConfig describes one data center. RootConfig.Datacenter is the data center an installer
@@ -773,6 +821,7 @@ type PgManagedServiceConfig struct {
 }
 
 type S3ManagedServiceConfig struct {
+	Enabled  *bool         `yaml:"enabled,omitempty"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 
