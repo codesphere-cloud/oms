@@ -132,6 +132,25 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput Codesphere-only install", func() {
+		BeforeEach(func() {
+			csEnv.InstallCodesphereOnly = true
+		})
+
+		It("rejects a Codesphere-only install without a version or local package", func() {
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only requires install-version or install-local")))
+		})
+
+		It("accepts a Codesphere-only install of a local package", func() {
+			csEnv.InstallLocal = "installer-lite.tar.gz"
+			csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+
+			fw.EXPECT().Exists("installer-lite.tar.gz").Return(true)
+
+			Expect(bs.ValidateInput()).To(Succeed())
+		})
+	})
+
 	Describe("ValidateInput remote OMS binary", func() {
 		BeforeEach(func() {
 			csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
@@ -2051,6 +2070,51 @@ var _ = Describe("GCP Bootstrapper", func() {
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install Codesphere from jumpbox"))
+			})
+		})
+	})
+
+	Describe("EnsureCodesphereInstalled", func() {
+		const installCommand = "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images"
+
+		BeforeEach(func() {
+			csEnv.InstallVersion = "v1.2.3"
+			csEnv.InstallHash = "abc1234567890"
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+			csEnv.RegistryType = gcp.RegistryTypeGitHub
+
+			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
+		})
+
+		It("given a full install, when Codesphere is installed, then k0s is installed first and configured afterwards", func() {
+			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
+				return strings.HasPrefix(command, "oms install k0s ")
+			})).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
+
+			Expect(bs.EnsureCodesphereInstalled()).To(Succeed())
+		})
+
+		Context("when only Codesphere is installed", func() {
+			BeforeEach(func() {
+				csEnv.InstallCodesphereOnly = true
+			})
+
+			It("given a running cluster, when Codesphere is installed, then only the Codesphere-only install runs and k0s is left untouched", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(nil)
+
+				Expect(bs.EnsureCodesphereInstalled()).To(Succeed())
+			})
+
+			It("given a failing install, when Codesphere is installed, then the install error is returned", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(fmt.Errorf("install error"))
+
+				Expect(bs.EnsureCodesphereInstalled()).To(MatchError(ContainSubstring("failed to install Codesphere")))
 			})
 		})
 	})

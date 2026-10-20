@@ -51,6 +51,7 @@ oms beta bootstrap-gcp [flags]
       --gitlab-app-client-secret string           GitLab App Client Secret (optional)
       --google-acme-issuer                        Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)
   -h, --help                                      help for bootstrap-gcp
+      --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project: installs with --codesphere-only and leaves k0s untouched, skipping its installation and config script. Requires --install-version or --install-local (default: false)
       --install-config string                     Path to install config file (optional) (default "config.yaml")
       --install-hash string                       Codesphere package hash to install (default: none)
       --install-local string                      Install Codesphere from local package (default: none)

@@ -163,6 +163,7 @@ type CodesphereEnvironment struct {
 	InstallLocal                  string       `json:"install_local"`
 	InstallHash                   string       `json:"install_hash"`
 	InstallSkipSteps              []string     `json:"install_skip_steps"`
+	InstallCodesphereOnly         bool         `json:"-"`
 	Preemptible                   bool         `json:"preemptible"`
 	SpotVMs                       bool         `json:"spot_vms"`
 	WriteConfig                   bool         `json:"-"`
@@ -440,21 +441,9 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
-		err = b.EnsureK0s()
+		err = b.EnsureCodesphereInstalled()
 		if err != nil {
-			return fmt.Errorf("failed to install k0s: %w", err)
-		}
-
-		err = b.InstallCodesphere()
-		if err != nil {
-			return fmt.Errorf("failed to install Codesphere: %w", err)
-		}
-
-		// Every data center is installed before any k0s script runs, so a script never patches
-		// gateway services an install has yet to create.
-		err = b.RunK0sConfigScript()
-		if err != nil {
-			return fmt.Errorf("failed to run k0s config script: %w", err)
+			return err
 		}
 	}
 
@@ -517,6 +506,10 @@ func (b *GCPBootstrapper) createTestUser() error {
 func (b *GCPBootstrapper) ValidateInput() error {
 	if b.Env.GoogleACMEIssuer && b.Env.ACMEStaging {
 		return fmt.Errorf("acme-staging cannot be combined with google-acme-issuer")
+	}
+
+	if b.Env.InstallCodesphereOnly && b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
+		return fmt.Errorf("install-codesphere-only requires install-version or install-local")
 	}
 
 	if b.Env.RemoteOmsBinaryPath != "" && !b.fw.Exists(b.Env.RemoteOmsBinaryPath) {
@@ -1083,6 +1076,36 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	return nil
 }
 
+// EnsureCodesphereInstalled installs k0s and Codesphere into every data center and then runs the
+// k0s config scripts. A Codesphere-only install leaves k0s alone, since the config script restarts
+// the k0s services of a cluster that is already running.
+func (b *GCPBootstrapper) EnsureCodesphereInstalled() error {
+	if !b.Env.InstallCodesphereOnly {
+		err := b.EnsureK0s()
+		if err != nil {
+			return fmt.Errorf("failed to install k0s: %w", err)
+		}
+	}
+
+	err := b.InstallCodesphere()
+	if err != nil {
+		return fmt.Errorf("failed to install Codesphere: %w", err)
+	}
+
+	if b.Env.InstallCodesphereOnly {
+		return nil
+	}
+
+	// Every data center is installed before any k0s script runs, so a script never patches
+	// gateway services an install has yet to create.
+	err = b.RunK0sConfigScript()
+	if err != nil {
+		return fmt.Errorf("failed to run k0s config script: %w", err)
+	}
+
+	return nil
+}
+
 // InstallCodesphere installs Codesphere into every data center from the shared jumpbox, in
 // ascending data center order. The order matters: the primary data center's install creates the
 // database, roles and schema that the secondary ones reuse.
@@ -1191,9 +1214,14 @@ func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilen
 		packageArg = " -p " + packageFilename
 	}
 
-	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s%s%s%s%s",
+	codesphereOnlyArg := ""
+	if b.Env.InstallCodesphereOnly {
+		codesphereOnlyArg = " --codesphere-only"
+	}
+
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s%s%s%s%s%s",
 		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageArg,
-		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg())
+		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg(), codesphereOnlyArg)
 }
 
 // remotePCAppsValuesPath is where the i-th pc-apps values file is stored on the jumpbox. The index
