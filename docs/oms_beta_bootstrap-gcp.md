@@ -10,6 +10,12 @@ Depending on your setup, additional configuration may be required after bootstra
 Ensure you have the necessary permissions to create and manage GCP resources before proceeding.
 Not for production use.
 
+Running it again against an existing project with --install-version installs that version on top
+and repeats every install step, including the k0s config script, which restarts k0s.
+To replace only Codesphere, e.g. to roll back to an earlier release, add --install-codesphere-only:
+the bootstrap then runs "oms install codesphere --codesphere-only" on the jumpbox and leaves k0s,
+PostgreSQL, Ceph and the other dependencies as they are.
+
 ```
 oms beta bootstrap-gcp [flags]
 ```
@@ -51,7 +57,7 @@ oms beta bootstrap-gcp [flags]
       --gitlab-app-client-secret string           GitLab App Client Secret (optional)
       --google-acme-issuer                        Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)
   -h, --help                                      help for bootstrap-gcp
-      --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project: installs with --codesphere-only and leaves k0s untouched, skipping its installation and config script. Requires --install-version or --install-local (default: false)
+      --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the "oms install codesphere" the bootstrap runs on the jumpbox, and skips installing k0s and its config script, which would restart k0s. Requires --install-version or --install-local (default: false)
       --install-config string                     Path to install config file (optional) (default "config.yaml")
       --install-hash string                       Codesphere package hash to install (default: none)
       --install-local string                      Install Codesphere from local package (default: none)
