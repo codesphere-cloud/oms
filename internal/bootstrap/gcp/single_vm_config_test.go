@@ -6,341 +6,248 @@ package gcp
 import (
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
-	"testing"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/util"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	"go.yaml.in/yaml/v3"
 )
 
-func TestSingleVMProvidesGoogleIssuerConfigAndVault(t *testing.T) {
-	dir := t.TempDir()
+var _ = Describe("Single VM configuration", func() {
+	var (
+		b              *GCPBootstrapper
+		manager        installer.InstallConfigManager
+		client         *MockGCPClientManager
+		nodeClient     *node.MockNodeClient
+		fw             *util.MockFileIO
+		n              *node.Node
+		uploadedConfig files.RootConfig
+		uploadedVault  files.InstallVault
+	)
 
-	manager, err := installer.NewInstallConfigManager("plain", "")
-	if err != nil {
-		t.Fatal(err)
+	BeforeEach(func() {
+		var err error
+
+		manager, err = installer.NewInstallConfigManager("plain", "")
+		Expect(err).NotTo(HaveOccurred())
+
+		client = NewMockGCPClientManager(GinkgoT())
+		nodeClient = node.NewMockNodeClient(GinkgoT())
+		fw = util.NewMockFileIO(GinkgoT())
+		n = &node.Node{NodeClient: nodeClient, ExternalIP: "192.0.2.13"}
+		b = &GCPBootstrapper{
+			Env:       &CodesphereEnvironment{BaseDomain: "example.com", ProjectID: "project", DNSProjectID: "dns-project", OmsWorkdir: "/work", Jumpbox: n, GoogleACMEIssuer: true},
+			GCPClient: client, icg: manager, fw: fw,
+		}
+		uploadedConfig = files.NewRootConfig()
+		uploadedVault = files.InstallVault{}
+	})
+
+	expectConfigUpload := func() {
+		GinkgoHelper()
+		fw.EXPECT().MkdirAll("/work", os.FileMode(0755)).Return(nil).Once()
+		client.EXPECT().CreatePublicCAExternalAccountKey("project").Return("default-id", "default-mac", nil).Once()
+		client.EXPECT().CreatePublicCAExternalAccountKey("project").Return("custom-id", "custom-mac", nil).Once()
+		fw.EXPECT().WriteFile("/work/single-vm-config.yaml", mock.Anything, os.FileMode(0600)).Run(func(_ string, data []byte, _ os.FileMode) {
+			Expect(uploadedConfig.Unmarshal(data)).To(Succeed())
+		}).Return(nil).Once()
+		fw.EXPECT().WriteFile("/work/single-vm-vault.yaml", mock.Anything, os.FileMode(0600)).Run(func(_ string, data []byte, _ os.FileMode) {
+			Expect(yaml.Unmarshal(data, &uploadedVault)).To(Succeed())
+		}).Return(nil).Once()
+		nodeClient.EXPECT().CopyFile(n, "/work/single-vm-config.yaml", singleVMConfigPath).Return(nil).Once()
+		nodeClient.EXPECT().CopyFile(n, "/work/single-vm-vault.yaml", singleVMVaultPath).Return(nil).Once()
 	}
 
-	client := NewMockGCPClientManager(t)
-	client.EXPECT().CreatePublicCAExternalAccountKey("project").Return("default-id", "default-mac", nil).Once()
-	client.EXPECT().CreatePublicCAExternalAccountKey("project").Return("custom-id", "custom-mac", nil).Once()
-
-	nodeClient := node.NewMockNodeClient(t)
-	n := &node.Node{NodeClient: nodeClient, ExternalIP: "192.0.2.13"}
-	nodeClient.EXPECT().CopyFile(n, filepath.Join(dir, "single-vm-config.yaml"), singleVMConfigPath).Return(nil)
-	nodeClient.EXPECT().CopyFile(n, filepath.Join(dir, "single-vm-vault.yaml"), singleVMVaultPath).Return(nil)
-
-	b := &GCPBootstrapper{
-		Env:       &CodesphereEnvironment{BaseDomain: "example.com", ProjectID: "project", DNSProjectID: "dns-project", OmsWorkdir: dir, Jumpbox: n, GoogleACMEIssuer: true},
-		GCPClient: client,
-		icg:       manager,
-		fw:        util.NewFilesystemWriter(),
-	}
-	if err := b.provideSingleVMConfig(); err != nil {
-		t.Fatal(err)
+	expectVaultRecovery := func(data []byte) {
+		GinkgoHelper()
+		nodeClient.EXPECT().RunCommand(n, "root", "test ! -e '/root/codesphere/prod.vault.yaml'").Return(errors.New("file exists")).Once()
+		fw.EXPECT().CreateTemp("/work", ".single-vm-vault-*").Return("/work/recovered-vault", nil).Once()
+		nodeClient.EXPECT().DownloadFile(n, singleVMVaultPath, "/work/recovered-vault").Return(nil).Once()
+		fw.EXPECT().ReadFile("/work/recovered-vault").Return(data, nil).Once()
+		fw.EXPECT().Remove("/work/recovered-vault").Return(nil).Once()
 	}
 
-	data, err := os.ReadFile(filepath.Join(dir, "single-vm-config.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	It("provides Google issuer credentials and DNS settings that survive the local profile", func() {
+		nodeClient.EXPECT().RunCommand(n, "root", "test ! -e '/root/codesphere/prod.vault.yaml'").Return(nil).Once()
+		expectConfigUpload()
+		Expect(b.provideSingleVMConfig()).To(Succeed())
+		manager.SetInstallConfig(&uploadedConfig)
+		Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
 
-	config := files.NewRootConfig()
-	if err := config.Unmarshal(data); err != nil {
-		t.Fatal(err)
-	}
+		issuer := uploadedConfig.Codesphere.CertIssuer
+		Expect(issuer).NotTo(BeNil())
+		Expect(issuer.Type).To(Equal(files.CertIssuerTypeACME))
+		Expect(issuer.Acme.Server).To(Equal("https://dv.acme-v02.api.pki.goog/directory"))
+		Expect(issuer.Acme.EABKeyID).To(Equal("default-id"))
+		Expect(issuer.Acme.CustomDomainsEABKeyID).To(Equal("custom-id"))
 
-	manager.SetInstallConfig(&config)
+		issuers := uploadedConfig.Cluster.Certificates.Override["issuers"].(map[string]any)
+		Expect(issuers["letsEncryptHttp"]).To(HaveKeyWithValue("enabled", false))
+		solver := issuers["acme"].(map[string]any)["dnsSolver"].(map[string]any)["config"].(map[string]any)
+		Expect(solver["cloudDNS"]).To(HaveKeyWithValue("project", "dns-project"))
+		Expect(uploadedVault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password).To(Equal("default-mac"))
+		Expect(uploadedVault.GetSecret(files.SecretAcmeCustomDomainsEabMacKey).Fields.Password).To(Equal("custom-mac"))
+	})
 
-	if err := manager.ApplyProfile(installer.PROFILE_DEV); err != nil {
-		t.Fatal(err)
-	}
+	It("preserves generated encryption and signing keys when rerun against an existing VM", func() {
+		existing := &files.InstallVault{}
+		existing.SetSecret(files.SecretEntry{Name: files.SecretMongoDbPasswordEncryptionKey, Fields: &files.SecretFields{Password: "existing-encryption-key"}})
+		existing.SetSecret(files.SecretEntry{Name: files.SecretTokenPrivateKey, File: &files.SecretFile{Content: "existing-signing-key"}})
+		data, err := existing.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+		expectVaultRecovery(data)
+		expectConfigUpload()
+		Expect(b.provideSingleVMConfig()).To(Succeed())
+		Expect(uploadedVault.GetSecret(files.SecretMongoDbPasswordEncryptionKey).Fields.Password).To(Equal("existing-encryption-key"))
+		Expect(uploadedVault.GetSecret(files.SecretTokenPrivateKey).File.Content).To(Equal("existing-signing-key"))
+		Expect(uploadedVault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password).To(Equal("default-mac"))
+	})
 
-	issuer := config.Codesphere.CertIssuer
-	if issuer == nil || issuer.Type != files.CertIssuerTypeACME || issuer.Acme.Server != "https://dv.acme-v02.api.pki.goog/directory" || issuer.Acme.EABKeyID != "default-id" || issuer.Acme.CustomDomainsEABKeyID != "custom-id" {
-		t.Fatalf("Google issuer was not preserved by the local profile: %+v", issuer)
-	}
+	It("keeps active secrets over seed values while retaining new seed entries", func() {
+		manager.GetVault().SetSecret(files.SecretEntry{Name: "existing", Fields: &files.SecretFields{Password: "seed"}})
+		manager.GetVault().SetSecret(files.SecretEntry{Name: "new", Fields: &files.SecretFields{Password: "new-seed"}})
+		expectVaultRecovery([]byte("secrets:\n- name: existing\n  fields:\n    password: active\n"))
+		Expect(b.loadSingleVMVault()).To(Succeed())
+		Expect(manager.GetVault().GetSecret("existing").Fields.Password).To(Equal("active"))
+		Expect(manager.GetVault().GetSecret("new").Fields.Password).To(Equal("new-seed"))
+	})
 
-	issuers, ok := config.Cluster.Certificates.Override["issuers"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("certificate override missing after local profile: %s", data)
-	}
+	It("stops before uploading a vault when recovery fails", func() {
+		fw.EXPECT().MkdirAll("/work", os.FileMode(0755)).Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "test ! -e '/root/codesphere/prod.vault.yaml'").Return(errors.New("SSH disconnected")).Once()
+		fw.EXPECT().CreateTemp("/work", ".single-vm-vault-*").Return("/work/recovered-vault", nil).Once()
+		nodeClient.EXPECT().DownloadFile(n, singleVMVaultPath, "/work/recovered-vault").Return(errors.New("SSH disconnected")).Once()
+		fw.EXPECT().Remove("/work/recovered-vault").Return(nil).Once()
+		Expect(b.provideSingleVMConfig()).To(MatchError(ContainSubstring("failed to recover single VM vault")))
+	})
 
-	if issuers["letsEncryptHttp"].(map[string]interface{})["enabled"] != false || issuers["acme"].(map[string]interface{})["dnsSolver"].(map[string]interface{})["config"].(map[string]interface{})["cloudDNS"].(map[string]interface{})["project"] != "dns-project" {
-		t.Fatalf("unexpected certificate solver config: %+v", issuers)
-	}
+	It("rejects a corrupt recovered vault instead of replacing it", func() {
+		expectVaultRecovery([]byte("secrets: ["))
+		Expect(b.loadSingleVMVault()).To(MatchError(ContainSubstring("failed to parse recovered single VM vault")))
+	})
 
-	vaultData, err := os.ReadFile(filepath.Join(dir, "single-vm-vault.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	It("uses an uploaded template as the base for VM settings", func() {
+		templatePath := "/config/base.yaml"
+		b.Env.InstallConfigTemplatePath = templatePath
+		fw.EXPECT().ReadFile(templatePath).Return([]byte("dataCenter:\n  name: custom\npcApps:\n  applications:\n    ssh-workspace-proxy:\n      valuesObject:\n        service:\n          port: 2222\n"), nil).Once()
+		nodeClient.EXPECT().CopyFile(n, templatePath, singleVMConfigTemplatePath).Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "test ! -e '/root/codesphere/prod.vault.yaml'").Return(nil).Once()
+		expectConfigUpload()
+		Expect(b.provideSingleVMConfig()).To(Succeed())
+		Expect(uploadedConfig.Datacenter.Name).To(Equal("custom"))
+		Expect(uploadedConfig.Codesphere.Domain).To(Equal("cs.example.com"))
+		Expect(uploadedConfig.Codesphere.PublicIP).To(Equal("192.0.2.13"))
+		service := uploadedConfig.PcApps["applications"].(map[string]any)["ssh-workspace-proxy"].(map[string]any)["valuesObject"].(map[string]any)["service"]
+		Expect(service).To(HaveKeyWithValue("port", 2222))
+		Expect(service).To(HaveKeyWithValue("type", "ClusterIP"))
+	})
 
-	var vault files.InstallVault
-	if err := yaml.Unmarshal(vaultData, &vault); err != nil {
-		t.Fatal(err)
-	}
+	It("merges repeated config files in order and renders their secrets", func() {
+		b.Env.InstallConfigs = []string{"/config/first.yaml", "/config/second.yaml"}
 
-	if vault.GetSecret(files.SecretAcmeEabMacKey).Fields.Password != "default-mac" || vault.GetSecret(files.SecretAcmeCustomDomainsEabMacKey).Fields.Password != "custom-mac" {
-		t.Fatalf("Google EAB keys missing from vault")
-	}
-}
+		manager.GetVault().SetSecret(files.SecretEntry{Name: "dcCity", File: &files.SecretFile{Content: "Berlin"}})
+		fw.EXPECT().ReadFile("/config/first.yaml").Return([]byte("dataCenter:\n  name: first\n  city: '{{ secret \"dcCity\" }}'\n"), nil).Once()
+		fw.EXPECT().ReadFile("/config/second.yaml").Return([]byte("dataCenter:\n  name: second\n"), nil).Once()
+		nodeClient.EXPECT().CopyFile(n, "/config/first.yaml", "/root/codesphere/config-input-0.yaml").Return(nil).Once()
+		nodeClient.EXPECT().CopyFile(n, "/config/second.yaml", "/root/codesphere/config-input-1.yaml").Return(nil).Once()
 
-func TestSingleVMUsesUploadedConfigTemplateAsBase(t *testing.T) {
-	dir := t.TempDir()
-	templatePath := filepath.Join(dir, "base.yaml")
+		config, err := b.loadSingleVMBaseConfig()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(config.Datacenter.Name).To(Equal("second"))
+		Expect(config.Datacenter.City).To(Equal("Berlin"))
+	})
 
-	template := []byte("dataCenter:\n  name: custom\npcApps:\n  applications:\n    ssh-workspace-proxy:\n      valuesObject:\n        service:\n          port: 2222\n")
-	if err := os.WriteFile(templatePath, template, 0600); err != nil {
-		t.Fatal(err)
-	}
+	It("preserves single VM addresses and internal services through the local profile", func() {
+		config := b.singleVMConfig(files.NewRootConfig())
+		data, err := config.Marshal()
+		Expect(err).NotTo(HaveOccurred())
 
-	manager, err := installer.NewInstallConfigManager("plain", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+		config = files.NewRootConfig()
+		Expect(config.Unmarshal(data)).To(Succeed())
+		manager.SetInstallConfig(&config)
+		Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+		Expect(config.Codesphere.Domain).To(Equal("cs.example.com"))
+		Expect(config.Codesphere.WorkspaceHostingBaseDomain).To(Equal("ws.example.com"))
+		Expect(config.Codesphere.PublicIP).To(Equal("192.0.2.13"))
+		Expect(config.Codesphere.CustomDomains.CNameBaseDomain).To(Equal("ws.example.com"))
+		Expect(config.Cluster.Gateway.ServiceType).To(Equal("ClusterIP"))
+		Expect(config.Cluster.PublicGateway.ServiceType).To(Equal("ClusterIP"))
+		service := config.PcApps["applications"].(map[string]any)["ssh-workspace-proxy"].(map[string]any)["valuesObject"].(map[string]any)["service"]
+		Expect(service).To(HaveKeyWithValue("type", "ClusterIP"))
+	})
 
-	client := NewMockGCPClientManager(t)
-	client.EXPECT().CreatePublicCAExternalAccountKey("project").Return("default-id", "default-mac", nil).Once()
-	client.EXPECT().CreatePublicCAExternalAccountKey("project").Return("custom-id", "custom-mac", nil).Once()
+	It("uses the VM address for every public DNS target", func() {
+		Expect(b.prepareSingleVMDataCenter()).To(Succeed())
+		Expect(b.primaryDC().GatewayIP).To(Equal("192.0.2.13"))
+		Expect(b.primaryDC().PublicGatewayIP).To(Equal("192.0.2.13"))
+		Expect(b.primaryDC().SSHProxyIP).To(Equal("192.0.2.13"))
+	})
 
-	nodeClient := node.NewMockNodeClient(t)
-	n := &node.Node{NodeClient: nodeClient, ExternalIP: "192.0.2.13"}
-	nodeClient.EXPECT().CopyFile(n, templatePath, singleVMConfigTemplatePath).Return(nil).Once()
-	nodeClient.EXPECT().CopyFile(n, filepath.Join(dir, "single-vm-config.yaml"), singleVMConfigPath).Return(nil).Once()
-	nodeClient.EXPECT().CopyFile(n, filepath.Join(dir, "single-vm-vault.yaml"), singleVMVaultPath).Return(nil).Once()
+	It("requires an installer source", func() {
+		Expect(b.validateSingleVMPackageSource()).To(HaveOccurred())
+	})
 
-	b := &GCPBootstrapper{
-		Env: &CodesphereEnvironment{BaseDomain: "example.com", ProjectID: "project", OmsWorkdir: dir,
-			Jumpbox: n, GoogleACMEIssuer: true, InstallConfigTemplatePath: templatePath},
-		GCPClient: client, icg: manager, fw: util.NewFilesystemWriter(),
-	}
-	if err := b.provideSingleVMConfig(); err != nil {
-		t.Fatal(err)
-	}
+	It("accepts a local installer archive", func() {
+		b.Env.InstallLocal = "installer-lite.tar.gz"
+		Expect(b.validateSingleVMPackageSource()).To(Succeed())
+	})
 
-	data, err := os.ReadFile(filepath.Join(dir, "single-vm-config.yaml"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	It("accepts an installer version", func() {
+		b.Env.InstallVersion = "v1.2.3"
+		Expect(b.validateSingleVMPackageSource()).To(Succeed())
+	})
 
-	config := files.NewRootConfig()
-	if err := config.Unmarshal(data); err != nil {
-		t.Fatal(err)
-	}
+	It("rejects unsupported installer archives", func() {
+		b.Env.InstallLocal = "installer.zip"
+		Expect(b.validateSingleVMPackageSource()).To(HaveOccurred())
+	})
 
-	if config.Datacenter.Name != "custom" || config.Codesphere.Domain != "cs.example.com" || config.Codesphere.PublicIP != "192.0.2.13" {
-		t.Fatalf("template or VM settings missing: %+v", config)
-	}
+	It("downloads a versioned installer and removes stale extracted files", func() {
+		b.Env.InstallVersion = "v1.2.3"
+		b.Env.InstallHash = "abc123"
 
-	service := config.PcApps["applications"].(map[string]any)["ssh-workspace-proxy"].(map[string]any)["valuesObject"].(map[string]any)["service"].(map[string]any)
-	if service["port"] != 2222 || service["type"] != "ClusterIP" {
-		t.Fatalf("template service values or VM overrides missing: %+v", service)
-	}
-}
+		nodeClient.EXPECT().RunCommand(n, "root", "cd /root && oms download package -f installer-lite.tar.gz -H 'abc123' 'v1.2.3' && mv -- 'v1.2.3-abc123-installer-lite.tar.gz' /root/installer-lite.tar.gz").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "rm -rf -- /root/installer-lite").Return(nil).Once()
+		Expect(b.ensureSingleVMPackage()).To(Succeed())
+	})
 
-func TestSingleVMMergesRepeatedConfigsInOrder(t *testing.T) {
-	dir := t.TempDir()
-	first := filepath.Join(dir, "first.yaml")
-	second := filepath.Join(dir, "second.yaml")
+	It("copies a local installer and removes stale extracted files", func() {
+		b.Env.InstallLocal = "installer-lite.tar.gz"
 
-	if err := os.WriteFile(first, []byte("dataCenter:\n  name: first\n  city: '{{ secret \"dcCity\" }}'\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+		nodeClient.EXPECT().CopyFile(n, "installer-lite.tar.gz", singleVMPackagePath).Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "rm -rf -- /root/installer-lite").Return(nil).Once()
+		Expect(b.ensureSingleVMPackage()).To(Succeed())
+	})
 
-	if err := os.WriteFile(second, []byte("dataCenter:\n  name: second\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	It("installs single-node k0s", func() {
+		nodeClient.EXPECT().RunCommand(n, "root", "oms install k0s --single").Return(nil).Once()
+		Expect(b.installSingleVMK0s()).To(Succeed())
+	})
 
-	manager, err := installer.NewInstallConfigManager("plain", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	It("forwards the selected storage engine", func() {
+		nodeClient.EXPECT().RunCommand(n, "root", "test -n \"$OMS_REGISTRY_PASSWORD\"").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", mock.MatchedBy(func(command string) bool {
+			return strings.Contains(command, "--storage-engine 'local'") && strings.Contains(command, "--ceph-device-filter '^sdb$'")
+		})).Return(nil).Once()
+		Expect(b.installSingleVMCodesphere("user", "^sdb$", "local", false)).To(Succeed())
+	})
 
-	manager.GetVault().SetSecret(files.SecretEntry{Name: "dcCity", File: &files.SecretFile{Content: "Berlin"}})
-
-	nodeClient := node.NewMockNodeClient(t)
-	n := &node.Node{NodeClient: nodeClient}
-	nodeClient.EXPECT().CopyFile(n, first, "/root/codesphere/config-input-0.yaml").Return(nil).Once()
-	nodeClient.EXPECT().CopyFile(n, second, "/root/codesphere/config-input-1.yaml").Return(nil).Once()
-	b := &GCPBootstrapper{Env: &CodesphereEnvironment{InstallConfigs: []string{first, second}, Jumpbox: n}, icg: manager, fw: util.NewFilesystemWriter()}
-
-	config, err := b.loadSingleVMBaseConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if config.Datacenter.Name != "second" || config.Datacenter.City != "Berlin" {
-		t.Fatalf("repeated configs were not merged in order: %+v", config.Datacenter)
-	}
-}
-
-func TestSingleVMConfigSurvivesLocalProfile(t *testing.T) {
-	b := &GCPBootstrapper{Env: &CodesphereEnvironment{
-		BaseDomain:      "example.com",
-		GatewayIP:       "192.0.2.10",
-		PublicGatewayIP: "192.0.2.11",
-		SSHProxyIP:      "192.0.2.12",
-		Jumpbox:         &node.Node{ExternalIP: "192.0.2.13"},
-	}}
-	seed := b.singleVMConfig(files.NewRootConfig())
-
-	data, err := seed.Marshal()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	config := files.NewRootConfig()
-	if err := config.Unmarshal(data); err != nil {
-		t.Fatal(err)
-	}
-
-	manager, err := installer.NewInstallConfigManager("plain", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	manager.SetInstallConfig(&config)
-
-	if err := manager.ApplyProfile(installer.PROFILE_DEV); err != nil {
-		t.Fatal(err)
-	}
-
-	if config.Codesphere.Domain != "cs.example.com" || config.Codesphere.WorkspaceHostingBaseDomain != "ws.example.com" || config.Codesphere.PublicIP != "192.0.2.13" || config.Codesphere.CustomDomains.CNameBaseDomain != "ws.example.com" {
-		t.Fatalf("unexpected Codesphere settings: %+v", config.Codesphere)
-	}
-
-	if config.Cluster.Gateway.ServiceType != "ClusterIP" || config.Cluster.PublicGateway.ServiceType != "ClusterIP" {
-		t.Fatalf("downstream gateways must be internal: %+v", config.Cluster)
-	}
-
-	apps := config.PcApps["applications"].(map[string]any)
-	proxy := apps["ssh-workspace-proxy"].(map[string]any)
-
-	service := proxy["valuesObject"].(map[string]any)["service"].(map[string]any)
-	if service["type"] != "ClusterIP" {
-		t.Fatalf("SSH proxy must be internal: %+v", service)
-	}
-}
-
-func TestSingleVMUsesVMAddressForAllPublicNames(t *testing.T) {
-	b := &GCPBootstrapper{Env: &CodesphereEnvironment{
-		BaseDomain: "example.com",
-		Jumpbox:    &node.Node{ExternalIP: "192.0.2.13"},
-	}}
-	if err := b.prepareSingleVMDataCenter(); err != nil {
-		t.Fatal(err)
-	}
-
-	dc := b.primaryDC()
-	if dc.GatewayIP != "192.0.2.13" || dc.PublicGatewayIP != "192.0.2.13" || dc.SSHProxyIP != "192.0.2.13" {
-		t.Fatalf("expected one public IP for all DNS targets: %#v", dc)
-	}
-}
-
-func TestSingleVMPackageSources(t *testing.T) {
-	for _, tc := range []struct {
-		name    string
-		local   string
-		version string
-		wantErr bool
-	}{
-		{name: "missing", wantErr: true},
-		{name: "local archive", local: "installer-lite.tar.gz"},
-		{name: "version", version: "v1.2.3"},
-		{name: "invalid local archive", local: "installer.zip", wantErr: true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			b := &GCPBootstrapper{Env: &CodesphereEnvironment{InstallLocal: tc.local, InstallVersion: tc.version}}
-			if err := b.validateSingleVMPackageSource(); (err != nil) != tc.wantErr {
-				t.Fatalf("validation error = %v, want error %t", err, tc.wantErr)
-			}
-		})
-	}
-}
-
-func TestSingleVMDownloadsVersionedInstaller(t *testing.T) {
-	client := node.NewMockNodeClient(t)
-	n := &node.Node{NodeClient: client}
-	b := &GCPBootstrapper{Env: &CodesphereEnvironment{
-		InstallVersion: "v1.2.3",
-		InstallHash:    "abc123",
-		Jumpbox:        n,
-	}}
-
-	client.EXPECT().RunCommand(mock.Anything, "root", "cd /root && oms download package -f installer-lite.tar.gz -H 'abc123' 'v1.2.3' && mv -- 'v1.2.3-abc123-installer-lite.tar.gz' /root/installer-lite.tar.gz").Return(nil)
-	client.EXPECT().RunCommand(mock.Anything, "root", "rm -rf -- /root/installer-lite").Return(nil)
-
-	if err := b.ensureSingleVMPackage(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSingleVMCopiesLocalInstaller(t *testing.T) {
-	client := node.NewMockNodeClient(t)
-	n := &node.Node{NodeClient: client}
-	b := &GCPBootstrapper{Env: &CodesphereEnvironment{InstallLocal: "installer-lite.tar.gz", Jumpbox: n}}
-	client.EXPECT().CopyFile(n, "installer-lite.tar.gz", singleVMPackagePath).Return(nil)
-	client.EXPECT().RunCommand(mock.Anything, "root", "rm -rf -- /root/installer-lite").Return(nil)
-
-	if err := b.ensureSingleVMPackage(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSingleVMInstallsBundledK0s(t *testing.T) {
-	client := node.NewMockNodeClient(t)
-	n := &node.Node{NodeClient: client}
-	b := &GCPBootstrapper{Env: &CodesphereEnvironment{Jumpbox: n}}
-
-	client.EXPECT().RunCommand(mock.Anything, "root", "oms install k0s --single").Return(nil)
-
-	if err := b.installSingleVMK0s(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSingleVMForwardsStorageEngine(t *testing.T) {
-	client := node.NewMockNodeClient(t)
-	n := &node.Node{NodeClient: client}
-	b := &GCPBootstrapper{Env: &CodesphereEnvironment{Jumpbox: n}}
-	client.EXPECT().RunCommand(n, "root", "test -n \"$OMS_REGISTRY_PASSWORD\"").Return(nil)
-	client.EXPECT().RunCommand(n, "root", mock.MatchedBy(func(command string) bool {
-		return strings.Contains(command, "--storage-engine 'local'") &&
-			strings.Contains(command, "--ceph-device-filter '^sdb$'")
-	})).Return(nil)
-
-	if err := b.installSingleVMCodesphere("user", "^sdb$", "local", false); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSingleVMConfiguresHostPortsBeforeInstall(t *testing.T) {
-	client := node.NewMockNodeClient(t)
-	n := &node.Node{NodeClient: client}
-
-	b := &GCPBootstrapper{Env: &CodesphereEnvironment{Jumpbox: n}}
-	for _, command := range []string{
-		"sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1",
-		"sudo sysctl -n fs.inotify.max_user_watches | grep -q '^1048576$'",
-		"sudo grep -E '^fs.inotify.max_user_instances=8192' /etc/sysctl.conf >/dev/null 2>&1",
-		"sudo sysctl -n fs.inotify.max_user_instances | grep -q '^8192$'",
-		"sudo grep -E '^vm.max_map_count=262144' /etc/sysctl.conf >/dev/null 2>&1",
-		"sudo sysctl -n vm.max_map_count | grep -q '^262144$'",
-	} {
-		client.EXPECT().RunCommand(n, "root", command).Return(nil).Once()
-	}
-
-	client.EXPECT().RunCommand(n, "root", "sudo grep -E '^net.ipv4.ip_unprivileged_port_start=80' /etc/sysctl.conf >/dev/null 2>&1").Return(errors.New("not configured")).Twice()
-	client.EXPECT().RunCommand(n, "root", "echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee -a /etc/sysctl.conf").Return(nil).Once()
-	client.EXPECT().RunCommand(n, "root", "sudo sysctl -p").Return(nil).Once()
-	client.EXPECT().RunCommand(n, "root", "mkdir -p /root/.kube /root/codesphere").Return(nil).Once()
-
-	if err := b.configureSingleVMHost(); err != nil {
-		t.Fatal(err)
-	}
-}
+	It("configures unprivileged gateway ports before installation", func() {
+		nodeClient.EXPECT().RunCommand(n, "root", "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "sudo sysctl -n fs.inotify.max_user_watches | grep -q '^1048576$'").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "sudo grep -E '^fs.inotify.max_user_instances=8192' /etc/sysctl.conf >/dev/null 2>&1").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "sudo sysctl -n fs.inotify.max_user_instances | grep -q '^8192$'").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "sudo grep -E '^vm.max_map_count=262144' /etc/sysctl.conf >/dev/null 2>&1").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "sudo sysctl -n vm.max_map_count | grep -q '^262144$'").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "sudo grep -E '^net.ipv4.ip_unprivileged_port_start=80' /etc/sysctl.conf >/dev/null 2>&1").Return(errors.New("not configured")).Twice()
+		nodeClient.EXPECT().RunCommand(n, "root", "echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee -a /etc/sysctl.conf").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "sudo sysctl -p").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", "mkdir -p /root/.kube /root/codesphere").Return(nil).Once()
+		Expect(b.configureSingleVMHost()).To(Succeed())
+	})
+})

@@ -224,18 +224,15 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 	statusCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	if err := waitForK0sReady(statusCtx, 2*time.Second, func(ctx context.Context) ([]byte, error) {
-		return exec.CommandContext(ctx, installedPath, "status", "-o", "json").CombinedOutput()
-	}); err != nil {
+	readiness := installer.NewK0sReadinessClient(installedPath)
+	if err := waitForK0sReady(statusCtx, 2*time.Second, readiness); err != nil {
 		return fmt.Errorf("failed to wait for k0s installation: %w", err)
 	}
 
 	nodeCtx, cancelNodeWait := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancelNodeWait()
 
-	node, err := waitForK0sNode(nodeCtx, 2*time.Second, func(ctx context.Context) ([]byte, error) {
-		return exec.CommandContext(ctx, installedPath, "kubectl", "get", "nodes", "-o", "name").CombinedOutput()
-	})
+	node, err := waitForK0sNode(nodeCtx, 2*time.Second, readiness)
 	if err != nil {
 		return fmt.Errorf("failed to wait for k0s node registration: %w", err)
 	}
@@ -261,14 +258,14 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 	return nil
 }
 
-func waitForK0sNode(ctx context.Context, interval time.Duration, listNodes func(context.Context) ([]byte, error)) (string, error) {
+func waitForK0sNode(ctx context.Context, interval time.Duration, readiness installer.K0sReadinessClient) (string, error) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	var lastResult string
 
 	for {
-		out, err := listNodes(ctx)
+		out, err := readiness.Nodes(ctx)
 		if err == nil {
 			for _, node := range strings.Fields(string(out)) {
 				if strings.HasPrefix(node, "node/") {
@@ -289,14 +286,14 @@ func waitForK0sNode(ctx context.Context, interval time.Duration, listNodes func(
 	}
 }
 
-func waitForK0sReady(ctx context.Context, interval time.Duration, status func(context.Context) ([]byte, error)) error {
+func waitForK0sReady(ctx context.Context, interval time.Duration, readiness installer.K0sReadinessClient) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	var lastStatus string
 
 	for {
-		out, err := status(ctx)
+		out, err := readiness.Status(ctx)
 		if err == nil {
 			var state struct {
 				Pid                         int

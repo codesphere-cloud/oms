@@ -71,6 +71,7 @@ func (c *BootstrapGcpRestartVMsCmd) resolveEnvironment(fw intutil.FileIO) (*gcp.
 		ProjectID:   projectID,
 		Zone:        zone,
 		MultiDC:     infraEnv.MultiDC,
+		SingleVM:    infraEnv.SingleVM,
 		DataCenters: infraEnv.DataCenters,
 	}, nil
 }
