@@ -15,6 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
 )
@@ -106,19 +107,21 @@ func prepareChartVaultSecret(
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
+	secretName := vault.VaultSecretName
 	if opts.ExtraVaultSecret != "" {
 		if err := installer.WriteExtraVaultSecret(ctx, kubeClient, installVault, opts.ExtraVaultSecret); err != nil {
 			return fmt.Errorf("failed to write extra vault secret: %w", err)
 		}
-	}
 
-	secretName := installer.ChartVaultSecretName(opts.ExtraVaultSecret)
+		secretName = opts.ExtraVaultSecret
+	}
 
 	checksum, found, err := installer.VaultSecretChecksum(ctx, kubeClient, secretName)
 	if err != nil {
 		return fmt.Errorf("failed to checksum the chart's vault secret: %w", err)
 	}
 
+	// Only the ArgoCD pre-step writes cs-vault. Without it there is no ESO either, so no chart reads the vault.
 	if !found {
 		log.Printf("Vault secret %q not found, not passing a vault checksum to the chart", secretName)
 		return nil

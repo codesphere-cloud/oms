@@ -55,15 +55,6 @@ func WriteExtraVaultSecret(
 	return nil
 }
 
-// ChartVaultSecretName returns the vault Secret the chart's ExternalSecrets read.
-func ChartVaultSecretName(extraVaultSecret string) string {
-	if extraVaultSecret == "" {
-		return vault.VaultSecretName
-	}
-
-	return extraVaultSecret
-}
-
 // VaultSecretChecksum reads the vault Secret back from the cluster, so the checksum matches
 // what ESO reads, whichever phase or run wrote it. found is false when the Secret does not exist.
 func VaultSecretChecksum(ctx context.Context, kubeClient ctrlclient.Client, secretName string) (checksum string, found bool, err error) {

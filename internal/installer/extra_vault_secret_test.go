@@ -67,16 +67,6 @@ var _ = Describe("ValidateExtraVaultSecretName", func() {
 	})
 })
 
-var _ = Describe("ChartVaultSecretName", func() {
-	It("is cs-vault when no extra vault secret is set", func() {
-		Expect(installer.ChartVaultSecretName("")).To(Equal("cs-vault"))
-	})
-
-	It("is the extra vault secret when one is set", func() {
-		Expect(installer.ChartVaultSecretName("codesphere-pr-42-vault")).To(Equal("codesphere-pr-42-vault"))
-	})
-})
-
 func setupExtraVaultSecret() (ctrlclient.Client, *files.InstallVault) {
 	scheme := runtime.NewScheme()
 	Expect(corev1.AddToScheme(scheme)).To(Succeed())
