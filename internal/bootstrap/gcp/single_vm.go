@@ -221,20 +221,12 @@ func (b *GCPBootstrapper) provideSingleVMConfig() error {
 		return fmt.Errorf("prepare single VM data center: %w", err)
 	}
 
-	if b.Env.InstallVaultPath != "" {
-		store, err := vault.New(vault.TypeSOPS, vault.Options{Path: b.Env.InstallVaultPath, AgeKey: b.Env.InstallVaultPrivKey})
-		if err != nil {
-			return fmt.Errorf("failed to open single VM vault: %w", err)
-		}
+	if err := b.fw.MkdirAll(b.Env.OmsWorkdir, 0755); err != nil {
+		return fmt.Errorf("failed to create OMS workdir: %w", err)
+	}
 
-		loaded, err := store.Load()
-		if err != nil {
-			return fmt.Errorf("failed to load single VM vault: %w", err)
-		}
-
-		for _, secret := range loaded.Secrets {
-			b.icg.GetVault().SetSecret(secret)
-		}
+	if err := b.loadSingleVMVault(); err != nil {
+		return err
 	}
 
 	dc := b.primaryDC()
@@ -260,10 +252,6 @@ func (b *GCPBootstrapper) provideSingleVMConfig() error {
 		return fmt.Errorf("failed to marshal single VM install config: %w", err)
 	}
 
-	if err := b.fw.MkdirAll(b.Env.OmsWorkdir, 0755); err != nil {
-		return fmt.Errorf("failed to create OMS workdir: %w", err)
-	}
-
 	path := filepath.Join(b.Env.OmsWorkdir, "single-vm-config.yaml")
 	if err := b.fw.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write single VM install config: %w", err)
@@ -285,6 +273,58 @@ func (b *GCPBootstrapper) provideSingleVMConfig() error {
 
 	if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, vaultPath, singleVMVaultPath); err != nil {
 		return fmt.Errorf("failed to copy single VM vault: %w", err)
+	}
+
+	return nil
+}
+
+// loadSingleVMVault seeds new installations from the supplied vault, then preserves
+// the active VM's secrets on reruns so encryption and signing keys remain stable.
+func (b *GCPBootstrapper) loadSingleVMVault() error {
+	if b.Env.InstallVaultPath != "" {
+		store, err := vault.New(vault.TypeSOPS, vault.Options{Path: b.Env.InstallVaultPath, AgeKey: b.Env.InstallVaultPrivKey})
+		if err != nil {
+			return fmt.Errorf("failed to open single VM vault: %w", err)
+		}
+
+		loaded, err := store.Load()
+		if err != nil {
+			return fmt.Errorf("failed to load single VM vault: %w", err)
+		}
+
+		for _, secret := range loaded.Secrets {
+			b.icg.GetVault().SetSecret(secret)
+		}
+	}
+
+	// Only a successful absence check permits starting from the seed vault.
+	// A failed SSH probe must not let us overwrite secrets we could not read.
+	if err := b.Env.Jumpbox.RunSSHCommand("root", "test ! -e "+shellQuote(singleVMVaultPath)); err == nil {
+		return nil
+	}
+
+	path, err := b.fw.CreateTemp(b.Env.OmsWorkdir, ".single-vm-vault-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary single VM vault: %w", err)
+	}
+	defer func() { _ = b.fw.Remove(path) }()
+
+	if err := b.Env.Jumpbox.NodeClient.DownloadFile(b.Env.Jumpbox, singleVMVaultPath, path); err != nil {
+		return fmt.Errorf("failed to recover single VM vault: %w", err)
+	}
+
+	data, err := b.fw.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read recovered single VM vault: %w", err)
+	}
+
+	var existing files.InstallVault
+	if err := yaml.Unmarshal(data, &existing); err != nil {
+		return fmt.Errorf("failed to parse recovered single VM vault: %w", err)
+	}
+
+	for _, secret := range existing.Secrets {
+		b.icg.GetVault().SetSecret(secret)
 	}
 
 	return nil
