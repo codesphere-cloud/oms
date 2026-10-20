@@ -613,9 +613,6 @@ func setLocalClusterComponents(config *files.RootConfig) {
 		Enabled:           false,
 		ManagedExternally: true,
 	}
-	config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
-		Enabled: false,
-	}
 }
 
 func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
