@@ -40,8 +40,10 @@ func K0sCleanupNodeIPs(installConfig *files.RootConfig) []string {
 //
 // If k0s reset fails, workload volumes may still be mounted below the k0s directories. The
 // script unmounts them and exits with an error instead of deleting through a remaining mount,
-// which would wipe the volume contents. Failed deletions also make the script fail, so the
-// node is not reported as cleaned. A reboot is required afterwards, see K0sRebootCommand.
+// which would wipe the volume contents. A k0s directory that is itself a dedicated mount stays
+// mounted and only its contents are deleted, as unmounting it would leave the stale state on
+// the backing filesystem. Failed deletions also make the script fail, so the node is not
+// reported as cleaned. A reboot is required afterwards, see K0sRebootCommand.
 func K0sCleanupScript() string {
 	return fmt.Sprintf(`for svc in k0sworker k0scontroller; do
   systemctl stop "$svc.service" 2>/dev/null || true
@@ -54,16 +56,23 @@ if [ -n "$K0S" ]; then
 else
   echo "k0s binary not found, skipping k0s reset"
 fi
-k0s_mounts() { awk '$2 ~ "^/(var/lib/k0s|etc/k0s)(/|$)" { print $2 }' /proc/mounts | sort -r; }
-for mnt in $(k0s_mounts); do umount "$mnt" || true; done
-if [ -n "$(k0s_mounts)" ]; then
+k0s_nested_mounts() { awk '$2 ~ "^/(var/lib/k0s|etc/k0s)/" { print $2 }' /proc/mounts | sort -r; }
+for mnt in $(k0s_nested_mounts); do umount "$mnt" || true; done
+if [ -n "$(k0s_nested_mounts)" ]; then
   echo "error: still mounted below /var/lib/k0s or /etc/k0s, not deleting them:" >&2
-  k0s_mounts >&2
+  k0s_nested_mounts >&2
   echo "reboot the node and run the cleanup again" >&2
   exit 1
 fi
 rm -f /etc/systemd/system/k0sworker.service /etc/systemd/system/k0scontroller.service || exit 1
-rm -rf --one-file-system /var/lib/k0s /etc/k0s || exit 1
+for dir in /var/lib/k0s /etc/k0s; do
+  if mountpoint -q "$dir"; then
+    echo "$dir is a dedicated mount, deleting its contents only"
+    find "$dir" -mindepth 1 -maxdepth 1 -exec rm -rf --one-file-system {} + || exit 1
+  else
+    rm -rf --one-file-system "$dir" || exit 1
+  fi
+done
 systemctl daemon-reload
 `, K0sPackageBinaryPath)
 }

@@ -47,21 +47,31 @@ var _ = Describe("K0sCleanup", func() {
 			Expect(script).To(ContainSubstring("K0S=" + installer.K0sPackageBinaryPath))
 			Expect(script).To(ContainSubstring(`"$K0S" reset`))
 			Expect(script).To(ContainSubstring("rm -f /etc/systemd/system/k0sworker.service /etc/systemd/system/k0scontroller.service || exit 1"))
-			Expect(script).To(ContainSubstring("rm -rf --one-file-system /var/lib/k0s /etc/k0s || exit 1"))
+			Expect(script).To(ContainSubstring("for dir in /var/lib/k0s /etc/k0s; do"))
+			Expect(script).To(ContainSubstring(`rm -rf --one-file-system "$dir" || exit 1`))
 			Expect(script).To(ContainSubstring("systemctl daemon-reload"))
 		})
 
-		It("unmounts remaining volumes and refuses to delete through them", func() {
+		It("unmounts only volumes below the k0s directories and refuses to delete through them", func() {
 			script := installer.K0sCleanupScript()
 
+			Expect(script).To(ContainSubstring(`'$2 ~ "^/(var/lib/k0s|etc/k0s)/"`))
+
 			unmount := strings.Index(script, `umount "$mnt"`)
-			mountCheck := strings.Index(script, `if [ -n "$(k0s_mounts)" ]; then`)
+			mountCheck := strings.Index(script, `if [ -n "$(k0s_nested_mounts)" ]; then`)
 			deletion := strings.Index(script, "rm -rf")
 
 			Expect(unmount).To(BeNumerically(">", 0))
 			Expect(mountCheck).To(BeNumerically(">", unmount))
 			Expect(deletion).To(BeNumerically(">", mountCheck))
 			Expect(script[mountCheck:deletion]).To(ContainSubstring("exit 1"))
+		})
+
+		It("keeps dedicated k0s mounts and deletes only their contents", func() {
+			script := installer.K0sCleanupScript()
+
+			Expect(script).To(ContainSubstring(`if mountpoint -q "$dir"; then`))
+			Expect(script).To(ContainSubstring(`find "$dir" -mindepth 1 -maxdepth 1 -exec rm -rf --one-file-system {} + || exit 1`))
 		})
 	})
 })
