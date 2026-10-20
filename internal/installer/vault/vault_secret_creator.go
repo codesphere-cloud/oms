@@ -27,9 +27,6 @@ import (
 const (
 	VaultSecretNamespace = "codesphere"
 	VaultSecretName      = "cs-vault"
-
-	// configFileMode matches the merged install config, which can hold rendered vault values.
-	configFileMode = 0o600
 )
 
 type VaultSecretCreator struct {
@@ -153,13 +150,8 @@ func (v *VaultSecretCreator) SecretChecksum(ctx context.Context, namespace, secr
 		return "", fmt.Errorf("failed to read %q: %w", secretName, err)
 	}
 
-	return secretDataChecksum(secret.Data), nil
-}
-
-// secretDataChecksum returns a SHA-256 over the data of a Secret, independent of key order.
-func secretDataChecksum(secretData map[string][]byte) string {
-	keys := make([]string, 0, len(secretData))
-	for key := range secretData {
+	keys := make([]string, 0, len(secret.Data))
+	for key := range secret.Data {
 		keys = append(keys, key)
 	}
 
@@ -170,11 +162,11 @@ func secretDataChecksum(secretData map[string][]byte) string {
 		// The separator keeps "ab"+"c" and "a"+"bc" from hashing alike.
 		hash.Write([]byte(key))
 		hash.Write([]byte{0})
-		hash.Write(secretData[key])
+		hash.Write(secret.Data[key])
 		hash.Write([]byte{0})
 	}
 
-	return hex.EncodeToString(hash.Sum(nil))
+	return hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 // ValidateSecretName rejects names Kubernetes would refuse for a Secret.
@@ -186,12 +178,12 @@ func ValidateSecretName(name string) error {
 	return nil
 }
 
-// AddExternalSecretsChecksum sets codesphere.override.global.externalSecretsChecksum in the
+// WriteVaultChecksumToConfig sets codesphere.override.global.externalSecretsChecksum in the
 // merged config file OMS hands to the TS installer. The chart puts it on its ExternalSecrets,
 // which ESO only re-syncs when they change, so a changed vault reaches the release in the
 // same deploy. Rewriting the merged config is a stopgap: once OMS deploys through the
 // cs-applications app of apps, it sets the checksum in the values it builds instead.
-func AddExternalSecretsChecksum(configPath, checksum string) error {
+func WriteVaultChecksumToConfig(configPath, checksum string) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read config %s: %w", configPath, err)
@@ -210,7 +202,8 @@ func AddExternalSecretsChecksum(configPath, checksum string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(configPath, updated, configFileMode); err != nil {
+	// Matches the merged install config, which can hold rendered vault values.
+	if err := os.WriteFile(configPath, updated, 0o600); err != nil {
 		return fmt.Errorf("failed to write config %s: %w", configPath, err)
 	}
 

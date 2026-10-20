@@ -146,27 +146,6 @@ var _ = Describe("vaultToSecretData", func() {
 	})
 })
 
-var _ = Describe("secretDataChecksum", func() {
-	It("does not depend on the order the keys were added in", func() {
-		first := map[string][]byte{}
-		first["a"] = []byte("1")
-		first["b"] = []byte("2")
-		second := map[string][]byte{}
-		second["b"] = []byte("2")
-		second["a"] = []byte("1")
-
-		Expect(secretDataChecksum(first)).To(Equal(secretDataChecksum(second)))
-	})
-
-	It("changes when a value changes", func() {
-		Expect(secretDataChecksum(map[string][]byte{"a": []byte("1")})).ToNot(Equal(secretDataChecksum(map[string][]byte{"a": []byte("2")})))
-	})
-
-	It("tells apart data that only differs in where a key ends and its value starts", func() {
-		Expect(secretDataChecksum(map[string][]byte{"ab": []byte("c")})).ToNot(Equal(secretDataChecksum(map[string][]byte{"a": []byte("bc")})))
-	})
-})
-
 // checksumOf recomputes the documented checksum format independently of the code under test.
 func checksumOf(data map[string][]byte) string {
 	keys := make([]string, 0, len(data))
@@ -270,8 +249,7 @@ var _ = Describe("SecretChecksum", func() {
 		return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 	}
 
-	It("returns the checksum of the data stored in the cluster", func() {
-		data := map[string][]byte{"tokenPublicKey": []byte("written-by-the-dependencies-phase")}
+	checksumOfStored := func(data map[string][]byte) string {
 		kubeClient := newKubeClient(&corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: "cs-vault", Namespace: "codesphere"},
 			Data:       data,
@@ -279,7 +257,25 @@ var _ = Describe("SecretChecksum", func() {
 
 		checksum, err := NewVaultSecretCreator(kubeClient).SecretChecksum(context.Background(), VaultSecretNamespace, "cs-vault")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(checksum).To(Equal(checksumOf(data)))
+
+		return checksum
+	}
+
+	It("returns the checksum of the data stored in the cluster", func() {
+		data := map[string][]byte{
+			"tokenPublicKey":                []byte("written-by-the-dependencies-phase"),
+			"authServiceUserToken.password": []byte("token"),
+		}
+
+		Expect(checksumOfStored(data)).To(Equal(checksumOf(data)))
+	})
+
+	It("changes when a value changes", func() {
+		Expect(checksumOfStored(map[string][]byte{"a": []byte("1")})).ToNot(Equal(checksumOfStored(map[string][]byte{"a": []byte("2")})))
+	})
+
+	It("tells apart data that only differs in where a key ends and its value starts", func() {
+		Expect(checksumOfStored(map[string][]byte{"ab": []byte("c")})).ToNot(Equal(checksumOfStored(map[string][]byte{"a": []byte("bc")})))
 	})
 
 	It("matches the data CreateSecretFromVault wrote, including the signed tokens", func() {
@@ -310,7 +306,7 @@ var _ = Describe("ValidateSecretName", func() {
 	})
 })
 
-var _ = Describe("AddExternalSecretsChecksum", func() {
+var _ = Describe("WriteVaultChecksumToConfig", func() {
 	writeConfig := func(content string) string {
 		path := filepath.Join(GinkgoT().TempDir(), "config.yaml")
 		Expect(os.WriteFile(path, []byte(content), 0o600)).To(Succeed())
@@ -331,7 +327,7 @@ var _ = Describe("AddExternalSecretsChecksum", func() {
 	It("sets the checksum next to the existing global overrides", func() {
 		path := writeConfig("codesphere:\n  domain: example.com\n  override:\n    global:\n      hostName: pr-42\n      externalSecrets: true\n")
 
-		Expect(AddExternalSecretsChecksum(path, "abc123")).To(Succeed())
+		Expect(WriteVaultChecksumToConfig(path, "abc123")).To(Succeed())
 
 		Expect(readConfig(path)).To(Equal(map[string]any{
 			"codesphere": map[string]any{
@@ -350,7 +346,7 @@ var _ = Describe("AddExternalSecretsChecksum", func() {
 	It("creates the override path when the config has none", func() {
 		path := writeConfig("postgres:\n  mode: install\n")
 
-		Expect(AddExternalSecretsChecksum(path, "abc123")).To(Succeed())
+		Expect(WriteVaultChecksumToConfig(path, "abc123")).To(Succeed())
 
 		Expect(readConfig(path)).To(Equal(map[string]any{
 			"postgres": map[string]any{"mode": "install"},
@@ -365,7 +361,7 @@ var _ = Describe("AddExternalSecretsChecksum", func() {
 	It("keeps the config readable only by its owner", func() {
 		path := writeConfig("codesphere: {}\n")
 
-		Expect(AddExternalSecretsChecksum(path, "abc123")).To(Succeed())
+		Expect(WriteVaultChecksumToConfig(path, "abc123")).To(Succeed())
 
 		info, err := os.Stat(path)
 		Expect(err).ToNot(HaveOccurred())

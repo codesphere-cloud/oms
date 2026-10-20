@@ -121,7 +121,7 @@ func prepareChartVaultSecret(
 		return fmt.Errorf("failed to checksum the chart's vault secret: %w", err)
 	}
 
-	if err := vault.AddExternalSecretsChecksum(opts.ConfigPath, checksum); err != nil {
+	if err := vault.WriteVaultChecksumToConfig(opts.ConfigPath, checksum); err != nil {
 		return fmt.Errorf("failed to pass the vault checksum to the chart: %w", err)
 	}
 
