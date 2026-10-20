@@ -204,6 +204,10 @@ var _ = Describe("ValidateSecretName", func() {
 	It("accepts a valid Secret name", func() {
 		Expect(ValidateSecretName("codesphere-pr-42-vault")).To(Succeed())
 	})
+
+	It("rejects a name Kubernetes would refuse for a Secret", func() {
+		Expect(ValidateSecretName("Codesphere_PR/42")).To(MatchError(ContainSubstring(`invalid secret name "Codesphere_PR/42"`)))
+	})
 })
 
 var _ = Describe("WriteVaultChecksumToConfig", func() {
