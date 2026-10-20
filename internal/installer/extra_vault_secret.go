@@ -56,20 +56,20 @@ func WriteExtraVaultSecret(
 }
 
 // VaultSecretChecksum reads the vault Secret back from the cluster, so the checksum matches
-// what ESO reads, whichever phase or run wrote it. found is false when the Secret does not exist.
-func VaultSecretChecksum(ctx context.Context, kubeClient ctrlclient.Client, secretName string) (checksum string, found bool, err error) {
+// what ESO reads, whichever phase or run wrote it.
+func VaultSecretChecksum(ctx context.Context, kubeClient ctrlclient.Client, secretName string) (string, error) {
 	secret := &corev1.Secret{}
 
-	err = kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: vault.VaultSecretNamespace, Name: secretName}, secret)
+	err := kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: vault.VaultSecretNamespace, Name: secretName}, secret)
 	if apierrors.IsNotFound(err) {
-		return "", false, nil
+		return "", fmt.Errorf("vault secret %q not found, run the ArgoCD pre-step of the dependencies phase first: %w", secretName, err)
 	}
 
 	if err != nil {
-		return "", false, fmt.Errorf("failed to read %q: %w", secretName, err)
+		return "", fmt.Errorf("failed to read %q: %w", secretName, err)
 	}
 
-	return vault.SecretDataChecksum(secret.Data), true, nil
+	return vault.SecretDataChecksum(secret.Data), nil
 }
 
 // AddExternalSecretsChecksum sets codesphere.override.global.externalSecretsChecksum in the

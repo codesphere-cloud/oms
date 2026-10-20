@@ -157,9 +157,8 @@ var _ = Describe("VaultSecretChecksum", func() {
 			Data:       data,
 		})
 
-		checksum, found, err := installer.VaultSecretChecksum(context.Background(), kubeClient, "cs-vault")
+		checksum, err := installer.VaultSecretChecksum(context.Background(), kubeClient, "cs-vault")
 		Expect(err).ToNot(HaveOccurred())
-		Expect(found).To(BeTrue())
 		Expect(checksum).To(Equal(checksumOf(data)))
 	})
 
@@ -167,7 +166,7 @@ var _ = Describe("VaultSecretChecksum", func() {
 		kubeClient, installVault := setupExtraVaultSecret()
 		Expect(installer.WriteExtraVaultSecret(context.Background(), kubeClient, installVault, "codesphere-pr-42-vault")).To(Succeed())
 
-		checksum, _, err := installer.VaultSecretChecksum(context.Background(), kubeClient, "codesphere-pr-42-vault")
+		checksum, err := installer.VaultSecretChecksum(context.Background(), kubeClient, "codesphere-pr-42-vault")
 		Expect(err).ToNot(HaveOccurred())
 
 		written := getCodesphereSecret(kubeClient, "codesphere-pr-42-vault").Data
@@ -175,11 +174,9 @@ var _ = Describe("VaultSecretChecksum", func() {
 		Expect(checksum).To(Equal(checksumOf(written)))
 	})
 
-	It("reports not found when the secret does not exist", func() {
-		checksum, found, err := installer.VaultSecretChecksum(context.Background(), newKubeClient(), "cs-vault")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(found).To(BeFalse())
-		Expect(checksum).To(BeEmpty())
+	It("fails when the secret does not exist", func() {
+		_, err := installer.VaultSecretChecksum(context.Background(), newKubeClient(), "cs-vault")
+		Expect(err).To(MatchError(ContainSubstring(`vault secret "cs-vault" not found`)))
 	})
 })
 
