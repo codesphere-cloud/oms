@@ -187,8 +187,10 @@ func validateInstallCodesphereVault(opts *InstallCodesphereOpts) error {
 		return fmt.Errorf("failed to validate install config: %w", err)
 	}
 
-	if err := installer.ValidateExtraVaultSecretName(opts.ExtraVaultSecret); err != nil {
-		return fmt.Errorf("failed to validate --extra-vault-secret: %w", err)
+	if opts.ExtraVaultSecret != "" {
+		if err := vault.ValidateSecretName(opts.ExtraVaultSecret); err != nil {
+			return fmt.Errorf("failed to validate --extra-vault-secret: %w", err)
+		}
 	}
 
 	return nil

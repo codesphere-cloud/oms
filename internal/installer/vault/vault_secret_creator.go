@@ -9,12 +9,17 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
 	"sort"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -22,6 +27,9 @@ import (
 const (
 	VaultSecretNamespace = "codesphere"
 	VaultSecretName      = "cs-vault"
+
+	// configFileMode matches the merged install config, which can hold rendered vault values.
+	configFileMode = 0o600
 )
 
 type VaultSecretCreator struct {
@@ -55,20 +63,21 @@ func (v *VaultSecretCreator) CreateSecretFromStore(ctx context.Context, store Va
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
 
-	// Always create new service accounts tokens during creation to ensure they are always valid and updated.
-	if err := secrets.EnsureServiceAccountTokens(data); err != nil {
-		return fmt.Errorf("failed to ensure service account tokens: %w", err)
-	}
-
 	return v.CreateSecretFromVault(ctx, data, namespace, secretName)
 }
 
-// CreateSecretFromVault creates or updates a Kubernetes secret with the contents of a Vault in the target cluster.
+// CreateSecretFromVault signs fresh service account tokens into vault and creates or updates a
+// Kubernetes secret with its contents in the target cluster.
 //
 // Each vault entry is mapped to one or more secret keys:
 //   - File entries produce a single key equal to the entry name.
 //   - Field entries produce "entryName.password" and, when present, "entryName.username".
 func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *files.InstallVault, namespace, secretName string) error {
+	// Always create new service accounts tokens during creation to ensure they are always valid and updated.
+	if err := secrets.EnsureServiceAccountTokens(vault); err != nil {
+		return fmt.Errorf("failed to ensure service account tokens: %w", err)
+	}
+
 	secretData, err := vaultToSecretData(vault)
 	if err != nil {
 		return err
@@ -109,27 +118,6 @@ func (v *VaultSecretCreator) ensureNamespace(ctx context.Context, namespace stri
 	return nil
 }
 
-// SecretDataChecksum returns a SHA-256 over the data of a Secret, independent of key order.
-func SecretDataChecksum(secretData map[string][]byte) string {
-	keys := make([]string, 0, len(secretData))
-	for key := range secretData {
-		keys = append(keys, key)
-	}
-
-	sort.Strings(keys)
-
-	hash := sha256.New()
-	for _, key := range keys {
-		// The separator keeps "ab"+"c" and "a"+"bc" from hashing alike.
-		hash.Write([]byte(key))
-		hash.Write([]byte{0})
-		hash.Write(secretData[key])
-		hash.Write([]byte{0})
-	}
-
-	return hex.EncodeToString(hash.Sum(nil))
-}
-
 // vaultToSecretData converts the entries of an InstallVault into Kubernetes secret data.
 // File entries produce a single key equal to the entry name containing the file content.
 // Field entries produce "entryName.password" and, when a username is present, "entryName.username".
@@ -149,4 +137,93 @@ func vaultToSecretData(vault *files.InstallVault) (map[string][]byte, error) {
 		return nil, fmt.Errorf("no secrets found in vault file")
 	}
 	return data, nil
+}
+
+// SecretChecksum reads a Secret back from the cluster, so the checksum matches what ESO reads,
+// whichever phase or run wrote it.
+func (v *VaultSecretCreator) SecretChecksum(ctx context.Context, namespace, secretName string) (string, error) {
+	secret := &corev1.Secret{}
+
+	err := v.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretName}, secret)
+	if apierrors.IsNotFound(err) {
+		return "", fmt.Errorf("vault secret %q not found, run the ArgoCD pre-step of the dependencies phase first: %w", secretName, err)
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("failed to read %q: %w", secretName, err)
+	}
+
+	return secretDataChecksum(secret.Data), nil
+}
+
+// secretDataChecksum returns a SHA-256 over the data of a Secret, independent of key order.
+func secretDataChecksum(secretData map[string][]byte) string {
+	keys := make([]string, 0, len(secretData))
+	for key := range secretData {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	hash := sha256.New()
+	for _, key := range keys {
+		// The separator keeps "ab"+"c" and "a"+"bc" from hashing alike.
+		hash.Write([]byte(key))
+		hash.Write([]byte{0})
+		hash.Write(secretData[key])
+		hash.Write([]byte{0})
+	}
+
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+// ValidateSecretName rejects names Kubernetes would refuse for a Secret.
+func ValidateSecretName(name string) error {
+	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {
+		return fmt.Errorf("invalid secret name %q: %s", name, strings.Join(problems, "; "))
+	}
+
+	return nil
+}
+
+// AddExternalSecretsChecksum sets codesphere.override.global.externalSecretsChecksum in the
+// merged config file OMS hands to the TS installer. The chart puts it on its ExternalSecrets,
+// which ESO only re-syncs when they change, so a changed vault reaches the release in the
+// same deploy. Rewriting the merged config is a stopgap: once OMS deploys through the
+// cs-applications app of apps, it sets the checksum in the values it builds instead.
+func AddExternalSecretsChecksum(configPath, checksum string) error {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config %s: %w", configPath, err)
+	}
+
+	config := map[string]any{}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse config %s: %w", configPath, err)
+	}
+
+	global := childMap(childMap(childMap(config, "codesphere"), "override"), "global")
+	global["externalSecretsChecksum"] = checksum
+
+	updated, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(configPath, updated, configFileMode); err != nil {
+		return fmt.Errorf("failed to write config %s: %w", configPath, err)
+	}
+
+	return nil
+}
+
+// childMap returns parent[key], replacing anything that is not a map with an empty one.
+func childMap(parent map[string]any, key string) map[string]any {
+	child, ok := parent[key].(map[string]any)
+	if !ok {
+		child = map[string]any{}
+		parent[key] = child
+	}
+
+	return child
 }

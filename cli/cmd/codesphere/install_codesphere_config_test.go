@@ -276,7 +276,7 @@ var _ = Describe("install codesphere vault type", func() {
 	It("rejects an extra vault secret name Kubernetes would refuse", func() {
 		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt", ExtraVaultSecret: "PR_42"}
 		err := validateInstallCodesphereVault(opts)
-		Expect(err).To(MatchError(ContainSubstring(`invalid extra vault secret name "PR_42"`)))
+		Expect(err).To(MatchError(ContainSubstring(`invalid secret name "PR_42"`)))
 	})
 })
 

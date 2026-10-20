@@ -106,21 +106,22 @@ func prepareChartVaultSecret(
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
+	creator := vault.NewVaultSecretCreator(kubeClient)
 	secretName := vault.VaultSecretName
 	if opts.ExtraVaultSecret != "" {
-		if err := installer.WriteExtraVaultSecret(ctx, kubeClient, installVault, opts.ExtraVaultSecret); err != nil {
+		if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, opts.ExtraVaultSecret); err != nil {
 			return fmt.Errorf("failed to write extra vault secret: %w", err)
 		}
 
 		secretName = opts.ExtraVaultSecret
 	}
 
-	checksum, err := installer.VaultSecretChecksum(ctx, kubeClient, secretName)
+	checksum, err := creator.SecretChecksum(ctx, vault.VaultSecretNamespace, secretName)
 	if err != nil {
 		return fmt.Errorf("failed to checksum the chart's vault secret: %w", err)
 	}
 
-	if err := installer.AddExternalSecretsChecksum(opts.ConfigPath, checksum); err != nil {
+	if err := vault.AddExternalSecretsChecksum(opts.ConfigPath, checksum); err != nil {
 		return fmt.Errorf("failed to pass the vault checksum to the chart: %w", err)
 	}
 
