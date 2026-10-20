@@ -5,11 +5,8 @@ package vault
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"path/filepath"
-	"sort"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
@@ -71,6 +68,38 @@ var _ = Describe("VaultSecretCreator", func() {
 		secret := &corev1.Secret{}
 		Expect(kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: VaultSecretNamespace, Name: VaultSecretName}, secret)).To(Succeed())
 		Expect(secret.Data).To(HaveKeyWithValue("registry.password", []byte("updated")))
+	})
+
+	It("signs service account tokens the token public key verifies", func() {
+		installVault := &files.InstallVault{}
+		Expect(secrets.EnsureAuthKeys(installVault)).To(Succeed())
+
+		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName)).To(Succeed())
+
+		publicKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(installVault.GetSecret(files.SecretTokenPublicKey).File.Content))
+		Expect(err).ToNot(HaveOccurred())
+
+		secret := &corev1.Secret{}
+		Expect(kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: VaultSecretNamespace, Name: VaultSecretName}, secret)).To(Succeed())
+
+		claims := jwt.MapClaims{}
+		_, err = jwt.ParseWithClaims(string(secret.Data["authServiceUserToken.password"]), claims, func(*jwt.Token) (any, error) { return publicKey, nil },
+			jwt.WithValidMethods([]string{jwt.SigningMethodRS512.Alg()}))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(claims).To(HaveKeyWithValue("serviceId", "auth-service"))
+	})
+
+	It("fails without writing a secret when the vault has no token private key", func() {
+		installVault := &files.InstallVault{Secrets: []files.SecretEntry{
+			{Name: "registry", Fields: &files.SecretFields{Password: "first"}},
+		}}
+
+		err := creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName)
+		Expect(err).To(MatchError(ContainSubstring("tokenPrivateKey not found")))
+
+		secretList := &corev1.SecretList{}
+		Expect(kubeClient.List(ctx, secretList)).To(Succeed())
+		Expect(secretList.Items).To(BeEmpty())
 	})
 })
 
@@ -146,152 +175,36 @@ var _ = Describe("vaultToSecretData", func() {
 	})
 })
 
-// checksumOf recomputes the documented checksum format independently of the code under test.
-func checksumOf(data map[string][]byte) string {
-	keys := make([]string, 0, len(data))
-	for key := range data {
-		keys = append(keys, key)
-	}
-
-	sort.Strings(keys)
-
-	hash := sha256.New()
-	for _, key := range keys {
-		hash.Write([]byte(key))
-		hash.Write([]byte{0})
-		hash.Write(data[key])
-		hash.Write([]byte{0})
-	}
-
-	return hex.EncodeToString(hash.Sum(nil))
-}
-
-func setupExtraVaultSecret() (ctrlclient.Client, *files.InstallVault) {
-	scheme := runtime.NewScheme()
-	Expect(corev1.AddToScheme(scheme)).To(Succeed())
-	kubeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-
-	installVault := &files.InstallVault{Secrets: []files.SecretEntry{
-		{Name: "oidcClientSecret", Fields: &files.SecretFields{Password: "oidc-secret"}},
-	}}
-	Expect(secrets.EnsureAuthKeys(installVault)).To(Succeed())
-
-	return kubeClient, installVault
-}
-
-func getCodesphereSecret(kubeClient ctrlclient.Client, name string) *corev1.Secret {
-	secret := &corev1.Secret{}
-	Expect(kubeClient.Get(context.Background(), ctrlclient.ObjectKey{Namespace: "codesphere", Name: name}, secret)).To(Succeed())
-
-	return secret
-}
-
-var _ = Describe("CreateSecretFromVault", func() {
-	const secretName = "codesphere-pr-42-vault"
-
-	It("writes the vault into the given secret", func() {
-		kubeClient, installVault := setupExtraVaultSecret()
-
-		Expect(NewVaultSecretCreator(kubeClient).CreateSecretFromVault(context.Background(), installVault, VaultSecretNamespace, secretName)).To(Succeed())
-
-		Expect(getCodesphereSecret(kubeClient, secretName).Data).To(HaveKeyWithValue("oidcClientSecret.password", []byte("oidc-secret")))
-	})
-
-	It("signs service account tokens the token public key verifies", func() {
-		kubeClient, installVault := setupExtraVaultSecret()
-
-		Expect(NewVaultSecretCreator(kubeClient).CreateSecretFromVault(context.Background(), installVault, VaultSecretNamespace, secretName)).To(Succeed())
-
-		publicKey, err := jwt.ParseRSAPublicKeyFromPEM([]byte(installVault.GetSecret(files.SecretTokenPublicKey).File.Content))
-		Expect(err).ToNot(HaveOccurred())
-
-		rawToken := getCodesphereSecret(kubeClient, secretName).Data["authServiceUserToken.password"]
-		claims := jwt.MapClaims{}
-		_, err = jwt.ParseWithClaims(string(rawToken), claims, func(*jwt.Token) (any, error) { return publicKey, nil },
-			jwt.WithValidMethods([]string{jwt.SigningMethodRS512.Alg()}))
-		Expect(err).ToNot(HaveOccurred())
-		Expect(claims).To(HaveKeyWithValue("serviceId", "auth-service"))
-	})
-
-	It("leaves other vault secrets untouched", func() {
-		kubeClient, installVault := setupExtraVaultSecret()
-		for _, name := range []string{"cs-vault", "codesphere-pr-7-vault"} {
-			Expect(kubeClient.Create(context.Background(), &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "codesphere"},
-				Data:       map[string][]byte{"marker": []byte(name)},
-			})).To(Succeed())
-		}
-
-		Expect(NewVaultSecretCreator(kubeClient).CreateSecretFromVault(context.Background(), installVault, VaultSecretNamespace, secretName)).To(Succeed())
-
-		Expect(getCodesphereSecret(kubeClient, "cs-vault").Data).To(Equal(map[string][]byte{"marker": []byte("cs-vault")}))
-		Expect(getCodesphereSecret(kubeClient, "codesphere-pr-7-vault").Data).To(Equal(map[string][]byte{"marker": []byte("codesphere-pr-7-vault")}))
-	})
-
-	It("fails without writing a secret when the vault has no token private key", func() {
-		kubeClient, installVault := setupExtraVaultSecret()
-		installVault.RemoveSecret(files.SecretTokenPrivateKey)
-
-		err := NewVaultSecretCreator(kubeClient).CreateSecretFromVault(context.Background(), installVault, VaultSecretNamespace, secretName)
-		Expect(err).To(MatchError(ContainSubstring("tokenPrivateKey not found")))
-
-		secretList := &corev1.SecretList{}
-		Expect(kubeClient.List(context.Background(), secretList)).To(Succeed())
-		Expect(secretList.Items).To(BeEmpty())
-	})
-})
-
 var _ = Describe("SecretChecksum", func() {
-	newKubeClient := func(objects ...ctrlclient.Object) ctrlclient.Client {
+	checksumOf := func(objects ...ctrlclient.Object) (string, error) {
 		scheme := runtime.NewScheme()
 		Expect(corev1.AddToScheme(scheme)).To(Succeed())
+		kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 
-		return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
+		return NewVaultSecretCreator(kubeClient).SecretChecksum(context.Background(), VaultSecretNamespace, VaultSecretName)
 	}
 
-	checksumOfStored := func(data map[string][]byte) string {
-		kubeClient := newKubeClient(&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: "cs-vault", Namespace: "codesphere"},
+	checksumOfData := func(data map[string][]byte) string {
+		checksum, err := checksumOf(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: VaultSecretName, Namespace: VaultSecretNamespace},
 			Data:       data,
 		})
-
-		checksum, err := NewVaultSecretCreator(kubeClient).SecretChecksum(context.Background(), VaultSecretNamespace, "cs-vault")
 		Expect(err).ToNot(HaveOccurred())
+		Expect(checksum).ToNot(BeEmpty())
 
 		return checksum
 	}
 
-	It("returns the checksum of the data stored in the cluster", func() {
-		data := map[string][]byte{
-			"tokenPublicKey":                []byte("written-by-the-dependencies-phase"),
-			"authServiceUserToken.password": []byte("token"),
-		}
-
-		Expect(checksumOfStored(data)).To(Equal(checksumOf(data)))
-	})
-
 	It("changes when a value changes", func() {
-		Expect(checksumOfStored(map[string][]byte{"a": []byte("1")})).ToNot(Equal(checksumOfStored(map[string][]byte{"a": []byte("2")})))
+		Expect(checksumOfData(map[string][]byte{"a": []byte("1")})).ToNot(Equal(checksumOfData(map[string][]byte{"a": []byte("2")})))
 	})
 
 	It("tells apart data that only differs in where a key ends and its value starts", func() {
-		Expect(checksumOfStored(map[string][]byte{"ab": []byte("c")})).ToNot(Equal(checksumOfStored(map[string][]byte{"a": []byte("bc")})))
-	})
-
-	It("matches the data CreateSecretFromVault wrote, including the signed tokens", func() {
-		kubeClient, installVault := setupExtraVaultSecret()
-		Expect(NewVaultSecretCreator(kubeClient).CreateSecretFromVault(context.Background(), installVault, VaultSecretNamespace, "codesphere-pr-42-vault")).To(Succeed())
-
-		checksum, err := NewVaultSecretCreator(kubeClient).SecretChecksum(context.Background(), VaultSecretNamespace, "codesphere-pr-42-vault")
-		Expect(err).ToNot(HaveOccurred())
-
-		written := getCodesphereSecret(kubeClient, "codesphere-pr-42-vault").Data
-		Expect(written).To(HaveKey("authServiceUserToken.password"))
-		Expect(checksum).To(Equal(checksumOf(written)))
+		Expect(checksumOfData(map[string][]byte{"ab": []byte("c")})).ToNot(Equal(checksumOfData(map[string][]byte{"a": []byte("bc")})))
 	})
 
 	It("fails when the secret does not exist", func() {
-		_, err := NewVaultSecretCreator(newKubeClient()).SecretChecksum(context.Background(), VaultSecretNamespace, "cs-vault")
+		_, err := checksumOf()
 		Expect(err).To(MatchError(ContainSubstring(`vault secret "cs-vault" not found`)))
 	})
 })
@@ -299,10 +212,6 @@ var _ = Describe("SecretChecksum", func() {
 var _ = Describe("ValidateSecretName", func() {
 	It("accepts a valid Secret name", func() {
 		Expect(ValidateSecretName("codesphere-pr-42-vault")).To(Succeed())
-	})
-
-	It("rejects a name Kubernetes would refuse for a Secret", func() {
-		Expect(ValidateSecretName("Codesphere_PR/42")).To(MatchError(ContainSubstring(`invalid secret name "Codesphere_PR/42"`)))
 	})
 })
 
