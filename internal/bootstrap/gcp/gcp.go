@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -238,7 +239,10 @@ type CodesphereEnvironment struct {
 	Zone                 string `json:"zone"`
 	DNSZoneName          string `json:"dns_zone_name"`
 
-	RootDiskSize int64 `json:"root_disk_size"`
+	// Test user creation
+	CreateTestUser bool   `json:"-"`
+	OmsWorkdir     string `json:"-"`
+	RootDiskSize   int64  `json:"root_disk_size"`
 	// Local OMS binary copied to the jumpbox instead of installing a release.
 	RemoteOmsBinaryPath string `json:"-"`
 	// PCAppsValues are local pc-apps values files. They are copied to the jumpbox unchanged and
@@ -450,6 +454,12 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		err = b.RunK0sConfigScript()
 		if err != nil {
 			return fmt.Errorf("failed to run k0s config script: %w", err)
+		}
+	}
+
+	if b.Env.CreateTestUser {
+		if err := b.createTestUser(); err != nil {
+			log.Printf("warning: failed to create test user: %v", err)
 		}
 	}
 
