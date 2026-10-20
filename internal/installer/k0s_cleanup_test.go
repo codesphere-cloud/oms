@@ -4,6 +4,8 @@
 package installer_test
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -44,9 +46,22 @@ var _ = Describe("K0sCleanup", func() {
 			Expect(script).To(ContainSubstring(`systemctl disable "$svc.service"`))
 			Expect(script).To(ContainSubstring("K0S=" + installer.K0sPackageBinaryPath))
 			Expect(script).To(ContainSubstring(`"$K0S" reset`))
-			Expect(script).To(ContainSubstring("rm -f /etc/systemd/system/k0sworker.service /etc/systemd/system/k0scontroller.service"))
-			Expect(script).To(ContainSubstring("rm -rf /var/lib/k0s /etc/k0s"))
+			Expect(script).To(ContainSubstring("rm -f /etc/systemd/system/k0sworker.service /etc/systemd/system/k0scontroller.service || exit 1"))
+			Expect(script).To(ContainSubstring("rm -rf --one-file-system /var/lib/k0s /etc/k0s || exit 1"))
 			Expect(script).To(ContainSubstring("systemctl daemon-reload"))
+		})
+
+		It("unmounts remaining volumes and refuses to delete through them", func() {
+			script := installer.K0sCleanupScript()
+
+			unmount := strings.Index(script, `umount "$mnt"`)
+			mountCheck := strings.Index(script, `if [ -n "$(k0s_mounts)" ]; then`)
+			deletion := strings.Index(script, "rm -rf")
+
+			Expect(unmount).To(BeNumerically(">", 0))
+			Expect(mountCheck).To(BeNumerically(">", unmount))
+			Expect(deletion).To(BeNumerically(">", mountCheck))
+			Expect(script[mountCheck:deletion]).To(ContainSubstring("exit 1"))
 		})
 	})
 })

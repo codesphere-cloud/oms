@@ -35,9 +35,13 @@ func K0sCleanupNodeIPs(installConfig *files.RootConfig) []string {
 // K0sCleanupScript returns a shell script that removes k0s from a node: it stops and disables
 // the k0s services, runs k0s reset and deletes the k0s service units, data and config.
 // Controllers (also with --enable-worker) run k0scontroller, dedicated workers run k0sworker,
-// so both are handled. Every step tolerates missing pieces, so the script also cleans up
-// partially installed or corrupted nodes and can be rerun safely. A reboot is required
-// afterwards, see K0sRebootCommand.
+// so both are handled. Missing services, binaries or files are tolerated, so the script also
+// cleans up partially installed or corrupted nodes and can be rerun safely.
+//
+// If k0s reset fails, workload volumes may still be mounted below the k0s directories. The
+// script unmounts them and exits with an error instead of deleting through a remaining mount,
+// which would wipe the volume contents. Failed deletions also make the script fail, so the
+// node is not reported as cleaned. A reboot is required afterwards, see K0sRebootCommand.
 func K0sCleanupScript() string {
 	return fmt.Sprintf(`for svc in k0sworker k0scontroller; do
   systemctl stop "$svc.service" 2>/dev/null || true
@@ -50,8 +54,16 @@ if [ -n "$K0S" ]; then
 else
   echo "k0s binary not found, skipping k0s reset"
 fi
-rm -f /etc/systemd/system/k0sworker.service /etc/systemd/system/k0scontroller.service
-rm -rf /var/lib/k0s /etc/k0s
+k0s_mounts() { awk '$2 ~ "^/(var/lib/k0s|etc/k0s)(/|$)" { print $2 }' /proc/mounts | sort -r; }
+for mnt in $(k0s_mounts); do umount "$mnt" || true; done
+if [ -n "$(k0s_mounts)" ]; then
+  echo "error: still mounted below /var/lib/k0s or /etc/k0s, not deleting them:" >&2
+  k0s_mounts >&2
+  echo "reboot the node and run the cleanup again" >&2
+  exit 1
+fi
+rm -f /etc/systemd/system/k0sworker.service /etc/systemd/system/k0scontroller.service || exit 1
+rm -rf --one-file-system /var/lib/k0s /etc/k0s || exit 1
 systemctl daemon-reload
 `, K0sPackageBinaryPath)
 }
