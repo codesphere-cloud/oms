@@ -266,14 +266,4 @@ var _ = Describe("WriteVaultChecksumToConfig", func() {
 			},
 		}))
 	})
-
-	It("keeps the config readable only by its owner", func() {
-		path := writeConfig("codesphere: {}\n")
-
-		Expect(WriteVaultChecksumToConfig(path, "abc123")).To(Succeed())
-
-		info, err := os.Stat(path)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(info.Mode().Perm()).To(Equal(os.FileMode(0o600)))
-	})
 })

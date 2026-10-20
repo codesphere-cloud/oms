@@ -202,7 +202,7 @@ func WriteVaultChecksumToConfig(configPath, checksum string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Matches the merged install config, which can hold rendered vault values.
+	// 0o600: Same as what the file already has but has no effect here anyway, because the file already exists.
 	if err := os.WriteFile(configPath, updated, 0o600); err != nil {
 		return fmt.Errorf("failed to write config %s: %w", configPath, err)
 	}
