@@ -1,6 +1,7 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package k0s implements the OMS commands to download, install and clean up k0s.
 package k0s
 
 import (
@@ -38,7 +39,8 @@ type CleanupK0sOpts struct {
 	Force         bool
 }
 
-func (c *CleanupK0sCmd) RunE(_ *cobra.Command, args []string) error {
+// RunE removes k0s from all nodes of the install-config via SSH
+func (c *CleanupK0sCmd) RunE(_ *cobra.Command, _ []string) error {
 	config, err := loadManagedInstallConfig(c.Opts.InstallConfig)
 	if err != nil {
 		return err
