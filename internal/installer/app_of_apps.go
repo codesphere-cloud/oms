@@ -47,7 +47,7 @@ const (
 // chart in a private OCI registry. ArgoCD pulls and reconciles the chart; OMS only owns the
 // Application resource.
 type AppOfApps struct {
-	name           string // name of the Application and of its Helm release
+	name           string // name of the Application
 	chart          string
 	version        string // chart version, used as the Application targetRevision (required)
 	namespace      string // destination namespace of the app-of-apps
@@ -173,7 +173,8 @@ func (p *AppOfApps) resolveRepoURL(ctx context.Context) (string, error) {
 // and merged Helm values.
 func (p *AppOfApps) createApplication(repoURL string, vals map[string]interface{}) (*argov1alpha1.Application, error) {
 	helm := &argov1alpha1.ApplicationSourceHelm{
-		ReleaseName: p.name,
+		// Named after the chart: Application names can exceed Helm's 53 character limit.
+		ReleaseName: p.chart,
 	}
 	if len(vals) > 0 {
 		raw, err := json.Marshal(vals)
