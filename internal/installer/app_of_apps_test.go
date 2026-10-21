@@ -301,9 +301,21 @@ var _ = Describe("AppOfApps.Install", func() {
 			Expect(fakeClient.Get(context.Background(), client.ObjectKey{Name: "pr-1-cs-applications", Namespace: "argocd"}, app)).To(Succeed())
 			Expect(app.Spec.Source.Chart).To(Equal("cs-applications"))
 			Expect(app.Spec.Source.TargetRevision).To(Equal("0.3.0"))
-			Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("pr-1-cs-applications"))
+			Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("cs-applications"))
 			Expect(app.Spec.Destination.Namespace).To(Equal("codesphere"))
 			Expect(helmValues(app)).To(HaveKeyWithValue("releaseName", "pr-1"))
+		})
+
+		It("Application name longer than Helm allows for a release -> release named after the chart", func() {
+			name := "codesphere-nate-test-pre-7a1cd4d4-test-cs-applications"
+			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", name, "argocd", nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(apps.Install(context.Background())).To(Succeed())
+
+			app := &argov1alpha1.Application{}
+			Expect(fakeClient.Get(context.Background(), client.ObjectKey{Name: name, Namespace: "argocd"}, app)).To(Succeed())
+			Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("cs-applications"))
 		})
 
 		It("takes the chart name from the reference, not the component", func() {
