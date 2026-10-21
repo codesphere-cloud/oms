@@ -75,6 +75,49 @@ func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, na
 	return nil
 }
 
+// WaitForApplicationSynced waits until Argo CD reports the Application as healthy and synced to
+// its current source. Comparing the source, values included, keeps a sync of an earlier source
+// from counting.
+func WaitForApplicationSynced(ctx context.Context, kubeClient client.Client, name string, logf LogFunc) error {
+	if logf == nil {
+		logf = func(string, ...interface{}) {}
+	}
+
+	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, applicationReadyTimeout)
+
+	lastHealth, lastSync := "", ""
+
+	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, applicationReadyTimeout, true, func(ctx context.Context) (bool, error) {
+		app := &argov1alpha1.Application{}
+		if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: DefaultNamespace}, app); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return false, fmt.Errorf("failed to read ArgoCD Application %q: %w", name, err)
+			}
+
+			logf("Waiting for ArgoCD Application %q to be created", name)
+
+			return false, nil
+		}
+
+		lastHealth, lastSync = string(app.Status.Health.Status), string(app.Status.Sync.Status)
+
+		comparedCurrentSource := app.Spec.Source.Equals(&app.Status.Sync.ComparedTo.Source)
+		if comparedCurrentSource && app.Status.Health.Status == "Healthy" && app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced {
+			logf("ArgoCD Application %q is healthy and synced", name)
+			return true, nil
+		}
+
+		logf("Waiting for ArgoCD Application %q (compared current source=%t, health=%q, sync=%q)", name, comparedCurrentSource, lastHealth, lastSync)
+
+		return false, nil
+	})
+	if err != nil {
+		return fmt.Errorf("timed out waiting for ArgoCD Application %q to become healthy and synced (health=%q, sync=%q): %w", name, lastHealth, lastSync, err)
+	}
+
+	return nil
+}
+
 // InstallerAPI is implemented by the concrete ArgoCD chart installer.
 type InstallerAPI interface {
 	Install() error
