@@ -13,11 +13,11 @@ import (
 const digest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 var _ = Describe("Split", func() {
-	DescribeTable("reference -> repository, tag and digest",
-		func(reference, repository, tag, digest string) {
-			gotRepository, gotTag, gotDigest := imageref.Split(reference)
+	DescribeTable("reference -> name, tag and digest",
+		func(reference, name, tag, digest string) {
+			gotName, gotTag, gotDigest := imageref.Split(reference)
 
-			Expect(gotRepository).To(Equal(repository))
+			Expect(gotName).To(Equal(name))
 			Expect(gotTag).To(Equal(tag))
 			Expect(gotDigest).To(Equal(digest))
 		},
@@ -30,14 +30,18 @@ var _ = Describe("Split", func() {
 	)
 })
 
-var _ = Describe("MirrorRepository", func() {
-	DescribeTable("repository -> path below the mirror",
-		func(repository, mirrored string) {
-			Expect(imageref.MirrorRepository(repository)).To(Equal(mirrored))
+var _ = Describe("MirroredName", func() {
+	DescribeTable("name and mirror registry -> name on the mirror",
+		func(name, mirrorRegistry, mirrored string) {
+			Expect(imageref.MirroredName(name, mirrorRegistry)).To(Equal(mirrored))
 		},
-		Entry("registry with dots", "ghcr.io/codesphere-cloud/api", "ghcr_io/codesphere-cloud/api"),
-		Entry("registry with a port", "registry.example.com:5000/api", "registry_example_com_5000/api"),
-		Entry("no registry", "alpine/kubectl", "alpine/kubectl"),
-		Entry("single segment", "alpine", "alpine"),
+		Entry("registry with dots", "ghcr.io/codesphere-cloud/api", "registry.example.com:5000",
+			"registry.example.com:5000/ghcr_io/codesphere-cloud/api"),
+		Entry("registry with a port", "localhost:5000/nginx", "registry.example.com:5000",
+			"registry.example.com:5000/localhost_5000/nginx"),
+		Entry("mirror with a path", "ghcr.io/codesphere-cloud/api", "registry.example.com/mirror/",
+			"registry.example.com/mirror/ghcr_io/codesphere-cloud/api"),
+		Entry("no registry", "alpine/kubectl", "10.10.0.2:5000", "10.10.0.2:5000/alpine/kubectl"),
+		Entry("single segment", "alpine", "10.10.0.2:5000", "10.10.0.2:5000/alpine"),
 	)
 })
