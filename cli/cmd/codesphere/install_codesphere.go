@@ -56,6 +56,7 @@ type InstallCodesphereOpts struct {
 	ArgoCDRepoURL        string
 	ArgoCDValues         []string
 	PCAppsValues         []string
+	CodesphereViaArgoCD  bool
 }
 
 func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -153,6 +154,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRepoURL, "argo-repo", argocd.DefaultRepoURL, "ArgoCD Helm chart repository URL")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file (can be specified multiple times)")
+	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.CodesphereViaArgoCD, "codesphere-via-argocd", false, "Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm. Requires the chart's external secrets")
 
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
 
@@ -251,6 +253,11 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 			}
 		}
 		merged = intutil.DeepMergeMaps(merged, partial)
+	}
+
+	if opts.CodesphereViaArgoCD {
+		// The Codesphere installer still prepares the release, but OMS deploys the chart.
+		merged = intutil.DeepMergeMaps(merged, map[string]any{"codesphere": map[string]any{"skipChartDeploy": true}})
 	}
 
 	mergedBytes, err := yaml.Marshal(merged)
