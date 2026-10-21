@@ -176,7 +176,7 @@ var _ = Describe("ValidateSecretName", func() {
 	})
 })
 
-var _ = Describe("WriteSyncTriggerToConfig", func() {
+var _ = Describe("WriteChartVaultValuesToConfig", func() {
 	writeConfig := func(content string) string {
 		path := filepath.Join(GinkgoT().TempDir(), "config.yaml")
 		Expect(os.WriteFile(path, []byte(content), 0o600)).To(Succeed())
@@ -194,10 +194,10 @@ var _ = Describe("WriteSyncTriggerToConfig", func() {
 		return config
 	}
 
-	It("sets the trigger next to the existing global overrides", func() {
+	It("sets the vault Secret and trigger next to the existing global overrides", func() {
 		path := writeConfig("codesphere:\n  domain: example.com\n  override:\n    global:\n      hostName: pr-42\n      externalSecrets: true\n")
 
-		Expect(WriteSyncTriggerToConfig(path, "abc123")).To(Succeed())
+		Expect(WriteChartVaultValuesToConfig(path, "codesphere-pr-42-vault", "abc123")).To(Succeed())
 
 		Expect(readConfig(path)).To(Equal(map[string]any{
 			"codesphere": map[string]any{
@@ -206,6 +206,7 @@ var _ = Describe("WriteSyncTriggerToConfig", func() {
 					"global": map[string]any{
 						"hostName":                   "pr-42",
 						"externalSecrets":            true,
+						"externalSecretsVaultSecret": "codesphere-pr-42-vault",
 						"externalSecretsSyncTrigger": "abc123",
 					},
 				},
@@ -216,13 +217,16 @@ var _ = Describe("WriteSyncTriggerToConfig", func() {
 	It("creates the override path when the config has none", func() {
 		path := writeConfig("postgres:\n  mode: install\n")
 
-		Expect(WriteSyncTriggerToConfig(path, "abc123")).To(Succeed())
+		Expect(WriteChartVaultValuesToConfig(path, "codesphere-pr-42-vault", "abc123")).To(Succeed())
 
 		Expect(readConfig(path)).To(Equal(map[string]any{
 			"postgres": map[string]any{"mode": "install"},
 			"codesphere": map[string]any{
 				"override": map[string]any{
-					"global": map[string]any{"externalSecretsSyncTrigger": "abc123"},
+					"global": map[string]any{
+						"externalSecretsVaultSecret": "codesphere-pr-42-vault",
+						"externalSecretsSyncTrigger": "abc123",
+					},
 				},
 			},
 		}))

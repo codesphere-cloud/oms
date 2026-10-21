@@ -263,7 +263,7 @@ func installCodesphereSopsAndAgeAvailable() bool {
 
 var _ = Describe("install codesphere vault type", func() {
 	It("accepts sops", func() {
-		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt"}
+		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt", VaultSecretName: vault.VaultSecretName}
 		Expect(validateInstallCodesphereVault(opts)).To(Succeed())
 	})
 
@@ -273,10 +273,21 @@ var _ = Describe("install codesphere vault type", func() {
 		Expect(err).To(MatchError(`install codesphere requires vault type "sops"`))
 	})
 
-	It("rejects an extra vault secret name Kubernetes would refuse", func() {
-		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt", ExtraVaultSecret: "PR_42"}
+	It("rejects a vault secret name Kubernetes would refuse", func() {
+		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt", VaultSecretName: "PR_42"}
 		err := validateInstallCodesphereVault(opts)
 		Expect(err).To(MatchError(ContainSubstring(`invalid secret name "PR_42"`)))
+	})
+})
+
+var _ = Describe("validateDependenciesVaultSecretName", func() {
+	It("accepts the default vault secret name", func() {
+		Expect(validateDependenciesVaultSecretName(&InstallCodesphereOpts{VaultSecretName: vault.VaultSecretName})).To(Succeed())
+	})
+
+	It("rejects a custom vault secret name the pc-apps would not read", func() {
+		err := validateDependenciesVaultSecretName(&InstallCodesphereOpts{VaultSecretName: "codesphere-pr-42-vault"})
+		Expect(err).To(MatchError(`--vault-secret-name "codesphere-pr-42-vault" is only supported by the platform phase, the dependencies phase writes "cs-vault"`))
 	})
 })
 

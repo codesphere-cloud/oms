@@ -18,6 +18,7 @@ import (
 	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +37,10 @@ func (c *InstallCodesphereDepenciesCmd) RunE(cmd *cobra.Command, _ []string) err
 		return err
 	}
 
+	if err := validateDependenciesVaultSecretName(c.Opts); err != nil {
+		return err
+	}
+
 	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {
 		return fmt.Errorf("--local-config-dir is required with --local-components")
 	}
@@ -50,6 +55,16 @@ func (c *InstallCodesphereDepenciesCmd) RunE(cmd *cobra.Command, _ []string) err
 	}
 
 	return installCodesphereDepencies(cmd.Context(), effectiveOpts, cfg, c.Env)
+}
+
+// validateDependenciesVaultSecretName rejects a custom vault Secret because the pc-apps charts
+// read theirs from vault.VaultSecretName.
+func validateDependenciesVaultSecretName(opts *InstallCodesphereOpts) error {
+	if opts.VaultSecretName != vault.VaultSecretName {
+		return fmt.Errorf("--vault-secret-name %q is only supported by the platform phase, the dependencies phase writes %q", opts.VaultSecretName, vault.VaultSecretName)
+	}
+
+	return nil
 }
 
 func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {

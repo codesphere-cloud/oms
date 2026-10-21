@@ -52,17 +52,15 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 
-	// A skipped deploy must not rewrite the extra Secret: its freshly signed tokens would make
+	// A skipped deploy must not rewrite the vault Secret: its freshly signed tokens would make
 	// Reloader restart the running release.
 	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep) {
-		if opts.ExtraVaultSecret != "" {
-			if err := writeExtraVaultSecret(ctx, opts, cfg); err != nil {
-				return err
-			}
+		if err := writeVaultSecret(ctx, opts, cfg); err != nil {
+			return err
 		}
 
-		if err := vault.WriteSyncTriggerToConfig(opts.ConfigPath, rand.Text()); err != nil {
-			return fmt.Errorf("failed to pass the sync trigger to the chart: %w", err)
+		if err := vault.WriteChartVaultValuesToConfig(opts.ConfigPath, opts.VaultSecretName, rand.Text()); err != nil {
+			return fmt.Errorf("failed to pass the vault Secret to the chart: %w", err)
 		}
 	}
 
@@ -96,7 +94,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	return nil
 }
 
-func writeExtraVaultSecret(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) error {
+func writeVaultSecret(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) error {
 	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to load vault and Kubernetes config: %w", err)
@@ -108,8 +106,8 @@ func writeExtraVaultSecret(ctx context.Context, opts *InstallCodesphereOpts, cfg
 	}
 
 	creator := vault.NewVaultSecretCreator(kubeClient)
-	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, opts.ExtraVaultSecret); err != nil {
-		return fmt.Errorf("failed to write extra vault secret: %w", err)
+	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, opts.VaultSecretName); err != nil {
+		return fmt.Errorf("failed to write vault secret %q: %w", opts.VaultSecretName, err)
 	}
 
 	return nil

@@ -29,11 +29,12 @@ var _ = Describe("InstallCodesphereCmd", func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		globalOpts = &util.GlobalOptions{}
 		opts = &codesphere.InstallCodesphereOpts{
-			GlobalOptions: globalOpts,
-			Package:       "codesphere-v1.66.0-installer-lite.tar.gz",
-			Force:         false,
-			VaultType:     "sops",
-			PrivKey:       "age-key.txt",
+			GlobalOptions:   globalOpts,
+			Package:         "codesphere-v1.66.0-installer-lite.tar.gz",
+			Force:           false,
+			VaultType:       "sops",
+			PrivKey:         "age-key.txt",
+			VaultSecretName: "cs-vault",
 		}
 		c = codesphere.InstallCodesphereCmd{
 			Opts: opts,
@@ -52,6 +53,14 @@ var _ = Describe("InstallCodesphereCmd", func() {
 			runCmd.SetContext(context.Background())
 			err := c.RunE(runCmd, nil)
 			Expect(err).To(MatchError("--local-components requires install codesphere dependencies or install codesphere platform"))
+		})
+
+		It("rejects a custom vault secret name before running the dependencies phase", func() {
+			c.Opts.VaultSecretName = "codesphere-pr-42-vault"
+			runCmd := &cobra.Command{}
+			runCmd.SetContext(context.Background())
+			err := c.RunE(runCmd, nil)
+			Expect(err).To(MatchError(ContainSubstring(`--vault-secret-name "codesphere-pr-42-vault" is only supported by the platform phase`)))
 		})
 
 		It("calls GetOmsWorkdir and fails on non-linux platform", func() {
@@ -147,8 +156,8 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 			}
 		}
 
-		extraVaultSecretFlag := codesphereCmd.PersistentFlags().Lookup("extra-vault-secret")
-		Expect(extraVaultSecretFlag).NotTo(BeNil())
-		Expect(extraVaultSecretFlag.DefValue).To(Equal(""))
+		vaultSecretNameFlag := codesphereCmd.PersistentFlags().Lookup("vault-secret-name")
+		Expect(vaultSecretNameFlag).NotTo(BeNil())
+		Expect(vaultSecretNameFlag.DefValue).To(Equal("cs-vault"))
 	})
 })

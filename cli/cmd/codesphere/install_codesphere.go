@@ -58,7 +58,7 @@ type InstallCodesphereOpts struct {
 	ArgoCDRepoURL        string
 	ArgoCDValues         []string
 	PCAppsValues         []string
-	ExtraVaultSecret     string
+	VaultSecretName      string
 }
 
 func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -67,6 +67,12 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
+	}
+
+	if !c.Opts.CodesphereOnly {
+		if err := validateDependenciesVaultSecretName(c.Opts); err != nil {
+			return err
+		}
 	}
 	ctx := cmd.Context()
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
@@ -162,7 +168,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRepoURL, "argo-repo", argocd.DefaultRepoURL, "ArgoCD Helm chart repository URL")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file (can be specified multiple times)")
-	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ExtraVaultSecret, "extra-vault-secret", "", "Also write the vault into this Secret in the codesphere namespace before deploying Codesphere, e.g. for preview releases sharing a cluster")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.VaultSecretName, "vault-secret-name", vault.VaultSecretName, "Secret in the codesphere namespace the vault is written to and Codesphere reads it from. Only the platform phase supports a non-default name, e.g. for preview releases sharing a cluster")
 
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
 
@@ -187,10 +193,8 @@ func validateInstallCodesphereVault(opts *InstallCodesphereOpts) error {
 		return fmt.Errorf("failed to validate install config: %w", err)
 	}
 
-	if opts.ExtraVaultSecret != "" {
-		if err := vault.ValidateSecretName(opts.ExtraVaultSecret); err != nil {
-			return fmt.Errorf("failed to validate --extra-vault-secret: %w", err)
-		}
+	if err := vault.ValidateSecretName(opts.VaultSecretName); err != nil {
+		return fmt.Errorf("failed to validate --vault-secret-name: %w", err)
 	}
 
 	return nil
