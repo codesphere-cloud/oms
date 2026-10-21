@@ -167,31 +167,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 		})
 
-		Context("when the config is not recovered", func() {
-			BeforeEach(func() {
-				csEnv.InstallLocal = "installer-lite.tar.gz"
-			})
+		// A vault kept locally from the first bootstrap lacks the kubeconfig that "oms install k0s"
+		// added to the jumpbox's copy, so uploading it would break the install.
+		It("rejects a Codesphere-only install without recover-config, even when local config files exist", func() {
+			csEnv.InstallLocal = "installer-lite.tar.gz"
 
-			It("accepts the install config and vault kept from the first bootstrap", func() {
-				fw.EXPECT().Exists("fake-config-file").Return(true)
-				fw.EXPECT().Exists("fake-secret").Return(true)
-				fw.EXPECT().Exists("installer-lite.tar.gz").Return(true)
+			fw.EXPECT().Exists(mock.Anything).Return(true).Maybe()
 
-				Expect(bs.ValidateInput()).To(Succeed())
-			})
-
-			It("rejects a missing install config, which would be generated anew", func() {
-				fw.EXPECT().Exists("fake-config-file").Return(false)
-
-				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only needs the existing install config and vault")))
-			})
-
-			It("rejects a missing vault, whose secrets would be generated anew", func() {
-				fw.EXPECT().Exists("fake-config-file").Return(true)
-				fw.EXPECT().Exists("fake-secret").Return(false)
-
-				Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only needs the existing install config and vault")))
-			})
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only requires recover-config")))
 		})
 	})
 

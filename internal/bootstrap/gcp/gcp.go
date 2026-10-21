@@ -577,8 +577,9 @@ func (b *GCPBootstrapper) ValidateInput() error {
 }
 
 // validateCodesphereOnly rejects a Codesphere-only install that has nothing to install, or that
-// would run without the existing config and vault: the bootstrap would then generate new secrets,
-// copy them to the jumpbox and install Codesphere against a database that expects the old ones.
+// would upload a vault other than the jumpbox's: the bootstrap copies its vault to the jumpbox,
+// and only the jumpbox's copy holds the kubeconfig "oms install k0s" added, which a
+// Codesphere-only install does not add again.
 func (b *GCPBootstrapper) validateCodesphereOnly() error {
 	if !b.Env.InstallCodesphereOnly {
 		return nil
@@ -588,13 +589,8 @@ func (b *GCPBootstrapper) validateCodesphereOnly() error {
 		return fmt.Errorf("install-codesphere-only requires install-version or install-local")
 	}
 
-	if b.Env.RecoverConfig {
-		return nil
-	}
-
-	if !b.fw.Exists(b.Env.InstallConfigPath) || !b.fw.Exists(b.Env.SecretsFilePath) {
-		return fmt.Errorf("install-codesphere-only needs the existing install config and vault: pass --recover-config or keep %s and %s from the first bootstrap",
-			b.Env.InstallConfigPath, b.Env.SecretsFilePath)
+	if !b.Env.RecoverConfig {
+		return fmt.Errorf("install-codesphere-only requires recover-config, so the install keeps the jumpbox's config and vault")
 	}
 
 	return nil
