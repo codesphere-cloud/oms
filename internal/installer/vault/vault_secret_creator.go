@@ -5,19 +5,15 @@ package vault
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -136,39 +132,6 @@ func vaultToSecretData(vault *files.InstallVault) (map[string][]byte, error) {
 	return data, nil
 }
 
-// SecretChecksum reads a Secret back from the cluster, so the checksum matches what ESO reads,
-// whichever phase or run wrote it.
-func (v *VaultSecretCreator) SecretChecksum(ctx context.Context, namespace, secretName string) (string, error) {
-	secret := &corev1.Secret{}
-
-	err := v.client.Get(ctx, client.ObjectKey{Namespace: namespace, Name: secretName}, secret)
-	if apierrors.IsNotFound(err) {
-		return "", fmt.Errorf("vault secret %q not found, run the ArgoCD pre-step of the dependencies phase first: %w", secretName, err)
-	}
-
-	if err != nil {
-		return "", fmt.Errorf("failed to read %q: %w", secretName, err)
-	}
-
-	keys := make([]string, 0, len(secret.Data))
-	for key := range secret.Data {
-		keys = append(keys, key)
-	}
-
-	sort.Strings(keys)
-
-	hash := sha256.New()
-	for _, key := range keys {
-		// The separator keeps "ab"+"c" and "a"+"bc" from hashing alike.
-		hash.Write([]byte(key))
-		hash.Write([]byte{0})
-		hash.Write(secret.Data[key])
-		hash.Write([]byte{0})
-	}
-
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
 // ValidateSecretName rejects names Kubernetes would refuse for a Secret.
 func ValidateSecretName(name string) error {
 	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {
@@ -178,12 +141,12 @@ func ValidateSecretName(name string) error {
 	return nil
 }
 
-// WriteVaultChecksumToConfig sets codesphere.override.global.externalSecretsChecksum in the
+// WriteSyncTriggerToConfig sets codesphere.override.global.externalSecretsSyncTrigger in the
 // merged config file OMS hands to the TS installer. The chart puts it on its ExternalSecrets,
 // which ESO only re-syncs when they change, so a changed vault reaches the release in the
 // same deploy. Rewriting the merged config is a stopgap: once OMS deploys through the
-// cs-applications app of apps, it sets the checksum in the values it builds instead.
-func WriteVaultChecksumToConfig(configPath, checksum string) error {
+// cs-applications app of apps, it sets the trigger in the values it builds instead.
+func WriteSyncTriggerToConfig(configPath, trigger string) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read config %s: %w", configPath, err)
@@ -195,7 +158,7 @@ func WriteVaultChecksumToConfig(configPath, checksum string) error {
 	}
 
 	global := childMap(childMap(childMap(config, "codesphere"), "override"), "global")
-	global["externalSecretsChecksum"] = checksum
+	global["externalSecretsSyncTrigger"] = trigger
 
 	updated, err := yaml.Marshal(config)
 	if err != nil {

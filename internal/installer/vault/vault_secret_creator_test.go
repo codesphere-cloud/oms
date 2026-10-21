@@ -166,40 +166,6 @@ var _ = Describe("vaultToSecretData", func() {
 	})
 })
 
-var _ = Describe("SecretChecksum", func() {
-	checksumOf := func(objects ...ctrlclient.Object) (string, error) {
-		scheme := runtime.NewScheme()
-		Expect(corev1.AddToScheme(scheme)).To(Succeed())
-		kubeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
-
-		return NewVaultSecretCreator(kubeClient).SecretChecksum(context.Background(), VaultSecretNamespace, VaultSecretName)
-	}
-
-	checksumOfData := func(data map[string][]byte) string {
-		checksum, err := checksumOf(&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{Name: VaultSecretName, Namespace: VaultSecretNamespace},
-			Data:       data,
-		})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(checksum).ToNot(BeEmpty())
-
-		return checksum
-	}
-
-	It("changes when a value changes", func() {
-		Expect(checksumOfData(map[string][]byte{"a": []byte("1")})).ToNot(Equal(checksumOfData(map[string][]byte{"a": []byte("2")})))
-	})
-
-	It("tells apart data that only differs in where a key ends and its value starts", func() {
-		Expect(checksumOfData(map[string][]byte{"ab": []byte("c")})).ToNot(Equal(checksumOfData(map[string][]byte{"a": []byte("bc")})))
-	})
-
-	It("fails when the secret does not exist", func() {
-		_, err := checksumOf()
-		Expect(err).To(MatchError(ContainSubstring(`vault secret "cs-vault" not found`)))
-	})
-})
-
 var _ = Describe("ValidateSecretName", func() {
 	It("accepts a valid Secret name", func() {
 		Expect(ValidateSecretName("codesphere-pr-42-vault")).To(Succeed())
@@ -210,7 +176,7 @@ var _ = Describe("ValidateSecretName", func() {
 	})
 })
 
-var _ = Describe("WriteVaultChecksumToConfig", func() {
+var _ = Describe("WriteSyncTriggerToConfig", func() {
 	writeConfig := func(content string) string {
 		path := filepath.Join(GinkgoT().TempDir(), "config.yaml")
 		Expect(os.WriteFile(path, []byte(content), 0o600)).To(Succeed())
@@ -228,19 +194,19 @@ var _ = Describe("WriteVaultChecksumToConfig", func() {
 		return config
 	}
 
-	It("sets the checksum next to the existing global overrides", func() {
+	It("sets the trigger next to the existing global overrides", func() {
 		path := writeConfig("codesphere:\n  domain: example.com\n  override:\n    global:\n      hostName: pr-42\n      externalSecrets: true\n")
 
-		Expect(WriteVaultChecksumToConfig(path, "abc123")).To(Succeed())
+		Expect(WriteSyncTriggerToConfig(path, "abc123")).To(Succeed())
 
 		Expect(readConfig(path)).To(Equal(map[string]any{
 			"codesphere": map[string]any{
 				"domain": "example.com",
 				"override": map[string]any{
 					"global": map[string]any{
-						"hostName":                "pr-42",
-						"externalSecrets":         true,
-						"externalSecretsChecksum": "abc123",
+						"hostName":                   "pr-42",
+						"externalSecrets":            true,
+						"externalSecretsSyncTrigger": "abc123",
 					},
 				},
 			},
@@ -250,13 +216,13 @@ var _ = Describe("WriteVaultChecksumToConfig", func() {
 	It("creates the override path when the config has none", func() {
 		path := writeConfig("postgres:\n  mode: install\n")
 
-		Expect(WriteVaultChecksumToConfig(path, "abc123")).To(Succeed())
+		Expect(WriteSyncTriggerToConfig(path, "abc123")).To(Succeed())
 
 		Expect(readConfig(path)).To(Equal(map[string]any{
 			"postgres": map[string]any{"mode": "install"},
 			"codesphere": map[string]any{
 				"override": map[string]any{
-					"global": map[string]any{"externalSecretsChecksum": "abc123"},
+					"global": map[string]any{"externalSecretsSyncTrigger": "abc123"},
 				},
 			},
 		}))

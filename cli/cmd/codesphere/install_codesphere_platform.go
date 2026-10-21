@@ -5,6 +5,7 @@ package codesphere
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -89,13 +90,27 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	return nil
 }
 
-// prepareChartVaultSecret writes the extra vault Secret if one is requested and passes the
-// checksum of the Secret the chart reads to the chart through the merged config.
+// prepareChartVaultSecret writes the extra vault Secret if one is requested and passes a new
+// sync trigger to the chart through the merged config.
 func prepareChartVaultSecret(
 	ctx context.Context,
 	opts *InstallCodesphereOpts,
 	cfg files.RootConfig,
 ) error {
+	if opts.ExtraVaultSecret != "" {
+		if err := writeExtraVaultSecret(ctx, opts, cfg); err != nil {
+			return err
+		}
+	}
+
+	if err := vault.WriteSyncTriggerToConfig(opts.ConfigPath, rand.Text()); err != nil {
+		return fmt.Errorf("failed to pass the sync trigger to the chart: %w", err)
+	}
+
+	return nil
+}
+
+func writeExtraVaultSecret(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) error {
 	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to load vault and Kubernetes config: %w", err)
@@ -107,22 +122,8 @@ func prepareChartVaultSecret(
 	}
 
 	creator := vault.NewVaultSecretCreator(kubeClient)
-	secretName := vault.VaultSecretName
-	if opts.ExtraVaultSecret != "" {
-		if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, opts.ExtraVaultSecret); err != nil {
-			return fmt.Errorf("failed to write extra vault secret: %w", err)
-		}
-
-		secretName = opts.ExtraVaultSecret
-	}
-
-	checksum, err := creator.SecretChecksum(ctx, vault.VaultSecretNamespace, secretName)
-	if err != nil {
-		return fmt.Errorf("failed to checksum the chart's vault secret: %w", err)
-	}
-
-	if err := vault.WriteVaultChecksumToConfig(opts.ConfigPath, checksum); err != nil {
-		return fmt.Errorf("failed to pass the vault checksum to the chart: %w", err)
+	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, opts.ExtraVaultSecret); err != nil {
+		return fmt.Errorf("failed to write extra vault secret: %w", err)
 	}
 
 	return nil
