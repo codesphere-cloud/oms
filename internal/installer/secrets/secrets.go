@@ -16,18 +16,20 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
-
 	"github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
 // EnsureSecrets generates all secrets required by the Helm chart that are not derived from
-// the installer configuration. Each sub-function is idempotent; the whole call is safe to
-// repeat on an already-populated vault.
+// the installer configuration. Existing keys and other stable secrets are preserved;
+// service account tokens are renewed on every call.
 func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
-	if err := EnsureAuthKeys(vault); err != nil {
+	if err := EnsureAuthKeys(vault, config.Codesphere.TokenAlgorithm); err != nil {
 		return fmt.Errorf("ensure auth keys: %w", err)
+	}
+
+	if err := EnsureServiceAccountTokens(vault, config.Codesphere.TokenAlgorithm); err != nil {
+		return fmt.Errorf("ensure service account tokens: %w", err)
 	}
 	if err := EnsureIngressCA(vault, &config.Cluster); err != nil {
 		return fmt.Errorf("ensure ingress CA: %w", err)
@@ -90,56 +92,22 @@ var codesphereServiceUsers = []serviceUser{
 	{tokenName: "teamServiceUserToken", serviceID: "team-service", email: "team.service@codesphere.com"},
 }
 
-// EnsureServiceAccountTokens signs RS512 JWTs for all Codesphere internal service accounts
-// and stores them in vault. Requires tokenPrivateKey to already be present (call EnsureAuthKeys
-// first). Idempotent: skips if authServiceUserToken already exists.
-func EnsureServiceAccountTokens(vault *files.InstallVault) error {
-	privKeyEntry := vault.GetSecret(files.SecretTokenPrivateKey)
-	if privKeyEntry == nil || privKeyEntry.File == nil {
-		return fmt.Errorf("tokenPrivateKey not found in vault; call EnsureAuthKeys first")
-	}
-
-	rsaKey, err := ParseRSAPrivateKey(privKeyEntry.File.Content)
+// EnsureAuthKeys generates token signing and domain-auth keys when absent.
+// Existing token keys select the algorithm unless one is explicitly configured.
+func EnsureAuthKeys(vault *files.InstallVault, configured ...string) error {
+	algorithm, err := tokenAlgorithm(vault, configured)
 	if err != nil {
-		return fmt.Errorf("parse tokenPrivateKey: %w", err)
+		return err
 	}
-
-	expiresAt := time.Now().Add(serviceAccountTokenExpiry)
-
-	for _, su := range codesphereServiceUsers {
-		claims := jwt.MapClaims{
-			"userId":               -1,
-			"firstName":            su.serviceID,
-			"lastName":             "",
-			"avatarId":             "",
-			"serviceId":            su.serviceID,
-			"authenticationMethod": "service",
-			"email":                su.email,
-			"exp":                  expiresAt.Unix(),
-			"iat":                  time.Now().Unix(),
-		}
-		token, err := jwt.NewWithClaims(jwt.SigningMethodRS512, claims).SignedString(rsaKey)
-		if err != nil {
-			return fmt.Errorf("sign token for %s: %w", su.tokenName, err)
-		}
-		vault.SetSecret(files.SecretEntry{
-			Name:   su.tokenName,
-			Fields: &files.SecretFields{Password: token},
-		})
-	}
-	return nil
-}
-
-// EnsureAuthKeys generates RSA-4096 token keys and EC P-256 domain-auth keys in
-// PKCS8/SPKI PEM format if not already present. Each key pair is checked independently.
-func EnsureAuthKeys(vault *files.InstallVault) error {
 	if vault.GetSecret(files.SecretTokenPrivateKey) == nil {
-		tokenPriv, tokenPub, err := generateRSAPKCS8KeyPair(4096)
+		tokenPriv, tokenPub, err := generateTokenKeyPair(algorithm)
 		if err != nil {
 			return fmt.Errorf("generate token key pair: %w", err)
 		}
 		vault.SetSecret(files.SecretEntry{Name: files.SecretTokenPrivateKey, File: &files.SecretFile{Name: "key.pem", Content: tokenPriv}})
 		vault.SetSecret(files.SecretEntry{Name: files.SecretTokenPublicKey, File: &files.SecretFile{Name: "key.pub", Content: tokenPub}})
+	} else if err := validateTokenKeys(vault, algorithm); err != nil {
+		return err
 	}
 
 	if vault.GetSecret(files.SecretDomainAuthPrivateKey) == nil {
