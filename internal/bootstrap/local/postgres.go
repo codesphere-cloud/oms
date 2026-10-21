@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"time"
 
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
@@ -46,8 +47,8 @@ func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
 	// The BOM component is Codesphere's wrapper chart around the upstream
 	// cloudnative-pg chart. Its tag is the wrapper's own version, so it must be
 	// installed from the OCI registry the BOM references, not from the upstream repo.
-	return b.installHelmApplication(helmApplicationConfig{
-		Name: cnpgReleaseName, Chart: cnpgBOMComponent, RepoURL: b.argoCDOCIRegistryURL(),
+	return b.installPrerequisiteChart(prerequisiteChartConfig{
+		Name: cnpgReleaseName, Chart: path.Base(chart.Name()), RepoURL: path.Dir(chart.Name()),
 		TargetRevision: chart.Tag(), Namespace: codesphereNamespace,
 		Values: map[string]interface{}{
 			// Values for the upstream chart are nested below its dependency name.
@@ -87,7 +88,7 @@ func (b *LocalBootstrapper) DeployPostgresDatabase() error {
 			ImageName: fmt.Sprintf("ghcr.io/cloudnative-pg/postgresql:%s-system-trixie", cnpgDatabaseVersion),
 			Instances: 1,
 			StorageConfiguration: cnpgv1.StorageConfiguration{
-				StorageClass: ptr.To(cephStorageClassName),
+				StorageClass: ptr.To(b.storageClassName()),
 				Size:         cnpgDatabaseStorageSize,
 			},
 			EnableSuperuserAccess: ptr.To(true),

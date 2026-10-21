@@ -70,7 +70,7 @@ oms beta bootstrap-gcp [flags]
       --openbao-user string                       OpenBao username (optional) (default "admin")
       --pc-apps-values stringArray                pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)
       --preemptible                               Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)
-      --preview-flags stringArray                 Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,cluster-admin,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
+      --preview-flags stringArray                 Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
       --project-name string                       Unique GCP Project Name (required)
       --project-ttl string                        Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours) (default "2h")
       --prometheus-remote-write-password string   Prometheus remote write password stored in the generated vault (optional)

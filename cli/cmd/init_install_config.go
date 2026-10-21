@@ -34,6 +34,8 @@ type InitInstallConfigOpts struct {
 	VaultType  string
 	AgeKey     string
 
+	CodesphereVersion    string
+	CodesphereHash       string
 	Profile              string
 	AnsibleInventoryFile string
 
@@ -187,9 +189,6 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 			- config.yaml: Main configuration (infrastructure, networking, plans)
 			- prod.vault.yaml: Secrets file (keys, certificates, passwords)
 			
-			Note: When --interactive=true (default), all other configuration flags are ignored 
-			and you will be prompted for all settings interactively.
-			
 			Note: When using ansible-inventory make sure the inventory follows our supported structure.
 			Supported YAML format (where 'hosts' is a dictionary of hostname keys):
 			- <k8s-cp|k8s-workers|ceph>.hosts.<hostname>.private_ip
@@ -201,7 +200,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 			`),
 			Example: util.FormatExamples("init install-config", []csio.Example{
 				{Cmd: "-c config.yaml --vault prod.vault.yaml", Desc: "Create config files interactively"},
-				{Cmd: "--profile dev -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
+				{Cmd: "--profile dev --codesphere-version 1.111.0 --codesphere-hash abc123 -c config.yaml --vault prod.vault.yaml", Desc: "Use dev profile with defaults"},
 				{Cmd: "--profile production -c config.yaml --vault prod.vault.yaml", Desc: "Use production profile"},
 				{Cmd: "--profile production -c config.yaml --ansible-inventory inventory.yaml", Desc: "Use ansible inventory for host definitions"},
 				{Cmd: "--validate -c config.yaml --vault prod.vault.yaml", Desc: "Validate existing configuration files"},
@@ -211,6 +210,8 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 		FileWriter: intutil.NewFilesystemWriter(),
 	}
 
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereVersion, "codesphere-version", "", "Codesphere version to write to operations.codesphere.version")
+	c.cmd.Flags().StringVar(&c.Opts.CodesphereHash, "codesphere-hash", "", "Optional Codesphere build hash to write to operations.codesphere.hash")
 	c.cmd.Flags().StringVarP(&c.Opts.ConfigFile, "config", "c", "config.yaml", "Output file path for config.yaml")
 	c.cmd.Flags().StringVar(&c.Opts.VaultFile, "vault", "prod.vault.yaml", "Output file path for prod.vault.yaml")
 	c.cmd.Flags().StringVar(&c.Opts.VaultType, "vault-type", "sops", "Vault storage type (sops or plain)")
@@ -221,7 +222,7 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 
 	c.cmd.Flags().BoolVar(&c.Opts.ValidateOnly, "validate", false, "Validate existing config files instead of creating new ones")
 	c.cmd.Flags().BoolVar(&c.Opts.WithComments, "with-comments", false, "Add helpful comments to the generated YAML files")
-	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (when true, other config flags are ignored)")
+	c.cmd.Flags().BoolVar(&c.Opts.Interactive, "interactive", true, "Enable interactive prompting (version and hash flags provide prompt defaults)")
 	c.cmd.Flags().BoolVar(&c.Opts.GenerateKeys, "generate-keys", true, "Generate SSH keys and certificates")
 	c.cmd.Flags().StringVar(&c.Opts.SecretsBaseDir, "secrets-dir", "/root/secrets", "Secrets base directory")
 
@@ -285,6 +286,9 @@ func AddInitInstallConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 }
 
 func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigManager) error {
+	if c.Opts.CodesphereHash != "" && c.Opts.CodesphereVersion == "" {
+		return fmt.Errorf("--codesphere-hash requires --codesphere-version")
+	}
 	if c.Opts.ValidateOnly {
 		return c.validateOnly(icg)
 	}
@@ -303,6 +307,10 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		if err != nil {
 			return fmt.Errorf("failed to import from Ansible inventory: %w", err)
 		}
+	}
+
+	if c.Opts.CodesphereVersion != "" {
+		icg.GetInstallConfig().SetCodespherePackage(c.Opts.CodesphereVersion, c.Opts.CodesphereHash)
 	}
 
 	if c.Opts.Interactive {

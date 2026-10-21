@@ -18,19 +18,20 @@ import (
 func writeValuesFile(content string) string {
 	path := filepath.Join(GinkgoT().TempDir(), "values.yaml")
 	Expect(os.WriteFile(path, []byte(content), 0o600)).To(Succeed())
+
 	return path
 }
 
 var _ = Describe("Installer.Install", func() {
 	var (
 		helmMock            *installer.MockHelmClient
-		argoCDResourcesMock *argocd.MockArgoCDResources
+		argoCDResourcesMock *argocd.MockResources
 		a                   *argocd.Installer
 	)
 
 	BeforeEach(func() {
 		helmMock = installer.NewMockHelmClient(GinkgoT())
-		argoCDResourcesMock = argocd.NewMockArgoCDResources(GinkgoT())
+		argoCDResourcesMock = argocd.NewMockResources(GinkgoT())
 		a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0"}, Helm: helmMock, Resources: argoCDResourcesMock}
 	})
 
@@ -285,7 +286,9 @@ var _ = Describe("Installer.Install", func() {
 				if !ok || dex["enabled"] != false {
 					return false
 				}
+
 				server, ok := cfg.Values["server"].(map[string]interface{})
+
 				return ok && server["replicas"] == float64(2)
 			}), mock.Anything).Return(nil)
 
@@ -304,7 +307,9 @@ var _ = Describe("Installer.Install", func() {
 				if !ok || dex["enabled"] != true {
 					return false
 				}
+
 				server, ok := cfg.Values["server"].(map[string]interface{})
+
 				return ok && server["replicas"] == float64(3)
 			}), mock.Anything).Return(nil)
 
@@ -354,6 +359,7 @@ var _ = Describe("Installer.Install", func() {
 
 		It("installs extra ArgoCD resources when FullInstall option in true", func() {
 			argoCDResourcesMock.EXPECT().ApplyAll(mock.Anything).Return(nil)
+
 			a.FullInstall = true
 
 			err := a.Install()

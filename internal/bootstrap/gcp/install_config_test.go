@@ -111,6 +111,41 @@ var _ = Describe("Installconfig & Secrets", func() {
 	})
 
 	Describe("EnsureInstallConfig", func() {
+		DescribeTable("selects the configured package unless an explicit source overrides it",
+			func(version, hash, local, configuredHash, expectedVersion, expectedHash string, resolve bool) {
+				cfg := files.NewRootConfig()
+				cfg.SetCodespherePackage("1.111.0", configuredHash)
+
+				csEnv.InstallVersion, csEnv.InstallHash, csEnv.InstallLocal = version, hash, local
+				csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+				fw.EXPECT().Exists(csEnv.InstallConfigPath).Return(true)
+				icg.EXPECT().LoadVaultFromUnecryptedFile(csEnv.SecretsFilePath).Return(nil)
+				icg.EXPECT().LoadInstallConfigFromFile(csEnv.InstallConfigPath).Return(nil)
+				icg.EXPECT().GetInstallConfig().Return(&cfg)
+
+				if resolve {
+					requestedHash := configuredHash
+					if hash != "" {
+						requestedHash = hash
+					}
+
+					mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.111.0", requestedHash).Return(portal.Build{
+						Hash: expectedHash, Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
+					}, nil)
+				}
+
+				Expect(bs.EnsureInstallConfig()).To(Succeed())
+				Expect(csEnv.InstallVersion).To(Equal(expectedVersion))
+				Expect(csEnv.InstallHash).To(Equal(expectedHash))
+				Expect(csEnv.InstallLocal).To(Equal(local))
+			},
+			Entry("config with hash", "", "", "", "abc123", "1.111.0", "abc123", true),
+			Entry("config without hash resolves latest build", "", "", "", "", "1.111.0", "latestBuild", true),
+			Entry("explicit hash overrides config hash", "", "override", "", "abc123", "1.111.0", "override", true),
+			Entry("explicit version overrides config", "master", "", "", "abc123", "master", "", false),
+			Entry("explicit archive overrides config", "", "", "installer.tar.gz", "abc123", "", "", false),
+		)
+
 		Describe("Valid EnsureInstallConfig", func() {
 			BeforeEach(func() {
 			})
@@ -362,6 +397,9 @@ var _ = Describe("Installconfig & Secrets", func() {
 		Describe("Valid UpdateInstallConfig", func() {
 			It("updates config and writes files", func() {
 				csEnv.SSHProxyIP = "3.3.3.3"
+				csEnv.InstallVersion = "1.111.0"
+				csEnv.InstallHash = "abc123"
+				csEnv.InstallConfig.Operations = &files.OperationsConfig{Skip: []string{"ceph"}}
 
 				icg.EXPECT().GenerateSecrets().Return(nil)
 				icg.EXPECT().WriteInstallConfig("fake-config-file", true).Return(nil)
@@ -372,6 +410,8 @@ var _ = Describe("Installconfig & Secrets", func() {
 				err := bs.UpdateInstallConfig()
 				Expect(err).NotTo(HaveOccurred())
 
+				Expect(bs.Env.InstallConfig.Operations.Codesphere).To(Equal(files.CodespherePackageConfig{Version: "1.111.0", Hash: "abc123"}))
+				Expect(bs.Env.InstallConfig.Operations.Skip).To(Equal([]string{"ceph"}))
 				// No openfga backup bucket provisioned → config stays unset.
 				Expect(bs.Env.InstallConfig.Codesphere.OpenfgaBackups).To(BeNil())
 

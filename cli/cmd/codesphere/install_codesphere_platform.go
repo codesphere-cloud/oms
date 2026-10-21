@@ -5,7 +5,9 @@ package codesphere
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"path/filepath"
 	"runtime"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -13,6 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
 )
@@ -27,6 +30,10 @@ type InstallCodespherePlatformCmd struct {
 func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
+	}
+
+	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {
+		return fmt.Errorf("--local-config-dir is required with --local-components")
 	}
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
@@ -46,34 +53,37 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 
-	// Each release gets its own vault Secret: releases sharing a cluster (master-dev and
-	// previews) would otherwise overwrite or drop each other's keys. It is written here,
-	// right before the release is deployed, not with cs-vault in the dependencies phase:
-	// previews and master-dev only run this phase, and a release can bring vault entries
-	// that did not exist when the dependencies phase last ran. cs-vault stays for the
-	// cluster-wide pc-applications charts.
-	if installer.NeedsReleaseVault(cfg, opts.SkipSteps) {
-		if err := writeReleaseVault(ctx, opts, cfg); err != nil {
+	// A skipped deploy must not rewrite the extra Secret: its freshly signed tokens would make
+	// Reloader restart the running release.
+	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep) {
+		if err := prepareChartVaultSecret(ctx, opts, cfg); err != nil {
 			return err
 		}
 	}
 
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
+	if opts.LocalComponents {
+		pm = installer.NewPackage(filepath.Dir(opts.Package), opts.Package)
+	}
 	cm := installer.NewConfig()
 	im := system.NewImage(ctx)
 
 	ci := &installer.CodesphereInstaller{
-		ConfigPath:       opts.ConfigPath,
-		VaultPath:        opts.Vault,
-		PrivKey:          opts.PrivKey,
-		Force:            opts.Force,
-		Verbose:          opts.Verbose,
-		SkipSteps:        opts.SkipSteps,
-		AllowedSteps:     installer.PlatformSteps,
-		CodesphereOnly:   true,
-		DirectConnection: opts.DirectConnection,
-		AutoApprove:      opts.AutoApprove,
+		ConfigPath:        opts.ConfigPath,
+		VaultPath:         opts.Vault,
+		PrivKey:           opts.PrivKey,
+		Force:             opts.Force,
+		Verbose:           opts.Verbose,
+		SkipSteps:         opts.SkipSteps,
+		AllowedSteps:      installer.PlatformSteps,
+		CodesphereOnly:    true,
+		DirectConnection:  opts.DirectConnection,
+		AutoApprove:       opts.AutoApprove,
+		LocalComponents:   opts.LocalComponents,
+		LocalConfigDir:    opts.LocalConfigDir,
+		SkipImageBuilding: opts.LocalComponents,
+		Context:           ctx,
 	}
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
@@ -81,13 +91,27 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	return nil
 }
 
-// writeReleaseVault writes the vault into the release's own secret, which the umbrella chart's
-// ExternalSecrets read, and passes its checksum to the chart through the merged config.
-func writeReleaseVault(
+// prepareChartVaultSecret writes the extra vault Secret if one is requested and passes a new
+// sync trigger to the chart through the merged config.
+func prepareChartVaultSecret(
 	ctx context.Context,
 	opts *InstallCodesphereOpts,
 	cfg files.RootConfig,
 ) error {
+	if opts.ExtraVaultSecret != "" {
+		if err := writeExtraVaultSecret(ctx, opts, cfg); err != nil {
+			return err
+		}
+	}
+
+	if err := vault.WriteSyncTriggerToConfig(opts.ConfigPath, rand.Text()); err != nil {
+		return fmt.Errorf("failed to pass the sync trigger to the chart: %w", err)
+	}
+
+	return nil
+}
+
+func writeExtraVaultSecret(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) error {
 	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to load vault and Kubernetes config: %w", err)
@@ -98,13 +122,9 @@ func writeReleaseVault(
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
-	checksum, err := installer.WriteReleaseVaultSecret(ctx, kubeClient, installVault, cfg.Codesphere)
-	if err != nil {
-		return fmt.Errorf("failed to write release vault secret: %w", err)
-	}
-
-	if err := installer.AddExternalSecretsChecksum(opts.ConfigPath, checksum); err != nil {
-		return fmt.Errorf("failed to pass the vault checksum to the chart: %w", err)
+	creator := vault.NewVaultSecretCreator(kubeClient)
+	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, opts.ExtraVaultSecret); err != nil {
+		return fmt.Errorf("failed to write extra vault secret: %w", err)
 	}
 
 	return nil

@@ -5,16 +5,17 @@ package vault
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"log"
-	"sort"
+	"os"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
+	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
@@ -55,20 +56,21 @@ func (v *VaultSecretCreator) CreateSecretFromStore(ctx context.Context, store Va
 		return fmt.Errorf("failed to load vault: %w", err)
 	}
 
-	// Always create new service accounts tokens during creation to ensure they are always valid and updated.
-	if err := secrets.EnsureServiceAccountTokens(data); err != nil {
-		return fmt.Errorf("failed to ensure service account tokens: %w", err)
-	}
-
 	return v.CreateSecretFromVault(ctx, data, namespace, secretName)
 }
 
-// CreateSecretFromVault creates or updates a Kubernetes secret with the contents of a Vault in the target cluster.
+// CreateSecretFromVault signs fresh service account tokens into vault and creates or updates a
+// Kubernetes secret with its contents in the target cluster.
 //
 // Each vault entry is mapped to one or more secret keys:
 //   - File entries produce a single key equal to the entry name.
 //   - Field entries produce "entryName.password" and, when present, "entryName.username".
 func (v *VaultSecretCreator) CreateSecretFromVault(ctx context.Context, vault *files.InstallVault, namespace, secretName string) error {
+	// Always create new service accounts tokens during creation to ensure they are always valid and updated.
+	if err := secrets.EnsureServiceAccountTokens(vault); err != nil {
+		return fmt.Errorf("failed to ensure service account tokens: %w", err)
+	}
+
 	secretData, err := vaultToSecretData(vault)
 	if err != nil {
 		return err
@@ -109,32 +111,6 @@ func (v *VaultSecretCreator) ensureNamespace(ctx context.Context, namespace stri
 	return nil
 }
 
-// SecretDataChecksum returns a SHA-256 over the secret data CreateSecretFromVault writes for vault.
-func SecretDataChecksum(vault *files.InstallVault) (string, error) {
-	secretData, err := vaultToSecretData(vault)
-	if err != nil {
-		return "", err
-	}
-
-	keys := make([]string, 0, len(secretData))
-	for key := range secretData {
-		keys = append(keys, key)
-	}
-
-	sort.Strings(keys)
-
-	hash := sha256.New()
-	for _, key := range keys {
-		// The separator keeps "ab"+"c" and "a"+"bc" from hashing alike.
-		hash.Write([]byte(key))
-		hash.Write([]byte{0})
-		hash.Write(secretData[key])
-		hash.Write([]byte{0})
-	}
-
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
 // vaultToSecretData converts the entries of an InstallVault into Kubernetes secret data.
 // File entries produce a single key equal to the entry name containing the file content.
 // Field entries produce "entryName.password" and, when a username is present, "entryName.username".
@@ -154,4 +130,56 @@ func vaultToSecretData(vault *files.InstallVault) (map[string][]byte, error) {
 		return nil, fmt.Errorf("no secrets found in vault file")
 	}
 	return data, nil
+}
+
+// ValidateSecretName rejects names Kubernetes would refuse for a Secret.
+func ValidateSecretName(name string) error {
+	if problems := validation.IsDNS1123Subdomain(name); len(problems) > 0 {
+		return fmt.Errorf("invalid secret name %q: %s", name, strings.Join(problems, "; "))
+	}
+
+	return nil
+}
+
+// WriteSyncTriggerToConfig sets codesphere.override.global.externalSecretsSyncTrigger in the
+// merged config file OMS hands to the TS installer. The chart puts it on its ExternalSecrets,
+// which ESO only re-syncs when they change, so a changed vault reaches the release in the
+// same deploy. Rewriting the merged config is a stopgap: once OMS deploys through the
+// cs-applications app of apps, it sets the trigger in the values it builds instead.
+func WriteSyncTriggerToConfig(configPath, trigger string) error {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read config %s: %w", configPath, err)
+	}
+
+	config := map[string]any{}
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return fmt.Errorf("failed to parse config %s: %w", configPath, err)
+	}
+
+	global := childMap(childMap(childMap(config, "codesphere"), "override"), "global")
+	global["externalSecretsSyncTrigger"] = trigger
+
+	updated, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	// 0o600: Same as what the file already has but has no effect here anyway, because the file already exists.
+	if err := os.WriteFile(configPath, updated, 0o600); err != nil {
+		return fmt.Errorf("failed to write config %s: %w", configPath, err)
+	}
+
+	return nil
+}
+
+// childMap returns parent[key], replacing anything that is not a map with an empty one.
+func childMap(parent map[string]any, key string) map[string]any {
+	child, ok := parent[key].(map[string]any)
+	if !ok {
+		child = map[string]any{}
+		parent[key] = child
+	}
+
+	return child
 }

@@ -5,10 +5,14 @@ package vault
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -35,6 +39,7 @@ var _ = Describe("VaultSecretCreator", func() {
 		installVault := &files.InstallVault{Secrets: []files.SecretEntry{
 			{Name: "registry", Fields: &files.SecretFields{Password: "first"}},
 		}}
+		Expect(secrets.EnsureAuthKeys(installVault)).To(Succeed())
 
 		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName)).To(Succeed())
 
@@ -53,6 +58,7 @@ var _ = Describe("VaultSecretCreator", func() {
 		installVault := &files.InstallVault{Secrets: []files.SecretEntry{
 			{Name: "registry", Fields: &files.SecretFields{Password: "first"}},
 		}}
+		Expect(secrets.EnsureAuthKeys(installVault)).To(Succeed())
 		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName)).To(Succeed())
 
 		installVault.SetSecret(files.SecretEntry{Name: "registry", Fields: &files.SecretFields{Password: "updated"}})
@@ -61,6 +67,30 @@ var _ = Describe("VaultSecretCreator", func() {
 		secret := &corev1.Secret{}
 		Expect(kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: VaultSecretNamespace, Name: VaultSecretName}, secret)).To(Succeed())
 		Expect(secret.Data).To(HaveKeyWithValue("registry.password", []byte("updated")))
+	})
+
+	It("writes the signed service account tokens into the secret", func() {
+		installVault := &files.InstallVault{}
+		Expect(secrets.EnsureAuthKeys(installVault)).To(Succeed())
+
+		Expect(creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName)).To(Succeed())
+
+		secret := &corev1.Secret{}
+		Expect(kubeClient.Get(ctx, ctrlclient.ObjectKey{Namespace: VaultSecretNamespace, Name: VaultSecretName}, secret)).To(Succeed())
+		Expect(secret.Data["authServiceUserToken.password"]).ToNot(BeEmpty())
+	})
+
+	It("fails without writing a secret when the vault has no token private key", func() {
+		installVault := &files.InstallVault{Secrets: []files.SecretEntry{
+			{Name: "registry", Fields: &files.SecretFields{Password: "first"}},
+		}}
+
+		err := creator.CreateSecretFromVault(ctx, installVault, VaultSecretNamespace, VaultSecretName)
+		Expect(err).To(MatchError(ContainSubstring("tokenPrivateKey not found")))
+
+		secretList := &corev1.SecretList{}
+		Expect(kubeClient.List(ctx, secretList)).To(Succeed())
+		Expect(secretList.Items).To(BeEmpty())
 	})
 })
 
@@ -136,33 +166,65 @@ var _ = Describe("vaultToSecretData", func() {
 	})
 })
 
-var _ = Describe("SecretDataChecksum", func() {
-	It("does not depend on the order of the vault entries", func() {
-		first := &files.InstallVault{Secrets: []files.SecretEntry{
-			{Name: "a", Fields: &files.SecretFields{Password: "1"}},
-			{Name: "b", File: &files.SecretFile{Name: "b", Content: "2"}},
-		}}
-		second := &files.InstallVault{Secrets: []files.SecretEntry{first.Secrets[1], first.Secrets[0]}}
-
-		Expect(SecretDataChecksum(first)).To(Equal(must(SecretDataChecksum(second))))
+var _ = Describe("ValidateSecretName", func() {
+	It("accepts a valid Secret name", func() {
+		Expect(ValidateSecretName("codesphere-pr-42-vault")).To(Succeed())
 	})
 
-	It("changes when a value changes", func() {
-		before := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "a", Fields: &files.SecretFields{Password: "1"}}}}
-		after := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "a", Fields: &files.SecretFields{Password: "2"}}}}
-
-		Expect(SecretDataChecksum(before)).ToNot(Equal(must(SecretDataChecksum(after))))
-	})
-
-	It("tells apart data that only differs in where a key ends and its value starts", func() {
-		left := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "ab", File: &files.SecretFile{Content: "c"}}}}
-		right := &files.InstallVault{Secrets: []files.SecretEntry{{Name: "a", File: &files.SecretFile{Content: "bc"}}}}
-
-		Expect(SecretDataChecksum(left)).ToNot(Equal(must(SecretDataChecksum(right))))
+	It("rejects a name Kubernetes would refuse for a Secret", func() {
+		Expect(ValidateSecretName("Codesphere_PR/42")).To(MatchError(ContainSubstring(`invalid secret name "Codesphere_PR/42"`)))
 	})
 })
 
-func must(checksum string, err error) string {
-	Expect(err).ToNot(HaveOccurred())
-	return checksum
-}
+var _ = Describe("WriteSyncTriggerToConfig", func() {
+	writeConfig := func(content string) string {
+		path := filepath.Join(GinkgoT().TempDir(), "config.yaml")
+		Expect(os.WriteFile(path, []byte(content), 0o600)).To(Succeed())
+
+		return path
+	}
+
+	readConfig := func(path string) map[string]any {
+		data, err := os.ReadFile(path)
+		Expect(err).ToNot(HaveOccurred())
+
+		config := map[string]any{}
+		Expect(yaml.Unmarshal(data, &config)).To(Succeed())
+
+		return config
+	}
+
+	It("sets the trigger next to the existing global overrides", func() {
+		path := writeConfig("codesphere:\n  domain: example.com\n  override:\n    global:\n      hostName: pr-42\n      externalSecrets: true\n")
+
+		Expect(WriteSyncTriggerToConfig(path, "abc123")).To(Succeed())
+
+		Expect(readConfig(path)).To(Equal(map[string]any{
+			"codesphere": map[string]any{
+				"domain": "example.com",
+				"override": map[string]any{
+					"global": map[string]any{
+						"hostName":                   "pr-42",
+						"externalSecrets":            true,
+						"externalSecretsSyncTrigger": "abc123",
+					},
+				},
+			},
+		}))
+	})
+
+	It("creates the override path when the config has none", func() {
+		path := writeConfig("postgres:\n  mode: install\n")
+
+		Expect(WriteSyncTriggerToConfig(path, "abc123")).To(Succeed())
+
+		Expect(readConfig(path)).To(Equal(map[string]any{
+			"postgres": map[string]any{"mode": "install"},
+			"codesphere": map[string]any{
+				"override": map[string]any{
+					"global": map[string]any{"externalSecretsSyncTrigger": "abc123"},
+				},
+			},
+		}))
+	})
+})
