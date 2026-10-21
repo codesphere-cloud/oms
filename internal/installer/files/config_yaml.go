@@ -110,6 +110,7 @@ type RootConfig struct {
 	Cluster                ClusterConfig                 `yaml:"cluster"`
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
 	PcApps                 ChartValues                   `yaml:"pcApps,omitempty"`
+	CsApps                 ChartValues                   `yaml:"csApps,omitempty"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
 	Operations             *OperationsConfig             `yaml:"operations,omitempty"`
 }
