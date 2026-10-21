@@ -32,7 +32,7 @@ require (
 	filippo.io/age v1.3.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/argoproj/argo-cd/v3 v3.5.5
+	github.com/argoproj/argo-cd/v3 v3.5.6
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/codesphere-cloud/cs-go v1.55.0
 	github.com/creativeprojects/go-selfupdate v1.7.0
