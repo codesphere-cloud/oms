@@ -384,7 +384,7 @@ func (g *InstallConfig) collectCodesphereConfig(prompter prompt.Prompter) {
 	}
 	g.Config.Codesphere.WorkspaceImages.Agent.BomRef = g.collectString(prompter, "Workspace agent image BOM reference", defaultBomRef)
 	hostingPlan := files.HostingPlan{}
-	hostingPlan.CPUTenth = g.collectInt(prompter, "Hosting plan CPU (tenths, e.g., 10 = 1 core)", 10)
+	hostingPlan.CPUTenth = float64(g.collectInt(prompter, "Hosting plan CPU (tenths, e.g., 10 = 1 core)", 10))
 	hostingPlan.MemoryMb = g.collectInt(prompter, "Hosting plan memory (MB)", 2048)
 	hostingPlan.StorageMb = g.collectInt(prompter, "Hosting plan storage (MB)", 20480)
 	hostingPlan.TempStorageMb = g.collectInt(prompter, "Hosting plan temp storage (MB)", 1024)

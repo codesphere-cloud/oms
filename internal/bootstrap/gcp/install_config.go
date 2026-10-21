@@ -603,7 +603,7 @@ func (b *GCPBootstrapper) applyDataCenterTopology(dc *datacenter.DataCenter) {
 
 	dc.InstallConfig.DataCenters = all
 	// Clients land in the primary data center, which is also the one cs.<base-domain> resolves to.
-	dc.InstallConfig.DefaultDataCenterID = b.primaryDC().ID
+	dc.InstallConfig.DefaultDataCenterID = new(b.primaryDC().ID)
 
 	b.dropAvailableDataCentersOverride(dc)
 }

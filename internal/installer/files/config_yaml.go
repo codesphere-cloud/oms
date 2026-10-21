@@ -101,7 +101,7 @@ type SecretFields struct {
 type RootConfig struct {
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
 	DataCenters            []DatacenterConfig            `yaml:"dataCenters,omitempty"`
-	DefaultDataCenterID    int                           `yaml:"defaultDataCenterId,omitempty"`
+	DefaultDataCenterID    *int                          `yaml:"defaultDataCenterId,omitempty"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
@@ -725,12 +725,12 @@ type PlansConfig struct {
 }
 
 type HostingPlan struct {
-	CPUTenth        int  `yaml:"cpuTenth"`
-	GPUParts        int  `yaml:"gpuParts"`
-	MemoryMb        int  `yaml:"memoryMb"`
-	StorageMb       int  `yaml:"storageMb"`
-	TempStorageMb   int  `yaml:"tempStorageMb"`
-	PooledInstances *int `yaml:"pooledInstances,omitempty"`
+	CPUTenth        float64 `yaml:"cpuTenth"`
+	GPUParts        float64 `yaml:"gpuParts"`
+	MemoryMb        int     `yaml:"memoryMb"`
+	StorageMb       int     `yaml:"storageMb"`
+	TempStorageMb   int     `yaml:"tempStorageMb"`
+	PooledInstances *int    `yaml:"pooledInstances,omitempty"`
 }
 
 type WorkspacePlan struct {

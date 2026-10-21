@@ -852,4 +852,22 @@ var _ = Describe("RootConfig round-trip", func() {
 		Expect(config.Registry.ReplaceImagesInBom).To(BeTrue())
 		Expect(config.Registry.LoadContainerImages).To(BeTrue())
 	})
+
+	It("defaultDataCenterId 0 -> kept as set", func() {
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal([]byte("defaultDataCenterId: 0\n"))).To(Succeed())
+
+		Expect(config.DefaultDataCenterID).To(HaveValue(Equal(0)))
+	})
+
+	It("fractional hosting plan numbers -> kept", func() {
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal([]byte(
+			"codesphere:\n  plans:\n    hostingPlans:\n      20: {cpuTenth: 2.5, gpuParts: 0.5}\n",
+		))).To(Succeed())
+
+		plan := config.Codesphere.Plans.HostingPlans[20]
+		Expect(plan.CPUTenth).To(Equal(2.5))
+		Expect(plan.GPUParts).To(Equal(0.5))
+	})
 })

@@ -133,7 +133,7 @@ var _ = Describe("ConfigManagerProfile", func() {
 					hostingPlans := config.Codesphere.Plans.HostingPlans
 					Expect(hostingPlans).To(HaveKey(1))
 					hostingPlan := hostingPlans[1]
-					Expect(hostingPlan.CPUTenth).To(Equal(10))
+					Expect(hostingPlan.CPUTenth).To(Equal(10.0))
 					Expect(hostingPlan.MemoryMb).To(Equal(2048))
 					Expect(hostingPlan.StorageMb).To(Equal(20480))
 					Expect(hostingPlan.TempStorageMb).To(Equal(1024))
