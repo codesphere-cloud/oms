@@ -4,6 +4,7 @@
 package installer
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -32,12 +33,15 @@ var KnownInstallerSteps = []string{
 	"ceph",
 	"kubernetes",
 	"set-up-cluster",
-	"codesphere",
+	CodesphereStep,
 	"ms-backends",
 }
 
 // ArgoCDStep is the skip-step name for the dependency-phase ArgoCD pre-step.
 const ArgoCDStep = "argocd"
+
+// CodesphereStep is the skip-step name for deploying the Codesphere release.
+const CodesphereStep = "codesphere"
 
 // InfraSteps are run in Phase 1 (before ArgoCD) when --argocd is active.
 var InfraSteps = []string{
@@ -55,10 +59,12 @@ var InfraSteps = []string{
 var DependenciesSteps = []string{"copy-dependencies", "extract-dependencies", "set-up-cluster", "ms-backends"}
 
 // PlatformSteps run in Phase 3 and install the Codesphere platform only.
-var PlatformSteps = []string{"copy-dependencies", "extract-dependencies", "codesphere"}
+var PlatformSteps = []string{"copy-dependencies", "extract-dependencies", CodesphereStep}
 
 // CodesphereInstaller encapsulates the logic for running the private-cloud-installer.js script.
 type CodesphereInstaller struct {
+	// Context cancels the installer process when the caller stops.
+	Context context.Context
 	// ConfigPath is the path to the Codesphere Private Cloud configuration YAML file.
 	ConfigPath string
 	// VaultPath is the path to the SOPS-encrypted vault file used for config templating.
@@ -86,6 +92,9 @@ type CodesphereInstaller struct {
 	// SkipImageBuilding skips the custom workspace image build-and-push step.
 	// Set when a prior phase already built the images so they are not rebuilt redundantly.
 	SkipImageBuilding bool
+	// LocalComponents runs install-components.js on this host for the selected steps.
+	LocalComponents bool
+	LocalConfigDir  string
 }
 
 // Install validates the platform, extracts the package, builds any custom workspace images,
@@ -194,8 +203,12 @@ func (ci *CodesphereInstaller) ExtractAndValidatePackage(pm PackageManager) erro
 	if !slices.Contains(foundFiles, "deps.tar.gz") {
 		return fmt.Errorf("deps.tar.gz not found in package")
 	}
-	if !slices.Contains(foundFiles, "private-cloud-installer.js") {
-		return fmt.Errorf("private-cloud-installer.js not found in package")
+	installerScript := "private-cloud-installer.js"
+	if ci.LocalComponents {
+		installerScript = "install-components.js"
+	}
+	if !slices.Contains(foundFiles, installerScript) {
+		return fmt.Errorf("%s not found in package", installerScript)
 	}
 	if !slices.Contains(foundFiles, "node") {
 		return fmt.Errorf("node executable not found in package")
@@ -352,6 +365,9 @@ func workspaceImageBuildTag(registryServer, imageKey, flavorKey, version string)
 }
 
 func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.RootConfig) error {
+	if ci.LocalComponents {
+		return ci.runLocalComponents(pm, config)
+	}
 	nodePath := filepath.Join(pm.GetWorkDir(), "node")
 	if err := os.Chmod(nodePath, 0755); err != nil {
 		return fmt.Errorf("failed to make node executable: %w", err)
@@ -365,7 +381,11 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 		return err
 	}
 
-	cmd := exec.Command(nodePath, cmdArgs...)
+	ctx := ci.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cmd := exec.CommandContext(ctx, nodePath, cmdArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
@@ -377,6 +397,42 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 	}
 
 	log.Println("Private cloud installer script finished.")
+	return nil
+}
+
+func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config files.RootConfig) error {
+	bundleDir, err := filepath.Abs(pm.GetWorkDir())
+	if err != nil {
+		return fmt.Errorf("failed to resolve installer bundle path: %w", err)
+	}
+	configDir, err := filepath.Abs(ci.LocalConfigDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve local config directory: %w", err)
+	}
+	privKey, err := filepath.Abs(ci.PrivKey)
+	if err != nil {
+		return fmt.Errorf("failed to resolve private key path: %w", err)
+	}
+	components := map[string]string{"set-up-cluster": "setUpCluster", "codesphere": "codesphere", "ms-backends": "msBackends"}
+	selected := ci.executableInstallerSteps(config)
+	for _, step := range []string{"set-up-cluster", "codesphere", "ms-backends"} {
+		if !selected[step] {
+			continue
+		}
+		args := []string{filepath.Join(bundleDir, "install-components.js"),
+			"--component", components[step], "--configDir", configDir,
+			"--dependenciesDir", filepath.Join(bundleDir, "deps"),
+			"--config", ci.ConfigPath, "--privKey", privKey}
+		ctx := ci.Context
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		cmd := exec.CommandContext(ctx, filepath.Join(bundleDir, "node"), args...)
+		cmd.Stdout, cmd.Stderr, cmd.Stdin = os.Stdout, os.Stderr, os.Stdin
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("install-components.js --component %s failed: %w", components[step], err)
+		}
+	}
 	return nil
 }
 

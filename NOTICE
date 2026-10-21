@@ -155,9 +155,9 @@ License URL: https://github.com/Masterminds/squirrel/blob/v1.5.4/LICENSE
  
 ----------
 Module: github.com/ProtonMail/go-crypto
-Version: v1.4.1
+Version: v1.5.2
 License: BSD-3-Clause
-License URL: https://github.com/ProtonMail/go-crypto/blob/v1.4.1/LICENSE
+License URL: https://github.com/ProtonMail/go-crypto/blob/v1.5.2/LICENSE
  
 ----------
 Module: github.com/argoproj/argo-cd/gitops-engine
@@ -323,9 +323,9 @@ License URL: https://github.com/cpuguy83/go-md2man/blob/v2.0.7/LICENSE.md
  
 ----------
 Module: github.com/creativeprojects/go-selfupdate
-Version: v1.6.0
+Version: v1.7.0
 License: MIT
-License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.6.0/LICENSE
+License URL: https://github.com/creativeprojects/go-selfupdate/blob/v1.7.0/LICENSE
  
 ----------
 Module: github.com/cyphar/filepath-securejoin
@@ -1175,9 +1175,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20261015192809-0fc6c0844a85
+Version: v0.0.0-20261019184450-d5af15a509a4
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/0fc6c0844a85/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/d5af15a509a4/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
@@ -1295,9 +1295,9 @@ License URL: https://github.com/thoas/go-funk/blob/v0.9.3/LICENSE
  
 ----------
 Module: github.com/ulikunitz/xz
-Version: v0.5.16
+Version: v0.5.17
 License: BSD-3-Clause
-License URL: https://github.com/ulikunitz/xz/blob/v0.5.16/LICENSE
+License URL: https://github.com/ulikunitz/xz/blob/v0.5.17/LICENSE
  
 ----------
 Module: github.com/vmihailenco/go-tinylfu
@@ -1505,15 +1505,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.304.0
+Version: v0.305.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.304.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.305.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.304.0
+Version: v0.305.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.304.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.305.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
@@ -1736,6 +1736,12 @@ Module: sigs.k8s.io/controller-runtime
 Version: v0.24.1
 License: Apache-2.0
 License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.24.1/LICENSE
+ 
+----------
+Module: sigs.k8s.io/gateway-api/apis/v1
+Version: v1.6.3
+License: Apache-2.0
+License URL: https://github.com/kubernetes-sigs/gateway-api/blob/v1.6.3/LICENSE
  
 ----------
 Module: sigs.k8s.io/json

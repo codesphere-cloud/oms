@@ -13,7 +13,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/argocd/pcapps"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,16 +31,20 @@ type LogFunc func(format string, args ...interface{})
 
 // WaitForApplicationHealthy waits until Argo CD has compared the requested target revision
 // and reports the Application as healthy and synced.
-func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, name, targetRevision string, logf LogFunc) error {
+func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, name, targetRevision string, timeout time.Duration, logf LogFunc) error {
 	if logf == nil {
 		logf = func(string, ...interface{}) {}
 	}
 
-	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, applicationReadyTimeout)
+	if timeout <= 0 {
+		timeout = applicationReadyTimeout
+	}
+
+	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, timeout)
 
 	lastHealth, lastSync, lastTargetRevision := "", "", ""
 
-	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, applicationReadyTimeout, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		app := &argov1alpha1.Application{}
 		if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: DefaultNamespace}, app); err != nil {
 			if !apierrors.IsNotFound(err) {
@@ -158,10 +161,6 @@ func (i *AppInstaller) InstallArgoCD() error {
 // SyncVaultSecret refreshes the service account tokens and creates or updates
 // the Codesphere vault secret in Kubernetes.
 func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
-	if err := secrets.EnsureServiceAccountTokens(i.cfg.Vault); err != nil {
-		return fmt.Errorf("failed to ensure service account tokens: %w", err)
-	}
-
 	creator := vault.NewVaultSecretCreator(i.cfg.KubeClient)
 	if err := creator.CreateSecretFromVault(ctx, i.cfg.Vault, vault.VaultSecretNamespace, vault.VaultSecretName); err != nil {
 		return fmt.Errorf("failed to sync vault secret: %w", err)
