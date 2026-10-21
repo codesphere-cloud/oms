@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -123,7 +124,7 @@ func packageArtifactDestination(source, dest string, keepRegistry bool) (string,
 		return "", fmt.Errorf("invalid package artifact reference %q: %w", source, err)
 	}
 
-	repository, tag, digest := imageref.Split(source)
+	sourceName, tag, digest := imageref.Split(source)
 
 	// A reference carrying both a tag and a digest is copied to its tag, because a manifest pushed
 	// under a digest alone leaves the repository without the tag the Helm charts pull by. Its
@@ -140,12 +141,12 @@ func packageArtifactDestination(source, dest string, keepRegistry bool) (string,
 		identifier = ":" + sourceRef.Identifier()
 	}
 
-	repositoryPath := sourceRef.Context().RepositoryStr()
+	destinationName := path.Join(dest, sourceRef.Context().RepositoryStr())
 	if keepRegistry {
-		repositoryPath = imageref.MirrorRepository(repository)
+		destinationName = imageref.MirroredName(sourceName, dest)
 	}
 
-	candidate := dest + "/" + repositoryPath + identifier
+	candidate := destinationName + identifier
 
 	destinationRef, err := name.ParseReference(candidate)
 	if err != nil {
