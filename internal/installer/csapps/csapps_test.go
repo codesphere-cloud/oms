@@ -87,6 +87,7 @@ var _ = Describe("Values", func() {
 		Expect(at(values, "chartsRegistry")).To(Equal(chartsRegistry))
 		Expect(at(values, "releaseName")).To(Equal("pr-1"))
 		Expect(at(values, "namespace")).To(Equal("codesphere"))
+		Expect(at(values, "applications", "codesphere", "enabled")).To(BeTrue())
 		Expect(at(values, "applications", "codesphere", "version")).To(Equal(codesphereVersion))
 
 		expected, err := csappsvalues.Build(cfg, b)
