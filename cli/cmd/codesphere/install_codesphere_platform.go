@@ -55,8 +55,14 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	// A skipped deploy must not rewrite the extra Secret: its freshly signed tokens would make
 	// Reloader restart the running release.
 	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep) {
-		if err := writeVaultSecretAndSyncTrigger(ctx, opts, cfg); err != nil {
-			return err
+		if opts.ExtraVaultSecret != "" {
+			if err := writeExtraVaultSecret(ctx, opts, cfg); err != nil {
+				return err
+			}
+		}
+
+		if err := vault.WriteSyncTriggerToConfig(opts.ConfigPath, rand.Text()); err != nil {
+			return fmt.Errorf("failed to pass the sync trigger to the chart: %w", err)
 		}
 	}
 
@@ -87,26 +93,6 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
-	return nil
-}
-
-// writeVaultSecretAndSyncTrigger writes the extra vault Secret if one is requested and passes a new
-// sync trigger to the chart through the merged config.
-func writeVaultSecretAndSyncTrigger(
-	ctx context.Context,
-	opts *InstallCodesphereOpts,
-	cfg files.RootConfig,
-) error {
-	if opts.ExtraVaultSecret != "" {
-		if err := writeExtraVaultSecret(ctx, opts, cfg); err != nil {
-			return err
-		}
-	}
-
-	if err := vault.WriteSyncTriggerToConfig(opts.ConfigPath, rand.Text()); err != nil {
-		return fmt.Errorf("failed to pass the sync trigger to the chart: %w", err)
-	}
-
 	return nil
 }
 
