@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/argoproj/argo-cd/gitops-engine/pkg/health"
+	synccommon "github.com/argoproj/argo-cd/gitops-engine/pkg/sync/common"
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -73,6 +74,46 @@ var _ = Describe("WaitForApplicationSynced", func() {
 		app := application(source(`{}`), source(`{}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeOutOfSync)
 
 		Expect(wait(app)).To(MatchError(ContainSubstring(`sync="OutOfSync"`)))
+	})
+
+	It("values with nulls, which Argo CD drops from the compared source -> done", func() {
+		app := application(
+			source(`{"global":{"tlsSecret":null,"list":[{"a":null,"b":1}],"trigger":"b"}}`),
+			source(`{"global":{"list":[{"b":1}],"trigger":"b"}}`),
+			health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeSynced,
+		)
+
+		Expect(wait(app)).To(Succeed())
+	})
+
+	It("out of sync after the sync of the current source succeeded -> done, drift does not block", func() {
+		app := application(source(`{"trigger":"b"}`), source(`{"trigger":"b"}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeOutOfSync)
+		app.Status.OperationState = &argov1alpha1.OperationState{
+			Phase:      synccommon.OperationSucceeded,
+			SyncResult: &argov1alpha1.SyncOperationResult{Source: source(`{"trigger":"b"}`)},
+		}
+
+		Expect(wait(app)).To(Succeed())
+	})
+
+	It("out of sync, the last succeeded sync was of an earlier source -> keeps waiting", func() {
+		app := application(source(`{"trigger":"b"}`), source(`{"trigger":"b"}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeOutOfSync)
+		app.Status.OperationState = &argov1alpha1.OperationState{
+			Phase:      synccommon.OperationSucceeded,
+			SyncResult: &argov1alpha1.SyncOperationResult{Source: source(`{"trigger":"a"}`)},
+		}
+
+		Expect(wait(app)).To(MatchError(ContainSubstring("timed out")))
+	})
+
+	It("out of sync while the sync of the current source runs -> keeps waiting", func() {
+		app := application(source(`{"trigger":"b"}`), source(`{"trigger":"b"}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeOutOfSync)
+		app.Status.OperationState = &argov1alpha1.OperationState{
+			Phase:      synccommon.OperationRunning,
+			SyncResult: &argov1alpha1.SyncOperationResult{Source: source(`{"trigger":"b"}`)},
+		}
+
+		Expect(wait(app)).To(MatchError(ContainSubstring("timed out")))
 	})
 
 	It("Application not created yet -> keeps waiting", func() {
