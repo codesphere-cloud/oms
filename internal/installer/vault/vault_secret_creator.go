@@ -145,7 +145,7 @@ func ValidateSecretName(name string) error {
 // merged config file OMS hands to the TS installer. The chart puts it on its ExternalSecrets,
 // which ESO only re-syncs when they change, so a changed vault reaches the release in the
 // same deploy.
-// TODO(nate): remove once OMS deploys through the cs-applications app of apps and sets the
+// TODO(CU-869fkgjbv): remove once OMS deploys through the cs-applications app of apps and sets the
 // trigger in the values it builds.
 func WriteSyncTriggerToConfig(configPath, trigger string) error {
 	data, err := os.ReadFile(configPath)
