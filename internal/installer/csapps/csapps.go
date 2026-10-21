@@ -94,6 +94,7 @@ func Values(cfg *files.RootConfig, b *bom.Config, chartsRegistry, syncTrigger st
 		"namespace":      codesphereNamespace,
 		"applications": map[string]any{
 			codesphereComponent: map[string]any{
+				"enabled":      true,
 				"version":      chart.Tag(),
 				"valuesObject": codesphereValues,
 			},
