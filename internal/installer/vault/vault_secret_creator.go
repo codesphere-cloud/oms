@@ -141,13 +141,13 @@ func ValidateSecretName(name string) error {
 	return nil
 }
 
-// WriteChartVaultValuesToConfig tells the chart which vault Secret to read and sets a new sync
+// WriteVaultValuesToConfig tells the chart which vault Secret to read and sets a new sync
 // trigger, both under codesphere.override.global in the merged config file OMS hands to the TS
 // installer. The chart puts the trigger on its ExternalSecrets, which ESO only re-syncs when they
 // change, so a changed vault reaches the release in the same deploy.
 // TODO(CU-869fkgjbv): remove once OMS deploys through the cs-applications app of apps and sets
 // these in the values it builds.
-func WriteChartVaultValuesToConfig(configPath, secretName, syncTrigger string) error {
+func WriteVaultValuesToConfig(configPath, secretName, syncTrigger string) error {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read config %s: %w", configPath, err)

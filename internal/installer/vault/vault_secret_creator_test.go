@@ -176,7 +176,7 @@ var _ = Describe("ValidateSecretName", func() {
 	})
 })
 
-var _ = Describe("WriteChartVaultValuesToConfig", func() {
+var _ = Describe("WriteVaultValuesToConfig", func() {
 	writeConfig := func(content string) string {
 		path := filepath.Join(GinkgoT().TempDir(), "config.yaml")
 		Expect(os.WriteFile(path, []byte(content), 0o600)).To(Succeed())
@@ -197,7 +197,7 @@ var _ = Describe("WriteChartVaultValuesToConfig", func() {
 	It("sets the vault Secret and trigger next to the existing global overrides", func() {
 		path := writeConfig("codesphere:\n  domain: example.com\n  override:\n    global:\n      hostName: pr-42\n      externalSecrets: true\n")
 
-		Expect(WriteChartVaultValuesToConfig(path, "codesphere-pr-42-vault", "abc123")).To(Succeed())
+		Expect(WriteVaultValuesToConfig(path, "codesphere-pr-42-vault", "abc123")).To(Succeed())
 
 		Expect(readConfig(path)).To(Equal(map[string]any{
 			"codesphere": map[string]any{
@@ -217,7 +217,7 @@ var _ = Describe("WriteChartVaultValuesToConfig", func() {
 	It("creates the override path when the config has none", func() {
 		path := writeConfig("postgres:\n  mode: install\n")
 
-		Expect(WriteChartVaultValuesToConfig(path, "codesphere-pr-42-vault", "abc123")).To(Succeed())
+		Expect(WriteVaultValuesToConfig(path, "codesphere-pr-42-vault", "abc123")).To(Succeed())
 
 		Expect(readConfig(path)).To(Equal(map[string]any{
 			"postgres": map[string]any{"mode": "install"},

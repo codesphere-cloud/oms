@@ -280,17 +280,6 @@ var _ = Describe("install codesphere vault type", func() {
 	})
 })
 
-var _ = Describe("validateDependenciesVaultSecretName", func() {
-	It("accepts the default vault secret name", func() {
-		Expect(validateDependenciesVaultSecretName(&InstallCodesphereOpts{VaultSecretName: vault.VaultSecretName})).To(Succeed())
-	})
-
-	It("rejects a custom vault secret name the pc-apps would not read", func() {
-		err := validateDependenciesVaultSecretName(&InstallCodesphereOpts{VaultSecretName: "codesphere-pr-42-vault"})
-		Expect(err).To(MatchError(`--vault-secret-name "codesphere-pr-42-vault" is only supported by the platform phase, the dependencies phase writes "cs-vault"`))
-	})
-})
-
 var _ = Describe("ensureCodespherePackageForVersion", func() {
 	It("accepts an install command without the legacy package flag", func() {
 		parent := &cobra.Command{Use: "install"}

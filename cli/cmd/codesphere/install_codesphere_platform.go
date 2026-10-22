@@ -55,11 +55,11 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	// A skipped deploy must not rewrite the vault Secret: its freshly signed tokens would make
 	// Reloader restart the running release.
 	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep) {
-		if err := writeVaultSecret(ctx, opts, cfg); err != nil {
+		if err := ensureVaultSecret(ctx, opts, cfg); err != nil {
 			return err
 		}
 
-		if err := vault.WriteChartVaultValuesToConfig(opts.ConfigPath, opts.VaultSecretName, rand.Text()); err != nil {
+		if err := vault.WriteVaultValuesToConfig(opts.ConfigPath, opts.VaultSecretName, rand.Text()); err != nil {
 			return fmt.Errorf("failed to pass the vault Secret to the chart: %w", err)
 		}
 	}
@@ -94,7 +94,9 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	return nil
 }
 
-func writeVaultSecret(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) error {
+// ensureVaultSecret writes the vault Secret even though the dependencies phase already wrote
+// cs-vault: dev previews read theirs from a Secret of their own name.
+func ensureVaultSecret(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) error {
 	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to load vault and Kubernetes config: %w", err)

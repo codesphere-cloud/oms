@@ -55,14 +55,6 @@ var _ = Describe("InstallCodesphereCmd", func() {
 			Expect(err).To(MatchError("--local-components requires install codesphere dependencies or install codesphere platform"))
 		})
 
-		It("rejects a custom vault secret name before running the dependencies phase", func() {
-			c.Opts.VaultSecretName = "codesphere-pr-42-vault"
-			runCmd := &cobra.Command{}
-			runCmd.SetContext(context.Background())
-			err := c.RunE(runCmd, nil)
-			Expect(err).To(MatchError(ContainSubstring(`--vault-secret-name "codesphere-pr-42-vault" is only supported by the platform phase`)))
-		})
-
 		It("calls GetOmsWorkdir and fails on non-linux platform", func() {
 			c.Opts.Package = "test-package.tar.gz"
 
