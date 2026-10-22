@@ -19,19 +19,19 @@ func testBOM(images map[string]string) *bom.Config {
 	}}
 }
 
-var _ = Describe("Image", func() {
+var _ = Describe("Reference", func() {
 	It("image in the BOM -> its reference unchanged", func() {
 		imgs, err := images.New(testBOM(map[string]string{"nginx": "localhost:5000/nginx:1.31.5"}))
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(imgs.Image("nginx")).To(Equal("localhost:5000/nginx:1.31.5"))
+		Expect(imgs.Reference("nginx")).To(Equal("localhost:5000/nginx:1.31.5"))
 	})
 
 	It("image missing from the BOM -> error", func() {
 		imgs, err := images.New(testBOM(map[string]string{}))
 		Expect(err).NotTo(HaveOccurred())
 
-		_, err = imgs.Image("nginx")
+		_, err = imgs.Reference("nginx")
 		Expect(err).To(MatchError(ContainSubstring("image nginx not found in BOM")))
 	})
 })
