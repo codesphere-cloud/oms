@@ -711,7 +711,7 @@ func (c *GCPClient) CreateFirewallRule(projectID string, rule *computepb.Firewal
 func (c *GCPClient) DeleteFirewallRule(projectID, ruleName string) error {
 	firewallsClient, err := compute.NewFirewallsRESTClient(c.ctx)
 	if err != nil {
-		return fmt.Errorf("failed to create firewalls client: %w", err)
+		return err
 	}
 	defer util.IgnoreError(firewallsClient.Close)
 
@@ -724,14 +724,10 @@ func (c *GCPClient) DeleteFirewallRule(projectID, ruleName string) error {
 	}
 
 	if err != nil {
-		return fmt.Errorf("failed to delete firewall rule %s: %w", ruleName, err)
+		return err
 	}
 
-	if err := op.Wait(c.ctx); err != nil {
-		return fmt.Errorf("failed to wait for deletion of firewall rule %s: %w", ruleName, err)
-	}
-
-	return nil
+	return op.Wait(c.ctx)
 }
 
 // CreateInstance creates a new Compute Engine instance in the specified project and zone.
