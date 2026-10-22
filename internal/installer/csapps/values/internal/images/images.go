@@ -17,6 +17,8 @@ import (
 // Images are the codesphere component's images from the BOM, by name. Each image is a reference,
 // split by OCI and by distribution/reference into these parts:
 //
+//	                       6
+//	┌──────────────────────┴──────────────────────┐
 //	ghcr.io/codesphere-cloud/api:1.2.3@sha256:0123…
 //	└──┬──┘ └────────┬─────────┘ └─┬─┘ └────┬─────┘
 //	   1             2             3        4
@@ -29,7 +31,7 @@ import (
 //	3  tag         Tagged.Tag               Tag
 //	4  digest      Digested.Digest
 //	5              Named.Name               Name
-//	   reference   Reference.String         Image
+//	6  reference   Reference.String         Reference
 type Images map[string]string
 
 // New reads the codesphere component's image references.
@@ -42,8 +44,8 @@ func New(b *bom.Config) (Images, error) {
 	return images, nil
 }
 
-// Image returns the full reference of the named image, as the BOM has it.
-func (b Images) Image(name string) (string, error) {
+// Reference returns the named image's reference as the BOM has it.
+func (b Images) Reference(name string) (string, error) {
 	image, ok := b[name]
 	if !ok || image == "" {
 		return "", fmt.Errorf("image %s not found in BOM", name)
@@ -78,7 +80,7 @@ func (b Images) Tag(name string) (string, error) {
 }
 
 func (b Images) parse(name string) (reference.Named, error) {
-	image, err := b.Image(name)
+	image, err := b.Reference(name)
 	if err != nil {
 		return nil, err
 	}

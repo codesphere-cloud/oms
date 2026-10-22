@@ -108,7 +108,7 @@ func workspaceObservabilityValues(imgs images.Images) (map[string]any, error) {
 		"otelCollectorInitImage": "observabilityOtelInit",
 	}
 	for key, imageName := range plain {
-		image, err := imgs.Image(imageName)
+		image, err := imgs.Reference(imageName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve the %s image: %w", key, err)
 		}
