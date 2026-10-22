@@ -18,7 +18,7 @@ oms beta bootstrap-gcp [flags]
 
 ```
       --acme-staging                              Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)
-      --airgapped                                 Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
+      --airgapped                                 Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. Firewall rules block internet egress of all VMs except the jumpbox. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
       --azure-devops-app-client-id string         Azure DevOps App Client ID (optional)
       --azure-devops-app-client-secret string     Azure DevOps App Client Secret (optional)
       --base-domain string                        Base domain for Codesphere (required)
@@ -78,7 +78,7 @@ oms beta bootstrap-gcp [flags]
       --prometheus-remote-write-user string       Prometheus remote write username (optional)
       --recover-config                            Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)
       --region string                             GCP Region (default: europe-west4) (default "europe-west4")
-      --registry-type string                      Container registry type to use (options: local-container, artifact-registry, github). With local-container, firewall rules block internet egress of all VMs except the jumpbox to simulate an airgapped installation (default: github) (default "github")
+      --registry-type string                      Container registry type to use (options: local-container, artifact-registry, github) (default: github) (default "github")
       --registry-user string                      Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)
       --remote-oms-binary string                  Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)
       --root-disk-size int                        Instance root disk size in GB (default: 50) (default 50)
