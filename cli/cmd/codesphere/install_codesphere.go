@@ -270,11 +270,6 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 		merged = intutil.DeepMergeMaps(merged, partial)
 	}
 
-	if opts.CodesphereViaArgoCD {
-		// The Codesphere installer still prepares the release, but OMS deploys the chart.
-		merged = intutil.DeepMergeMaps(merged, map[string]any{"codesphere": map[string]any{"skipChartDeploy": true}})
-	}
-
 	mergedBytes, err := yaml.Marshal(merged)
 	if err != nil {
 		cleanup()
