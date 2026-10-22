@@ -37,7 +37,7 @@ oms beta bootstrap-local [flags]
       --secrets-file string              Path to secrets file (default: <install-dir>/prod.vault.yaml)
       --service-cidr string              Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
       --storage-engine string            Storage engine (supported: rook-ceph, local) (default "rook-ceph")
-      --timer                            Show how long each step took after it finishes
+      --timer                            Show how long each step took and a final timing summary table
   -y, --yes                              Auto-approve the local bootstrapping warning prompt
 ```
 

@@ -77,12 +77,18 @@ func (b *LocalBootstrapper) RunInstallCodesphereCommand() (err error) {
 	commandEnv := env.NewEnv()
 
 	dependencies := &codesphere.InstallCodesphereDepenciesCmd{Opts: opts, Env: commandEnv}
-	if err := dependencies.RunE(command, nil); err != nil {
+
+	if err := b.stlog.Substep("Install dependencies", func() error {
+		return dependencies.RunE(command, nil)
+	}); err != nil {
 		return fmt.Errorf("oms install codesphere dependencies failed: %w", err)
 	}
 
 	platform := &codesphere.InstallCodespherePlatformCmd{Opts: opts, Env: commandEnv}
-	if err := platform.RunE(command, nil); err != nil {
+
+	if err := b.stlog.Substep("Install Codesphere", func() error {
+		return platform.RunE(command, nil)
+	}); err != nil {
 		return fmt.Errorf("oms install codesphere platform failed: %w", err)
 	}
 

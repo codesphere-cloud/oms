@@ -75,7 +75,7 @@ set -eo pipefail
 
 cat <<EOF > cloud.conf
 [Global]
-project-id = "$PROJECT_ID"
+project-id = "%s"
 EOF
 
 cat <<EOF > cc-deployment.yaml
@@ -143,7 +143,7 @@ $KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerI
 
 %s
 %s
-`, dc.PublicGatewayIP, dc.GatewayIP, enableWorkerDaemonsCmds.String(), enableCloudProviderCmd("k0scontroller"))
+`, b.Env.ProjectID, dc.PublicGatewayIP, dc.GatewayIP, enableWorkerDaemonsCmds.String(), enableCloudProviderCmd("k0scontroller"))
 
 	localScript := dc.K0sConfigScriptPath()
 

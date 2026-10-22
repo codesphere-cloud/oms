@@ -10,11 +10,15 @@ import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/apikey"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
+	"github.com/go-logr/stdr"
 	"github.com/spf13/cobra"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // GetRootCmd adds all child commands to the root command and sets flags appropriately.
 func GetRootCmd() *cobra.Command {
+	ctrllog.SetLogger(stdr.New(log.Default()))
+
 	opts := &util.GlobalOptions{}
 	rootCmd := &cobra.Command{
 		Use:   "oms",

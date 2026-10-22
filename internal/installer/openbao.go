@@ -174,6 +174,8 @@ func (o *OpenBaoInstaller) validateConfig() error {
 // Install is the top-level orchestrator for the full OpenBao bootstrap pipeline.
 // It is idempotent — safe to re-run at any point.
 func (o *OpenBaoInstaller) Install(ctx context.Context) error {
+	defer o.Logger.PrintSummary()
+
 	if err := o.validateConfig(); err != nil {
 		return err
 	}
