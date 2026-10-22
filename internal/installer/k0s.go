@@ -27,7 +27,7 @@ const (
 type K0sManager interface {
 	GetLatestVersion() (string, error)
 	Download(version string, opts DownloadOptions) (string, error)
-	EnsureAirgapBundle(version string, opts DownloadOptions) (string, error)
+	DownloadAirgapBundle(version, path string, opts DownloadOptions) (string, error)
 }
 
 type K0s struct {
@@ -80,8 +80,12 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 		return cachePath, nil
 	}
 
+	if opts.CacheOnly {
+		return "", fmt.Errorf("k0s %s not found in OMS cache at '%s', download it first with 'oms download k0s --version %s'", version, cachePath, version)
+	}
+
 	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
-	downloadURL := releaseAssetURL(k0sReleaseURL, version, assetName)
+	downloadURL := fmt.Sprintf("%s/%s/%s", k0sReleaseURL, version, assetName)
 
 	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {
 		return "", err

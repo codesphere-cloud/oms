@@ -96,7 +96,7 @@ func (k *K0sctl) Download(version string, opts DownloadOptions) (string, error) 
 	}
 
 	assetName := fmt.Sprintf("%s-%s-%s", k0sctlBinaryName, k.Goos, k.Goarch)
-	downloadURL := releaseAssetURL(k0sctlReleaseURL, version, assetName)
+	downloadURL := fmt.Sprintf("%s/%s/%s", k0sctlReleaseURL, version, assetName)
 
 	io.Verbosef(!opts.Quiet, "Downloading k0sctl %s from %s", version, downloadURL)
 

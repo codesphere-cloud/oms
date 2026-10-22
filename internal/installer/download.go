@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -22,6 +23,8 @@ type DownloadOptions struct {
 	Force bool
 	// Quiet suppresses progress output.
 	Quiet bool
+	// CacheOnly fails instead of downloading when no matching cached copy exists.
+	CacheOnly bool
 }
 
 // githubReleaseAsset is a single downloadable asset of a GitHub release.
@@ -87,18 +90,13 @@ func reuseCachedBinary(fw util.FileIO, cachePath, requestedVersion, name string,
 	return false
 }
 
-func releaseAssetURL(releaseURL, version, assetName string) string {
-	return fmt.Sprintf("%s/%s/%s", releaseURL, version, assetName)
-}
-
-// downloadToPath downloads to a partial file next to path and moves it into place with
-// perm once complete, so an interrupted download never leaves a file at path.
+// downloadToPath downloads to a uniquely named partial file next to path and moves it
+// into place with perm once complete, so neither an interrupted nor a concurrent
+// download leaves a broken file at path.
 func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, quiet bool, perm os.FileMode) (err error) {
-	partialPath := path + ".partial"
-
-	dstFile, err := fw.Create(partialPath)
+	partialPath, err := fw.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.partial")
 	if err != nil {
-		return fmt.Errorf("failed to create %s: %w", partialPath, err)
+		return fmt.Errorf("failed to create partial download for %s: %w", path, err)
 	}
 
 	defer func() {
@@ -106,6 +104,11 @@ func downloadToPath(fw util.FileIO, http portal.Http, path, downloadURL string, 
 			_ = fw.Remove(partialPath)
 		}
 	}()
+
+	dstFile, err := fw.Create(partialPath)
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", partialPath, err)
+	}
 
 	if err := http.Download(downloadURL, dstFile, quiet); err != nil {
 		util.CloseFileIgnoreError(dstFile)

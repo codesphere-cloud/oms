@@ -21,20 +21,30 @@ const (
 	AirgapImagesDir = "/var/lib/k0s/images"
 )
 
-// EnsureAirgapBundle makes sure the airgap image bundle of the given version is
-// available in the OMS cache dir and returns its path. The bundle is cached under a
-// fixed name, so a cached bundle is found without contacting the release API.
-func (k *K0s) EnsureAirgapBundle(version string, opts DownloadOptions) (string, error) {
-	cacheDir, err := ensureCacheDir(k.FileWriter, k.Env)
-	if err != nil {
-		return "", err
+// DownloadAirgapBundle downloads the airgap image bundle of the given version to path,
+// unless a file already exists there, and returns its path. An empty path stores the
+// bundle in the OMS cache dir under a fixed name, so a cached bundle is found without
+// contacting the release API.
+func (k *K0s) DownloadAirgapBundle(version, path string, opts DownloadOptions) (string, error) {
+	if path == "" {
+		cacheDir, err := ensureCacheDir(k.FileWriter, k.Env)
+		if err != nil {
+			return "", err
+		}
+
+		path = filepath.Join(cacheDir, fmt.Sprintf("%s-%s-%s-%s.tar", AirgapBundleName, version, k.Goos, k.Goarch))
+	} else if err := k.FileWriter.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return "", fmt.Errorf("failed to create directory for airgap bundle %s: %w", path, err)
 	}
 
-	cachePath := filepath.Join(cacheDir, fmt.Sprintf("%s-%s-%s-%s.tar", AirgapBundleName, version, k.Goos, k.Goarch))
-	if !opts.Force && k.FileWriter.Exists(cachePath) {
-		io.Verbosef(!opts.Quiet, "Using cached airgap bundle %s", cachePath)
+	if !opts.Force && k.FileWriter.Exists(path) {
+		io.Verbosef(!opts.Quiet, "Using existing airgap bundle %s", path)
 
-		return cachePath, nil
+		return path, nil
+	}
+
+	if opts.CacheOnly {
+		return "", fmt.Errorf("k0s airgap bundle %s not found at '%s', download it first with 'oms download k0s --version %s --airgapped'", version, path, version)
 	}
 
 	assetName, err := k.resolveAirgapBundleAssetName(version)
@@ -42,14 +52,14 @@ func (k *K0s) EnsureAirgapBundle(version string, opts DownloadOptions) (string, 
 		return "", err
 	}
 
-	downloadURL := releaseAssetURL(k0sReleaseURL, version, assetName)
+	downloadURL := fmt.Sprintf("%s/%s/%s", k0sReleaseURL, version, assetName)
 	io.Verbosef(!opts.Quiet, "Downloading k0s airgap bundle from %s", downloadURL)
 
-	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0644); err != nil {
+	if err := downloadToPath(k.FileWriter, k.Http, path, downloadURL, opts.Quiet, 0644); err != nil {
 		return "", err
 	}
 
-	return cachePath, nil
+	return path, nil
 }
 
 // resolveAirgapBundleAssetName returns the release asset name of the airgap image

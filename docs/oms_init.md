@@ -22,4 +22,5 @@ Initialize configuration files for Codesphere installation and other components.
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)
 * [oms init install-config](oms_init_install-config.md)	 - Initialize Codesphere installer configuration files
+* [oms init k0s-config](oms_init_k0s-config.md)	 - Generate a k0sctl config for installing k0s
 
