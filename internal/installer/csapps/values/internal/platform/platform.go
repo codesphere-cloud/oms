@@ -57,38 +57,38 @@ func servicesValues(imgs images.Images) (map[string]any, error) {
 	services := map[string]any{"priorityClass": PriorityClass}
 
 	for service, imageName := range serviceImages {
-		ref, err := imgs.Ref(imageName)
+		named, err := imgs.Named(imageName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve the %s image: %w", service, err)
 		}
 
-		services[service] = map[string]any{"image": ref.Image}
+		services[service] = map[string]any{"image": named.Name()}
 	}
 
 	return services, nil
 }
 
 func workspaceRouterValues(imgs images.Images) (map[string]any, error) {
-	nginx, err := imgs.Ref("nginx")
+	nginx, err := imgs.Tagged("nginx")
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve the workspace router image: %w", err)
 	}
 
 	return map[string]any{
-		"image":      map[string]any{"name": nginx.Image, "tag": nginx.Tag},
+		"image":      map[string]any{"name": nginx.Name(), "tag": nginx.Tag()},
 		"haReplicas": 2,
 	}, nil
 }
 
 func workspaceObservabilityValues(imgs images.Images) (map[string]any, error) {
-	opensearch, err := imgs.Ref("opensearch")
+	opensearch, err := imgs.Tagged("opensearch")
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve the OpenSearch image: %w", err)
 	}
 
 	values := map[string]any{
-		"openSearchImage":   opensearch.Image,
-		"openSearchVersion": opensearch.Tag,
+		"openSearchImage":   opensearch.Name(),
+		"openSearchVersion": opensearch.Tag(),
 	}
 
 	plain := map[string]string{
