@@ -52,8 +52,8 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 
-	// A skipped deploy must not rewrite the vault Secret: its freshly signed tokens would make
-	// Reloader restart the running release.
+	// If the codesphere step is skipped we don't want to update the secret that is the source for ESO.
+	// We use ESO with `refreshPolicy: OnChange` which would result in a long lived drift between source and target secret which might be confusing for debugging and could cause problems if we ever switch the refreshPolicy or trigger a manual sync.
 	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep) {
 		if err := ensureVaultSecret(ctx, opts, cfg); err != nil {
 			return err
