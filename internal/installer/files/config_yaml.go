@@ -101,7 +101,7 @@ type SecretFields struct {
 type RootConfig struct {
 	Datacenter             DatacenterConfig              `yaml:"dataCenter"`
 	DataCenters            []DatacenterConfig            `yaml:"dataCenters,omitempty"`
-	DefaultDataCenterID    *int                          `yaml:"defaultDataCenterId,omitempty"`
+	DefaultDataCenterID    int                           `yaml:"defaultDataCenterId,omitempty"`
 	Secrets                SecretsConfig                 `yaml:"secrets"`
 	Registry               *RegistryConfig               `yaml:"registry,omitempty"`
 	Postgres               PostgresConfig                `yaml:"postgres"`
@@ -201,20 +201,6 @@ type RegistryConfig struct {
 	Server              string `yaml:"server"`
 	ReplaceImagesInBom  bool   `yaml:"replaceImagesInBom"`
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
-}
-
-type registryConfigAlias RegistryConfig
-
-// UnmarshalYAML defaults both flags to true when they are left out, as the Codesphere installer does.
-func (r *RegistryConfig) UnmarshalYAML(node *yaml.Node) error {
-	config := registryConfigAlias{ReplaceImagesInBom: true, LoadContainerImages: true}
-	if err := node.Decode(&config); err != nil {
-		return fmt.Errorf("decode registry config: %w", err)
-	}
-
-	*r = RegistryConfig(config)
-
-	return nil
 }
 
 type PostgresConfig struct {
@@ -472,10 +458,8 @@ type CodesphereConfig struct {
 	OpenfgaBackups                *OpenfgaBackupsConfig  `yaml:"openfgaBackups,omitempty"`
 	OpenFga                       *OpenFgaConfig         `yaml:"openFga,omitempty"`
 	Migration                     *MigrationConfig       `yaml:"migration,omitempty"`
-	// ReleaseName is only set in dev, where several Codesphere releases share one cluster.
-	ReleaseName     string           `yaml:"releaseName,omitempty"`
-	TelemetryExport *TelemetryExport `yaml:"telemetryExport,omitempty"`
-	Override        ChartOverride    `yaml:"override,omitempty"`
+	TelemetryExport               *TelemetryExport       `yaml:"telemetryExport,omitempty"`
+	Override                      ChartOverride          `yaml:"override,omitempty"`
 }
 
 // BrandingConfig customizes how the Codesphere UI presents the installation.
@@ -724,12 +708,12 @@ type PlansConfig struct {
 }
 
 type HostingPlan struct {
-	CPUTenth        float64 `yaml:"cpuTenth"`
-	GPUParts        float64 `yaml:"gpuParts"`
-	MemoryMb        int     `yaml:"memoryMb"`
-	StorageMb       int     `yaml:"storageMb"`
-	TempStorageMb   int     `yaml:"tempStorageMb"`
-	PooledInstances *int    `yaml:"pooledInstances,omitempty"`
+	CPUTenth        int  `yaml:"cpuTenth"`
+	GPUParts        int  `yaml:"gpuParts"`
+	MemoryMb        int  `yaml:"memoryMb"`
+	StorageMb       int  `yaml:"storageMb"`
+	TempStorageMb   int  `yaml:"tempStorageMb"`
+	PooledInstances *int `yaml:"pooledInstances,omitempty"`
 }
 
 type WorkspacePlan struct {
@@ -775,10 +759,9 @@ type OAuthConfig struct {
 	AuthorizationEndpoint string `yaml:"authorizationEndpoint"`
 	TokenEndpoint         string `yaml:"tokenEndpoint"`
 	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
-	// Scope is a pointer because configs set it to an empty string, which the installer passes on.
-	Scope           *string `yaml:"scope,omitempty"`
-	RedirectURI     string  `yaml:"redirectUri,omitempty"`
-	InstallationURI string  `yaml:"installationUri,omitempty"`
+	Scope                 string `yaml:"scope,omitempty"`
+	RedirectURI           string `yaml:"redirectUri,omitempty"`
+	InstallationURI       string `yaml:"installationUri,omitempty"`
 }
 
 type ManagedServiceConfig struct {

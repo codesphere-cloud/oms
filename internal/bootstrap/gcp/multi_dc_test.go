@@ -383,7 +383,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		}
 		for _, dc := range bs.Env.DataCenters {
 			Expect(dc.InstallConfig.DataCenters).To(Equal(topology), "data center %d", dc.ID)
-			Expect(dc.InstallConfig.DefaultDataCenterID).To(HaveValue(Equal(1)), "data center %d", dc.ID)
+			Expect(dc.InstallConfig.DefaultDataCenterID).To(Equal(1), "data center %d", dc.ID)
 			// The local data center is still the one this config installs.
 			Expect(dc.InstallConfig.Datacenter.ID).To(Equal(dc.ID))
 		}

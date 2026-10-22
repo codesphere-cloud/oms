@@ -689,7 +689,7 @@ func (c *InitInstallConfigCmd) updateConfigFromOpts(config *files.RootConfig, va
 		config.Codesphere.Plans = files.PlansConfig{
 			HostingPlans: map[int]files.HostingPlan{
 				1: {
-					CPUTenth:      float64(c.Opts.CodesphereHostingPlanCPUTenth),
+					CPUTenth:      c.Opts.CodesphereHostingPlanCPUTenth,
 					MemoryMb:      c.Opts.CodesphereHostingPlanMemoryMb,
 					StorageMb:     c.Opts.CodesphereHostingPlanStorageMb,
 					TempStorageMb: c.Opts.CodesphereHostingPlanTempStorageMb,

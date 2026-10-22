@@ -16,7 +16,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/util"
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -392,7 +391,7 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 				TokenEndpoint:         "https://login.microsoftonline.com/common/oauth2/v2.0/token",
 				ClientAuthMethod:      "client_secret_post",
 				RedirectURI:           "https://cs." + b.Env.BaseDomain + "/ide/auth/azure-dev-ops/callback",
-				Scope:                 ptr.To("openid offline_access https://app.vssps.visualstudio.com/vso.code_full"),
+				Scope:                 "openid offline_access https://app.vssps.visualstudio.com/vso.code_full",
 			},
 		}
 		dc.ConfigManager.GetVault().SetSecret(files.SecretEntry{Name: files.SecretAzureDevOpsAppClientId, Fields: &files.SecretFields{Password: b.Env.AzureDevOpsAppClientID}})
@@ -603,7 +602,7 @@ func (b *GCPBootstrapper) applyDataCenterTopology(dc *datacenter.DataCenter) {
 
 	dc.InstallConfig.DataCenters = all
 	// Clients land in the primary data center, which is also the one cs.<base-domain> resolves to.
-	dc.InstallConfig.DefaultDataCenterID = new(b.primaryDC().ID)
+	dc.InstallConfig.DefaultDataCenterID = b.primaryDC().ID
 
 	b.dropAvailableDataCentersOverride(dc)
 }

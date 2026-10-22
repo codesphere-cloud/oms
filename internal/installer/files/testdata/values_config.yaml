@@ -211,7 +211,6 @@ codesphere:
     user: codesphere
   openFga:
     apiUrl: https://fga.example.com
-  releaseName: codesphere-dev
   telemetryExport:
     remoteEndpoint: https://otel.example.com
     remoteExport: true
