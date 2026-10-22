@@ -5,8 +5,11 @@
 package images
 
 import (
+	// Registers SHA-256 so reference.Parse accepts sha256 digests.
+	_ "crypto/sha256"
 	"fmt"
-	"strings"
+
+	"github.com/distribution/reference"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 )
@@ -34,47 +37,44 @@ func (b Images) Image(name string) (string, error) {
 	return image, nil
 }
 
-// Ref returns the named image split into image, tag and digest.
-func (b Images) Ref(name string) (Ref, error) {
+// Named returns the named image parsed, with a tag or a digest.
+func (b Images) Named(name string) (reference.Named, error) {
 	image, err := b.Image(name)
 	if err != nil {
-		return Ref{}, err
+		return nil, err
 	}
 
-	return parseRef(image)
+	parsed, err := reference.Parse(image)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse image %s: %w", image, err)
+	}
+
+	named, ok := parsed.(reference.Named)
+	if !ok {
+		return nil, fmt.Errorf("image %s has no name", image)
+	}
+
+	_, tagged := named.(reference.Tagged)
+
+	_, digested := named.(reference.Digested)
+	if !tagged && !digested {
+		return nil, fmt.Errorf("image %s is missing a tag or digest", image)
+	}
+
+	return named, nil
 }
 
-// Ref is an image reference split like the Codesphere installer's OciImage, so the values name
-// images exactly as it does.
-type Ref struct {
-	// Image is the reference without tag and digest, e.g. ghcr.io/org/app.
-	Image  string
-	Tag    string
-	Digest string
-}
-
-func parseRef(ref string) (Ref, error) {
-	image, tag, digest := splitRef(ref)
-	if tag == "" && digest == "" {
-		return Ref{}, fmt.Errorf("image %s is missing a tag or digest", ref)
+// Tagged returns the named image parsed, for values that need its tag.
+func (b Images) Tagged(name string) (reference.NamedTagged, error) {
+	named, err := b.Named(name)
+	if err != nil {
+		return nil, err
 	}
 
-	return Ref{Image: image, Tag: tag, Digest: digest}, nil
-}
-
-// splitRef keeps both a tag and a digest when a reference carries both, which the Docker reference
-// parsers do not.
-func splitRef(ref string) (image, tag, digest string) {
-	image = ref
-	if at := strings.Index(image, "@"); at != -1 {
-		digest = image[at+1:]
-		image = image[:at]
+	tagged, ok := named.(reference.NamedTagged)
+	if !ok {
+		return nil, fmt.Errorf("image %s is missing a tag", named)
 	}
 
-	if colon := strings.LastIndex(image, ":"); colon > strings.LastIndex(image, "/") {
-		tag = image[colon+1:]
-		image = image[:colon]
-	}
-
-	return image, tag, digest
+	return tagged, nil
 }

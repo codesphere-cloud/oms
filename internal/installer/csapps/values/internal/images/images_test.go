@@ -36,29 +36,53 @@ var _ = Describe("Image", func() {
 	})
 })
 
-var _ = Describe("Ref", func() {
-	DescribeTable("reference -> image, tag and digest",
-		func(reference string, want images.Ref) {
-			imgs, err := images.New(testBOM(map[string]string{"api": reference}))
+func testImages(reference string) images.Images {
+	imgs, err := images.New(testBOM(map[string]string{"api": reference}))
+	Expect(err).NotTo(HaveOccurred())
+
+	return imgs
+}
+
+var _ = Describe("Named", func() {
+	DescribeTable("reference -> its name without tag and digest",
+		func(reference string, want string) {
+			named, err := testImages(reference).Named("api")
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(imgs.Ref("api")).To(Equal(want))
+			Expect(named.Name()).To(Equal(want))
 		},
-		Entry("tag", "ghcr.io/codesphere-cloud/api:1.2.3",
-			images.Ref{Image: "ghcr.io/codesphere-cloud/api", Tag: "1.2.3"}),
-		Entry("digest", "ghcr.io/codesphere-cloud/api@"+digest,
-			images.Ref{Image: "ghcr.io/codesphere-cloud/api", Digest: digest}),
-		Entry("tag and digest", "ghcr.io/codesphere-cloud/api:main@"+digest,
-			images.Ref{Image: "ghcr.io/codesphere-cloud/api", Tag: "main", Digest: digest}),
-		Entry("registry port and tag", "registry.example.com:5000/api:1.2.3",
-			images.Ref{Image: "registry.example.com:5000/api", Tag: "1.2.3"}),
+		Entry("tag", "ghcr.io/codesphere-cloud/api:1.2.3", "ghcr.io/codesphere-cloud/api"),
+		Entry("digest", "ghcr.io/codesphere-cloud/api@"+digest, "ghcr.io/codesphere-cloud/api"),
+		Entry("tag and digest", "ghcr.io/codesphere-cloud/api:main@"+digest, "ghcr.io/codesphere-cloud/api"),
+		Entry("registry port and tag", "registry.example.com:5000/api:1.2.3", "registry.example.com:5000/api"),
+		Entry("no registry", "nginx:1.31.5", "nginx"),
 	)
 
 	It("reference with neither tag nor digest -> error", func() {
-		imgs, err := images.New(testBOM(map[string]string{"api": "registry.example.com:5000/api"}))
-		Expect(err).NotTo(HaveOccurred())
-
-		_, err = imgs.Ref("api")
+		_, err := testImages("registry.example.com:5000/api").Named("api")
 		Expect(err).To(MatchError(ContainSubstring("missing a tag or digest")))
+	})
+
+	It("malformed reference -> error", func() {
+		_, err := testImages("ghcr.io/codesphere-cloud/API:1.2.3").Named("api")
+		Expect(err).To(MatchError(ContainSubstring("failed to parse image")))
+	})
+})
+
+var _ = Describe("Tagged", func() {
+	DescribeTable("tagged reference -> its tag",
+		func(reference string, want string) {
+			tagged, err := testImages(reference).Tagged("api")
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(tagged.Tag()).To(Equal(want))
+		},
+		Entry("tag", "ghcr.io/codesphere-cloud/api:1.2.3", "1.2.3"),
+		Entry("tag and digest", "ghcr.io/codesphere-cloud/api:main@"+digest, "main"),
+	)
+
+	It("digest-only reference -> error", func() {
+		_, err := testImages("ghcr.io/codesphere-cloud/api@" + digest).Tagged("api")
+		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
 	})
 })
