@@ -30,7 +30,7 @@ type SmoketestCodesphereOpts struct {
 	Token   string
 	TeamID  string
 	PlanID  string
-	Verbose bool
+	Quiet   bool
 	Timeout time.Duration
 	Profile string
 	Steps   []string
@@ -39,19 +39,19 @@ type SmoketestCodesphereOpts struct {
 // Logging helpers
 
 func (c *SmoketestCodesphereOpts) logStep(message string) {
-	if c.Verbose {
+	if !c.Quiet {
 		fmt.Printf("%s...", message)
 	}
 }
 
 func (c *SmoketestCodesphereOpts) logSuccess() {
-	if c.Verbose {
+	if !c.Quiet {
 		fmt.Printf(" %ssucceeded%s\n", colorGreen, colorReset)
 	}
 }
 
 func (c *SmoketestCodesphereOpts) logFailure() {
-	if c.Verbose {
+	if !c.Quiet {
 		fmt.Printf(" %sfailed%s\n", colorRed, colorReset)
 	}
 }
