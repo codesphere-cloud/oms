@@ -201,8 +201,8 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		gc.EXPECT().EnsureStorageBucket(projectID, projectID+"-openfga-backup", "us-central1").Return(nil)
 		gc.EXPECT().CreateHMACKey(projectID, openfgaSA).Return("fake-access-id", "fake-secret", nil)
 		gc.EXPECT().CreateVPC(projectID, "us-central1", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
-		// Only the local container registry cuts the VMs off from the internet.
-		if csEnv.RegistryType == gcp.RegistryTypeLocalContainer {
+		// Only airgapped installations cut the VMs off from the internet.
+		if csEnv.Airgapped {
 			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(8)
 		} else {
 			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(5)

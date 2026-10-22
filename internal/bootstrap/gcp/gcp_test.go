@@ -1381,7 +1381,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 		}
 
 		Describe("Valid EnsureFirewallRules", func() {
-			It("creates the base rules and blocks internet egress of all VMs but the jumpbox with the local container registry", func() {
+			It("creates the base rules and blocks internet egress of all VMs but the jumpbox when airgapped", func() {
+				csEnv.Airgapped = true
+
 				expectBaseRules()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
 					return r.GetName() == "allow-jumpbox-egress" &&
@@ -1413,7 +1415,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			DescribeTable("removes the airgapped egress rules with a registry reachable over the internet",
+			DescribeTable("removes the airgapped egress rules when not airgapped",
 				func(registryType gcp.RegistryType) {
 					csEnv.RegistryType = registryType
 
@@ -1428,6 +1430,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 				},
 				Entry("GitHub", gcp.RegistryTypeGitHub),
 				Entry("artifact registry", gcp.RegistryTypeArtifactRegistry),
+				// Only airgapped installations stage the k0s airgap bundle, so a local container
+				// registry alone must keep internet egress.
+				Entry("local container registry", gcp.RegistryTypeLocalContainer),
 			)
 		})
 
@@ -1443,6 +1448,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when the egress deny rule creation fails", func() {
+				csEnv.Airgapped = true
+
 				expectBaseRules()
 				expectRules("allow-jumpbox-egress", "allow-internal-egress")
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
@@ -1457,8 +1464,6 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when removing the egress deny rule fails", func() {
-				csEnv.RegistryType = gcp.RegistryTypeGitHub
-
 				expectBaseRules()
 				gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(fmt.Errorf("delete error")).Once()
 

@@ -882,14 +882,14 @@ func (b *GCPBootstrapper) createFirewallRules(network string, rules []*computepb
 	return nil
 }
 
-// ensureAirgappedEgressRules cuts all VMs but the jumpbox off from the internet when they pull
-// from the local container registry, which simulates an air-gapped installation. They keep
-// reaching each other and the jumpbox inside the VPC, and the jumpbox keeps its internet access to
-// download the package and mirror the images into its registry. Replies to inbound connections
-// still pass, since GCP firewall rules are stateful. With any other registry type the rules are
-// removed, so a re-run that switches away from the local registry can pull again.
+// ensureAirgappedEgressRules cuts all VMs but the jumpbox off from the internet for an airgapped
+// installation. They keep reaching each other and the jumpbox inside the VPC, and the jumpbox keeps
+// its internet access to download the package and mirror the images into its registry. Replies to
+// inbound connections still pass, since GCP firewall rules are stateful. A local container registry
+// alone does not cut the VMs off, as only airgapped installations stage the k0s airgap bundle.
+// Without airgapping the rules are removed, so a re-run that switches it off can pull again.
 func (b *GCPBootstrapper) ensureAirgappedEgressRules(network string) error {
-	if b.Env.RegistryType == RegistryTypeLocalContainer {
+	if b.Env.Airgapped {
 		return b.createFirewallRules(network, airgappedEgressRules())
 	}
 
