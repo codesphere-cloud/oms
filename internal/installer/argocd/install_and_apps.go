@@ -13,7 +13,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/argocd/pcapps"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -119,10 +118,6 @@ func (i *AppInstaller) InstallArgoCD() error {
 // SyncVaultSecret refreshes the service account tokens and creates or updates
 // the Codesphere vault secret in Kubernetes.
 func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
-	if err := secrets.EnsureServiceAccountTokens(i.cfg.Vault); err != nil {
-		return fmt.Errorf("failed to ensure service account tokens: %w", err)
-	}
-
 	creator := vault.NewVaultSecretCreator(i.cfg.KubeClient)
 	if err := creator.CreateSecretFromVault(ctx, i.cfg.Vault, vault.VaultSecretNamespace, vault.VaultSecretName); err != nil {
 		return fmt.Errorf("failed to sync vault secret: %w", err)

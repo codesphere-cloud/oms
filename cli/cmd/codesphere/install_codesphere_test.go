@@ -29,11 +29,12 @@ var _ = Describe("InstallCodesphereCmd", func() {
 		mockEnv = env.NewMockEnv(GinkgoT())
 		globalOpts = &util.GlobalOptions{}
 		opts = &codesphere.InstallCodesphereOpts{
-			GlobalOptions: globalOpts,
-			Package:       "codesphere-v1.66.0-installer-lite.tar.gz",
-			Force:         false,
-			VaultType:     "sops",
-			PrivKey:       "age-key.txt",
+			GlobalOptions:   globalOpts,
+			Package:         "codesphere-v1.66.0-installer-lite.tar.gz",
+			Force:           false,
+			VaultType:       "sops",
+			PrivKey:         "age-key.txt",
+			VaultSecretName: "cs-vault",
 		}
 		c = codesphere.InstallCodesphereCmd{
 			Opts: opts,
@@ -146,5 +147,9 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 				Expect(subcommand.InheritedFlags().Lookup("local-components")).NotTo(BeNil())
 			}
 		}
+
+		vaultSecretNameFlag := codesphereCmd.PersistentFlags().Lookup("vault-secret-name")
+		Expect(vaultSecretNameFlag).NotTo(BeNil())
+		Expect(vaultSecretNameFlag.DefValue).To(Equal("cs-vault"))
 	})
 })

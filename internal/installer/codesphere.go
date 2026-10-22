@@ -33,12 +33,15 @@ var KnownInstallerSteps = []string{
 	"ceph",
 	"kubernetes",
 	"set-up-cluster",
-	"codesphere",
+	CodesphereStep,
 	"ms-backends",
 }
 
 // ArgoCDStep is the skip-step name for the dependency-phase ArgoCD pre-step.
 const ArgoCDStep = "argocd"
+
+// CodesphereStep is the skip-step name for deploying the Codesphere release.
+const CodesphereStep = "codesphere"
 
 // InfraSteps are run in Phase 1 (before ArgoCD) when --argocd is active.
 var InfraSteps = []string{
@@ -56,7 +59,7 @@ var InfraSteps = []string{
 var DependenciesSteps = []string{"copy-dependencies", "extract-dependencies", "set-up-cluster", "ms-backends"}
 
 // PlatformSteps run in Phase 3 and install the Codesphere platform only.
-var PlatformSteps = []string{"copy-dependencies", "extract-dependencies", "codesphere"}
+var PlatformSteps = []string{"copy-dependencies", "extract-dependencies", CodesphereStep}
 
 // CodesphereInstaller encapsulates the logic for running the private-cloud-installer.js script.
 type CodesphereInstaller struct {
