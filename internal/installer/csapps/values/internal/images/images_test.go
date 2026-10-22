@@ -43,13 +43,10 @@ func testImages(reference string) images.Images {
 	return imgs
 }
 
-var _ = Describe("Named", func() {
-	DescribeTable("reference -> its name without tag and digest",
+var _ = Describe("Name", func() {
+	DescribeTable("reference -> registry and repository",
 		func(reference string, want string) {
-			named, err := testImages(reference).Named("api")
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(named.Name()).To(Equal(want))
+			Expect(testImages(reference).Name("api")).To(Equal(want))
 		},
 		Entry("tag", "ghcr.io/codesphere-cloud/api:1.2.3", "ghcr.io/codesphere-cloud/api"),
 		Entry("digest", "ghcr.io/codesphere-cloud/api@"+digest, "ghcr.io/codesphere-cloud/api"),
@@ -59,30 +56,28 @@ var _ = Describe("Named", func() {
 	)
 
 	It("reference with neither tag nor digest -> error", func() {
-		_, err := testImages("registry.example.com:5000/api").Named("api")
+		_, err := testImages("registry.example.com:5000/api").Name("api")
 		Expect(err).To(MatchError(ContainSubstring("missing a tag or digest")))
 	})
 
 	It("malformed reference -> error", func() {
-		_, err := testImages("ghcr.io/codesphere-cloud/API:1.2.3").Named("api")
+		_, err := testImages("ghcr.io/codesphere-cloud/API:1.2.3").Name("api")
 		Expect(err).To(MatchError(ContainSubstring("failed to parse image")))
 	})
 })
 
-var _ = Describe("Tagged", func() {
+var _ = Describe("Tag", func() {
 	DescribeTable("tagged reference -> its tag",
 		func(reference string, want string) {
-			tagged, err := testImages(reference).Tagged("api")
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(tagged.Tag()).To(Equal(want))
+			Expect(testImages(reference).Tag("api")).To(Equal(want))
 		},
 		Entry("tag", "ghcr.io/codesphere-cloud/api:1.2.3", "1.2.3"),
 		Entry("tag and digest", "ghcr.io/codesphere-cloud/api:main@"+digest, "main"),
+		Entry("registry port and tag", "registry.example.com:5000/api:1.2.3", "1.2.3"),
 	)
 
 	It("digest-only reference -> error", func() {
-		_, err := testImages("ghcr.io/codesphere-cloud/api@" + digest).Tagged("api")
+		_, err := testImages("ghcr.io/codesphere-cloud/api@" + digest).Tag("api")
 		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
 	})
 })
