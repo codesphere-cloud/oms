@@ -14,7 +14,22 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 )
 
-// Images are the codesphere component's images from the BOM, by name.
+// Images are the codesphere component's images from the BOM, by name. Each image is a reference,
+// split by OCI and by distribution/reference into these parts:
+//
+//	ghcr.io/codesphere-cloud/api:1.2.3@sha256:0123…
+//	└──┬──┘ └────────┬─────────┘ └─┬─┘ └────┬─────┘
+//	   1             2             3        4
+//	└────────────┬─────────────┘
+//	             5
+//
+//	   OCI         distribution/reference   Images
+//	1  registry    reference.Domain
+//	2  repository  reference.Path
+//	3  tag         Tagged.Tag               Tag
+//	4  digest      Digested.Digest
+//	5              Named.Name               Name
+//	   reference   Reference.String         Image
 type Images map[string]string
 
 // New reads the codesphere component's image references.
@@ -27,7 +42,7 @@ func New(b *bom.Config) (Images, error) {
 	return images, nil
 }
 
-// Image returns the full reference of the named image.
+// Image returns the full reference of the named image, as the BOM has it.
 func (b Images) Image(name string) (string, error) {
 	image, ok := b[name]
 	if !ok || image == "" {
@@ -37,14 +52,32 @@ func (b Images) Image(name string) (string, error) {
 	return image, nil
 }
 
-// Named returns the named image parsed, with a tag or a digest. The parts of a reference:
-//
-//	     name (repository)
-//	┌────────────┴─────────────┐
-//	ghcr.io/codesphere-cloud/api:1.2.3@sha256:0123…
-//	└──┬──┘ └────────┬─────────┘ └─┬─┘ └────┬─────┘
-//	domain         path           tag    digest
-func (b Images) Named(name string) (reference.Named, error) {
+// Name returns the registry and repository of the named image, without tag and digest.
+func (b Images) Name(name string) (string, error) {
+	named, err := b.parse(name)
+	if err != nil {
+		return "", err
+	}
+
+	return named.Name(), nil
+}
+
+// Tag returns the tag of the named image.
+func (b Images) Tag(name string) (string, error) {
+	named, err := b.parse(name)
+	if err != nil {
+		return "", err
+	}
+
+	tagged, ok := named.(reference.Tagged)
+	if !ok {
+		return "", fmt.Errorf("image %s is missing a tag", named)
+	}
+
+	return tagged.Tag(), nil
+}
+
+func (b Images) parse(name string) (reference.Named, error) {
 	image, err := b.Image(name)
 	if err != nil {
 		return nil, err
@@ -68,19 +101,4 @@ func (b Images) Named(name string) (reference.Named, error) {
 	}
 
 	return named, nil
-}
-
-// Tagged returns the named image parsed, for values that need its tag.
-func (b Images) Tagged(name string) (reference.NamedTagged, error) {
-	named, err := b.Named(name)
-	if err != nil {
-		return nil, err
-	}
-
-	tagged, ok := named.(reference.NamedTagged)
-	if !ok {
-		return nil, fmt.Errorf("image %s is missing a tag", named)
-	}
-
-	return tagged, nil
 }
