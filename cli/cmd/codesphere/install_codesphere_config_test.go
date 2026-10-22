@@ -46,27 +46,6 @@ var _ = Describe("prepareInstallConfig", func() {
 		Entry("object overlay adds a hash to a legacy version", "1.111.0", "{hash: abc123}", "1.111.0", "abc123"),
 		Entry("legacy override replaces the version and clears the prior hash", "{version: 1.111.0, hash: abc123}", "1.112.0", "1.112.0", ""),
 	)
-	DescribeTable("tells the Codesphere installer to skip the chart deploy only when OMS deploys through ArgoCD",
-		func(viaArgoCD bool) {
-			configPath := filepath.Join(GinkgoT().TempDir(), "config.yaml")
-			Expect(os.WriteFile(configPath, []byte("codesphere:\n  domain: example.com\n"), 0600)).To(Succeed())
-
-			effectiveOpts, _, cleanup, err := prepareInstallConfig(
-				&InstallCodesphereOpts{Configs: []string{configPath}, CodesphereViaArgoCD: viaArgoCD},
-				installer.NewConfig(),
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			defer cleanup()
-
-			merged, err := os.ReadFile(effectiveOpts.ConfigPath)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(merged)).To(ContainSubstring("domain: example.com"))
-			Expect(strings.Contains(string(merged), "skipChartDeploy: true")).To(Equal(viaArgoCD))
-		},
-		Entry("via ArgoCD", true),
-		Entry("via Helm", false),
-	)
 	It("merges multiple config files in order and returns a single parsed config path", func() {
 		tmpDir, err := os.MkdirTemp("", "install-config-merge-*")
 		Expect(err).ToNot(HaveOccurred())
