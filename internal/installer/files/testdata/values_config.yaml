@@ -55,7 +55,6 @@ codesphere:
     desc: Cloud IDE
     docsUrl: https://docs.example.com
     faviconHref: https://example.com/favicon.ico
-    showOnboarding: true
     title: Example IDE
     tosUrl: https://example.com/tos
   certIssuer:

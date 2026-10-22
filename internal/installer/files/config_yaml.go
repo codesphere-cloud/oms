@@ -480,12 +480,11 @@ type CodesphereConfig struct {
 
 // BrandingConfig customizes how the Codesphere UI presents the installation.
 type BrandingConfig struct {
-	Desc           string `yaml:"desc,omitempty"`
-	DocsURL        string `yaml:"docsUrl,omitempty"`
-	FaviconHref    string `yaml:"faviconHref,omitempty"`
-	ShowOnboarding *bool  `yaml:"showOnboarding,omitempty"`
-	Title          string `yaml:"title,omitempty"`
-	TosURL         string `yaml:"tosUrl,omitempty"`
+	Desc        string `yaml:"desc,omitempty"`
+	DocsURL     string `yaml:"docsUrl,omitempty"`
+	FaviconHref string `yaml:"faviconHref,omitempty"`
+	Title       string `yaml:"title,omitempty"`
+	TosURL      string `yaml:"tosUrl,omitempty"`
 }
 
 // CustomCertificate is a PEM certificate and key served instead of an issued one.
