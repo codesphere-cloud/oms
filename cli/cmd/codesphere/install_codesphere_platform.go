@@ -95,7 +95,8 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 }
 
 // ensureVaultSecret writes the vault Secret even though the dependencies phase already wrote
-// cs-vault: dev previews read theirs from a Secret of their own name.
+// cs-vault: The platform phase can pass another name (via --vault-secret-name), e.g. for dev
+// preview deployments where we have multiple Codesphere installations on one cluster.
 func ensureVaultSecret(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) error {
 	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 	if err != nil {
