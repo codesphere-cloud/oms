@@ -37,7 +37,13 @@ func (b Images) Image(name string) (string, error) {
 	return image, nil
 }
 
-// Named returns the named image parsed, with a tag or a digest.
+// Named returns the named image parsed, with a tag or a digest. The parts of a reference:
+//
+//	     name (repository)
+//	┌────────────┴─────────────┐
+//	ghcr.io/codesphere-cloud/api:1.2.3@sha256:0123…
+//	└──┬──┘ └────────┬─────────┘ └─┬─┘ └────┬─────┘
+//	domain         path           tag    digest
 func (b Images) Named(name string) (reference.Named, error) {
 	image, err := b.Image(name)
 	if err != nil {
