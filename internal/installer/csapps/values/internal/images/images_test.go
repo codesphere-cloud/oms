@@ -52,12 +52,16 @@ var _ = Describe("Name", func() {
 		Entry("digest", "ghcr.io/codesphere-cloud/api@"+digest, "ghcr.io/codesphere-cloud/api"),
 		Entry("tag and digest", "ghcr.io/codesphere-cloud/api:main@"+digest, "ghcr.io/codesphere-cloud/api"),
 		Entry("registry port and tag", "registry.example.com:5000/api:1.2.3", "registry.example.com:5000/api"),
-		Entry("no registry", "nginx:1.31.5", "nginx"),
 	)
 
 	It("reference with neither tag nor digest -> error", func() {
 		_, err := testImages("registry.example.com:5000/api").Name("api")
 		Expect(err).To(MatchError(ContainSubstring("missing a tag or digest")))
+	})
+
+	It("reference without registry -> error", func() {
+		_, err := testImages("nginx:1.31.5").Name("api")
+		Expect(err).To(MatchError(ContainSubstring("must be canonical")))
 	})
 
 	It("malformed reference -> error", func() {
