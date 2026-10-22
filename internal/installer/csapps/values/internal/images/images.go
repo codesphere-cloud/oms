@@ -5,7 +5,7 @@
 package images
 
 import (
-	// Registers SHA-256 so reference.ParseNamed accepts sha256 digests.
+	// Registers SHA-256 so reference.Parse accepts sha256 digests.
 	_ "crypto/sha256"
 	"fmt"
 
@@ -85,9 +85,14 @@ func (b Images) parse(name string) (reference.Named, error) {
 		return nil, err
 	}
 
-	named, err := reference.ParseNamed(image)
+	parsed, err := reference.Parse(image)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse image %s: %w", image, err)
+	}
+
+	named, ok := parsed.(reference.Named)
+	if !ok {
+		return nil, fmt.Errorf("image %s has no name", image)
 	}
 
 	_, tagged := named.(reference.Tagged)
