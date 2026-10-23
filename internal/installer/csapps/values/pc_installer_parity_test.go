@@ -62,6 +62,7 @@ func installerConfig(yamlConfig string) *files.RootConfig {
 	base := `
 		dataCenter: {id: 1, name: test, city: KA, countryCode: None}
 		postgres:
+		  mode: install
 		  caCertPem: ca
 		  primary: {ip: 1.2.3.4, hostname: foo, sslConfig: {serverCertPem: ""}}
 		  replica: {ip: 1.2.3.5, name: bar, sslConfig: {serverCertPem: ""}}
