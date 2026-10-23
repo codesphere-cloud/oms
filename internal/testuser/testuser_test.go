@@ -4,253 +4,237 @@
 package testuser
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
 
-	"github.com/DATA-DOG/go-sqlmock"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-var _ = Describe("generateAPIToken", func() {
-	It("returns no error", func() {
-		_, err := generateAPIToken()
-		Expect(err).NotTo(HaveOccurred())
-	})
+func TestSignupCreatesTokenUsingAuthenticatedInternalAPI(t *testing.T) {
+	var calls []string
 
-	It("starts with the CS_ prefix", func() {
-		token, err := generateAPIToken()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(token).To(HavePrefix("CS_"))
-	})
+	opts := CreateTestUserOpts{Email: "test+api@codesphere.com", Password: "Aa1!secret"}
 
-	It("has the correct length (3 prefix + 32 hex chars)", func() {
-		token, err := generateAPIToken()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(token).To(HaveLen(35))
-	})
-
-	It("produces unique tokens on successive calls", func() {
-		token1, err := generateAPIToken()
-		Expect(err).NotTo(HaveOccurred())
-		token2, err := generateAPIToken()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(token1).NotTo(Equal(token2))
-	})
-
-	It("contains only hex characters after the prefix", func() {
-		token, err := generateAPIToken()
-		Expect(err).NotTo(HaveOccurred())
-		hexPart := token[len(tokenPrefix):]
-		Expect(hexPart).To(MatchRegexp("^[0-9a-f]{32}$"))
-	})
-})
-
-var _ = Describe("WriteResultToFile", func() {
-	It("writes a valid JSON file to the given directory", func() {
-		dir := GinkgoT().TempDir()
-		result := &TestUserResult{
-			Email:             "test@example.com",
-			PlaintextPassword: "secret123",
-			PlaintextAPIToken: "CS_abc123",
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls = append(calls, r.URL.Path)
+		if r.Method != http.MethodPost {
+			t.Errorf("method = %s", r.Method)
 		}
 
-		filePath, err := WriteResultToFile(result, dir)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(filePath).To(Equal(filepath.Join(dir, "test-user.json")))
+		var data map[string]any
 
-		data, err := os.ReadFile(filePath)
-		Expect(err).NotTo(HaveOccurred())
+		if r.URL.Path != "/session/v1/sign-out" {
+			if r.Header.Get("Content-Type") != "application/json" {
+				t.Error("missing JSON content type")
+			}
 
-		var loaded TestUserResult
-		err = json.Unmarshal(data, &loaded)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(loaded.Email).To(Equal("test@example.com"))
-		Expect(loaded.PlaintextPassword).To(Equal("secret123"))
-		Expect(loaded.PlaintextAPIToken).To(Equal("CS_abc123"))
-	})
-
-	It("creates the directory if it does not exist", func() {
-		dir := filepath.Join(GinkgoT().TempDir(), "nested", "subdir")
-		result := &TestUserResult{
-			Email:             "user@example.com",
-			PlaintextPassword: "pass",
-			PlaintextAPIToken: "CS_token",
+			if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+				t.Error(err)
+			}
 		}
 
-		filePath, err := WriteResultToFile(result, dir)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(filePath).To(BeARegularFile())
-	})
+		switch r.URL.Path {
+		case "/internal/v1/Auth/signUp":
+			want := map[string]any{"email": opts.Email, "password": opts.Password, "recaptchaToken": "test"}
+			if !reflect.DeepEqual(data["data"], want) {
+				t.Error("incorrect signup payload")
+			}
 
-	It("sets restrictive file permissions (0600)", func() {
-		dir := GinkgoT().TempDir()
-		result := &TestUserResult{
-			Email:             "user@example.com",
-			PlaintextPassword: "pass",
-			PlaintextAPIToken: "CS_token",
+			_, _ = fmt.Fprint(w, `{"kind":12,"id":1}`)
+		case "/internal/v1/Auth/signIn":
+			want := map[string]any{"email": opts.Email, "password": opts.Password}
+			if !reflect.DeepEqual(data["data"], want) {
+				t.Error("incorrect sign-in payload")
+			}
+
+			_, _ = fmt.Fprint(w, `{"kind":12,"id":1,"data":{"sessionId":"session-secret","firstSignin":true}}`)
+		case "/session/v1/gen-access-token":
+			if data["id"] != "session-secret" {
+				t.Error("missing session ID")
+			}
+
+			_, _ = fmt.Fprint(w, `{"accessToken":"access-secret","sessionId":"session-secret"}`)
+		case "/internal/v1/ApiTokenService/createToken":
+			if r.Header.Get("Authorization") != "Bearer access-secret" {
+				t.Error("missing access token")
+			}
+
+			if !reflect.DeepEqual(data["data"], map[string]any{"name": "oms-test-user"}) {
+				t.Error("incorrect token request")
+			}
+
+			_, _ = fmt.Fprint(w, `{"kind":12,"id":1,"data":{"token":"CS_from-service"}}`)
+		case "/session/v1/sign-out":
+			cookie, err := r.Cookie("sessionId")
+			if err != nil || cookie.Value != "session-secret" {
+				t.Error("missing logout cookie")
+			}
+
+			_, _ = fmt.Fprint(w, `{}`)
+		default:
+			t.Errorf("unexpected route %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	result, err := createViaAPI(context.Background(), server.URL, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Email != opts.Email || result.PlaintextPassword != opts.Password || result.PlaintextAPIToken != "CS_from-service" {
+		t.Error("credentials differ from signup and token response")
+	}
+
+	want := []string{"/internal/v1/Auth/signUp", "/internal/v1/Auth/signIn", "/session/v1/gen-access-token", "/internal/v1/ApiTokenService/createToken", "/session/v1/sign-out"}
+	if !reflect.DeepEqual(calls, want) {
+		t.Errorf("calls = %v", calls)
+	}
+}
+
+func TestSignupFailureStopsFlowAndDoesNotExposeResponseBody(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{"HTTP failure", 500, `password-secret access-secret database-details`},
+		{"RPC failure", 200, `{"kind":13,"id":1,"error":{"name":"InvalidArgument","data":"password-secret"}}`},
+		{"malformed response", 200, `password-secret`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				calls++
+
+				w.WriteHeader(tc.status)
+				_, _ = fmt.Fprint(w, tc.body)
+			}))
+			defer server.Close()
+
+			_, err := createViaAPI(context.Background(), server.URL, CreateTestUserOpts{Email: "test@codesphere.com", Password: "password-secret"})
+			if err == nil || !strings.Contains(err.Error(), "signup failed") {
+				t.Fatalf("unexpected error %v", err)
+			}
+
+			if strings.Contains(err.Error(), "password-secret") || strings.Contains(err.Error(), "access-secret") {
+				t.Error("error exposes secrets")
+			}
+
+			if calls != 1 {
+				t.Errorf("made %d calls after failed signup", calls)
+			}
+		})
+	}
+}
+
+func TestMissingCredentialsInResponsesAreRejected(t *testing.T) {
+	for _, stage := range []string{"signIn", "gen-access-token", "createToken"} {
+		t.Run(stage, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case strings.HasSuffix(r.URL.Path, stage):
+					if stage == "gen-access-token" {
+						_, _ = fmt.Fprint(w, `{}`)
+					} else {
+						_, _ = fmt.Fprint(w, `{"kind":12,"id":1,"data":{}}`)
+					}
+				case strings.HasSuffix(r.URL.Path, "signIn"):
+					_, _ = fmt.Fprint(w, `{"kind":12,"id":1,"data":{"sessionId":"session"}}`)
+				case strings.HasSuffix(r.URL.Path, "gen-access-token"):
+					_, _ = fmt.Fprint(w, `{"accessToken":"access"}`)
+				default:
+					_, _ = fmt.Fprint(w, `{"kind":12,"id":1}`)
+				}
+			}))
+			defer server.Close()
+
+			_, err := createViaAPI(context.Background(), server.URL, CreateTestUserOpts{Email: "test@codesphere.com", Password: "password"})
+			if err == nil {
+				t.Fatal("missing response credential accepted")
+			}
+		})
+	}
+}
+
+func TestGeneratedCredentialsAreUniqueAndCanBePersistedPrivately(t *testing.T) {
+	a, err := (CreateTestUserOpts{}).defaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := (CreateTestUserOpts{}).defaults()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if a.Email == b.Email || a.Password == b.Password || !strings.HasPrefix(a.Password, "Aa1!") {
+		t.Error("generated credentials are not unique and strong")
+	}
+
+	dir := t.TempDir()
+
+	file := filepath.Join(dir, "test-user.json")
+	if err := os.WriteFile(file, []byte("old"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	want := &TestUserResult{Email: a.Email, PlaintextPassword: a.Password, PlaintextAPIToken: "CS_token"}
+	if _, err := WriteResultToFile(want, dir); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if info.Mode().Perm() != 0600 {
+		t.Errorf("mode = %v", info.Mode().Perm())
+	}
+
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got TestUserResult
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got != *want {
+		t.Error("persisted credentials differ")
+	}
+}
+
+func TestServiceTargetPortResolvesNamedAndNumericPorts(t *testing.T) {
+	pod := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{{Ports: []corev1.ContainerPort{{Name: "http", ContainerPort: 3010}}}}}}
+	for _, target := range []intstr.IntOrString{intstr.FromInt32(3010), intstr.FromString("http"), intstr.FromInt32(0)} {
+		svc := &corev1.Service{Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Port: 3010, TargetPort: target}}}}
+
+		port, err := serviceTargetPort(svc, pod, 3010)
+		if err != nil || port != 3010 {
+			t.Fatalf("target %v: port=%d err=%v", target, port, err)
 		}
 
-		filePath, err := WriteResultToFile(result, dir)
-		Expect(err).NotTo(HaveOccurred())
+		if _, err := serviceTargetPort(svc, pod, 80); err == nil {
+			t.Error("missing service port accepted")
+		}
+	}
 
-		info, err := os.Stat(filePath)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(info.Mode().Perm()).To(Equal(os.FileMode(0600)))
-	})
-})
-
-var _ = Describe("createInDB", func() {
-	const (
-		hashedPassword = "fakehashedpassword"
-		hashedToken    = "fakehashedtoken"
-	)
-
-	It("creates a test user successfully", func() {
-		sqlDB, m, err := sqlmock.New()
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = sqlDB.Close() }()
-
-		// Expect: check if user exists
-		m.ExpectQuery(`SELECT EXISTS`).
-			WithArgs(TestEmail).
-			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-
-		// Expect: begin transaction
-		m.ExpectBegin()
-
-		// Expect: insert credentials
-		m.ExpectQuery(`INSERT INTO authservice.credentials`).
-			WithArgs(TestEmail, hashedPassword).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(42))
-
-		// Expect: insert email confirmation
-		m.ExpectExec(`INSERT INTO authservice.email_confirmations`).
-			WithArgs(TestEmail).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-
-		// Expect: insert team
-		m.ExpectQuery(`INSERT INTO "teamService".teams`).
-			WithArgs(TestTeamName, DefaultDatacenterID).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
-
-		// Expect: insert team member
-		m.ExpectExec(`INSERT INTO "teamService".team_members`).
-			WithArgs(42, 7).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-
-		// Expect: insert API token
-		m.ExpectExec(`INSERT INTO public_api_service.tokens`).
-			WithArgs(hashedToken, 42).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-
-		// Expect: commit
-		m.ExpectCommit()
-
-		result, err := (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test"}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Email).To(Equal(TestEmail))
-		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
-	})
-
-	It("returns an error when the test user already exists", func() {
-		sqlDB, m, err := sqlmock.New()
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = sqlDB.Close() }()
-
-		m.ExpectQuery(`SELECT EXISTS`).
-			WithArgs(TestEmail).
-			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
-
-		_, err = (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test"}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("already exists"))
-		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
-	})
-
-	It("rolls back the transaction on credential insert failure", func() {
-		sqlDB, m, err := sqlmock.New()
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = sqlDB.Close() }()
-
-		m.ExpectQuery(`SELECT EXISTS`).
-			WithArgs(TestEmail).
-			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-
-		m.ExpectBegin()
-		m.ExpectQuery(`INSERT INTO authservice.credentials`).
-			WithArgs(TestEmail, hashedPassword).
-			WillReturnError(fmt.Errorf("unique_violation"))
-		m.ExpectRollback()
-
-		_, err = (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test"}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to insert credentials"))
-		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
-	})
-
-	It("rolls back the transaction on team insert failure", func() {
-		sqlDB, m, err := sqlmock.New()
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = sqlDB.Close() }()
-
-		m.ExpectQuery(`SELECT EXISTS`).
-			WithArgs(TestEmail).
-			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-
-		m.ExpectBegin()
-		m.ExpectQuery(`INSERT INTO authservice.credentials`).
-			WithArgs(TestEmail, hashedPassword).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(42))
-		m.ExpectExec(`INSERT INTO authservice.email_confirmations`).
-			WithArgs(TestEmail).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-		m.ExpectQuery(`INSERT INTO "teamService".teams`).
-			WithArgs(TestTeamName, DefaultDatacenterID).
-			WillReturnError(fmt.Errorf("db error"))
-		m.ExpectRollback()
-
-		_, err = (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test"}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("failed to insert team"))
-		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
-	})
-
-	It("uses a custom datacenter ID and queues the OpenFGA membership tuple with SeedAuthz", func() {
-		sqlDB, m, err := sqlmock.New()
-		Expect(err).NotTo(HaveOccurred())
-		defer func() { _ = sqlDB.Close() }()
-
-		m.ExpectQuery(`SELECT EXISTS`).
-			WithArgs(TestEmail).
-			WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
-
-		m.ExpectBegin()
-		m.ExpectQuery(`INSERT INTO authservice.credentials`).
-			WithArgs(TestEmail, hashedPassword).
-			WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(42))
-		m.ExpectExec(`INSERT INTO authservice.email_confirmations`).
-			WithArgs(TestEmail).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-		m.ExpectQuery(`INSERT INTO "teamService".teams`).
-			WithArgs(TestTeamName, 77).
-			WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(7))
-		m.ExpectExec(`INSERT INTO "teamService".team_members`).
-			WithArgs(42, 7).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-		m.ExpectExec(`INSERT INTO "teamService".fga_outbox`).
-			WithArgs("user:42", "resource_group:7").
-			WillReturnResult(sqlmock.NewResult(1, 1))
-		m.ExpectExec(`INSERT INTO public_api_service.tokens`).
-			WithArgs(hashedToken, 42).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-		m.ExpectCommit()
-
-		result, err := (&TestUserCreator{opts: CreateTestUserOpts{Host: "test", Password: "test", DatacenterID: 77, SeedAuthz: true}, db: sqlDB, email: TestEmail}).createInDB(hashedPassword, hashedToken)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(result.Email).To(Equal(TestEmail))
-		Expect(m.ExpectationsWereMet()).NotTo(HaveOccurred())
-	})
-})
+	svc := &corev1.Service{Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Port: 3010, TargetPort: intstr.FromString("missing")}}}}
+	if _, err := serviceTargetPort(svc, pod, 3010); err == nil {
+		t.Error("missing named container port accepted")
+	}
+}

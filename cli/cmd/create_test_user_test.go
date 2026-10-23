@@ -4,94 +4,35 @@
 package cmd_test
 
 import (
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/spf13/cobra"
+	"testing"
 
 	"github.com/codesphere-cloud/oms/cli/cmd"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
+	"github.com/spf13/cobra"
 )
 
-var _ = Describe("CreateTestUser", func() {
-	Context("AddCreateTestUserCmd", func() {
-		var createCmd cobra.Command
-		var opts *util.GlobalOptions
+func TestCreateTestUserFlagsUseKubernetesInsteadOfPostgres(t *testing.T) {
+	parent := &cobra.Command{Use: "create"}
+	cmd.AddCreateTestUserCmd(parent, &util.GlobalOptions{})
 
-		BeforeEach(func() {
-			createCmd = cobra.Command{}
-			opts = &util.GlobalOptions{}
-		})
+	child := parent.Commands()[0]
+	for _, name := range []string{"postgres-host", "postgres-password", "postgres-port", "postgres-user", "postgres-db", "ssl-mode", "seed-authz", "datacenter-id"} {
+		if child.Flags().Lookup(name) != nil {
+			t.Errorf("obsolete flag %s is still registered", name)
+		}
+	}
 
-		It("accepts valid flags with all required flags set", func() {
-			createCmd.SetArgs([]string{
-				"test-user",
-				"--postgres-host", "localhost",
-				"--postgres-password", "secret",
-			})
+	for _, name := range []string{"namespace", "auth-service", "service-port", "email", "vault", "vault-priv-key", "timeout"} {
+		if child.Flags().Lookup(name) == nil {
+			t.Errorf("missing flag %s", name)
+		}
+	}
 
-			cmd.AddCreateTestUserCmd(&createCmd, opts)
+	child.RunE = func(*cobra.Command, []string) error { return nil }
 
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
-				return nil
-			}
+	parent.SetArgs([]string{"test-user", "--namespace", "test", "--auth-service", "auth-service-dev", "--service-port", "3010", "--email", "test@codesphere.com"})
 
-			err := createCmd.Execute()
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		It("fails when --postgres-host is missing", func() {
-			createCmd.SetArgs([]string{
-				"test-user",
-				"--postgres-password", "secret",
-			})
-
-			cmd.AddCreateTestUserCmd(&createCmd, opts)
-
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
-				return nil
-			}
-
-			err := createCmd.Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("postgres-host"))
-		})
-
-		It("fails when --postgres-password is missing", func() {
-			createCmd.SetArgs([]string{
-				"test-user",
-				"--postgres-host", "localhost",
-			})
-
-			cmd.AddCreateTestUserCmd(&createCmd, opts)
-
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
-				return nil
-			}
-
-			err := createCmd.Execute()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("postgres-password"))
-		})
-
-		It("accepts optional flags with custom values", func() {
-			createCmd.SetArgs([]string{
-				"test-user",
-				"--postgres-host", "db.example.com",
-				"--postgres-password", "secret",
-				"--postgres-port", "5433",
-				"--postgres-user", "admin",
-				"--postgres-db", "mydb",
-				"--ssl-mode", "require",
-			})
-
-			cmd.AddCreateTestUserCmd(&createCmd, opts)
-
-			createCmd.Commands()[0].RunE = func(cmd *cobra.Command, args []string) error {
-				return nil
-			}
-
-			err := createCmd.Execute()
-			Expect(err).NotTo(HaveOccurred())
-		})
-	})
-})
+	if err := parent.Execute(); err != nil {
+		t.Fatal(err)
+	}
+}

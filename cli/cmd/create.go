@@ -19,7 +19,7 @@ func AddCreateCmd(rootCmd *cobra.Command, opts *util.GlobalOptions) {
 		cmd: &cobra.Command{
 			Use:   "create",
 			Short: "Create resources for Codesphere",
-			Long:  io.Long(`Create resources for Codesphere installations, such as test users for automated testing.`),
+			Long:  io.Long(`Create resources for Codesphere installations, including test users created through the internal Codesphere API.`),
 		},
 	}
 	util.AddCmd(rootCmd, create.cmd)

@@ -23,7 +23,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -460,53 +459,6 @@ func (b *GCPBootstrapper) Bootstrap() error {
 			log.Printf("warning: failed to create test user: %v", err)
 		}
 	}
-
-	return nil
-}
-
-// createTestUser creates a test user in the shared PostgreSQL instance using the testuser package
-// and logs the credentials. The user's team is homed in the primary data center.
-func (b *GCPBootstrapper) createTestUser() error {
-	if err := b.ensureDataCenters(); err != nil {
-		return err
-	}
-
-	if b.Env.PostgreSQLNode == nil {
-		return fmt.Errorf("postgres node not found in bootstrap environment")
-	}
-
-	pgHost := b.Env.PostgreSQLNode.GetExternalIP()
-	if pgHost == "" {
-		return fmt.Errorf("postgres node has no external IP")
-	}
-
-	primary := b.primaryDC()
-	if primary.InstallConfig == nil {
-		return fmt.Errorf("install config not found in bootstrap environment")
-	}
-
-	pgPasswordSecret := primary.ConfigManager.GetVault().GetSecret(files.SecretPostgresPassword)
-	if pgPasswordSecret == nil || pgPasswordSecret.Fields == nil {
-		return fmt.Errorf("postgres admin password not found in vault")
-	}
-
-	pgPassword := pgPasswordSecret.Fields.Password
-
-	result, err := testuser.CreateTestUser(testuser.CreateTestUserOpts{
-		Host:         pgHost,
-		Port:         testuser.DefaultPort,
-		User:         testuser.DefaultUser,
-		Password:     pgPassword,
-		DBName:       testuser.DefaultDBName,
-		SSLMode:      "require",
-		DatacenterID: primary.ID,
-		SeedAuthz:    primary.InstallConfig.Codesphere.Preview["openfga-authz"],
-	})
-	if err != nil {
-		return err
-	}
-
-	testuser.LogAndPersistResult(result, b.Env.OmsWorkdir)
 
 	return nil
 }
