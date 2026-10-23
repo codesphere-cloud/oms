@@ -14,7 +14,13 @@ import (
 
 const imagePrefix = "ghcr.io/codesphere-cloud/codesphere-monorepo/"
 
-func testImages(extraImages map[string]string) images.Images {
+var noRegistry *files.RegistryConfig
+
+func defaultTestImages() images.Images {
+	return testImagesWith(nil)
+}
+
+func testImagesWith(extraImages map[string]string) images.Images {
 	bomImages := map[string]string{
 		"workspace-agent-24.04": imagePrefix + "workspace-agent-24.04:v1.2.3",
 		"workspace-agent":       imagePrefix + "workspace-agent:v1.2.3",
@@ -33,30 +39,6 @@ func testImages(extraImages map[string]string) images.Images {
 	Expect(err).NotTo(HaveOccurred())
 
 	return imgs
-}
-
-// input are the arguments of codesphere.Values, with defaults for everything a test does not set.
-type input struct {
-	conf     files.CodesphereConfig
-	images   images.Images
-	registry *files.RegistryConfig
-}
-
-func (in input) values() (codesphere.Codesphere, error) {
-	imgs := in.images
-	if imgs == nil {
-		imgs = testImages(nil)
-	}
-
-	// Tests check the error Values returns.
-	return codesphere.Values(in.conf, imgs, in.registry) //nolint:wrapcheck
-}
-
-func (in input) mustValues() codesphere.Codesphere {
-	values, err := in.values()
-	Expect(err).NotTo(HaveOccurred())
-
-	return values
 }
 
 // deployImage returns a deploy config image.
