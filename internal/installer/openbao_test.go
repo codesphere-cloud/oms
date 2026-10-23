@@ -158,13 +158,12 @@ var _ = Describe("OpenBaoBootstrapper", func() {
 
 		It("refuses to overwrite keys written after the create conflict", func() {
 			// Simulates bank-vaults creating the secret between the Get and Create.
-			raced := false
+			// Going through the tracker, since the clientset is locked while reactors run.
 			clientset.PrependReactor("create", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-				if !raced {
-					raced = true
-					createSecret(map[string][]byte{"vault-unseal-0": []byte("live-key")})
-				}
-				return false, nil, nil
+				return false, nil, clientset.Tracker().Add(&corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{Name: "openbao-unseal-keys", Namespace: "vault"},
+					Data:       map[string][]byte{"vault-unseal-0": []byte("live-key")},
+				})
 			})
 
 			err := newBootstrapper().EnsureUnsealSecret()
