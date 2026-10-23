@@ -6,15 +6,17 @@ package values_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	csappsvalues "github.com/codesphere-cloud/oms/internal/installer/csapps/values"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
 const authServiceDigest = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 var _ = Describe("Build", func() {
 	It("minimal config -> installer defaults", func() {
-		values := build(testConfig(""), testBOM(nil))
+		values := build(testConfig(), testBOM(nil))
 
 		Expect(at(values, "global.dnsServers")).To(Equal([]any{"8.8.8.8"}))
 		Expect(at(values, "global.prePullImages")).To(BeTrue())
@@ -37,21 +39,20 @@ var _ = Describe("Build", func() {
 	It("auth-service image without a tag -> release tag error", func() {
 		untagged := map[string]string{"auth-service": imagePrefix + "auth-service@" + authServiceDigest}
 
-		_, err := csappsvalues.Build(testConfig(""), testBOM(untagged))
+		_, err := csappsvalues.Build(testConfig(), testBOM(untagged))
 
 		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
 	})
 
 	It("override -> wins over the installer's values, null kept for Helm", func() {
-		values := build(testConfig(`
-			codesphere:
-			  override:
-			    global:
-			      prePullImages: false
-			      metrics: null
-			      hostName: override.example.com
-			      imageTag: from-override
-		`), testBOM(nil))
+		cfg := testConfig()
+		cfg.Codesphere.Override = files.ChartOverride{"global": map[string]any{
+			"prePullImages": false,
+			"metrics":       nil,
+			"hostName":      "override.example.com",
+			"imageTag":      "from-override",
+		}}
+		values := build(cfg, testBOM(nil))
 
 		Expect(at(values, "global.prePullImages")).To(BeFalse())
 		Expect(at(values, "global")).To(HaveKeyWithValue("metrics", BeNil()))
@@ -60,13 +61,12 @@ var _ = Describe("Build", func() {
 	})
 
 	It("override of one workspace env var -> the others stay", func() {
-		values := build(testConfig(`
-			codesphere:
-			  extraWorkspaceEnvVars: {FOO: foo, BAR: bar}
-			  override:
-			    global:
-			      extraWorkspaceEnvVars: {FOO: changed}
-		`), testBOM(nil))
+		cfg := testConfig()
+		cfg.Codesphere.ExtraWorkspaceEnvVars = map[string]string{"FOO": "foo", "BAR": "bar"}
+		cfg.Codesphere.Override = files.ChartOverride{"global": map[string]any{
+			"extraWorkspaceEnvVars": map[string]any{"FOO": "changed"},
+		}}
+		values := build(cfg, testBOM(nil))
 
 		Expect(at(values, "global.extraWorkspaceEnvVars")).To(Equal(map[string]any{
 			"FOO": "changed",
@@ -75,22 +75,18 @@ var _ = Describe("Build", func() {
 	})
 
 	It("override with numeric keys -> merged into the built map", func() {
-		values := build(testConfig(`
-			codesphere:
-			  plans:
-			    hostingPlans:
-			      20: {cpuTenth: 10, gpuParts: 0, memoryMb: 2048, storageMb: 20480, tempStorageMb: 1500, pooledInstances: 1}
-			      21: {cpuTenth: 20, gpuParts: 0, memoryMb: 4096, storageMb: 20480, tempStorageMb: 1500, pooledInstances: 2}
-			    workspacePlans: {}
-			  override:
-			    global:
-			      deployConfig:
-			        images:
-			          ubuntu-24.04:
-			            flavors:
-			              default:
-			                pool: {20: 5}
-		`), testBOM(nil))
+		cfg := testConfig()
+		cfg.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{
+			20: {CPUTenth: 10, MemoryMb: 2048, StorageMb: 20480, TempStorageMb: 1500, PooledInstances: ptr.To(1)},
+			21: {CPUTenth: 20, MemoryMb: 4096, StorageMb: 20480, TempStorageMb: 1500, PooledInstances: ptr.To(2)},
+		}
+		// YAML decodes the numeric pool keys of an override to a map with int keys.
+		cfg.Codesphere.Override = files.ChartOverride{"global": map[string]any{
+			"deployConfig": map[string]any{"images": map[string]any{"ubuntu-24.04": map[string]any{
+				"flavors": map[string]any{"default": map[string]any{"pool": map[any]any{20: 5}}},
+			}}},
+		}}
+		values := build(cfg, testBOM(nil))
 
 		ubuntu := at(values, "global.deployConfig.images").(map[string]any)["ubuntu-24.04"]
 		flavors := ubuntu.(map[string]any)["flavors"].(map[string]any)
@@ -101,12 +97,10 @@ var _ = Describe("Build", func() {
 	})
 
 	It("override -> config is not changed through the values", func() {
-		cfg := testConfig(`
-			codesphere:
-			  override:
-			    global:
-			      ceph: {storageClass: rbd}
-		`)
+		cfg := testConfig()
+		cfg.Codesphere.Override = files.ChartOverride{"global": map[string]any{
+			"ceph": map[string]any{"storageClass": "rbd"},
+		}}
 		values := build(cfg, testBOM(nil))
 		at(values, "global.ceph").(map[string]any)["storageClass"] = "changed"
 
