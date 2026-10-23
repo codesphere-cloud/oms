@@ -14,7 +14,7 @@ import (
 var _ = Describe("Values", func() {
 	It("install mode -> primary IP as host, hostname as server name", func() {
 		values := postgres.Values(files.PostgresConfig{
-			Mode:      files.PostgresModeInstall,
+			Mode:      "install",
 			CACertPem: "-----BEGIN CERTIFICATE-----",
 			Primary:   &files.PostgresPrimaryConfig{IP: "10.0.0.5", Hostname: "pg-1"},
 		})
@@ -30,7 +30,7 @@ var _ = Describe("Values", func() {
 
 	It("external postgres -> alt name as server name", func() {
 		values := postgres.Values(files.PostgresConfig{
-			Mode:          files.PostgresModeExternal,
+			Mode:          "external",
 			ServerAddress: "pg.example.com",
 			AltName:       "pg-rw",
 			Port:          5433,
