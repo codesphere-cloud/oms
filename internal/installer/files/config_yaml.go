@@ -271,6 +271,12 @@ type RegistryConfig struct {
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
 }
 
+// Values of PostgresConfig.Mode: Postgres installed by OMS, or an external server.
+const (
+	PostgresModeInstall  = "install"
+	PostgresModeExternal = "external"
+)
+
 type PostgresConfig struct {
 	Mode          string                 `yaml:"mode,omitempty"`
 	CACertPem     string                 `yaml:"caCertPem,omitempty"`

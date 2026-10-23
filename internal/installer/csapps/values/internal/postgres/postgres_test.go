@@ -12,8 +12,25 @@ import (
 )
 
 var _ = Describe("Values", func() {
+	It("install mode -> primary IP as host, hostname as server name", func() {
+		values := postgres.Values(files.PostgresConfig{
+			Mode:      files.PostgresModeInstall,
+			CACertPem: "-----BEGIN CERTIFICATE-----",
+			Primary:   &files.PostgresPrimaryConfig{IP: "10.0.0.5", Hostname: "pg-1"},
+		})
+
+		Expect(values).To(Equal(postgres.Postgres{
+			Host:               "10.0.0.5",
+			Port:               5432,
+			Database:           "codesphere",
+			RejectUnauthorized: true,
+			SSL:                postgres.SSL{ServerName: "pg-1", CA: "-----BEGIN CERTIFICATE-----"},
+		}))
+	})
+
 	It("external postgres -> alt name as server name", func() {
 		values := postgres.Values(files.PostgresConfig{
+			Mode:          files.PostgresModeExternal,
 			ServerAddress: "pg.example.com",
 			AltName:       "pg-rw",
 			Port:          5433,
@@ -29,8 +46,9 @@ var _ = Describe("Values", func() {
 		}))
 	})
 
-	It("external server and primary both set -> external server used", func() {
+	It("external mode with a leftover primary -> external server used", func() {
 		values := postgres.Values(files.PostgresConfig{
+			Mode:          files.PostgresModeExternal,
 			ServerAddress: "pg.example.com",
 			Port:          5433,
 			Primary:       &files.PostgresPrimaryConfig{IP: "10.0.0.5", Hostname: "pg-1"},
@@ -38,5 +56,6 @@ var _ = Describe("Values", func() {
 
 		Expect(values.Host).To(Equal("pg.example.com"))
 		Expect(values.Port).To(Equal(5433))
+		Expect(values.SSL.ServerName).To(Equal("pg.example.com"))
 	})
 })
