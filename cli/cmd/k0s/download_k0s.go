@@ -75,7 +75,7 @@ func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager) error {
 		return fmt.Errorf("--path requires --airgapped")
 	}
 
-	version, err := resolveK0sVersion(k0s, c.Opts.Version)
+	version, err := installer.ResolveK0sVersion(k0s, c.Opts.Version)
 	if err != nil {
 		return err
 	}

@@ -12,8 +12,14 @@ import (
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 )
 
-// AirgapBundleName is the name of target airgap-bundle for oms to download to
-const AirgapBundleName = "k0s-airgap-bundle"
+const (
+	// AirgapBundleName is the name of target airgap-bundle for oms to download to
+	AirgapBundleName = "k0s-airgap-bundle"
+
+	// AirgapImagesDir is the k0s data dir from which worker nodes import the
+	// images of an airgap bundle. Controllers that do not run a worker ignore it.
+	AirgapImagesDir = "/var/lib/k0s/images"
+)
 
 // DownloadAirgapBundle downloads the airgap image bundle of the given version to path,
 // unless a file already exists there, and returns its path. An empty path stores the
@@ -35,6 +41,10 @@ func (k *K0s) DownloadAirgapBundle(version, path string, opts DownloadOptions) (
 		io.Verbosef(!opts.Quiet, "Using existing airgap bundle %s", path)
 
 		return path, nil
+	}
+
+	if opts.CacheOnly {
+		return "", fmt.Errorf("k0s airgap bundle %s not found at '%s', download it first with 'oms download k0s --version %s --airgapped'", version, path, version)
 	}
 
 	assetName, err := k.resolveAirgapBundleAssetName(version)

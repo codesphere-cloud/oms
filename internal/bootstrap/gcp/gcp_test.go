@@ -2255,6 +2255,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 			err := bs.InstallK0s()
 			Expect(err).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
 		})
+
+		It("applies the generated airgap k0sctl config when airgapped", func() {
+			csEnv.Airgapped = true
+
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms install k0s --config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
+
+			Expect(bs.InstallK0s()).To(Succeed())
+		})
 	})
 
 	Describe("DownloadK0sAirgapBundle", func() {
@@ -2267,6 +2276,45 @@ var _ = Describe("GCP Bootstrapper", func() {
 				"oms download k0s --version v1.31.14+k0s.0 --airgapped").Return(nil)
 
 			Expect(bs.DownloadK0sAirgapBundle()).To(Succeed())
+		})
+	})
+
+	Describe("GenerateK0sAirgapConfig", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+		})
+
+		It("generates the airgap k0sctl config on the jumpbox without installing it", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml").Return(nil)
+
+			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
+		})
+	})
+
+	Describe("EnsureK0s", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+			csEnv.Airgapped = true
+		})
+
+		It("installs an airgapped cluster from the airgap config it generates", func() {
+			var jumpboxCommands []string
+
+			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
+				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
+				Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+
+			Expect(bs.EnsureK0s()).To(Succeed())
+			Expect(jumpboxCommands).To(Equal([]string{
+				"oms download k0s --version v1.31.14+k0s.0 --airgapped",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml",
+				"oms install k0s --config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt",
+			}))
 		})
 	})
 
