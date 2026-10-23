@@ -39,8 +39,7 @@ func Values(postgres files.PostgresConfig) Postgres {
 		SSL:                SSL{CA: postgres.CACertPem},
 	}
 
-	// Like the old pc-installer, an external server wins when both are configured.
-	if postgres.Primary != nil && postgres.ServerAddress == "" {
+	if postgres.Mode == files.PostgresModeInstall {
 		values.Host = postgres.Primary.IP
 		values.Port = internalPostgresPort
 		values.SSL.ServerName = postgres.Primary.Hostname
