@@ -5,6 +5,7 @@ package codesphere
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -342,35 +343,15 @@ func codesphereSecretRefs(config map[string]any) []string {
 		return nil
 	}
 
-	refs := secretRefKeys(codesphere, "codesphere")
-	slices.Sort(refs)
+	refs := []string{}
 
-	return refs
-}
-
-func secretRefKeys(value any, key string) []string {
-	switch typed := value.(type) {
-	case map[string]any:
-		refs := []string{}
-		for childKey, child := range typed {
-			refs = append(refs, secretRefKeys(child, key+"."+childKey)...)
-		}
-
-		return refs
-	case []any:
-		refs := []string{}
-		for i, child := range typed {
-			refs = append(refs, secretRefKeys(child, fmt.Sprintf("%s[%d]", key, i))...)
-		}
-
-		return refs
-	case string:
-		if strings.Contains(typed, secretRefMarker) {
-			return []string{key}
+	for _, key := range slices.Sorted(maps.Keys(codesphere)) {
+		if strings.Contains(fmt.Sprint(codesphere[key]), secretRefMarker) {
+			refs = append(refs, "codesphere."+key)
 		}
 	}
 
-	return nil
+	return refs
 }
 
 func readConfigWithSecretMarkers(configPath string) (map[string]any, error) {
