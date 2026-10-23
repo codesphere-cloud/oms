@@ -142,6 +142,7 @@ var _ = Describe("AddInstallCodesphereCmd", func() {
 		Expect(skipStepFlag.Shorthand).To(Equal("s"))
 		Expect(codesphereCmd.PersistentFlags().Lookup("local-components")).NotTo(BeNil())
 		Expect(codesphereCmd.PersistentFlags().Lookup("local-config-dir")).NotTo(BeNil())
+
 		for _, subcommand := range codesphereCmd.Commands() {
 			if subcommand.Name() == "dependencies" || subcommand.Name() == "platform" {
 				Expect(subcommand.InheritedFlags().Lookup("local-components")).NotTo(BeNil())

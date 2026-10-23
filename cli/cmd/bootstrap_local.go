@@ -163,6 +163,7 @@ func (c *BootstrapLocalCmd) BootstrapLocal() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize Kubernetes client: %w", err)
 	}
+
 	helmClient, err := installer.NewHelmClientWithRESTConfig("codesphere", restConfig)
 	if err != nil {
 		return fmt.Errorf("failed to initialize Helm client: %w", err)

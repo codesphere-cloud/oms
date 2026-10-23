@@ -59,10 +59,12 @@ func (b *LocalBootstrapper) ExposeSharedGateway() error {
 	if domain == "" || strings.ContainsAny(domain, " \t\n\r\"'/:*") {
 		return fmt.Errorf("invalid Codesphere domain for shared gateway: %q", domain)
 	}
+
 	workspaceDomain := b.Env.InstallConfig.Codesphere.WorkspaceHostingBaseDomain
 	if workspaceDomain == "" || strings.ContainsAny(workspaceDomain, " \t\n\r\"'/:*") {
 		return fmt.Errorf("invalid workspace hosting base domain for shared gateway: %q", workspaceDomain)
 	}
+
 	customCNameDomain := b.Env.InstallConfig.Codesphere.CustomDomains.CNameBaseDomain
 	if customCNameDomain != "" && strings.ContainsAny(customCNameDomain, " \t\n\r\"'/:*") {
 		return fmt.Errorf("invalid custom CNAME base domain for shared gateway: %q", customCNameDomain)

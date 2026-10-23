@@ -31,6 +31,7 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
+
 	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {
 		return fmt.Errorf("--local-config-dir is required with --local-components")
 	}
