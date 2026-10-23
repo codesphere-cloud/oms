@@ -179,8 +179,8 @@ func (g *InstallConfig) collectK8sConfig(prompter prompt.Prompter) {
 		g.Config.Kubernetes.Workers = stringSliceToK8sNodes(workerIPs)
 		g.Config.Kubernetes.NeedsKubeConfig = false
 	} else {
-		g.Config.Kubernetes.PodCIDR = g.collectString(prompter, "Pod CIDR of external cluster", "100.96.0.0/11")
-		g.Config.Kubernetes.ServiceCIDR = g.collectString(prompter, "Service CIDR of external cluster", "100.64.0.0/13")
+		g.Config.Kubernetes.PodCIDR = g.collectString(prompter, "Pod CIDR of external cluster", files.DefaultKubernetesPodCIDR)
+		g.Config.Kubernetes.ServiceCIDR = g.collectString(prompter, "Service CIDR of external cluster", files.DefaultKubernetesServiceCIDR)
 		g.Config.Kubernetes.NeedsKubeConfig = true
 		log.Println("Note: You'll need to provide kubeconfig in the vault file for external Kubernetes")
 	}
