@@ -60,6 +60,35 @@ var _ = Describe("local bootstrap install config version", func() {
 })
 
 var _ = Describe("local bootstrap install config", func() {
+	It("disables the pc-apps Rook application while preserving other app settings", func() {
+		config := files.NewRootConfig()
+		config.PcApps = files.ChartValues{
+			"applications": map[string]any{
+				"rook-ceph": map[string]any{
+					"enabled":      true,
+					"valuesObject": map[string]any{"existing": "value"},
+				},
+				"other-app": map[string]any{"enabled": true},
+			},
+		}
+
+		disablePcAppsRookCeph(&config)
+
+		apps := config.PcApps["applications"].(map[string]any)
+		rook := apps["rook-ceph"].(map[string]any)
+		Expect(rook).To(HaveKeyWithValue("enabled", false))
+		Expect(rook["valuesObject"]).To(Equal(map[string]any{"existing": "value"}))
+		Expect(apps["other-app"]).To(Equal(map[string]any{"enabled": true}))
+
+		data, err := config.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+
+		var restored files.RootConfig
+		Expect(restored.Unmarshal(data)).To(Succeed())
+		restoredApps := restored.PcApps["applications"].(map[string]any)
+		Expect(restoredApps["rook-ceph"].(map[string]any)).To(HaveKeyWithValue("enabled", false))
+	})
+
 	It("keeps a supplied config without an existing vault", func() {
 		dir := GinkgoT().TempDir()
 

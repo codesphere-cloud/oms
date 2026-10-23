@@ -720,6 +720,7 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	b.Env.InstallConfig.Codesphere.Preview = util.StringSliceToBoolMap(b.Env.PreviewFlags)
 	b.Env.InstallConfig.Codesphere.Features = util.StringSliceToBoolMap(b.Env.FeatureFlags)
 	configureVirtualMachineApps(b.Env.InstallConfig)
+	disablePcAppsRookCeph(b.Env.InstallConfig)
 
 	if err := b.icg.GenerateSecrets(); err != nil {
 		return fmt.Errorf("failed to generate secrets: %w", err)
@@ -760,6 +761,14 @@ func configureVirtualMachineApps(config *files.RootConfig) {
 			"kubevirt-cr":       map[string]any{"enabled": true},
 			"cdi-operator":      map[string]any{"enabled": true},
 			"cdi-cr":            map[string]any{"enabled": true},
+		},
+	})
+}
+
+func disablePcAppsRookCeph(config *files.RootConfig) {
+	config.PcApps = util.DeepMergeMaps(config.PcApps, files.ChartValues{
+		"applications": map[string]any{
+			"rook-ceph": map[string]any{"enabled": false},
 		},
 	})
 }
