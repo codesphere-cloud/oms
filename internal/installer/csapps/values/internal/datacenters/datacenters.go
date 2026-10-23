@@ -16,6 +16,7 @@ import (
 // target data center is the only one.
 func Values(cfg *files.RootConfig) (map[string]any, error) {
 	configured := cfg.DataCenters
+	// For single DC installs cfg.DataCenters is optional
 	if len(configured) == 0 {
 		configured = []files.DatacenterConfig{cfg.Datacenter}
 	}
