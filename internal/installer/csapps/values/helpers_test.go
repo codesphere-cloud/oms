@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	. "github.com/onsi/gomega"
-	"go.yaml.in/yaml/v3"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	csappsvalues "github.com/codesphere-cloud/oms/internal/installer/csapps/values"
@@ -50,24 +49,23 @@ func testBOM(extraImages map[string]string) *bom.Config {
 	}}
 }
 
-func testConfig(yamlConfig string) *files.RootConfig {
-	base := `
-		dataCenter: {id: 1, name: main, city: Karlsruhe, countryCode: DE}
-		postgres: {serverAddress: postgres.example.com}
-		kubernetes: {managedByCodesphere: false, podCidr: 10.1.0.0/16, serviceCidr: 10.2.0.0/16}
-		codesphere:
-		  domain: codesphere.example.com
-		  workspaceHostingBaseDomain: ws.example.com
-		  publicIp: 203.0.113.10
-		  customDomains: {cNameBaseDomain: custom.example.com}
-		  plans:
-		    hostingPlans:
-		      8: {cpuTenth: 10, gpuParts: 0, memoryMb: 2048, storageMb: 20480, tempStorageMb: 1500}
-		    workspacePlans: {}
-	`
+func testConfig() *files.RootConfig {
 	config := files.NewRootConfig()
-	Expect(config.Unmarshal([]byte(dedent(base)))).To(Succeed())
-	Expect(yaml.Unmarshal([]byte(dedent(yamlConfig)), &config)).To(Succeed())
+	config.Datacenter = files.DatacenterConfig{ID: 1, Name: "main", City: "Karlsruhe", CountryCode: "DE"}
+	config.Postgres = files.PostgresConfig{ServerAddress: "postgres.example.com"}
+	config.Kubernetes = files.KubernetesConfig{PodCIDR: "10.1.0.0/16", ServiceCIDR: "10.2.0.0/16"}
+	config.Codesphere = files.CodesphereConfig{
+		Domain:                     "codesphere.example.com",
+		WorkspaceHostingBaseDomain: "ws.example.com",
+		PublicIP:                   "203.0.113.10",
+		CustomDomains:              files.CustomDomainsConfig{CNameBaseDomain: "custom.example.com"},
+		Plans: files.PlansConfig{
+			HostingPlans: map[int]files.HostingPlan{
+				8: {CPUTenth: 10, MemoryMb: 2048, StorageMb: 20480, TempStorageMb: 1500},
+			},
+			WorkspacePlans: map[int]files.WorkspacePlan{},
+		},
+	}
 
 	return &config
 }
@@ -90,37 +88,4 @@ func at(values map[string]any, path string) any {
 	}
 
 	return current
-}
-
-// dedent removes the indentation all non-blank lines share, so tests can indent multi-line YAML
-// like the code around it.
-func dedent(s string) string {
-	lines := strings.Split(strings.TrimPrefix(s, "\n"), "\n")
-	if last := len(lines) - 1; strings.TrimSpace(lines[last]) == "" {
-		lines[last] = ""
-	}
-
-	prefix, first := "", true
-
-	for _, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-
-		indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-		if first {
-			prefix, first = indent, false
-			continue
-		}
-
-		for !strings.HasPrefix(indent, prefix) {
-			prefix = prefix[:len(prefix)-1]
-		}
-	}
-
-	for i, line := range lines {
-		lines[i] = strings.TrimPrefix(line, prefix)
-	}
-
-	return strings.Join(lines, "\n")
 }
