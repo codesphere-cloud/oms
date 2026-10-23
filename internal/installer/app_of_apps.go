@@ -54,7 +54,14 @@ type AppOfApps struct {
 	valuesFiles    []string
 	valuesOverride map[string]interface{}
 	forceConflicts bool
+	finalizers     []string
 	client         client.Client
+}
+
+// DeleteResourcesWithApplication makes deleting the Application delete everything ArgoCD
+// deployed from it.
+func (p *AppOfApps) DeleteResourcesWithApplication() {
+	p.finalizers = []string{argov1alpha1.ResourcesFinalizerName}
 }
 
 // NewPCApps creates a new pc-applications installer. It validates that required fields
@@ -142,14 +149,14 @@ func checkArgoCDScheme(c client.Client) error {
 	return nil
 }
 
-// resolveRepoURL reads the OCI registry base URL from the K8s Secret created by
-// "oms beta install argocd --deploy-dc-config". The Application's repoURL must
+// ResolveChartsRegistry reads the OCI registry base URL from the K8s Secret created by
+// "oms beta install argocd --deploy-dc-config". An Application's repoURL must
 // match that secret's url verbatim, otherwise ArgoCD cannot match the
 // credentials to the repository.
-func (p *AppOfApps) resolveRepoURL(ctx context.Context) (string, error) {
+func ResolveChartsRegistry(ctx context.Context, c client.Client) (string, error) {
 	secret := &corev1.Secret{}
 	key := client.ObjectKey{Name: ociCredentialSecretName, Namespace: ociCredentialNamespace}
-	if err := p.client.Get(ctx, key, secret); err != nil {
+	if err := c.Get(ctx, key, secret); err != nil {
 		return "", fmt.Errorf(
 			"K8s secret %q not found in namespace %q: %w\n"+
 				"Run 'oms beta install argocd --deploy-dc-config' first to create registry credentials",
@@ -190,8 +197,9 @@ func (p *AppOfApps) createApplication(repoURL string, vals map[string]interface{
 			Kind:       argov1alpha1.ApplicationSchemaGroupVersionKind.Kind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      p.name,
-			Namespace: ociCredentialNamespace,
+			Name:       p.name,
+			Namespace:  ociCredentialNamespace,
+			Finalizers: p.finalizers,
 		},
 		Spec: argov1alpha1.ApplicationSpec{
 			Project: argoAppProject,
@@ -230,7 +238,7 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 	vals := util.DeepMergeMaps(map[string]any{}, p.valuesOverride)
 	vals = util.DeepMergeMaps(vals, fileVals)
 
-	repoURL, err := p.resolveRepoURL(ctx)
+	repoURL, err := ResolveChartsRegistry(ctx, p.client)
 	if err != nil {
 		return fmt.Errorf("failed to resolve repo url: %w", err)
 	}
@@ -251,6 +259,10 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 	if _, err := controllerutil.CreateOrUpdate(ctx, p.client, current, func() error {
 		current.TypeMeta = app.TypeMeta
 		current.Spec = app.Spec
+		for _, finalizer := range app.Finalizers {
+			controllerutil.AddFinalizer(current, finalizer)
+		}
+
 		return nil
 	}); err != nil {
 		return fmt.Errorf("applying ArgoCD Application %q failed: %w", p.name, err)
