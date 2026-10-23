@@ -15,16 +15,14 @@ type SecretStore interface {
 	LookupSecret(name string, selector ...string) (string, error)
 }
 
-// SecretRefMarker replaces every `secret` call in RenderSecretMarkers output.
-const SecretRefMarker = "__oms_secret_ref__"
-
-type secretResolver func(name string, selector ...string) (string, error)
+// SecretResolver returns the value a `secret` template call renders to.
+type SecretResolver func(name string, selector ...string) (string, error)
 
 // RenderInstallConfigTemplate renders the given config template data, resolving
 // any `secret` template calls against store, and returns the rendered bytes.
 // Referencing a missing template key or a missing secret is treated as an error.
 func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error) {
-	return render(data, func(name string, selector ...string) (string, error) {
+	return RenderWithSecretResolver(data, func(name string, selector ...string) (string, error) {
 		if store == nil {
 			return "", fmt.Errorf("secret store is required to render config template")
 		}
@@ -33,15 +31,9 @@ func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error)
 	})
 }
 
-// RenderSecretMarkers renders the given config template data with every `secret` call replaced by
-// SecretRefMarker, so callers can find where secrets are used without resolving them.
-func RenderSecretMarkers(data []byte) ([]byte, error) {
-	return render(data, func(string, ...string) (string, error) {
-		return SecretRefMarker, nil
-	})
-}
-
-func render(data []byte, secret secretResolver) ([]byte, error) {
+// RenderWithSecretResolver renders the given config template data, resolving any `secret`
+// template calls with secret.
+func RenderWithSecretResolver(data []byte, secret SecretResolver) ([]byte, error) {
 	tmpl, err := template.New("install-config").
 		Option("missingkey=error").
 		Funcs(template.FuncMap{"secret": secret}).

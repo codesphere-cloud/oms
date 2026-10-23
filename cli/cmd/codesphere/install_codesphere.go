@@ -25,6 +25,7 @@ import (
 )
 
 const (
+	secretRefMarker               = "__oms_secret_ref__"
 	mergedInstallConfigDirPattern = "oms-install-config-*"
 	mergedInstallConfigFileName   = "config.yaml"
 )
@@ -364,7 +365,7 @@ func secretRefKeys(value any, key string) []string {
 
 		return refs
 	case string:
-		if strings.Contains(typed, configtemplating.SecretRefMarker) {
+		if strings.Contains(typed, secretRefMarker) {
 			return []string{key}
 		}
 	}
@@ -378,7 +379,9 @@ func readConfigWithSecretMarkers(configPath string) (map[string]any, error) {
 		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
 	}
 
-	rendered, err := configtemplating.RenderSecretMarkers(data)
+	rendered, err := configtemplating.RenderWithSecretResolver(data, func(string, ...string) (string, error) {
+		return secretRefMarker, nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to render secret markers in %s: %w", configPath, err)
 	}
