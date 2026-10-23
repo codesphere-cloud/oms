@@ -15,24 +15,25 @@ const (
 	defaultActiveMDS  = 7
 )
 
-// Values builds the CephFS settings. With workspacePVCStorage, workspaces use PVCs instead of
-// CephFS.
-func Values(ceph files.CephConfig, workspacePVCStorage bool) (map[string]any, error) {
-	values, err := cephValues(ceph, workspacePVCStorage)
-	if err != nil {
-		return nil, err
-	}
-
-	return map[string]any{"ceph": values}, nil
+// Ceph are the CephFS settings of the ceph key.
+type Ceph struct {
+	CredentialsSecretName     string `yaml:"credentialsSecretName"`
+	StorageClass              string `yaml:"storageClass"`
+	MonEndpointsConfigMapName string `yaml:"monEndpointsConfigMapName"`
+	MDSNamespace              string `yaml:"mdsNamespace"`
+	// ActiveMDS is a string, as the old pc-installer passed it.
+	ActiveMDS string `yaml:"activeMds"`
 }
 
-func cephValues(ceph files.CephConfig, workspacePVCStorage bool) (map[string]any, error) {
-	values := map[string]any{
-		"credentialsSecretName":     "ceph-admin-credentials",
-		"storageClass":              "codesphere",
-		"monEndpointsConfigMapName": "ceph-mon-endpoints",
-		"mdsNamespace":              "",
-		"activeMds":                 "0",
+// Values builds the CephFS settings. With workspacePVCStorage, workspaces use PVCs instead of
+// CephFS.
+func Values(ceph files.CephConfig, workspacePVCStorage bool) (Ceph, error) {
+	values := Ceph{
+		CredentialsSecretName:     "ceph-admin-credentials",
+		StorageClass:              "codesphere",
+		MonEndpointsConfigMapName: "ceph-mon-endpoints",
+		MDSNamespace:              "",
+		ActiveMDS:                 "0",
 	}
 	if workspacePVCStorage {
 		return values, nil
@@ -40,11 +41,11 @@ func cephValues(ceph files.CephConfig, workspacePVCStorage bool) (map[string]any
 
 	name, active, err := codesphereVolume(ceph.Volumes)
 	if err != nil {
-		return nil, err
+		return Ceph{}, err
 	}
 
-	values["mdsNamespace"] = name
-	values["activeMds"] = fmt.Sprint(active)
+	values.MDSNamespace = name
+	values.ActiveMDS = fmt.Sprint(active)
 
 	return values, nil
 }
