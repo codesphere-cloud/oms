@@ -12,27 +12,27 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/platform"
 )
 
-const registry = "ghcr.io/codesphere-cloud/"
+const namePrefix = "ghcr.io/codesphere-cloud/"
 
 func fullImages() map[string]string {
 	return map[string]string{
-		"auth-service":          registry + "auth-service:v1.0.0",
-		"deployment-service":    registry + "deployment-service:v1.0.1",
-		"error-page-server":     registry + "error-page-server:v1.0.2",
-		"ide-frontend":          registry + "ide-frontend:v1.0.3",
-		"ide-service":           registry + "ide-service:v1.0.4",
-		"marketplace":           registry + "marketplace:v1.0.5",
-		"payment-service":       registry + "payment-service:v1.0.6",
-		"public-api-service":    registry + "public-api-service:v1.0.7",
-		"team-service":          registry + "team-service:v1.0.8",
-		"workspace-proxy":       registry + "workspace-proxy:v1.0.9",
-		"workspace-service":     registry + "workspace-service:v1.0.10",
-		"nginx":                 registry + "nginx:1.31.5-alpine-otel",
-		"opensearch":            registry + "opensearch:3.8.0",
-		"opensearchInit":        registry + "busybox:1.37.0",
-		"kubectl":               registry + "kubectl:1.34.0",
-		"observabilityOtel":     registry + "otel-collector:0.120.0",
-		"observabilityOtelInit": registry + "curl:8.12.1",
+		"auth-service":          namePrefix + "auth-service:v1.0.0",
+		"deployment-service":    namePrefix + "deployment-service:v1.0.1",
+		"error-page-server":     namePrefix + "error-page-server:v1.0.2",
+		"ide-frontend":          namePrefix + "ide-frontend:v1.0.3",
+		"ide-service":           namePrefix + "ide-service:v1.0.4",
+		"marketplace":           namePrefix + "marketplace:v1.0.5",
+		"payment-service":       namePrefix + "payment-service:v1.0.6",
+		"public-api-service":    namePrefix + "public-api-service:v1.0.7",
+		"team-service":          namePrefix + "team-service:v1.0.8",
+		"workspace-proxy":       namePrefix + "workspace-proxy:v1.0.9",
+		"workspace-service":     namePrefix + "workspace-service:v1.0.10",
+		"nginx":                 namePrefix + "nginx:1.31.5-alpine-otel",
+		"opensearch":            namePrefix + "opensearch:3.8.0",
+		"opensearchInit":        namePrefix + "busybox:1.37.0",
+		"kubectl":               namePrefix + "kubectl:1.34.0",
+		"observabilityOtel":     namePrefix + "otel-collector:0.120.0",
+		"observabilityOtelInit": namePrefix + "curl:8.12.1",
 	}
 }
 
@@ -64,29 +64,29 @@ var _ = Describe("Values", func() {
 		Expect(values).To(Equal(map[string]any{
 			"services": map[string]any{
 				"priorityClass":      "prod-codesphere-deployment",
-				"auth_service":       map[string]any{"image": registry + "auth-service"},
-				"deployment_service": map[string]any{"image": registry + "deployment-service"},
-				"error_page_server":  map[string]any{"image": registry + "error-page-server"},
-				"ide_frontend":       map[string]any{"image": registry + "ide-frontend"},
-				"ide_service":        map[string]any{"image": registry + "ide-service"},
-				"marketplace":        map[string]any{"image": registry + "marketplace"},
-				"payment_service":    map[string]any{"image": registry + "payment-service"},
-				"public_api_service": map[string]any{"image": registry + "public-api-service"},
-				"team_service":       map[string]any{"image": registry + "team-service"},
-				"workspace_proxy":    map[string]any{"image": registry + "workspace-proxy"},
-				"workspace_service":  map[string]any{"image": registry + "workspace-service"},
+				"auth_service":       map[string]any{"image": namePrefix + "auth-service"},
+				"deployment_service": map[string]any{"image": namePrefix + "deployment-service"},
+				"error_page_server":  map[string]any{"image": namePrefix + "error-page-server"},
+				"ide_frontend":       map[string]any{"image": namePrefix + "ide-frontend"},
+				"ide_service":        map[string]any{"image": namePrefix + "ide-service"},
+				"marketplace":        map[string]any{"image": namePrefix + "marketplace"},
+				"payment_service":    map[string]any{"image": namePrefix + "payment-service"},
+				"public_api_service": map[string]any{"image": namePrefix + "public-api-service"},
+				"team_service":       map[string]any{"image": namePrefix + "team-service"},
+				"workspace_proxy":    map[string]any{"image": namePrefix + "workspace-proxy"},
+				"workspace_service":  map[string]any{"image": namePrefix + "workspace-service"},
 			},
 			"workspaceRouter": map[string]any{
-				"image":      map[string]any{"name": registry + "nginx", "tag": "1.31.5-alpine-otel"},
+				"image":      map[string]any{"name": namePrefix + "nginx", "tag": "1.31.5-alpine-otel"},
 				"haReplicas": 2,
 			},
 			"workspaceObservability": map[string]any{
-				"openSearchImage":        registry + "opensearch",
+				"openSearchImage":        namePrefix + "opensearch",
 				"openSearchVersion":      "3.8.0",
-				"openSearchInitImage":    registry + "busybox:1.37.0",
-				"migrationKubectlImage":  registry + "kubectl:1.34.0",
-				"otelCollectorImage":     registry + "otel-collector:0.120.0",
-				"otelCollectorInitImage": registry + "curl:8.12.1",
+				"openSearchInitImage":    namePrefix + "busybox:1.37.0",
+				"migrationKubectlImage":  namePrefix + "kubectl:1.34.0",
+				"otelCollectorImage":     namePrefix + "otel-collector:0.120.0",
+				"otelCollectorInitImage": namePrefix + "curl:8.12.1",
 			},
 		}))
 	})
@@ -104,7 +104,7 @@ var _ = Describe("Values", func() {
 
 	DescribeTable("image that needs a tag has only a digest -> error",
 		func(name string) {
-			digestOnly := registry + name + "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+			digestOnly := namePrefix + name + "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 			_, err := platform.Values(testImages(withImage(name, digestOnly)))
 			Expect(err).To(MatchError(ContainSubstring("missing a tag")))
 		},
