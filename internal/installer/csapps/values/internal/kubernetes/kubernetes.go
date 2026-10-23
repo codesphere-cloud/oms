@@ -13,11 +13,6 @@ import (
 // WorkspaceNamespace is the namespace workspaces run in.
 const WorkspaceNamespace = "workspaces"
 
-const (
-	defaultKubernetesPodCIDR     = "100.96.0.0/11"
-	defaultKubernetesServiceCIDR = "100.64.0.0/13"
-)
-
 // Values builds the network policies of the workspaces from the cluster CIDRs.
 func Values(kubernetes files.KubernetesConfig) map[string]any {
 	return map[string]any{"networkPolicies": networkPoliciesValues(kubernetes)}
@@ -26,8 +21,8 @@ func Values(kubernetes files.KubernetesConfig) map[string]any {
 func networkPoliciesValues(kubernetes files.KubernetesConfig) map[string]any {
 	podCIDR, serviceCIDR := kubernetes.PodCIDR, kubernetes.ServiceCIDR
 	if kubernetes.ManagedByCodesphere {
-		podCIDR = cmp.Or(podCIDR, defaultKubernetesPodCIDR)
-		serviceCIDR = cmp.Or(serviceCIDR, defaultKubernetesServiceCIDR)
+		podCIDR = cmp.Or(podCIDR, files.DefaultKubernetesPodCIDR)
+		serviceCIDR = cmp.Or(serviceCIDR, files.DefaultKubernetesServiceCIDR)
 	}
 
 	return map[string]any{
