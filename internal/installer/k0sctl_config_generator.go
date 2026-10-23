@@ -189,7 +189,12 @@ func absolutePath(path string) (string, error) {
 		return path, nil
 	}
 
-	return filepath.Abs(path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve absolute path of '%s': %w", path, err)
+	}
+
+	return absPath, nil
 }
 
 func (g *K0sctlConfigGenerator) writeK0sctlConfig(config *files.RootConfig, options K0sctlOptions, path string) (string, error) {

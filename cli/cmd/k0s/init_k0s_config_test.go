@@ -108,6 +108,7 @@ var _ = Describe("InitK0sConfigCmd", func() {
 		c.Opts.SSHKeyPath = "keys/id_rsa"
 		cwd, err := os.Getwd()
 		Expect(err).NotTo(HaveOccurred())
+
 		bundlePath := filepath.Join(cwd, "bundle.tar")
 
 		setupWorkdirMocks()
