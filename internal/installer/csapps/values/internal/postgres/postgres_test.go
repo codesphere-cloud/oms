@@ -20,13 +20,13 @@ var _ = Describe("Values", func() {
 			Database:      "masterdata",
 		})
 
-		Expect(values).To(Equal(map[string]any{"postgres": map[string]any{
-			"host":               "pg.example.com",
-			"port":               5433,
-			"database":           "masterdata",
-			"rejectUnauthorized": true,
-			"ssl":                map[string]any{"serverName": "pg-rw"},
-		}}))
+		Expect(values).To(Equal(postgres.Postgres{
+			Host:               "pg.example.com",
+			Port:               5433,
+			Database:           "masterdata",
+			RejectUnauthorized: true,
+			SSL:                postgres.SSL{ServerName: "pg-rw"},
+		}))
 	})
 
 	It("external server and primary both set -> external server used", func() {
@@ -36,9 +36,7 @@ var _ = Describe("Values", func() {
 			Primary:       &files.PostgresPrimaryConfig{IP: "10.0.0.5", Hostname: "pg-1"},
 		})
 
-		Expect(values).To(HaveKeyWithValue("postgres", And(
-			HaveKeyWithValue("host", "pg.example.com"),
-			HaveKeyWithValue("port", 5433),
-		)))
+		Expect(values.Host).To(Equal("pg.example.com"))
+		Expect(values.Port).To(Equal(5433))
 	})
 })

@@ -15,38 +15,42 @@ const (
 	internalPostgresPort = 5432
 )
 
-// Values builds the database connection values.
-func Values(postgres files.PostgresConfig) map[string]any {
-	return map[string]any{"postgres": postgresValues(postgres)}
+// Postgres is the connection to the Codesphere database.
+type Postgres struct {
+	Host string `yaml:"host"`
+	// Port is left to the chart's default when the config has none.
+	Port               int    `yaml:"port,omitempty"`
+	Database           string `yaml:"database"`
+	RejectUnauthorized bool   `yaml:"rejectUnauthorized"`
+	SSL                SSL    `yaml:"ssl"`
 }
 
-func postgresValues(postgres files.PostgresConfig) map[string]any {
-	ssl := map[string]any{}
-	if postgres.CACertPem != "" {
-		ssl["ca"] = postgres.CACertPem
-	}
+// SSL verifies the server's certificate against its name and, if the config has one, a CA.
+type SSL struct {
+	ServerName string `yaml:"serverName"`
+	CA         string `yaml:"ca,omitempty"`
+}
 
-	values := map[string]any{
-		"database":           cmp.Or(postgres.Database, codesphereDatabase),
-		"rejectUnauthorized": true,
-		"ssl":                ssl,
+// Values builds the database connection values.
+func Values(postgres files.PostgresConfig) Postgres {
+	values := Postgres{
+		Database:           cmp.Or(postgres.Database, codesphereDatabase),
+		RejectUnauthorized: true,
+		SSL:                SSL{CA: postgres.CACertPem},
 	}
 
 	// Like the old pc-installer, an external server wins when both are configured.
 	if postgres.Primary != nil && postgres.ServerAddress == "" {
-		values["host"] = postgres.Primary.IP
-		values["port"] = internalPostgresPort
-		ssl["serverName"] = postgres.Primary.Hostname
+		values.Host = postgres.Primary.IP
+		values.Port = internalPostgresPort
+		values.SSL.ServerName = postgres.Primary.Hostname
 
 		return values
 	}
 
-	values["host"] = postgres.ServerAddress
-	if postgres.Port != 0 {
-		values["port"] = postgres.Port
-	}
-
-	ssl["serverName"] = cmp.Or(postgres.AltName, postgres.ServerAddress)
+	values.Host = postgres.ServerAddress
+	values.Port = postgres.Port
+	values.SSL.ServerName = cmp.Or(postgres.AltName, postgres.ServerAddress)
 
 	return values
 }
