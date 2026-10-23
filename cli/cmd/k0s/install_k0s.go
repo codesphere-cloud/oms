@@ -147,7 +147,13 @@ func (c *InstallK0sCmd) InstallK0s(pm installer.PackageManager, k0s installer.K0
 }
 
 func (c *InstallK0sCmd) loadInstallConfig() (*files.RootConfig, error) {
-	config, err := installer.NewConfig().ParseConfigYaml(c.Opts.InstallConfig)
+	return loadManagedInstallConfig(c.Opts.InstallConfig)
+}
+
+// loadManagedInstallConfig loads the install-config and ensures its Kubernetes is managed by
+// Codesphere, as only then OMS handles k0s on its nodes.
+func loadManagedInstallConfig(path string) (*files.RootConfig, error) {
+	config, err := installer.NewConfig().ParseConfigYaml(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load install-config: %w", err)
 	}
