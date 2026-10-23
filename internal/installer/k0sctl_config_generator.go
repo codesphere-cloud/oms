@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -72,9 +73,14 @@ func (g *K0sctlConfigGenerator) Generate(pm PackageManager, k0s K0sManager, outp
 		return "", err
 	}
 
+	sshKeyPath, err := absolutePath(g.Opts.SSHKeyPath)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve SSH key path: %w", err)
+	}
+
 	k0sctlOptions := K0sctlOptions{
 		K0sVersion:       k0sVersion,
-		SSHKeyPath:       g.Opts.SSHKeyPath,
+		SSHKeyPath:       sshKeyPath,
 		K0sBinaryPath:    k0sBinaryPath,
 		AirgapBundlePath: airgapBundlePath,
 	}
@@ -155,11 +161,16 @@ func (g *K0sctlConfigGenerator) getAirgapBundlePath(k0s K0sManager, k0sVersion s
 	}
 
 	if g.Opts.AirgapBundlePath != "" {
-		if !g.FileWriter.Exists(g.Opts.AirgapBundlePath) {
-			return "", fmt.Errorf("airgap bundle '%s' does not exist", g.Opts.AirgapBundlePath)
+		bundlePath, err := absolutePath(g.Opts.AirgapBundlePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve airgap bundle path: %w", err)
 		}
 
-		return g.Opts.AirgapBundlePath, nil
+		if !g.FileWriter.Exists(bundlePath) {
+			return "", fmt.Errorf("airgap bundle '%s' does not exist", bundlePath)
+		}
+
+		return bundlePath, nil
 	}
 
 	bundlePath, err := k0s.DownloadAirgapBundle(k0sVersion, "", g.downloadOptions())
@@ -168,6 +179,22 @@ func (g *K0sctlConfigGenerator) getAirgapBundlePath(k0s K0sManager, k0sVersion s
 	}
 
 	return bundlePath, nil
+}
+
+// absolutePath makes a path absolute, so that the k0sctl config works independent of the
+// directory k0sctl is run from. Empty paths and paths starting with '~', which k0sctl
+// expands itself, are returned unchanged.
+func absolutePath(path string) (string, error) {
+	if path == "" || strings.HasPrefix(path, "~") {
+		return path, nil
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve absolute path of '%s': %w", path, err)
+	}
+
+	return absPath, nil
 }
 
 func (g *K0sctlConfigGenerator) writeK0sctlConfig(config *files.RootConfig, options K0sctlOptions, path string) (string, error) {

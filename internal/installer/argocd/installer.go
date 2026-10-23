@@ -1,6 +1,8 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Package argocd installs and upgrades ArgoCD via Helm and sets up the
+// resources it needs in the cluster, such as registry and repository credentials.
 package argocd
 
 import (
@@ -21,6 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// Defaults for the ArgoCD Helm chart repository and the namespace ArgoCD is installed into.
 const (
 	DefaultRepoURL   = "https://argoproj.github.io/argo-helm"
 	DefaultNamespace = "argocd"
@@ -48,9 +51,11 @@ type InstallerConfig struct {
 type Installer struct {
 	InstallerConfig
 	Helm      installer.HelmClient
-	Resources ArgoCDResources
+	Resources Resources
 }
 
+// NewInstaller creates an Installer with Helm and Kubernetes clients. It uses cfg.RESTConfig
+// when set and falls back to the default kubeconfig otherwise.
 func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 	if cfg.RESTConfig != nil {
 		helm, err := installer.NewHelmClientWithRESTConfig(DefaultNamespace, cfg.RESTConfig)
@@ -63,26 +68,29 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 			return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 		}
 
-		resources, err := NewArgoCDResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+		resources, err := NewResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 		if err != nil {
 			return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 		}
+
 		return &Installer{
 			InstallerConfig: cfg,
 			Helm:            helm,
 			Resources:       resources,
 		}, nil
 	}
+
 	helm, err := installer.NewHelmClient(DefaultNamespace)
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
+
 	clientset, _, err := k8s.NewClients()
 	if err != nil {
 		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
 	}
 
-	resources, err := NewArgoCDResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
+	resources, err := NewResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
 	if err != nil {
 		return nil, fmt.Errorf("init argocd resources client failed: %w", err)
 	}
@@ -142,7 +150,7 @@ func (a *Installer) Install() error {
 
 	existing, err := a.Helm.FindRelease(cfg.Namespace, cfg.ReleaseName)
 	if err != nil {
-		return err
+		return fmt.Errorf("finding existing ArgoCD release: %w", err)
 	}
 
 	if existing != nil {
@@ -212,7 +220,7 @@ func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) erro
 	log.Println("No existing ArgoCD release found, performing fresh install")
 
 	if err := a.Helm.InstallChart(ctx, cfg, installer.InstallChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
-		return err
+		return fmt.Errorf("installing ArgoCD chart: %w", err)
 	}
 
 	if cfg.Version != "" {
@@ -220,6 +228,7 @@ func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) erro
 	} else {
 		fmt.Println("Successfully installed Argo CD (latest chart version)")
 	}
+
 	return nil
 }
 
@@ -232,6 +241,7 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 		if err != nil {
 			return fmt.Errorf("failed to parse installed version %q: %w", existing.InstalledVersion, err)
 		}
+
 		requestedSemver, err := semver.NewVersion(a.Version)
 		if err != nil {
 			return fmt.Errorf("failed to parse requested version %q: %w", a.Version, err)
@@ -243,13 +253,14 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 				a.Version, existing.InstalledVersion,
 			)
 		}
+
 		log.Printf("Upgrading ArgoCD from %s to %s\n", existing.InstalledVersion, a.Version)
 	} else {
 		log.Printf("Upgrading ArgoCD from %s to latest\n", existing.InstalledVersion)
 	}
 
 	if err := a.Helm.UpgradeChart(ctx, cfg, installer.UpgradeChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
-		return err
+		return fmt.Errorf("upgrading ArgoCD chart: %w", err)
 	}
 
 	if cfg.Version != "" {
@@ -257,6 +268,7 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 	} else {
 		fmt.Println("Successfully upgraded Argo CD to the latest chart version")
 	}
+
 	return nil
 }
 
@@ -264,11 +276,13 @@ func (a *Installer) validateRepoURL() error {
 	if a.RepoURL == "" {
 		return nil
 	}
+
 	for _, prefix := range []string{"http://", "https://", "oci://"} {
 		if strings.HasPrefix(a.RepoURL, prefix) {
 			return nil
 		}
 	}
+
 	return fmt.Errorf("invalid repo URL %q: must start with http://, https://, or oci://", a.RepoURL)
 }
 
@@ -277,9 +291,11 @@ func (a *Installer) resolveChartRef(chartName string) (string, string) {
 	if repoURL == "" {
 		repoURL = DefaultRepoURL
 	}
+
 	if strings.HasPrefix(repoURL, "oci://") {
 		return strings.TrimRight(repoURL, "/") + "/" + chartName, ""
 	}
+
 	return chartName, repoURL
 }
 

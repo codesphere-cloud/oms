@@ -58,7 +58,13 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 				This includes setting up projects, service accounts, and necessary IAM roles.
 				Depending on your setup, additional configuration may be required after bootstrapping.
 				Ensure you have the necessary permissions to create and manage GCP resources before proceeding.
-				Not for production use.`),
+				Not for production use.
+
+				Running it again against an existing project with --install-version installs that version on top
+				and repeats every install step, including the k0s config script, which restarts k0s.
+				To replace only Codesphere, e.g. to roll back to an earlier release, add --install-codesphere-only
+				and --recover-config: the bootstrap then runs "oms install codesphere --codesphere-only" on the jumpbox and leaves k0s,
+				PostgreSQL, Ceph and the other dependencies as they are.`),
 		},
 		Opts:          opts,
 		Env:           env.NewEnv(),
@@ -119,11 +125,12 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (default: none)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.InstallCodesphereOnly, "install-codesphere-only", false, "Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the \"oms install codesphere\" the bootstrap runs on the jumpbox, and skips installing k0s and its config script, which would restart k0s. Requires --install-version or --install-local, and --recover-config (default: false)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)")
 	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "github", "Container registry type to use (options: local-container, artifact-registry, github) (default: github)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Airgapped, "airgapped", false, "Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Selects the local-container registry type and fails if another --registry-type is given. (default: false)")
+	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Airgapped, "airgapped", false, "Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox. Selects the local-container registry type and fails if another --registry-type is given. (default: false)")
 	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
 	flags.StringArrayVar(&bootstrapGcpCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
 	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")

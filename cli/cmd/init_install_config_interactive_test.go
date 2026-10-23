@@ -435,3 +435,69 @@ var _ = Describe("Non-interactive Kubernetes CIDR flags", func() {
 		Expect(err.Error()).To(ContainSubstring("pod CIDR is required"))
 	})
 })
+
+var _ = Describe("init install-config package selection", func() {
+	DescribeTable("writes version and optional hash in either input mode", func(interactive bool, hash string, override bool) {
+		cfg := files.NewRootConfig()
+		cfg.Operations = &files.OperationsConfig{Skip: []string{"ceph"}}
+		manager := installer.NewMockInstallConfigManager(GinkgoT())
+		manager.EXPECT().ApplyProfile("minimal").Return(nil)
+		manager.EXPECT().GetInstallConfig().Return(&cfg)
+
+		expected := files.CodespherePackageConfig{Version: "1.111.0", Hash: hash}
+		if override {
+			expected = files.CodespherePackageConfig{Version: "master", Hash: "otherhash"}
+		}
+
+		if interactive {
+			manager.EXPECT().CollectInteractively().Run(func() {
+				Expect(cfg.Operations.Codesphere).To(Equal(files.CodespherePackageConfig{Version: "1.111.0", Hash: hash}))
+
+				if override {
+					cfg.SetCodespherePackage(expected.Version, expected.Hash)
+				}
+			}).Return(nil)
+		} else {
+			manager.EXPECT().GetVault().Return(&files.InstallVault{})
+		}
+
+		manager.EXPECT().ValidateInstallConfig().Return(nil)
+		manager.EXPECT().GenerateSecrets().Return(nil)
+		manager.EXPECT().WriteInstallConfig("config.yaml", false).Run(func(_ string, _ bool) {
+			Expect(cfg.Operations.Codesphere).To(Equal(expected))
+			Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+		}).Return(nil)
+		manager.EXPECT().WriteVault("vault.yaml", false).Return(nil)
+
+		command := InitInstallConfigCmd{Opts: &InitInstallConfigOpts{
+			GlobalOptions: &util.GlobalOptions{}, Profile: "minimal", Interactive: interactive,
+			ConfigFile: "config.yaml", VaultFile: "vault.yaml", VaultType: "plain", CodesphereVersion: "1.111.0", CodesphereHash: hash,
+		}}
+		Expect(command.InitInstallConfig(manager)).To(Succeed())
+	},
+		Entry("noninteractive version only", false, "", false),
+		Entry("noninteractive pinned build", false, "abc123", false),
+		Entry("interactive pinned build", true, "abc123", false),
+		Entry("interactive answers override flag defaults", true, "abc123", true),
+	)
+	It("rejects a hash without a version before generating files", func() {
+		command := InitInstallConfigCmd{Opts: &InitInstallConfigOpts{CodesphereHash: "abc123"}}
+		Expect(command.InitInstallConfig(installer.NewMockInstallConfigManager(GinkgoT()))).To(MatchError("--codesphere-hash requires --codesphere-version"))
+	})
+	It("registers optional install version and hash flags", func() {
+		parent := &cobra.Command{Use: "init"}
+		AddInitInstallConfigCmd(parent, &util.GlobalOptions{})
+		child, _, err := parent.Find([]string{"install-config"})
+		Expect(err).NotTo(HaveOccurred())
+
+		child.RunE = func(cmd *cobra.Command, _ []string) error {
+			Expect(cmd.Flags().GetString("codesphere-version")).To(Equal("1.111.0"))
+			Expect(cmd.Flags().GetString("codesphere-hash")).To(Equal("abc123"))
+
+			return nil
+		}
+
+		parent.SetArgs([]string{"install-config", "-c", "config.yaml", "--vault", "vault.yaml", "--codesphere-version", "1.111.0", "--codesphere-hash", "abc123"})
+		Expect(parent.Execute()).To(Succeed())
+	})
+})

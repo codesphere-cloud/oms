@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
@@ -132,6 +133,52 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("ValidateInput Codesphere-only install", func() {
+		BeforeEach(func() {
+			csEnv.InstallCodesphereOnly = true
+			csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+		})
+
+		It("rejects a Codesphere-only install without a version or local package", func() {
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only requires install-version or install-local")))
+		})
+
+		Context("when the config is recovered from the jumpbox", func() {
+			BeforeEach(func() {
+				csEnv.RecoverConfig = true
+			})
+
+			It("accepts a Codesphere-only install of a local package", func() {
+				csEnv.InstallLocal = "installer-lite.tar.gz"
+
+				fw.EXPECT().Exists("installer-lite.tar.gz").Return(true)
+
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("accepts a Codesphere-only install of a released version", func() {
+				csEnv.InstallVersion = "v1.2.3"
+
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.2.3", "").Return(portal.Build{
+					Hash:      "abc1234567890",
+					Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
+				}, nil)
+
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+		})
+
+		// A vault kept locally from the first bootstrap lacks the kubeconfig that "oms install k0s"
+		// added to the jumpbox's copy, so uploading it would break the install.
+		It("rejects a Codesphere-only install without recover-config, even when local config files exist", func() {
+			csEnv.InstallLocal = "installer-lite.tar.gz"
+
+			fw.EXPECT().Exists(mock.Anything).Return(true).Maybe()
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only requires recover-config")))
+		})
+	})
+
 	Describe("ValidateInput remote OMS binary", func() {
 		BeforeEach(func() {
 			csEnv.RemoteOmsBinaryPath = "./bin/oms-linux-amd64"
@@ -214,7 +261,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				csEnv.GitHubPAT = "fake-pat"
 				csEnv.RegistryUser = "fake-registry-user"
 
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "v1.2.3", mock.Anything).Return(portal.Build{
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.2.3", mock.Anything).Return(portal.Build{
 					Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
 				}, nil).Maybe()
 			})
@@ -342,8 +389,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// EnsureVPC
 			gc.EXPECT().CreateVPC(projectID, "us-central1", projectID+"-vpc", projectID+"-us-central1-subnet", projectID+"-router", projectID+"-nat-gateway").Return(nil)
 
-			// EnsureFirewallRules (5 times)
+			// EnsureFirewallRules: the artifact registry keeps internet egress, so the airgapped
+			// egress rules are removed instead of created.
 			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(5)
+			gc.EXPECT().DeleteFirewallRule(projectID, "deny-external-egress").Return(nil)
+			gc.EXPECT().DeleteFirewallRule(projectID, "allow-internal-egress").Return(nil)
+			gc.EXPECT().DeleteFirewallRule(projectID, "allow-jumpbox-egress").Return(nil)
 
 			// EnsureComputeInstances
 			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
@@ -503,7 +554,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				}
 			})
 			JustBeforeEach(func() {
-				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, bs.Env.InstallVersion, bs.Env.InstallHash).Return(portal.Build{
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, (files.CodespherePackageConfig{Version: bs.Env.InstallVersion}).FormatVersionForPortal(), bs.Env.InstallHash).Return(portal.Build{
 					Artifacts: artifacts,
 					Hash:      csEnv.InstallHash,
 					Version:   csEnv.InstallVersion,
@@ -527,9 +578,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 					})
 				})
 
-				It("succeeds when package exists and has the lite package", func() {
+				It("preserves the specified build hash", func() {
 					err := bs.ValidateInput()
 					Expect(err).NotTo(HaveOccurred())
+					Expect(csEnv.InstallHash).To(Equal("abc123"))
 				})
 
 				Context("when package exists but does not have the lite package", func() {
@@ -1363,29 +1415,72 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("EnsureFirewallRules", func() {
+		expectRules := func(names ...string) {
+			network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", csEnv.ProjectID, csEnv.ProjectID)
+			for _, name := range names {
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == name && r.GetNetwork() == network
+				})).Return(nil).Once()
+			}
+		}
+		expectBaseRules := func() {
+			expectRules("allow-ssh-ext", "allow-internal", "allow-all-egress", "allow-ingress-web", "allow-ingress-postgres")
+		}
+
 		Describe("Valid EnsureFirewallRules", func() {
-			It("creates required firewall rules", func() {
-				// Expect 4 rules: allow-ssh-ext, allow-internal, allow-all-egress, allow-ingress-web, allow-ingress-postgres
-				// Wait, code showed 5 blocks? ssh, internal, egress, web, postgres.
+			It("creates the base rules and blocks internet egress of all VMs but the jumpbox when airgapped", func() {
+				csEnv.Airgapped = true
+
+				expectBaseRules()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ssh-ext"
-				})).Return(nil)
+					return r.GetName() == "allow-jumpbox-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 800 &&
+						len(r.GetAllowed()) == 1 && r.GetAllowed()[0].GetIPProtocol() == "all" &&
+						slices.Equal(r.GetDestinationRanges(), []string{"0.0.0.0/0"}) &&
+						slices.Equal(r.GetTargetTags(), []string{"jumpbox"})
+				})).Return(nil).Once()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-internal"
-				})).Return(nil)
+					return r.GetName() == "allow-internal-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 800 &&
+						len(r.GetAllowed()) == 1 && r.GetAllowed()[0].GetIPProtocol() == "all" &&
+						slices.Equal(r.GetDestinationRanges(), []string{"10.10.0.0/20"}) &&
+						len(r.GetTargetTags()) == 0
+				})).Return(nil).Once()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-all-egress"
-				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ingress-web"
-				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ingress-postgres"
-				})).Return(nil)
+					return r.GetName() == "deny-external-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 900 &&
+						len(r.GetDenied()) == 1 && r.GetDenied()[0].GetIPProtocol() == "all" &&
+						len(r.GetAllowed()) == 0 &&
+						slices.Equal(r.GetDestinationRanges(), []string{"0.0.0.0/0"}) &&
+						len(r.GetTargetTags()) == 0
+				})).Return(nil).Once()
 
 				err := bs.EnsureFirewallRules()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			DescribeTable("removes the airgapped egress rules when not airgapped",
+				func(registryType gcp.RegistryType) {
+					csEnv.RegistryType = registryType
+
+					expectBaseRules()
+
+					deny := gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(nil).Once()
+					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-internal-egress").Return(nil).Once().NotBefore(deny)
+					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-jumpbox-egress").Return(nil).Once().NotBefore(deny)
+
+					err := bs.EnsureFirewallRules()
+					Expect(err).NotTo(HaveOccurred())
+				},
+				Entry("GitHub", gcp.RegistryTypeGitHub),
+				Entry("artifact registry", gcp.RegistryTypeArtifactRegistry),
+				// Only airgapped installations stage the k0s airgap bundle, so a local container
+				// registry alone must keep internet egress.
+				Entry("local container registry", gcp.RegistryTypeLocalContainer),
+			)
 		})
 
 		Describe("Invalid cases", func() {
@@ -1393,8 +1488,37 @@ var _ = Describe("GCP Bootstrapper", func() {
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.Anything).Return(fmt.Errorf("firewall error")).Once()
 
 				err := bs.EnsureFirewallRules()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to create jumpbox ssh firewall rule"))
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to create allow-ssh-ext firewall rule"),
+					ContainSubstring("firewall error"),
+				)))
+			})
+
+			It("fails when the egress deny rule creation fails", func() {
+				csEnv.Airgapped = true
+
+				expectBaseRules()
+				expectRules("allow-jumpbox-egress", "allow-internal-egress")
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == "deny-external-egress"
+				})).Return(fmt.Errorf("firewall error")).Once()
+
+				err := bs.EnsureFirewallRules()
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to create deny-external-egress firewall rule"),
+					ContainSubstring("firewall error"),
+				)))
+			})
+
+			It("fails when removing the egress deny rule fails", func() {
+				expectBaseRules()
+				gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(fmt.Errorf("delete error")).Once()
+
+				err := bs.EnsureFirewallRules()
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to delete deny-external-egress firewall rule"),
+					ContainSubstring("delete error"),
+				)))
 			})
 		})
 	})
@@ -1855,6 +1979,23 @@ var _ = Describe("GCP Bootstrapper", func() {
 		)
 	})
 
+	DescribeTable("uses a package override only for manual or local installs", func(version, local string, wantsPackage bool) {
+		csEnv.InstallVersion = version
+		csEnv.InstallLocal = local
+		dc := gcp.BuildDataCenters(csEnv)[0]
+
+		command := bs.InstallCommand(dc, "example-installer.tar.gz")
+		if wantsPackage {
+			Expect(command).To(ContainSubstring(" -p example-installer.tar.gz"))
+		} else {
+			Expect(command).NotTo(ContainSubstring(" -p "))
+		}
+	},
+		Entry("manual command without a version", "", "", true),
+		Entry("local archive", "", "local.tar.gz", true),
+		Entry("config-selected version", "master", "", false),
+	)
+
 	Describe("InstallCodesphere", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
@@ -1872,11 +2013,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 				It("downloads and installs lite package", func() {
 					// Expect download package
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
 
 					// Expect install codesphere
 					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz -s kubernetes,load-container-images").Return(nil)
+						"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1890,13 +2030,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 				})
 				It("downloads and installs codesphere", func() {
 					// Expect download package
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H def9876543210 v1.2.3").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H def9876543210 codesphere-v1.2.3").Return(nil)
 
 					// Expect mirroring the package artifacts into the local registry
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-def9876543210-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-def9876543210-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
 
 					// Expect install codesphere
-					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-def9876543210-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
+					nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
 
 					err := bs.InstallCodesphere()
 					Expect(err).NotTo(HaveOccurred())
@@ -1904,9 +2044,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("downloads and installs codesphere with hash", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt -s kubernetes").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1915,11 +2055,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("copies the pc-apps values files to the jumpbox and passes them in order", func() {
 				csEnv.PCAppsValues = []string{"values/base.yaml", "overlay/base.yaml"}
 
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil)
 				nodeClient.EXPECT().CopyFile(mock.Anything, "values/base.yaml", "/root/pc-apps-values/0-base.yaml").Return(nil)
 				nodeClient.EXPECT().CopyFile(mock.Anything, "overlay/base.yaml", "/root/pc-apps-values/1-base.yaml").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt --pc-apps-values /root/pc-apps-values/0-base.yaml --pc-apps-values /root/pc-apps-values/1-base.yaml -s kubernetes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt --pc-apps-values /root/pc-apps-values/0-base.yaml --pc-apps-values /root/pc-apps-values/1-base.yaml -s kubernetes").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -1928,7 +2068,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("fails when a pc-apps values file cannot be copied", func() {
 				csEnv.PCAppsValues = []string{"base.yaml"}
 
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil)
 				nodeClient.EXPECT().CopyFile(mock.Anything, "base.yaml", "/root/pc-apps-values/0-base.yaml").Return(fmt.Errorf("copy error"))
 
 				err := bs.InstallCodesphere()
@@ -1938,9 +2078,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("preserves requested skip steps without duplicating kubernetes", func() {
 				csEnv.InstallSkipSteps = []string{"postgres", "kubernetes"}
 
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes,postgres").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt -s kubernetes,postgres").Return(nil)
 
 				err := bs.InstallCodesphere()
 				Expect(err).NotTo(HaveOccurred())
@@ -2010,7 +2150,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when download package fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(fmt.Errorf("download error"))
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(fmt.Errorf("download error"))
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
@@ -2018,8 +2158,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when mirroring package artifacts fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(fmt.Errorf("copy error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(fmt.Errorf("copy error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
@@ -2027,13 +2167,67 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when install codesphere fails", func() {
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download package -f installer-lite.tar.gz -H abc1234567890 v1.2.3").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil).Once()
-				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -p v1.2.3-abc1234567890-installer-lite.tar.gz --argo-registry-ca /root/registry.crt -s kubernetes").Return(fmt.Errorf("install error")).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "mkdir -p oms-workdir && cd oms-workdir && oms download package -f installer-lite.tar.gz -H abc1234567890 codesphere-v1.2.3").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms copy package -p oms-workdir/codesphere-v1.2.3-abc1234567890-installer-lite.tar.gz --dest 10.10.0.2 --yes").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml --argo-registry-ca /root/registry.crt -s kubernetes").Return(fmt.Errorf("install error")).Once()
 
 				err := bs.InstallCodesphere()
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("failed to install Codesphere from jumpbox"))
+			})
+		})
+	})
+
+	Describe("InstallK0sAndCodesphere", func() {
+		const installCommand = "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images"
+
+		BeforeEach(func() {
+			csEnv.InstallVersion = "v1.2.3"
+			csEnv.InstallHash = "abc1234567890"
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+			csEnv.RegistryType = gcp.RegistryTypeGitHub
+
+			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
+		})
+
+		It("given a full install, when Codesphere is installed, then k0s is installed first and configured afterwards", func() {
+			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
+				return strings.HasPrefix(command, "oms install k0s ")
+			})).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
+
+			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+		})
+
+		Context("when only Codesphere is installed", func() {
+			BeforeEach(func() {
+				csEnv.InstallCodesphereOnly = true
+			})
+
+			It("given a running cluster, when Codesphere is installed, then only the Codesphere-only install runs and k0s is left untouched", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(nil)
+
+				Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+			})
+
+			It("given skip steps, when Codesphere is installed, then they are passed on together with --codesphere-only", func() {
+				csEnv.InstallSkipSteps = []string{"set-up-cluster"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+					"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,set-up-cluster,load-container-images --codesphere-only").Return(nil)
+
+				Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+			})
+
+			It("given a failing install, when Codesphere is installed, then the install error is returned", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(fmt.Errorf("install error"))
+
+				Expect(bs.InstallK0sAndCodesphere()).To(MatchError(ContainSubstring("failed to install Codesphere")))
 			})
 		})
 	})
@@ -2140,6 +2334,22 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("RunK0sConfigScript", func() {
+		It("runs the script on the first control plane node", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil)
+
+			Expect(bs.RunK0sConfigScript()).To(Succeed())
+		})
+
+		It("fails when the script exits with an error", func() {
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(fmt.Errorf("command failed: exit status 1"))
+
+			err := bs.RunK0sConfigScript()
+			Expect(err).To(MatchError(ContainSubstring("failed to run k0s config script")))
+			Expect(err).To(MatchError(ContainSubstring("exit status 1")))
+		})
+	})
+
 	Describe("GenerateK0sConfigScript", func() {
 		Describe("Valid GenerateK0sConfigScript", func() {
 			It("generates script", func() {
@@ -2169,8 +2379,9 @@ var _ = Describe("GCP Bootstrapper", func() {
 					Expect(script).NotTo(ContainSubstring("/etc/codesphere/deps/kubernetes"))
 				})
 
-				It("given a failing kubectl call, when the script runs, then it exits before reporting success", func() {
-					Expect(script).To(MatchRegexp(`(?s)set -eo pipefail\s+KUBECTL=.*patch svc gateway-controller.*set \+e`))
+				It("given any failing command, when the script runs, then it exits with an error", func() {
+					Expect(script).To(HavePrefix("#!/bin/bash\n\nset -eo pipefail\n"))
+					Expect(script).NotTo(ContainSubstring("set +e"))
 				})
 
 				It("given a rerun on an existing cluster, when the script runs, then the cloud-config configmap is applied instead of created", func() {

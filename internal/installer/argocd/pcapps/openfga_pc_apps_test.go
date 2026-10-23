@@ -1,13 +1,13 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-package installer_test
+package pcapps_test
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd/pcapps"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
@@ -57,12 +57,12 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 	}
 
 	It("leaves the chart defaults alone when the config says nothing", func() {
-		Expect(installer.OpenFgaPcAppsValues(configWith(nil, ""), emptyVault())).To(BeNil())
+		Expect(pcapps.OpenFgaPcAppsValues(configWith(nil, ""), emptyVault())).To(BeNil())
 	})
 
 	It("disables the application for a data center that uses a remote OpenFGA", func() {
 		deploy := false
-		values := installer.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
+		values := pcapps.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
 			Deploy: &deploy,
 			APIURL: "https://openfga.1.cs.example.com",
 		}, files.CertIssuerTypeACME), emptyVault())
@@ -74,7 +74,7 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 	})
 
 	It("defaults to deploying when only the exposure is configured", func() {
-		values := installer.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
+		values := pcapps.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
 			Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "openfga.1.cs.example.com"},
 		}, files.CertIssuerTypeACME), emptyVault())
 
@@ -87,7 +87,7 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 	})
 
 	It("issues the gateway certificate with the installation's cert issuer", func() {
-		values := installer.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
+		values := pcapps.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
 			Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "openfga.1.cs.example.com"},
 		}, files.CertIssuerTypeACME), emptyVault())
 
@@ -97,7 +97,7 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 	})
 
 	It("falls back to the self-signed issuer when no cert issuer is configured", func() {
-		values := installer.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
+		values := pcapps.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
 			Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "openfga.1.cs.example.com"},
 		}, ""), emptyVault())
 
@@ -112,7 +112,7 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 		}, "")
 		config.Codesphere.CertIssuer = nil
 
-		values := installer.OpenFgaPcAppsValues(config, emptyVault())
+		values := pcapps.OpenFgaPcAppsValues(config, emptyVault())
 
 		gateway := openfgaValues(values)["valuesObject"].(files.ChartValues)["gateway"].(files.ChartValues)
 		issuerRef := gateway["tls"].(files.ChartValues)["certificate"].(files.ChartValues)["issuerRef"].(files.ChartValues)
@@ -120,13 +120,13 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 	})
 
 	It("leaves OpenFGA unauthenticated while the vault has no preshared key", func() {
-		values := installer.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{}, ""), emptyVault())
+		values := pcapps.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{}, ""), emptyVault())
 
 		Expect(authnValues(values)).To(BeNil())
 	})
 
 	It("requires the preshared key once the vault holds one", func() {
-		values := installer.OpenFgaPcAppsValues(configWith(nil, ""), vaultWithPresharedKey())
+		values := pcapps.OpenFgaPcAppsValues(configWith(nil, ""), vaultWithPresharedKey())
 
 		authn := authnValues(values)
 		Expect(authn["method"]).To(Equal("preshared"))
@@ -134,7 +134,7 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 	})
 
 	It("keeps the gateway configuration when authentication is derived as well", func() {
-		values := installer.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
+		values := pcapps.OpenFgaPcAppsValues(configWith(&files.OpenFgaConfig{
 			Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "openfga.1.cs.example.com"},
 		}, files.CertIssuerTypeACME), vaultWithPresharedKey())
 
@@ -149,6 +149,6 @@ var _ = Describe("OpenFgaPcAppsValues", func() {
 			Fields: &files.SecretFields{Password: ""},
 		}}}
 
-		Expect(installer.OpenFgaPcAppsValues(configWith(nil, ""), vault)).To(BeNil())
+		Expect(pcapps.OpenFgaPcAppsValues(configWith(nil, ""), vault)).To(BeNil())
 	})
 })

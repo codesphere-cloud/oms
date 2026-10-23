@@ -4,8 +4,11 @@ Install a Codesphere instance
 
 ### Synopsis
 
-Install a Codesphere instance with the provided package, configuration file, and private key.
+Install a Codesphere instance with the provided configuration file and private key.
+When --package is omitted, operations.codesphere selects the version to download
+and reuse in OMS_WORKDIR. An explicit --package overrides the configured version.
 Uses the private-cloud-installer.js script included in the package to perform the installation.
+Use the dependencies and platform subcommands with --local-components for a prepared local cluster.
 
 ```
 oms install codesphere [flags]
@@ -14,6 +17,9 @@ oms install codesphere [flags]
 ### Examples
 
 ```
+# Install the operations.codesphere version, downloading it to OMS_WORKDIR if needed
+$ oms install codesphere -c config.yaml -k <path-to-private-key>
+
 # Skip most pre-installation steps. E.g. if you only need to re-apply Codesphere's helm charts
 $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml -s copy-dependencies,extract-dependencies,load-container-images,ceph,postgres,kubernetes,docker
 
@@ -37,12 +43,15 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
       --direct-connection            Use direct connection for installation, requires having access to the cluster nodes from your machine
   -f, --force                        Enforce package extraction
   -h, --help                         help for codesphere
-  -p, --package string               Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load binaries, installer etc. from
+      --local-components             Run selected install components on the local host
+      --local-config-dir string      Config directory for local install components
+  -p, --package string               Package file to use. This flag overrides the version specified in the configuration file.
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
   -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)
   -s, --skip-steps strings           Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd
       --timer                        Show how long each step took after it finishes
       --vault string                 Path to the prod.vault.yaml file used for config templating
+      --vault-secret-name string     Secret in the codesphere namespace the vault is written to (as source for ESO). (default "cs-vault")
 ```
 
 ### Options inherited from parent commands

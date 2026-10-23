@@ -12,6 +12,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 var _ = Describe("ConfigYaml", func() {
@@ -755,5 +756,92 @@ codesphere:
 		err := config.Unmarshal([]byte(yamlData))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("unsupported plan parameter shape"))
+	})
+})
+
+var _ = Describe("CodespherePackageVersion", func() {
+	DescribeTable("resolves the configured portal version", func(input, expected string) {
+		cfg := files.NewRootConfig()
+		Expect(cfg.Unmarshal([]byte("operations:\n  codesphere: " + input + "\n  skip: [ceph]\n"))).To(Succeed())
+		version, err := cfg.CodespherePackageVersion()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(version).To(Equal(expected))
+		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+	},
+		Entry("plain version", "1.95.0", "codesphere-v1.95.0"),
+		Entry("quoted two-component version", `"1.10"`, "codesphere-v1.10"),
+		Entry("v version", "v1.95.0", "codesphere-v1.95.0"),
+		Entry("portal tag", "codesphere-v1.95.0", "codesphere-v1.95.0"),
+		Entry("prerelease", "1.95.0-rc.1", "codesphere-v1.95.0-rc.1"),
+		Entry("branch", "release/test", "release/test"),
+	)
+	DescribeTable("reads object selections with optional hashes", func(input, version, hash string) {
+		cfg := files.NewRootConfig()
+		Expect(cfg.Unmarshal([]byte(input))).To(Succeed())
+		selected, err := cfg.CodespherePackageVersion()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(selected).To(Equal(version))
+		Expect(cfg.Operations.Codesphere.Hash).To(Equal(hash))
+		encoded, err := yaml.Marshal(cfg)
+		Expect(err).NotTo(HaveOccurred())
+
+		clone := files.NewRootConfig()
+		Expect(clone.Unmarshal(encoded)).To(Succeed())
+		Expect(clone.Operations.Codesphere).To(Equal(cfg.Operations.Codesphere))
+	},
+		Entry("version only", "operations:\n  codesphere: {version: 1.111.0}\n", "codesphere-v1.111.0", ""),
+		Entry("quoted two-component version", "operations:\n  codesphere: {version: \"1.10\"}\n", "codesphere-v1.10", ""),
+		Entry("version and hash", "operations:\n  codesphere: {version: 1.111.0, hash: abc123}\n", "codesphere-v1.111.0", "abc123"),
+		Entry("branch and hash", "operations:\n  codesphere: {version: master, hash: abc123}\n", "master", "abc123"),
+	)
+	It("preserves skip steps when setting a package", func() {
+		cfg := files.RootConfig{Operations: &files.OperationsConfig{Skip: []string{"ceph"}}}
+		cfg.SetCodespherePackage("1.111.0", "abc123")
+		Expect(cfg.Operations.Codesphere).To(Equal(files.CodespherePackageConfig{Version: "1.111.0", Hash: "abc123"}))
+		Expect(cfg.Operations.Skip).To(Equal([]string{"ceph"}))
+	})
+	DescribeTable("rejects unsupported selection types", func(selection string) {
+		cfg := files.NewRootConfig()
+		Expect(cfg.Unmarshal([]byte("operations:\n  codesphere: " + selection))).NotTo(Succeed())
+	}, Entry("list", "[1.111.0]"), Entry("boolean", "true"), Entry("unquoted numeric version", "1.10"))
+
+	DescribeTable("rejects a missing version", func(operations *files.OperationsConfig) {
+		cfg := files.RootConfig{Operations: operations}
+		_, err := cfg.CodespherePackageVersion()
+		Expect(err).To(MatchError(ContainSubstring("operations.codesphere is required")))
+	},
+		Entry("no operations", nil),
+		Entry("only skip steps", &files.OperationsConfig{Skip: []string{"ceph"}}),
+		Entry("empty version", &files.OperationsConfig{}),
+		Entry("hash without version", &files.OperationsConfig{Codesphere: files.CodespherePackageConfig{Hash: "abc123"}}),
+	)
+})
+
+var _ = Describe("RootConfig round-trip", func() {
+	roundTrip := func(path string) (map[string]interface{}, map[string]interface{}) {
+		data, err := os.ReadFile(path)
+		Expect(err).NotTo(HaveOccurred())
+
+		var original map[string]interface{}
+		Expect(yaml.Unmarshal(data, &original)).To(Succeed())
+
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal(data)).To(Succeed())
+		marshaled, err := config.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+
+		var saved map[string]interface{}
+		Expect(yaml.Unmarshal(marshaled, &saved)).To(Succeed())
+
+		return original, saved
+	}
+
+	It("keeps every field the Codesphere values are built from", func() {
+		original, saved := roundTrip(filepath.Join("testdata", "values_config.yaml"))
+
+		// Merging the original over the saved config only changes it if a field was lost or altered.
+		// Fields OMS always writes, like secrets.baseDir, are allowed to be added.
+		_, savedCopy := roundTrip(filepath.Join("testdata", "values_config.yaml"))
+		Expect(util.DeepMergeMaps(savedCopy, original)).To(Equal(saved))
 	})
 })

@@ -10,6 +10,12 @@ Depending on your setup, additional configuration may be required after bootstra
 Ensure you have the necessary permissions to create and manage GCP resources before proceeding.
 Not for production use.
 
+Running it again against an existing project with --install-version installs that version on top
+and repeats every install step, including the k0s config script, which restarts k0s.
+To replace only Codesphere, e.g. to roll back to an earlier release, add --install-codesphere-only
+and --recover-config: the bootstrap then runs "oms install codesphere --codesphere-only" on the jumpbox and leaves k0s,
+PostgreSQL, Ceph and the other dependencies as they are.
+
 ```
 oms beta bootstrap-gcp [flags]
 ```
@@ -18,7 +24,7 @@ oms beta bootstrap-gcp [flags]
 
 ```
       --acme-staging                              Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)
-      --airgapped                                 Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
+      --airgapped                                 Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox. Selects the local-container registry type and fails if another --registry-type is given. (default: false)
       --azure-devops-app-client-id string         Azure DevOps App Client ID (optional)
       --azure-devops-app-client-secret string     Azure DevOps App Client Secret (optional)
       --base-domain string                        Base domain for Codesphere (required)
@@ -51,6 +57,7 @@ oms beta bootstrap-gcp [flags]
       --gitlab-app-client-secret string           GitLab App Client Secret (optional)
       --google-acme-issuer                        Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)
   -h, --help                                      help for bootstrap-gcp
+      --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the "oms install codesphere" the bootstrap runs on the jumpbox, and skips installing k0s and its config script, which would restart k0s. Requires --install-version or --install-local, and --recover-config (default: false)
       --install-config string                     Path to install config file (optional) (default "config.yaml")
       --install-hash string                       Codesphere package hash to install (default: none)
       --install-local string                      Install Codesphere from local package (default: none)
@@ -70,7 +77,7 @@ oms beta bootstrap-gcp [flags]
       --openbao-user string                       OpenBao username (optional) (default "admin")
       --pc-apps-values stringArray                pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)
       --preemptible                               Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)
-      --preview-flags stringArray                 Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,cluster-admin,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
+      --preview-flags stringArray                 Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
       --project-name string                       Unique GCP Project Name (required)
       --project-ttl string                        Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours) (default "2h")
       --prometheus-remote-write-password string   Prometheus remote write password stored in the generated vault (optional)

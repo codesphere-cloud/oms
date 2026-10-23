@@ -11,6 +11,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/mock"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/k0s"
@@ -63,6 +64,38 @@ var _ = Describe("InstallK0sCmd", func() {
 			err := c.RunE(nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("install-config"))
+		})
+	})
+
+	Context("flag validation", func() {
+		var installK0sCmd *cobra.Command
+
+		BeforeEach(func() {
+			parent := &cobra.Command{Use: "install"}
+			k0s.AddInstallCmd(parent, globalOpts)
+			installK0sCmd, _, _ = parent.Find([]string{"k0s"})
+		})
+
+		DescribeTable("rejects flags that are ignored with --config",
+			func(args ...string) {
+				Expect(installK0sCmd.ParseFlags(append([]string{"--config", "k0sctl.yaml"}, args...))).To(Succeed())
+				err := installK0sCmd.ValidateFlagGroups()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("config"))
+			},
+			Entry("--version", "--version", "v1.31.14+k0s.0"),
+			Entry("--package", "--package", "pkg.tar.gz"),
+			Entry("--ssh-key-path", "--ssh-key-path", "id_rsa"),
+			Entry("--no-download", "--no-download"),
+			Entry("--install-config", "--install-config", "config.yaml"),
+		)
+
+		It("accepts flags that still apply with --config", func() {
+			Expect(installK0sCmd.ParseFlags([]string{
+				"--config", "k0sctl.yaml", "--k0sctl-version", "v0.17.4", "--force",
+				"--vault", "prod.vault.yaml", "--vault-type", "plain",
+			})).To(Succeed())
+			Expect(installK0sCmd.ValidateFlagGroups()).To(Succeed())
 		})
 	})
 

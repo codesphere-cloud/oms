@@ -4,6 +4,7 @@
 package portal
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -42,7 +43,12 @@ func DownloadAndVerifyBuild(p Portal, fileWriter intutil.FileIO, product Product
 	}
 
 	if err := p.DownloadBuildArtifact(product, download, out, fileSize, opts.Quiet); err != nil {
-		return fmt.Errorf("failed to download build: %w", err)
+		// A resume at EOF may return 416. Only accept the existing archive if
+		// the portal supplied a checksum and the verification below succeeds.
+		verifyExisting := opts.Resume && fileSize > 0 && download.Artifacts[0].Md5Sum != "" && errors.Is(err, errDownloadRangeNotSatisfiable)
+		if !verifyExisting {
+			return fmt.Errorf("failed to download build: %w", err)
+		}
 	}
 
 	verifyFile, err := fileWriter.Open(destination)

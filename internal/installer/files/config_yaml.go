@@ -5,10 +5,12 @@ package files
 
 import (
 	"fmt"
+	"log"
 	"slices"
 	"strings"
 
 	"go.yaml.in/yaml/v3"
+	"golang.org/x/mod/semver"
 )
 
 // Vault
@@ -113,7 +115,70 @@ type RootConfig struct {
 }
 
 type OperationsConfig struct {
-	Skip []string `yaml:"skip"`
+	Codesphere CodespherePackageConfig `yaml:"codesphere,omitempty"`
+	Skip       []string                `yaml:"skip"`
+}
+
+// CodespherePackageConfig selects an installer version and optionally a build hash.
+// YAML also accepts the legacy scalar form, e.g. codesphere: 1.111.0.
+type CodespherePackageConfig struct {
+	Version string `yaml:"version"`
+	Hash    string `yaml:"hash,omitempty"`
+}
+
+// UnmarshalYAML accepts a legacy version string or an explicit version/hash object.
+func (c *CodespherePackageConfig) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind == yaml.ScalarNode && node.Tag == "!!str" {
+		*c = CodespherePackageConfig{Version: node.Value}
+		return nil
+	}
+
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("operations.codesphere must be a version string or an object with version and optional hash")
+	}
+
+	type packageConfig CodespherePackageConfig
+
+	var decoded packageConfig
+	if err := node.Decode(&decoded); err != nil {
+		return fmt.Errorf("decode operations.codesphere: %w", err)
+	}
+
+	*c = CodespherePackageConfig(decoded)
+
+	return nil
+}
+
+// FormatVersionForPortal expands plain releases to the portal tag format and preserves branch names.
+func (c CodespherePackageConfig) FormatVersionForPortal() string {
+	release := "v" + strings.TrimPrefix(c.Version, "v")
+	if semver.IsValid(release) {
+		version := "codesphere-" + release
+		log.Printf("Using portal version %q for Codesphere version %q", version, c.Version)
+
+		return version
+	}
+
+	return c.Version
+}
+
+// SetCodespherePackage updates the package selection without replacing operation skip steps.
+func (c *RootConfig) SetCodespherePackage(version, hash string) {
+	if c.Operations == nil {
+		c.Operations = &OperationsConfig{}
+	}
+
+	c.Operations.Codesphere = CodespherePackageConfig{Version: version, Hash: hash}
+}
+
+// CodespherePackageVersion returns the portal version selected by operations.codesphere.
+// Plain release versions are expanded to the portal's codesphere-v tag format.
+func (c *RootConfig) CodespherePackageVersion() (string, error) {
+	if c.Operations == nil || c.Operations.Codesphere.Version == "" {
+		return "", fmt.Errorf("operations.codesphere is required when no package is specified")
+	}
+
+	return c.Operations.Codesphere.FormatVersionForPortal(), nil
 }
 
 // DatacenterConfig describes one data center. RootConfig.Datacenter is the data center an installer
@@ -166,11 +231,22 @@ type SSLConfig struct {
 }
 
 type CephConfig struct {
-	CsiKubeletDir string     `yaml:"csiKubeletDir,omitempty"`
-	CephAdmSSHKey CephSSHKey `yaml:"cephAdmSshKey"`
-	NodesSubnet   string     `yaml:"nodesSubnet"`
-	Hosts         []CephHost `yaml:"hosts"`
-	OSDs          []CephOSD  `yaml:"osds"`
+	CsiKubeletDir string                `yaml:"csiKubeletDir,omitempty"`
+	CephAdmSSHKey CephSSHKey            `yaml:"cephAdmSshKey"`
+	NodesSubnet   string                `yaml:"nodesSubnet"`
+	Hosts         []CephHost            `yaml:"hosts"`
+	OSDs          []CephOSD             `yaml:"osds"`
+	Volumes       map[string]CephVolume `yaml:"volumes,omitempty"`
+}
+
+// CephVolume is a CephFS volume for workspace storage, named by its key in CephConfig.Volumes.
+type CephVolume struct {
+	MDS CephMDS `yaml:"mds"`
+}
+
+// CephMDS sets how many metadata servers a CephFS volume runs and how many of them are active.
+type CephMDS struct {
+	Active int `yaml:"active"`
 }
 
 type CephSSHKey struct {
@@ -270,10 +346,17 @@ type ACMEDNS01Solver struct {
 }
 
 type GatewayConfig struct {
+	GatewayAPI  *GatewayAPIConfig `yaml:"gatewayApi,omitempty"`
 	ServiceType string            `yaml:"serviceType"`
 	Annotations map[string]string `yaml:"annotations,omitempty"`
 	IPAddresses []string          `yaml:"ipAddresses,omitempty"`
 	Override    ChartOverride     `yaml:"override,omitempty"`
+}
+
+// GatewayAPIConfig switches the gateway to the Gateway API. Use defaults to true when Enabled is set.
+type GatewayAPIConfig struct {
+	Enabled bool  `yaml:"enabled"`
+	Use     *bool `yaml:"use,omitempty"`
 }
 
 type CertManagerConfig struct {
@@ -340,32 +423,94 @@ type MetalLBBGPConfig struct {
 }
 
 type CodesphereConfig struct {
-	Domain                     string                 `yaml:"domain"`
-	WorkspaceHostingBaseDomain string                 `yaml:"workspaceHostingBaseDomain"`
-	PublicIP                   string                 `yaml:"publicIp"`
-	CertIssuer                 *CertIssuerConfig      `yaml:"certIssuer,omitempty"`
-	CustomDomains              CustomDomainsConfig    `yaml:"customDomains"`
-	DNSServers                 []string               `yaml:"dnsServers"`
-	Internal                   []string               `yaml:"internal"`
-	Preview                    map[string]bool        `yaml:"preview"`
-	Features                   map[string]bool        `yaml:"features"`
-	ClusterAdminEmail          string                 `yaml:"clusterAdminEmail,omitempty"`
-	ExtraCAPem                 string                 `yaml:"extraCaPem,omitempty"`
-	ExtraWorkspaceEnvVars      map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
-	ExtraWorkspaceFiles        []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
-	WorkspaceImages            *WorkspaceImagesConfig `yaml:"workspaceImages,omitempty"`
-	DeployConfig               DeployConfig           `yaml:"deployConfig"`
-	Plans                      PlansConfig            `yaml:"plans"`
-	UnderprovisionFactors      *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
-	GitProviders               *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
-	OAuth                      *OAuthProvidersConfig  `yaml:"oauth,omitempty"`
-	ManagedServices            []ManagedServiceConfig `yaml:"managedServices,omitempty"`
-	OpenBao                    *OpenBaoConfig         `yaml:"openBao,omitempty"`
-	OpenfgaBackups             *OpenfgaBackupsConfig  `yaml:"openfgaBackups,omitempty"`
-	OpenFga                    *OpenFgaConfig         `yaml:"openFga,omitempty"`
-	Migration                  *MigrationConfig       `yaml:"migration,omitempty"`
-	TelemetryExport            *TelemetryExport       `yaml:"telemetryExport,omitempty"`
-	Override                   ChartOverride          `yaml:"override,omitempty"`
+	Domain                     string                   `yaml:"domain"`
+	WorkspaceHostingBaseDomain string                   `yaml:"workspaceHostingBaseDomain"`
+	PublicIP                   string                   `yaml:"publicIp"`
+	Branding                   *BrandingConfig          `yaml:"branding,omitempty"`
+	CertIssuer                 *CertIssuerConfig        `yaml:"certIssuer,omitempty"`
+	CustomCertificate          *CustomCertificate       `yaml:"customCertificate,omitempty"`
+	SSHWorkspaceProxy          *SSHWorkspaceProxyConfig `yaml:"sshWorkspaceProxy,omitempty"`
+	VPNLeftPeerID              string                   `yaml:"vpnLeftPeerId,omitempty"`
+	CustomDomains              CustomDomainsConfig      `yaml:"customDomains"`
+	DNSServers                 []string                 `yaml:"dnsServers"`
+	// Deprecated: use Internal.
+	Experiments                   []string               `yaml:"experiments,omitempty"`
+	Internal                      []string               `yaml:"internal"`
+	Preview                       map[string]bool        `yaml:"preview"`
+	Features                      map[string]bool        `yaml:"features"`
+	ClusterAdminEmail             string                 `yaml:"clusterAdminEmail,omitempty"`
+	ExtraCAPem                    string                 `yaml:"extraCaPem,omitempty"`
+	ExtraWorkspaceEnvVars         map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
+	ExtraWorkspaceFiles           []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
+	WorkspaceImages               *WorkspaceImagesConfig `yaml:"workspaceImages,omitempty"`
+	DeployConfig                  DeployConfig           `yaml:"deployConfig"`
+	PrePullImages                 *bool                  `yaml:"prePullImages,omitempty"`
+	IPService                     *IPServiceConfig       `yaml:"ipService,omitempty"`
+	Plans                         PlansConfig            `yaml:"plans"`
+	SignUp                        *SignUpConfig          `yaml:"signUp,omitempty"`
+	Email                         *EmailConfig           `yaml:"email,omitempty"`
+	UnderprovisionFactors         *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
+	GitProviders                  *GitProvidersConfig    `yaml:"gitProviders,omitempty"`
+	OAuth                         *OAuthProvidersConfig  `yaml:"oauth,omitempty"`
+	ManagedServices               []ManagedServiceConfig `yaml:"managedServices,omitempty"`
+	ManagedServiceWorkspacePlanID *int                   `yaml:"managedServiceWorkspacePlanId,omitempty"`
+	OpenBao                       *OpenBaoConfig         `yaml:"openBao,omitempty"`
+	OpenfgaBackups                *OpenfgaBackupsConfig  `yaml:"openfgaBackups,omitempty"`
+	OpenFga                       *OpenFgaConfig         `yaml:"openFga,omitempty"`
+	Migration                     *MigrationConfig       `yaml:"migration,omitempty"`
+	TelemetryExport               *TelemetryExport       `yaml:"telemetryExport,omitempty"`
+	Override                      ChartOverride          `yaml:"override,omitempty"`
+}
+
+// BrandingConfig customizes how the Codesphere UI presents the installation.
+type BrandingConfig struct {
+	Desc        string `yaml:"desc,omitempty"`
+	DocsURL     string `yaml:"docsUrl,omitempty"`
+	FaviconHref string `yaml:"faviconHref,omitempty"`
+	Title       string `yaml:"title,omitempty"`
+	TosURL      string `yaml:"tosUrl,omitempty"`
+}
+
+// CustomCertificate is a PEM certificate and key served instead of an issued one.
+type CustomCertificate struct {
+	Cert string `yaml:"cert"`
+	Key  string `yaml:"key"`
+}
+
+// SSHWorkspaceProxyConfig configures the SSH proxy into workspaces.
+type SSHWorkspaceProxyConfig struct {
+	// BaseDomain defaults to the Codesphere domain.
+	BaseDomain string `yaml:"baseDomain,omitempty"`
+}
+
+// IPServiceConfig selects the load balancer that gives workspace services their IP addresses.
+type IPServiceConfig struct {
+	LoadBalancerKind string   `yaml:"loadBalancerKind"`
+	AddressPools     []string `yaml:"addressPools,omitempty"`
+}
+
+// SignUpConfig restricts who can sign up.
+type SignUpConfig struct {
+	Email *SignUpEmailConfig `yaml:"email,omitempty"`
+}
+
+// SignUpEmailConfig restricts sign-up by email address.
+type SignUpEmailConfig struct {
+	AllowedDomains []string `yaml:"allowedDomains,omitempty"`
+}
+
+// EmailConfig configures how Codesphere sends emails.
+type EmailConfig struct {
+	Provider string     `yaml:"provider"`
+	SMTP     SMTPConfig `yaml:"smtp"`
+}
+
+// SMTPConfig is the SMTP server Codesphere sends emails through. The password comes from the vault.
+type SMTPConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	Secure   bool   `yaml:"secure"`
+	Username string `yaml:"username,omitempty"`
 }
 
 type MigrationConfig struct {
@@ -458,12 +603,21 @@ type CertIssuerConfig struct {
 }
 
 type CustomDomainsConfig struct {
-	CNameBaseDomain string `yaml:"cNameBaseDomain"`
+	CNameBaseDomain                 string                   `yaml:"cNameBaseDomain"`
+	InsecureSkipDomainControlVerify *bool                    `yaml:"insecureSkipDomainControlVerify,omitempty"`
+	Cert                            *CustomDomainsCertConfig `yaml:"cert,omitempty"`
+}
+
+// CustomDomainsCertConfig sets the key algorithm and size of certificates issued for custom domains.
+type CustomDomainsCertConfig struct {
+	Algorithm string `yaml:"algorithm,omitempty"`
+	Size      int    `yaml:"size,omitempty"`
 }
 
 type ExtraWorkspaceFile struct {
-	Path    string `yaml:"path"`
+	Name    string `yaml:"name"`
 	Content string `yaml:"content"`
+	Encoded bool   `yaml:"encoded"`
 }
 
 type WorkspaceImagesConfig struct {
@@ -480,6 +634,7 @@ type DeployConfig struct {
 type ImageConfig struct {
 	Name           string                  `yaml:"name"`
 	SupportedUntil string                  `yaml:"supportedUntil"`
+	Default        *bool                   `yaml:"default,omitempty"`
 	Flavors        map[string]FlavorConfig `yaml:"flavors"`
 }
 
@@ -553,11 +708,12 @@ type PlansConfig struct {
 }
 
 type HostingPlan struct {
-	CPUTenth      int `yaml:"cpuTenth"`
-	GPUParts      int `yaml:"gpuParts"`
-	MemoryMb      int `yaml:"memoryMb"`
-	StorageMb     int `yaml:"storageMb"`
-	TempStorageMb int `yaml:"tempStorageMb"`
+	CPUTenth        int  `yaml:"cpuTenth"`
+	GPUParts        int  `yaml:"gpuParts"`
+	MemoryMb        int  `yaml:"memoryMb"`
+	StorageMb       int  `yaml:"storageMb"`
+	TempStorageMb   int  `yaml:"tempStorageMb"`
+	PooledInstances *int `yaml:"pooledInstances,omitempty"`
 }
 
 type WorkspacePlan struct {
@@ -577,6 +733,14 @@ type GitProvidersConfig struct {
 	GitLab      *GitProviderConfig `yaml:"gitlab,omitempty"`
 	Bitbucket   *GitProviderConfig `yaml:"bitbucket,omitempty"`
 	AzureDevOps *GitProviderConfig `yaml:"azureDevOps,omitempty"`
+	SCMManager  *SCMManagerConfig  `yaml:"scmManager,omitempty"`
+}
+
+// SCMManagerConfig connects an SCM-Manager instance as a git provider.
+type SCMManagerConfig struct {
+	Enabled bool       `yaml:"enabled"`
+	URL     string     `yaml:"url,omitempty"`
+	API     *APIConfig `yaml:"api,omitempty"`
 }
 
 type GitProviderConfig struct {
@@ -601,23 +765,26 @@ type OAuthConfig struct {
 }
 
 type ManagedServiceConfig struct {
-	Name               string                   `yaml:"name"`
-	API                ManagedServiceAPI        `yaml:"api,omitempty"`
-	Author             string                   `yaml:"author,omitempty"`
-	Category           string                   `yaml:"category,omitempty"`
-	ConfigSchema       map[string]interface{}   `yaml:"configSchema,omitempty"`
-	DetailsSchema      map[string]interface{}   `yaml:"detailsSchema,omitempty"`
-	SecretsSchema      map[string]interface{}   `yaml:"secretsSchema,omitempty"`
-	Description        string                   `yaml:"description,omitempty"`
-	DisplayName        string                   `yaml:"displayName,omitempty"`
-	IconURL            string                   `yaml:"iconUrl,omitempty"`
-	ResourceParameters map[string]ResourceParam `yaml:"resourceParameters,omitempty"`
-	Plans              []ServicePlan            `yaml:"plans,omitempty"`
-	SchemaVersion      string                   `yaml:"schemaVersion"`
-}
-
-type ManagedServiceAPI struct {
-	Endpoint string `yaml:"endpoint"`
+	Name               string                    `yaml:"name"`
+	Scope              string                    `yaml:"scope,omitempty"`
+	Author             string                    `yaml:"author,omitempty"`
+	Backups            map[string]interface{}    `yaml:"backups,omitempty"`
+	Capabilities       map[string]interface{}    `yaml:"capabilities,omitempty"`
+	Category           string                    `yaml:"category,omitempty"`
+	ConfigSchema       map[string]interface{}    `yaml:"configSchema,omitempty"`
+	DetailsSchema      map[string]interface{}    `yaml:"detailsSchema,omitempty"`
+	SecretsSchema      map[string]interface{}    `yaml:"secretsSchema,omitempty"`
+	Description        string                    `yaml:"description,omitempty"`
+	DisplayName        string                    `yaml:"displayName,omitempty"`
+	IconURL            string                    `yaml:"iconUrl,omitempty"`
+	Labels             interface{}               `yaml:"labels,omitempty"`
+	ResourceParameters map[string]*ResourceParam `yaml:"resourceParameters,omitempty"`
+	Plans              []ServicePlan             `yaml:"plans,omitempty"`
+	SchemaVersion      string                    `yaml:"schemaVersion"`
+	TeamSingleton      *bool                     `yaml:"teamSingleton,omitempty"`
+	DocumentationURL   string                    `yaml:"documentationUrl,omitempty"`
+	Backend            map[string]interface{}    `yaml:"backend,omitempty"`
+	Versions           map[string]interface{}    `yaml:"versions,omitempty"`
 }
 
 type ServicePlan struct {
@@ -756,6 +923,7 @@ type PgManagedServiceConfig struct {
 }
 
 type S3ManagedServiceConfig struct {
+	Enabled  *bool         `yaml:"enabled,omitempty"`
 	Override ChartOverride `yaml:"override,omitempty"`
 }
 

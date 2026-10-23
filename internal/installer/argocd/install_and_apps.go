@@ -10,9 +10,9 @@ import (
 
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd/pcapps"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -31,16 +31,20 @@ type LogFunc func(format string, args ...interface{})
 
 // WaitForApplicationHealthy waits until Argo CD has compared the requested target revision
 // and reports the Application as healthy and synced.
-func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, name, targetRevision string, logf LogFunc) error {
+func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, name, targetRevision string, timeout time.Duration, logf LogFunc) error {
 	if logf == nil {
 		logf = func(string, ...interface{}) {}
 	}
 
-	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, applicationReadyTimeout)
+	if timeout <= 0 {
+		timeout = applicationReadyTimeout
+	}
+
+	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, timeout)
 
 	lastHealth, lastSync, lastTargetRevision := "", "", ""
 
-	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, applicationReadyTimeout, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		app := &argov1alpha1.Application{}
 		if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: DefaultNamespace}, app); err != nil {
 			if !apierrors.IsNotFound(err) {
@@ -103,44 +107,56 @@ func (i *AppInstaller) InstallArgoCD() error {
 	if i.cfg.Installer == nil {
 		return fmt.Errorf("ArgoCD installer is required")
 	}
+
 	if err := i.cfg.Installer.Install(); err != nil {
 		return fmt.Errorf("failed to install ArgoCD: %w", err)
 	}
+
 	return nil
 }
 
 // SyncVaultSecret refreshes the service account tokens and creates or updates
 // the Codesphere vault secret in Kubernetes.
 func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
-	if err := secrets.EnsureServiceAccountTokens(i.cfg.Vault); err != nil {
-		return fmt.Errorf("failed to ensure service account tokens: %w", err)
-	}
 	creator := vault.NewVaultSecretCreator(i.cfg.KubeClient)
 	if err := creator.CreateSecretFromVault(ctx, i.cfg.Vault, vault.VaultSecretNamespace, vault.VaultSecretName); err != nil {
 		return fmt.Errorf("failed to sync vault secret: %w", err)
 	}
+
 	return nil
 }
 
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config) error {
-	// Values derived from the install config form the base; an explicit pcApps block in
-	// config.yaml wins over them, and the --pc-apps-values files win over both.
-	values := util.DeepMergeMaps(installer.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault), i.cfg.Config.PcApps)
-
 	pcApps, err := installer.NewPcAppsFromBom(
 		i.cfg.KubeClient,
 		bomConfig,
 		DefaultNamespace,
 		i.cfg.PCAppsValues,
-		values,
+		i.getPcAppsValues(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize pc-apps installer: %w", err)
 	}
+
 	if err := pcApps.Install(ctx); err != nil {
 		return fmt.Errorf("failed to install pc-apps: %w", err)
 	}
+
 	return nil
+}
+
+// getPcAppsValues collects the base values for some apps from the config (OpenFGA, Rook) and merges these with
+// explicit pcApps block in the config.yaml.
+// The pcApps block in the config.yaml and --pc-apps-values always win over derived values from the config.yaml.
+// Returns a ChartValues map
+func (i *AppInstaller) getPcAppsValues() files.ChartValues {
+	openFGAppValues := pcapps.OpenFgaPcAppsValues(&i.cfg.Config, i.cfg.Vault)
+	rookCephAppValues := pcapps.RookCephPcAppsValues(&i.cfg.Config)
+
+	values := util.DeepMergeMaps(openFGAppValues, rookCephAppValues)
+	values = util.DeepMergeMaps(values, i.cfg.Config.PcApps)
+
+	return values
 }

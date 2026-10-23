@@ -5,7 +5,9 @@ package codesphere
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"path/filepath"
 	"runtime"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
@@ -13,6 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
 )
@@ -28,11 +31,19 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
 	}
+
+	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {
+		return fmt.Errorf("--local-config-dir is required with --local-components")
+	}
 	effectiveOpts, cfg, cleanup, err := prepareInstallConfig(c.Opts, installer.NewConfig())
 	if err != nil {
 		return err
 	}
 	defer cleanup()
+
+	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
+		return err
+	}
 
 	return installCodespherePlatform(cmd.Context(), effectiveOpts, cfg, c.Env)
 }
@@ -42,26 +53,67 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
 
+	// If the codesphere step is skipped we don't want to update the secret that is the source for ESO.
+	// We use ESO with `refreshPolicy: OnChange` which would result in a long lived drift between source and target secret which might be confusing for debugging and could cause problems if we ever switch the refreshPolicy or trigger a manual sync.
+	if !installer.IsStepSkipped(cfg, opts.SkipSteps, installer.CodesphereStep) {
+		if err := ensureVaultSecret(ctx, opts, cfg); err != nil {
+			return err
+		}
+
+		if err := vault.WriteVaultValuesToConfig(opts.ConfigPath, opts.VaultSecretName, rand.Text()); err != nil {
+			return fmt.Errorf("failed to pass the vault Secret to the chart: %w", err)
+		}
+	}
+
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
+	if opts.LocalComponents {
+		pm = installer.NewPackage(filepath.Dir(opts.Package), opts.Package)
+	}
 	cm := installer.NewConfig()
 	im := system.NewImage(ctx)
 
 	ci := &installer.CodesphereInstaller{
-		ConfigPath:       opts.ConfigPath,
-		VaultPath:        opts.Vault,
-		PrivKey:          opts.PrivKey,
-		Force:            opts.Force,
-		Verbose:          opts.Verbose,
-		SkipSteps:        opts.SkipSteps,
-		AllowedSteps:     installer.PlatformSteps,
-		CodesphereOnly:   true,
-		DirectConnection: opts.DirectConnection,
-		AutoApprove:      opts.AutoApprove,
+		ConfigPath:        opts.ConfigPath,
+		VaultPath:         opts.Vault,
+		PrivKey:           opts.PrivKey,
+		Force:             opts.Force,
+		Verbose:           opts.Verbose,
+		SkipSteps:         opts.SkipSteps,
+		AllowedSteps:      installer.PlatformSteps,
+		CodesphereOnly:    true,
+		DirectConnection:  opts.DirectConnection,
+		AutoApprove:       opts.AutoApprove,
+		LocalComponents:   opts.LocalComponents,
+		LocalConfigDir:    opts.LocalConfigDir,
+		SkipImageBuilding: opts.LocalComponents,
+		Context:           ctx,
 	}
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
+	return nil
+}
+
+// ensureVaultSecret writes the vault Secret even though the dependencies phase already wrote
+// cs-vault: The platform phase can pass another name (via --vault-secret-name), e.g. for dev
+// preview deployments where we have multiple Codesphere installations on one cluster.
+func ensureVaultSecret(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) error {
+	installVault, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to load vault and Kubernetes config: %w", err)
+	}
+
+	kubeClient, err := installer.NewKubeClient(restConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create Kubernetes client: %w", err)
+	}
+
+	creator := vault.NewVaultSecretCreator(kubeClient)
+	if err := creator.CreateSecretFromVault(ctx, installVault, vault.VaultSecretNamespace, opts.VaultSecretName); err != nil {
+		return fmt.Errorf("failed to write vault secret %q: %w", opts.VaultSecretName, err)
+	}
+
 	return nil
 }
 
