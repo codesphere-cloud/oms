@@ -1115,9 +1115,9 @@ License URL: https://github.com/pkg/errors/blob/v0.9.1/LICENSE
  
 ----------
 Module: github.com/pkg/sftp
-Version: v1.13.11
+Version: v1.13.12
 License: BSD-2-Clause
-License URL: https://github.com/pkg/sftp/blob/v1.13.11/LICENSE
+License URL: https://github.com/pkg/sftp/blob/v1.13.12/LICENSE
  
 ----------
 Module: github.com/pmezard/go-difflib/difflib
