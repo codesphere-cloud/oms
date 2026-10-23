@@ -61,32 +61,34 @@ var _ = Describe("Values", func() {
 		values, err := platform.Values(testImages(fullImages()))
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(values).To(Equal(map[string]any{
-			"services": map[string]any{
-				"priorityClass":      "prod-codesphere-deployment",
-				"auth_service":       map[string]any{"image": namePrefix + "auth-service"},
-				"deployment_service": map[string]any{"image": namePrefix + "deployment-service"},
-				"error_page_server":  map[string]any{"image": namePrefix + "error-page-server"},
-				"ide_frontend":       map[string]any{"image": namePrefix + "ide-frontend"},
-				"ide_service":        map[string]any{"image": namePrefix + "ide-service"},
-				"marketplace":        map[string]any{"image": namePrefix + "marketplace"},
-				"payment_service":    map[string]any{"image": namePrefix + "payment-service"},
-				"public_api_service": map[string]any{"image": namePrefix + "public-api-service"},
-				"team_service":       map[string]any{"image": namePrefix + "team-service"},
-				"workspace_proxy":    map[string]any{"image": namePrefix + "workspace-proxy"},
-				"workspace_service":  map[string]any{"image": namePrefix + "workspace-service"},
+		Expect(values).To(Equal(platform.Platform{
+			Services: platform.Services{
+				PriorityClass: "prod-codesphere-deployment",
+				Images: map[string]platform.ServiceImage{
+					"auth_service":       {Image: namePrefix + "auth-service"},
+					"deployment_service": {Image: namePrefix + "deployment-service"},
+					"error_page_server":  {Image: namePrefix + "error-page-server"},
+					"ide_frontend":       {Image: namePrefix + "ide-frontend"},
+					"ide_service":        {Image: namePrefix + "ide-service"},
+					"marketplace":        {Image: namePrefix + "marketplace"},
+					"payment_service":    {Image: namePrefix + "payment-service"},
+					"public_api_service": {Image: namePrefix + "public-api-service"},
+					"team_service":       {Image: namePrefix + "team-service"},
+					"workspace_proxy":    {Image: namePrefix + "workspace-proxy"},
+					"workspace_service":  {Image: namePrefix + "workspace-service"},
+				},
 			},
-			"workspaceRouter": map[string]any{
-				"image":      map[string]any{"name": namePrefix + "nginx", "tag": "1.31.5-alpine-otel"},
-				"haReplicas": 2,
+			WorkspaceRouter: platform.WorkspaceRouter{
+				Image:      platform.Image{Name: namePrefix + "nginx", Tag: "1.31.5-alpine-otel"},
+				HAReplicas: 2,
 			},
-			"workspaceObservability": map[string]any{
-				"openSearchImage":        namePrefix + "opensearch",
-				"openSearchVersion":      "3.8.0",
-				"openSearchInitImage":    namePrefix + "busybox:1.37.0",
-				"migrationKubectlImage":  namePrefix + "kubectl:1.34.0",
-				"otelCollectorImage":     namePrefix + "otel-collector:0.120.0",
-				"otelCollectorInitImage": namePrefix + "curl:8.12.1",
+			WorkspaceObservability: platform.WorkspaceObservability{
+				OpenSearchImage:        namePrefix + "opensearch",
+				OpenSearchVersion:      "3.8.0",
+				OpenSearchInitImage:    namePrefix + "busybox:1.37.0",
+				MigrationKubectlImage:  namePrefix + "kubectl:1.34.0",
+				OtelCollectorImage:     namePrefix + "otel-collector:0.120.0",
+				OtelCollectorInitImage: namePrefix + "curl:8.12.1",
 			},
 		}))
 	})

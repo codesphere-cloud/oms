@@ -31,93 +31,141 @@ var serviceImages = map[string]string{
 	"workspace_service":  "workspace-service",
 }
 
-// Values are the images of the services and platform components, which come from the
-// BOM only.
-func Values(imgs images.Images) (map[string]any, error) {
+// Platform are the images of the services and platform components.
+type Platform struct {
+	Services               Services               `yaml:"services"`
+	WorkspaceRouter        WorkspaceRouter        `yaml:"workspaceRouter"`
+	WorkspaceObservability WorkspaceObservability `yaml:"workspaceObservability"`
+}
+
+// Services are the Codesphere services, keyed as the chart names them.
+type Services struct {
+	PriorityClass string                  `yaml:"priorityClass"`
+	Images        map[string]ServiceImage `yaml:",inline"`
+}
+
+// ServiceImage is a service's image name; the chart adds the release's tag.
+type ServiceImage struct {
+	Image string `yaml:"image"`
+}
+
+// WorkspaceRouter is the workspace router's image and replica count.
+type WorkspaceRouter struct {
+	Image      Image `yaml:"image"`
+	HAReplicas int   `yaml:"haReplicas"`
+}
+
+// Image is an image reference split into name and tag.
+type Image struct {
+	Name string `yaml:"name"`
+	Tag  string `yaml:"tag"`
+}
+
+// WorkspaceObservability are the images of the workspace observability stack.
+type WorkspaceObservability struct {
+	OpenSearchImage        string `yaml:"openSearchImage"`
+	OpenSearchVersion      string `yaml:"openSearchVersion"`
+	OpenSearchInitImage    string `yaml:"openSearchInitImage"`
+	MigrationKubectlImage  string `yaml:"migrationKubectlImage"`
+	OtelCollectorImage     string `yaml:"otelCollectorImage"`
+	OtelCollectorInitImage string `yaml:"otelCollectorInitImage"`
+}
+
+// Values resolves the images of the services and platform components from the BOM.
+func Values(imgs images.Images) (Platform, error) {
 	services, err := servicesValues(imgs)
 	if err != nil {
-		return nil, err
+		return Platform{}, err
 	}
 
 	workspaceRouter, err := workspaceRouterValues(imgs)
 	if err != nil {
-		return nil, err
+		return Platform{}, err
 	}
 
 	workspaceObservability, err := workspaceObservabilityValues(imgs)
 	if err != nil {
-		return nil, err
+		return Platform{}, err
 	}
 
-	return map[string]any{
-		"services":               services,
-		"workspaceRouter":        workspaceRouter,
-		"workspaceObservability": workspaceObservability,
+	return Platform{
+		Services:               services,
+		WorkspaceRouter:        workspaceRouter,
+		WorkspaceObservability: workspaceObservability,
 	}, nil
 }
 
-func servicesValues(imgs images.Images) (map[string]any, error) {
-	services := map[string]any{"priorityClass": PriorityClass}
+func servicesValues(imgs images.Images) (Services, error) {
+	serviceImageNames := make(map[string]ServiceImage, len(serviceImages))
 
 	for service, imageName := range serviceImages {
 		image, err := imgs.Name(imageName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to resolve the %s image: %w", service, err)
+			return Services{}, fmt.Errorf("failed to resolve the %s image: %w", service, err)
 		}
 
-		services[service] = map[string]any{"image": image}
+		serviceImageNames[service] = ServiceImage{Image: image}
 	}
 
-	return services, nil
+	return Services{PriorityClass: PriorityClass, Images: serviceImageNames}, nil
 }
 
-func workspaceRouterValues(imgs images.Images) (map[string]any, error) {
-	image, err := imgs.Name("nginx")
+func workspaceRouterValues(imgs images.Images) (WorkspaceRouter, error) {
+	image, err := nameAndTag(imgs, "nginx", "workspace router")
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve the workspace router image: %w", err)
+		return WorkspaceRouter{}, err
 	}
 
-	tag, err := imgs.Tag("nginx")
+	return WorkspaceRouter{Image: image, HAReplicas: workspaceRouterHAReplicas}, nil
+}
+
+func workspaceObservabilityValues(imgs images.Images) (WorkspaceObservability, error) {
+	openSearch, err := nameAndTag(imgs, "opensearch", "OpenSearch")
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve the workspace router image: %w", err)
+		return WorkspaceObservability{}, err
 	}
 
-	return map[string]any{
-		"image":      map[string]any{"name": image, "tag": tag},
-		"haReplicas": workspaceRouterHAReplicas,
+	openSearchInit, err := imgs.Reference("opensearchInit")
+	if err != nil {
+		return WorkspaceObservability{}, fmt.Errorf("failed to resolve the OpenSearch init image: %w", err)
+	}
+
+	kubectl, err := imgs.Reference("kubectl")
+	if err != nil {
+		return WorkspaceObservability{}, fmt.Errorf("failed to resolve the migration kubectl image: %w", err)
+	}
+
+	otelCollector, err := imgs.Reference("observabilityOtel")
+	if err != nil {
+		return WorkspaceObservability{}, fmt.Errorf("failed to resolve the OTel collector image: %w", err)
+	}
+
+	otelCollectorInit, err := imgs.Reference("observabilityOtelInit")
+	if err != nil {
+		return WorkspaceObservability{}, fmt.Errorf("failed to resolve the OTel collector init image: %w", err)
+	}
+
+	return WorkspaceObservability{
+		OpenSearchImage:        openSearch.Name,
+		OpenSearchVersion:      openSearch.Tag,
+		OpenSearchInitImage:    openSearchInit,
+		MigrationKubectlImage:  kubectl,
+		OtelCollectorImage:     otelCollector,
+		OtelCollectorInitImage: otelCollectorInit,
 	}, nil
 }
 
-func workspaceObservabilityValues(imgs images.Images) (map[string]any, error) {
-	openSearchImage, err := imgs.Name("opensearch")
+// nameAndTag resolves an image the chart takes as separate name and tag; purpose names it in errors.
+func nameAndTag(imgs images.Images, name, purpose string) (Image, error) {
+	image, err := imgs.Name(name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve the OpenSearch image: %w", err)
+		return Image{}, fmt.Errorf("failed to resolve the %s image: %w", purpose, err)
 	}
 
-	openSearchVersion, err := imgs.Tag("opensearch")
+	tag, err := imgs.Tag(name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve the OpenSearch image: %w", err)
+		return Image{}, fmt.Errorf("failed to resolve the %s image: %w", purpose, err)
 	}
 
-	values := map[string]any{
-		"openSearchImage":   openSearchImage,
-		"openSearchVersion": openSearchVersion,
-	}
-
-	plain := map[string]string{
-		"migrationKubectlImage":  "kubectl",
-		"openSearchInitImage":    "opensearchInit",
-		"otelCollectorImage":     "observabilityOtel",
-		"otelCollectorInitImage": "observabilityOtelInit",
-	}
-	for key, imageName := range plain {
-		image, err := imgs.Reference(imageName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve the %s image: %w", key, err)
-		}
-
-		values[key] = image
-	}
-
-	return values, nil
+	return Image{Name: image, Tag: tag}, nil
 }
