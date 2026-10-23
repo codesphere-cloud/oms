@@ -20,14 +20,12 @@ var _ = Describe("Values", func() {
 		values, err := ceph.Values(oneVolume /* workspacePVCStorage */, false)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(values).To(Equal(map[string]any{
-			"ceph": map[string]any{
-				"credentialsSecretName":     "ceph-admin-credentials",
-				"storageClass":              "codesphere",
-				"monEndpointsConfigMapName": "ceph-mon-endpoints",
-				"mdsNamespace":              "shared",
-				"activeMds":                 "3",
-			},
+		Expect(values).To(Equal(ceph.Ceph{
+			CredentialsSecretName:     "ceph-admin-credentials",
+			StorageClass:              "codesphere",
+			MonEndpointsConfigMapName: "ceph-mon-endpoints",
+			MDSNamespace:              "shared",
+			ActiveMDS:                 "3",
 		}))
 	})
 
@@ -35,29 +33,25 @@ var _ = Describe("Values", func() {
 		values, err := ceph.Values(oneVolume /* workspacePVCStorage */, true)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(values).To(Equal(map[string]any{
-			"ceph": map[string]any{
-				"credentialsSecretName":     "ceph-admin-credentials",
-				"storageClass":              "codesphere",
-				"monEndpointsConfigMapName": "ceph-mon-endpoints",
-				"mdsNamespace":              "",
-				"activeMds":                 "0",
-			},
+		Expect(values).To(Equal(ceph.Ceph{
+			CredentialsSecretName:     "ceph-admin-credentials",
+			StorageClass:              "codesphere",
+			MonEndpointsConfigMapName: "ceph-mon-endpoints",
+			MDSNamespace:              "",
+			ActiveMDS:                 "0",
 		}))
 	})
 
 	It("no volumes without PVC storage -> default MDS namespace and active MDS count", func() {
-		values, err := ceph.Values(files.CephConfig{}, /* workspacePVCStorage */ false)
+		values, err := ceph.Values(files.CephConfig{} /* workspacePVCStorage */, false)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(values).To(Equal(map[string]any{
-			"ceph": map[string]any{
-				"credentialsSecretName":     "ceph-admin-credentials",
-				"storageClass":              "codesphere",
-				"monEndpointsConfigMapName": "ceph-mon-endpoints",
-				"mdsNamespace":              "codesphere",
-				"activeMds":                 "7",
-			},
+		Expect(values).To(Equal(ceph.Ceph{
+			CredentialsSecretName:     "ceph-admin-credentials",
+			StorageClass:              "codesphere",
+			MonEndpointsConfigMapName: "ceph-mon-endpoints",
+			MDSNamespace:              "codesphere",
+			ActiveMDS:                 "7",
 		}))
 	})
 
