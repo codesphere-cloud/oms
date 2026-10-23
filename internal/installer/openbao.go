@@ -184,11 +184,7 @@ func (o *OpenBaoBootstrapper) restore() error {
 		if err := o.ensureNamespace(); err != nil {
 			return err
 		}
-		secretsClient := o.Clientset.CoreV1().Secrets(o.Config.Namespace)
-		if err := o.checkNoForeignUnsealKeys(secretsClient); err != nil {
-			return err
-		}
-		return o.ensureUnsealSecret(secretsClient)
+		return o.ensureUnsealSecret(o.Clientset.CoreV1().Secrets(o.Config.Namespace))
 	})
 	if err != nil {
 		return fmt.Errorf("failed to seed unseal keys: %w", err)
@@ -349,28 +345,14 @@ func (o *OpenBaoBootstrapper) WaitForInitialization() error {
 	})
 }
 
-// checkNoForeignUnsealKeys refuses to restore over an initialized instance:
-// replacing its keys would make its Raft data unsealable after the next restart.
-func (o *OpenBaoBootstrapper) checkNoForeignUnsealKeys(secretsClient corev1client.SecretInterface) error {
-	existing, err := secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return nil
-		}
-		return fmt.Errorf("checking unseal secret: %w", err)
-	}
-	if len(existing.Data) > 0 && !unsealKeysEqual(existing.Data, o.backupUnsealKeys) {
-		return fmt.Errorf("secret %s/%s already holds unseal keys that differ from the DR backup: refusing to overwrite an initialized instance", o.Config.Namespace, openBaoUnsealSecretName)
-	}
-	return nil
-}
-
 func unsealKeysEqual(a, b map[string][]byte) bool {
 	return maps.EqualFunc(a, b, bytes.Equal)
 }
 
 // ensureUnsealSecret creates or updates the unseal keys secret from the DR backup.
-// It preserves existing metadata (labels, annotations, ownerReferences) when updating.
+// It preserves existing metadata (labels, annotations, ownerReferences) when updating
+// and refuses to replace differing keys: that would make the Raft data of an
+// initialized instance unsealable after the next restart.
 func (o *OpenBaoBootstrapper) ensureUnsealSecret(secretsClient corev1client.SecretInterface) error {
 	existing, err := secretsClient.Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
 	if err != nil {
@@ -399,6 +381,10 @@ func (o *OpenBaoBootstrapper) ensureUnsealSecret(secretsClient corev1client.Secr
 		if err != nil {
 			return fmt.Errorf("re-fetching unseal secret after create conflict: %w", err)
 		}
+	}
+
+	if len(existing.Data) > 0 && !unsealKeysEqual(existing.Data, o.backupUnsealKeys) {
+		return fmt.Errorf("secret %s/%s already holds unseal keys that differ from the DR backup: refusing to overwrite an initialized instance", o.Config.Namespace, openBaoUnsealSecretName)
 	}
 
 	// Update existing secret — preserve metadata, only set Data
@@ -503,8 +489,24 @@ func (o *OpenBaoBootstrapper) ExtractAndEncrypt() error {
 		return fmt.Errorf("closing temp backup file: %w", err)
 	}
 
-	if err := sops.EncryptFile(tmpPath, o.Config.DRBackupPath, o.Config.AgeRecipient); err != nil {
+	// sops derives the output format from the extension, so keep the target's.
+	encFile, err := os.CreateTemp(dir, "openbao-dr-*.enc"+filepath.Ext(o.Config.DRBackupPath))
+	if err != nil {
+		return fmt.Errorf("creating temp encrypted backup file: %w", err)
+	}
+	encPath := encFile.Name()
+	defer func() { _ = os.Remove(encPath) }()
+	if err := encFile.Close(); err != nil {
+		return fmt.Errorf("closing temp encrypted backup file: %w", err)
+	}
+
+	if err := sops.EncryptFile(tmpPath, encPath, o.Config.AgeRecipient); err != nil {
 		return fmt.Errorf("encrypting DR backup: %w", err)
+	}
+
+	// Link fails if the target exists, so a backup created during the waits is never replaced.
+	if err := os.Link(encPath, o.Config.DRBackupPath); err != nil {
+		return fmt.Errorf("saving DR backup to %s: %w", o.Config.DRBackupPath, err)
 	}
 
 	o.Logger.Logf("DR backup encrypted and saved to: %s", o.Config.DRBackupPath)

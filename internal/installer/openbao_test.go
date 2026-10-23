@@ -25,6 +25,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 var _ = Describe("OpenBaoBootstrapper", func() {
@@ -150,15 +151,31 @@ var _ = Describe("OpenBaoBootstrapper", func() {
 		It("refuses to overwrite unseal keys that differ from the backup", func() {
 			createSecret(map[string][]byte{"vault-unseal-0": []byte("live-key")})
 
-			err := newBootstrapper().CheckNoForeignUnsealKeys()
+			err := newBootstrapper().EnsureUnsealSecret()
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("refusing to overwrite"))
 		})
 
-		It("allows an empty secret or one already holding the backup keys", func() {
-			Expect(newBootstrapper().CheckNoForeignUnsealKeys()).To(Succeed())
-			createSecret(map[string][]byte{"vault-unseal-0": []byte("backup-key")})
-			Expect(newBootstrapper().CheckNoForeignUnsealKeys()).To(Succeed())
+		It("refuses to overwrite keys written after the create conflict", func() {
+			// Simulates bank-vaults creating the secret between the Get and Create.
+			raced := false
+			clientset.PrependReactor("create", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
+				if !raced {
+					raced = true
+					createSecret(map[string][]byte{"vault-unseal-0": []byte("live-key")})
+				}
+				return false, nil, nil
+			})
+
+			err := newBootstrapper().EnsureUnsealSecret()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("refusing to overwrite"))
+		})
+
+		It("seeds an empty secret or one already holding the backup keys", func() {
+			createSecret(nil)
+			Expect(newBootstrapper().EnsureUnsealSecret()).To(Succeed())
+			Expect(newBootstrapper().EnsureUnsealSecret()).To(Succeed())
 		})
 
 		It("fails initialization when bank-vaults wrote different keys", func() {
@@ -642,6 +659,33 @@ var _ = Describe("OpenBaoBootstrapper", func() {
 			Expect(ok).To(BeTrue())
 			Expect(unsealKeys).To(HaveKey("vault-unseal-0"))
 			Expect(unsealKeys["vault-unseal-0"]).To(Equal("test-unseal-key-0"))
+		})
+
+		It("never replaces a backup created in the meantime", func() {
+			if !sopsAndAgeAvailable() {
+				Skip("sops/age not available")
+			}
+			keyFile := filepath.Join(tmpDir, "age_key.txt")
+			out, err := exec.Command("age-keygen", "-o", keyFile).CombinedOutput()
+			Expect(err).ToNot(HaveOccurred(), string(out))
+
+			backupPath := filepath.Join(tmpDir, "backup.enc.json")
+			Expect(os.WriteFile(backupPath, []byte("other"), 0o600)).To(Succeed())
+
+			b := &installer.OpenBaoBootstrapper{
+				Logger: bootstrap.NewStepLogger(true),
+				Config: installer.OpenBaoBootstrapConfig{
+					DRBackupPath: backupPath,
+					AgeRecipient: extractAgeRecipient(string(out)),
+				},
+			}
+			b.SetUnsealSecret(&corev1.Secret{Data: map[string][]byte{"vault-unseal-0": []byte("key")}})
+
+			Expect(b.ExtractAndEncrypt()).ToNot(Succeed())
+			Expect(os.ReadFile(backupPath)).To(Equal([]byte("other")))
+			entries, err := os.ReadDir(tmpDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(2))
 		})
 	})
 
