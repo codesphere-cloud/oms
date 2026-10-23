@@ -372,8 +372,11 @@ type RookExternalClusterConfig struct {
 }
 
 type PgOperatorConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Override ChartOverride `yaml:"override,omitempty"`
+	Enabled bool `yaml:"enabled"`
+	// ManagedExternally marks a disabled operator as installed by something other than the
+	// PC installer, such as bootstrap-local, so its CRDs exist even though Enabled is false.
+	ManagedExternally bool          `yaml:"managedExternally,omitempty"`
+	Override          ChartOverride `yaml:"override,omitempty"`
 }
 
 type BarmanCloudPluginConfig struct {
