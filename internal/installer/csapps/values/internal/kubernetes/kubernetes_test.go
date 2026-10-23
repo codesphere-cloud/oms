@@ -25,4 +25,29 @@ var _ = Describe("Values", func() {
 			},
 		}))
 	})
+
+	It("external Kubernetes with CIDRs -> configured subnets", func() {
+		values := kubernetes.Values(files.KubernetesConfig{
+			PodCIDR:     "10.0.0.0/16",
+			ServiceCIDR: "10.1.0.0/16",
+		})
+
+		Expect(values).To(Equal(map[string]any{
+			"networkPolicies": map[string]any{
+				"workspace": map[string]any{
+					"namespace":     "workspaces",
+					"podSubnet":     "10.0.0.0/16",
+					"serviceSubnet": "10.1.0.0/16",
+				},
+			},
+		}))
+	})
+
+	It("external Kubernetes without CIDRs -> no default subnets", func() {
+		values := kubernetes.Values(files.KubernetesConfig{})
+
+		workspace := values["networkPolicies"].(map[string]any)["workspace"].(map[string]any)
+		Expect(workspace["podSubnet"]).To(BeEmpty())
+		Expect(workspace["serviceSubnet"]).To(BeEmpty())
+	})
 })
