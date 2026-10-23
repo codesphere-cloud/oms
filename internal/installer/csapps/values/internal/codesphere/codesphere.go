@@ -15,32 +15,37 @@ import (
 // Codesphere are the values of the codesphere key, from the config with the installer's defaults.
 // The optional ones are left out when the config has none, so the chart's defaults apply.
 type Codesphere struct {
-	PublicIP                   string            `yaml:"publicIP"`
-	CertIssuer                 CertIssuer        `yaml:"certIssuer"`
-	WorkspaceHostingBaseDomain string            `yaml:"workspaceHostingBaseDomain"`
-	SSHWorkspaceProxy          SSHWorkspaceProxy `yaml:"sshWorkspaceProxy"`
-	VPN                        VPN               `yaml:"vpn"`
-	DNSServers                 []string          `yaml:"dnsServers"`
-	Hosts                      []string          `yaml:"hosts"`
-	PrePullImages              bool              `yaml:"prePullImages"`
-	GitProviders               GitProviders      `yaml:"gitProviders"`
-	Experiments                Flags             `yaml:"experiments"`
-	Features                   Flags             `yaml:"features"`
-	CustomDomains              CustomDomains     `yaml:"customDomains"`
-	OAuth                      OAuth             `yaml:"oauth"`
-	SignUp                     SignUp            `yaml:"signUp"`
-	DeployConfig               DeployConfig      `yaml:"deployConfig"`
-	WorkspaceImages            WorkspaceImages   `yaml:"workspaceImages"`
-	FrontendGateway            FrontendGateway   `yaml:"frontendGateway"`
+	PublicIP                      string            `yaml:"publicIP"`
+	CertIssuer                    CertIssuer        `yaml:"certIssuer"`
+	WorkspaceHostingBaseDomain    string            `yaml:"workspaceHostingBaseDomain"`
+	SSHWorkspaceProxy             SSHWorkspaceProxy `yaml:"sshWorkspaceProxy"`
+	VPN                           VPN               `yaml:"vpn"`
+	DNSServers                    []string          `yaml:"dnsServers"`
+	Hosts                         []string          `yaml:"hosts"`
+	PrePullImages                 bool              `yaml:"prePullImages"`
+	GitProviders                  GitProviders      `yaml:"gitProviders"`
+	Experiments                   Flags             `yaml:"experiments"`
+	Features                      Flags             `yaml:"features"`
+	CustomDomains                 CustomDomains     `yaml:"customDomains"`
+	OAuth                         OAuth             `yaml:"oauth"`
+	SignUp                        SignUp            `yaml:"signUp"`
+	ManagedServiceWorkspacePlanID int               `yaml:"managedServiceWorkspacePlanId"`
+	Otel                          Otel              `yaml:"otel"`
+	DeployConfig                  DeployConfig      `yaml:"deployConfig"`
+	WorkspaceImages               WorkspaceImages   `yaml:"workspaceImages"`
+	FrontendGateway               FrontendGateway   `yaml:"frontendGateway"`
 
-	IPService             *IPService             `yaml:"ipService,omitempty"`
-	Branding              *Branding              `yaml:"branding,omitempty"`
-	TLSCertificate        *TLSCertificate        `yaml:"tlsCertificate,omitempty"`
-	UnderprovisionFactors *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
-	ExtraWorkspaceFiles   []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
-	SMTP                  *SMTP                  `yaml:"smtp,omitempty"`
-	ExtraCAPem            string                 `yaml:"extraCaPem,omitempty"`
-	ExtraWorkspaceEnvVars map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
+	IPService             *IPService                   `yaml:"ipService,omitempty"`
+	ManagedServices       []files.ManagedServiceConfig `yaml:"managedServices,omitempty"`
+	Branding              *Branding                    `yaml:"branding,omitempty"`
+	TLSCertificate        *TLSCertificate              `yaml:"tlsCertificate,omitempty"`
+	UnderprovisionFactors *UnderprovisionFactors       `yaml:"underprovisionFactors,omitempty"`
+	ExtraWorkspaceFiles   []ExtraWorkspaceFile         `yaml:"extraWorkspaceFiles,omitempty"`
+	SMTP                  *SMTP                        `yaml:"smtp,omitempty"`
+	OpenBao               *OpenBao                     `yaml:"openBao,omitempty"`
+	OpenFGA               *OpenFGA                     `yaml:"openFga,omitempty"`
+	ExtraCAPem            string                       `yaml:"extraCaPem,omitempty"`
+	ExtraWorkspaceEnvVars map[string]string            `yaml:"extraWorkspaceEnvVars,omitempty"`
 }
 
 // SSHWorkspaceProxy is the ssh proxy's jump host domain.
@@ -85,6 +90,10 @@ func Values(
 		return Codesphere{}, err
 	}
 
+	if err := validateTelemetryExport(conf.TelemetryExport); err != nil {
+		return Codesphere{}, err
+	}
+
 	deployConfig, err := deployConfigValues(conf, registry, imgs)
 	if err != nil {
 		return Codesphere{}, err
@@ -105,32 +114,42 @@ func Values(
 		return Codesphere{}, err
 	}
 
+	managedServices, err := managedServicesValues(conf.ManagedServices)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
 	return Codesphere{
-		PublicIP:                   conf.PublicIP,
-		CertIssuer:                 certIssuerValues(conf.CertIssuer),
-		WorkspaceHostingBaseDomain: conf.WorkspaceHostingBaseDomain,
-		SSHWorkspaceProxy:          SSHWorkspaceProxy{BaseDomain: sshBaseDomain(conf.SSHWorkspaceProxy)},
-		VPN:                        VPN{LeftPeerID: conf.VPNLeftPeerID},
-		DNSServers:                 dnsServers(conf.DNSServers),
-		Hosts:                      []string{conf.Domain},
-		PrePullImages:              ptr.Deref(conf.PrePullImages, true),
-		GitProviders:               gitProvidersValues(conf.GitProviders),
-		Experiments:                experimentsValues(conf, gateways.Workspaces.Enabled),
-		Features:                   featuresValues(conf.Features),
-		CustomDomains:              customDomainsValues(conf.CustomDomains, gateways.Workspaces.Use),
-		OAuth:                      oauthValues(conf.OAuth),
-		SignUp:                     signUpValues(conf.SignUp),
-		DeployConfig:               deployConfig,
-		WorkspaceImages:            workspaceImages,
-		FrontendGateway:            frontendGateway,
-		IPService:                  ipService,
-		Branding:                   brandingValues(conf.Branding),
-		TLSCertificate:             tlsCertificateValues(conf.CustomCertificate),
-		UnderprovisionFactors:      underprovisionFactorsValues(conf.UnderprovisionFactors),
-		ExtraWorkspaceFiles:        extraWorkspaceFilesValues(conf.ExtraWorkspaceFiles),
-		SMTP:                       smtpValues(conf.Email),
-		ExtraCAPem:                 conf.ExtraCAPem,
-		ExtraWorkspaceEnvVars:      conf.ExtraWorkspaceEnvVars,
+		PublicIP:                      conf.PublicIP,
+		CertIssuer:                    certIssuerValues(conf.CertIssuer),
+		WorkspaceHostingBaseDomain:    conf.WorkspaceHostingBaseDomain,
+		SSHWorkspaceProxy:             SSHWorkspaceProxy{BaseDomain: sshBaseDomain(conf.SSHWorkspaceProxy)},
+		VPN:                           VPN{LeftPeerID: conf.VPNLeftPeerID},
+		DNSServers:                    dnsServers(conf.DNSServers),
+		Hosts:                         []string{conf.Domain},
+		PrePullImages:                 ptr.Deref(conf.PrePullImages, true),
+		GitProviders:                  gitProvidersValues(conf.GitProviders),
+		Experiments:                   experimentsValues(conf, gateways.Workspaces.Enabled),
+		Features:                      featuresValues(conf.Features),
+		CustomDomains:                 customDomainsValues(conf.CustomDomains, gateways.Workspaces.Use),
+		OAuth:                         oauthValues(conf.OAuth),
+		SignUp:                        signUpValues(conf.SignUp),
+		ManagedServiceWorkspacePlanID: ptr.Deref(conf.ManagedServiceWorkspacePlanID, defaultManagedServicePlanID),
+		Otel:                          otelValues(conf.TelemetryExport),
+		DeployConfig:                  deployConfig,
+		WorkspaceImages:               workspaceImages,
+		FrontendGateway:               frontendGateway,
+		IPService:                     ipService,
+		ManagedServices:               managedServices,
+		Branding:                      brandingValues(conf.Branding),
+		TLSCertificate:                tlsCertificateValues(conf.CustomCertificate),
+		UnderprovisionFactors:         underprovisionFactorsValues(conf.UnderprovisionFactors),
+		ExtraWorkspaceFiles:           extraWorkspaceFilesValues(conf.ExtraWorkspaceFiles),
+		SMTP:                          smtpValues(conf.Email),
+		OpenBao:                       openBaoValues(conf.OpenBao),
+		OpenFGA:                       openFgaValues(conf.OpenFga),
+		ExtraCAPem:                    conf.ExtraCAPem,
+		ExtraWorkspaceEnvVars:         conf.ExtraWorkspaceEnvVars,
 	}, nil
 }
 
