@@ -271,12 +271,6 @@ type RegistryConfig struct {
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
 }
 
-// Values of PostgresConfig.Mode: Postgres installed by OMS, or an external server.
-const (
-	PostgresModeInstall  = "install"
-	PostgresModeExternal = "external"
-)
-
 // PostgresPort is the port the Postgres installed by OMS listens on.
 const PostgresPort = 5432
 
