@@ -10,10 +10,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-const (
-	codesphereDatabase   = "codesphere"
-	internalPostgresPort = 5432
-)
+const codesphereDatabase = "codesphere"
 
 // Postgres is the connection to the Codesphere database.
 type Postgres struct {
@@ -41,7 +38,7 @@ func Values(postgres files.PostgresConfig) Postgres {
 
 	if postgres.Mode == files.PostgresModeInstall {
 		values.Host = postgres.Primary.IP
-		values.Port = internalPostgresPort
+		values.Port = files.PostgresPort
 		values.SSL.ServerName = postgres.Primary.Hostname
 
 		return values

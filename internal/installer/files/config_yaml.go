@@ -209,6 +209,9 @@ const (
 	PostgresModeExternal = "external"
 )
 
+// PostgresPort is the port the Postgres installed by OMS listens on.
+const PostgresPort = 5432
+
 type PostgresConfig struct {
 	Mode          string                 `yaml:"mode,omitempty"`
 	CACertPem     string                 `yaml:"caCertPem,omitempty"`
