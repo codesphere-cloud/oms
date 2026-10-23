@@ -347,6 +347,12 @@ type CephDBDevices struct {
 	Limit int    `yaml:"limit,omitempty"`
 }
 
+// CIDRs of a Codesphere-managed cluster when the config leaves them empty.
+const (
+	DefaultKubernetesPodCIDR     = "100.96.0.0/11"
+	DefaultKubernetesServiceCIDR = "100.64.0.0/13"
+)
+
 type KubernetesConfig struct {
 	ManagedByCodesphere bool      `yaml:"managedByCodesphere"`
 	APIServerHost       string    `yaml:"apiServerHost,omitempty"`
