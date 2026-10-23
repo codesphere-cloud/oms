@@ -16,7 +16,7 @@ var _ = Describe("Build", func() {
 	It("minimal config -> installer defaults", func() {
 		values := build(testConfig(""), testBOM(nil))
 
-		Expect(at(values, "global.dnsServers")).To(Equal([]string{"8.8.8.8"}))
+		Expect(at(values, "global.dnsServers")).To(Equal([]any{"8.8.8.8"}))
 		Expect(at(values, "global.prePullImages")).To(BeTrue())
 		Expect(at(values, "global.managedServiceWorkspacePlanId")).To(Equal(20))
 		Expect(at(values, "global.ceph.mdsNamespace")).To(Equal("codesphere"))

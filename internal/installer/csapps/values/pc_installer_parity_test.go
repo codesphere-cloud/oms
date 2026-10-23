@@ -105,7 +105,7 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 			"redirectToIde": true,
 			"gatewayApi":    map[string]any{"enabled": true},
 		}))
-		Expect(values["hosts"]).To(Equal([]string{"cs.internal"}))
+		Expect(values["hosts"]).To(Equal([]any{"cs.internal"}))
 		Expect(values["customDomains"]).To(Equal(map[string]any{
 			"cNameBaseDomain": "ws.example.com",
 			"gatewayApi":      map[string]any{"useGateway": false},
@@ -149,7 +149,7 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 		Expect(values["ceph"]).To(HaveKeyWithValue("storageClass", "codesphere"))
 		Expect(values["ceph"]).To(HaveKeyWithValue("activeMds", "0"))
 		Expect(values["experiments"]).To(
-			HaveKeyWithValue("workspace-pvc-storage", []string{"prod"}),
+			HaveKeyWithValue("workspace-pvc-storage", []any{"prod"}),
 		)
 	})
 
@@ -174,9 +174,9 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 
 		Expect(values["dataCenterId"]).To(Equal(1))
 		Expect(values["defaultDataCenterId"]).To(Equal(1))
-		Expect(values["availableDataCenters"]).To(Equal([]int{1}))
-		Expect(values["dataCenters"]).To(Equal([]map[string]any{
-			{"id": 1, "name": "test", "city": "KA", "countryCode": "None"},
+		Expect(values["availableDataCenters"]).To(Equal([]any{1}))
+		Expect(values["dataCenters"]).To(Equal([]any{
+			map[string]any{"id": 1, "name": "test", "city": "KA", "countryCode": "None"},
 		}))
 	})
 
@@ -191,10 +191,10 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 		// The target data center, the other one is remote.
 		Expect(values["dataCenterId"]).To(Equal(1))
 		Expect(values["defaultDataCenterId"]).To(Equal(2))
-		Expect(values["availableDataCenters"]).To(Equal([]int{1, 2}))
-		Expect(values["dataCenters"]).To(Equal([]map[string]any{
-			{"id": 1, "name": "test", "city": "KA", "countryCode": "None"},
-			{"id": 2, "name": "test-dc2", "city": "FRA", "countryCode": "DE"},
+		Expect(values["availableDataCenters"]).To(Equal([]any{1, 2}))
+		Expect(values["dataCenters"]).To(Equal([]any{
+			map[string]any{"id": 1, "name": "test", "city": "KA", "countryCode": "None"},
+			map[string]any{"id": 2, "name": "test-dc2", "city": "FRA", "countryCode": "DE"},
 		}))
 	})
 
@@ -352,7 +352,7 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 					"type":      "oidc",
 					"name":      "fooIdp",
 					"issuerUrl": "http://idp.example.com",
-					"scopes":    []string{"abc"},
+					"scopes":    []any{"abc"},
 				},
 			},
 		}))
@@ -366,7 +366,7 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 
 		Expect(values["ipService"]).To(Equal(map[string]any{
 			"loadBalancerKind": "metallb",
-			"addressPools":     []string{"foo", "bar"},
+			"addressPools":     []any{"foo", "bar"},
 		}))
 	})
 
@@ -420,11 +420,11 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["experiments"]).To(Equal(map[string]any{
-			"foo":             []string{"prod"},
-			"bar":             []string{"prod"},
-			"hermetic":        []string{"prod"},
-			"persistent-nix":  []string{"prod"},
-			"gateway-domains": []string{"prod"},
+			"foo":             []any{"prod"},
+			"bar":             []any{"prod"},
+			"hermetic":        []any{"prod"},
+			"persistent-nix":  []any{"prod"},
+			"gateway-domains": []any{"prod"},
 		}))
 	})
 
@@ -433,12 +433,12 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["features"]).To(Equal(map[string]any{
-			"email-signup":     []string{"prod"},
-			"email-signin":     []string{"prod"},
-			"standalone-teams": []string{"prod"},
-			"billing":          []string{},
-			"foo":              []string{"prod"},
-			"bar":              []string{"prod"},
+			"email-signup":     []any{"prod"},
+			"email-signin":     []any{"prod"},
+			"standalone-teams": []any{"prod"},
+			"billing":          []any{},
+			"foo":              []any{"prod"},
+			"bar":              []any{"prod"},
 		}))
 	})
 
@@ -519,7 +519,7 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	It("hermetic is enabled by default", func() {
 		values := global(build(installerConfig(""), installerBOM(nil)))
 
-		Expect(values["experiments"]).To(HaveKeyWithValue("hermetic", []string{"prod"}))
+		Expect(values["experiments"]).To(HaveKeyWithValue("hermetic", []any{"prod"}))
 	})
 
 	It("override experiments -> success", func() {
@@ -600,7 +600,7 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 			  publicGateway: {gatewayApi: {enabled: true, use: false}}
 		`), installerBOM(nil)))
 
-		Expect(values["experiments"]).To(HaveKeyWithValue("gateway-domains", []string{"prod"}))
+		Expect(values["experiments"]).To(HaveKeyWithValue("gateway-domains", []any{"prod"}))
 	})
 
 	// The installer checks the rendered Issuer's solver, which the chart picks from this value.
