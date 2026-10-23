@@ -14,8 +14,13 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 )
 
-// Images are the codesphere component's images from the BOM, by name. Each image is a reference,
-// split by OCI and by distribution/reference into these parts:
+// Images are the codesphere component's container images from the BOM. The key is the
+// image's name in the BOM, the value its full reference:
+//
+//	"auth-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/auth-service:v1.111.0"
+//
+// Reference, Name and Tag return the reference or one of its parts, named as OCI and
+// distribution/reference name them:
 //
 //	                       6
 //	┌──────────────────────┴──────────────────────┐
@@ -45,8 +50,8 @@ func New(b *bom.Config) (Images, error) {
 }
 
 // Reference returns the named image's reference as the BOM has it.
-func (b Images) Reference(name string) (string, error) {
-	image, ok := b[name]
+func (images Images) Reference(name string) (string, error) {
+	image, ok := images[name]
 	if !ok || image == "" {
 		return "", fmt.Errorf("image %s not found in BOM", name)
 	}
@@ -55,8 +60,8 @@ func (b Images) Reference(name string) (string, error) {
 }
 
 // Name returns the registry and repository of the named image, without tag and digest.
-func (b Images) Name(name string) (string, error) {
-	named, err := b.parse(name)
+func (images Images) Name(name string) (string, error) {
+	named, err := images.parse(name)
 	if err != nil {
 		return "", err
 	}
@@ -65,8 +70,8 @@ func (b Images) Name(name string) (string, error) {
 }
 
 // Tag returns the tag of the named image.
-func (b Images) Tag(name string) (string, error) {
-	named, err := b.parse(name)
+func (images Images) Tag(name string) (string, error) {
+	named, err := images.parse(name)
 	if err != nil {
 		return "", err
 	}
@@ -79,8 +84,8 @@ func (b Images) Tag(name string) (string, error) {
 	return tagged.Tag(), nil
 }
 
-func (b Images) parse(name string) (reference.Named, error) {
-	image, err := b.Reference(name)
+func (images Images) parse(name string) (reference.Named, error) {
+	image, err := images.Reference(name)
 	if err != nil {
 		return nil, err
 	}
