@@ -46,6 +46,21 @@ var _ = Describe("Values", func() {
 		}))
 	})
 
+	It("no volumes without PVC storage -> default MDS namespace and active MDS count", func() {
+		values, err := ceph.Values(files.CephConfig{}, /* workspacePVCStorage */ false)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values).To(Equal(map[string]any{
+			"ceph": map[string]any{
+				"credentialsSecretName":     "ceph-admin-credentials",
+				"storageClass":              "codesphere",
+				"monEndpointsConfigMapName": "ceph-mon-endpoints",
+				"mdsNamespace":              "codesphere",
+				"activeMds":                 "7",
+			},
+		}))
+	})
+
 	It("two volumes -> error", func() {
 		_, err := ceph.Values(files.CephConfig{Volumes: map[string]files.CephVolume{
 			"a": {MDS: files.CephMDS{Active: 1}},
