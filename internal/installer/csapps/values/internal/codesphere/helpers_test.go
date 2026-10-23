@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/cluster"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/images"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -20,6 +21,7 @@ func testImages(extraImages map[string]string) images.Images {
 		"workspace-agent":       imagePrefix + "workspace-agent:v1.2.3",
 		"workspace-server":      imagePrefix + "workspace-server:v1.2.3",
 		"vpn":                   imagePrefix + "vpn:v1.2.3",
+		"frontendGatewayNginx":  "ghcr.io/codesphere-cloud/docker/nginx-gateway:1.31.5",
 	}
 	for name, image := range extraImages {
 		bomImages[name] = image
@@ -39,6 +41,8 @@ func testImages(extraImages map[string]string) images.Images {
 type input struct {
 	conf     files.CodesphereConfig
 	images   images.Images
+	gateways *cluster.Gateways
+	metalLB  *files.MetalLBConfig
 	registry *files.RegistryConfig
 }
 
@@ -48,8 +52,13 @@ func (in input) values() (codesphere.Codesphere, error) {
 		imgs = testImages(nil)
 	}
 
+	gateways := cluster.GatewayAPIs(files.ClusterConfig{})
+	if in.gateways != nil {
+		gateways = *in.gateways
+	}
+
 	// Tests check the error Values returns.
-	return codesphere.Values(in.conf, imgs, in.registry) //nolint:wrapcheck
+	return codesphere.Values(in.conf, imgs, gateways, in.metalLB, in.registry) //nolint:wrapcheck
 }
 
 func (in input) mustValues() codesphere.Codesphere {
