@@ -13,6 +13,9 @@ import (
 // PriorityClass is the priority class of the Codesphere services.
 const PriorityClass = "prod-codesphere-deployment"
 
+// workspaceRouterHAReplicas is the replica count the Codesphere installer gives the workspace router.
+const workspaceRouterHAReplicas = 2
+
 // serviceImages maps each service in the chart to its image in the BOM.
 var serviceImages = map[string]string{
 	"auth_service":       "auth-service",
@@ -81,7 +84,7 @@ func workspaceRouterValues(imgs images.Images) (map[string]any, error) {
 
 	return map[string]any{
 		"image":      map[string]any{"name": image, "tag": tag},
-		"haReplicas": 2,
+		"haReplicas": workspaceRouterHAReplicas,
 	}, nil
 }
 
