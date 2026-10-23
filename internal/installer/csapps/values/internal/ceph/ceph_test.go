@@ -17,7 +17,7 @@ var _ = Describe("Values", func() {
 	}}
 
 	It("one volume without PVC storage -> its name as MDS namespace and its active MDS count", func() {
-		values, err := ceph.Values(oneVolume, false)
+		values, err := ceph.Values(oneVolume /* workspacePVCStorage */, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values).To(Equal(map[string]any{
@@ -32,7 +32,7 @@ var _ = Describe("Values", func() {
 	})
 
 	It("one volume with PVC storage -> no MDS namespace and no active MDS", func() {
-		values, err := ceph.Values(oneVolume, true)
+		values, err := ceph.Values(oneVolume /* workspacePVCStorage */, true)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values).To(Equal(map[string]any{
@@ -50,7 +50,7 @@ var _ = Describe("Values", func() {
 		_, err := ceph.Values(files.CephConfig{Volumes: map[string]files.CephVolume{
 			"a": {MDS: files.CephMDS{Active: 1}},
 			"b": {MDS: files.CephMDS{Active: 2}},
-		}}, false)
+		}}, /* workspacePVCStorage */ false)
 
 		Expect(err).To(MatchError(ContainSubstring("only one ceph volume is supported")))
 	})
