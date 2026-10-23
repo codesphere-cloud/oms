@@ -22,18 +22,23 @@ type Codesphere struct {
 	DNSServers                 []string        `yaml:"dnsServers"`
 	Hosts                      []string        `yaml:"hosts"`
 	PrePullImages              bool            `yaml:"prePullImages"`
+	GitProviders               GitProviders    `yaml:"gitProviders"`
 	Experiments                Flags           `yaml:"experiments"`
 	Features                   Flags           `yaml:"features"`
 	CustomDomains              CustomDomains   `yaml:"customDomains"`
+	OAuth                      OAuth           `yaml:"oauth"`
+	SignUp                     SignUp          `yaml:"signUp"`
 	DeployConfig               DeployConfig    `yaml:"deployConfig"`
 	WorkspaceImages            WorkspaceImages `yaml:"workspaceImages"`
 	FrontendGateway            FrontendGateway `yaml:"frontendGateway"`
 
 	IPService             *IPService                     `yaml:"ipService,omitempty"`
 	SSHWorkspaceProxy     *files.SSHWorkspaceProxyConfig `yaml:"sshWorkspaceProxy,omitempty"`
+	Branding              *Branding                      `yaml:"branding,omitempty"`
 	TLSCertificate        *TLSCertificate                `yaml:"tlsCertificate,omitempty"`
 	UnderprovisionFactors *files.UnderprovisionFactors   `yaml:"underprovisionFactors,omitempty"`
 	ExtraWorkspaceFiles   []files.ExtraWorkspaceFile     `yaml:"extraWorkspaceFiles,omitempty"`
+	SMTP                  *SMTP                          `yaml:"smtp,omitempty"`
 	ExtraCAPem            string                         `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars map[string]string              `yaml:"extraWorkspaceEnvVars,omitempty"`
 }
@@ -92,17 +97,22 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		DNSServers:                 dnsServers(conf.DNSServers),
 		Hosts:                      []string{conf.Domain},
 		PrePullImages:              ptr.Deref(conf.PrePullImages, true),
+		GitProviders:               gitProvidersValues(conf.GitProviders),
 		Experiments:                experimentsValues(conf, in.Gateways.Workspaces.Enabled),
 		Features:                   featuresValues(conf.Features),
 		CustomDomains:              customDomainsValues(conf.CustomDomains, in.Gateways.Workspaces.Use),
+		OAuth:                      oauthValues(conf.OAuth),
+		SignUp:                     signUpValues(conf.SignUp),
 		DeployConfig:               deployConfig,
 		WorkspaceImages:            workspaceImages,
 		FrontendGateway:            frontendGateway,
 		IPService:                  ipService,
 		SSHWorkspaceProxy:          conf.SSHWorkspaceProxy,
+		Branding:                   brandingValues(conf.Branding),
 		TLSCertificate:             tlsCertificateValues(conf.CustomCertificate),
 		UnderprovisionFactors:      conf.UnderprovisionFactors,
 		ExtraWorkspaceFiles:        conf.ExtraWorkspaceFiles,
+		SMTP:                       smtpValues(conf.Email),
 		ExtraCAPem:                 conf.ExtraCAPem,
 		ExtraWorkspaceEnvVars:      conf.ExtraWorkspaceEnvVars,
 	}, nil
