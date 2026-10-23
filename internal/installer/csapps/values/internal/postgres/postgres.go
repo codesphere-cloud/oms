@@ -36,7 +36,8 @@ func Values(postgres files.PostgresConfig) Postgres {
 		SSL:                SSL{CA: postgres.CACertPem},
 	}
 
-	if postgres.Mode == files.PostgresModeInstall {
+	// TODO(nate): make the postgres mode an enum.
+	if postgres.Mode == "install" {
 		values.Host = postgres.Primary.IP
 		values.Port = files.PostgresPort
 		values.SSL.ServerName = postgres.Primary.Hostname

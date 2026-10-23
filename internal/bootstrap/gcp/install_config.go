@@ -631,7 +631,7 @@ func (b *GCPBootstrapper) dropAvailableDataCentersOverride(dc *datacenter.DataCe
 func (b *GCPBootstrapper) applyPostgresConfig(dc *datacenter.DataCenter) (previousIP, previousHostname string) {
 	if dc.ExternalPostgres {
 		dc.InstallConfig.Postgres = files.PostgresConfig{
-			Mode: files.PostgresModeExternal,
+			Mode: "external",
 			// The server certificate carries only an IP SAN, so the address must be the IP.
 			ServerAddress: b.Env.PostgreSQLNode.GetInternalIP(),
 			// Secondary data centers connect to the installed server as an external one.
