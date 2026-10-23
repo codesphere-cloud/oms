@@ -62,10 +62,6 @@ type ExtraWorkspaceFile struct {
 
 // Values builds the values of the codesphere key. The images also depend on the registry.
 func Values(conf files.CodesphereConfig, imgs images.Images, registry *files.RegistryConfig) (Codesphere, error) {
-	if err := validateDeployConfig(conf); err != nil {
-		return Codesphere{}, err
-	}
-
 	deployConfig, err := deployConfigValues(conf, registry, imgs)
 	if err != nil {
 		return Codesphere{}, err
