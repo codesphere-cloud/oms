@@ -12,10 +12,12 @@ import (
 )
 
 var _ = Describe("Values", func() {
-	It("one volume -> its name as MDS namespace and its active MDS count", func() {
-		values, err := ceph.Values(files.CephConfig{Volumes: map[string]files.CephVolume{
-			"shared": {MDS: files.CephMDS{Active: 3}},
-		}}, false)
+	oneVolume := files.CephConfig{Volumes: map[string]files.CephVolume{
+		"shared": {MDS: files.CephMDS{Active: 3}},
+	}}
+
+	It("one volume without PVC storage -> its name as MDS namespace and its active MDS count", func() {
+		values, err := ceph.Values(oneVolume, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values).To(Equal(map[string]any{
@@ -25,6 +27,21 @@ var _ = Describe("Values", func() {
 				"monEndpointsConfigMapName": "ceph-mon-endpoints",
 				"mdsNamespace":              "shared",
 				"activeMds":                 "3",
+			},
+		}))
+	})
+
+	It("one volume with PVC storage -> no MDS namespace and no active MDS", func() {
+		values, err := ceph.Values(oneVolume, true)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values).To(Equal(map[string]any{
+			"ceph": map[string]any{
+				"credentialsSecretName":     "ceph-admin-credentials",
+				"storageClass":              "codesphere",
+				"monEndpointsConfigMapName": "ceph-mon-endpoints",
+				"mdsNamespace":              "",
+				"activeMds":                 "0",
 			},
 		}))
 	})
