@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"strings"
 	"text/template"
 )
 
@@ -16,7 +15,8 @@ type SecretStore interface {
 	LookupSecret(name string, selector ...string) (string, error)
 }
 
-const secretRefMarker = "__oms_secret_ref__"
+// SecretRefMarker replaces every `secret` call in RenderSecretMarkers output.
+const SecretRefMarker = "__oms_secret_ref__"
 
 type secretResolver func(name string, selector ...string) (string, error)
 
@@ -34,33 +34,11 @@ func RenderInstallConfigTemplate(data []byte, store SecretStore) ([]byte, error)
 }
 
 // RenderSecretMarkers renders the given config template data with every `secret` call replaced by
-// a marker, so CheckNoCodesphereSecretRefs can find where secrets are used without resolving them.
+// SecretRefMarker, so callers can find where secrets are used without resolving them.
 func RenderSecretMarkers(data []byte) ([]byte, error) {
 	return render(data, func(string, ...string) (string, error) {
-		return secretRefMarker, nil
+		return SecretRefMarker, nil
 	})
-}
-
-// CheckNoCodesphereSecretRefs rejects `secret` calls in the codesphere block of a config
-// rendered with RenderSecretMarkers. Their values reach the Codesphere chart's ExternalSecrets in
-// plaintext. Dev releases, the only ones that set codesphere.releaseName, are exempt for now
-// (only use case atm.). Long term config and secrets should be more strictly separated, i.e. no
-// secrets in config.yml (requires some changes in auth-service).
-func CheckNoCodesphereSecretRefs(config map[string]any) error {
-	codesphere, ok := config["codesphere"].(map[string]any)
-	if !ok {
-		return nil
-	}
-
-	if releaseName, _ := codesphere["releaseName"].(string); releaseName != "" {
-		return nil
-	}
-
-	if strings.Contains(fmt.Sprint(codesphere), secretRefMarker) {
-		return fmt.Errorf("secret templates are not supported in the codesphere block")
-	}
-
-	return nil
 }
 
 func render(data []byte, secret secretResolver) ([]byte, error) {

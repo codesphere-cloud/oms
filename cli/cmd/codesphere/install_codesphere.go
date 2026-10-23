@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -317,8 +319,54 @@ func checkNoCodesphereSecretRefs(configFiles []string) error {
 		merged = intutil.DeepMergeMaps(merged, config)
 	}
 
-	if err := configtemplating.CheckNoCodesphereSecretRefs(merged); err != nil {
-		return fmt.Errorf("invalid install config: %w", err)
+	if refs := codesphereSecretRefs(merged); len(refs) > 0 {
+		return fmt.Errorf("invalid install config: secret templates are not supported in the codesphere block: %s", strings.Join(refs, ", "))
+	}
+
+	return nil
+}
+
+// codesphereSecretRefs returns the keys in the codesphere block that use `secret`. Their values
+// reach the Codesphere chart's ExternalSecrets in plaintext. Dev releases, the only ones that set
+// codesphere.releaseName, are exempt for now (only use case atm.). Long term config and secrets
+// should be more strictly separated, i.e. no secrets in config.yml (requires some changes in
+// auth-service).
+func codesphereSecretRefs(config map[string]any) []string {
+	codesphere, ok := config["codesphere"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	if releaseName, _ := codesphere["releaseName"].(string); releaseName != "" {
+		return nil
+	}
+
+	refs := secretRefKeys(codesphere, "codesphere")
+	slices.Sort(refs)
+
+	return refs
+}
+
+func secretRefKeys(value any, key string) []string {
+	switch typed := value.(type) {
+	case map[string]any:
+		refs := []string{}
+		for childKey, child := range typed {
+			refs = append(refs, secretRefKeys(child, key+"."+childKey)...)
+		}
+
+		return refs
+	case []any:
+		refs := []string{}
+		for i, child := range typed {
+			refs = append(refs, secretRefKeys(child, fmt.Sprintf("%s[%d]", key, i))...)
+		}
+
+		return refs
+	case string:
+		if strings.Contains(typed, configtemplating.SecretRefMarker) {
+			return []string{key}
+		}
 	}
 
 	return nil

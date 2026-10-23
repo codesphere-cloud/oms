@@ -251,7 +251,20 @@ codesphere:
 		It("rejects a config without a release name", func() {
 			_, err := prepareWithVault(codesphereSecretConfig)
 
-			Expect(err).To(MatchError(ContainSubstring("secret templates are not supported in the codesphere block")))
+			Expect(err).To(MatchError(ContainSubstring("secret templates are not supported in the codesphere block: codesphere.override.clientSecret")))
+		})
+
+		It("names every key in the codesphere block that uses a secret", func() {
+			_, err := prepareWithVault(`
+codesphere:
+  override:
+    clientSecret: '{{ secret "oidcClientSecret" }}'
+  customDomains:
+    - plain.example.com
+    - '{{ secret "oidcClientSecret" }}'
+`)
+
+			Expect(err).To(MatchError(HaveSuffix(": codesphere.customDomains[1], codesphere.override.clientSecret")))
 		})
 
 		It("accepts a secret outside the codesphere block", func() {
