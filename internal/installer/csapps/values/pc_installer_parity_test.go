@@ -8,7 +8,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.yaml.in/yaml/v3"
+	"k8s.io/utils/ptr"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	csappsvalues "github.com/codesphere-cloud/oms/internal/installer/csapps/values"
@@ -57,38 +57,42 @@ func installerBOM(overrides map[string]string) *bom.Config {
 	}}
 }
 
-func installerConfig(yamlConfig string) *files.RootConfig {
-	// Data center 1, not the installer's 0: OMS rejects id 0.
-	base := `
-		dataCenter: {id: 1, name: test, city: KA, countryCode: None}
-		postgres:
-		  mode: install
-		  caCertPem: ca
-		  primary: {ip: 1.2.3.4, hostname: foo, sslConfig: {serverCertPem: ""}}
-		  replica: {ip: 1.2.3.5, name: bar, sslConfig: {serverCertPem: ""}}
-		ceph:
-		  cephAdmSshKey: {publicKey: ""}
-		  nodesSubnet: 0.0.0.0/0
-		  hosts: []
-		  osds: []
-		  volumes: {codesphere: {mds: {active: 2}}}
-		kubernetes: {managedByCodesphere: false, podCidr: 1.1.1.1/1, serviceCidr: 2.2.2.2/2}
-		cluster:
-		  gateway: {gatewayApi: {enabled: true, use: false}}
-		  publicGateway: {gatewayApi: {enabled: true, use: false}}
-		codesphere:
-		  domain: cs.internal
-		  workspaceHostingBaseDomain: ws.cs.internal
-		  publicIp: 0.0.0.0
-		  dnsServers: [8.8.8.8]
-		  customDomains: {cNameBaseDomain: ws.example.com}
-		  plans: {hostingPlans: {}, workspacePlans: {}}
-	`
+func installerConfig() *files.RootConfig {
 	config := files.NewRootConfig()
-	Expect(config.Unmarshal([]byte(dedent(base)))).To(Succeed())
-	Expect(yaml.Unmarshal([]byte(dedent(yamlConfig)), &config)).To(Succeed())
+	// Data center 1, not the installer's 0: OMS rejects id 0.
+	config.Datacenter = files.DatacenterConfig{ID: 1, Name: "test", City: "KA", CountryCode: "None"}
+	config.Postgres = files.PostgresConfig{
+		Mode:      "install",
+		CACertPem: "ca",
+		Primary:   &files.PostgresPrimaryConfig{IP: "1.2.3.4", Hostname: "foo"},
+		Replica:   &files.PostgresReplicaConfig{IP: "1.2.3.5", Name: "bar"},
+	}
+	config.Ceph = files.CephConfig{
+		NodesSubnet: "0.0.0.0/0",
+		Hosts:       []files.CephHost{},
+		OSDs:        []files.CephOSD{},
+		Volumes:     map[string]files.CephVolume{"codesphere": {MDS: files.CephMDS{Active: 2}}},
+	}
+	config.Kubernetes = files.KubernetesConfig{PodCIDR: "1.1.1.1/1", ServiceCIDR: "2.2.2.2/2"}
+	config.Cluster.Gateway = gateway(true, false)
+	config.Cluster.PublicGateway = gateway(true, false)
+	config.Codesphere = files.CodesphereConfig{
+		Domain:                     "cs.internal",
+		WorkspaceHostingBaseDomain: "ws.cs.internal",
+		PublicIP:                   "0.0.0.0",
+		DNSServers:                 []string{"8.8.8.8"},
+		CustomDomains:              files.CustomDomainsConfig{CNameBaseDomain: "ws.example.com"},
+		Plans: files.PlansConfig{
+			HostingPlans:   map[int]files.HostingPlan{},
+			WorkspacePlans: map[int]files.WorkspacePlan{},
+		},
+	}
 
 	return &config
+}
+
+func gateway(enabled, use bool) files.GatewayConfig {
+	return files.GatewayConfig{GatewayAPI: &files.GatewayAPIConfig{Enabled: enabled, Use: ptr.To(use)}}
 }
 
 func global(values map[string]any) map[string]any {
@@ -97,7 +101,7 @@ func global(values map[string]any) map[string]any {
 
 var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	It("create values -> success", func() {
-		values := global(build(installerConfig(""), installerBOM(nil)))
+		values := global(build(installerConfig(), installerBOM(nil)))
 
 		Expect(values["ceph"]).To(HaveKeyWithValue("activeMds", "2"))
 		Expect(values["frontendGateway"]).To(Equal(map[string]any{
@@ -144,7 +148,8 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("workspace PVC storage enabled without Ceph config -> create values succeeds", func() {
-		cfg := installerConfig(`codesphere: {internal: [workspace-pvc-storage]}`)
+		cfg := installerConfig()
+		cfg.Codesphere.Internal = []string{"workspace-pvc-storage"}
 		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["ceph"]).To(HaveKeyWithValue("storageClass", "codesphere"))
@@ -155,12 +160,12 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("SMTP is configured > create values > SMTP values are forwarded to the chart", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  email:
-			    provider: smtp
-			    smtp: {host: smtp.example.com, port: 465, secure: true, username: username}
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Codesphere.Email = &files.EmailConfig{
+			Provider: "smtp",
+			SMTP:     files.SMTPConfig{Host: "smtp.example.com", Port: 465, Secure: true, Username: "username"},
+		}
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["smtp"]).To(Equal(map[string]any{
 			"host":     "smtp.example.com",
@@ -171,7 +176,7 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("one data center -> only the target one is available", func() {
-		values := global(build(installerConfig(""), installerBOM(nil)))
+		values := global(build(installerConfig(), installerBOM(nil)))
 
 		Expect(values["dataCenterId"]).To(Equal(1))
 		Expect(values["defaultDataCenterId"]).To(Equal(1))
@@ -182,12 +187,13 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("multiple data centers -> all of them are available", func() {
-		values := global(build(installerConfig(`
-			dataCenters:
-			  - {id: 1, name: test, city: KA, countryCode: None}
-			  - {id: 2, name: test-dc2, city: FRA, countryCode: DE}
-			defaultDataCenterId: 2
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.DataCenters = []files.DatacenterConfig{
+			{ID: 1, Name: "test", City: "KA", CountryCode: "None"},
+			{ID: 2, Name: "test-dc2", City: "FRA", CountryCode: "DE"},
+		}
+		cfg.DefaultDataCenterID = 2
+		values := global(build(cfg, installerBOM(nil)))
 
 		// The target data center, the other one is remote.
 		Expect(values["dataCenterId"]).To(Equal(1))
@@ -201,17 +207,22 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 
 	// The installer checks the rendered VPN_LEFT_PEER_ID, which the chart takes from this value.
 	It("configure VPN left peer ID -> deployment receives VPN_LEFT_PEER_ID", func() {
-		cfg := installerConfig(`codesphere: {vpnLeftPeerId: peer-id.example}`)
+		cfg := installerConfig()
+		cfg.Codesphere.VPNLeftPeerID = "peer-id.example"
 		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["vpn"]).To(Equal(map[string]any{"leftPeerId": "peer-id.example"}))
 	})
 
 	It("overwrite workspace images -> success", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  workspaceImages: {agent: agent, agentGpu: agentGpu, server: server, vpn: vpn}
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
+			Agent:    &files.ImageRef{ImageName: "agent"},
+			AgentGpu: &files.ImageRef{ImageName: "agentGpu"},
+			Server:   &files.ImageRef{ImageName: "server"},
+			VPN:      &files.ImageRef{ImageName: "vpn"},
+		}
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["workspaceImages"]).To(Equal(map[string]any{
 			"server": "server",
@@ -220,18 +231,20 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("overwrite workspace images by bom -> success", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  deployConfig:
-			    images:
-			      uwu-24.04:
-			        name: UwU 24.04
-			        supportedUntil: "2025-05-31"
-			        flavors:
-			          default: {image: {bomRef: workspace-agent-24.04-slim}, pool: {}}
-			  workspaceImages:
-			    agent: {bomRef: workspace-agent-24.04}
-		`), installerBOM(map[string]string{
+		cfg := installerConfig()
+		cfg.Codesphere.DeployConfig = files.DeployConfig{Images: map[string]files.ImageConfig{
+			"uwu-24.04": {
+				Name:           "UwU 24.04",
+				SupportedUntil: "2025-05-31",
+				Flavors: map[string]files.FlavorConfig{
+					"default": {Image: files.ImageRef{BomRef: "workspace-agent-24.04-slim"}, Pool: map[int]int{}},
+				},
+			},
+		}}
+		cfg.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
+			Agent: &files.ImageRef{BomRef: "workspace-agent-24.04"},
+		}
+		values := global(build(cfg, installerBOM(map[string]string{
 			"workspace-agent-24.04":      "foo.bar:latest",
 			"workspace-agent-24.04-slim": "bobby.babby:latest",
 		})))
@@ -244,29 +257,17 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("no deploy config set > construct based on legacy config", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  plans:
-			    workspacePlans: {}
-			    hostingPlans:
-			      101:
-			        cpuTenth: 1
-			        gpuParts: 0
-			        memoryMb: 1
-			        storageMb: 2
-			        tempStorageMb: 3
-			        pooledInstances: 10
-			      777:
-			        cpuTenth: 1
-			        gpuParts: 1
-			        memoryMb: 1
-			        storageMb: 2
-			        tempStorageMb: 3
-			        pooledInstances: 223
-			  workspaceImages:
-			    agent: {bomRef: workspace-agent-24.04}
-			    agentGpu: bar
-		`), installerBOM(map[string]string{"workspace-agent-24.04": "foo-experimental:latest"})))
+		cfg := installerConfig()
+		cfg.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{
+			101: {CPUTenth: 1, GPUParts: 0, MemoryMb: 1, StorageMb: 2, TempStorageMb: 3, PooledInstances: ptr.To(10)},
+			777: {CPUTenth: 1, GPUParts: 1, MemoryMb: 1, StorageMb: 2, TempStorageMb: 3, PooledInstances: ptr.To(223)},
+		}
+		cfg.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
+			Agent:    &files.ImageRef{BomRef: "workspace-agent-24.04"},
+			AgentGpu: &files.ImageRef{ImageName: "bar"},
+		}
+		b := installerBOM(map[string]string{"workspace-agent-24.04": "foo-experimental:latest"})
+		values := global(build(cfg, b))
 
 		images := values["deployConfig"].(map[string]any)["images"].(map[string]any)
 		Expect(images).To(HaveLen(1))
@@ -280,27 +281,19 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("provide deployConfig AND pooledInstances > throws", func() {
-		_, err := csappsvalues.Build(installerConfig(`
-			codesphere:
-			  plans:
-			    workspacePlans: {}
-			    hostingPlans:
-			      101:
-			        cpuTenth: 1
-			        gpuParts: 0
-			        memoryMb: 1
-			        storageMb: 2
-			        tempStorageMb: 3
-			        pooledInstances: 10
-			  deployConfig: {images: {}}
-		`), installerBOM(nil))
+		cfg := installerConfig()
+		cfg.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{
+			101: {CPUTenth: 1, GPUParts: 0, MemoryMb: 1, StorageMb: 2, TempStorageMb: 3, PooledInstances: ptr.To(10)},
+		}
+		cfg.Codesphere.DeployConfig = files.DeployConfig{Images: map[string]files.ImageConfig{}}
+		_, err := csappsvalues.Build(cfg, installerBOM(nil))
 
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("gpu image not set -> success", func() {
 		b := installerBOM(map[string]string{"workspace-agent-gpu": ""})
-		values := global(build(installerConfig(""), b))
+		values := global(build(installerConfig(), b))
 
 		Expect(values["workspaceImages"]).To(Equal(map[string]any{
 			"server": "workspace-server",
@@ -309,7 +302,7 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("external postgres -> success", func() {
-		cfg := installerConfig("")
+		cfg := installerConfig()
 		cfg.Postgres = files.PostgresConfig{
 			CACertPem:     "foo",
 			ServerAddress: "example.com",
@@ -329,16 +322,15 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	// The installer also checks that the rendered Secret has the client credentials. These values
 	// hold no secrets, so only the values part is ported.
 	It("configure oidc -> success", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  oauth:
-			    oidc:
-			      enabled: true
-			      type: oidc
-			      name: fooIdp
-			      issuerUrl: "http://idp.example.com"
-			      scopes: [abc]
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Codesphere.OAuth = &files.OAuthProvidersConfig{Oidc: &files.OidcOAuthProvider{
+			Enabled:   true,
+			Type:      "oidc",
+			Name:      "fooIdp",
+			IssuerURL: "http://idp.example.com",
+			Scopes:    []string{"abc"},
+		}}
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["oauth"]).To(Equal(map[string]any{
 			"providers": map[string]any{
@@ -360,10 +352,9 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("configure load balancer -> success", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  ipService: {loadBalancerKind: metallb, addressPools: [foo, bar]}
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Codesphere.IPService = &files.IPServiceConfig{LoadBalancerKind: "metallb", AddressPools: []string{"foo", "bar"}}
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["ipService"]).To(Equal(map[string]any{
 			"loadBalancerKind": "metallb",
@@ -372,25 +363,28 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("configure gitProviders -> success", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  gitProviders:
-			    azureDevOps: &provider
-			      enabled: true
-			      url: "http://example.org"
-			      api: {baseUrl: "https://api.example.org/2.0"}
-			      oauth:
-			        issuer: "https://example.org"
-			        authorizationEndpoint: "https://example.org/site/oauth2/authorize"
-			        tokenEndpoint: "https://example.org/access_token"
-			        clientAuthMethod: client_secret_post
-			        scope: ""
-			    bitbucket: *provider
-			    scmManager:
-			      enabled: true
-			      url: "http://scm.example.org"
-			      api: {baseUrl: "https://api.scm.example.org/2.0"}
-		`), installerBOM(nil)))
+		providerConfig := &files.GitProviderConfig{
+			Enabled: true,
+			URL:     "http://example.org",
+			API:     files.APIConfig{BaseURL: "https://api.example.org/2.0"},
+			OAuth: files.OAuthConfig{
+				Issuer:                "https://example.org",
+				AuthorizationEndpoint: "https://example.org/site/oauth2/authorize",
+				TokenEndpoint:         "https://example.org/access_token",
+				ClientAuthMethod:      "client_secret_post",
+			},
+		}
+		cfg := installerConfig()
+		cfg.Codesphere.GitProviders = &files.GitProvidersConfig{
+			AzureDevOps: providerConfig,
+			Bitbucket:   providerConfig,
+			SCMManager: &files.SCMManagerConfig{
+				Enabled: true,
+				URL:     "http://scm.example.org",
+				API:     &files.APIConfig{BaseURL: "https://api.scm.example.org/2.0"},
+			},
+		}
+		values := global(build(cfg, installerBOM(nil)))
 
 		provider := map[string]any{
 			"enabled": true,
@@ -417,7 +411,8 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("extra experiments -> success", func() {
-		cfg := installerConfig(`codesphere: {experiments: [foo, bar]}`)
+		cfg := installerConfig()
+		cfg.Codesphere.Experiments = []string{"foo", "bar"} //nolint:staticcheck
 		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["experiments"]).To(Equal(map[string]any{
@@ -430,7 +425,8 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("extra features -> success", func() {
-		cfg := installerConfig(`codesphere: {features: {foo: true, bar: true}}`)
+		cfg := installerConfig()
+		cfg.Codesphere.Features = map[string]bool{"foo": true, "bar": true}
 		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["features"]).To(Equal(map[string]any{
@@ -446,15 +442,13 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	// The installer checks the rendered Issuer and EAB Secret. With external secrets, the chart
 	// reads the key id and the vault entry of the MAC key from these values.
 	It("use acme with eab -> expect enabled", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  certIssuer:
-			    type: acme
-			    acme:
-			      server: "https://acme.corp42.test/v2/directory"
-			      email: test@corp42.test
-			      eabKeyId: dummykeyid
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
+			Server:   "https://acme.corp42.test/v2/directory",
+			Email:    "test@corp42.test",
+			EABKeyID: "dummykeyid",
+		}}
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["certIssuer"]).To(Equal(map[string]any{"acme": map[string]any{
 			"enabled":       true,
@@ -466,16 +460,14 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("use acme with separate custom domains eab -> expect custom domains eab used", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  certIssuer:
-			    type: acme
-			    acme:
-			      server: "https://acme.corp42.test/v2/directory"
-			      email: test@corp42.test
-			      eabKeyId: clusterissuerkeyid
-			      customDomainsEabKeyId: customdomainskeyid
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
+			Server:                "https://acme.corp42.test/v2/directory",
+			Email:                 "test@corp42.test",
+			EABKeyID:              "clusterissuerkeyid",
+			CustomDomainsEABKeyID: "customdomainskeyid",
+		}}
+		values := global(build(cfg, installerBOM(nil)))
 
 		// The custom-domain Issuer must use its own key id, not the ClusterIssuer's.
 		acme := values["certIssuer"].(map[string]any)["acme"]
@@ -484,7 +476,7 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("no certIssuer -> expect self-signed issuer", func() {
-		values := global(build(installerConfig(""), installerBOM(nil)))
+		values := global(build(installerConfig(), installerBOM(nil)))
 
 		Expect(values["certIssuer"]).To(Equal(map[string]any{
 			"acme": map[string]any{"enabled": false},
@@ -493,7 +485,8 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("certIssuer type self-signed -> expect self-signed issuer", func() {
-		cfg := installerConfig(`codesphere: {certIssuer: {type: self-signed}}`)
+		cfg := installerConfig()
+		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeSelfSigned}
 		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["certIssuer"]).To(Equal(map[string]any{
@@ -503,12 +496,12 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("use acme without eab -> expect acme issuer without eab", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  certIssuer:
-			    type: acme
-			    acme: {server: "https://acme.corp42.test/v2/directory", email: test@corp42.test}
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
+			Server: "https://acme.corp42.test/v2/directory",
+			Email:  "test@corp42.test",
+		}}
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["certIssuer"]).To(Equal(map[string]any{"acme": map[string]any{
 			"enabled": true,
@@ -518,24 +511,23 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("hermetic is enabled by default", func() {
-		values := global(build(installerConfig(""), installerBOM(nil)))
+		values := global(build(installerConfig(), installerBOM(nil)))
 
 		Expect(values["experiments"]).To(HaveKeyWithValue("hermetic", []any{"prod"}))
 	})
 
 	It("override experiments -> success", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  override:
-			    global:
-			      experiments: {hermetic: []}
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Codesphere.Override = files.ChartOverride{"global": map[string]any{
+			"experiments": map[string]any{"hermetic": []any{}},
+		}}
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["experiments"]).To(HaveKeyWithValue("hermetic", []any{}))
 	})
 
 	It("no telemetryExport configured -> all otel values default to disabled", func() {
-		values := global(build(installerConfig(""), installerBOM(nil)))
+		values := global(build(installerConfig(), installerBOM(nil)))
 
 		Expect(values["otel"]).To(Equal(map[string]any{
 			"centralOtelExport": map[string]any{
@@ -553,15 +545,15 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("all telemetryExport options set -> all otel values mapped correctly", func() {
-		values := global(build(installerConfig(`
-			codesphere:
-			  telemetryExport:
-			    remoteExport: true
-			    remoteEndpoint: "https://custom.otel.example.com"
-			    spanMetrics: true
-			    traces: true
-			    traceEndpoint: "tempo.custom.svc.cluster.local:4317"
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Codesphere.TelemetryExport = &files.TelemetryExport{
+			RemoteExport:   true,
+			RemoteEndpoint: "https://custom.otel.example.com",
+			SpanMetrics:    true,
+			Traces:         true,
+			TraceEndpoint:  "tempo.custom.svc.cluster.local:4317",
+		}
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["otel"]).To(Equal(map[string]any{
 			"centralOtelExport": map[string]any{
@@ -583,11 +575,10 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 
 	// The installer checks the rendered Gateway, which the chart creates from this value.
 	It("enable codesphere-gateway > gateway created in frontend-gateway-values", func() {
-		values := global(build(installerConfig(`
-			cluster:
-			  gateway: {gatewayApi: {enabled: true, use: false}}
-			  publicGateway: {gatewayApi: {enabled: false, use: false}}
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Cluster.Gateway = gateway(true, false)
+		cfg.Cluster.PublicGateway = gateway(false, false)
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["frontendGateway"]).To(
 			HaveKeyWithValue("gatewayApi", map[string]any{"enabled": true}),
@@ -595,24 +586,24 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	It("enable workspaces-gateway > enables experiment", func() {
-		values := global(build(installerConfig(`
-			cluster:
-			  gateway: {gatewayApi: {enabled: false, use: false}}
-			  publicGateway: {gatewayApi: {enabled: true, use: false}}
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Cluster.Gateway = gateway(false, false)
+		cfg.Cluster.PublicGateway = gateway(true, false)
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["experiments"]).To(HaveKeyWithValue("gateway-domains", []any{"prod"}))
 	})
 
 	// The installer checks the rendered Issuer's solver, which the chart picks from this value.
 	It("enable and use workspaces-gateway > sets issuer solver to gateway", func() {
-		values := global(build(installerConfig(`
-			cluster:
-			  gateway: {gatewayApi: {enabled: false, use: false}}
-			  publicGateway: {gatewayApi: {enabled: true, use: true}}
-			codesphere:
-			  certIssuer: {type: acme, acme: {server: acme.test, email: cert@acme.test}}
-		`), installerBOM(nil)))
+		cfg := installerConfig()
+		cfg.Cluster.Gateway = gateway(false, false)
+		cfg.Cluster.PublicGateway = gateway(true, true)
+		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{
+			Type: files.CertIssuerTypeACME,
+			Acme: &files.ACMEConfig{Server: "acme.test", Email: "cert@acme.test"},
+		}
+		values := global(build(cfg, installerBOM(nil)))
 
 		Expect(values["customDomains"]).To(
 			HaveKeyWithValue("gatewayApi", map[string]any{"useGateway": true}),
