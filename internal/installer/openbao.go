@@ -217,6 +217,26 @@ func (o *OpenBaoBootstrapper) waitUntilReady() error {
 	if err != nil {
 		return fmt.Errorf("failed waiting for pods to be ready: %w", err)
 	}
+
+	err = o.Logger.Step("Verifying unseal keys", o.verifyUnsealSecret)
+	if err != nil {
+		return fmt.Errorf("failed verifying unseal keys: %w", err)
+	}
+	return nil
+}
+
+// verifyUnsealSecret re-reads the unseal Secret once the pods are ready.
+// WaitForInitialization may have seen a partially written Secret, and on restore
+// it passes immediately on the seeded keys, before bank-vaults could replace them.
+func (o *OpenBaoBootstrapper) verifyUnsealSecret() error {
+	secret, err := o.Clientset.CoreV1().Secrets(o.Config.Namespace).Get(o.ctx, openBaoUnsealSecretName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("fetching unseal secret: %w", err)
+	}
+	if o.backupUnsealKeys != nil && !unsealKeysEqual(secret.Data, o.backupUnsealKeys) {
+		return fmt.Errorf("secret %s holds unseal keys that differ from the DR backup: bank-vaults initialized a new instance instead of restoring", openBaoUnsealSecretName)
+	}
+	o.unsealSecret = secret
 	return nil
 }
 
