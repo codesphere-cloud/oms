@@ -63,6 +63,10 @@ func deployConfigValues(
 	registry *files.RegistryConfig,
 	imgs images.Images,
 ) (DeployConfig, error) {
+	if err := validateDeployConfig(conf); err != nil {
+		return DeployConfig{}, err
+	}
+
 	configured := conf.DeployConfig.Images
 	if configured == nil {
 		configured = defaultDeployImages(conf, imgs)
