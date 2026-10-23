@@ -102,6 +102,37 @@ var _ = Describe("InitK0sConfigCmd", func() {
 		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
 	})
 
+	It("writes relative --path and --ssh-key-path as absolute paths", func() {
+		c.Opts.Airgap = true
+		c.Opts.AirgapBundlePath = "bundle.tar"
+		c.Opts.SSHKeyPath = "keys/id_rsa"
+		cwd, err := os.Getwd()
+		Expect(err).NotTo(HaveOccurred())
+		bundlePath := filepath.Join(cwd, "bundle.tar")
+
+		setupWorkdirMocks()
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockFileWriter.EXPECT().Exists(bundlePath).Return(true)
+		mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.MatchedBy(func(data []byte) bool {
+			return strings.Contains(string(data), "src: "+bundlePath) &&
+				strings.Contains(string(data), "keyPath: "+filepath.Join(cwd, "keys/id_rsa"))
+		}), os.FileMode(0644)).Return(nil)
+
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
+	})
+
+	It("keeps an SSH key path starting with ~ for k0sctl to expand", func() {
+		c.Opts.SSHKeyPath = "~/.ssh/id_rsa"
+
+		setupWorkdirMocks()
+		mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+		mockFileWriter.EXPECT().WriteFile(mock.Anything, mock.MatchedBy(func(data []byte) bool {
+			return strings.Contains(string(data), "keyPath: ~/.ssh/id_rsa")
+		}), os.FileMode(0644)).Return(nil)
+
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
+	})
+
 	It("takes the k0s binary from the package but still uses the airgap bundle", func() {
 		c.Opts.Airgap = true
 		c.Opts.Package = "test-package.tar.gz"
