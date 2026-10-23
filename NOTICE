@@ -1409,9 +1409,9 @@ License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.45
  
 ----------
 Module: go.opentelemetry.io/proto/otlp
-Version: v1.10.0
+Version: v1.11.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-proto-go/blob/otlp/v1.10.0/otlp/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-proto-go/blob/otlp/v1.11.0/otlp/LICENSE
  
 ----------
 Module: go.uber.org/atomic
@@ -1523,9 +1523,9 @@ License URL: https://github.com/googleapis/go-genproto/blob/e059f2f05d78/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/api
-Version: v0.0.0-20260720171339-e059f2f05d78
+Version: v0.0.0-20260803160001-6ac0973c030d
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/e059f2f05d78/googleapis/api/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/6ac0973c030d/googleapis/api/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
@@ -1583,9 +1583,9 @@ License URL: https://github.com/go-yaml/yaml/blob/v3.0.1/LICENSE
  
 ----------
 Module: helm.sh/helm/v4
-Version: v4.3.0
+Version: v4.3.1
 License: Apache-2.0
-License URL: https://github.com/helm/helm/blob/v4.3.0/LICENSE
+License URL: https://github.com/helm/helm/blob/v4.3.1/LICENSE
  
 ----------
 Module: k8s.io/api
@@ -1733,9 +1733,9 @@ License URL: https://github.com/oras-project/oras-go/blob/v2.6.2/LICENSE
  
 ----------
 Module: sigs.k8s.io/controller-runtime
-Version: v0.24.1
+Version: v0.25.2
 License: Apache-2.0
-License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.24.1/LICENSE
+License URL: https://github.com/kubernetes-sigs/controller-runtime/blob/v0.25.2/LICENSE
  
 ----------
 Module: sigs.k8s.io/gateway-api/apis/v1
@@ -1763,9 +1763,9 @@ License URL: https://github.com/kubernetes-sigs/kustomize/blob/api/v0.21.1/api/L
  
 ----------
 Module: sigs.k8s.io/kustomize/kyaml
-Version: v0.21.1
+Version: v0.21.2
 License: Apache-2.0
-License URL: https://github.com/kubernetes-sigs/kustomize/blob/kyaml/v0.21.1/kyaml/LICENSE
+License URL: https://github.com/kubernetes-sigs/kustomize/blob/kyaml/v0.21.2/kyaml/LICENSE
  
 ----------
 Module: sigs.k8s.io/randfill
