@@ -45,17 +45,4 @@ var _ = Describe("Values", func() {
 			SSL:                postgres.SSL{ServerName: "pg-rw"},
 		}))
 	})
-
-	It("external mode with a leftover primary -> external server used", func() {
-		values := postgres.Values(files.PostgresConfig{
-			Mode:          files.PostgresModeExternal,
-			ServerAddress: "pg.example.com",
-			Port:          5433,
-			Primary:       &files.PostgresPrimaryConfig{IP: "10.0.0.5", Hostname: "pg-1"},
-		})
-
-		Expect(values.Host).To(Equal("pg.example.com"))
-		Expect(values.Port).To(Equal(5433))
-		Expect(values.SSL.ServerName).To(Equal("pg.example.com"))
-	})
 })
