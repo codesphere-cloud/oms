@@ -8,7 +8,7 @@ package values
 import (
 	"fmt"
 
-	"maps"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/ceph"
@@ -30,9 +30,14 @@ func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 		return nil, fmt.Errorf("failed to read the BOM images: %w", err)
 	}
 
-	global, err := globalValues(cfg, imgs)
+	built, err := globalValues(cfg, imgs)
 	if err != nil {
 		return nil, err
+	}
+
+	global, err := toMap(built)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert the global values: %w", err)
 	}
 
 	imageTag, err := releaseImageTag(imgs)
@@ -75,10 +80,18 @@ func releaseImageTag(imgs images.Images) (string, error) {
 	return tag, nil
 }
 
-func globalValues(
-	cfg *files.RootConfig,
-	imgs images.Images,
-) (map[string]any, error) {
+// global are the chart's global values the installer builds, before the override.
+type global struct {
+	Fixed       fixed                   `yaml:",inline"`
+	DataCenters datacenters.DataCenters `yaml:",inline"`
+	Postgres    postgres.Postgres       `yaml:"postgres"`
+	Ceph        ceph.Ceph               `yaml:"ceph"`
+	Kubernetes  kubernetes.Kubernetes   `yaml:",inline"`
+	Platform    platform.Platform       `yaml:",inline"`
+	Codesphere  codesphere.Codesphere   `yaml:",inline"`
+}
+
+func globalValues(cfg *files.RootConfig, imgs images.Images) (global, error) {
 	codesphereValues, err := codesphere.Values(
 		cfg.Codesphere,
 		imgs,
@@ -87,60 +100,89 @@ func globalValues(
 		cfg.Registry,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build the codesphere values: %w", err)
+		return global{}, fmt.Errorf("failed to build the codesphere values: %w", err)
 	}
 
 	platformValues, err := platform.Values(imgs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build the platform image values: %w", err)
+		return global{}, fmt.Errorf("failed to build the platform image values: %w", err)
 	}
 
 	pvcStorage := codesphere.EnabledFlags(cfg.Codesphere)[codesphere.WorkspacePVCStorageFlag]
 
 	cephValues, err := ceph.Values(cfg.Ceph, pvcStorage)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build the ceph values: %w", err)
+		return global{}, fmt.Errorf("failed to build the ceph values: %w", err)
 	}
 
 	dataCenterValues, err := datacenters.Values(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("invalid data centers: %w", err)
+		return global{}, fmt.Errorf("invalid data centers: %w", err)
 	}
 
-	sections := []map[string]any{
-		fixedValues(),
-		dataCenterValues,
-		postgres.Values(cfg.Postgres),
-		cephValues,
-		kubernetes.Values(cfg.Kubernetes),
-		platformValues,
-		codesphereValues,
-	}
-
-	global := map[string]any{}
-	for _, section := range sections {
-		maps.Copy(global, section)
-	}
-
-	return global, nil
+	return global{
+		Fixed:       fixedValues(),
+		DataCenters: dataCenterValues,
+		Postgres:    postgres.Values(cfg.Postgres),
+		Ceph:        cephValues,
+		Kubernetes:  kubernetes.Values(cfg.Kubernetes),
+		Platform:    platformValues,
+		Codesphere:  codesphereValues,
+	}, nil
 }
 
-// fixedValues are the values the installer sets the same for every private cloud.
-func fixedValues() map[string]any {
-	return map[string]any{
-		"env":            "prod",
-		"showPromotions": false,
-		"priorityClass":  platform.PriorityClass,
-		"namespace":      kubernetes.WorkspaceNamespace,
-		"workspacePriorityClass": map[string]any{
-			"free": platform.PriorityClass,
-			"paid": "prod-paid-workspaces",
-		},
-		"customDomainIngressClass":   "workspace-proxy-ingress",
-		"useDedicatedWorkspaceNodes": false,
-		"freeWorkspaceClusterLimit":  0,
-		"deployCert":                 false,
-		"metrics":                    map[string]any{"type": "log"},
-		"stripePriceId":              "",
+// fixed are the values the installer sets the same for every private cloud.
+type fixed struct {
+	Env                        string                 `yaml:"env"`
+	ShowPromotions             bool                   `yaml:"showPromotions"`
+	PriorityClass              string                 `yaml:"priorityClass"`
+	Namespace                  string                 `yaml:"namespace"`
+	WorkspacePriorityClass     workspacePriorityClass `yaml:"workspacePriorityClass"`
+	CustomDomainIngressClass   string                 `yaml:"customDomainIngressClass"`
+	UseDedicatedWorkspaceNodes bool                   `yaml:"useDedicatedWorkspaceNodes"`
+	FreeWorkspaceClusterLimit  int                    `yaml:"freeWorkspaceClusterLimit"`
+	DeployCert                 bool                   `yaml:"deployCert"`
+	Metrics                    metrics                `yaml:"metrics"`
+	StripePriceID              string                 `yaml:"stripePriceId"`
+}
+
+type workspacePriorityClass struct {
+	Free string `yaml:"free"`
+	Paid string `yaml:"paid"`
+}
+
+type metrics struct {
+	Type string `yaml:"type"`
+}
+
+func fixedValues() fixed {
+	return fixed{
+		Env:                        "prod",
+		ShowPromotions:             false,
+		PriorityClass:              platform.PriorityClass,
+		Namespace:                  kubernetes.WorkspaceNamespace,
+		WorkspacePriorityClass:     workspacePriorityClass{Free: platform.PriorityClass, Paid: "prod-paid-workspaces"},
+		CustomDomainIngressClass:   "workspace-proxy-ingress",
+		UseDedicatedWorkspaceNodes: false,
+		FreeWorkspaceClusterLimit:  0,
+		DeployCert:                 false,
+		Metrics:                    metrics{Type: "log"},
+		StripePriceID:              "",
 	}
+}
+
+// toMap converts the built values to the plain maps the override merges into, keeping their yaml
+// keys and shapes.
+func toMap(values global) (map[string]any, error) {
+	data, err := yaml.Marshal(values)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal: %w", err)
+	}
+
+	var plain map[string]any
+	if err := yaml.Unmarshal(data, &plain); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	return plain, nil
 }
