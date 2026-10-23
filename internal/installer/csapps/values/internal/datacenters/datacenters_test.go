@@ -25,14 +25,14 @@ var _ = Describe("Values", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(values).To(Equal(map[string]any{
-			"dataCenterId":         1,
-			"dataCenterName":       "main",
-			"defaultDataCenterId":  2,
-			"availableDataCenters": []int{1, 2},
-			"dataCenters": []map[string]any{
-				{"id": 1, "name": "main", "city": "Karlsruhe", "countryCode": "DE"},
-				{"id": 2, "name": "second", "city": "Frankfurt", "countryCode": "DE"},
+		Expect(values).To(Equal(datacenters.DataCenters{
+			DataCenterID:         1,
+			DataCenterName:       "main",
+			DefaultDataCenterID:  2,
+			AvailableDataCenters: []int{1, 2},
+			DataCenters: []datacenters.DataCenter{
+				{ID: 1, Name: "main", City: "Karlsruhe", CountryCode: "DE"},
+				{ID: 2, Name: "second", City: "Frankfurt", CountryCode: "DE"},
 			},
 		}))
 	})
@@ -44,18 +44,18 @@ var _ = Describe("Values", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(values["dataCenterId"]).To(Equal(2))
-		Expect(values["dataCenterName"]).To(Equal("second"))
-		Expect(values["defaultDataCenterId"]).To(Equal(2))
-		Expect(values["availableDataCenters"]).To(Equal([]int{1, 2}))
+		Expect(values.DataCenterID).To(Equal(2))
+		Expect(values.DataCenterName).To(Equal("second"))
+		Expect(values.DefaultDataCenterID).To(Equal(2))
+		Expect(values.AvailableDataCenters).To(Equal([]int{1, 2}))
 	})
 
 	It("no .dataCenters -> only the target one, which is the default", func() {
 		values, err := datacenters.Values(&files.RootConfig{Datacenter: second})
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(values["availableDataCenters"]).To(Equal([]int{2}))
-		Expect(values["defaultDataCenterId"]).To(Equal(2))
+		Expect(values.AvailableDataCenters).To(Equal([]int{2}))
+		Expect(values.DefaultDataCenterID).To(Equal(2))
 	})
 
 	It("data center with id 0 -> error", func() {
