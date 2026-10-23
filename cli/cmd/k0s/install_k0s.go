@@ -94,6 +94,10 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.MarkFlagsOneRequired("install-config", "config")
 	k0s.cmd.MarkFlagsMutuallyExclusive("install-config", "config")
 
+	for _, flag := range []string{"version", "package", "ssh-key-path", "no-download"} {
+		k0s.cmd.MarkFlagsMutuallyExclusive("config", flag)
+	}
+
 	util.AddCmd(install, k0s.cmd)
 
 	k0s.cmd.RunE = k0s.RunE
