@@ -7,6 +7,7 @@ package codesphere
 import (
 	"k8s.io/utils/ptr"
 
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/images"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
@@ -20,6 +21,8 @@ type Codesphere struct {
 	DNSServers                 []string          `yaml:"dnsServers"`
 	Hosts                      []string          `yaml:"hosts"`
 	PrePullImages              bool              `yaml:"prePullImages"`
+	DeployConfig               DeployConfig      `yaml:"deployConfig"`
+	WorkspaceImages            WorkspaceImages   `yaml:"workspaceImages"`
 
 	TLSCertificate        *TLSCertificate        `yaml:"tlsCertificate,omitempty"`
 	UnderprovisionFactors *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
@@ -57,8 +60,22 @@ type ExtraWorkspaceFile struct {
 	Encoded bool   `yaml:"encoded"`
 }
 
-// Values builds the values of the codesphere key.
-func Values(conf files.CodesphereConfig) Codesphere {
+// Values builds the values of the codesphere key. The images also depend on the registry.
+func Values(conf files.CodesphereConfig, imgs images.Images, registry *files.RegistryConfig) (Codesphere, error) {
+	if err := validateDeployConfig(conf); err != nil {
+		return Codesphere{}, err
+	}
+
+	deployConfig, err := deployConfigValues(conf, registry, imgs)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
+	workspaceImages, err := workspaceImagesValues(conf.WorkspaceImages, imgs)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
 	return Codesphere{
 		PublicIP:                   conf.PublicIP,
 		WorkspaceHostingBaseDomain: conf.WorkspaceHostingBaseDomain,
@@ -67,12 +84,14 @@ func Values(conf files.CodesphereConfig) Codesphere {
 		DNSServers:                 dnsServers(conf.DNSServers),
 		Hosts:                      []string{conf.Domain},
 		PrePullImages:              ptr.Deref(conf.PrePullImages, true),
+		DeployConfig:               deployConfig,
+		WorkspaceImages:            workspaceImages,
 		TLSCertificate:             tlsCertificateValues(conf.CustomCertificate),
 		UnderprovisionFactors:      underprovisionFactorsValues(conf.UnderprovisionFactors),
 		ExtraWorkspaceFiles:        extraWorkspaceFilesValues(conf.ExtraWorkspaceFiles),
 		ExtraCAPem:                 conf.ExtraCAPem,
 		ExtraWorkspaceEnvVars:      conf.ExtraWorkspaceEnvVars,
-	}
+	}, nil
 }
 
 func dnsServers(configured []string) []string {
