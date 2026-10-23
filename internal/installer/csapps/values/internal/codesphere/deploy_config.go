@@ -21,7 +21,6 @@ const (
 	defaultGPUAgentBOMRef      = "workspace-agent-24.04.gpu"
 )
 
-// deployFlavors are the flavors deployment-service reads; the installer drops any others.
 var deployFlavors = []string{"default", "gpu"}
 
 // DeployConfig are the images workspaces deploy with.
