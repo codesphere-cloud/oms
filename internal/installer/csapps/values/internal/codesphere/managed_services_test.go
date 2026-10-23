@@ -6,6 +6,8 @@ package codesphere_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
 var _ = Describe("Managed services", func() {
@@ -22,22 +24,17 @@ var _ = Describe("Managed services", func() {
 			          storage: {pricedAs: storage, schema: {type: integer, default: 10}}
 		`}.mustValues()
 
-		Expect(values["managedServices"]).To(Equal([]any{map[string]any{
-			"name":          "postgres",
-			"schemaVersion": "v1",
-			"scope":         "global",
-			"resourceParameters": map[string]any{
-				"storage": map[string]any{
-					"pricedAs": "storage",
-					"schema":   map[string]any{"type": "integer"},
-				},
-			},
-			"plans": []any{map[string]any{
-				"id":          1,
-				"name":        "small",
-				"description": "Small",
-				"parameters":  map[string]any{"storage": 10},
-			}},
+		Expect(values.ManagedServices).To(HaveLen(1))
+		service := values.ManagedServices[0]
+		Expect(service.Scope).To(Equal("global"))
+		Expect(service.ResourceParameters).To(Equal(map[string]*files.ResourceParam{
+			"storage": {PricedAs: "storage", Schema: map[string]any{"type": "integer"}},
+		}))
+		Expect(service.Plans).To(Equal([]files.ServicePlan{{
+			ID:          1,
+			Name:        "small",
+			Description: "Small",
+			Parameters:  map[string]files.PlanParam{"storage": {IsScalar: true, Value: 10}},
 		}}))
 	})
 
@@ -50,9 +47,9 @@ var _ = Describe("Managed services", func() {
 			    resourceParameters: {storage: null}
 		`}.mustValues()
 
-		service := values["managedServices"].([]any)[0].(map[string]any)
-		Expect(service["scope"]).To(Equal("team"))
-		Expect(service["resourceParameters"]).To(Equal(map[string]any{"storage": nil}))
+		service := values.ManagedServices[0]
+		Expect(service.Scope).To(Equal("team"))
+		Expect(service.ResourceParameters).To(Equal(map[string]*files.ResourceParam{"storage": nil}))
 	})
 
 	It("REST provider with versions -> versions dropped", func() {
@@ -64,7 +61,7 @@ var _ = Describe("Managed services", func() {
 			    versions: {1.0.0: {appVersion: "17.6"}}
 		`}.mustValues()
 
-		Expect(values["managedServices"].([]any)[0]).NotTo(HaveKey("versions"))
+		Expect(values.ManagedServices[0].Versions).To(BeNil())
 	})
 
 	It("landscape provider with versions -> versions kept", func() {
@@ -76,8 +73,8 @@ var _ = Describe("Managed services", func() {
 			    versions: {1.0.0: {appVersion: "8.1"}}
 		`}.mustValues()
 
-		Expect(values["managedServices"].([]any)[0]).To(
-			HaveKeyWithValue("versions", map[string]any{"1.0.0": map[string]any{"appVersion": "8.1"}}),
+		Expect(values.ManagedServices[0].Versions).To(
+			Equal(map[string]any{"1.0.0": map[string]any{"appVersion": "8.1"}}),
 		)
 	})
 })

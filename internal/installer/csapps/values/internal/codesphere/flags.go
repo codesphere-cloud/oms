@@ -14,6 +14,10 @@ const WorkspacePVCStorageFlag = "workspace-pvc-storage"
 
 const prodEnv = "prod"
 
+// Flags are the environments each experiment or feature is enabled in; a private cloud only has
+// prod.
+type Flags map[string][]string
+
 // EnabledFlags are the flags the installer enables from the config's internal, deprecated
 // experiments, preview and feature flags.
 func EnabledFlags(conf files.CodesphereConfig) map[string]bool {
@@ -34,8 +38,8 @@ func EnabledFlags(conf files.CodesphereConfig) map[string]bool {
 	return flags
 }
 
-func experimentsValues(conf files.CodesphereConfig, workspacesGatewayEnabled bool) map[string]any {
-	experiments := map[string]any{
+func experimentsValues(conf files.CodesphereConfig, workspacesGatewayEnabled bool) Flags {
+	experiments := Flags{
 		"hermetic":       []string{prodEnv},
 		"persistent-nix": []string{prodEnv},
 	}
@@ -56,8 +60,8 @@ func experimentsValues(conf files.CodesphereConfig, workspacesGatewayEnabled boo
 	return experiments
 }
 
-func featuresValues(configured map[string]bool) map[string]any {
-	features := map[string]any{
+func featuresValues(configured map[string]bool) Flags {
+	features := Flags{
 		"email-signup":     []string{prodEnv},
 		"email-signin":     []string{prodEnv},
 		"standalone-teams": []string{prodEnv},

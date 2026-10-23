@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"maps"
 
-	"go.yaml.in/yaml/v3"
-
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
@@ -17,12 +15,14 @@ const (
 	defaultManagedServicePlanID = 20
 )
 
-func managedServicesValues(services []files.ManagedServiceConfig) ([]any, error) {
+// managedServicesValues passes the configured providers on as they are, with legacy plans upgraded
+// and the installer's defaults.
+func managedServicesValues(services []files.ManagedServiceConfig) ([]files.ManagedServiceConfig, error) {
 	if services == nil {
 		return nil, nil
 	}
 
-	values := make([]any, 0, len(services))
+	values := make([]files.ManagedServiceConfig, 0, len(services))
 	for _, service := range services {
 		if isLegacyPlans(service.Plans) {
 			upgraded, err := upgradeLegacyPlans(service)
@@ -43,12 +43,7 @@ func managedServicesValues(services []files.ManagedServiceConfig) ([]any, error)
 			service.Versions = nil
 		}
 
-		value, err := toValue(service)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert managed service %s: %w", service.Name, err)
-		}
-
-		values = append(values, value)
+		values = append(values, service)
 	}
 
 	return values, nil
@@ -144,19 +139,4 @@ func withoutDefault(schema map[string]interface{}) map[string]interface{} {
 	delete(stripped, "default")
 
 	return stripped
-}
-
-// toValue converts a config struct into plain values, keeping its YAML field names and shapes.
-func toValue(config any) (map[string]any, error) {
-	data, err := yaml.Marshal(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal: %w", err)
-	}
-
-	var value map[string]any
-	if err := yaml.Unmarshal(data, &value); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal: %w", err)
-	}
-
-	return value, nil
 }

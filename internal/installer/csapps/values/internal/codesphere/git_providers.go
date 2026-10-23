@@ -7,64 +7,104 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-func gitProvidersValues(providers *files.GitProvidersConfig) map[string]any {
+// GitProviders are the git providers Codesphere integrates with.
+type GitProviders struct {
+	AzureDevOps GitProvider `yaml:"azureDevOps"`
+	GitHub      GitProvider `yaml:"github"`
+	GitLab      GitProvider `yaml:"gitlab"`
+	Bitbucket   GitProvider `yaml:"bitbucket"`
+	SCMManager  SCMManager  `yaml:"scmManager"`
+}
+
+// GitProvider is a git provider; disabled, it has no connection.
+type GitProvider struct {
+	Enabled                bool `yaml:"enabled"`
+	*GitProviderConnection `yaml:",inline"`
+}
+
+// GitProviderConnection is where Codesphere reaches a git provider and how it signs users in.
+type GitProviderConnection struct {
+	URL   string           `yaml:"url"`
+	API   GitProviderAPI   `yaml:"api"`
+	OAuth GitProviderOAuth `yaml:"oauth"`
+}
+
+// GitProviderAPI is a git provider's API.
+type GitProviderAPI struct {
+	BaseURL string `yaml:"baseUrl"`
+}
+
+// GitProviderOAuth is the OAuth flow of a git provider.
+type GitProviderOAuth struct {
+	Issuer                string `yaml:"issuer"`
+	AuthorizationEndpoint string `yaml:"authorizationEndpoint"`
+	TokenEndpoint         string `yaml:"tokenEndpoint"`
+	RedirectURI           string `yaml:"redirectUri,omitempty"`
+	InstallationURI       string `yaml:"installationUri,omitempty"`
+	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
+	Scope                 string `yaml:"scope,omitempty"`
+}
+
+// SCMManager is the SCM-Manager integration; disabled, it has no connection.
+type SCMManager struct {
+	Enabled               bool `yaml:"enabled"`
+	*SCMManagerConnection `yaml:",inline"`
+}
+
+// SCMManagerConnection is where Codesphere reaches SCM-Manager.
+type SCMManagerConnection struct {
+	URL string        `yaml:"url"`
+	API SCMManagerAPI `yaml:"api"`
+}
+
+// SCMManagerAPI is SCM-Manager's API, when the config sets it apart from its URL.
+type SCMManagerAPI struct {
+	BaseURL string `yaml:"baseUrl,omitempty"`
+}
+
+func gitProvidersValues(providers *files.GitProvidersConfig) GitProviders {
 	if providers == nil {
 		providers = &files.GitProvidersConfig{}
 	}
 
-	values := map[string]any{
-		"azureDevOps": gitProviderValues(providers.AzureDevOps),
-		"github":      gitProviderValues(providers.GitHub),
-		"gitlab":      gitProviderValues(providers.GitLab),
-		"bitbucket":   gitProviderValues(providers.Bitbucket),
+	return GitProviders{
+		AzureDevOps: gitProviderValues(providers.AzureDevOps),
+		GitHub:      gitProviderValues(providers.GitHub),
+		GitLab:      gitProviderValues(providers.GitLab),
+		Bitbucket:   gitProviderValues(providers.Bitbucket),
+		SCMManager:  scmManagerValues(providers.SCMManager),
 	}
-
-	scm := providers.SCMManager
-	if scm == nil || !scm.Enabled {
-		values["scmManager"] = map[string]any{"enabled": false}
-		return values
-	}
-
-	scmValues := map[string]any{"enabled": true, "url": scm.URL, "api": map[string]any{}}
-	if scm.API != nil {
-		scmValues["api"] = map[string]any{"baseUrl": scm.API.BaseURL}
-	}
-
-	values["scmManager"] = scmValues
-
-	return values
 }
 
-func gitProviderValues(provider *files.GitProviderConfig) map[string]any {
+func gitProviderValues(provider *files.GitProviderConfig) GitProvider {
 	if provider == nil || !provider.Enabled {
-		return map[string]any{"enabled": false}
+		return GitProvider{Enabled: false}
 	}
 
-	oauth := map[string]any{
-		"issuer":                provider.OAuth.Issuer,
-		"authorizationEndpoint": provider.OAuth.AuthorizationEndpoint,
-		"tokenEndpoint":         provider.OAuth.TokenEndpoint,
+	return GitProvider{Enabled: true, GitProviderConnection: &GitProviderConnection{
+		URL: provider.URL,
+		API: GitProviderAPI{BaseURL: provider.API.BaseURL},
+		OAuth: GitProviderOAuth{
+			Issuer:                provider.OAuth.Issuer,
+			AuthorizationEndpoint: provider.OAuth.AuthorizationEndpoint,
+			TokenEndpoint:         provider.OAuth.TokenEndpoint,
+			RedirectURI:           provider.OAuth.RedirectURI,
+			InstallationURI:       provider.OAuth.InstallationURI,
+			ClientAuthMethod:      provider.OAuth.ClientAuthMethod,
+			Scope:                 provider.OAuth.Scope,
+		},
+	}}
+}
+
+func scmManagerValues(scm *files.SCMManagerConfig) SCMManager {
+	if scm == nil || !scm.Enabled {
+		return SCMManager{Enabled: false}
 	}
 
-	optional := map[string]string{
-		"redirectUri":      provider.OAuth.RedirectURI,
-		"installationUri":  provider.OAuth.InstallationURI,
-		"clientAuthMethod": provider.OAuth.ClientAuthMethod,
-	}
-	for key, value := range optional {
-		if value != "" {
-			oauth[key] = value
-		}
+	connection := &SCMManagerConnection{URL: scm.URL}
+	if scm.API != nil {
+		connection.API.BaseURL = scm.API.BaseURL
 	}
 
-	if provider.OAuth.Scope != "" {
-		oauth["scope"] = provider.OAuth.Scope
-	}
-
-	return map[string]any{
-		"enabled": true,
-		"url":     provider.URL,
-		"api":     map[string]any{"baseUrl": provider.API.BaseURL},
-		"oauth":   oauth,
-	}
+	return SCMManager{Enabled: true, SCMManagerConnection: connection}
 }

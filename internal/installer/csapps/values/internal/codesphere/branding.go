@@ -7,16 +7,25 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-func brandingValues(branding *files.BrandingConfig) any {
+// Branding are the texts and links that brand the IDE.
+type Branding struct {
+	Desc        string `yaml:"desc,omitempty"`
+	DocsURL     string `yaml:"docsUrl,omitempty"`
+	FaviconHref string `yaml:"faviconHref,omitempty"`
+	Title       string `yaml:"title,omitempty"`
+	TosURL      string `yaml:"tosUrl,omitempty"`
+}
+
+func brandingValues(branding *files.BrandingConfig) *Branding {
 	if branding == nil {
 		return nil
 	}
 
-	return omitEmpty(map[string]any{
-		"desc":        branding.Desc,
-		"docsUrl":     branding.DocsURL,
-		"faviconHref": branding.FaviconHref,
-		"title":       branding.Title,
-		"tosUrl":      branding.TosURL,
-	})
+	return &Branding{
+		Desc:        branding.Desc,
+		DocsURL:     branding.DocsURL,
+		FaviconHref: branding.FaviconHref,
+		Title:       branding.Title,
+		TosURL:      branding.TosURL,
+	}
 }

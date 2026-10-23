@@ -49,7 +49,7 @@ type input struct {
 	registry *files.RegistryConfig
 }
 
-func (in input) values() (map[string]any, error) {
+func (in input) values() (codesphere.Codesphere, error) {
 	conf := files.CodesphereConfig{
 		Domain:        "codesphere.example.com",
 		CustomDomains: files.CustomDomainsConfig{CNameBaseDomain: "custom.example.com"},
@@ -73,7 +73,7 @@ func (in input) values() (map[string]any, error) {
 	return codesphere.Values(conf, imgs, gateways, in.metalLB, in.registry) //nolint:wrapcheck
 }
 
-func (in input) mustValues() map[string]any {
+func (in input) mustValues() codesphere.Codesphere {
 	values, err := in.values()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -81,11 +81,10 @@ func (in input) mustValues() map[string]any {
 }
 
 // deployImage returns a deploy config image.
-func deployImage(values map[string]any, key string) map[string]any {
-	images := values["deployConfig"].(map[string]any)["images"].(map[string]any)
-	Expect(images).To(HaveKey(key))
+func deployImage(values codesphere.Codesphere, key string) codesphere.DeployImage {
+	Expect(values.DeployConfig.Images).To(HaveKey(key))
 
-	return images[key].(map[string]any)
+	return values.DeployConfig.Images[key]
 }
 
 // dedent removes the indentation all non-blank lines share, so tests can indent multi-line YAML

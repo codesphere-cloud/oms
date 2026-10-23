@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
@@ -24,15 +25,15 @@ var _ = Describe("Deploy config", func() {
 			      pooledInstances: 2
 		`}.mustValues()
 
-		Expect(values["deployConfig"]).To(Equal(map[string]any{
-			"images": map[string]any{
-				"ubuntu-24.04": map[string]any{
-					"name":           "Ubuntu 24.04",
-					"supportedUntil": "2028-05-31T00:00:00.000Z",
-					"flavors": map[string]any{
-						"default": map[string]any{
-							"image": imagePrefix + "workspace-agent-24.04",
-							"pool":  map[string]any{"8": 2},
+		Expect(values.DeployConfig).To(Equal(codesphere.DeployConfig{
+			Images: map[string]codesphere.DeployImage{
+				"ubuntu-24.04": {
+					Name:           "Ubuntu 24.04",
+					SupportedUntil: "2028-05-31T00:00:00.000Z",
+					Flavors: map[string]codesphere.Flavor{
+						"default": {
+							Image: imagePrefix + "workspace-agent-24.04",
+							Pool:  map[string]int{"8": 2},
 						},
 					},
 				},
@@ -64,11 +65,11 @@ var _ = Describe("Deploy config", func() {
 			}),
 		}.mustValues()
 
-		flavors := deployImage(values, "ubuntu-24.04")["flavors"].(map[string]any)
-		Expect(flavors["default"]).To(HaveKeyWithValue("pool", map[string]any{"8": 0}))
-		Expect(flavors["gpu"]).To(Equal(map[string]any{
-			"image": imagePrefix + "workspace-agent-24.04-gpu",
-			"pool":  map[string]any{"9": 1},
+		flavors := deployImage(values, "ubuntu-24.04").Flavors
+		Expect(flavors["default"].Pool).To(Equal(map[string]int{"8": 0}))
+		Expect(flavors["gpu"]).To(Equal(codesphere.Flavor{
+			Image: imagePrefix + "workspace-agent-24.04-gpu",
+			Pool:  map[string]int{"9": 1},
 		}))
 	})
 
@@ -86,10 +87,10 @@ var _ = Describe("Deploy config", func() {
 		`}.mustValues()
 
 		image := deployImage(values, "ubuntu-22.04")
-		Expect(image["default"]).To(BeTrue())
-		Expect(image["supportedUntil"]).To(Equal("2027-04-01T00:00:00.000Z"))
-		Expect(image["flavors"]).To(HaveLen(1))
-		Expect(image["flavors"]).To(HaveKey("default"))
+		Expect(image.Default).To(HaveValue(BeTrue()))
+		Expect(image.SupportedUntil).To(Equal("2027-04-01T00:00:00.000Z"))
+		Expect(image.Flavors).To(HaveLen(1))
+		Expect(image.Flavors).To(HaveKey("default"))
 	})
 
 	It("flavor with a Dockerfile and a registry -> image built from it", func() {
@@ -101,9 +102,7 @@ var _ = Describe("Deploy config", func() {
 			registry: &files.RegistryConfig{Server: "registry.example.com"},
 		}.mustValues()
 
-		defaultFlavor := deployImage(values, "ubuntu-24.04")["flavors"].(map[string]any)["default"]
-		Expect(defaultFlavor).To(
-			HaveKeyWithValue("image", "registry.example.com/ubuntu-24.04-default"),
-		)
+		defaultFlavor := deployImage(values, "ubuntu-24.04").Flavors["default"]
+		Expect(defaultFlavor.Image).To(Equal("registry.example.com/ubuntu-24.04-default"))
 	})
 })

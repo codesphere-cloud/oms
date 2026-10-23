@@ -24,10 +24,16 @@ func workspaceImage(imgs images.Images, configured files.ImageRef) (string, erro
 	return image, nil
 }
 
+// WorkspaceImages are the images every workspace runs besides its agent.
+type WorkspaceImages struct {
+	Server string `yaml:"server"`
+	VPN    string `yaml:"vpn"`
+}
+
 func workspaceImagesValues(
 	configured *files.WorkspaceImagesConfig,
 	imgs images.Images,
-) (map[string]any, error) {
+) (WorkspaceImages, error) {
 	if configured == nil {
 		configured = &files.WorkspaceImagesConfig{}
 	}
@@ -42,13 +48,13 @@ func workspaceImagesValues(
 
 	server, err := workspaceImage(imgs, pick(configured.Server, "workspace-server"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve the workspace server image: %w", err)
+		return WorkspaceImages{}, fmt.Errorf("failed to resolve the workspace server image: %w", err)
 	}
 
 	vpn, err := workspaceImage(imgs, pick(configured.VPN, "vpn"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve the workspace VPN image: %w", err)
+		return WorkspaceImages{}, fmt.Errorf("failed to resolve the workspace VPN image: %w", err)
 	}
 
-	return map[string]any{"server": server, "vpn": vpn}, nil
+	return WorkspaceImages{Server: server, VPN: vpn}, nil
 }

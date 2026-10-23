@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/cluster"
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/codesphere"
 )
 
 var _ = Describe("Values", func() {
@@ -17,20 +18,16 @@ var _ = Describe("Values", func() {
 			  - {name: .npmrc, content: cmVnaXN0cnk=, encoded: true}
 		`}.mustValues()
 
-		Expect(values["extraWorkspaceFiles"]).To(Equal([]any{
-			map[string]any{"name": ".npmrc", "content": "cmVnaXN0cnk=", "encoded": true},
+		Expect(values.ExtraWorkspaceFiles).To(Equal([]codesphere.ExtraWorkspaceFile{
+			{Name: ".npmrc", Content: "cmVnaXN0cnk=", Encoded: true},
 		}))
 	})
 
 	It("disabled gateway APIs -> no gateway domains experiment", func() {
 		values := input{gateways: &cluster.Gateways{}}.mustValues()
 
-		Expect(values["frontendGateway"]).To(
-			HaveKeyWithValue("gatewayApi", map[string]any{"enabled": false}),
-		)
-		Expect(values["customDomains"]).To(
-			HaveKeyWithValue("gatewayApi", map[string]any{"useGateway": false}),
-		)
-		Expect(values["experiments"]).NotTo(HaveKey("gateway-domains"))
+		Expect(values.FrontendGateway.GatewayAPI.Enabled).To(BeFalse())
+		Expect(values.CustomDomains.GatewayAPI.UseGateway).To(BeFalse())
+		Expect(values.Experiments).NotTo(HaveKey("gateway-domains"))
 	})
 })

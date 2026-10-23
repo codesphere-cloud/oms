@@ -22,6 +22,25 @@ const (
 // deployFlavors are the flavors deployment-service reads; the installer drops any others.
 var deployFlavors = []string{"default", "gpu"}
 
+// DeployConfig are the images workspaces deploy with.
+type DeployConfig struct {
+	Images map[string]DeployImage `yaml:"images"`
+}
+
+// DeployImage is a workspace image and its flavors.
+type DeployImage struct {
+	Name           string            `yaml:"name"`
+	SupportedUntil string            `yaml:"supportedUntil"`
+	Flavors        map[string]Flavor `yaml:"flavors"`
+	Default        *bool             `yaml:"default,omitempty"`
+}
+
+// Flavor is a flavor's image and the instances pooled for it per plan id.
+type Flavor struct {
+	Image string         `yaml:"image"`
+	Pool  map[string]int `yaml:"pool"`
+}
+
 func validateDeployConfig(conf files.CodesphereConfig) error {
 	if conf.DeployConfig.Images == nil {
 		return nil
@@ -42,24 +61,24 @@ func deployConfigValues(
 	conf files.CodesphereConfig,
 	registry *files.RegistryConfig,
 	imgs images.Images,
-) (map[string]any, error) {
+) (DeployConfig, error) {
 	configured := conf.DeployConfig.Images
 	if configured == nil {
 		configured = defaultDeployImages(conf, imgs)
 	}
 
-	resolved := map[string]any{}
+	resolved := make(map[string]DeployImage, len(configured))
 
 	for imageKey, image := range configured {
 		value, err := deployImageValues(imageKey, image, registry, imgs)
 		if err != nil {
-			return nil, fmt.Errorf("deployConfig image %s: %w", imageKey, err)
+			return DeployConfig{}, fmt.Errorf("deployConfig image %s: %w", imageKey, err)
 		}
 
 		resolved[imageKey] = value
 	}
 
-	return map[string]any{"images": resolved}, nil
+	return DeployConfig{Images: resolved}, nil
 }
 
 func defaultDeployImages(
@@ -114,8 +133,8 @@ func pool(plans map[int]files.HostingPlan, include func(files.HostingPlan) bool)
 }
 
 // poolValues keys the pooled instances by plan id as a string, as values are JSON.
-func poolValues(instances map[int]int) map[string]any {
-	values := map[string]any{}
+func poolValues(instances map[int]int) map[string]int {
+	values := make(map[string]int, len(instances))
 	for planID, count := range instances {
 		values[fmt.Sprint(planID)] = count
 	}
@@ -128,17 +147,17 @@ func deployImageValues(
 	image files.ImageConfig,
 	registry *files.RegistryConfig,
 	imgs images.Images,
-) (map[string]any, error) {
+) (DeployImage, error) {
 	supportedUntil, err := jsDateString(image.SupportedUntil)
 	if err != nil {
-		return nil, err
+		return DeployImage{}, err
 	}
 
 	if _, ok := image.Flavors["default"]; !ok {
-		return nil, fmt.Errorf("the default flavor is required")
+		return DeployImage{}, fmt.Errorf("the default flavor is required")
 	}
 
-	flavors := map[string]any{}
+	flavors := map[string]Flavor{}
 
 	for _, flavorKey := range deployFlavors {
 		flavor, ok := image.Flavors[flavorKey]
@@ -148,22 +167,18 @@ func deployImageValues(
 
 		resolved, err := flavorImage(imageKey, flavorKey, flavor.Image, registry, imgs)
 		if err != nil {
-			return nil, fmt.Errorf("flavor %s: %w", flavorKey, err)
+			return DeployImage{}, fmt.Errorf("flavor %s: %w", flavorKey, err)
 		}
 
-		flavors[flavorKey] = map[string]any{"image": resolved, "pool": poolValues(flavor.Pool)}
+		flavors[flavorKey] = Flavor{Image: resolved, Pool: poolValues(flavor.Pool)}
 	}
 
-	values := map[string]any{
-		"name":           image.Name,
-		"supportedUntil": supportedUntil,
-		"flavors":        flavors,
-	}
-	if image.Default != nil {
-		values["default"] = *image.Default
-	}
-
-	return values, nil
+	return DeployImage{
+		Name:           image.Name,
+		SupportedUntil: supportedUntil,
+		Flavors:        flavors,
+		Default:        image.Default,
+	}, nil
 }
 
 // flavorImage resolves a flavor's image. A flavor with a Dockerfile uses the image built from it,

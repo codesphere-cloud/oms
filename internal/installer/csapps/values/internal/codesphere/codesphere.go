@@ -5,12 +5,75 @@
 package codesphere
 
 import (
-	"maps"
-
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/cluster"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/images"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
+
+// Codesphere are the values of the codesphere key, from the config with the installer's defaults.
+// The optional ones are left out when the config has none, so the chart's defaults apply.
+type Codesphere struct {
+	PublicIP                      string            `yaml:"publicIP"`
+	CertIssuer                    CertIssuer        `yaml:"certIssuer"`
+	WorkspaceHostingBaseDomain    string            `yaml:"workspaceHostingBaseDomain"`
+	SSHWorkspaceProxy             SSHWorkspaceProxy `yaml:"sshWorkspaceProxy"`
+	VPN                           VPN               `yaml:"vpn"`
+	DNSServers                    []string          `yaml:"dnsServers"`
+	Hosts                         []string          `yaml:"hosts"`
+	PrePullImages                 bool              `yaml:"prePullImages"`
+	GitProviders                  GitProviders      `yaml:"gitProviders"`
+	Experiments                   Flags             `yaml:"experiments"`
+	Features                      Flags             `yaml:"features"`
+	CustomDomains                 CustomDomains     `yaml:"customDomains"`
+	OAuth                         OAuth             `yaml:"oauth"`
+	SignUp                        SignUp            `yaml:"signUp"`
+	ManagedServiceWorkspacePlanID int               `yaml:"managedServiceWorkspacePlanId"`
+	Otel                          Otel              `yaml:"otel"`
+	DeployConfig                  DeployConfig      `yaml:"deployConfig"`
+	WorkspaceImages               WorkspaceImages   `yaml:"workspaceImages"`
+	FrontendGateway               FrontendGateway   `yaml:"frontendGateway"`
+
+	IPService             *IPService                   `yaml:"ipService,omitempty"`
+	ManagedServices       []files.ManagedServiceConfig `yaml:"managedServices,omitempty"`
+	Branding              *Branding                    `yaml:"branding,omitempty"`
+	TLSCertificate        *TLSCertificate              `yaml:"tlsCertificate,omitempty"`
+	UnderprovisionFactors *UnderprovisionFactors       `yaml:"underprovisionFactors,omitempty"`
+	ExtraWorkspaceFiles   []ExtraWorkspaceFile         `yaml:"extraWorkspaceFiles,omitempty"`
+	SMTP                  *SMTP                        `yaml:"smtp,omitempty"`
+	OpenBao               *OpenBao                     `yaml:"openBao,omitempty"`
+	OpenFGA               *OpenFGA                     `yaml:"openFga,omitempty"`
+	ExtraCAPem            string                       `yaml:"extraCaPem,omitempty"`
+	ExtraWorkspaceEnvVars map[string]string            `yaml:"extraWorkspaceEnvVars,omitempty"`
+}
+
+// SSHWorkspaceProxy is the ssh proxy's jump host domain.
+type SSHWorkspaceProxy struct {
+	BaseDomain string `yaml:"baseDomain,omitempty"`
+}
+
+// VPN is the peer id of the workspace VPN tunnels.
+type VPN struct {
+	LeftPeerID string `yaml:"leftPeerId,omitempty"`
+}
+
+// TLSCertificate is the custom certificate Codesphere serves.
+type TLSCertificate struct {
+	Cert string `yaml:"cert"`
+	Key  string `yaml:"key"`
+}
+
+// UnderprovisionFactors scale the resources workspaces request.
+type UnderprovisionFactors struct {
+	CPU    float64 `yaml:"cpu"`
+	Memory float64 `yaml:"memory"`
+}
+
+// ExtraWorkspaceFile is a file every workspace gets.
+type ExtraWorkspaceFile struct {
+	Name    string `yaml:"name"`
+	Content string `yaml:"content"`
+	Encoded bool   `yaml:"encoded"`
+}
 
 // Values builds the values of the codesphere key. Some of them also depend on the cluster gateways,
 // MetalLB and the registry.
@@ -20,142 +83,72 @@ func Values(
 	gateways cluster.Gateways,
 	metalLB *files.MetalLBConfig,
 	registry *files.RegistryConfig,
-) (map[string]any, error) {
+) (Codesphere, error) {
 	if err := validateDeployConfig(conf); err != nil {
-		return nil, err
+		return Codesphere{}, err
 	}
 
 	if err := validateTelemetryExport(conf.TelemetryExport); err != nil {
-		return nil, err
+		return Codesphere{}, err
 	}
 
-	resolved, err := resolvedValues(conf, imgs, gateways, metalLB, registry)
-	if err != nil {
-		return nil, err
-	}
-
-	values := configuredValues(conf, gateways)
-	maps.Copy(values, optionalValues(conf))
-	maps.Copy(values, resolved)
-
-	return values, nil
-}
-
-// configuredValues are the values taken from the config with the installer's defaults.
-func configuredValues(conf files.CodesphereConfig, gateways cluster.Gateways) map[string]any {
-	sshWorkspaceProxy := omitEmpty(map[string]any{
-		"baseDomain": sshBaseDomain(conf.SSHWorkspaceProxy),
-	})
-	vpn := omitEmpty(map[string]any{"leftPeerId": conf.VPNLeftPeerID})
-	customDomains := customDomainsValues(conf.CustomDomains, gateways.Workspaces.Use)
-	planID := intOr(conf.ManagedServiceWorkspacePlanID, defaultManagedServicePlanID)
-
-	return map[string]any{
-		"publicIP":                      conf.PublicIP,
-		"certIssuer":                    certIssuerValues(conf.CertIssuer),
-		"workspaceHostingBaseDomain":    conf.WorkspaceHostingBaseDomain,
-		"sshWorkspaceProxy":             sshWorkspaceProxy,
-		"vpn":                           vpn,
-		"dnsServers":                    dnsServers(conf.DNSServers),
-		"hosts":                         []string{conf.Domain},
-		"prePullImages":                 boolOr(conf.PrePullImages, true),
-		"gitProviders":                  gitProvidersValues(conf.GitProviders),
-		"experiments":                   experimentsValues(conf, gateways.Workspaces.Enabled),
-		"features":                      featuresValues(conf.Features),
-		"customDomains":                 customDomains,
-		"oauth":                         oauthValues(conf.OAuth),
-		"signUp":                        signUpValues(conf.SignUp),
-		"managedServiceWorkspacePlanId": planID,
-		"otel":                          otelValues(conf.TelemetryExport),
-	}
-}
-
-// resolvedValues are the values that resolve images or check the config against other keys,
-// and so can fail.
-func resolvedValues(
-	conf files.CodesphereConfig,
-	imgs images.Images,
-	gateways cluster.Gateways,
-	metalLB *files.MetalLBConfig,
-	registry *files.RegistryConfig,
-) (map[string]any, error) {
 	deployConfig, err := deployConfigValues(conf, registry, imgs)
 	if err != nil {
-		return nil, err
+		return Codesphere{}, err
 	}
 
 	workspaceImages, err := workspaceImagesValues(conf.WorkspaceImages, imgs)
 	if err != nil {
-		return nil, err
+		return Codesphere{}, err
 	}
 
-	frontendGateway, err := frontendGatewayValues(
-		imgs,
-		conf.CertIssuer,
-		gateways.Codesphere.Enabled,
-	)
+	frontendGateway, err := frontendGatewayValues(imgs, conf.CertIssuer, gateways.Codesphere.Enabled)
 	if err != nil {
-		return nil, err
+		return Codesphere{}, err
 	}
 
 	ipService, err := ipServiceValues(conf.IPService, metalLB)
 	if err != nil {
-		return nil, err
+		return Codesphere{}, err
 	}
 
 	managedServices, err := managedServicesValues(conf.ManagedServices)
 	if err != nil {
-		return nil, err
+		return Codesphere{}, err
 	}
 
-	values := map[string]any{
-		"deployConfig":    deployConfig,
-		"workspaceImages": workspaceImages,
-		"frontendGateway": frontendGateway,
-	}
-	if ipService != nil {
-		values["ipService"] = ipService
-	}
-
-	if managedServices != nil {
-		values["managedServices"] = managedServices
-	}
-
-	return values, nil
-}
-
-// optionalValues are the values the installer passes through only when the config has them.
-func optionalValues(conf files.CodesphereConfig) map[string]any {
-	optional := map[string]any{
-		"branding":              brandingValues(conf.Branding),
-		"tlsCertificate":        customCertificateValues(conf.CustomCertificate),
-		"underprovisionFactors": underprovisionFactorsValues(conf.UnderprovisionFactors),
-		"extraWorkspaceFiles":   extraWorkspaceFilesValues(conf.ExtraWorkspaceFiles),
-		"smtp":                  smtpValues(conf.Email),
-		"openBao":               openBaoValues(conf.OpenBao),
-		"openFga":               openFgaValues(conf.OpenFga),
-	}
-	if conf.ExtraCAPem != "" {
-		optional["extraCaPem"] = conf.ExtraCAPem
-	}
-
-	if conf.ExtraWorkspaceEnvVars != nil {
-		// As a plain map, so the override merges into it key by key.
-		envVars := make(map[string]any, len(conf.ExtraWorkspaceEnvVars))
-		for name, value := range conf.ExtraWorkspaceEnvVars {
-			envVars[name] = value
-		}
-
-		optional["extraWorkspaceEnvVars"] = envVars
-	}
-
-	for key, value := range optional {
-		if value == nil {
-			delete(optional, key)
-		}
-	}
-
-	return optional
+	return Codesphere{
+		PublicIP:                      conf.PublicIP,
+		CertIssuer:                    certIssuerValues(conf.CertIssuer),
+		WorkspaceHostingBaseDomain:    conf.WorkspaceHostingBaseDomain,
+		SSHWorkspaceProxy:             SSHWorkspaceProxy{BaseDomain: sshBaseDomain(conf.SSHWorkspaceProxy)},
+		VPN:                           VPN{LeftPeerID: conf.VPNLeftPeerID},
+		DNSServers:                    dnsServers(conf.DNSServers),
+		Hosts:                         []string{conf.Domain},
+		PrePullImages:                 boolOr(conf.PrePullImages, true),
+		GitProviders:                  gitProvidersValues(conf.GitProviders),
+		Experiments:                   experimentsValues(conf, gateways.Workspaces.Enabled),
+		Features:                      featuresValues(conf.Features),
+		CustomDomains:                 customDomainsValues(conf.CustomDomains, gateways.Workspaces.Use),
+		OAuth:                         oauthValues(conf.OAuth),
+		SignUp:                        signUpValues(conf.SignUp),
+		ManagedServiceWorkspacePlanID: intOr(conf.ManagedServiceWorkspacePlanID, defaultManagedServicePlanID),
+		Otel:                          otelValues(conf.TelemetryExport),
+		DeployConfig:                  deployConfig,
+		WorkspaceImages:               workspaceImages,
+		FrontendGateway:               frontendGateway,
+		IPService:                     ipService,
+		ManagedServices:               managedServices,
+		Branding:                      brandingValues(conf.Branding),
+		TLSCertificate:                tlsCertificateValues(conf.CustomCertificate),
+		UnderprovisionFactors:         underprovisionFactorsValues(conf.UnderprovisionFactors),
+		ExtraWorkspaceFiles:           extraWorkspaceFilesValues(conf.ExtraWorkspaceFiles),
+		SMTP:                          smtpValues(conf.Email),
+		OpenBao:                       openBaoValues(conf.OpenBao),
+		OpenFGA:                       openFgaValues(conf.OpenFga),
+		ExtraCAPem:                    conf.ExtraCAPem,
+		ExtraWorkspaceEnvVars:         conf.ExtraWorkspaceEnvVars,
+	}, nil
 }
 
 func dnsServers(configured []string) []string {
@@ -174,34 +167,30 @@ func sshBaseDomain(proxy *files.SSHWorkspaceProxyConfig) string {
 	return proxy.BaseDomain
 }
 
-func customCertificateValues(certificate *files.CustomCertificate) any {
+func tlsCertificateValues(certificate *files.CustomCertificate) *TLSCertificate {
 	if certificate == nil {
 		return nil
 	}
 
-	return map[string]any{"cert": certificate.Cert, "key": certificate.Key}
+	return &TLSCertificate{Cert: certificate.Cert, Key: certificate.Key}
 }
 
-func underprovisionFactorsValues(factors *files.UnderprovisionFactors) any {
+func underprovisionFactorsValues(factors *files.UnderprovisionFactors) *UnderprovisionFactors {
 	if factors == nil {
 		return nil
 	}
 
-	return map[string]any{"cpu": factors.CPU, "memory": factors.Memory}
+	return &UnderprovisionFactors{CPU: factors.CPU, Memory: factors.Memory}
 }
 
-func extraWorkspaceFilesValues(workspaceFiles []files.ExtraWorkspaceFile) any {
+func extraWorkspaceFilesValues(workspaceFiles []files.ExtraWorkspaceFile) []ExtraWorkspaceFile {
 	if workspaceFiles == nil {
 		return nil
 	}
 
-	values := make([]any, len(workspaceFiles))
+	values := make([]ExtraWorkspaceFile, len(workspaceFiles))
 	for i, file := range workspaceFiles {
-		values[i] = map[string]any{
-			"name":    file.Name,
-			"content": file.Content,
-			"encoded": file.Encoded,
-		}
+		values[i] = ExtraWorkspaceFile{Name: file.Name, Content: file.Content, Encoded: file.Encoded}
 	}
 
 	return values
@@ -221,15 +210,4 @@ func intOr(value *int, fallback int) int {
 	}
 
 	return *value
-}
-
-// omitEmpty drops the empty strings from values, like JSON drops the installer's undefined fields.
-func omitEmpty(values map[string]any) map[string]any {
-	for key, value := range values {
-		if value == "" {
-			delete(values, key)
-		}
-	}
-
-	return values
 }

@@ -16,6 +16,6 @@ var _ = Describe("OpenFGA", func() {
 			  expose: {enabled: true, host: fga.example.com}
 		`}.mustValues()
 
-		Expect(values).NotTo(HaveKey("openFga"))
+		Expect(values.OpenFGA).To(BeNil())
 	})
 })

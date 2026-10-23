@@ -10,12 +10,18 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
+// IPService is the load balancer workspaces get public IPs from.
+type IPService struct {
+	LoadBalancerKind string   `yaml:"loadBalancerKind"`
+	AddressPools     []string `yaml:"addressPools,omitempty"`
+}
+
 // ipServiceValues returns the configured IP service, or one using all MetalLB pools when MetalLB is
 // enabled and nothing is configured.
 func ipServiceValues(
 	ipService *files.IPServiceConfig,
 	metalLB *files.MetalLBConfig,
-) (map[string]any, error) {
+) (*IPService, error) {
 	metalLBEnabled := metalLB != nil && metalLB.Enabled
 	poolNames := []string{}
 
@@ -30,7 +36,7 @@ func ipServiceValues(
 			return nil, nil
 		}
 
-		return map[string]any{"loadBalancerKind": "metallb", "addressPools": poolNames}, nil
+		return &IPService{LoadBalancerKind: "metallb", AddressPools: poolNames}, nil
 	}
 
 	if metalLBEnabled && ipService.LoadBalancerKind != "metallb" {
@@ -51,10 +57,5 @@ func ipServiceValues(
 		}
 	}
 
-	values := map[string]any{"loadBalancerKind": ipService.LoadBalancerKind}
-	if ipService.AddressPools != nil {
-		values["addressPools"] = ipService.AddressPools
-	}
-
-	return values, nil
+	return &IPService{LoadBalancerKind: ipService.LoadBalancerKind, AddressPools: ipService.AddressPools}, nil
 }

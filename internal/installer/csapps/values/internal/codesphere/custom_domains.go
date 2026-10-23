@@ -7,26 +7,33 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-func customDomainsValues(conf files.CustomDomainsConfig, useGateway bool) map[string]any {
-	values := map[string]any{
-		"cNameBaseDomain": conf.CNameBaseDomain,
-		"gatewayApi":      map[string]any{"useGateway": useGateway},
-	}
-	if conf.InsecureSkipDomainControlVerify != nil {
-		values["insecureSkipDomainControlVerify"] = *conf.InsecureSkipDomainControlVerify
-	}
+// CustomDomains are the settings of the workspaces' custom domains.
+type CustomDomains struct {
+	CNameBaseDomain                 string                  `yaml:"cNameBaseDomain"`
+	GatewayAPI                      CustomDomainsGatewayAPI `yaml:"gatewayApi"`
+	InsecureSkipDomainControlVerify *bool                   `yaml:"insecureSkipDomainControlVerify,omitempty"`
+	Cert                            *CustomDomainsCert      `yaml:"cert,omitempty"`
+}
 
+// CustomDomainsGatewayAPI says whether custom domains are served through the Gateway API.
+type CustomDomainsGatewayAPI struct {
+	UseGateway bool `yaml:"useGateway"`
+}
+
+// CustomDomainsCert is the key of the certificates issued for custom domains.
+type CustomDomainsCert struct {
+	Algorithm string `yaml:"algorithm,omitempty"`
+	Size      int    `yaml:"size,omitempty"`
+}
+
+func customDomainsValues(conf files.CustomDomainsConfig, useGateway bool) CustomDomains {
+	values := CustomDomains{
+		CNameBaseDomain:                 conf.CNameBaseDomain,
+		GatewayAPI:                      CustomDomainsGatewayAPI{UseGateway: useGateway},
+		InsecureSkipDomainControlVerify: conf.InsecureSkipDomainControlVerify,
+	}
 	if conf.Cert != nil {
-		cert := map[string]any{}
-		if conf.Cert.Algorithm != "" {
-			cert["algorithm"] = conf.Cert.Algorithm
-		}
-
-		if conf.Cert.Size != 0 {
-			cert["size"] = conf.Cert.Size
-		}
-
-		values["cert"] = cert
+		values.Cert = &CustomDomainsCert{Algorithm: conf.Cert.Algorithm, Size: conf.Cert.Size}
 	}
 
 	return values

@@ -17,13 +17,13 @@ var _ = Describe("Flags", func() {
 			features: {feature-on: true, feature-off: false}
 		`}.mustValues()
 
-		experiments := values["experiments"].(map[string]any)
+		experiments := values.Experiments
 		Expect(experiments).To(HaveKeyWithValue("legacy", []string{"prod"}))
 		Expect(experiments).To(HaveKeyWithValue("internal-flag", []string{"prod"}))
 		Expect(experiments).To(HaveKeyWithValue("preview-on", []string{"prod"}))
 		Expect(experiments).NotTo(HaveKey("preview-off"))
 
-		features := values["features"].(map[string]any)
+		features := values.Features
 		Expect(features).To(HaveKeyWithValue("feature-on", []string{"prod"}))
 		Expect(features).To(HaveKeyWithValue("feature-off", []string{}))
 	})

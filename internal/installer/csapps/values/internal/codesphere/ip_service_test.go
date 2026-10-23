@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
@@ -19,9 +20,9 @@ var _ = Describe("IP service", func() {
 	It("enabled MetalLB without an IP service -> all its pools", func() {
 		values := input{metalLB: metalLB}.mustValues()
 
-		Expect(values["ipService"]).To(Equal(map[string]any{
-			"loadBalancerKind": "metallb",
-			"addressPools":     []string{"public"},
+		Expect(values.IPService).To(Equal(&codesphere.IPService{
+			LoadBalancerKind: "metallb",
+			AddressPools:     []string{"public"},
 		}))
 	})
 
