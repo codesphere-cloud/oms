@@ -15,14 +15,12 @@ var _ = Describe("Values", func() {
 	It("Codesphere-managed Kubernetes without CIDRs -> default subnets", func() {
 		values := kubernetes.Values(files.KubernetesConfig{ManagedByCodesphere: true})
 
-		Expect(values).To(Equal(map[string]any{
-			"networkPolicies": map[string]any{
-				"workspace": map[string]any{
-					"namespace":     "workspaces",
-					"podSubnet":     "100.96.0.0/11",
-					"serviceSubnet": "100.64.0.0/13",
-				},
-			},
+		Expect(values).To(Equal(kubernetes.Kubernetes{
+			NetworkPolicies: kubernetes.NetworkPolicies{Workspace: kubernetes.WorkspaceNetworkPolicy{
+				Namespace:     "workspaces",
+				PodSubnet:     "100.96.0.0/11",
+				ServiceSubnet: "100.64.0.0/13",
+			}},
 		}))
 	})
 
@@ -32,22 +30,20 @@ var _ = Describe("Values", func() {
 			ServiceCIDR: "10.1.0.0/16",
 		})
 
-		Expect(values).To(Equal(map[string]any{
-			"networkPolicies": map[string]any{
-				"workspace": map[string]any{
-					"namespace":     "workspaces",
-					"podSubnet":     "10.0.0.0/16",
-					"serviceSubnet": "10.1.0.0/16",
-				},
-			},
+		Expect(values).To(Equal(kubernetes.Kubernetes{
+			NetworkPolicies: kubernetes.NetworkPolicies{Workspace: kubernetes.WorkspaceNetworkPolicy{
+				Namespace:     "workspaces",
+				PodSubnet:     "10.0.0.0/16",
+				ServiceSubnet: "10.1.0.0/16",
+			}},
 		}))
 	})
 
 	It("external Kubernetes without CIDRs -> no default subnets", func() {
 		values := kubernetes.Values(files.KubernetesConfig{})
 
-		workspace := values["networkPolicies"].(map[string]any)["workspace"].(map[string]any)
-		Expect(workspace["podSubnet"]).To(BeEmpty())
-		Expect(workspace["serviceSubnet"]).To(BeEmpty())
+		workspace := values.NetworkPolicies.Workspace
+		Expect(workspace.PodSubnet).To(BeEmpty())
+		Expect(workspace.ServiceSubnet).To(BeEmpty())
 	})
 })
