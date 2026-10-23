@@ -105,7 +105,9 @@ func defaultDeployImages(
 	flavors := map[string]files.FlavorConfig{
 		"default": {Image: agent, Pool: pool(conf.Plans.HostingPlans, withoutGPU)},
 	}
-	if _, err := imgs.Reference(defaultGPUAgentBOMRef); hasGPUAgent || err == nil {
+
+	bomHasGPUAgent := imgs[defaultGPUAgentBOMRef] != ""
+	if hasGPUAgent || bomHasGPUAgent {
 		flavors["gpu"] = files.FlavorConfig{
 			Image: gpuAgent,
 			Pool:  pool(conf.Plans.HostingPlans, withGPU),
