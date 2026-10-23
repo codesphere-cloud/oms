@@ -100,15 +100,6 @@ func Parse(filePath string) (*Config, error) {
 	return &cfg, nil
 }
 
-// GetPCApps returns the pc-applications chart version from the BOM by
-// parsing the tag out of the OCI image reference stored at
-// components["pc-applications"].files["chart"].ociRef.
-// Returns (nil, false) when the component is absent, the chart file entry is
-// missing, or the ociRef has no recognisable tag.
-func (b *Config) GetPCApps() (reference.NamedTagged, bool) {
-	return b.GetChart("pc-applications")
-}
-
 // GetChart returns the tagged OCI chart reference stored in the named
 // component's files["chart"].ociRef entry.
 func (b *Config) GetChart(component string) (reference.NamedTagged, bool) {
