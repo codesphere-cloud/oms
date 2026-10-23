@@ -18,12 +18,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-const (
-	remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
-	// sharedPostgresPort is the port the shared PostgreSQL server listens on. Secondary data
-	// centers need it spelled out because they connect to it as an external server.
-	sharedPostgresPort int = 5432
-)
+const remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
 
 // errRemoteConfigMissing reports that the jumpbox holds no config for a data center. Recovering
 // a secondary data center tolerates this, since --multi-dc can add one to an existing project.
@@ -636,10 +631,11 @@ func (b *GCPBootstrapper) dropAvailableDataCentersOverride(dc *datacenter.DataCe
 func (b *GCPBootstrapper) applyPostgresConfig(dc *datacenter.DataCenter) (previousIP, previousHostname string) {
 	if dc.ExternalPostgres {
 		dc.InstallConfig.Postgres = files.PostgresConfig{
-			Mode: "external",
+			Mode: files.PostgresModeExternal,
 			// The server certificate carries only an IP SAN, so the address must be the IP.
 			ServerAddress: b.Env.PostgreSQLNode.GetInternalIP(),
-			Port:          sharedPostgresPort,
+			// Secondary data centers connect to the installed server as an external one.
+			Port: files.PostgresPort,
 			// The CA certificate lives in the config, not the vault, and cannot be re-derived
 			// from the CA key — so it has to be copied from the primary data center.
 			CACertPem: b.primaryDC().InstallConfig.Postgres.CACertPem,
