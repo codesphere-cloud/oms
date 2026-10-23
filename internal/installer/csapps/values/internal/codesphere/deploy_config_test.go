@@ -14,11 +14,14 @@ import (
 
 var _ = Describe("Deploy config", func() {
 	It("minimal config -> default Ubuntu image from the BOM, pooled per plan", func() {
-		values := input{conf: files.CodesphereConfig{
+		conf := files.CodesphereConfig{
 			Plans: files.PlansConfig{HostingPlans: map[int]files.HostingPlan{
 				8: {PooledInstances: ptr.To(2)},
 			}},
-		}}.mustValues()
+		}
+
+		values, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.DeployConfig).To(Equal(codesphere.DeployConfig{
 			Images: map[string]codesphere.DeployImage{
@@ -37,17 +40,18 @@ var _ = Describe("Deploy config", func() {
 	})
 
 	It("BOM with a GPU agent -> gpu flavor pools only the GPU plans", func() {
-		values := input{
-			conf: files.CodesphereConfig{
-				Plans: files.PlansConfig{HostingPlans: map[int]files.HostingPlan{
-					8: {},
-					9: {GPUParts: 1, PooledInstances: ptr.To(1)},
-				}},
-			},
-			images: testImages(map[string]string{
-				"workspace-agent-24.04.gpu": imagePrefix + "workspace-agent-24.04-gpu:v1.2.3",
-			}),
-		}.mustValues()
+		conf := files.CodesphereConfig{
+			Plans: files.PlansConfig{HostingPlans: map[int]files.HostingPlan{
+				8: {},
+				9: {GPUParts: 1, PooledInstances: ptr.To(1)},
+			}},
+		}
+		imgs := testImagesWith(map[string]string{
+			"workspace-agent-24.04.gpu": imagePrefix + "workspace-agent-24.04-gpu:v1.2.3",
+		})
+
+		values, err := codesphere.Values(conf, imgs, noRegistry)
+		Expect(err).NotTo(HaveOccurred())
 
 		flavors := deployImage(values, "ubuntu-24.04").Flavors
 		Expect(flavors["default"].Pool).To(Equal(map[string]int{"8": 0}))
@@ -59,7 +63,7 @@ var _ = Describe("Deploy config", func() {
 
 	It("configured deploy config -> only the default and gpu flavors", func() {
 		agent := files.ImageRef{BomRef: "workspace-agent-24.04"}
-		values := input{conf: files.CodesphereConfig{
+		conf := files.CodesphereConfig{
 			DeployConfig: files.DeployConfig{Images: map[string]files.ImageConfig{
 				"ubuntu-22.04": {
 					Name:           "Ubuntu 22.04",
@@ -71,7 +75,10 @@ var _ = Describe("Deploy config", func() {
 					},
 				},
 			}},
-		}}.mustValues()
+		}
+
+		values, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		Expect(err).NotTo(HaveOccurred())
 
 		image := deployImage(values, "ubuntu-22.04")
 		Expect(image.Default).To(HaveValue(BeTrue()))
@@ -81,12 +88,13 @@ var _ = Describe("Deploy config", func() {
 	})
 
 	It("flavor with a Dockerfile and a registry -> image built from it", func() {
-		values := input{
-			conf: files.CodesphereConfig{WorkspaceImages: &files.WorkspaceImagesConfig{
-				Agent: &files.ImageRef{BomRef: "workspace-agent-24.04", Dockerfile: "Dockerfile.agent"},
-			}},
-			registry: &files.RegistryConfig{Server: "registry.example.com"},
-		}.mustValues()
+		conf := files.CodesphereConfig{WorkspaceImages: &files.WorkspaceImagesConfig{
+			Agent: &files.ImageRef{BomRef: "workspace-agent-24.04", Dockerfile: "Dockerfile.agent"},
+		}}
+		registry := &files.RegistryConfig{Server: "registry.example.com"}
+
+		values, err := codesphere.Values(conf, defaultTestImages(), registry)
+		Expect(err).NotTo(HaveOccurred())
 
 		defaultFlavor := deployImage(values, "ubuntu-24.04").Flavors["default"]
 		Expect(defaultFlavor.Image).To(Equal("registry.example.com/ubuntu-24.04-default"))
