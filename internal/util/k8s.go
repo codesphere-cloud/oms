@@ -4,46 +4,19 @@
 package util
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	sigyaml "sigs.k8s.io/yaml"
 )
-
-// DecodeMultiDocYAML splits a multi-document YAML byte slice into
-// individual unstructured objects. This handles the "---" separators.
-func DecodeMultiDocYAML(data []byte) ([]*unstructured.Unstructured, error) {
-	var objects []*unstructured.Unstructured
-
-	reader := yaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
-	for {
-		obj := &unstructured.Unstructured{}
-		if err := reader.Decode(obj); err != nil {
-			if err == io.EOF {
-				break
-			}
-			return nil, fmt.Errorf("decoding yaml document: %w", err)
-		}
-		if obj.Object == nil {
-			continue
-		}
-		objects = append(objects, obj)
-	}
-
-	return objects, nil
-}
 
 // RenderTemplate performs simple ${VAR} substitution on a raw byte slice.
 func RenderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
@@ -61,58 +34,6 @@ func VaultGVR() schema.GroupVersionResource {
 		Version:  "v1alpha1",
 		Resource: "vaults",
 	}
-}
-
-// gvrMappings maps Kubernetes Kind names to their plural resource names.
-// New kinds used in embedded templates need a corresponding entry here.
-var gvrMappings = map[string]string{
-	"Vault":          "vaults",
-	"ServiceAccount": "serviceaccounts",
-	"Role":           "roles",
-	"RoleBinding":    "rolebindings",
-}
-
-// GvrForUnstructured maps an unstructured object's GVK to the appropriate GVR.
-//
-// This uses a hand-rolled lookup table rather than a discovery-backed RESTMapper
-// to avoid requiring a cluster round-trip during resolution. New kinds used in
-// embedded templates will need a corresponding entry in gvrMappings. If this
-// grows unwieldy, consider switching to restmapper.NewDiscoveryRESTMapper.
-func GvrForUnstructured(obj *unstructured.Unstructured) (schema.GroupVersionResource, error) {
-	gvk := obj.GroupVersionKind()
-
-	resource, ok := gvrMappings[gvk.Kind]
-	if !ok {
-		return schema.GroupVersionResource{}, fmt.Errorf("no GVR mapping for %s — add an entry to gvrMappings", gvk)
-	}
-	return schema.GroupVersionResource{
-		Group:    gvk.Group,
-		Version:  gvk.Version,
-		Resource: resource,
-	}, nil
-}
-
-// ApplyUnstructured creates or updates an unstructured resource using the dynamic client.
-func ApplyUnstructured(ctx context.Context, dynClient dynamic.Interface, gvr schema.GroupVersionResource, obj *unstructured.Unstructured) error {
-	ns := obj.GetNamespace()
-	name := obj.GetName()
-	resource := dynClient.Resource(gvr).Namespace(ns)
-
-	existing, err := resource.Get(ctx, name, metav1.GetOptions{})
-	if err != nil {
-		_, err = resource.Create(ctx, obj, metav1.CreateOptions{})
-		if err != nil {
-			return fmt.Errorf("creating %s %s/%s: %w", gvr.Resource, ns, name, err)
-		}
-		return nil
-	}
-
-	obj.SetResourceVersion(existing.GetResourceVersion())
-	_, err = resource.Update(ctx, obj, metav1.UpdateOptions{})
-	if err != nil {
-		return fmt.Errorf("updating %s %s/%s: %w", gvr.Resource, ns, name, err)
-	}
-	return nil
 }
 
 // ApplySecretFromYAML creates or updates a corev1.Secret parsed from YAML bytes.

@@ -13,54 +13,46 @@ import (
 // Test helpers — exported only during `go test` so external test packages
 // (package installer_test) can access unexported fields and methods.
 
-func (o *OpenBaoInstaller) SetCtx(ctx context.Context) {
+func (o *OpenBaoBootstrapper) SetCtx(ctx context.Context) {
 	o.ctx = ctx
 }
 
-func (o *OpenBaoInstaller) SetUnsealSecret(secret *corev1.Secret) {
+func (o *OpenBaoBootstrapper) SetUnsealSecret(secret *corev1.Secret) {
 	o.unsealSecret = secret
 }
 
-func (o *OpenBaoInstaller) SetPassword(password string) {
-	o.password = password
+func (o *OpenBaoBootstrapper) SetReplicas(replicas int) {
+	o.replicas = replicas
 }
 
-func (o *OpenBaoInstaller) GetDRBackupExists() bool {
-	return o.drBackupExists
+func (o *OpenBaoBootstrapper) GetReplicas() int {
+	return o.replicas
 }
 
-func (o *OpenBaoInstaller) GetUnsealSecret() *corev1.Secret {
+func (o *OpenBaoBootstrapper) GetUnsealSecret() *corev1.Secret {
 	return o.unsealSecret
 }
 
-func (o *OpenBaoInstaller) HasExistingDeployment() (bool, error) {
-	return o.hasExistingDeployment()
+func (o *OpenBaoBootstrapper) GetBackupUnsealKeys() map[string][]byte {
+	return o.backupUnsealKeys
 }
 
-func (o *OpenBaoInstaller) SetBackupUnsealKeys(keys map[string][]byte) {
+func (o *OpenBaoBootstrapper) SetBackupUnsealKeys(keys map[string][]byte) {
 	o.backupUnsealKeys = keys
 }
 
-func (o *OpenBaoInstaller) EnsureUnsealSecret() error {
+func (o *OpenBaoBootstrapper) EnsureUnsealSecret() error {
 	return o.ensureUnsealSecret(o.Clientset.CoreV1().Secrets(o.Config.Namespace))
 }
 
-func (o *OpenBaoInstaller) ReleaseExistsInTargetNamespace(releaseName string) (bool, error) {
-	return o.releaseExistsInTargetNamespace(releaseName)
-}
-
-func (o *OpenBaoInstaller) OperatorRunningClusterWide() (bool, error) {
-	return o.operatorRunningClusterWide()
-}
-
-func BuildRetryJoinAddrs(replicas int, namespace string) []string {
-	return buildRetryJoinAddrs(replicas, namespace)
-}
-
-func (o *OpenBaoInstaller) ValidateConfig() error {
+func (o *OpenBaoBootstrapper) ValidateConfig() error {
 	return o.validateConfig()
 }
 
-func (o *OpenBaoInstaller) ReadinessTimeout() time.Duration {
+func (o *OpenBaoBootstrapper) ReadinessTimeout() time.Duration {
 	return o.readinessTimeout()
+}
+
+func (o *OpenBaoBootstrapper) VerifyUnsealSecret() error {
+	return o.verifyUnsealSecret()
 }
