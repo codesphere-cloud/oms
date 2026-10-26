@@ -127,6 +127,19 @@ var _ = Describe("Managed services", func() {
 		Expect(err).To(MatchError(ContainSubstring(`legacy plan "Small" parameter "cpu" is read-only`)))
 	})
 
+	It("legacy read-only parameter with default 0 -> plan pins 0", func() {
+		services := managedServices([]files.ServicePlan{{
+			ID:          0,
+			Name:        "Small",
+			Description: "Small Plan",
+			Parameters: map[string]files.PlanParam{
+				"replicas": legacyParam("replicas", map[string]any{"type": "integer", "default": 0, "readOnly": true}),
+			},
+		}})
+
+		Expect(services[0].Plans[0].Parameters).To(Equal(map[string]files.PlanParam{"replicas": scalarParam(0)}))
+	})
+
 	It("new-format plans -> passed through unchanged", func() {
 		plans := []files.ServicePlan{{
 			ID:          0,
