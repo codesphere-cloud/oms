@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"go.yaml.in/yaml/v3"
+	"k8s.io/utils/ptr"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -460,6 +461,25 @@ cluster:
 			applications := raw["pcApps"].(map[string]interface{})["applications"].(map[string]interface{})
 			Expect(applications).To(HaveKey("ssh-workspace-proxy"))
 			Expect(applications).To(HaveKey("openfga"))
+		})
+
+		It("does not enable openfga in a data center that uses another one's OpenFGA", func() {
+			rootConfig.Codesphere.OpenFga = &files.OpenFgaConfig{Deploy: ptr.To(false), APIURL: "https://openfga.1.cs.example.com"}
+			rootConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
+				Enabled:         true,
+				DestinationPath: "s3://backup-openfga-dev",
+				EndpointURL:     "https://s3.de.io.cloud.ovh.net",
+			}
+
+			data, err := rootConfig.Marshal()
+			Expect(err).NotTo(HaveOccurred())
+
+			var raw map[string]interface{}
+			Expect(yaml.Unmarshal(data, &raw)).NotTo(HaveOccurred())
+
+			pcApps, _ := raw["pcApps"].(map[string]interface{})
+			applications, _ := pcApps["applications"].(map[string]interface{})
+			Expect(applications).NotTo(HaveKey("openfga"))
 		})
 
 		It("does not generate openfga application values when openfgaBackups is unset", func() {

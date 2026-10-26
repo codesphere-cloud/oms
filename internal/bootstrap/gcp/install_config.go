@@ -808,6 +808,17 @@ func (b *GCPBootstrapper) applyOpenfgaBackupConfig(dc *datacenter.DataCenter) {
 		return
 	}
 
+	// A data center using another one's OpenFGA neither runs nor backs it up. Its config is cloned
+	// from the primary's, whose pc-apps values carry the primary's openfga entry, so that goes too.
+	if !dc.InstallConfig.Codesphere.OpenFga.DeploysOpenFga() {
+		dc.InstallConfig.Codesphere.OpenfgaBackups = nil
+		if applications, ok := dc.InstallConfig.PcApps["applications"].(map[string]interface{}); ok {
+			delete(applications, "openfga")
+		}
+
+		return
+	}
+
 	dc.InstallConfig.Codesphere.OpenfgaBackups = &files.OpenfgaBackupsConfig{
 		Enabled:         true,
 		DestinationPath: "s3://" + b.Env.OpenfgaBackupBucket,

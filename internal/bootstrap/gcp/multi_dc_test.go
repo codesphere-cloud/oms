@@ -474,6 +474,24 @@ var _ = Describe("Multi-DC bootstrap", func() {
 		}))
 	})
 
+	It("leaves running and backing up OpenFGA to the primary data center", func() {
+		expectBootstrapMocks("test-project-12345")
+
+		Expect(bs.Bootstrap()).To(Succeed())
+
+		primary, secondary := bs.Env.DataCenters[0], bs.Env.DataCenters[1]
+		Expect(primary.InstallConfig.Codesphere.OpenfgaBackups).NotTo(BeNil())
+		primaryApplications := primary.InstallConfig.PcApps["applications"].(map[string]interface{})
+		Expect(primaryApplications).To(HaveKey("openfga"))
+		Expect(secondary.InstallConfig.Codesphere.OpenfgaBackups).To(BeNil())
+
+		data, err := secondary.InstallConfig.Marshal()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(data)).NotTo(ContainSubstring("openfga-backup"))
+		applications, _ := secondary.InstallConfig.PcApps["applications"].(map[string]interface{})
+		Expect(applications).NotTo(HaveKey("openfga"))
+	})
+
 	It("installs a separate k0s cluster per data center", func() {
 		csEnv.Jumpbox = &node.Node{NodeClient: nodeClient, FileIO: fw}
 		for _, dc := range []struct{ config, secretsDir string }{
