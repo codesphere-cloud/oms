@@ -11,7 +11,11 @@ import (
 )
 
 const (
-	defaultProviderScope        = "global"
+	defaultProviderScope = "global"
+
+	// Landscape managed services run their workspaces on this plan, and 20 (CS Micro) is the only
+	// plan ID every environment has.
+	// TODO(CU-869cwbjnx): use a plan read from the database instead.
 	defaultManagedServicePlanID = 20
 )
 
