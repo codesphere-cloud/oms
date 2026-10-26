@@ -22,7 +22,7 @@ type Gateways struct {
 	Workspaces GatewayAPI
 }
 
-// GatewayAPIs reads the gateways' Gateway API settings, which default to enabled and used.
+// GatewayAPIs reads the gateways' Gateway API settings. They default to enabled and used; a disabled Gateway API is never used.
 func GatewayAPIs(cluster files.ClusterConfig) Gateways {
 	return Gateways{
 		Codesphere: gatewayAPIOf(cluster.Gateway),
@@ -35,10 +35,12 @@ func gatewayAPIOf(conf files.GatewayConfig) GatewayAPI {
 		return GatewayAPI{Enabled: true, Use: true}
 	}
 
-	use := true
-	if conf.GatewayAPI.Use != nil {
+	enabled := conf.GatewayAPI.Enabled
+
+	use := enabled
+	if enabled && conf.GatewayAPI.Use != nil {
 		use = *conf.GatewayAPI.Use
 	}
 
-	return GatewayAPI{Enabled: conf.GatewayAPI.Enabled, Use: use}
+	return GatewayAPI{Enabled: enabled, Use: use}
 }
