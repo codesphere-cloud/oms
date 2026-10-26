@@ -45,26 +45,12 @@ func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 		return nil, fmt.Errorf("failed to read the release image tag: %w", err)
 	}
 
+	global["hostName"] = cfg.Codesphere.Domain
 	values := mergeValues(map[string]any{"global": global}, cfg.Codesphere.Override)
 
 	return mergeValues(values, map[string]any{
-		"global": map[string]any{
-			"imageTag": imageTag,
-			"hostName": hostName(cfg.Codesphere),
-		},
+		"global": map[string]any{"imageTag": imageTag},
 	}), nil
-}
-
-// hostName prefers the override's hostName: the installer sets it after the override, so it would
-// otherwise replace the override's.
-func hostName(conf files.CodesphereConfig) string {
-	if global, ok := conf.Override["global"].(map[string]any); ok {
-		if name, ok := global["hostName"].(string); ok {
-			return name
-		}
-	}
-
-	return conf.Domain
 }
 
 const authServiceImage = "auth-service"
