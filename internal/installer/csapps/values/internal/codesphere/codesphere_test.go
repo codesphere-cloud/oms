@@ -209,7 +209,7 @@ var _ = Describe("Values", func() {
 			},
 			IPService:         &codesphere.IPService{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
 			SSHWorkspaceProxy: &files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"},
-			Branding: &codesphere.Branding{
+			Branding: &files.BrandingConfig{
 				Desc:        "Example IDE",
 				DocsURL:     "https://docs.example.com",
 				FaviconHref: "https://example.com/favicon.ico",
@@ -219,7 +219,7 @@ var _ = Describe("Values", func() {
 			TLSCertificate:        &codesphere.TLSCertificate{Cert: "cert-pem", KeyName: "customCertificateKey"},
 			UnderprovisionFactors: &files.UnderprovisionFactors{CPU: 0.5, Memory: 0.75},
 			ExtraWorkspaceFiles:   []files.ExtraWorkspaceFile{{Name: ".npmrc", Content: "cmVnaXN0cnk=", Encoded: true}},
-			SMTP:                  &codesphere.SMTP{Host: "smtp.example.com", Port: 587, Secure: true, Username: "codesphere"},
+			SMTP:                  &files.SMTPConfig{Host: "smtp.example.com", Port: 587, Secure: true, Username: "codesphere"},
 			ExtraCAPem:            "ca-pem",
 			ExtraWorkspaceEnvVars: map[string]string{"FOO": "bar"},
 		}))

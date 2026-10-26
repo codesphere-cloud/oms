@@ -34,11 +34,11 @@ type Codesphere struct {
 
 	IPService             *IPService                     `yaml:"ipService,omitempty"`
 	SSHWorkspaceProxy     *files.SSHWorkspaceProxyConfig `yaml:"sshWorkspaceProxy,omitempty"`
-	Branding              *Branding                      `yaml:"branding,omitempty"`
+	Branding              *files.BrandingConfig          `yaml:"branding,omitempty"`
 	TLSCertificate        *TLSCertificate                `yaml:"tlsCertificate,omitempty"`
 	UnderprovisionFactors *files.UnderprovisionFactors   `yaml:"underprovisionFactors,omitempty"`
 	ExtraWorkspaceFiles   []files.ExtraWorkspaceFile     `yaml:"extraWorkspaceFiles,omitempty"`
-	SMTP                  *SMTP                          `yaml:"smtp,omitempty"`
+	SMTP                  *files.SMTPConfig              `yaml:"smtp,omitempty"`
 	ExtraCAPem            string                         `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars map[string]string              `yaml:"extraWorkspaceEnvVars,omitempty"`
 }
@@ -108,7 +108,7 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		FrontendGateway:            frontendGateway,
 		IPService:                  ipService,
 		SSHWorkspaceProxy:          conf.SSHWorkspaceProxy,
-		Branding:                   brandingValues(conf.Branding),
+		Branding:                   conf.Branding,
 		TLSCertificate:             tlsCertificateValues(conf.CustomCertificate),
 		UnderprovisionFactors:      conf.UnderprovisionFactors,
 		ExtraWorkspaceFiles:        conf.ExtraWorkspaceFiles,
