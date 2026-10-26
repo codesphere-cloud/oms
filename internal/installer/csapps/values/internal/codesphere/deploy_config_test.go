@@ -87,6 +87,19 @@ var _ = Describe("Deploy config", func() {
 		Expect(image.Flavors).To(HaveKey("default"))
 	})
 
+	It("flavor with a Dockerfile and a registry -> image built from it", func() {
+		conf := files.CodesphereConfig{WorkspaceImages: &files.WorkspaceImagesConfig{
+			Agent: &files.ImageRef{BomRef: "workspace-agent-24.04", Dockerfile: "Dockerfile.agent"},
+		}}
+		registry := &files.RegistryConfig{Server: "registry.example.com"}
+
+		values, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, registry)
+		Expect(err).NotTo(HaveOccurred())
+
+		defaultFlavor := deployImage(values, "ubuntu-24.04").Flavors["default"]
+		Expect(defaultFlavor.Image).To(Equal("registry.example.com/ubuntu-24.04-default"))
+	})
+
 	It("registry server with a trailing slash -> image without a double slash", func() {
 		conf := files.CodesphereConfig{WorkspaceImages: &files.WorkspaceImagesConfig{
 			Agent: &files.ImageRef{BomRef: "workspace-agent-24.04", Dockerfile: "Dockerfile.agent"},

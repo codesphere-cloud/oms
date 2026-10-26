@@ -12,10 +12,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/platform"
 )
 
-const (
-	namePrefix = "ghcr.io/codesphere-cloud/"
-	digest     = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-)
+const namePrefix = "ghcr.io/codesphere-cloud/"
 
 func fullImages() map[string]string {
 	return map[string]string{
@@ -96,33 +93,24 @@ var _ = Describe("Values", func() {
 		}))
 	})
 
-	It("service image missing from the BOM -> error", func() {
-		_, err := platform.Values(testImages(withImage("team-service", "")))
-		Expect(err).To(MatchError(ContainSubstring("image team-service not found in BOM")))
-	})
+	DescribeTable("required image missing from the BOM -> error",
+		func(name string) {
+			_, err := platform.Values(testImages(withImage(name, "")))
+			Expect(err).To(MatchError(ContainSubstring("image " + name + " not found in BOM")))
+		},
+		Entry("service", "team-service"),
+		Entry("router", "nginx"),
+		Entry("OpenSearch", "opensearch"),
+		Entry("auxiliary", "observabilityOtel"),
+	)
 
-	It("router image missing from the BOM -> error", func() {
-		_, err := platform.Values(testImages(withImage("nginx", "")))
-		Expect(err).To(MatchError(ContainSubstring("image nginx not found in BOM")))
-	})
-
-	It("OpenSearch image missing from the BOM -> error", func() {
-		_, err := platform.Values(testImages(withImage("opensearch", "")))
-		Expect(err).To(MatchError(ContainSubstring("image opensearch not found in BOM")))
-	})
-
-	It("auxiliary image missing from the BOM -> error", func() {
-		_, err := platform.Values(testImages(withImage("observabilityOtel", "")))
-		Expect(err).To(MatchError(ContainSubstring("image observabilityOtel not found in BOM")))
-	})
-
-	It("router image with only a digest -> error", func() {
-		_, err := platform.Values(testImages(withImage("nginx", namePrefix+"nginx@"+digest)))
-		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
-	})
-
-	It("OpenSearch image with only a digest -> error", func() {
-		_, err := platform.Values(testImages(withImage("opensearch", namePrefix+"opensearch@"+digest)))
-		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
-	})
+	DescribeTable("image that needs a tag has only a digest -> error",
+		func(name string) {
+			digestOnly := namePrefix + name + "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+			_, err := platform.Values(testImages(withImage(name, digestOnly)))
+			Expect(err).To(MatchError(ContainSubstring("missing a tag")))
+		},
+		Entry("router", "nginx"),
+		Entry("OpenSearch", "opensearch"),
+	)
 })
