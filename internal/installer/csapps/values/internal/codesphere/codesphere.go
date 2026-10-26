@@ -23,6 +23,8 @@ type Codesphere struct {
 	DNSServers                 []string          `yaml:"dnsServers"`
 	Hosts                      []string          `yaml:"hosts"`
 	PrePullImages              bool              `yaml:"prePullImages"`
+	Experiments                Flags             `yaml:"experiments"`
+	Features                   Flags             `yaml:"features"`
 	CustomDomains              CustomDomains     `yaml:"customDomains"`
 	DeployConfig               DeployConfig      `yaml:"deployConfig"`
 	WorkspaceImages            WorkspaceImages   `yaml:"workspaceImages"`
@@ -108,6 +110,8 @@ func Values(
 		DNSServers:                 dnsServers(conf.DNSServers),
 		Hosts:                      []string{conf.Domain},
 		PrePullImages:              ptr.Deref(conf.PrePullImages, true),
+		Experiments:                experimentsValues(conf, gateways.Workspaces.Enabled),
+		Features:                   featuresValues(conf.Features),
 		CustomDomains:              customDomainsValues(conf.CustomDomains, gateways.Workspaces.Use),
 		DeployConfig:               deployConfig,
 		WorkspaceImages:            workspaceImages,
