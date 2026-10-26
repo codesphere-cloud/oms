@@ -19,23 +19,6 @@ func testBOM(images map[string]string) *bom.Config {
 	}}
 }
 
-var _ = Describe("Reference", func() {
-	It("image in the BOM -> its reference unchanged", func() {
-		imgs, err := images.New(testBOM(map[string]string{"nginx": "localhost:5000/nginx:1.31.5"}))
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(imgs.Reference("nginx")).To(Equal("localhost:5000/nginx:1.31.5"))
-	})
-
-	It("image missing from the BOM -> error", func() {
-		imgs, err := images.New(testBOM(map[string]string{}))
-		Expect(err).NotTo(HaveOccurred())
-
-		_, err = imgs.Reference("nginx")
-		Expect(err).To(MatchError(ContainSubstring("image nginx not found in BOM")))
-	})
-})
-
 func testImages(reference string) images.Images {
 	imgs, err := images.New(testBOM(map[string]string{"api": reference}))
 	Expect(err).NotTo(HaveOccurred())
@@ -43,17 +26,55 @@ func testImages(reference string) images.Images {
 	return imgs
 }
 
+var _ = Describe("Reference", func() {
+	It("image in the BOM -> its reference unchanged", func() {
+		Expect(testImages("localhost:5000/api:1.31.5").Reference("api")).To(Equal("localhost:5000/api:1.31.5"))
+	})
+
+	It("image with tag and digest -> its reference unchanged", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api:main@" + digest).Reference("api")).
+			To(Equal("ghcr.io/codesphere-cloud/api:main@" + digest))
+	})
+
+	It("image missing from the BOM -> error", func() {
+		imgs, err := images.New(testBOM(map[string]string{}))
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = imgs.Reference("api")
+		Expect(err).To(MatchError(ContainSubstring("image api not found in BOM")))
+	})
+
+	It("reference with neither tag nor digest -> error", func() {
+		_, err := testImages("registry.example.com:5000/api").Reference("api")
+		Expect(err).To(MatchError(ContainSubstring("missing a tag or digest")))
+	})
+
+	It("malformed reference -> error", func() {
+		_, err := testImages("ghcr.io/codesphere-cloud/API:1.2.3").Reference("api")
+		Expect(err).To(MatchError(ContainSubstring("failed to parse image")))
+	})
+})
+
 var _ = Describe("Name", func() {
-	DescribeTable("reference -> registry and repository",
-		func(reference string, want string) {
-			Expect(testImages(reference).Name("api")).To(Equal(want))
-		},
-		Entry("tag", "ghcr.io/codesphere-cloud/api:1.2.3", "ghcr.io/codesphere-cloud/api"),
-		Entry("digest", "ghcr.io/codesphere-cloud/api@"+digest, "ghcr.io/codesphere-cloud/api"),
-		Entry("tag and digest", "ghcr.io/codesphere-cloud/api:main@"+digest, "ghcr.io/codesphere-cloud/api"),
-		Entry("registry port and tag", "registry.example.com:5000/api:1.2.3", "registry.example.com:5000/api"),
-		Entry("no registry", "nginx:1.31.5", "nginx"),
-	)
+	It("reference with tag -> registry and repository", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api:1.2.3").Name("api")).To(Equal("ghcr.io/codesphere-cloud/api"))
+	})
+
+	It("reference with digest -> registry and repository", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api@" + digest).Name("api")).To(Equal("ghcr.io/codesphere-cloud/api"))
+	})
+
+	It("reference with tag and digest -> registry and repository", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api:main@" + digest).Name("api")).To(Equal("ghcr.io/codesphere-cloud/api"))
+	})
+
+	It("reference with registry port and tag -> registry with port and repository", func() {
+		Expect(testImages("registry.example.com:5000/api:1.2.3").Name("api")).To(Equal("registry.example.com:5000/api"))
+	})
+
+	It("reference without registry -> repository only", func() {
+		Expect(testImages("nginx:1.31.5").Name("api")).To(Equal("nginx"))
+	})
 
 	It("reference with neither tag nor digest -> error", func() {
 		_, err := testImages("registry.example.com:5000/api").Name("api")
@@ -67,17 +88,43 @@ var _ = Describe("Name", func() {
 })
 
 var _ = Describe("Tag", func() {
-	DescribeTable("tagged reference -> its tag",
-		func(reference string, want string) {
-			Expect(testImages(reference).Tag("api")).To(Equal(want))
-		},
-		Entry("tag", "ghcr.io/codesphere-cloud/api:1.2.3", "1.2.3"),
-		Entry("tag and digest", "ghcr.io/codesphere-cloud/api:main@"+digest, "main"),
-		Entry("registry port and tag", "registry.example.com:5000/api:1.2.3", "1.2.3"),
-	)
+	It("reference with tag -> its tag", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api:1.2.3").Tag("api")).To(Equal("1.2.3"))
+	})
+
+	It("reference with tag and digest -> its tag", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api:main@" + digest).Tag("api")).To(Equal("main"))
+	})
+
+	It("reference with registry port and tag -> its tag, not the port", func() {
+		Expect(testImages("registry.example.com:5000/api:1.2.3").Tag("api")).To(Equal("1.2.3"))
+	})
 
 	It("digest-only reference -> error", func() {
 		_, err := testImages("ghcr.io/codesphere-cloud/api@" + digest).Tag("api")
 		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
+	})
+})
+
+var _ = Describe("NameAndTag", func() {
+	It("reference with registry port and tag -> name with port and tag", func() {
+		name, tag, err := testImages("registry.example.com:5000/api:1.2.3").NameAndTag("api")
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(name).To(Equal("registry.example.com:5000/api"))
+		Expect(tag).To(Equal("1.2.3"))
+	})
+
+	It("digest-only reference -> error", func() {
+		_, _, err := testImages("ghcr.io/codesphere-cloud/api@" + digest).NameAndTag("api")
+		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
+	})
+
+	It("image missing from the BOM -> error", func() {
+		imgs, err := images.New(testBOM(map[string]string{}))
+		Expect(err).NotTo(HaveOccurred())
+
+		_, _, err = imgs.NameAndTag("api")
+		Expect(err).To(MatchError(ContainSubstring("image api not found in BOM")))
 	})
 })

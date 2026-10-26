@@ -19,7 +19,7 @@ import (
 //
 //	"auth-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/auth-service:v1.111.0"
 //
-// Reference, Name and Tag return the reference or one of its parts, named as OCI and
+// Reference, Name, Tag and NameAndTag return the reference or one of its parts, named as OCI and
 // distribution/reference name them:
 //
 //	                       6
@@ -51,12 +51,12 @@ func New(b *bom.Config) (Images, error) {
 
 // Reference returns the named image's reference as the BOM has it.
 func (images Images) Reference(name string) (string, error) {
-	image, ok := images[name]
-	if !ok || image == "" {
-		return "", fmt.Errorf("image %s not found in BOM", name)
+	named, err := images.parse(name)
+	if err != nil {
+		return "", err
 	}
 
-	return image, nil
+	return named.String(), nil
 }
 
 // Name returns the registry and repository of the named image, without tag and digest.
@@ -76,6 +76,25 @@ func (images Images) Tag(name string) (string, error) {
 		return "", err
 	}
 
+	return tag(named)
+}
+
+// NameAndTag returns the name and tag of the named image.
+func (images Images) NameAndTag(name string) (string, string, error) {
+	named, err := images.parse(name)
+	if err != nil {
+		return "", "", err
+	}
+
+	imageTag, err := tag(named)
+	if err != nil {
+		return "", "", err
+	}
+
+	return named.Name(), imageTag, nil
+}
+
+func tag(named reference.Named) (string, error) {
 	tagged, ok := named.(reference.Tagged)
 	if !ok {
 		return "", fmt.Errorf("image %s is missing a tag", named)
@@ -85,9 +104,9 @@ func (images Images) Tag(name string) (string, error) {
 }
 
 func (images Images) parse(name string) (reference.Named, error) {
-	image, err := images.Reference(name)
-	if err != nil {
-		return nil, err
+	image, ok := images[name]
+	if !ok || image == "" {
+		return nil, fmt.Errorf("image %s not found in BOM", name)
 	}
 
 	parsed, err := reference.Parse(image)
