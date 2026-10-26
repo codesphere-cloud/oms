@@ -66,7 +66,7 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if config.Operations != nil {
 		codesphereVersion = config.Operations.Codesphere.Version
 	}
-	EnsureSendGridApiKey(vault, codesphereVersion)
+	EnsureSendGridAPIKey(vault, codesphereVersion)
 	return nil
 }
 
@@ -290,15 +290,15 @@ func EnsureDefaultSecrets(vault *files.InstallVault) error {
 	return nil
 }
 
-// sendGridApiKeyOptionalSince is the first Codesphere release whose chart renders without
+// sendGridAPIKeyOptionalSince is the first Codesphere release whose chart renders without
 // sendGridApiKey.
-const sendGridApiKeyOptionalSince = "v1.109.0"
+const sendGridAPIKeyOptionalSince = "v1.109.0"
 
-// EnsureSendGridApiKey sets the dummy sendGridApiKey older Codesphere releases require and
+// EnsureSendGridAPIKey sets the dummy sendGridApiKey older Codesphere releases require and
 // removes it for newer ones, which send mail through SendGrid whenever the key is set.
 // A real key is always kept.
-func EnsureSendGridApiKey(vault *files.InstallVault, codesphereVersion string) {
-	if requiresSendGridApiKey(codesphereVersion) {
+func EnsureSendGridAPIKey(vault *files.InstallVault, codesphereVersion string) {
+	if requiresSendGridAPIKey(codesphereVersion) {
 		setPasswordIfAbsent(vault, files.SecretSendGridApiKey, "dummy")
 		return
 	}
@@ -308,10 +308,10 @@ func EnsureSendGridApiKey(vault *files.InstallVault, codesphereVersion string) {
 	}
 }
 
-// requiresSendGridApiKey treats versions that are no release, such as branch builds, as current.
-func requiresSendGridApiKey(codesphereVersion string) bool {
+// requiresSendGridAPIKey treats versions that are no release, such as branch builds, as current.
+func requiresSendGridAPIKey(codesphereVersion string) bool {
 	v := "v" + strings.TrimPrefix(strings.TrimPrefix(codesphereVersion, "codesphere-"), "v")
-	return semver.IsValid(v) && semver.Compare(v, sendGridApiKeyOptionalSince) < 0
+	return semver.IsValid(v) && semver.Compare(v, sendGridAPIKeyOptionalSince) < 0
 }
 
 // optionalPasswordSecrets are set to "dummy" only when absent. They are not required for
