@@ -12,6 +12,12 @@ import (
 )
 
 var _ = Describe("GatewayAPIs", func() {
+	workspacesGatewayAPI := func(conf *files.GatewayAPIConfig) cluster.GatewayAPI {
+		return cluster.GatewayAPIs(files.ClusterConfig{
+			PublicGateway: files.GatewayConfig{GatewayAPI: conf},
+		}).Workspaces
+	}
+
 	It("gateways without Gateway API settings -> enabled and used", func() {
 		gateways := cluster.GatewayAPIs(files.ClusterConfig{})
 
@@ -21,18 +27,29 @@ var _ = Describe("GatewayAPIs", func() {
 		}))
 	})
 
-	It("disabled Gateway APIs -> disabled, use defaults to true", func() {
-		use := false
-		gateways := cluster.GatewayAPIs(files.ClusterConfig{
-			Gateway: files.GatewayConfig{GatewayAPI: &files.GatewayAPIConfig{Enabled: false}},
-			PublicGateway: files.GatewayConfig{
-				GatewayAPI: &files.GatewayAPIConfig{Enabled: false, Use: &use},
-			},
-		})
+	It("enabled Gateway API without use -> used", func() {
+		gatewayAPI := workspacesGatewayAPI(&files.GatewayAPIConfig{Enabled: true})
 
-		Expect(gateways).To(Equal(cluster.Gateways{
-			Codesphere: cluster.GatewayAPI{Enabled: false, Use: true},
-			Workspaces: cluster.GatewayAPI{Enabled: false, Use: false},
-		}))
+		Expect(gatewayAPI).To(Equal(cluster.GatewayAPI{Enabled: true, Use: true}))
+	})
+
+	It("enabled Gateway API with use false -> not used", func() {
+		use := false
+		gatewayAPI := workspacesGatewayAPI(&files.GatewayAPIConfig{Enabled: true, Use: &use})
+
+		Expect(gatewayAPI).To(Equal(cluster.GatewayAPI{Enabled: true, Use: false}))
+	})
+
+	It("disabled Gateway API without use -> not used", func() {
+		gatewayAPI := workspacesGatewayAPI(&files.GatewayAPIConfig{Enabled: false})
+
+		Expect(gatewayAPI).To(Equal(cluster.GatewayAPI{Enabled: false, Use: false}))
+	})
+
+	It("disabled Gateway API with use true -> not used", func() {
+		use := true
+		gatewayAPI := workspacesGatewayAPI(&files.GatewayAPIConfig{Enabled: false, Use: &use})
+
+		Expect(gatewayAPI).To(Equal(cluster.GatewayAPI{Enabled: false, Use: false}))
 	})
 })
