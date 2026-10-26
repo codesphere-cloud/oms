@@ -9,6 +9,16 @@ Rook/Ceph or a local CSI provisioner provides storage, and CNPG is used for the 
 For local setups, use Minikube with a virtual machine on Linux.
 Not for production use.
 
+Environment variables:
+  OMS_REGISTRY_PASSWORD  Registry password/token; prompts when unset.
+  OMS_GIT_PASSWORD       Optional Git password/token for ArgoCD repository access.
+  OMS_PORTAL_API_KEY     OMS portal API key for installer downloads with --install-version.
+  OMS_PORTAL_API         Portal API URL (default: https://oms-portal.codesphere.com/api).
+  OMS_WORKDIR            Installer working directory (default: ./oms-workdir).
+  KUBECONFIG             Kubeconfig file(s); uses the current context (default: ~/.kube/config).
+  HELM_DRIVER            Helm release storage driver (default: secret).
+  XDG_CONFIG_HOME       Overrides the config directory searched for sops/age/keys.txt.
+
 ```
 oms beta bootstrap-local [flags]
 ```
@@ -32,7 +42,7 @@ oms beta bootstrap-local [flags]
       --pod-cidr string                  Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
       --preview-flags stringArray        Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
       --profile string                   Profile to apply to the install config like resources (supported: dev, minimal, prod) (default "dev")
-      --registry-url string              OCI registry URL used for the ArgoCD helm pull secret (default "oci://ghcr.io/codesphere-cloud/charts")
+      --registry-url string              Registry host with optional port and repository path, without a scheme; Helm charts are pulled from <registry-url>/codesphere-cloud/charts (default "ghcr.io")
       --registry-user string             Custom Registry username
       --secrets-file string              Path to secrets file (default: <install-dir>/prod.vault.yaml)
       --service-cidr string              Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.

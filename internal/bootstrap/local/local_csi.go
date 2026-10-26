@@ -15,16 +15,19 @@ import (
 const (
 	localCSIReleaseName = "local-csi-provisioner"
 	localCSINamespace   = "local-csi"
-	localCSIRepoURL     = "oci://ghcr.io/codesphere-cloud/charts"
 	localCSIVersion     = "0.2.0"
 )
 
 // InstallLocalCSIProvisioner installs the chart and selects its storage class as default.
 func (b *LocalBootstrapper) InstallLocalCSIProvisioner() error {
+	repoURL, err := b.Env.chartsRegistryURL()
+	if err != nil {
+		return err
+	}
 	if err := b.installPrerequisiteChart(prerequisiteChartConfig{
 		Name:           localCSIReleaseName,
 		Chart:          localCSIReleaseName,
-		RepoURL:        localCSIRepoURL,
+		RepoURL:        repoURL,
 		TargetRevision: localCSIVersion,
 		Namespace:      localCSINamespace,
 		Values: map[string]interface{}{

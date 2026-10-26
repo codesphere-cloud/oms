@@ -44,11 +44,16 @@ func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
 		return fmt.Errorf("CloudNativePG chart is missing from BOM component %q", cnpgBOMComponent)
 	}
 
+	repoURL, err := b.Env.chartsRegistryURL()
+	if err != nil {
+		return err
+	}
+
 	// The BOM component is Codesphere's wrapper chart around the upstream
 	// cloudnative-pg chart. Its tag is the wrapper's own version, so it must be
-	// installed from the OCI registry the BOM references, not from the upstream repo.
+	// installed using the chart name and version from the BOM.
 	return b.installPrerequisiteChart(prerequisiteChartConfig{
-		Name: cnpgReleaseName, Chart: path.Base(chart.Name()), RepoURL: path.Dir(chart.Name()),
+		Name: cnpgReleaseName, Chart: path.Base(chart.Name()), RepoURL: repoURL,
 		TargetRevision: chart.Tag(), Namespace: codesphereNamespace,
 		Values: map[string]interface{}{
 			// Values for the upstream chart are nested below its dependency name.

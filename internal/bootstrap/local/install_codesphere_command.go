@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/codesphere-cloud/oms/cli/cmd/codesphere"
 	cmdutil "github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -70,7 +69,10 @@ func (b *LocalBootstrapper) RunInstallCodesphereCommand() (err error) {
 		return fmt.Errorf("failed to resolve local config directory: %w", err)
 	}
 
-	opts := b.localInstallCodesphereOptions(bundleDir, configPath, vaultPath, privKeyPath, configDir)
+	opts, err := b.localInstallCodesphereOptions(bundleDir, configPath, vaultPath, privKeyPath, configDir)
+	if err != nil {
+		return err
+	}
 	command := &cobra.Command{}
 	command.SetContext(b.ctx)
 
@@ -89,7 +91,11 @@ func (b *LocalBootstrapper) RunInstallCodesphereCommand() (err error) {
 	return nil
 }
 
-func (b *LocalBootstrapper) localInstallCodesphereOptions(bundleDir, configPath, vaultPath, privKeyPath, configDir string) *codesphere.InstallCodesphereOpts {
+func (b *LocalBootstrapper) localInstallCodesphereOptions(bundleDir, configPath, vaultPath, privKeyPath, configDir string) (*codesphere.InstallCodesphereOpts, error) {
+	registryURL, err := b.Env.chartsRegistryURL()
+	if err != nil {
+		return nil, err
+	}
 	return &codesphere.InstallCodesphereOpts{
 		GlobalOptions:        &cmdutil.GlobalOptions{Verbose: b.Verbose},
 		Package:              bundleDir,
@@ -104,6 +110,6 @@ func (b *LocalBootstrapper) localInstallCodesphereOptions(bundleDir, configPath,
 		ArgoCDVersion:        "9.5.21",
 		ArgoCDForceConflicts: true,
 		ArgoCDRepoURL:        argocd.DefaultRepoURL,
-		ArgoCDRegistryURL:    strings.TrimPrefix(b.Env.ArgoCDRegistryURL, "oci://"),
-	}
+		ArgoCDRegistryURL:    registryURL,
+	}, nil
 }

@@ -11,11 +11,10 @@ import (
 )
 
 var _ = Describe("Local Codesphere installer options", func() {
-	It("uses the shared vault secret name for both install phases", func() {
-		b := &LocalBootstrapper{Env: &CodesphereEnvironment{ArgoCDRegistryURL: "oci://ghcr.io/codesphere-cloud/charts"}, Verbose: true}
-		opts := b.localInstallCodesphereOptions("/bundle", "/config.yaml", "/vault.yaml", "/age-key", "/config")
-
-		Expect(opts.VaultSecretName).To(Equal(vault.VaultSecretName))
+	It("configures local components and forwards bootstrap settings", func() {
+		b := &LocalBootstrapper{Env: &CodesphereEnvironment{RegistryURL: "ghcr.io"}, Verbose: true}
+		opts, err := b.localInstallCodesphereOptions("/bundle", "/config.yaml", "/vault.yaml", "/age-key", "/config")
+		Expect(err).NotTo(HaveOccurred())
 		Expect(opts.LocalComponents).To(BeTrue())
 		Expect(opts.AutoApprove).To(BeTrue())
 		Expect(opts.Verbose).To(BeTrue())
@@ -29,5 +28,19 @@ var _ = Describe("Local Codesphere installer options", func() {
 		Expect(opts.ArgoCDVersion).To(Equal("9.5.21"))
 		Expect(opts.ArgoCDForceConflicts).To(BeTrue())
 		Expect(opts.ArgoCDRepoURL).To(Equal(argocd.DefaultRepoURL))
+	})
+
+	It("uses the vault secret name required by the dependencies phase", func() {
+		b := &LocalBootstrapper{Env: &CodesphereEnvironment{}}
+		opts, err := b.localInstallCodesphereOptions("/bundle", "/config.yaml", "/vault.yaml", "/age-key", "/config")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(opts.VaultSecretName).To(Equal(vault.VaultSecretName))
+	})
+
+	It("appends the chart path to a registry with a port and repository prefix", func() {
+		b := &LocalBootstrapper{Env: &CodesphereEnvironment{RegistryURL: "registry.example.com:5000/mirror/"}}
+		opts, err := b.localInstallCodesphereOptions("/bundle", "/config.yaml", "/vault.yaml", "/age-key", "/config")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(opts.ArgoCDRegistryURL).To(Equal("registry.example.com:5000/mirror/codesphere-cloud/charts"))
 	})
 })
