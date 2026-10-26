@@ -12,7 +12,10 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/platform"
 )
 
-const namePrefix = "ghcr.io/codesphere-cloud/"
+const (
+	namePrefix = "ghcr.io/codesphere-cloud/"
+	digest     = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+)
 
 func fullImages() map[string]string {
 	return map[string]string{
@@ -93,24 +96,54 @@ var _ = Describe("Values", func() {
 		}))
 	})
 
-	DescribeTable("required image missing from the BOM -> error",
-		func(name string) {
-			_, err := platform.Values(testImages(withImage(name, "")))
-			Expect(err).To(MatchError(ContainSubstring("image " + name + " not found in BOM")))
-		},
-		Entry("service", "team-service"),
-		Entry("router", "nginx"),
-		Entry("OpenSearch", "opensearch"),
-		Entry("auxiliary", "observabilityOtel"),
-	)
+	It("service image missing from the BOM -> error", func() {
+		_, err := platform.Values(testImages(withImage("team-service", "")))
+		Expect(err).To(MatchError(ContainSubstring("image team-service not found in BOM")))
+	})
 
-	DescribeTable("image that needs a tag has only a digest -> error",
-		func(name string) {
-			digestOnly := namePrefix + name + "@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-			_, err := platform.Values(testImages(withImage(name, digestOnly)))
-			Expect(err).To(MatchError(ContainSubstring("missing a tag")))
-		},
-		Entry("router", "nginx"),
-		Entry("OpenSearch", "opensearch"),
-	)
+	It("router image missing from the BOM -> error", func() {
+		_, err := platform.Values(testImages(withImage("nginx", "")))
+		Expect(err).To(MatchError(ContainSubstring("image nginx not found in BOM")))
+	})
+
+	It("OpenSearch image missing from the BOM -> error", func() {
+		_, err := platform.Values(testImages(withImage("opensearch", "")))
+		Expect(err).To(MatchError(ContainSubstring("image opensearch not found in BOM")))
+	})
+
+	It("auxiliary image missing from the BOM -> error", func() {
+		_, err := platform.Values(testImages(withImage("observabilityOtel", "")))
+		Expect(err).To(MatchError(ContainSubstring("image observabilityOtel not found in BOM")))
+	})
+
+	It("auxiliary image with neither tag nor digest -> error", func() {
+		_, err := platform.Values(testImages(withImage("kubectl", namePrefix+"kubectl")))
+		Expect(err).To(MatchError(ContainSubstring("missing a tag or digest")))
+	})
+
+	It("router image has only a digest -> error", func() {
+		_, err := platform.Values(testImages(withImage("nginx", namePrefix+"nginx@"+digest)))
+		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
+	})
+
+	It("OpenSearch image has only a digest -> error", func() {
+		_, err := platform.Values(testImages(withImage("opensearch", namePrefix+"opensearch@"+digest)))
+		Expect(err).To(MatchError(ContainSubstring("missing a tag")))
+	})
+
+	It("images missing across services, router and observability -> every one in the error", func() {
+		bomImages := fullImages()
+		for _, name := range []string{"auth-service", "team-service", "nginx", "opensearch", "kubectl"} {
+			delete(bomImages, name)
+		}
+
+		_, err := platform.Values(testImages(bomImages))
+		Expect(err).To(SatisfyAll(
+			MatchError(ContainSubstring("image auth-service not found in BOM")),
+			MatchError(ContainSubstring("image team-service not found in BOM")),
+			MatchError(ContainSubstring("image nginx not found in BOM")),
+			MatchError(ContainSubstring("image opensearch not found in BOM")),
+			MatchError(ContainSubstring("image kubectl not found in BOM")),
+		))
+	})
 })

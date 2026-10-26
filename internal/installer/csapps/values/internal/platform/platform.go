@@ -1,11 +1,15 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package platform builds the values of the platform images, which come from the BOM only.
+// Package platform builds the values of the services and platform components: their images
+// from the BOM and their fixed defaults.
 package platform
 
 import (
+	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/images"
 )
@@ -71,20 +75,14 @@ type WorkspaceObservability struct {
 	OtelCollectorInitImage string `yaml:"otelCollectorInitImage"`
 }
 
-// Values resolves the images of the services and platform components from the BOM.
+// Values resolves the images of the services and platform components from the BOM. It
+// reports every image that fails, not just the first.
 func Values(imgs images.Images) (Platform, error) {
-	services, err := servicesValues(imgs)
-	if err != nil {
-		return Platform{}, err
-	}
+	services, servicesErr := servicesValues(imgs)
+	workspaceRouter, workspaceRouterErr := workspaceRouterValues(imgs)
+	workspaceObservability, workspaceObservabilityErr := workspaceObservabilityValues(imgs)
 
-	workspaceRouter, err := workspaceRouterValues(imgs)
-	if err != nil {
-		return Platform{}, err
-	}
-
-	workspaceObservability, err := workspaceObservabilityValues(imgs)
-	if err != nil {
+	if err := errors.Join(servicesErr, workspaceRouterErr, workspaceObservabilityErr); err != nil {
 		return Platform{}, err
 	}
 
@@ -98,74 +96,72 @@ func Values(imgs images.Images) (Platform, error) {
 func servicesValues(imgs images.Images) (Services, error) {
 	serviceImageNames := make(map[string]ServiceImage, len(serviceImages))
 
-	for service, imageName := range serviceImages {
-		image, err := imgs.Name(imageName)
+	var errs []error
+
+	for _, service := range slices.Sorted(maps.Keys(serviceImages)) {
+		image, err := imgs.Name(serviceImages[service])
 		if err != nil {
-			return Services{}, fmt.Errorf("failed to resolve the %s image: %w", service, err)
+			errs = append(errs, fmt.Errorf("failed to resolve the %s image: %w", service, err))
+			continue
 		}
 
 		serviceImageNames[service] = ServiceImage{Image: image}
+	}
+
+	if err := errors.Join(errs...); err != nil {
+		return Services{}, err
 	}
 
 	return Services{PriorityClass: PriorityClass, Images: serviceImageNames}, nil
 }
 
 func workspaceRouterValues(imgs images.Images) (WorkspaceRouter, error) {
-	image, err := nameAndTag(imgs, "nginx", "workspace router")
+	name, tag, err := imgs.NameAndTag("nginx")
 	if err != nil {
-		return WorkspaceRouter{}, err
+		return WorkspaceRouter{}, fmt.Errorf("failed to resolve the workspace router image: %w", err)
 	}
 
-	return WorkspaceRouter{Image: image, HAReplicas: workspaceRouterHAReplicas}, nil
+	return WorkspaceRouter{Image: Image{Name: name, Tag: tag}, HAReplicas: workspaceRouterHAReplicas}, nil
 }
 
 func workspaceObservabilityValues(imgs images.Images) (WorkspaceObservability, error) {
-	openSearch, err := nameAndTag(imgs, "opensearch", "OpenSearch")
+	var errs []error
+
+	openSearchName, openSearchTag, err := imgs.NameAndTag("opensearch")
 	if err != nil {
-		return WorkspaceObservability{}, err
+		errs = append(errs, fmt.Errorf("failed to resolve the OpenSearch image: %w", err))
 	}
 
 	openSearchInit, err := imgs.Reference("opensearchInit")
 	if err != nil {
-		return WorkspaceObservability{}, fmt.Errorf("failed to resolve the OpenSearch init image: %w", err)
+		errs = append(errs, fmt.Errorf("failed to resolve the OpenSearch init image: %w", err))
 	}
 
 	kubectl, err := imgs.Reference("kubectl")
 	if err != nil {
-		return WorkspaceObservability{}, fmt.Errorf("failed to resolve the migration kubectl image: %w", err)
+		errs = append(errs, fmt.Errorf("failed to resolve the migration kubectl image: %w", err))
 	}
 
 	otelCollector, err := imgs.Reference("observabilityOtel")
 	if err != nil {
-		return WorkspaceObservability{}, fmt.Errorf("failed to resolve the OTel collector image: %w", err)
+		errs = append(errs, fmt.Errorf("failed to resolve the OTel collector image: %w", err))
 	}
 
 	otelCollectorInit, err := imgs.Reference("observabilityOtelInit")
 	if err != nil {
-		return WorkspaceObservability{}, fmt.Errorf("failed to resolve the OTel collector init image: %w", err)
+		errs = append(errs, fmt.Errorf("failed to resolve the OTel collector init image: %w", err))
+	}
+
+	if err := errors.Join(errs...); err != nil {
+		return WorkspaceObservability{}, err
 	}
 
 	return WorkspaceObservability{
-		OpenSearchImage:        openSearch.Name,
-		OpenSearchVersion:      openSearch.Tag,
+		OpenSearchImage:        openSearchName,
+		OpenSearchVersion:      openSearchTag,
 		OpenSearchInitImage:    openSearchInit,
 		MigrationKubectlImage:  kubectl,
 		OtelCollectorImage:     otelCollector,
 		OtelCollectorInitImage: otelCollectorInit,
 	}, nil
-}
-
-// nameAndTag resolves an image the chart takes as separate name and tag; purpose names it in errors.
-func nameAndTag(imgs images.Images, name, purpose string) (Image, error) {
-	image, err := imgs.Name(name)
-	if err != nil {
-		return Image{}, fmt.Errorf("failed to resolve the %s image: %w", purpose, err)
-	}
-
-	tag, err := imgs.Tag(name)
-	if err != nil {
-		return Image{}, fmt.Errorf("failed to resolve the %s image: %w", purpose, err)
-	}
-
-	return Image{Name: image, Tag: tag}, nil
 }
