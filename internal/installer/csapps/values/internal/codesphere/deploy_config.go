@@ -157,7 +157,7 @@ func deployImageValues(
 ) (DeployImage, error) {
 	supportedUntil, err := jsDateString(image.SupportedUntil)
 	if err != nil {
-		return DeployImage{}, err
+		return DeployImage{}, fmt.Errorf("supportedUntil: %w", err)
 	}
 
 	if _, ok := image.Flavors["default"]; !ok {
@@ -189,7 +189,7 @@ func deployImageValues(
 }
 
 // flavorImage resolves a flavor's image. A flavor with a Dockerfile uses the image built from it,
-// which the installer pushes to the registry as <image>-<flavor>.
+// which `oms build-images` pushes to the registry as <image>-<flavor>.
 func flavorImage(
 	imageKey, flavorKey string,
 	image files.ImageRef,
@@ -216,7 +216,7 @@ func jsDateString(date string) (string, error) {
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("invalid supportedUntil %q: %w", date, err)
+		return "", fmt.Errorf("invalid date %q: %w", date, err)
 	}
 
 	return parsed.UTC().Format("2006-01-02T15:04:05.000Z"), nil
