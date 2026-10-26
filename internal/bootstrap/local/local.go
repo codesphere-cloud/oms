@@ -34,7 +34,6 @@ import (
 const (
 	codesphereSystemNamespace = "codesphere-system"
 	codesphereNamespace       = "codesphere"
-	workspacesNamespace       = "workspaces"
 	// StorageEngineRookCeph uses Rook Ceph for local bootstrap storage.
 	StorageEngineRookCeph = "rook-ceph"
 	// StorageEngineLocal uses PVC-backed local storage.
@@ -265,14 +264,14 @@ func (b *LocalBootstrapper) storageClassName() string {
 }
 
 func (b *LocalBootstrapper) EnsureNamespaces() error {
-	for _, ns := range []string{codesphereSystemNamespace, codesphereNamespace, workspacesNamespace} {
+	for _, ns := range []string{codesphereSystemNamespace, codesphereNamespace, files.WorkspacesNamespace} {
 		namespace := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: ns},
 		}
 
 		// Mark the workspaces namespace as owned by the cluster-config Helm
 		// release so that the chart can manage it during install/upgrade.
-		if ns == workspacesNamespace {
+		if ns == files.WorkspacesNamespace {
 			namespace.Labels = map[string]string{
 				"app.kubernetes.io/managed-by":   "Helm",
 				"meta.helm.sh/release-name":      "cluster-config",
@@ -329,7 +328,7 @@ func (b *LocalBootstrapper) CreateCephAdminSecrets() error {
 		return fmt.Errorf("ceph credentials have not been read yet")
 	}
 
-	for _, ns := range []string{codesphereNamespace, workspacesNamespace} {
+	for _, ns := range []string{codesphereNamespace, files.WorkspacesNamespace} {
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "ceph-admin-credentials",
@@ -362,7 +361,7 @@ func (b *LocalBootstrapper) SyncCephMonEndpoints() error {
 		return fmt.Errorf("failed to read rook-ceph-mon-endpoints ConfigMap from rook-ceph namespace: %w", err)
 	}
 
-	for _, ns := range []string{codesphereNamespace, workspacesNamespace} {
+	for _, ns := range []string{codesphereNamespace, files.WorkspacesNamespace} {
 		cm := &corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "ceph-mon-endpoints",

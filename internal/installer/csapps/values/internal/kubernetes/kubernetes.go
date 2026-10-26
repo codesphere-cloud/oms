@@ -1,17 +1,10 @@
 // Copyright (c) Codesphere Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Package kubernetes builds the values of the kubernetes key.
+// Package kubernetes builds the workspace network policies from the cluster CIDRs.
 package kubernetes
 
-import (
-	"cmp"
-
-	"github.com/codesphere-cloud/oms/internal/installer/files"
-)
-
-// WorkspaceNamespace is the namespace workspaces run in.
-const WorkspaceNamespace = "workspaces"
+import "github.com/codesphere-cloud/oms/internal/installer/files"
 
 // Kubernetes are the values that depend on the cluster's network.
 type Kubernetes struct {
@@ -31,15 +24,11 @@ type WorkspaceNetworkPolicy struct {
 }
 
 // Values builds the network policies of the workspaces from the cluster CIDRs.
-func Values(kubernetes files.KubernetesConfig) Kubernetes {
-	podCIDR, serviceCIDR := kubernetes.PodCIDR, kubernetes.ServiceCIDR
-	if kubernetes.ManagedByCodesphere {
-		podCIDR = cmp.Or(podCIDR, files.DefaultKubernetesPodCIDR)
-		serviceCIDR = cmp.Or(serviceCIDR, files.DefaultKubernetesServiceCIDR)
-	}
+func Values(cfg files.KubernetesConfig) Kubernetes {
+	podCIDR, serviceCIDR := cfg.CIDRs()
 
 	return Kubernetes{NetworkPolicies: NetworkPolicies{Workspace: WorkspaceNetworkPolicy{
-		Namespace:     WorkspaceNamespace,
+		Namespace:     files.WorkspacesNamespace,
 		PodSubnet:     podCIDR,
 		ServiceSubnet: serviceCIDR,
 	}}}
