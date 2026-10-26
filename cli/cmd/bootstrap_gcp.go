@@ -62,7 +62,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 				Not for production use.
 
 				Use --single-vm to install k0s and Codesphere on one VM using the local bootstrap.
-				This mode requires --registry-user, OMS_REGISTRY_PASSWORD,
+				This mode requires --registry-user, either --github-pat or OMS_REGISTRY_PASSWORD,
 				and either --install-local or --install-version. Both modes default to a 50 GB root disk.
 				Single-VM mode adds a separate 100 GB Ceph disk.
 				Both modes accept --install-config-template, --config, --vault and --priv-key.
@@ -104,7 +104,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppClientSecret, "github-app-client-secret", "", "GitHub App Client Secret (required)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitLabAppClientID, "gitlab-app-client-id", "", "GitLab App Client ID (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitLabAppClientSecret, "gitlab-app-client-secret", "", "GitLab App Client Secret (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.")
+	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys (defaults to OMS_REGISTRY_PASSWORD). Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppName, "github-app-name", "", "GitHub App Name (optional)")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamOrg, "github-team-org", "", "GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.")
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamSlug, "github-team-slug", "", "GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.")
@@ -204,7 +204,9 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	}
 
 	sshClient := node.NewSSHNodeClient(c.SSHQuiet)
-	sshClient.ForwardRegistryPassword = c.CodesphereEnv.SingleVM
+	if c.CodesphereEnv.SingleVM {
+		sshClient.RegistryPassword = c.CodesphereEnv.GitHubPAT
+	}
 
 	bs, err := gcp.NewGCPBootstrapper(
 		ctx,

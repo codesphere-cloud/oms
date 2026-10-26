@@ -141,6 +141,26 @@ var _ = Describe("GCP bootstrap mode options", func() {
 		command.CodesphereEnv.RegistryUser = ""
 		Expect(command.prepareBootstrapOptions()).To(Succeed())
 		Expect(command.CodesphereEnv.RootDiskSize).To(Equal(int64(50)))
+		Expect(command.CodesphereEnv.GitHubPAT).To(BeEmpty())
+	})
+
+	It("uses the registry password environment variable for multi-VM GitHub access", func() {
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.GitHubPAT).To(Equal("password"))
+	})
+
+	It("keeps an explicit GitHub PAT ahead of the registry password environment variable", func() {
+		command.CodesphereEnv.GitHubPAT = "explicit-token"
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.GitHubPAT).To(Equal("explicit-token"))
+	})
+
+	It("keeps the GitHub PAT usable without the registry password environment variable", func() {
+		GinkgoT().Setenv("OMS_REGISTRY_PASSWORD", "")
+
+		command.CodesphereEnv.GitHubPAT = "explicit-token"
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.GitHubPAT).To(Equal("explicit-token"))
 	})
 
 	It("uses the same root disk default in single-VM mode", func() {
@@ -169,11 +189,21 @@ var _ = Describe("GCP bootstrap mode options", func() {
 		Expect(command.prepareBootstrapOptions()).To(MatchError(ContainSubstring("--registry-user is required")))
 	})
 
-	It("requires the registry password in single-VM mode", func() {
+	It("accepts a GitHub PAT without the registry password environment variable in single-VM mode", func() {
+		command.CodesphereEnv.SingleVM = true
+		command.CodesphereEnv.GitHubPAT = "explicit-token"
+
+		GinkgoT().Setenv("OMS_REGISTRY_PASSWORD", "")
+
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.GitHubPAT).To(Equal("explicit-token"))
+	})
+
+	It("requires either credential in single-VM mode", func() {
 		command.CodesphereEnv.SingleVM = true
 
 		GinkgoT().Setenv("OMS_REGISTRY_PASSWORD", "")
-		Expect(command.prepareBootstrapOptions()).To(MatchError(ContainSubstring("OMS_REGISTRY_PASSWORD must be set")))
+		Expect(command.prepareBootstrapOptions()).To(MatchError(ContainSubstring("--github-pat or OMS_REGISTRY_PASSWORD must be set")))
 	})
 
 	It("rejects an unsupported single-VM storage engine", func() {

@@ -52,8 +52,8 @@ type NodeClient interface {
 }
 
 type SSHNodeClient struct {
-	Quiet                   bool
-	ForwardRegistryPassword bool
+	Quiet            bool
+	RegistryPassword string
 }
 
 func NewSSHNodeClient(quiet bool) *SSHNodeClient {
@@ -95,8 +95,8 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 
 	_ = session.Setenv("OMS_PORTAL_API_KEY", os.Getenv("OMS_PORTAL_API_KEY"))
 	_ = session.Setenv("OMS_PORTAL_API", os.Getenv("OMS_PORTAL_API"))
-	if r.ForwardRegistryPassword {
-		_ = session.Setenv("OMS_REGISTRY_PASSWORD", os.Getenv("OMS_REGISTRY_PASSWORD"))
+	if r.RegistryPassword != "" {
+		_ = session.Setenv("OMS_REGISTRY_PASSWORD", r.RegistryPassword)
 	}
 	_ = agent.RequestAgentForwarding(session) // Best effort, ignore errors
 

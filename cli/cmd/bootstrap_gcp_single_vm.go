@@ -26,6 +26,10 @@ func (c *BootstrapGcpCmd) addBootstrapModeFlags() {
 
 // prepareBootstrapOptions validates mode-specific flags before creating external clients.
 func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
+	if c.CodesphereEnv.GitHubPAT == "" {
+		c.CodesphereEnv.GitHubPAT = os.Getenv("OMS_REGISTRY_PASSWORD")
+	}
+
 	if c.CodesphereEnv.InstallVaultPrivKey != "" && c.CodesphereEnv.InstallVaultPath == "" {
 		return fmt.Errorf("--priv-key requires --vault")
 	}
@@ -46,8 +50,8 @@ func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
 		return fmt.Errorf("--registry-user is required with --single-vm")
 	}
 
-	if os.Getenv("OMS_REGISTRY_PASSWORD") == "" {
-		return fmt.Errorf("OMS_REGISTRY_PASSWORD must be set for the local Codesphere installer")
+	if c.CodesphereEnv.GitHubPAT == "" {
+		return fmt.Errorf("--github-pat or OMS_REGISTRY_PASSWORD must be set for the local Codesphere installer")
 	}
 
 	return nil
