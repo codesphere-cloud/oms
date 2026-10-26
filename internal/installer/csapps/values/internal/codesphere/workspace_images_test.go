@@ -12,16 +12,21 @@ import (
 )
 
 var _ = Describe("Workspace images", func() {
-	DescribeTable("image missing from the BOM -> error",
-		func(name string) {
-			imgs := defaultTestImages()
-			delete(imgs, name)
+	It("BOM without the workspace server -> error", func() {
+		imgs := defaultTestImages()
+		delete(imgs, "workspace-server")
 
-			_, err := codesphere.Values(files.CodesphereConfig{}, imgs, noRegistry)
+		_, err := codesphere.Values(files.CodesphereConfig{}, imgs, noRegistry)
 
-			Expect(err).To(MatchError(ContainSubstring(name + " not found")))
-		},
-		Entry("server", "workspace-server"),
-		Entry("VPN", "vpn"),
-	)
+		Expect(err).To(MatchError(ContainSubstring("workspace-server not found")))
+	})
+
+	It("BOM without the VPN -> error", func() {
+		imgs := defaultTestImages()
+		delete(imgs, "vpn")
+
+		_, err := codesphere.Values(files.CodesphereConfig{}, imgs, noRegistry)
+
+		Expect(err).To(MatchError(ContainSubstring("vpn not found")))
+	})
 })
