@@ -38,7 +38,7 @@ func workspaceImagesValues(
 		configured = &files.WorkspaceImagesConfig{}
 	}
 
-	pick := func(image *files.ImageRef, bomRef string) files.ImageRef {
+	configuredOrBOM := func(image *files.ImageRef, bomRef string) files.ImageRef {
 		if image != nil {
 			return *image
 		}
@@ -46,12 +46,12 @@ func workspaceImagesValues(
 		return files.ImageRef{BomRef: bomRef}
 	}
 
-	server, err := workspaceImage(imgs, pick(configured.Server, "workspace-server"))
+	server, err := workspaceImage(imgs, configuredOrBOM(configured.Server, "workspace-server"))
 	if err != nil {
 		return WorkspaceImages{}, fmt.Errorf("failed to resolve the workspace server image: %w", err)
 	}
 
-	vpn, err := workspaceImage(imgs, pick(configured.VPN, "vpn"))
+	vpn, err := workspaceImage(imgs, configuredOrBOM(configured.VPN, "vpn"))
 	if err != nil {
 		return WorkspaceImages{}, fmt.Errorf("failed to resolve the workspace VPN image: %w", err)
 	}
