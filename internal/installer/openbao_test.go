@@ -346,6 +346,32 @@ var _ = Describe("OpenBaoBootstrapper", func() {
 			Expect(b.VerifyUnsealSecret()).To(Succeed())
 			Expect(b.GetUnsealSecret().Data).To(HaveKey("vault-unseal-1"))
 		})
+
+		It("keeps the cached keys when the secret was emptied after initialization", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "openbao-unseal-keys", Namespace: "vault"},
+				Data:       map[string][]byte{"vault-unseal-0": []byte("key-0")},
+			}
+			_, err := clientset.CoreV1().Secrets("vault").Create(ctx, secret, metav1.CreateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			b := &installer.OpenBaoBootstrapper{
+				Clientset: clientset,
+				Logger:    bootstrap.NewStepLogger(true),
+				Config:    installer.OpenBaoBootstrapConfig{Namespace: "vault", Timeout: 1 * time.Second},
+			}
+			b.SetCtx(ctx)
+			Expect(b.WaitForInitialization()).To(Succeed())
+
+			secret.Data = nil
+			_, err = clientset.CoreV1().Secrets("vault").Update(ctx, secret, metav1.UpdateOptions{})
+			Expect(err).ToNot(HaveOccurred())
+
+			err = b.VerifyUnsealSecret()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("holds no unseal keys"))
+			Expect(b.GetUnsealSecret().Data).To(HaveKeyWithValue("vault-unseal-0", []byte("key-0")))
+		})
 	})
 
 	Describe("WaitForPodsReady", func() {

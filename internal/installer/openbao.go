@@ -229,6 +229,9 @@ func (o *OpenBaoBootstrapper) verifyUnsealSecret() error {
 	if err != nil {
 		return fmt.Errorf("fetching unseal secret: %w", err)
 	}
+	if len(secret.Data) == 0 {
+		return fmt.Errorf("secret %s holds no unseal keys after the pods became ready", openBaoUnsealSecretName)
+	}
 	if o.backupUnsealKeys != nil && !unsealKeysEqual(secret.Data, o.backupUnsealKeys) {
 		return fmt.Errorf("secret %s holds unseal keys that differ from the DR backup: bank-vaults initialized a new instance instead of restoring", openBaoUnsealSecretName)
 	}
