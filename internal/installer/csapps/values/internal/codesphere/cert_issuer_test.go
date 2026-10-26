@@ -45,16 +45,31 @@ var _ = Describe("Cert issuer", func() {
 		}}}))
 	})
 
-	DescribeTable("no ACME issuer -> ACME disabled without an account",
-		func(issuer *files.CertIssuerConfig) {
-			values, err := codesphere.Values(files.CodesphereConfig{CertIssuer: issuer},
-				defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
-			Expect(err).NotTo(HaveOccurred())
+	disabledACME := codesphere.CertIssuer{ACME: codesphere.ACME{Enabled: false}}
 
-			Expect(values.CertIssuer).To(Equal(codesphere.CertIssuer{ACME: codesphere.ACME{Enabled: false}}))
-		},
-		Entry("no cert issuer", nil),
-		Entry("self-signed issuer", &files.CertIssuerConfig{Type: files.CertIssuerTypeSelfSigned}),
-		Entry("ACME type without ACME config", &files.CertIssuerConfig{Type: files.CertIssuerTypeACME}),
-	)
+	It("no cert issuer -> ACME disabled without an account", func() {
+		values, err := codesphere.Values(files.CodesphereConfig{},
+			defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.CertIssuer).To(Equal(disabledACME))
+	})
+
+	It("self-signed issuer -> ACME disabled without an account", func() {
+		conf := files.CodesphereConfig{CertIssuer: &files.CertIssuerConfig{Type: files.CertIssuerTypeSelfSigned}}
+
+		values, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.CertIssuer).To(Equal(disabledACME))
+	})
+
+	It("ACME type without ACME config -> ACME disabled without an account", func() {
+		conf := files.CodesphereConfig{CertIssuer: &files.CertIssuerConfig{Type: files.CertIssuerTypeACME}}
+
+		values, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.CertIssuer).To(Equal(disabledACME))
+	})
 })
