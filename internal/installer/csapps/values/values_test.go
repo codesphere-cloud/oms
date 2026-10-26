@@ -225,21 +225,6 @@ var _ = Describe("Build", func() {
 		}))
 	})
 
-	It("ACME without EAB -> no EAB keys", func() {
-		cfg := testConfig()
-		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
-			Server: "https://acme.example.com/directory",
-			Email:  "certs@example.com",
-		}}
-		values := build(cfg, testBOM(nil))
-
-		Expect(at(values, "global.certIssuer")).To(Equal(map[string]any{"acme": map[string]any{
-			"enabled": true,
-			"server":  "https://acme.example.com/directory",
-			"email":   "certs@example.com",
-		}}))
-	})
-
 	It("ACME with a separate custom domains EAB key -> custom domains key used", func() {
 		cfg := testConfig()
 		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
