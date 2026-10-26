@@ -141,7 +141,7 @@ func pool(plans map[int]files.HostingPlan, include func(files.HostingPlan) bool)
 	return instances
 }
 
-// poolValues keys the pooled instances by plan id as a string, as values are JSON.
+// poolValues keys the pooled instances by plan id as a string.
 func poolValues(instances map[int]int) map[string]int {
 	values := make(map[string]int, len(instances))
 	for planID, count := range instances {
