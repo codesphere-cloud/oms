@@ -11,6 +11,7 @@ import (
 
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -21,7 +22,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var _ = Describe("PCApps.Install", func() {
+var _ = Describe("AppOfApps.Install", func() {
 	const (
 		version   = "1.2.3"
 		namespace = "argocd"
@@ -34,7 +35,7 @@ var _ = Describe("PCApps.Install", func() {
 
 	var (
 		fakeClient client.Client
-		pcApps     *installer.PCApps
+		pcApps     *installer.AppOfApps
 		scheme     *runtime.Scheme
 	)
 
@@ -273,6 +274,70 @@ var _ = Describe("PCApps.Install", func() {
 			app := getApp()
 			Expect(app.Spec.Source.Helm).ToNot(BeNil())
 			Expect(app.Spec.Source.Helm.ValuesObject).To(BeNil())
+		})
+	})
+
+	Context("chart from a BOM component", func() {
+		bomWithChart := func(component, ociRef string) *bom.Config {
+			return &bom.Config{Components: map[string]bom.ComponentConfig{
+				component: {Files: map[string]bom.FileRef{"chart": {OciRef: ociRef}}},
+			}}
+		}
+
+		BeforeEach(func() {
+			fakeClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithObjects(newSecret()).
+				Build()
+		})
+
+		It("applies the component's chart and version under the given Application name", func() {
+			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "pr-1-cs-applications", "codesphere", map[string]interface{}{"releaseName": "pr-1"})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(apps.Install(context.Background())).To(Succeed())
+
+			app := &argov1alpha1.Application{}
+			Expect(fakeClient.Get(context.Background(), client.ObjectKey{Name: "pr-1-cs-applications", Namespace: "argocd"}, app)).To(Succeed())
+			Expect(app.Spec.Source.Chart).To(Equal("cs-applications"))
+			Expect(app.Spec.Source.TargetRevision).To(Equal("0.3.0"))
+			Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("cs-applications"))
+			Expect(app.Spec.Destination.Namespace).To(Equal("codesphere"))
+			Expect(helmValues(app)).To(HaveKeyWithValue("releaseName", "pr-1"))
+		})
+
+		It("Application name longer than Helm allows for a release -> release named after the chart", func() {
+			name := "codesphere-nate-test-pre-7a1cd4d4-test-cs-applications"
+			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", name, "argocd", nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(apps.Install(context.Background())).To(Succeed())
+
+			app := &argov1alpha1.Application{}
+			Expect(fakeClient.Get(context.Background(), client.ObjectKey{Name: name, Namespace: "argocd"}, app)).To(Succeed())
+			Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("cs-applications"))
+		})
+
+		It("takes the chart name from the reference, not the component", func() {
+			b := bomWithChart("apps", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "apps", "apps", "codesphere", nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(apps.Install(context.Background())).To(Succeed())
+
+			app := &argov1alpha1.Application{}
+			Expect(fakeClient.Get(context.Background(), client.ObjectKey{Name: "apps", Namespace: "argocd"}, app)).To(Succeed())
+			Expect(app.Spec.Source.Chart).To(Equal("cs-applications"))
+		})
+
+		It("fails when the BOM has no chart for the component", func() {
+			b := bomWithChart("pc-applications", "ghcr.io/codesphere-cloud/charts/pc-applications:1.0.0")
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "codesphere", nil)
+			Expect(err).To(MatchError(ContainSubstring("cs-applications chart not found in BOM")))
+		})
+
+		It("fails without a BOM", func() {
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, nil, "cs-applications", "cs-applications", "codesphere", nil)
+			Expect(err).To(MatchError(ContainSubstring("BOM is required")))
 		})
 	})
 

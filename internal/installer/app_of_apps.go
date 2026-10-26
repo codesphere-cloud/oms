@@ -9,10 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"path"
 
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/util"
+	"github.com/distribution/reference"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,10 +34,8 @@ const (
 	// ociCredentialNamespace is the namespace where the credential secret lives.
 	// It is also the namespace ArgoCD watches for Application resources.
 	ociCredentialNamespace = "argocd"
-	// pcAppsAppName is the name of the app-of-apps ArgoCD Application.
-	pcAppsAppName = "pc-applications"
-	// pcAppsChartName is the chart name referenced by the ArgoCD Application source.
-	pcAppsChartName = "pc-applications"
+	// pcAppsName is the name of the pc-applications chart, its BOM component and its Application.
+	pcAppsName = "pc-applications"
 	// argoAppProject is the ArgoCD project the app-of-apps belongs to.
 	argoAppProject = "default"
 	// argoDestinationServer is the in-cluster API server address, matching the
@@ -43,11 +43,12 @@ const (
 	argoDestinationServer = "https://kubernetes.default.svc"
 )
 
-// PCApps holds the configuration for creating the ArgoCD app-of-apps
-// Application that references the pc-applications chart in a private OCI
-// registry. ArgoCD pulls and reconciles the chart; OMS only owns the
+// AppOfApps holds the configuration for creating the ArgoCD Application of an app of apps
+// chart in a private OCI registry. ArgoCD pulls and reconciles the chart; OMS only owns the
 // Application resource.
-type PCApps struct {
+type AppOfApps struct {
+	name           string // name of the Application
+	chart          string
 	version        string // chart version, used as the Application targetRevision (required)
 	namespace      string // destination namespace of the app-of-apps
 	valuesFiles    []string
@@ -56,10 +57,10 @@ type PCApps struct {
 	client         client.Client
 }
 
-// NewPCApps creates a new PCApps installer. It validates that required fields
+// NewPCApps creates a new pc-applications installer. It validates that required fields
 // are non-empty but does not apply defaults — defaults live on the CLI flag
 // declarations only.
-func NewPCApps(c client.Client, version, namespace string, valuesFiles []string, valuesOverride map[string]interface{}, forceConflicts bool) (*PCApps, error) {
+func NewPCApps(c client.Client, version, namespace string, valuesFiles []string, valuesOverride map[string]interface{}, forceConflicts bool) (*AppOfApps, error) {
 	if version == "" {
 		return nil, errors.New("version is required")
 	}
@@ -70,7 +71,9 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 		return nil, err
 	}
 
-	return &PCApps{
+	return &AppOfApps{
+		name:           pcAppsName,
+		chart:          pcAppsName,
 		version:        version,
 		namespace:      namespace,
 		valuesFiles:    valuesFiles,
@@ -80,8 +83,26 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 	}, nil
 }
 
-// NewPcAppsFromBom creates a PCApps installer from the pc-applications entry in a BOM.
-func NewPcAppsFromBom(c client.Client, bomConfig *bom.Config, namespace string, valuesFiles []string, valuesOverride map[string]interface{}) (*PCApps, error) {
+// NewPcAppsFromBom creates a pc-applications installer from the pc-applications entry in a BOM.
+func NewPcAppsFromBom(c client.Client, bomConfig *bom.Config, namespace string, valuesFiles []string, valuesOverride map[string]interface{}) (*AppOfApps, error) {
+	pcApps, err := NewAppOfAppsFromBom(c, bomConfig, pcAppsName, pcAppsName, namespace, valuesOverride)
+	if err != nil {
+		return nil, err
+	}
+
+	pcApps.valuesFiles = valuesFiles
+
+	return pcApps, nil
+}
+
+// NewAppOfAppsFromBom creates an installer for the chart in the BOM component, applied as the
+// Application name.
+func NewAppOfAppsFromBom(
+	c client.Client,
+	bomConfig *bom.Config,
+	component, name, namespace string,
+	values map[string]interface{},
+) (*AppOfApps, error) {
 	if err := checkArgoCDScheme(c); err != nil {
 		return nil, err
 	}
@@ -90,16 +111,17 @@ func NewPcAppsFromBom(c client.Client, bomConfig *bom.Config, namespace string, 
 		return nil, fmt.Errorf("BOM is required")
 	}
 
-	pcApps, ok := bomConfig.GetPCApps()
+	chart, ok := bomConfig.GetChart(component)
 	if !ok {
-		return nil, fmt.Errorf("pc-applications component not found in BOM")
+		return nil, fmt.Errorf("%s chart not found in BOM", component)
 	}
 
-	return &PCApps{
-		version:        pcApps.Tag(),
+	return &AppOfApps{
+		name:           name,
+		chart:          path.Base(reference.Path(chart)),
+		version:        chart.Tag(),
 		namespace:      namespace,
-		valuesFiles:    valuesFiles,
-		valuesOverride: valuesOverride,
+		valuesOverride: values,
 		client:         c,
 	}, nil
 }
@@ -124,7 +146,7 @@ func checkArgoCDScheme(c client.Client) error {
 // "oms beta install argocd --deploy-dc-config". The Application's repoURL must
 // match that secret's url verbatim, otherwise ArgoCD cannot match the
 // credentials to the repository.
-func (p *PCApps) resolveRepoURL(ctx context.Context) (string, error) {
+func (p *AppOfApps) resolveRepoURL(ctx context.Context) (string, error) {
 	secret := &corev1.Secret{}
 	key := client.ObjectKey{Name: ociCredentialSecretName, Namespace: ociCredentialNamespace}
 	if err := p.client.Get(ctx, key, secret); err != nil {
@@ -149,9 +171,10 @@ func (p *PCApps) resolveRepoURL(ctx context.Context) (string, error) {
 
 // createApplication renders the app-of-apps ArgoCD Application for the given repo URL
 // and merged Helm values.
-func (p *PCApps) createApplication(repoURL string, vals map[string]interface{}) (*argov1alpha1.Application, error) {
+func (p *AppOfApps) createApplication(repoURL string, vals map[string]interface{}) (*argov1alpha1.Application, error) {
 	helm := &argov1alpha1.ApplicationSourceHelm{
-		ReleaseName: pcAppsAppName,
+		// Named after the chart: Application names can exceed Helm's 53 character limit.
+		ReleaseName: p.chart,
 	}
 	if len(vals) > 0 {
 		raw, err := json.Marshal(vals)
@@ -167,14 +190,14 @@ func (p *PCApps) createApplication(repoURL string, vals map[string]interface{}) 
 			Kind:       argov1alpha1.ApplicationSchemaGroupVersionKind.Kind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      pcAppsAppName,
+			Name:      p.name,
 			Namespace: ociCredentialNamespace,
 		},
 		Spec: argov1alpha1.ApplicationSpec{
 			Project: argoAppProject,
 			Source: &argov1alpha1.ApplicationSource{
 				RepoURL:        repoURL,
-				Chart:          pcAppsChartName,
+				Chart:          p.chart,
 				TargetRevision: p.version,
 				Helm:           helm,
 			},
@@ -196,8 +219,8 @@ func (p *PCApps) createApplication(repoURL string, vals map[string]interface{}) 
 }
 
 // Install creates or updates the app-of-apps ArgoCD Application that references
-// the pc-applications chart. Rolling the chart out is left to ArgoCD.
-func (p *PCApps) Install(ctx context.Context) error {
+// the chart. Rolling the chart out is left to ArgoCD.
+func (p *AppOfApps) Install(ctx context.Context) error {
 	// Validate values files before any cluster calls so local errors fail fast.
 	valueOpts := values.Options{ValueFiles: p.valuesFiles}
 	fileVals, err := valueOpts.MergeValues(getter.All(cli.New()))
@@ -218,7 +241,7 @@ func (p *PCApps) Install(ctx context.Context) error {
 	}
 
 	log.Printf("Applying ArgoCD Application %q (chart %s, version %s) in namespace %s\n",
-		pcAppsAppName, pcAppsChartName, p.version, ociCredentialNamespace)
+		p.name, p.chart, p.version, ociCredentialNamespace)
 	current := &argov1alpha1.Application{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      app.Name,
@@ -230,17 +253,19 @@ func (p *PCApps) Install(ctx context.Context) error {
 		current.Spec = app.Spec
 		return nil
 	}); err != nil {
-		return fmt.Errorf("applying ArgoCD Application %q failed: %w", pcAppsAppName, err)
+		return fmt.Errorf("applying ArgoCD Application %q failed: %w", p.name, err)
 	}
 
-	log.Printf("Successfully applied ArgoCD Application %q; ArgoCD will sync the chart\n", pcAppsAppName)
+	log.Printf("Successfully applied ArgoCD Application %q; ArgoCD will sync the chart\n", p.name)
 	return nil
 }
 
-// NewPCAppsForTesting creates a PCApps instance with injected dependencies for
+// NewPCAppsForTesting creates a pc-applications installer with injected dependencies for
 // use in tests. This avoids exporting struct fields solely for test access.
-func NewPCAppsForTesting(c client.Client, version, namespace string, valuesFiles []string, valuesOverride map[string]interface{}, forceConflicts bool) *PCApps {
-	return &PCApps{
+func NewPCAppsForTesting(c client.Client, version, namespace string, valuesFiles []string, valuesOverride map[string]interface{}, forceConflicts bool) *AppOfApps {
+	return &AppOfApps{
+		name:           pcAppsName,
+		chart:          pcAppsName,
 		version:        version,
 		namespace:      namespace,
 		valuesFiles:    valuesFiles,
