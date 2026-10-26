@@ -42,6 +42,8 @@ type Codesphere struct {
 	UnderprovisionFactors *files.UnderprovisionFactors   `yaml:"underprovisionFactors,omitempty"`
 	ExtraWorkspaceFiles   []files.ExtraWorkspaceFile     `yaml:"extraWorkspaceFiles,omitempty"`
 	SMTP                  *files.SMTPConfig              `yaml:"smtp,omitempty"`
+	OpenBao               *OpenBao                       `yaml:"openBao,omitempty"`
+	OpenFGA               *OpenFGA                       `yaml:"openFga,omitempty"`
 	ExtraCAPem            string                         `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars map[string]string              `yaml:"extraWorkspaceEnvVars,omitempty"`
 }
@@ -128,6 +130,8 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		UnderprovisionFactors:         conf.UnderprovisionFactors,
 		ExtraWorkspaceFiles:           conf.ExtraWorkspaceFiles,
 		SMTP:                          smtp,
+		OpenBao:                       openBaoValues(conf.OpenBao),
+		OpenFGA:                       openFgaValues(conf.OpenFga),
 		ExtraCAPem:                    conf.ExtraCAPem,
 		ExtraWorkspaceEnvVars:         conf.ExtraWorkspaceEnvVars,
 	}, nil
