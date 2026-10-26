@@ -280,6 +280,12 @@ func EnsureDefaultSecrets(vault *files.InstallVault) error {
 		})
 	}
 
+	// Older installers seeded this with "dummy", but Codesphere sends mail through SendGrid
+	// whenever the key is set.
+	if s := vault.GetSecret(files.SecretSendGridApiKey); s != nil && s.Fields != nil && s.Fields.Password == "dummy" {
+		vault.RemoveSecret(files.SecretSendGridApiKey)
+	}
+
 	return nil
 }
 
@@ -315,7 +321,6 @@ var optionalPasswordSecrets = []string{
 	files.SecretStripeWebhookEndpointSecret,
 	files.SecretStripePublishableKey,
 	files.SecretStripeSecretKey,
-	files.SecretSendGridApiKey,
 	files.SecretOpenBaoPassword,
 	files.SecretOpenfgaDbBackupAccessKeyId,
 	files.SecretOpenfgaDbBackupSecretAccessKey,
