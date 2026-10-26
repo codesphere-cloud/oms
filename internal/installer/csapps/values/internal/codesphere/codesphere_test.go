@@ -102,7 +102,7 @@ var _ = Describe("Values", func() {
 				Issuer:        "acme",
 				RedirectToIde: true,
 				Image:         codesphere.Image{Name: "ghcr.io/codesphere-cloud/docker/nginx-gateway", Tag: "1.31.5"},
-				GatewayAPI:    codesphere.GatewayAPI{Enabled: true},
+				GatewayAPI:    codesphere.FrontendGatewayAPI{Enabled: true},
 			},
 			IPService:             &codesphere.IPService{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
 			TLSCertificate:        &codesphere.TLSCertificate{Cert: "cert-pem", Key: "key-pem"},
