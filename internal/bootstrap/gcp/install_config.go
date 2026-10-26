@@ -6,6 +6,7 @@ package gcp
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"reflect"
 	"slices"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/secrets"
 	"github.com/codesphere-cloud/oms/internal/util"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -24,6 +26,21 @@ const (
 	// centers need it spelled out because they connect to it as an external server.
 	sharedPostgresPort int = 5432
 )
+
+// sharedOpenFgaConfig returns a multi-DC data center's OpenFGA block. One OpenFGA serves the whole
+// installation: every data center's team-service drains the same outbox in the shared database,
+// so with one OpenFGA per data center each tuple lands in whichever one processed it.
+func (b *GCPBootstrapper) sharedOpenFgaConfig(dc *datacenter.DataCenter) *files.OpenFgaConfig {
+	// The primary's platform domain has a wildcard record pointing at its gateway.
+	host := "openfga." + b.primaryDC().PlatformDomain(b.Env.BaseDomain)
+	if dc == b.primaryDC() {
+		return &files.OpenFgaConfig{Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: host}}
+	}
+
+	apiURL := url.URL{Scheme: "https", Host: host}
+
+	return &files.OpenFgaConfig{Deploy: ptr.To(false), APIURL: apiURL.String()}
+}
 
 // errRemoteConfigMissing reports that the jumpbox holds no config for a data center. Recovering
 // a secondary data center tolerates this, since --multi-dc can add one to an existing project.
@@ -311,6 +328,7 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 	}
 	if b.Env.MultiDC {
 		dc.InstallConfig.Codesphere.PublicIP = dc.PublicGatewayIP
+		dc.InstallConfig.Codesphere.OpenFga = b.sharedOpenFgaConfig(dc)
 	} else {
 		dc.InstallConfig.Codesphere.PublicIP = dc.ControlPlaneNodes[1].GetExternalIP()
 	}
