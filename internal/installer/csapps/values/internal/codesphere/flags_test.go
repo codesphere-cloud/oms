@@ -24,13 +24,13 @@ var _ = Describe("Flags", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		experiments := values.Experiments
-		Expect(experiments).To(HaveKeyWithValue("legacy", []string{"prod"}))
-		Expect(experiments).To(HaveKeyWithValue("internal-flag", []string{"prod"}))
-		Expect(experiments).To(HaveKeyWithValue("preview-on", []string{"prod"}))
+		Expect(experiments).To(HaveKeyWithValue("legacy", []codesphere.FlagEnv{codesphere.FlagEnvProd}))
+		Expect(experiments).To(HaveKeyWithValue("internal-flag", []codesphere.FlagEnv{codesphere.FlagEnvProd}))
+		Expect(experiments).To(HaveKeyWithValue("preview-on", []codesphere.FlagEnv{codesphere.FlagEnvProd}))
 		Expect(experiments).NotTo(HaveKey("preview-off"))
 
 		features := values.Features
-		Expect(features).To(HaveKeyWithValue("feature-on", []string{"prod"}))
-		Expect(features).To(HaveKeyWithValue("feature-off", []string{}))
+		Expect(features).To(HaveKeyWithValue("feature-on", []codesphere.FlagEnv{codesphere.FlagEnvProd}))
+		Expect(features).To(HaveKeyWithValue("feature-off", []codesphere.FlagEnv{}))
 	})
 })
