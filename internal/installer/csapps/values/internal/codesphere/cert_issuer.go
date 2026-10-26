@@ -4,6 +4,7 @@
 package codesphere
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/images"
@@ -54,9 +55,13 @@ type GatewayAPI struct {
 	Enabled bool `yaml:"enabled"`
 }
 
-func certIssuerValues(issuer *files.CertIssuerConfig) CertIssuer {
-	if issuer == nil || issuer.Type != files.CertIssuerTypeACME || issuer.Acme == nil {
-		return CertIssuer{ACME: ACME{Enabled: false}}
+func certIssuerValues(issuer *files.CertIssuerConfig) (CertIssuer, error) {
+	if issuer == nil || issuer.Type != files.CertIssuerTypeACME {
+		return CertIssuer{ACME: ACME{Enabled: false}}, nil
+	}
+
+	if issuer.Acme == nil {
+		return CertIssuer{}, errors.New("certIssuer.acme is required when certIssuer.type is acme")
 	}
 
 	keyID, macKeyName := customDomainsEAB(issuer.Acme)
@@ -66,7 +71,7 @@ func certIssuerValues(issuer *files.CertIssuerConfig) CertIssuer {
 		Email:         issuer.Acme.Email,
 		EABKeyID:      keyID,
 		EABMacKeyName: macKeyName,
-	}}}
+	}}}, nil
 }
 
 // customDomainsEAB returns the EAB key the custom-domain issuer registers with and the vault entry

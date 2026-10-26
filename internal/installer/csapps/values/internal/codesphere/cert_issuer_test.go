@@ -64,12 +64,11 @@ var _ = Describe("Cert issuer", func() {
 		Expect(values.CertIssuer).To(Equal(disabledACME))
 	})
 
-	It("ACME type without ACME config -> ACME disabled without an account", func() {
+	It("ACME type without ACME config -> error", func() {
 		conf := files.CodesphereConfig{CertIssuer: &files.CertIssuerConfig{Type: files.CertIssuerTypeACME}}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
-		Expect(err).NotTo(HaveOccurred())
+		_, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
 
-		Expect(values.CertIssuer).To(Equal(disabledACME))
+		Expect(err).To(MatchError(ContainSubstring("certIssuer.acme is required")))
 	})
 })
