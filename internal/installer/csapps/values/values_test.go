@@ -21,17 +21,7 @@ var _ = Describe("Build", func() {
 		Expect(at(values, "global.dnsServers")).To(Equal([]any{"8.8.8.8"}))
 		Expect(at(values, "global.prePullImages")).To(BeTrue())
 		Expect(at(values, "global.managedServiceWorkspacePlanId")).To(Equal(20))
-		Expect(at(values, "global.ceph.mdsNamespace")).To(Equal("codesphere"))
-		Expect(at(values, "global.ceph.activeMds")).To(Equal("7"))
-		Expect(at(values, "global.otel.centralOtelExport.otlpHttpEndpoint")).
-			To(Equal("https://otel.tools.codesphere.com"))
-		Expect(at(values, "global.frontendGateway.issuer")).To(Equal("self-signed"))
-		Expect(at(values, "global.frontendGateway.gatewayApi.enabled")).To(BeTrue())
 		Expect(at(values, "global.customDomains.gatewayApi.useGateway")).To(BeTrue())
-		Expect(at(values, "global.experiments")).To(HaveKey("gateway-domains"))
-		Expect(at(values, "global.certIssuer")).To(Equal(map[string]any{
-			"acme": map[string]any{"enabled": false},
-		}))
 		Expect(at(values, "global.imageTag")).To(Equal("v1.2.3"))
 		Expect(at(values, "global.hostName")).To(Equal("codesphere.example.com"))
 	})

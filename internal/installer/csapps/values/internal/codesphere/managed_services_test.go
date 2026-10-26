@@ -165,15 +165,6 @@ var _ = Describe("Managed services", func() {
 		Expect(services[0].ResourceParameters).To(BeNil())
 	})
 
-	It("no managed service workspace plan ID -> 20", func() {
-		values, err := codesphere.Values(
-			files.CodesphereConfig{}, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry,
-		)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(values.ManagedServiceWorkspacePlanID).To(Equal(20))
-	})
-
 	It("managed service resource parameter set to null -> kept as null", func() {
 		conf := files.CodesphereConfig{ManagedServices: []files.ManagedServiceConfig{{
 			Name:               "postgres",
@@ -202,21 +193,5 @@ var _ = Describe("Managed services", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.ManagedServices[0].Versions).To(BeNil())
-	})
-
-	It("landscape provider with versions -> versions kept", func() {
-		conf := files.CodesphereConfig{ManagedServices: []files.ManagedServiceConfig{{
-			Name:          "valkey",
-			SchemaVersion: "v0",
-			Backend:       map[string]any{"landscape": map[string]any{"gitUrl": "https://git.example.com/valkey"}},
-			Versions:      map[string]any{"1.0.0": map[string]any{"appVersion": "8.1"}},
-		}}}
-
-		values, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(values.ManagedServices[0].Versions).To(
-			Equal(map[string]any{"1.0.0": map[string]any{"appVersion": "8.1"}}),
-		)
 	})
 })

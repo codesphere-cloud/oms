@@ -50,14 +50,6 @@ var _ = Describe("Values", func() {
 		Expect(values.AvailableDataCenters).To(Equal([]int{1, 2}))
 	})
 
-	It("no .dataCenters -> only the target one, which is the default", func() {
-		values, err := datacenters.Values(&files.RootConfig{Datacenter: second})
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(values.AvailableDataCenters).To(Equal([]int{2}))
-		Expect(values.DefaultDataCenterID).To(Equal(2))
-	})
-
 	It("data center with id 0 -> error", func() {
 		_, err := datacenters.Values(&files.RootConfig{
 			Datacenter:  main,

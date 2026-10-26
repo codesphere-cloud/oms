@@ -259,12 +259,10 @@ var _ = Describe("Values", func() {
 		}))
 	})
 
-	It("no keys configured -> default DNS server and pre-pulling, optional keys left out", func() {
+	It("no keys configured -> optional keys left out", func() {
 		values, err := codesphere.Values(files.CodesphereConfig{}, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(values.DNSServers).To(Equal([]string{"8.8.8.8"}))
-		Expect(values.PrePullImages).To(BeTrue())
 		Expect(values.SSHWorkspaceProxy).To(Equal(codesphere.SSHWorkspaceProxy{}))
 		Expect(values.TLSCertificate).To(BeNil())
 		Expect(values.UnderprovisionFactors).To(BeNil())

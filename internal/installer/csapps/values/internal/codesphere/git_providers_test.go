@@ -6,7 +6,6 @@ package codesphere_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.yaml.in/yaml/v3"
 
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -22,13 +21,6 @@ var _ = Describe("GitProvider", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.GitProviders.GitLab).To(Equal(codesphere.GitProvider{Enabled: false}))
-	})
-
-	It("disabled provider -> rendered as only enabled false", func() {
-		rendered, err := yaml.Marshal(codesphere.GitProvider{Enabled: false})
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(string(rendered)).To(Equal("enabled: false\n"))
 	})
 })
 

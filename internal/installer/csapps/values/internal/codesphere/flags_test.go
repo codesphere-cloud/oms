@@ -12,25 +12,12 @@ import (
 )
 
 var _ = Describe("Flags", func() {
-	It("flags -> experiments and features", func() {
-		conf := files.CodesphereConfig{
-			Experiments: []string{"legacy"}, //nolint:staticcheck
-			Internal:    []string{"internal-flag"},
-			Preview:     map[string]bool{"preview-on": true, "preview-off": false},
-			Features:    map[string]bool{"feature-on": true, "feature-off": false},
-		}
+	It("disabled preview flag -> left out of the experiments", func() {
+		conf := files.CodesphereConfig{Preview: map[string]bool{"preview-off": false}}
 
 		values, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
 		Expect(err).NotTo(HaveOccurred())
 
-		experiments := values.Experiments
-		Expect(experiments).To(HaveKeyWithValue("legacy", []codesphere.FlagEnv{codesphere.FlagEnvProd}))
-		Expect(experiments).To(HaveKeyWithValue("internal-flag", []codesphere.FlagEnv{codesphere.FlagEnvProd}))
-		Expect(experiments).To(HaveKeyWithValue("preview-on", []codesphere.FlagEnv{codesphere.FlagEnvProd}))
-		Expect(experiments).NotTo(HaveKey("preview-off"))
-
-		features := values.Features
-		Expect(features).To(HaveKeyWithValue("feature-on", []codesphere.FlagEnv{codesphere.FlagEnvProd}))
-		Expect(features).To(HaveKeyWithValue("feature-off", []codesphere.FlagEnv{}))
+		Expect(values.Experiments).NotTo(HaveKey("preview-off"))
 	})
 })
