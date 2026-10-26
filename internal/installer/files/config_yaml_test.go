@@ -845,3 +845,115 @@ var _ = Describe("RootConfig round-trip", func() {
 		Expect(util.DeepMergeMaps(savedCopy, original)).To(Equal(saved))
 	})
 })
+
+var _ = Describe("RootConfig data centers", func() {
+	var (
+		primary   = files.DatacenterConfig{ID: 1, Name: "primary", City: "Karlsruhe", CountryCode: "DE"}
+		secondary = files.DatacenterConfig{ID: 2, Name: "secondary", City: "Frankfurt", CountryCode: "DE"}
+	)
+
+	Describe("AllDataCenters", func() {
+		It("no .dataCenters -> only .dataCenter", func() {
+			config := files.RootConfig{Datacenter: primary}
+
+			Expect(config.AllDataCenters()).To(Equal([]files.DatacenterConfig{primary}))
+		})
+
+		It(".dataCenters set -> .dataCenters", func() {
+			config := files.RootConfig{Datacenter: primary, DataCenters: []files.DatacenterConfig{secondary, primary}}
+
+			Expect(config.AllDataCenters()).To(Equal([]files.DatacenterConfig{secondary, primary}))
+		})
+	})
+
+	Describe("ValidateDataCenters", func() {
+		It("valid data centers with a default -> no error", func() {
+			config := files.RootConfig{
+				Datacenter:          primary,
+				DataCenters:         []files.DatacenterConfig{primary, secondary},
+				DefaultDataCenterID: 2,
+			}
+
+			Expect(config.ValidateDataCenters()).To(Succeed())
+		})
+
+		It("only .dataCenter -> no error", func() {
+			config := files.RootConfig{Datacenter: primary}
+
+			Expect(config.ValidateDataCenters()).To(Succeed())
+		})
+
+		It("data center with id 0 in .dataCenters -> error", func() {
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{primary, {ID: 0, Name: "zero"}},
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(`data center "zero" has id 0`)))
+		})
+
+		It(".dataCenter with id 0 and no .dataCenters -> error", func() {
+			config := files.RootConfig{Datacenter: files.DatacenterConfig{ID: 0, Name: "zero"}}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(`data center "zero" has id 0`)))
+		})
+
+		It("data center with a negative id -> error", func() {
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{primary, {ID: -1, Name: "negative"}},
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(`data center "negative" has id -1`)))
+		})
+
+		It("duplicate id -> error", func() {
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{primary, secondary, primary},
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring("duplicate data center id 1")))
+		})
+
+		It(".dataCenters without .dataCenter -> error", func() {
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{secondary},
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring("is missing .dataCenter (id 1)")))
+		})
+
+		It(".dataCenters entry that differs from .dataCenter -> error naming both", func() {
+			renamed := primary
+			renamed.Name = "renamed"
+			config := files.RootConfig{
+				Datacenter:  primary,
+				DataCenters: []files.DatacenterConfig{renamed, secondary},
+			}
+
+			err := config.ValidateDataCenters()
+
+			Expect(err).To(MatchError(ContainSubstring("entry with id 1 differs from .dataCenter")))
+			Expect(err).To(MatchError(ContainSubstring("Name:renamed")))
+			Expect(err).To(MatchError(ContainSubstring("Name:primary")))
+		})
+
+		It("unknown default -> error", func() {
+			config := files.RootConfig{
+				Datacenter:          primary,
+				DataCenters:         []files.DatacenterConfig{primary, secondary},
+				DefaultDataCenterID: 3,
+			}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(".defaultDataCenterId 3 is not one")))
+		})
+
+		It("no .dataCenters and a default of another data center -> error", func() {
+			config := files.RootConfig{Datacenter: primary, DefaultDataCenterID: 2}
+
+			Expect(config.ValidateDataCenters()).To(MatchError(ContainSubstring(".defaultDataCenterId 2 is not one")))
+		})
+	})
+})
