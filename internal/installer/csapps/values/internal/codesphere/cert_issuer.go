@@ -38,10 +38,10 @@ type ACMEAccount struct {
 
 // FrontendGateway is the gateway that serves Codesphere itself.
 type FrontendGateway struct {
-	Issuer        string     `yaml:"issuer"`
-	RedirectToIde bool       `yaml:"redirectToIde"`
-	Image         Image      `yaml:"image"`
-	GatewayAPI    GatewayAPI `yaml:"gatewayApi"`
+	Issuer        string             `yaml:"issuer"`
+	RedirectToIde bool               `yaml:"redirectToIde"`
+	Image         Image              `yaml:"image"`
+	GatewayAPI    FrontendGatewayAPI `yaml:"gatewayApi"`
 }
 
 // Image is an image reference split into name and tag.
@@ -50,8 +50,8 @@ type Image struct {
 	Tag  string `yaml:"tag"`
 }
 
-// GatewayAPI says whether a gateway is a Gateway API Gateway.
-type GatewayAPI struct {
+// FrontendGatewayAPI says whether the frontend gateway is a Gateway API Gateway.
+type FrontendGatewayAPI struct {
 	Enabled bool `yaml:"enabled"`
 }
 
@@ -112,6 +112,6 @@ func frontendGatewayValues(
 		Issuer:        issuerName,
 		RedirectToIde: true,
 		Image:         Image{Name: image, Tag: tag},
-		GatewayAPI:    GatewayAPI{Enabled: gatewayAPIEnabled},
+		GatewayAPI:    FrontendGatewayAPI{Enabled: gatewayAPIEnabled},
 	}, nil
 }
