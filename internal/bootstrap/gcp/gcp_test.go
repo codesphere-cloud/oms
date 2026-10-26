@@ -2195,10 +2195,13 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
+				return strings.HasPrefix(command, "oms download k0s ")
+			})).Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
 				return strings.HasPrefix(command, "oms install k0s ")
 			})).Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
-			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
+			install :=nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
 
 			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
@@ -2266,24 +2269,33 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
-	Describe("DownloadK0sAirgapBundle", func() {
+	Describe("DownloadK0s", func() {
 		BeforeEach(func() {
 			csEnv.K0sVersion = "v1.31.14+k0s.0"
 		})
 
-		It("caches the k0s binary and airgap bundle on the jumpbox", func() {
+		It("caches the k0s binary on the jumpbox", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms download k0s --version v1.31.14+k0s.0").Return(nil)
+
+			Expect(bs.DownloadK0s()).To(Succeed())
+		})
+
+		It("caches the k0s binary and airgap bundle on the jumpbox for airgapped bootstraps", func() {
+			csEnv.Airgapped = true
+
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 				"oms download k0s --version v1.31.14+k0s.0 --airgapped").Return(nil)
 
-			Expect(bs.DownloadK0sAirgapBundle()).To(Succeed())
+			Expect(bs.DownloadK0s()).To(Succeed())
 		})
 
 		It("reports a failing download on the jumpbox", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-				"oms download k0s --version v1.31.14+k0s.0 --airgapped").Return(fmt.Errorf("network error"))
+				"oms download k0s --version v1.31.14+k0s.0").Return(fmt.Errorf("network error"))
 
-			err := bs.DownloadK0sAirgapBundle()
-			Expect(err).To(MatchError(ContainSubstring("failed to download k0s airgap bundle on jumpbox")))
+			err := bs.DownloadK0s()
+			Expect(err).To(MatchError(ContainSubstring("failed to download k0s on jumpbox")))
 			Expect(err).To(MatchError(ContainSubstring("network error")))
 		})
 	})
@@ -2379,7 +2391,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("does not generate a config or install k0s when the bundle download fails", func() {
 				failJumpboxCommand("oms download k0s ")
 
-				Expect(bs.EnsureK0s()).To(MatchError(ContainSubstring("failed to download k0s airgap bundle")))
+				Expect(bs.EnsureK0s()).To(MatchError(ContainSubstring("failed to download k0s")))
 				Expect(jumpboxCommands).To(Equal([]string{"oms download k0s --version v1.31.14+k0s.0 --airgapped"}))
 			})
 
@@ -2392,7 +2404,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 		})
 
-		It("installs a non-airgapped cluster from the install-config without the airgap steps", func() {
+		It("downloads k0s and installs a non-airgapped cluster from the install-config without the airgap steps", func() {
 			csEnv.Airgapped = false
 
 			var jumpboxCommands []string
@@ -2407,6 +2419,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			Expect(bs.EnsureK0s()).To(Succeed())
 			Expect(jumpboxCommands).To(Equal([]string{
+				"oms download k0s --version v1.31.14+k0s.0",
 				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt",
 			}))
 		})
