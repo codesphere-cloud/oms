@@ -36,7 +36,7 @@ func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 		return nil, err
 	}
 
-	global, err := toMap(built)
+	global, err := toPlainMap(built)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert the global values: %w", err)
 	}
@@ -158,9 +158,9 @@ func fixedValues() fixed {
 	}
 }
 
-// toMap converts the built values to the plain maps the override merges into, keeping their yaml
+// toPlainMap converts the built values to the plain maps the override merges into, keeping their yaml
 // keys and shapes.
-func toMap(values global) (map[string]any, error) {
+func toPlainMap(values global) (map[string]any, error) {
 	data, err := yaml.Marshal(values)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal: %w", err)
