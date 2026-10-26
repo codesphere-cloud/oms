@@ -4,6 +4,7 @@
 package files
 
 import (
+	"cmp"
 	"fmt"
 	"log"
 	"maps"
@@ -347,6 +348,15 @@ type CephDBDevices struct {
 	Limit int    `yaml:"limit,omitempty"`
 }
 
+// Default Kubernetes pod and service CIDRs.
+const (
+	DefaultKubernetesPodCIDR     = "100.96.0.0/11"
+	DefaultKubernetesServiceCIDR = "100.64.0.0/13"
+)
+
+// WorkspacesNamespace is the namespace workspaces run in.
+const WorkspacesNamespace = "workspaces"
+
 type KubernetesConfig struct {
 	ManagedByCodesphere bool      `yaml:"managedByCodesphere"`
 	APIServerHost       string    `yaml:"apiServerHost,omitempty"`
@@ -357,6 +367,15 @@ type KubernetesConfig struct {
 
 	// Internal flag
 	NeedsKubeConfig bool `yaml:"-"`
+}
+
+// CIDRs returns the cluster CIDRs, falling back to the defaults on a Codesphere-managed cluster.
+func (k KubernetesConfig) CIDRs() (pod, service string) {
+	if !k.ManagedByCodesphere {
+		return k.PodCIDR, k.ServiceCIDR
+	}
+
+	return cmp.Or(k.PodCIDR, DefaultKubernetesPodCIDR), cmp.Or(k.ServiceCIDR, DefaultKubernetesServiceCIDR)
 }
 
 type K8sNode struct {
