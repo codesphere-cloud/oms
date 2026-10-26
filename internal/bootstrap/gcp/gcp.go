@@ -54,6 +54,14 @@ const installerNodeSecretsDir = "/etc/codesphere/secrets"
 // its own hosts, monitors and FSID.
 const vpcSubnetCIDR = "10.10.0.0/20"
 
+// The firewall rules that cut an installation using the local container registry off from the
+// internet: every VM except the jumpbox, which hosts the registry.
+const (
+	airgappedAllowJumpboxEgressRule  = "allow-jumpbox-egress"
+	airgappedAllowInternalEgressRule = "allow-internal-egress"
+	airgappedDenyEgressRule          = "deny-external-egress"
+)
+
 // CheckOMSManagedLabel checks if the given labels map indicates an OMS-managed project.
 // A project is considered OMS-managed if it has the 'oms-managed' label set to "true".
 func CheckOMSManagedLabel(labels map[string]string) bool {
@@ -163,6 +171,7 @@ type CodesphereEnvironment struct {
 	InstallLocal                  string       `json:"install_local"`
 	InstallHash                   string       `json:"install_hash"`
 	InstallSkipSteps              []string     `json:"install_skip_steps"`
+	InstallCodesphereOnly         bool         `json:"-"`
 	Preemptible                   bool         `json:"preemptible"`
 	SpotVMs                       bool         `json:"spot_vms"`
 	WriteConfig                   bool         `json:"-"`
@@ -440,21 +449,9 @@ func (b *GCPBootstrapper) Bootstrap() error {
 	}
 
 	if b.Env.InstallVersion != "" || b.Env.InstallLocal != "" {
-		err = b.EnsureK0s()
+		err = b.InstallK0sAndCodesphere()
 		if err != nil {
-			return fmt.Errorf("failed to install k0s: %w", err)
-		}
-
-		err = b.InstallCodesphere()
-		if err != nil {
-			return fmt.Errorf("failed to install Codesphere: %w", err)
-		}
-
-		// Every data center is installed before any k0s script runs, so a script never patches
-		// gateway services an install has yet to create.
-		err = b.RunK0sConfigScript()
-		if err != nil {
-			return fmt.Errorf("failed to run k0s config script: %w", err)
+			return err
 		}
 	}
 
@@ -519,6 +516,11 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return fmt.Errorf("acme-staging cannot be combined with google-acme-issuer")
 	}
 
+	err := b.validateCodesphereOnly()
+	if err != nil {
+		return err
+	}
+
 	if b.Env.RemoteOmsBinaryPath != "" && !b.fw.Exists(b.Env.RemoteOmsBinaryPath) {
 		return fmt.Errorf("remote OMS binary not found at path: %s", b.Env.RemoteOmsBinaryPath)
 	}
@@ -529,7 +531,7 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		}
 	}
 
-	err := b.validateInstallVersion()
+	err = b.validateInstallVersion()
 	if err != nil {
 		return err
 	}
@@ -580,6 +582,26 @@ func (b *GCPBootstrapper) ValidateInput() error {
 	}
 
 	return b.validateTelemetryExportParams()
+}
+
+// validateCodesphereOnly rejects a Codesphere-only install that has nothing to install, or that
+// would upload a vault other than the jumpbox's: the bootstrap copies its vault to the jumpbox,
+// and only the jumpbox's copy holds the kubeconfig "oms install k0s" added, which a
+// Codesphere-only install does not add again.
+func (b *GCPBootstrapper) validateCodesphereOnly() error {
+	if !b.Env.InstallCodesphereOnly {
+		return nil
+	}
+
+	if b.Env.InstallVersion == "" && b.Env.InstallLocal == "" {
+		return fmt.Errorf("install-codesphere-only requires install-version or install-local")
+	}
+
+	if !b.Env.RecoverConfig {
+		return fmt.Errorf("install-codesphere-only requires recover-config, so the install keeps the jumpbox's config and vault")
+	}
+
+	return nil
 }
 
 // validateMultiDC rejects flag combinations a multi-data-center bootstrap cannot satisfy.
@@ -770,101 +792,129 @@ func (b *GCPBootstrapper) EnsureVPC() error {
 }
 
 func (b *GCPBootstrapper) EnsureFirewallRules() error {
-	networkName := fmt.Sprintf("%s-vpc", b.Env.ProjectID)
+	network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", b.Env.ProjectID, b.Env.ProjectID)
 
-	// Allow external SSH to Jumpbox
-	sshRule := &computepb.Firewall{
-		Name:      protoString("allow-ssh-ext"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{
-				IPProtocol: protoString("tcp"),
-				Ports:      []string{"22"},
-			},
-		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		TargetTags:   []string{"ssh"},
-		Description:  protoString("Allow external SSH to Jumpbox"),
-	}
-
-	err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, sshRule)
+	err := b.createFirewallRules(network, baseFirewallRules())
 	if err != nil {
-		return fmt.Errorf("failed to create jumpbox ssh firewall rule: %w", err)
+		return err
 	}
 
-	// Allow all internal traffic
-	internalRule := &computepb.Firewall{
-		Name:      protoString("allow-internal"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("all")},
+	return b.ensureAirgappedEgressRules(network)
+}
+
+// baseFirewallRules returns the firewall rules every installation gets, whatever its registry type.
+func baseFirewallRules() []*computepb.Firewall {
+	return []*computepb.Firewall{
+		{
+			Name:         protoString("allow-ssh-ext"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"22"}}},
+			SourceRanges: []string{"0.0.0.0/0"},
+			TargetTags:   []string{"ssh"},
+			Description:  protoString("Allow external SSH to Jumpbox"),
 		},
-		SourceRanges: []string{vpcSubnetCIDR},
-		Description:  protoString("Allow all internal traffic"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, internalRule)
-	if err != nil {
-		return fmt.Errorf("failed to create internal firewall rule: %w", err)
-	}
-
-	// Allow all egress
-	egressRule := &computepb.Firewall{
-		Name:      protoString("allow-all-egress"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("EGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("all")},
+		{
+			Name:         protoString("allow-internal"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			SourceRanges: []string{vpcSubnetCIDR},
+			Description:  protoString("Allow all internal traffic"),
 		},
-		DestinationRanges: []string{"0.0.0.0/0"},
-		Description:       protoString("Allow all egress"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, egressRule)
-	if err != nil {
-		return fmt.Errorf("failed to create egress firewall rule: %w", err)
-	}
-
-	// Allow ingress for web (HTTP/HTTPS)
-	webRule := &computepb.Firewall{
-		Name:      protoString("allow-ingress-web"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("tcp"), Ports: []string{"80", "443"}},
+		{
+			Name:              protoString("allow-all-egress"),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(1000),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{"0.0.0.0/0"},
+			Description:       protoString("Allow all egress"),
 		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		Description:  protoString("Allow HTTP/HTTPS ingress"),
-	}
-
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, webRule)
-	if err != nil {
-		return fmt.Errorf("failed to create web firewall rule: %w", err)
-	}
-
-	// Allow ingress for PostgreSQL
-	postgresRule := &computepb.Firewall{
-		Name:      protoString("allow-ingress-postgres"),
-		Network:   protoString(fmt.Sprintf("projects/%s/global/networks/%s", b.Env.ProjectID, networkName)),
-		Direction: protoString("INGRESS"),
-		Priority:  protoInt32(1000),
-		Allowed: []*computepb.Allowed{
-			{IPProtocol: protoString("tcp"), Ports: []string{"5432"}},
+		{
+			Name:         protoString("allow-ingress-web"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"80", "443"}}},
+			SourceRanges: []string{"0.0.0.0/0"},
+			Description:  protoString("Allow HTTP/HTTPS ingress"),
 		},
-		SourceRanges: []string{"0.0.0.0/0"},
-		TargetTags:   []string{"postgres"},
-		Description:  protoString("Allow external access to PostgreSQL"),
+		{
+			Name:         protoString("allow-ingress-postgres"),
+			Direction:    protoString("INGRESS"),
+			Priority:     protoInt32(1000),
+			Allowed:      []*computepb.Allowed{{IPProtocol: protoString("tcp"), Ports: []string{"5432"}}},
+			SourceRanges: []string{"0.0.0.0/0"},
+			TargetTags:   []string{"postgres"},
+			Description:  protoString("Allow external access to PostgreSQL"),
+		},
+	}
+}
+
+// airgappedEgressRules returns the firewall rules that cut every VM but the jumpbox off from the
+// internet. The deny applies to all VMs, so a VM type added later is air-gapped as well; the
+// higher priority allows keep traffic inside the VPC and give the jumpbox its internet access.
+// All of them take precedence over allow-all-egress.
+func airgappedEgressRules() []*computepb.Firewall {
+	return []*computepb.Firewall{
+		{
+			Name:              protoString(airgappedAllowJumpboxEgressRule),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(800),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{"0.0.0.0/0"},
+			TargetTags:        []string{jumpboxTag},
+			Description:       protoString("Allow internet egress of the jumpbox, which hosts the local container registry"),
+		},
+		{
+			Name:              protoString(airgappedAllowInternalEgressRule),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(800),
+			Allowed:           []*computepb.Allowed{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{vpcSubnetCIDR},
+			Description:       protoString("Allow egress of air-gapped VMs inside the VPC"),
+		},
+		{
+			Name:              protoString(airgappedDenyEgressRule),
+			Direction:         protoString("EGRESS"),
+			Priority:          protoInt32(900),
+			Denied:            []*computepb.Denied{{IPProtocol: protoString("all")}},
+			DestinationRanges: []string{"0.0.0.0/0"},
+			Description:       protoString("Simulate an air-gapped installation: block internet egress of all VMs but the jumpbox"),
+		},
+	}
+}
+
+// createFirewallRules creates the given rules in the project's VPC network.
+func (b *GCPBootstrapper) createFirewallRules(network string, rules []*computepb.Firewall) error {
+	for _, rule := range rules {
+		rule.Network = protoString(network)
+
+		err := b.GCPClient.CreateFirewallRule(b.Env.ProjectID, rule)
+		if err != nil {
+			return fmt.Errorf("failed to create %s firewall rule: %w", rule.GetName(), err)
+		}
 	}
 
-	err = b.GCPClient.CreateFirewallRule(b.Env.ProjectID, postgresRule)
-	if err != nil {
-		return fmt.Errorf("failed to create postgres firewall rule: %w", err)
+	return nil
+}
+
+// ensureAirgappedEgressRules cuts all VMs but the jumpbox off from the internet for an airgapped
+// installation. They keep reaching each other and the jumpbox inside the VPC, and the jumpbox keeps
+// its internet access to download the package and mirror the images into its registry. Replies to
+// inbound connections still pass, since GCP firewall rules are stateful. A local container registry
+// alone does not cut the VMs off, as only airgapped installations stage the k0s airgap bundle.
+// Without airgapping the rules are removed, so a re-run that switches it off can pull again.
+func (b *GCPBootstrapper) ensureAirgappedEgressRules(network string) error {
+	if b.Env.Airgapped {
+		return b.createFirewallRules(network, airgappedEgressRules())
+	}
+
+	// Delete the deny first, so the jumpbox and internal traffic are never blocked in between.
+	for _, name := range []string{airgappedDenyEgressRule, airgappedAllowInternalEgressRule, airgappedAllowJumpboxEgressRule} {
+		err := b.GCPClient.DeleteFirewallRule(b.Env.ProjectID, name)
+		if err != nil {
+			return fmt.Errorf("failed to delete %s firewall rule: %w", name, err)
+		}
 	}
 
 	return nil
@@ -1083,6 +1133,38 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	return nil
 }
 
+// InstallK0sAndCodesphere installs k0s and Codesphere into every data center and then runs the
+// k0s config scripts. A Codesphere-only install leaves k0s alone, since the config script restarts
+// the k0s services of a cluster that is already running.
+func (b *GCPBootstrapper) InstallK0sAndCodesphere() error {
+	if b.Env.InstallCodesphereOnly {
+		log.Printf("Warning: installing only Codesphere. k0s, PostgreSQL, Ceph and the database keep their current state, so installing an older version than the running one, e.g. for a rollback, can fail or leave the instance broken.")
+	} else {
+		err := b.EnsureK0s()
+		if err != nil {
+			return fmt.Errorf("failed to install k0s: %w", err)
+		}
+	}
+
+	err := b.InstallCodesphere()
+	if err != nil {
+		return fmt.Errorf("failed to install Codesphere: %w", err)
+	}
+
+	if b.Env.InstallCodesphereOnly {
+		return nil
+	}
+
+	// Every data center is installed before any k0s script runs, so a script never patches
+	// gateway services an install has yet to create.
+	err = b.RunK0sConfigScript()
+	if err != nil {
+		return fmt.Errorf("failed to run k0s config script: %w", err)
+	}
+
+	return nil
+}
+
 // InstallCodesphere installs Codesphere into every data center from the shared jumpbox, in
 // ascending data center order. The order matters: the primary data center's install creates the
 // database, roles and schema that the secondary ones reuse.
@@ -1191,9 +1273,14 @@ func (b *GCPBootstrapper) InstallCommand(dc *datacenter.DataCenter, packageFilen
 		packageArg = " -p " + packageFilename
 	}
 
-	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s%s%s%s%s",
+	codesphereOnlyArg := ""
+	if b.Env.InstallCodesphereOnly {
+		codesphereOnlyArg = " --codesphere-only"
+	}
+
+	return fmt.Sprintf("oms install codesphere -c %s -k %s --vault %s%s%s%s%s%s",
 		dc.RemoteConfigPath, dc.RemoteAgeKeyPath(), dc.RemoteVaultPath(), packageArg,
-		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg())
+		b.generateRegistryTrustArg(), b.generatePCAppsValuesArg(), b.generateSkipStepsArg(), codesphereOnlyArg)
 }
 
 // remotePCAppsValuesPath is where the i-th pc-apps values file is stored on the jumpbox. The index

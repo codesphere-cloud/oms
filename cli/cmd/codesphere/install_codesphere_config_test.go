@@ -162,6 +162,7 @@ cluster:
   publicGateway:
     serviceType: LoadBalancer
 codesphere:
+  releaseName: codesphere-test
   domain: '{{ secret "baseDomain" }}'
   workspaceHostingBaseDomain: ws.base.example.com
   customDomains:
@@ -214,6 +215,85 @@ pcApps:
 		Expect(source["targetRevision"]).To(Equal("from-vault"))
 	})
 
+	Context("with secret templates in the codesphere block", func() {
+		const codesphereSecretConfig = `
+codesphere:
+  override:
+    clientSecret: '{{ secret "oidcClientSecret" }}'
+`
+
+		prepareWithVault := func(configs ...string) (files.RootConfig, error) {
+			tmpDir := GinkgoT().TempDir()
+			testVault := &files.InstallVault{
+				Secrets: []files.SecretEntry{{Name: "oidcClientSecret", File: &files.SecretFile{Content: "from-vault"}}},
+			}
+			vaultYAML, err := testVault.Marshal()
+			Expect(err).ToNot(HaveOccurred())
+
+			vaultPath := filepath.Join(tmpDir, "prod.vault.yaml")
+			Expect(os.WriteFile(vaultPath, vaultYAML, 0600)).To(Succeed())
+
+			configPaths := []string{}
+
+			for i, config := range configs {
+				configPath := filepath.Join(tmpDir, fmt.Sprintf("config-%d.yaml", i))
+				Expect(os.WriteFile(configPath, []byte(config), 0600)).To(Succeed())
+				configPaths = append(configPaths, configPath)
+			}
+
+			opts := &InstallCodesphereOpts{Configs: configPaths, Vault: vaultPath, VaultType: "plain"}
+			_, cfg, cleanup, err := prepareInstallConfig(opts, installer.NewConfig())
+			cleanup()
+
+			return cfg, err
+		}
+
+		It("rejects a config without a release name", func() {
+			_, err := prepareWithVault(codesphereSecretConfig)
+
+			Expect(err).To(MatchError(ContainSubstring("secret templates are not supported in the codesphere block: codesphere.override")))
+		})
+
+		It("names every codesphere key that uses a secret", func() {
+			_, err := prepareWithVault(`
+codesphere:
+  override:
+    clientSecret: '{{ secret "oidcClientSecret" }}'
+  customDomains:
+    - plain.example.com
+    - '{{ secret "oidcClientSecret" }}'
+`)
+
+			Expect(err).To(MatchError(HaveSuffix(": codesphere.customDomains, codesphere.override")))
+		})
+
+		It("accepts a secret outside the codesphere block", func() {
+			cfg, err := prepareWithVault(`
+cluster:
+  certificates:
+    override:
+      api-token: '{{ secret "oidcClientSecret" }}'
+`)
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Cluster.Certificates.Override).To(HaveKeyWithValue("api-token", "from-vault"))
+		})
+
+		It("accepts the secret when an overlay sets the release name", func() {
+			cfg, err := prepareWithVault(codesphereSecretConfig, "codesphere:\n  releaseName: codesphere-preview\n")
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Codesphere.Override).To(HaveKeyWithValue("clientSecret", "from-vault"))
+		})
+
+		It("accepts the config when an overlay replaces the secret with a literal", func() {
+			cfg, err := prepareWithVault(codesphereSecretConfig, "codesphere:\n  override:\n    clientSecret: literal\n")
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cfg.Codesphere.Override).To(HaveKeyWithValue("clientSecret", "literal"))
+		})
+	})
+
 	It("supports a single config path", func() {
 		tmpDir := GinkgoT().TempDir()
 		configPath := filepath.Join(tmpDir, "config.yaml")
@@ -263,7 +343,7 @@ func installCodesphereSopsAndAgeAvailable() bool {
 
 var _ = Describe("install codesphere vault type", func() {
 	It("accepts sops", func() {
-		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt"}
+		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt", VaultSecretName: vault.VaultSecretName}
 		Expect(validateInstallCodesphereVault(opts)).To(Succeed())
 	})
 
@@ -271,6 +351,12 @@ var _ = Describe("install codesphere vault type", func() {
 		opts := &InstallCodesphereOpts{VaultType: string(vault.TypePlain), PrivKey: "age-key.txt"}
 		err := validateInstallCodesphereVault(opts)
 		Expect(err).To(MatchError(`install codesphere requires vault type "sops"`))
+	})
+
+	It("rejects a vault secret name Kubernetes would refuse", func() {
+		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt", VaultSecretName: "PR_42"}
+		err := validateInstallCodesphereVault(opts)
+		Expect(err).To(MatchError(ContainSubstring(`invalid secret name "PR_42"`)))
 	})
 })
 

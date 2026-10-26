@@ -23,6 +23,8 @@ type DownloadOptions struct {
 	Force bool
 	// Quiet suppresses progress output.
 	Quiet bool
+	// CacheOnly fails instead of downloading when no matching cached copy exists.
+	CacheOnly bool
 }
 
 // githubReleaseAsset is a single downloadable asset of a GitHub release.

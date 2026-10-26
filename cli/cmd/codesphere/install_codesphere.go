@@ -5,8 +5,11 @@ package codesphere
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -23,6 +26,7 @@ import (
 )
 
 const (
+	secretRefMarker               = "__oms_secret_ref__"
 	mergedInstallConfigDirPattern = "oms-install-config-*"
 	mergedInstallConfigFileName   = "config.yaml"
 )
@@ -58,6 +62,8 @@ type InstallCodesphereOpts struct {
 	ArgoCDRepoURL        string
 	ArgoCDValues         []string
 	PCAppsValues         []string
+	// Name of the k8s secret containing the entire vault; source for ESO.
+	VaultSecretName string
 }
 
 func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -161,6 +167,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRepoURL, "argo-repo", argocd.DefaultRepoURL, "ArgoCD Helm chart repository URL")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file (can be specified multiple times)")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.VaultSecretName, "vault-secret-name", vault.VaultSecretName, "Secret in the codesphere namespace the vault is written to (as source for ESO).")
 
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
 
@@ -183,6 +190,10 @@ func validateInstallCodesphereVault(opts *InstallCodesphereOpts) error {
 	err := vault.ValidateConfiguration(vault.TypeSOPS, opts.PrivKey)
 	if err != nil {
 		return fmt.Errorf("failed to validate install config: %w", err)
+	}
+
+	if err := vault.ValidateSecretName(opts.VaultSecretName); err != nil {
+		return fmt.Errorf("failed to validate --vault-secret-name: %w", err)
 	}
 
 	return nil
@@ -211,6 +222,10 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	var store *vault.VaultTemplatingSecretStore
 
 	if opts.Vault != "" {
+		if err := checkNoCodesphereSecretRefs(configFiles); err != nil {
+			return nil, files.RootConfig{}, func() {}, err
+		}
+
 		backend, err := vault.NewFromString(opts.VaultType, vault.Options{Path: opts.Vault, AgeKey: opts.PrivKey})
 		if err != nil {
 			return nil, files.RootConfig{}, func() {}, fmt.Errorf("failed to load vault: %w", err)
@@ -305,6 +320,74 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 	effectiveOpts.Configs = append([]string(nil), configFiles...)
 
 	return &effectiveOpts, cfg, cleanup, nil
+}
+
+// checkNoCodesphereSecretRefs merges the configs like prepareInstallConfig does, because an
+// overlay can set the release name that exempts the base config's secrets.
+func checkNoCodesphereSecretRefs(configFiles []string) error {
+	merged := map[string]any{}
+
+	for _, configPath := range configFiles {
+		config, err := readConfigWithSecretMarkers(configPath)
+		if err != nil {
+			return err
+		}
+
+		merged = intutil.DeepMergeMaps(merged, config)
+	}
+
+	if refs := codesphereSecretRefs(merged); len(refs) > 0 {
+		return fmt.Errorf("invalid install config: secret templates are not supported in the codesphere block: %s", strings.Join(refs, ", "))
+	}
+
+	return nil
+}
+
+// codesphereSecretRefs returns the keys in the codesphere block that use `secret`. Their values
+// reach the Codesphere chart's ExternalSecrets in plaintext. Dev releases, the only ones that set
+// codesphere.releaseName, are exempt for now (only use case atm.). Long term config and secrets
+// should be more strictly separated, i.e. no secrets in config.yml (requires some changes in
+// auth-service).
+func codesphereSecretRefs(config map[string]any) []string {
+	codesphere, ok := config["codesphere"].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	if releaseName, _ := codesphere["releaseName"].(string); releaseName != "" {
+		return nil
+	}
+
+	refs := []string{}
+
+	for _, key := range slices.Sorted(maps.Keys(codesphere)) {
+		if strings.Contains(fmt.Sprint(codesphere[key]), secretRefMarker) {
+			refs = append(refs, "codesphere."+key)
+		}
+	}
+
+	return refs
+}
+
+func readConfigWithSecretMarkers(configPath string) (map[string]any, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file %s: %w", configPath, err)
+	}
+
+	rendered, err := configtemplating.RenderWithSecretResolver(data, func(string, ...string) (string, error) {
+		return secretRefMarker, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to render secret markers in %s: %w", configPath, err)
+	}
+
+	config := map[string]any{}
+	if err := yaml.Unmarshal(rendered, &config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file %s: %w", configPath, err)
+	}
+
+	return config, nil
 }
 
 // ensureCodespherePackageForVersion preserves explicit packages and resolves config-selected

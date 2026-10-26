@@ -18,6 +18,7 @@ import (
 	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,6 +35,10 @@ type InstallCodesphereDepenciesCmd struct {
 func (c *InstallCodesphereDepenciesCmd) RunE(cmd *cobra.Command, _ []string) error {
 	if err := validateInstallCodesphereVault(c.Opts); err != nil {
 		return err
+	}
+
+	if c.Opts.VaultSecretName != vault.VaultSecretName {
+		return fmt.Errorf("at the moment --vault-secret-name is only supported by the platform phase, the dependencies phase hardcodes %q", vault.VaultSecretName)
 	}
 
 	if c.Opts.LocalComponents && c.Opts.LocalConfigDir == "" {

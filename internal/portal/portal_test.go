@@ -528,6 +528,7 @@ var _ = Describe("PortalClient", func() {
 						Role         string    `json:"role"`
 						ExpiresAt    time.Time `json:"expiresAt"`
 					}
+
 					decoder := json.NewDecoder(req.Body)
 					decoder.DisallowUnknownFields()
 					Expect(decoder.Decode(&input)).To(Succeed())

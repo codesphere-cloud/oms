@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"cloud.google.com/go/artifactregistry/apiv1/artifactregistrypb"
@@ -129,6 +130,52 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.GoogleACMEIssuer = true
 
 			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("acme-staging cannot be combined with google-acme-issuer")))
+		})
+	})
+
+	Describe("ValidateInput Codesphere-only install", func() {
+		BeforeEach(func() {
+			csEnv.InstallCodesphereOnly = true
+			csEnv.RegistryType = gcp.RegistryTypeArtifactRegistry
+		})
+
+		It("rejects a Codesphere-only install without a version or local package", func() {
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only requires install-version or install-local")))
+		})
+
+		Context("when the config is recovered from the jumpbox", func() {
+			BeforeEach(func() {
+				csEnv.RecoverConfig = true
+			})
+
+			It("accepts a Codesphere-only install of a local package", func() {
+				csEnv.InstallLocal = "installer-lite.tar.gz"
+
+				fw.EXPECT().Exists("installer-lite.tar.gz").Return(true)
+
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+
+			It("accepts a Codesphere-only install of a released version", func() {
+				csEnv.InstallVersion = "v1.2.3"
+
+				mockPortalClient.EXPECT().GetBuild(portal.CodesphereProduct, "codesphere-v1.2.3", "").Return(portal.Build{
+					Hash:      "abc1234567890",
+					Artifacts: []portal.Artifact{{Filename: "installer-lite.tar.gz"}},
+				}, nil)
+
+				Expect(bs.ValidateInput()).To(Succeed())
+			})
+		})
+
+		// A vault kept locally from the first bootstrap lacks the kubeconfig that "oms install k0s"
+		// added to the jumpbox's copy, so uploading it would break the install.
+		It("rejects a Codesphere-only install without recover-config, even when local config files exist", func() {
+			csEnv.InstallLocal = "installer-lite.tar.gz"
+
+			fw.EXPECT().Exists(mock.Anything).Return(true).Maybe()
+
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("install-codesphere-only requires recover-config")))
 		})
 	})
 
@@ -342,8 +389,12 @@ var _ = Describe("GCP Bootstrapper", func() {
 			// EnsureVPC
 			gc.EXPECT().CreateVPC(projectID, "us-central1", projectID+"-vpc", projectID+"-us-central1-subnet", projectID+"-router", projectID+"-nat-gateway").Return(nil)
 
-			// EnsureFirewallRules (5 times)
+			// EnsureFirewallRules: the artifact registry keeps internet egress, so the airgapped
+			// egress rules are removed instead of created.
 			gc.EXPECT().CreateFirewallRule(projectID, mock.Anything).Return(nil).Times(5)
+			gc.EXPECT().DeleteFirewallRule(projectID, "deny-external-egress").Return(nil)
+			gc.EXPECT().DeleteFirewallRule(projectID, "allow-internal-egress").Return(nil)
+			gc.EXPECT().DeleteFirewallRule(projectID, "allow-jumpbox-egress").Return(nil)
 
 			// EnsureComputeInstances
 			ipResp := makeRunningInstance("10.0.0.1", "1.2.3.4")
@@ -1364,29 +1415,72 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("EnsureFirewallRules", func() {
+		expectRules := func(names ...string) {
+			network := fmt.Sprintf("projects/%s/global/networks/%s-vpc", csEnv.ProjectID, csEnv.ProjectID)
+			for _, name := range names {
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == name && r.GetNetwork() == network
+				})).Return(nil).Once()
+			}
+		}
+		expectBaseRules := func() {
+			expectRules("allow-ssh-ext", "allow-internal", "allow-all-egress", "allow-ingress-web", "allow-ingress-postgres")
+		}
+
 		Describe("Valid EnsureFirewallRules", func() {
-			It("creates required firewall rules", func() {
-				// Expect 4 rules: allow-ssh-ext, allow-internal, allow-all-egress, allow-ingress-web, allow-ingress-postgres
-				// Wait, code showed 5 blocks? ssh, internal, egress, web, postgres.
+			It("creates the base rules and blocks internet egress of all VMs but the jumpbox when airgapped", func() {
+				csEnv.Airgapped = true
+
+				expectBaseRules()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ssh-ext"
-				})).Return(nil)
+					return r.GetName() == "allow-jumpbox-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 800 &&
+						len(r.GetAllowed()) == 1 && r.GetAllowed()[0].GetIPProtocol() == "all" &&
+						slices.Equal(r.GetDestinationRanges(), []string{"0.0.0.0/0"}) &&
+						slices.Equal(r.GetTargetTags(), []string{"jumpbox"})
+				})).Return(nil).Once()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-internal"
-				})).Return(nil)
+					return r.GetName() == "allow-internal-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 800 &&
+						len(r.GetAllowed()) == 1 && r.GetAllowed()[0].GetIPProtocol() == "all" &&
+						slices.Equal(r.GetDestinationRanges(), []string{"10.10.0.0/20"}) &&
+						len(r.GetTargetTags()) == 0
+				})).Return(nil).Once()
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-all-egress"
-				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ingress-web"
-				})).Return(nil)
-				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
-					return *r.Name == "allow-ingress-postgres"
-				})).Return(nil)
+					return r.GetName() == "deny-external-egress" &&
+						r.GetDirection() == "EGRESS" &&
+						r.GetPriority() == 900 &&
+						len(r.GetDenied()) == 1 && r.GetDenied()[0].GetIPProtocol() == "all" &&
+						len(r.GetAllowed()) == 0 &&
+						slices.Equal(r.GetDestinationRanges(), []string{"0.0.0.0/0"}) &&
+						len(r.GetTargetTags()) == 0
+				})).Return(nil).Once()
 
 				err := bs.EnsureFirewallRules()
 				Expect(err).NotTo(HaveOccurred())
 			})
+
+			DescribeTable("removes the airgapped egress rules when not airgapped",
+				func(registryType gcp.RegistryType) {
+					csEnv.RegistryType = registryType
+
+					expectBaseRules()
+
+					deny := gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(nil).Once()
+					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-internal-egress").Return(nil).Once().NotBefore(deny)
+					gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "allow-jumpbox-egress").Return(nil).Once().NotBefore(deny)
+
+					err := bs.EnsureFirewallRules()
+					Expect(err).NotTo(HaveOccurred())
+				},
+				Entry("GitHub", gcp.RegistryTypeGitHub),
+				Entry("artifact registry", gcp.RegistryTypeArtifactRegistry),
+				// Only airgapped installations stage the k0s airgap bundle, so a local container
+				// registry alone must keep internet egress.
+				Entry("local container registry", gcp.RegistryTypeLocalContainer),
+			)
 		})
 
 		Describe("Invalid cases", func() {
@@ -1394,8 +1488,37 @@ var _ = Describe("GCP Bootstrapper", func() {
 				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.Anything).Return(fmt.Errorf("firewall error")).Once()
 
 				err := bs.EnsureFirewallRules()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to create jumpbox ssh firewall rule"))
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to create allow-ssh-ext firewall rule"),
+					ContainSubstring("firewall error"),
+				)))
+			})
+
+			It("fails when the egress deny rule creation fails", func() {
+				csEnv.Airgapped = true
+
+				expectBaseRules()
+				expectRules("allow-jumpbox-egress", "allow-internal-egress")
+				gc.EXPECT().CreateFirewallRule(csEnv.ProjectID, mock.MatchedBy(func(r *computepb.Firewall) bool {
+					return r.GetName() == "deny-external-egress"
+				})).Return(fmt.Errorf("firewall error")).Once()
+
+				err := bs.EnsureFirewallRules()
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to create deny-external-egress firewall rule"),
+					ContainSubstring("firewall error"),
+				)))
+			})
+
+			It("fails when removing the egress deny rule fails", func() {
+				expectBaseRules()
+				gc.EXPECT().DeleteFirewallRule(csEnv.ProjectID, "deny-external-egress").Return(fmt.Errorf("delete error")).Once()
+
+				err := bs.EnsureFirewallRules()
+				Expect(err).To(MatchError(And(
+					ContainSubstring("failed to delete deny-external-egress firewall rule"),
+					ContainSubstring("delete error"),
+				)))
 			})
 		})
 	})
@@ -2055,6 +2178,60 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("InstallK0sAndCodesphere", func() {
+		const installCommand = "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images"
+
+		BeforeEach(func() {
+			csEnv.InstallVersion = "v1.2.3"
+			csEnv.InstallHash = "abc1234567890"
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+			csEnv.RegistryType = gcp.RegistryTypeGitHub
+
+			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
+		})
+
+		It("given a full install, when Codesphere is installed, then k0s is installed first and configured afterwards", func() {
+			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
+				return strings.HasPrefix(command, "oms install k0s ")
+			})).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
+
+			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+		})
+
+		Context("when only Codesphere is installed", func() {
+			BeforeEach(func() {
+				csEnv.InstallCodesphereOnly = true
+			})
+
+			It("given a running cluster, when Codesphere is installed, then only the Codesphere-only install runs and k0s is left untouched", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(nil)
+
+				Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+			})
+
+			It("given skip steps, when Codesphere is installed, then they are passed on together with --codesphere-only", func() {
+				csEnv.InstallSkipSteps = []string{"set-up-cluster"}
+
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+					"oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,set-up-cluster,load-container-images --codesphere-only").Return(nil)
+
+				Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+			})
+
+			It("given a failing install, when Codesphere is installed, then the install error is returned", func() {
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand+" --codesphere-only").Return(fmt.Errorf("install error"))
+
+				Expect(bs.InstallK0sAndCodesphere()).To(MatchError(ContainSubstring("failed to install Codesphere")))
+			})
+		})
+	})
+
 	Describe("InstallK0s", func() {
 		BeforeEach(func() {
 			csEnv.InstallVersion = "v1.2.3"
@@ -2078,6 +2255,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 			err := bs.InstallK0s()
 			Expect(err).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
 		})
+
+		It("applies the generated airgap k0sctl config when airgapped", func() {
+			csEnv.Airgapped = true
+
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms install k0s --config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
+
+			Expect(bs.InstallK0s()).To(Succeed())
+		})
 	})
 
 	Describe("DownloadK0sAirgapBundle", func() {
@@ -2090,6 +2276,139 @@ var _ = Describe("GCP Bootstrapper", func() {
 				"oms download k0s --version v1.31.14+k0s.0 --airgapped").Return(nil)
 
 			Expect(bs.DownloadK0sAirgapBundle()).To(Succeed())
+		})
+
+		It("reports a failing download on the jumpbox", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms download k0s --version v1.31.14+k0s.0 --airgapped").Return(fmt.Errorf("network error"))
+
+			err := bs.DownloadK0sAirgapBundle()
+			Expect(err).To(MatchError(ContainSubstring("failed to download k0s airgap bundle on jumpbox")))
+			Expect(err).To(MatchError(ContainSubstring("network error")))
+		})
+	})
+
+	Describe("GenerateK0sAirgapConfig", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+		})
+
+		It("generates the airgap k0sctl config on the jumpbox without installing it", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml").Return(nil)
+
+			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
+		})
+
+		It("reports a failing config generation on the jumpbox", func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
+				return strings.HasPrefix(command, "oms init k0s-config ")
+			})).Return(fmt.Errorf("airgap bundle not found"))
+
+			err := bs.GenerateK0sAirgapConfig()
+			Expect(err).To(MatchError(ContainSubstring("failed to generate k0s airgap config (data center 1)")))
+			Expect(err).To(MatchError(ContainSubstring("airgap bundle not found")))
+		})
+
+		It("generates a separate airgap k0sctl config for every data center", func() {
+			bs.Env.DataCenters = []*datacenter.DataCenter{
+				{ID: 1, RemoteConfigPath: "/etc/codesphere/config.yaml", ControlPlaneNodes: bs.Env.ControlPlaneNodes},
+				{ID: 2, Suffix: "-dc2", RemoteConfigPath: "/etc/codesphere/config-dc2.yaml", ControlPlaneNodes: []*node.Node{fakeNode("k0s-1-dc2", nodeClient)}},
+			}
+
+			var jumpboxCommands []string
+
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
+				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
+				Return(nil)
+
+			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
+			Expect(jumpboxCommands).To(Equal([]string{
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config-dc2.yaml --airgapped --output /etc/codesphere/k0sctl-config-dc2.yaml",
+			}))
+		})
+	})
+
+	Describe("EnsureK0s", func() {
+		BeforeEach(func() {
+			csEnv.K0sVersion = "v1.31.14+k0s.0"
+			csEnv.Airgapped = true
+		})
+
+		It("installs an airgapped cluster from the airgap config it generates", func() {
+			var jumpboxCommands []string
+
+			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
+				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
+				Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+
+			Expect(bs.EnsureK0s()).To(Succeed())
+			Expect(jumpboxCommands).To(Equal([]string{
+				"oms download k0s --version v1.31.14+k0s.0 --airgapped",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml",
+				"oms install k0s --config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt",
+			}))
+		})
+
+		Context("when a step fails", func() {
+			var jumpboxCommands []string
+
+			// failJumpboxCommand records the jumpbox commands and fails the one starting with prefix.
+			failJumpboxCommand := func(prefix string) {
+				jumpboxCommands = nil
+
+				fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+				nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+				nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						jumpboxCommands = append(jumpboxCommands, command)
+						if strings.HasPrefix(command, prefix) {
+							return fmt.Errorf("step error")
+						}
+
+						return nil
+					})
+			}
+
+			It("does not generate a config or install k0s when the bundle download fails", func() {
+				failJumpboxCommand("oms download k0s ")
+
+				Expect(bs.EnsureK0s()).To(MatchError(ContainSubstring("failed to download k0s airgap bundle")))
+				Expect(jumpboxCommands).To(Equal([]string{"oms download k0s --version v1.31.14+k0s.0 --airgapped"}))
+			})
+
+			It("does not install k0s when the airgap config generation fails", func() {
+				failJumpboxCommand("oms init k0s-config ")
+
+				Expect(bs.EnsureK0s()).To(MatchError(ContainSubstring("failed to generate k0s airgap config")))
+				Expect(jumpboxCommands).To(HaveLen(2))
+				Expect(jumpboxCommands).NotTo(ContainElement(HavePrefix("oms install k0s ")))
+			})
+		})
+
+		It("installs a non-airgapped cluster from the install-config without the airgap steps", func() {
+			csEnv.Airgapped = false
+
+			var jumpboxCommands []string
+
+			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
+			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.Anything).
+				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
+				Return(nil)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+
+			Expect(bs.EnsureK0s()).To(Succeed())
+			Expect(jumpboxCommands).To(Equal([]string{
+				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt",
+			}))
 		})
 	})
 

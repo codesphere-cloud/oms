@@ -24,15 +24,15 @@ replace (
 )
 
 require (
-	cloud.google.com/go/artifactregistry v1.27.0
-	cloud.google.com/go/compute v1.73.0
-	cloud.google.com/go/iam v1.14.0
-	cloud.google.com/go/resourcemanager v1.17.0
+	cloud.google.com/go/artifactregistry v1.28.0
+	cloud.google.com/go/compute v1.74.0
+	cloud.google.com/go/iam v1.15.0
+	cloud.google.com/go/resourcemanager v1.18.0
 	cloud.google.com/go/serviceusage v1.16.0
 	filippo.io/age v1.3.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
-	github.com/argoproj/argo-cd/v3 v3.5.5
+	github.com/argoproj/argo-cd/v3 v3.5.6
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
 	github.com/codesphere-cloud/cs-go v1.55.0
 	github.com/creativeprojects/go-selfupdate v1.7.0
@@ -45,8 +45,8 @@ require (
 	github.com/lithammer/shortuuid v3.0.0+incompatible
 	github.com/onsi/ginkgo/v2 v2.33.1
 	github.com/onsi/gomega v1.44.0
-	github.com/pkg/sftp v1.13.11
-	github.com/rook/rook/pkg/apis v0.0.0-20261019184450-d5af15a509a4
+	github.com/pkg/sftp v1.13.12
+	github.com/rook/rook/pkg/apis v0.0.0-20261022223044-d4548cbb5834
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 	go.yaml.in/yaml/v3 v3.0.5
@@ -54,7 +54,7 @@ require (
 	golang.org/x/mod v0.42.0
 	golang.org/x/oauth2 v0.37.0
 	golang.org/x/term v0.47.0
-	google.golang.org/api v0.305.0
+	google.golang.org/api v0.308.0
 	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
@@ -62,7 +62,7 @@ require (
 	k8s.io/api v0.37.1
 	k8s.io/apimachinery v0.37.1
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
+	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	sigs.k8s.io/controller-runtime v0.24.1
 	sigs.k8s.io/gateway-api v1.6.3
 	sigs.k8s.io/yaml v1.6.0
@@ -644,7 +644,7 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto v0.0.0-20260720171339-e059f2f05d78 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260720171339-e059f2f05d78 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

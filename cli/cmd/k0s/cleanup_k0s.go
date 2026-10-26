@@ -41,9 +41,9 @@ type CleanupK0sOpts struct {
 
 // RunE removes k0s from all nodes of the install-config via SSH
 func (c *CleanupK0sCmd) RunE(_ *cobra.Command, _ []string) error {
-	config, err := loadManagedInstallConfig(c.Opts.InstallConfig)
+	config, err := installer.LoadManagedInstallConfig(c.Opts.InstallConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to clean up k0s: %w", err)
 	}
 
 	nodeClient := node.NewSSHNodeClient(!c.Opts.Verbose)
