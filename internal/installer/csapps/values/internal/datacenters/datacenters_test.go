@@ -12,98 +12,55 @@ import (
 )
 
 var (
-	main   = files.DatacenterConfig{ID: 1, Name: "main", City: "Karlsruhe", CountryCode: "DE"}
-	second = files.DatacenterConfig{ID: 2, Name: "second", City: "Frankfurt", CountryCode: "DE"}
+	primary   = files.DatacenterConfig{ID: 1, Name: "primary", City: "Karlsruhe", CountryCode: "DE"}
+	secondary = files.DatacenterConfig{ID: 2, Name: "secondary", City: "Frankfurt", CountryCode: "DE"}
 )
 
 var _ = Describe("Values", func() {
 	It("several data centers -> sorted by id, configured default", func() {
 		values, err := datacenters.Values(&files.RootConfig{
-			Datacenter:          main,
-			DataCenters:         []files.DatacenterConfig{second, main},
+			Datacenter:          primary,
+			DataCenters:         []files.DatacenterConfig{secondary, primary},
 			DefaultDataCenterID: 2,
 		})
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values).To(Equal(datacenters.DataCenters{
 			DataCenterID:         1,
-			DataCenterName:       "main",
+			DataCenterName:       "primary",
 			DefaultDataCenterID:  2,
 			AvailableDataCenters: []int{1, 2},
-			DataCenters: []datacenters.DataCenter{
-				{ID: 1, Name: "main", City: "Karlsruhe", CountryCode: "DE"},
-				{ID: 2, Name: "second", City: "Frankfurt", CountryCode: "DE"},
-			},
+			DataCenters:          []files.DatacenterConfig{primary, secondary},
 		}))
 	})
 
-	It("second data center's config without a default -> second is target and default", func() {
+	It("secondary data center's config without a default -> secondary is target and default", func() {
 		values, err := datacenters.Values(&files.RootConfig{
-			Datacenter:  second,
-			DataCenters: []files.DatacenterConfig{main, second},
+			Datacenter:  secondary,
+			DataCenters: []files.DatacenterConfig{primary, secondary},
 		})
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.DataCenterID).To(Equal(2))
-		Expect(values.DataCenterName).To(Equal("second"))
+		Expect(values.DataCenterName).To(Equal("secondary"))
 		Expect(values.DefaultDataCenterID).To(Equal(2))
 		Expect(values.AvailableDataCenters).To(Equal([]int{1, 2}))
 	})
 
 	It("no .dataCenters -> only the target one, which is the default", func() {
-		values, err := datacenters.Values(&files.RootConfig{Datacenter: second})
+		values, err := datacenters.Values(&files.RootConfig{Datacenter: secondary})
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.AvailableDataCenters).To(Equal([]int{2}))
 		Expect(values.DefaultDataCenterID).To(Equal(2))
 	})
 
-	It("data center with id 0 -> error", func() {
+	It("invalid data centers -> error", func() {
 		_, err := datacenters.Values(&files.RootConfig{
-			Datacenter:  main,
-			DataCenters: []files.DatacenterConfig{main, {ID: 0, Name: "zero"}},
-		})
-
-		Expect(err).To(MatchError(ContainSubstring(`data center "zero" has id 0`)))
-	})
-
-	It("duplicate id -> error", func() {
-		_, err := datacenters.Values(&files.RootConfig{
-			Datacenter:  main,
-			DataCenters: []files.DatacenterConfig{main, second, main},
-		})
-
-		Expect(err).To(MatchError(ContainSubstring("duplicate data center id 1")))
-	})
-
-	It("data centers without the target one -> error", func() {
-		_, err := datacenters.Values(&files.RootConfig{
-			Datacenter:  main,
-			DataCenters: []files.DatacenterConfig{second},
+			Datacenter:  primary,
+			DataCenters: []files.DatacenterConfig{secondary},
 		})
 
 		Expect(err).To(MatchError(ContainSubstring("is missing .dataCenter (id 1)")))
-	})
-
-	It("target entry that differs from .dataCenter -> error", func() {
-		renamed := main
-		renamed.Name = "renamed"
-
-		_, err := datacenters.Values(&files.RootConfig{
-			Datacenter:  main,
-			DataCenters: []files.DatacenterConfig{renamed, second},
-		})
-
-		Expect(err).To(MatchError(ContainSubstring("entry with id 1 differs from .dataCenter")))
-	})
-
-	It("unknown default -> error", func() {
-		_, err := datacenters.Values(&files.RootConfig{
-			Datacenter:          main,
-			DataCenters:         []files.DatacenterConfig{main, second},
-			DefaultDataCenterID: 3,
-		})
-
-		Expect(err).To(MatchError(ContainSubstring(".defaultDataCenterId 3 is not one")))
 	})
 })

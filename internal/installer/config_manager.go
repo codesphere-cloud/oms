@@ -162,6 +162,10 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 		errors = append(errors, "datacenter name is required")
 	}
 
+	if err := g.Config.ValidateDataCenters(); err != nil {
+		errors = append(errors, err.Error())
+	}
+
 	if g.Config.Postgres.Mode == "" {
 		errors = append(errors, "postgres mode is required (install or external)")
 	} else if g.Config.Postgres.Mode != "install" && g.Config.Postgres.Mode != "external" {
