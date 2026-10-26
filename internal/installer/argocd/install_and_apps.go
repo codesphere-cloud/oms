@@ -5,9 +5,11 @@ package argocd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	synccommon "github.com/argoproj/argo-cd/gitops-engine/pkg/sync/common"
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd/pcapps"
@@ -16,6 +18,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/util"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,6 +76,132 @@ func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, na
 	}
 
 	return nil
+}
+
+// WaitForApplicationSynced waits until Argo CD has synced the Application's current source, values
+// included, and reports it as healthy. A sync of an earlier source does not count. Resources that
+// drift after a successful sync do not keep it waiting.
+func WaitForApplicationSynced(ctx context.Context, kubeClient client.Client, name string, logf LogFunc) error {
+	if logf == nil {
+		logf = func(string, ...interface{}) {}
+	}
+
+	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, applicationReadyTimeout)
+
+	lastHealth, lastSync := "", ""
+
+	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, applicationReadyTimeout, true, func(ctx context.Context) (bool, error) {
+		app := &argov1alpha1.Application{}
+		if err := kubeClient.Get(ctx, client.ObjectKey{Name: name, Namespace: DefaultNamespace}, app); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return false, fmt.Errorf("failed to read ArgoCD Application %q: %w", name, err)
+			}
+
+			logf("Waiting for ArgoCD Application %q to be created", name)
+
+			return false, nil
+		}
+
+		lastHealth, lastSync = string(app.Status.Health.Status), string(app.Status.Sync.Status)
+
+		synced, err := syncedCurrentSource(app)
+		if err != nil {
+			return false, fmt.Errorf("failed to compare the sources of ArgoCD Application %q: %w", name, err)
+		}
+
+		if synced && app.Status.Health.Status == "Healthy" {
+			logf("ArgoCD Application %q is healthy and synced", name)
+			return true, nil
+		}
+
+		logf("Waiting for ArgoCD Application %q (synced current source=%t, health=%q, sync=%q)", name, synced, lastHealth, lastSync)
+
+		return false, nil
+	})
+	if err != nil {
+		return fmt.Errorf("timed out waiting for ArgoCD Application %q to become healthy and synced (health=%q, sync=%q): %w", name, lastHealth, lastSync, err)
+	}
+
+	return nil
+}
+
+// syncedCurrentSource reports whether the Application is in sync with its current source, or the
+// last sync of that source succeeded.
+func syncedCurrentSource(app *argov1alpha1.Application) (bool, error) {
+	if app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced {
+		compared, err := sameSource(app.Spec.Source, &app.Status.Sync.ComparedTo.Source)
+		if err != nil || compared {
+			return compared, err
+		}
+	}
+
+	operation := app.Status.OperationState
+	if operation == nil || operation.Phase != synccommon.OperationSucceeded || operation.SyncResult == nil {
+		return false, nil
+	}
+
+	return sameSource(app.Spec.Source, &operation.SyncResult.Source)
+}
+
+// sameSource compares two sources ignoring null values, which Argo CD drops from the sources it
+// records in the status.
+func sameSource(a, b *argov1alpha1.ApplicationSource) (bool, error) {
+	a, err := withoutNullValues(a)
+	if err != nil {
+		return false, err
+	}
+
+	b, err = withoutNullValues(b)
+	if err != nil {
+		return false, err
+	}
+
+	return a.Equals(b), nil
+}
+
+func withoutNullValues(source *argov1alpha1.ApplicationSource) (*argov1alpha1.ApplicationSource, error) {
+	if source == nil || source.Helm == nil || source.Helm.ValuesObject == nil {
+		return source, nil
+	}
+
+	values := map[string]any{}
+	if err := json.Unmarshal(source.Helm.ValuesObject.Raw, &values); err != nil {
+		return nil, fmt.Errorf("failed to parse the Helm values: %w", err)
+	}
+
+	raw, err := json.Marshal(dropNulls(values))
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal the Helm values: %w", err)
+	}
+
+	copied := source.DeepCopy()
+	copied.Helm.ValuesObject = &runtime.RawExtension{Raw: raw}
+
+	return copied, nil
+}
+
+func dropNulls(values map[string]any) map[string]any {
+	for key, value := range values {
+		if value == nil {
+			delete(values, key)
+			continue
+		}
+
+		dropNestedNulls(value)
+	}
+
+	return values
+}
+
+func dropNestedNulls(value any) {
+	switch v := value.(type) {
+	case map[string]any:
+		dropNulls(v)
+	case []any:
+		for _, item := range v {
+			dropNestedNulls(item)
+		}
+	}
 }
 
 // InstallerAPI is implemented by the concrete ArgoCD chart installer.

@@ -63,7 +63,8 @@ type InstallCodesphereOpts struct {
 	ArgoCDValues         []string
 	PCAppsValues         []string
 	// Name of the k8s secret containing the entire vault; source for ESO.
-	VaultSecretName string
+	VaultSecretName     string
+	CodesphereViaArgoCD bool
 }
 
 func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
@@ -168,6 +169,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.VaultSecretName, "vault-secret-name", vault.VaultSecretName, "Secret in the codesphere namespace the vault is written to (as source for ESO).")
+	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.CodesphereViaArgoCD, "codesphere-via-argocd", false, "Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm. Requires the chart's external secrets")
 
 	util.MarkPersistentFlagRequired(codesphere.cmd, "config")
 

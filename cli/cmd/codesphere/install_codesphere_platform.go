@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"log"
 	"path/filepath"
 	"runtime"
 
@@ -14,11 +15,16 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
+	"github.com/codesphere-cloud/oms/internal/installer/csapps"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+const codesphereStep = "codesphere"
 
 // InstallCodespherePlatformCmd runs only the Codesphere platform step (Phase 3).
 type InstallCodespherePlatformCmd struct {
@@ -65,6 +71,19 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		}
 	}
 
+	viaArgoCD := opts.CodesphereViaArgoCD && !installer.IsStepSkipped(cfg, opts.SkipSteps, codesphereStep)
+
+	var kubeClient client.Client
+
+	if viaArgoCD {
+		var err error
+
+		kubeClient, err = handOverDeployToArgoCD(ctx, opts, cfg)
+		if err != nil {
+			return err
+		}
+	}
+
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
 	if opts.LocalComponents {
@@ -92,6 +111,51 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
+
+	if viaArgoCD {
+		if err := deployCodesphereViaArgoCD(ctx, kubeClient, cfg, pm); err != nil {
+			return fmt.Errorf("failed to deploy Codesphere through ArgoCD: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// handOverDeployToArgoCD tells the Codesphere installer to leave the chart to OMS, and which
+// version ArgoCD has installed, before the installer migrates the database.
+func handOverDeployToArgoCD(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) (client.Client, error) {
+	_, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load the Kubernetes config: %w", err)
+	}
+
+	kubeClient, err := installer.NewKubeClient(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
+	}
+
+	installedVersion, err := csapps.InstalledVersion(ctx, kubeClient, &cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the installed Codesphere version: %w", err)
+	}
+
+	if err := csapps.HandOverToInstaller(opts.ConfigPath, installedVersion); err != nil {
+		return nil, fmt.Errorf("failed to hand the chart deploy over to OMS: %w", err)
+	}
+
+	return kubeClient, nil
+}
+
+func deployCodesphereViaArgoCD(ctx context.Context, kubeClient client.Client, cfg files.RootConfig, pm installer.PackageManager) error {
+	installerBOM, err := bom.Parse(pm.GetDependencyPath("bom.json"))
+	if err != nil {
+		return fmt.Errorf("failed to read the package BOM: %w", err)
+	}
+
+	if err := csapps.Install(ctx, kubeClient, &cfg, installerBOM, log.Printf); err != nil {
+		return fmt.Errorf("failed to deploy the cs-applications: %w", err)
+	}
+
 	return nil
 }
 
