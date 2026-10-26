@@ -4,7 +4,6 @@
 package installer
 
 import (
-	"cmp"
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -108,10 +107,11 @@ func GenerateK0sConfig(installConfig *files.RootConfig) (*K0sConfig, error) {
 			}
 		}
 
+		podCIDR, serviceCIDR := installConfig.Kubernetes.CIDRs()
 		k0sConfig.Spec.Network = &K0sNetwork{
 			Provider:      "calico",
-			PodCIDR:       cmp.Or(installConfig.Kubernetes.PodCIDR, files.DefaultKubernetesPodCIDR),
-			ServiceCIDR:   cmp.Or(installConfig.Kubernetes.ServiceCIDR, files.DefaultKubernetesServiceCIDR),
+			PodCIDR:       podCIDR,
+			ServiceCIDR:   serviceCIDR,
 			ClusterDomain: "cluster.local",
 		}
 
