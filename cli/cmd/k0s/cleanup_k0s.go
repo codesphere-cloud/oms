@@ -52,7 +52,7 @@ func (c *CleanupK0sCmd) RunE(_ *cobra.Command, _ []string) error {
 	for _, ip := range installer.K0sCleanupNodeIPs(config) {
 		nodes = append(nodes, &node.Node{
 			FileIO:     c.FileWriter,
-			KeyPath:    c.Opts.SSHKeyPath,
+			KeyPath:    intutil.ExpandPath(c.Opts.SSHKeyPath),
 			Name:       ip,
 			ExternalIP: ip,
 			NodeClient: nodeClient,

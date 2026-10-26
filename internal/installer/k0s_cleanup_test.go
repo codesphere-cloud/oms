@@ -67,6 +67,30 @@ var _ = Describe("K0sCleanup", func() {
 			Expect(script[mountCheck:deletion]).To(ContainSubstring("exit 1"))
 		})
 
+		It("refuses to delete while a k0s service or kubelet is still running", func() {
+			script := installer.K0sCleanupScript()
+
+			serviceCheck := strings.Index(script, `if systemctl is-active --quiet "$svc.service"; then`)
+			kubeletCheck := strings.Index(script, "if pgrep -x kubelet >/dev/null 2>&1; then")
+			reset := strings.Index(script, `"$K0S" reset`)
+
+			Expect(serviceCheck).To(BeNumerically(">", strings.Index(script, `systemctl stop "$svc.service"`)))
+			Expect(kubeletCheck).To(BeNumerically(">", serviceCheck))
+			Expect(reset).To(BeNumerically(">", kubeletCheck))
+			Expect(script[serviceCheck:reset]).To(ContainSubstring("exit 1"))
+		})
+
+		It("runs k0s reset only while k0s data is left and fails after the cleanup if it fails", func() {
+			script := installer.K0sCleanupScript()
+
+			Expect(script).To(ContainSubstring(`if [ -z "$(ls -A /var/lib/k0s 2>/dev/null)" ]; then`))
+			Expect(script).To(ContainSubstring(`"$K0S" reset || RESET_FAILED=1`))
+
+			resetCheck := strings.Index(script, `if [ -n "$RESET_FAILED" ]; then`)
+			Expect(resetCheck).To(BeNumerically(">", strings.Index(script, "systemctl daemon-reload")))
+			Expect(script[resetCheck:]).To(ContainSubstring("exit 1"))
+		})
+
 		It("keeps dedicated k0s mounts and deletes only their contents", func() {
 			script := installer.K0sCleanupScript()
 
