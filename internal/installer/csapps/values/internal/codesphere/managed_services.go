@@ -87,13 +87,13 @@ func upgradeLegacyPlans(service files.ManagedServiceConfig) (files.ManagedServic
 				}
 			}
 
-			value, err := legacyPlanValue(plan.Name, key, parameter.Legacy.Schema)
+			value, pinned, err := legacyPlanValue(plan.Name, key, parameter.Legacy.Schema)
 			if err != nil {
 				return files.ManagedServiceConfig{}, err
 			}
 
-			if value != nil {
-				values[key] = files.PlanParam{IsScalar: true, Value: value}
+			if pinned {
+				values[key] = value
 			}
 		}
 
@@ -111,23 +111,23 @@ func upgradeLegacyPlans(service files.ManagedServiceConfig) (files.ManagedServic
 	return service, nil
 }
 
-// legacyPlanValue returns the numeric default a legacy plan pins for a parameter, or nil if it pins
-// none.
-func legacyPlanValue(planName, key string, schema map[string]interface{}) (any, error) {
+// legacyPlanValue returns the numeric default a legacy plan pins for a parameter, and whether it pins
+// one.
+func legacyPlanValue(planName, key string, schema map[string]interface{}) (files.PlanParam, bool, error) {
 	switch value := schema["default"].(type) {
 	case int, float64:
-		return value, nil
+		return files.PlanParam{IsScalar: true, Value: value}, true, nil
 	}
 
 	if readOnly, _ := schema["readOnly"].(bool); readOnly {
-		return nil, fmt.Errorf(
+		return files.PlanParam{}, false, fmt.Errorf(
 			"legacy plan %q parameter %q is read-only but has no numeric schema.default, so it pins no value",
 			planName,
 			key,
 		)
 	}
 
-	return nil, nil
+	return files.PlanParam{}, false, nil
 }
 
 func withoutDefault(schema map[string]interface{}) map[string]interface{} {
