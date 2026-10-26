@@ -16,7 +16,7 @@ var _ = Describe("Workspace images", func() {
 		imgs := defaultTestImages()
 		delete(imgs, "workspace-server")
 
-		_, err := codesphere.Values(files.CodesphereConfig{}, imgs, noRegistry)
+		_, err := codesphere.Values(files.CodesphereConfig{}, imgs, defaultTestGateways(), noMetalLB, noRegistry)
 
 		Expect(err).To(MatchError(ContainSubstring("workspace-server not found")))
 	})
@@ -25,7 +25,7 @@ var _ = Describe("Workspace images", func() {
 		imgs := defaultTestImages()
 		delete(imgs, "vpn")
 
-		_, err := codesphere.Values(files.CodesphereConfig{}, imgs, noRegistry)
+		_, err := codesphere.Values(files.CodesphereConfig{}, imgs, defaultTestGateways(), noMetalLB, noRegistry)
 
 		Expect(err).To(MatchError(ContainSubstring("vpn not found")))
 	})
