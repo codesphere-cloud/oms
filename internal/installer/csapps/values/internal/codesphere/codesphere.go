@@ -84,6 +84,11 @@ func Values(
 		return Codesphere{}, err
 	}
 
+	certIssuer, err := certIssuerValues(conf.CertIssuer)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
 	frontendGateway, err := frontendGatewayValues(imgs, conf.CertIssuer, gateways.Codesphere.Enabled)
 	if err != nil {
 		return Codesphere{}, err
@@ -96,7 +101,7 @@ func Values(
 
 	return Codesphere{
 		PublicIP:                   conf.PublicIP,
-		CertIssuer:                 certIssuerValues(conf.CertIssuer),
+		CertIssuer:                 certIssuer,
 		WorkspaceHostingBaseDomain: conf.WorkspaceHostingBaseDomain,
 		SSHWorkspaceProxy:          SSHWorkspaceProxy{BaseDomain: sshBaseDomain(conf.SSHWorkspaceProxy)},
 		VPN:                        VPN{LeftPeerID: conf.VPNLeftPeerID},
