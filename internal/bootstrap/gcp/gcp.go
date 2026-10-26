@@ -106,9 +106,11 @@ type GCPBootstrapper struct {
 	// Environment
 	Env *CodesphereEnvironment
 	// SSH command runner
-	NodeClient   node.NodeClient
-	PortalClient portal.Portal
-	GitHubClient github.GitHubClient
+	NodeClient         node.NodeClient
+	PortalClient       portal.Portal
+	GitHubClient       github.GitHubClient
+	InstallVaultLoader InstallVaultLoader
+	installVault       *files.InstallVault
 }
 
 // primaryDC returns the first data center, which owns the shared PostgreSQL server and the
@@ -150,9 +152,9 @@ type CodesphereEnvironment struct {
 	PostgreSQLNode *node.Node `json:"postgres_node"`
 	// MultiDC bootstraps two data centers that share the PostgreSQL server but run separate
 	// Kubernetes and Ceph clusters.
-	MultiDC             bool   `json:"multi_dc"`
-	SingleVM            bool   `json:"single_vm,omitempty"`
-	SingleVMMachineType string `json:"single_vm_machine_type,omitempty"`
+	MultiDC     bool   `json:"multi_dc"`
+	SingleVM    bool   `json:"single_vm,omitempty"`
+	MachineType string `json:"machine_type,omitempty"`
 	// DataCenters holds the per-data-center state. It always has at least one entry.
 	DataCenters []*datacenter.DataCenter `json:"datacenters"`
 	// DNSRecords records the DNS records the bootstrap created, so cleanup deletes exactly
@@ -291,16 +293,17 @@ func NewGCPBootstrapper(
 	gitHubClient github.GitHubClient,
 ) (*GCPBootstrapper, error) {
 	return &GCPBootstrapper{
-		ctx:          ctx,
-		stlog:        stlog,
-		fw:           fw,
-		icg:          icg,
-		GCPClient:    gcpClient,
-		Env:          CodesphereEnv,
-		NodeClient:   sshRunner,
-		PortalClient: portalClient,
-		Time:         time,
-		GitHubClient: gitHubClient,
+		ctx:                ctx,
+		stlog:              stlog,
+		fw:                 fw,
+		icg:                icg,
+		GCPClient:          gcpClient,
+		Env:                CodesphereEnv,
+		NodeClient:         sshRunner,
+		PortalClient:       portalClient,
+		Time:               time,
+		GitHubClient:       gitHubClient,
+		InstallVaultLoader: &sopsInstallVaultLoader{fileIO: fw},
 	}, nil
 }
 
@@ -528,8 +531,8 @@ func (b *GCPBootstrapper) ValidateInput() error {
 		return err
 	}
 
-	if b.Env.RemoteOmsBinaryPath != "" && !b.fw.Exists(b.Env.RemoteOmsBinaryPath) {
-		return fmt.Errorf("remote OMS binary not found at path: %s", b.Env.RemoteOmsBinaryPath)
+	if err := b.validateBootstrapFiles(); err != nil {
+		return err
 	}
 
 	for _, valuesFile := range b.Env.PCAppsValues {
@@ -809,6 +812,7 @@ func (b *GCPBootstrapper) EnsureFirewallRules() error {
 			}
 		}
 	}
+
 	err := b.createFirewallRules(network, rules)
 	if err != nil {
 		return err

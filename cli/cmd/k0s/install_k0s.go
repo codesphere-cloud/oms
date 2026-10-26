@@ -50,6 +50,7 @@ func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
 	if c.Opts.Single && (c.Opts.InstallConfig != "" || c.Opts.K0sctlConfig != "") {
 		return fmt.Errorf("--install-config and --config cannot be used with --single")
 	}
+
 	if !c.Opts.Single && c.Opts.InstallConfig == "" && c.Opts.K0sctlConfig == "" {
 		return fmt.Errorf("--install-config or --config is required unless --single is set")
 	}
@@ -261,7 +262,7 @@ func (c *InstallK0sCmd) installSingle(pm installer.PackageManager, k0s installer
 
 	version, err := installer.ResolveK0sVersion(k0s, c.Opts.Version)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to resolve k0s version: %w", err)
 	}
 
 	path, err := c.getK0sBinaryPath(pm, k0s, version)
@@ -411,6 +412,7 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 		if err := pm.ExtractDependency("kubernetes/files/k0s", c.Opts.Force, c.Opts.Verbose); err != nil {
 			return "", fmt.Errorf("failed to extract k0s from package: %w", err)
 		}
+
 		return pm.GetDependencyPath("kubernetes/files/k0s"), nil
 	}
 
@@ -418,5 +420,6 @@ func (c *InstallK0sCmd) getK0sBinaryPath(pm installer.PackageManager, k0s instal
 	if err != nil {
 		return "", fmt.Errorf("failed to download k0s: %w", err)
 	}
+
 	return k0sBinaryPath, nil
 }

@@ -117,6 +117,21 @@ var _ = Describe("Single VM configuration", func() {
 		Expect(manager.GetVault().GetSecret("new").Fields.Password).To(Equal("new-seed"))
 	})
 
+	It("loads the supplied seed vault through the shared loader before recovering active VM secrets", func() {
+		b.Env.InstallVaultPath = "/seed.yaml"
+		b.Env.InstallVaultPrivKey = "/age-key"
+		loader := NewMockInstallVaultLoader(GinkgoT())
+		b.InstallVaultLoader = loader
+		seed := &files.InstallVault{}
+		seed.SetSecret(files.SecretEntry{Name: "existing", Fields: &files.SecretFields{Password: "seed"}})
+		seed.SetSecret(files.SecretEntry{Name: "new", Fields: &files.SecretFields{Password: "new-seed"}})
+		loader.EXPECT().Load("/seed.yaml", "/age-key").Return(seed, nil).Once()
+		expectVaultRecovery([]byte("secrets:\n- name: existing\n  fields:\n    password: active\n"))
+		Expect(b.loadSingleVMVault()).To(Succeed())
+		Expect(manager.GetVault().GetSecret("existing").Fields.Password).To(Equal("active"))
+		Expect(manager.GetVault().GetSecret("new").Fields.Password).To(Equal("new-seed"))
+	})
+
 	It("stops before uploading a vault when recovery fails", func() {
 		fw.EXPECT().MkdirAll("/work", os.FileMode(0755)).Return(nil).Once()
 		nodeClient.EXPECT().RunCommand(n, "root", "test ! -e '/root/codesphere/prod.vault.yaml'").Return(errors.New("SSH disconnected")).Once()
@@ -234,7 +249,7 @@ var _ = Describe("Single VM configuration", func() {
 		nodeClient.EXPECT().RunCommand(n, "root", mock.MatchedBy(func(command string) bool {
 			return strings.Contains(command, "--storage-engine 'local'") && strings.Contains(command, "--ceph-device-filter '^sdb$'")
 		})).Return(nil).Once()
-		Expect(b.installSingleVMCodesphere("user", "^sdb$", "local", false)).To(Succeed())
+		Expect(b.installSingleVMCodesphere("user", "local", false)).To(Succeed())
 	})
 
 	It("configures unprivileged gateway ports before installation", func() {

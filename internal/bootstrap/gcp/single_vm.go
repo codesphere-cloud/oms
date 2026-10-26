@@ -4,15 +4,12 @@
 package gcp
 
 import (
-	"debug/elf"
 	"fmt"
 	"path/filepath"
 	"strings"
 
-	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
-	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"go.yaml.in/yaml/v3"
@@ -27,7 +24,7 @@ const singleVMVaultPath = "/root/codesphere/prod.vault.yaml"
 // BootstrapSingleVM provisions one VM and runs the local Codesphere installer there.
 // It deliberately uses the local bootstrap's Rook and CloudNativePG setup instead of the
 // multi-host GCP bootstrap's dedicated Ceph and PostgreSQL machines.
-func (b *GCPBootstrapper) BootstrapSingleVM(registryUser, cephDeviceFilter, storageEngine string, stepTimer bool) error {
+func (b *GCPBootstrapper) BootstrapSingleVM(registryUser, storageEngine string, stepTimer bool) error {
 	b.Env.SingleVM = true
 
 	b.Env.GoogleACMEIssuer = true
@@ -43,40 +40,8 @@ func (b *GCPBootstrapper) BootstrapSingleVM(registryUser, cephDeviceFilter, stor
 		return err
 	}
 
-	if b.Env.RemoteOmsBinaryPath == "" {
-		return fmt.Errorf("--remote-oms-binary is required so the VM runs an OMS build with the single VM bootstrap options")
-	}
-
-	if !b.fw.Exists(b.Env.RemoteOmsBinaryPath) {
-		return fmt.Errorf("remote OMS binary not found at path: %s", b.Env.RemoteOmsBinaryPath)
-	}
-
-	if b.Env.InstallConfigTemplatePath != "" && !b.fw.Exists(b.Env.InstallConfigTemplatePath) {
-		return fmt.Errorf("single VM install config template not found at path: %s", b.Env.InstallConfigTemplatePath)
-	}
-
-	for _, path := range b.Env.InstallConfigs {
-		if !b.fw.Exists(path) {
-			return fmt.Errorf("single VM install config not found at path: %s", path)
-		}
-	}
-
-	if b.Env.InstallVaultPath != "" && !b.fw.Exists(b.Env.InstallVaultPath) {
-		return fmt.Errorf("single VM vault not found at path: %s", b.Env.InstallVaultPath)
-	}
-
-	omsBinary, err := elf.Open(b.Env.RemoteOmsBinaryPath)
-	if err != nil {
-		return fmt.Errorf("remote OMS binary must be a Linux amd64 ELF executable: %w", err)
-	}
-
-	machine, binaryType := omsBinary.Machine, omsBinary.Type
-	if err := omsBinary.Close(); err != nil {
-		return fmt.Errorf("failed to close remote OMS binary: %w", err)
-	}
-
-	if machine != elf.EM_X86_64 || binaryType != elf.ET_EXEC && binaryType != elf.ET_DYN {
-		return fmt.Errorf("remote OMS binary must be a Linux amd64 ELF executable")
+	if err := b.validateBootstrapFiles(); err != nil {
+		return err
 	}
 
 	steps := []struct {
@@ -101,7 +66,7 @@ func (b *GCPBootstrapper) BootstrapSingleVM(registryUser, cephDeviceFilter, stor
 		{"Provide install config", b.provideSingleVMConfig},
 		{"Install k0s", b.installSingleVMK0s},
 		{"Install Codesphere", func() error {
-			return b.installSingleVMCodesphere(registryUser, cephDeviceFilter, storageEngine, stepTimer)
+			return b.installSingleVMCodesphere(registryUser, storageEngine, stepTimer)
 		}},
 		{"Ensure DNS records", b.EnsureDNSRecords},
 		{"Write infrastructure file", b.WriteInfraFile},
@@ -281,20 +246,8 @@ func (b *GCPBootstrapper) provideSingleVMConfig() error {
 // loadSingleVMVault seeds new installations from the supplied vault, then preserves
 // the active VM's secrets on reruns so encryption and signing keys remain stable.
 func (b *GCPBootstrapper) loadSingleVMVault() error {
-	if b.Env.InstallVaultPath != "" {
-		store, err := vault.New(vault.TypeSOPS, vault.Options{Path: b.Env.InstallVaultPath, AgeKey: b.Env.InstallVaultPrivKey})
-		if err != nil {
-			return fmt.Errorf("failed to open single VM vault: %w", err)
-		}
-
-		loaded, err := store.Load()
-		if err != nil {
-			return fmt.Errorf("failed to load single VM vault: %w", err)
-		}
-
-		for _, secret := range loaded.Secrets {
-			b.icg.GetVault().SetSecret(secret)
-		}
+	if err := b.loadInstallVault(b.icg); err != nil {
+		return err
 	}
 
 	// Only a successful absence check permits starting from the seed vault.
@@ -331,54 +284,20 @@ func (b *GCPBootstrapper) loadSingleVMVault() error {
 }
 
 func (b *GCPBootstrapper) loadSingleVMBaseConfig() (files.RootConfig, error) {
-	paths := append([]string(nil), b.Env.InstallConfigs...)
-	if b.Env.InstallConfigTemplatePath != "" {
-		paths = append([]string{b.Env.InstallConfigTemplatePath}, paths...)
+	config, err := b.loadInstallInputs(files.NewRootConfig(), b.icg)
+	if err != nil {
+		return config, err
 	}
 
-	config := files.NewRootConfig()
-	if len(paths) == 0 {
-		return config, nil
-	}
-
-	store := vault.NewVaultTemplatingSecretStore(b.icg.GetVault())
-	merged := map[string]any{}
-
-	for i, path := range paths {
-		data, err := b.fw.ReadFile(path)
-		if err != nil {
-			return config, fmt.Errorf("failed to read single VM config %s: %w", path, err)
-		}
-
-		data, err = configtemplating.RenderInstallConfigTemplate(data, store)
-		if err != nil {
-			return config, fmt.Errorf("failed to render single VM config %s: %w", path, err)
-		}
-
-		var partial map[string]any
-		if err := yaml.Unmarshal(data, &partial); err != nil {
-			return config, fmt.Errorf("failed to parse single VM config %s: %w", path, err)
-		}
-
-		merged = util.DeepMergeMaps(merged, partial)
-
+	for i, path := range b.installInputPaths() {
 		remotePath := fmt.Sprintf("/root/codesphere/config-input-%d.yaml", i)
 		if path == b.Env.InstallConfigTemplatePath {
 			remotePath = singleVMConfigTemplatePath
 		}
 
 		if err := b.Env.Jumpbox.NodeClient.CopyFile(b.Env.Jumpbox, path, remotePath); err != nil {
-			return config, fmt.Errorf("failed to copy single VM config %s: %w", path, err)
+			return config, fmt.Errorf("failed to copy install config %s: %w", path, err)
 		}
-	}
-
-	data, err := yaml.Marshal(merged)
-	if err != nil {
-		return config, fmt.Errorf("failed to marshal merged single VM config: %w", err)
-	}
-
-	if err := config.Unmarshal(data); err != nil {
-		return config, fmt.Errorf("failed to load merged single VM config: %w", err)
 	}
 
 	return config, nil
@@ -392,7 +311,7 @@ func (b *GCPBootstrapper) installSingleVMK0s() error {
 	return nil
 }
 
-func (b *GCPBootstrapper) installSingleVMCodesphere(registryUser, cephDeviceFilter, storageEngine string, stepTimer bool) error {
+func (b *GCPBootstrapper) installSingleVMCodesphere(registryUser, storageEngine string, stepTimer bool) error {
 	n := b.Env.Jumpbox
 	if err := n.RunSSHCommand("root", "test -n \"$OMS_REGISTRY_PASSWORD\""); err != nil {
 		return fmt.Errorf("registry password was not forwarded to the VM: %w", err)
@@ -404,7 +323,7 @@ func (b *GCPBootstrapper) installSingleVMCodesphere(registryUser, cephDeviceFilt
 		"--install-dir /root/codesphere",
 		"--install-config " + singleVMConfigPath,
 		"--registry-user " + shellQuote(registryUser),
-		"--ceph-device-filter " + shellQuote(cephDeviceFilter),
+		"--ceph-device-filter " + shellQuote("^sdb$"),
 		"--storage-engine " + shellQuote(storageEngine),
 		"--expose-shared",
 	}

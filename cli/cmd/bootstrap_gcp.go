@@ -32,6 +32,7 @@ type BootstrapGcpCmd struct {
 	InputRegistryType string
 	SSHQuiet          bool
 	StepTimer         bool
+	StorageEngine     string
 
 	// experiments backs the deprecated --experiments flag; its values
 	// are folded into the internal bucket for backwards compatibility.
@@ -60,6 +61,12 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 				Ensure you have the necessary permissions to create and manage GCP resources before proceeding.
 				Not for production use.
 
+				Use --single-vm to install k0s and Codesphere on one VM using the local bootstrap.
+				This mode requires --registry-user, OMS_REGISTRY_PASSWORD,
+				and either --install-local or --install-version. Both modes default to a 50 GB root disk.
+				Single-VM mode adds a separate 100 GB Ceph disk.
+				Both modes accept --install-config-template, --config, --vault and --priv-key.
+
 				Running it again against an existing project with --install-version installs that version on top
 				and repeats every install step, including the k0s config script, which restarts k0s.
 				To replace only Codesphere, e.g. to roll back to an earlier release, add --install-codesphere-only
@@ -72,6 +79,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	}
 	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
 
+	bootstrapGcpCmd.addBootstrapModeFlags()
 	flags := bootstrapGcpCmd.cmd.Flags()
 	flags.BoolVar(&bootstrapGcpCmd.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP Project Name (required)")
@@ -173,6 +181,10 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 // BootstrapGcp initializes the bootstrapper, validates the input flags and starts bootstrapping.
 // Returns an error if validation or github client connection fails
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
+	if err := c.prepareBootstrapOptions(); err != nil {
+		return err
+	}
+
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
 	defer stlog.PrintSummary()
@@ -191,6 +203,9 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return fmt.Errorf("failed to create github client: %w", err)
 	}
 
+	sshClient := node.NewSSHNodeClient(c.SSHQuiet)
+	sshClient.ForwardRegistryPassword = c.CodesphereEnv.SingleVM
+
 	bs, err := gcp.NewGCPBootstrapper(
 		ctx,
 		c.Env,
@@ -199,7 +214,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		icg,
 		gcpClient,
 		fw,
-		node.NewSSHNodeClient(c.SSHQuiet),
+		sshClient,
 		portalClient,
 		intutil.NewTime(),
 		githubClient,
@@ -208,9 +223,13 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return fmt.Errorf("failed to create gcp bootstrapper: %w", err)
 	}
 
+	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
+	if c.CodesphereEnv.SingleVM {
+		return c.bootstrapSingleVM(bs)
+	}
+
 	c.CodesphereEnv.RegistryType = gcp.ResolveRegistryType(c.InputRegistryType, c.cmd.Flags().Changed("registry-type"), c.CodesphereEnv.Airgapped)
 
-	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
 	// The value alone cannot distinguish the default 1 from an explicit --datacenter-id=1.
 	c.CodesphereEnv.DatacenterIDExplicit = c.cmd.Flags().Changed("datacenter-id")
 

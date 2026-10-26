@@ -46,14 +46,14 @@ var _ = Describe("Single VM provisioning", func() {
 	})
 
 	It("preserves standard provisioning at package validation", func() {
-		Expect(b.BootstrapSingleVM("", "", "", false)).To(HaveOccurred())
+		Expect(b.BootstrapSingleVM("", "", false)).To(HaveOccurred())
 		Expect(b.Env.SpotVMs).To(BeFalse())
 		Expect(b.Env.SpotOnly).To(BeFalse())
 	})
 
 	It("preserves Spot provisioning at package validation", func() {
 		b.Env.SpotVMs = true
-		Expect(b.BootstrapSingleVM("", "", "", false)).To(HaveOccurred())
+		Expect(b.BootstrapSingleVM("", "", false)).To(HaveOccurred())
 		Expect(b.Env.SpotVMs).To(BeTrue())
 		Expect(b.Env.SpotOnly).To(BeFalse())
 	})
@@ -113,7 +113,7 @@ var _ = Describe("Single VM provisioning", func() {
 	})
 
 	It("defines one public VM with the requested machine type and a Ceph disk", func() {
-		defs := gcp.VMDefsForEnv(&gcp.CodesphereEnvironment{SingleVM: true, SingleVMMachineType: "n2-standard-8"})
+		defs := gcp.VMDefsForEnv(&gcp.CodesphereEnvironment{SingleVM: true, MachineType: "n2-standard-8"})
 		Expect(defs).To(HaveLen(1))
 		Expect(defs[0].Name).To(Equal("codesphere"))
 		Expect(defs[0].MachineType).To(Equal("n2-standard-8"))

@@ -8,121 +8,93 @@ import (
 	"log"
 	"os"
 
-	"github.com/codesphere-cloud/oms/cli/cmd/util"
-	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
-	"github.com/codesphere-cloud/oms/internal/env"
-	"github.com/codesphere-cloud/oms/internal/github"
-	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/installer/node"
-	"github.com/codesphere-cloud/oms/internal/portal"
-	intutil "github.com/codesphere-cloud/oms/internal/util"
-	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
-// BootstrapGcpSingleVMCmd holds the options for the single VM bootstrap command.
-type BootstrapGcpSingleVMCmd struct {
-	cmd              *cobra.Command
-	Env              env.Env
-	CodesphereEnv    *gcp.CodesphereEnvironment
-	RegistryUser     string
-	CephDeviceFilter string
-	StorageEngine    string
-	SSHQuiet         bool
-	StepTimer        bool
-}
-
-// AddBootstrapGcpSingleVMCmd registers the all-in-one test installation separately from
-// bootstrap-gcp, which retains its multi-VM layout.
-func AddBootstrapGcpSingleVMCmd(parent *cobra.Command, opts *util.GlobalOptions) {
-	c := &BootstrapGcpSingleVMCmd{
-		Env:              env.NewEnv(),
-		CodesphereEnv:    &gcp.CodesphereEnvironment{},
-		CephDeviceFilter: "^sdb$",
-	}
-	c.cmd = &cobra.Command{
-		Use:   "bootstrap-gcp-single-vm",
-		Short: "Bootstrap Codesphere on one GCP VM",
-		Long:  "Create a single GCP VM, install k0s, and run the local Codesphere bootstrap on it. For testing only.",
-		Args:  cobra.NoArgs,
-		RunE:  c.RunE,
-	}
+func (c *BootstrapGcpCmd) addBootstrapModeFlags() {
 	f := c.cmd.Flags()
-	f.BoolVar(&c.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
-	f.StringVar(&c.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP project name")
-	f.StringVar(&c.CodesphereEnv.ProjectTTL, "project-ttl", "2h", "Project lifetime before cleanup")
-	f.StringVar(&c.CodesphereEnv.BillingAccount, "billing-account", "", "GCP billing account ID")
-	f.StringVar(&c.CodesphereEnv.FolderID, "folder-id", "", "GCP folder ID")
-	f.StringVar(&c.CodesphereEnv.BaseDomain, "base-domain", "", "Base domain (Codesphere uses cs.<base-domain>)")
-	f.StringVar(&c.CodesphereEnv.DNSProjectID, "dns-project-id", "", "GCP project containing the Cloud DNS zone (default: bootstrap project)")
-	f.StringVar(&c.CodesphereEnv.DNSZoneName, "dns-zone-name", "oms-testing", "Cloud DNS zone name")
-	f.StringVar(&c.CodesphereEnv.Region, "region", "europe-west4", "GCP region")
-	f.StringVar(&c.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP zone")
-	f.StringVar(&c.CodesphereEnv.SSHPublicKeyPath, "ssh-public-key-path", "~/.ssh/id_rsa.pub", "SSH public key path")
-	f.StringVar(&c.CodesphereEnv.SSHPrivateKeyPath, "ssh-private-key-path", "~/.ssh/id_rsa", "SSH private key path")
-	f.StringVar(&c.CodesphereEnv.InstallLocal, "install-local", "", "Local installer-lite archive for the Codesphere installation")
-	f.StringVar(&c.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to download and install")
-	f.StringVar(&c.CodesphereEnv.InstallConfigTemplatePath, "install-config-template", "", "Local config.yaml template to use as the base for the single VM install config")
+	f.BoolVar(&c.CodesphereEnv.SingleVM, "single-vm", false, "Install k0s and Codesphere on one GCP VM using the local bootstrap")
+	f.StringVar(&c.CodesphereEnv.InstallConfigTemplatePath, "install-config-template", "", "Initial config.yaml template, applied before --config files")
 	f.StringArrayVar(&c.CodesphereEnv.InstallConfigs, "config", nil, "Local config.yaml file; repeat to merge in order before VM settings")
 	f.StringVar(&c.CodesphereEnv.InstallVaultPath, "vault", "", "SOPS vault for config templating and initial install secrets")
 	f.StringVar(&c.CodesphereEnv.InstallVaultPrivKey, "priv-key", "", "Age private key for --vault (or use the age key environment variable)")
-	f.StringVar(&c.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Local Linux amd64 OMS binary to run on the VM")
-	f.StringVar(&c.CodesphereEnv.SingleVMMachineType, "machine-type", "e2-standard-8", "GCP machine type")
-	f.BoolVar(&c.CodesphereEnv.SpotVMs, "spot-vms", false, "Use a Spot VM. Falls back to a standard VM if spot capacity unavailable (default: false)")
-	f.Int64Var(&c.CodesphereEnv.RootDiskSize, "root-disk-size", 100, "Boot disk size in GB; an additional 100 GB Ceph disk is created")
-	f.StringVar(&c.RegistryUser, "registry-user", "", "GHCR username for the local Codesphere installer")
-	f.StringVar(&c.CephDeviceFilter, "ceph-device-filter", "^sdb$", "Rook device name filter for the extra disk")
-	f.StringVar(&c.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine for the local installer (supported: rook-ceph, local)")
-	f.BoolVar(&c.SSHQuiet, "ssh-quiet", false, "Suppress SSH command output")
-	util.MarkFlagRequired(c.cmd, "project-name")
-	util.MarkFlagRequired(c.cmd, "billing-account")
-	util.MarkFlagRequired(c.cmd, "base-domain")
-	util.MarkFlagRequired(c.cmd, "remote-oms-binary")
-	util.MarkFlagRequired(c.cmd, "registry-user")
-	util.AddCmd(parent, c.cmd)
-	AddBootstrapGcpCleanupCmd(c.cmd, opts)
-	AddBootstrapGcpRestartVMsCmd(c.cmd, opts)
+	f.StringVar(&c.CodesphereEnv.MachineType, "machine-type", "", "GCP machine type override for all VMs (default: role-specific sizes; e2-standard-8 for a single VM)")
+	f.StringVar(&c.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Single VM: storage engine (rook-ceph or local)")
 }
 
-// RunE validates the command options and bootstraps Codesphere on one GCP VM.
-func (c *BootstrapGcpSingleVMCmd) RunE(_ *cobra.Command, _ []string) error {
+// prepareBootstrapOptions validates mode-specific flags before creating external clients.
+func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
+	if c.CodesphereEnv.InstallVaultPrivKey != "" && c.CodesphereEnv.InstallVaultPath == "" {
+		return fmt.Errorf("--priv-key requires --vault")
+	}
+
+	if !c.CodesphereEnv.SingleVM {
+		return c.validateMultiVMFlags()
+	}
+
+	if err := c.validateSingleVMFlags(); err != nil {
+		return err
+	}
+
 	if err := validateLocalStorageEngine(c.StorageEngine); err != nil {
 		return err
+	}
+
+	if c.CodesphereEnv.RegistryUser == "" {
+		return fmt.Errorf("--registry-user is required with --single-vm")
 	}
 
 	if os.Getenv("OMS_REGISTRY_PASSWORD") == "" {
 		return fmt.Errorf("OMS_REGISTRY_PASSWORD must be set for the local Codesphere installer")
 	}
 
-	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
-	defer stlog.PrintSummary()
+	return nil
+}
 
-	icg, err := installer.NewInstallConfigManager("plain", "")
-	if err != nil {
-		return fmt.Errorf("failed to initialize config manager: %w", err)
+func (c *BootstrapGcpCmd) validateMultiVMFlags() error {
+	for _, name := range []string{"storage-engine"} {
+		if c.cmd.Flags().Changed(name) {
+			return fmt.Errorf("--%s requires --single-vm", name)
+		}
 	}
 
-	ctx := c.cmd.Context()
+	return nil
+}
 
-	githubClient, err := github.NewGitHubClient(ctx, "")
-	if err != nil {
-		return fmt.Errorf("failed to create GitHub client: %w", err)
+func (c *BootstrapGcpCmd) validateSingleVMFlags() error {
+	var flagErr error
+
+	c.cmd.LocalNonPersistentFlags().VisitAll(func(flag *pflag.Flag) {
+		if flagErr != nil || !flag.Changed || singleVMSupportsFlag(flag.Name) {
+			return
+		}
+
+		flagErr = fmt.Errorf("--%s is not supported with --single-vm; supply installation settings through --config and --vault", flag.Name)
+	})
+
+	return flagErr
+}
+
+// Only flags consumed by the single VM workflow are accepted, so multi-host
+// installation options cannot be silently ignored by the local installer.
+func singleVMSupportsFlag(name string) bool {
+	switch name {
+	case "single-vm", "project-name", "project-ttl", "billing-account", "folder-id",
+		"base-domain", "dns-project-id", "dns-zone-name", "region", "zone",
+		"ssh-public-key-path", "ssh-private-key-path", "install-local", "install-version",
+		"install-hash", "remote-oms-binary", "registry-user", "github-pat", "spot-vms",
+		"root-disk-size", "ssh-quiet", "timer", "install-config-template", "config",
+		"vault", "priv-key", "machine-type", "storage-engine", "help":
+		return true
+	default:
+		return false
 	}
+}
 
-	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
-	sshClient := node.NewSSHNodeClient(c.SSHQuiet)
-	sshClient.ForwardRegistryPassword = true
-
-	bs, err := gcp.NewGCPBootstrapper(ctx, c.Env, stlog, c.CodesphereEnv, icg,
-		gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")),
-		intutil.NewFilesystemWriter(), sshClient, portal.NewPortalClient(),
-		intutil.NewTime(), githubClient)
-	if err != nil {
-		return fmt.Errorf("failed to create GCP bootstrapper: %w", err)
-	}
-
-	if err := bs.BootstrapSingleVM(c.RegistryUser, c.CephDeviceFilter, c.StorageEngine, c.StepTimer); err != nil {
+func (c *BootstrapGcpCmd) bootstrapSingleVM(bs *gcp.GCPBootstrapper) error {
+	if err := bs.BootstrapSingleVM(c.CodesphereEnv.RegistryUser, c.StorageEngine, c.StepTimer); err != nil {
 		return fmt.Errorf("failed to bootstrap single VM: %w", err)
 	}
 

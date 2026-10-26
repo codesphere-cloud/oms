@@ -81,7 +81,7 @@ func dataCenterVMDefs(dcID int, suffix string) []VMDef {
 // an infra file written before multi-DC support — it falls back to a single unsuffixed one.
 func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
 	if env.SingleVM {
-		return []VMDef{SingleVMDef(env.SingleVMMachineType)}
+		return []VMDef{SingleVMDef(env.MachineType)}
 	}
 	defs := sharedVMDefs()
 
@@ -92,6 +92,12 @@ func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
 
 	for _, dc := range dcs {
 		defs = append(defs, dataCenterVMDefs(dc.ID, dc.Suffix)...)
+	}
+
+	if env.MachineType != "" {
+		for i := range defs {
+			defs[i].MachineType = env.MachineType
+		}
 	}
 
 	return defs
@@ -115,7 +121,7 @@ func (b *GCPBootstrapper) EnsureSingleVM() error {
 	}
 
 	logs := make(chan string, 1)
-	result, err := b.ensureVM(SingleVMDef(b.Env.SingleVMMachineType), b.Env.RootDiskSize, sshKeys, logs)
+	result, err := b.ensureVM(SingleVMDef(b.Env.MachineType), b.Env.RootDiskSize, sshKeys, logs)
 	close(logs)
 
 	for message := range logs {
