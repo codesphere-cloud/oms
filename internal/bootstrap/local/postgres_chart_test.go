@@ -63,7 +63,7 @@ var _ = Describe("CloudNativePG chart", func() {
 		helm.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 			return cfg.ChartName == "oci://registry.example.com/custom/codesphere-cloud/charts/postgres-operator" &&
 				cfg.Version == "1.2.3" && cfg.Namespace == codesphereNamespace
-		}), installer.UpgradeChartOptions{ForceConflicts: true, TakeOwnership: true}).Return(nil)
+		}), installer.UpgradeChartOptions{}).Return(nil)
 		b := &LocalBootstrapper{
 			ctx: context.Background(), helmClient: helm,
 			Env: &CodesphereEnvironment{

@@ -31,7 +31,7 @@ var _ = Describe("prerequisite charts", func() {
 		helm.EXPECT().FindRelease("rook-ceph", "rook-ceph").Return(&installer.ReleaseInfo{Name: "rook-ceph"}, nil)
 		helm.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 			return cfg.ReleaseName == "rook-ceph" && cfg.Version == "1.0.0"
-		}), installer.UpgradeChartOptions{ForceConflicts: true, TakeOwnership: true}).Return(nil)
+		}), installer.UpgradeChartOptions{}).Return(nil)
 		b := &LocalBootstrapper{ctx: context.Background(), helmClient: helm}
 		Expect(b.installPrerequisiteChart(prerequisiteChartConfig{
 			Name: "rook-ceph", Chart: "rook-ceph", RepoURL: "https://charts.rook.io/release",
