@@ -6,10 +6,13 @@ package ceph
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
+// The volume the ceph install creates when ceph.volumes is empty.
 const (
 	defaultVolumeName = "codesphere"
 	defaultActiveMDS  = 7
@@ -28,6 +31,11 @@ type Ceph struct {
 // Values builds the CephFS settings. With workspacePVCStorage, workspaces use PVCs instead of
 // CephFS.
 func Values(ceph files.CephConfig, workspacePVCStorage bool) (Ceph, error) {
+	name, active, err := codesphereVolume(ceph.Volumes)
+	if err != nil {
+		return Ceph{}, err
+	}
+
 	values := Ceph{
 		CredentialsSecretName:     "ceph-admin-credentials",
 		StorageClass:              "codesphere",
@@ -39,11 +47,6 @@ func Values(ceph files.CephConfig, workspacePVCStorage bool) (Ceph, error) {
 		return values, nil
 	}
 
-	name, active, err := codesphereVolume(ceph.Volumes)
-	if err != nil {
-		return Ceph{}, err
-	}
-
 	values.MDSNamespace = name
 	values.ActiveMDS = fmt.Sprint(active)
 
@@ -53,10 +56,14 @@ func Values(ceph files.CephConfig, workspacePVCStorage bool) (Ceph, error) {
 // codesphereVolume returns the name and active MDS count of the one CephFS volume Codesphere uses.
 func codesphereVolume(volumes map[string]files.CephVolume) (string, int, error) {
 	if len(volumes) > 1 {
-		return "", 0, fmt.Errorf("only one ceph volume is supported, got %d", len(volumes))
+		return "", 0, fmt.Errorf("only one ceph volume is supported, got %v", slices.Sorted(maps.Keys(volumes)))
 	}
 
 	for name, volume := range volumes {
+		if volume.MDS.Active < 1 {
+			return "", 0, fmt.Errorf("ceph volume %q needs at least one active MDS, got %d", name, volume.MDS.Active)
+		}
+
 		return name, volume.MDS.Active, nil
 	}
 
