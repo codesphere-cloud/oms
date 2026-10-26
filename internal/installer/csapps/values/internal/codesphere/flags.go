@@ -18,7 +18,7 @@ type FlagEnv string
 const (
 	// FlagEnvProd enables a flag in production.
 	FlagEnvProd FlagEnv = "prod"
-	// FlagEnvDev enables a flag in development. The installer never sets it.
+	// FlagEnvDev enables a flag in development.
 	FlagEnvDev FlagEnv = "dev"
 )
 
