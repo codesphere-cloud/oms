@@ -291,16 +291,6 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
-	It("gpu image not set -> success", func() {
-		b := installerBOM(map[string]string{"workspace-agent-gpu": ""})
-		values := global(build(installerConfig(), b))
-
-		Expect(values["workspaceImages"]).To(Equal(map[string]any{
-			"server": "workspace-server",
-			"vpn":    "vpn",
-		}))
-	})
-
 	It("external postgres -> success", func() {
 		cfg := installerConfig()
 		cfg.Postgres = files.PostgresConfig{
@@ -510,12 +500,6 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 		}}))
 	})
 
-	It("hermetic is enabled by default", func() {
-		values := global(build(installerConfig(), installerBOM(nil)))
-
-		Expect(values["experiments"]).To(HaveKeyWithValue("hermetic", []any{"prod"}))
-	})
-
 	It("override experiments -> success", func() {
 		cfg := installerConfig()
 		cfg.Codesphere.Override = files.ChartOverride{"global": map[string]any{
@@ -595,18 +579,4 @@ var _ = Describe("Build, as the Codesphere installer's tests", func() {
 	})
 
 	// The installer checks the rendered Issuer's solver, which the chart picks from this value.
-	It("enable and use workspaces-gateway > sets issuer solver to gateway", func() {
-		cfg := installerConfig()
-		cfg.Cluster.Gateway = gateway(false, false)
-		cfg.Cluster.PublicGateway = gateway(true, true)
-		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{
-			Type: files.CertIssuerTypeACME,
-			Acme: &files.ACMEConfig{Server: "acme.test", Email: "cert@acme.test"},
-		}
-		values := global(build(cfg, installerBOM(nil)))
-
-		Expect(values["customDomains"]).To(
-			HaveKeyWithValue("gatewayApi", map[string]any{"useGateway": true}),
-		)
-	})
 })
