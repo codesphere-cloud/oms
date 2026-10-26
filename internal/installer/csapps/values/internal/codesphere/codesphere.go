@@ -23,17 +23,22 @@ type Codesphere struct {
 	DNSServers                 []string          `yaml:"dnsServers"`
 	Hosts                      []string          `yaml:"hosts"`
 	PrePullImages              bool              `yaml:"prePullImages"`
+	GitProviders               GitProviders      `yaml:"gitProviders"`
 	Experiments                Flags             `yaml:"experiments"`
 	Features                   Flags             `yaml:"features"`
 	CustomDomains              CustomDomains     `yaml:"customDomains"`
+	OAuth                      OAuth             `yaml:"oauth"`
+	SignUp                     SignUp            `yaml:"signUp"`
 	DeployConfig               DeployConfig      `yaml:"deployConfig"`
 	WorkspaceImages            WorkspaceImages   `yaml:"workspaceImages"`
 	FrontendGateway            FrontendGateway   `yaml:"frontendGateway"`
 
 	IPService             *IPService             `yaml:"ipService,omitempty"`
+	Branding              *files.BrandingConfig  `yaml:"branding,omitempty"`
 	TLSCertificate        *TLSCertificate        `yaml:"tlsCertificate,omitempty"`
 	UnderprovisionFactors *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
 	ExtraWorkspaceFiles   []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
+	SMTP                  *files.SMTPConfig      `yaml:"smtp,omitempty"`
 	ExtraCAPem            string                 `yaml:"extraCaPem,omitempty"`
 	ExtraWorkspaceEnvVars map[string]string      `yaml:"extraWorkspaceEnvVars,omitempty"`
 }
@@ -110,16 +115,21 @@ func Values(
 		DNSServers:                 dnsServers(conf.DNSServers),
 		Hosts:                      []string{conf.Domain},
 		PrePullImages:              ptr.Deref(conf.PrePullImages, true),
+		GitProviders:               gitProvidersValues(conf.GitProviders),
 		Experiments:                experimentsValues(conf, gateways.Workspaces.Enabled),
 		Features:                   featuresValues(conf.Features),
 		CustomDomains:              customDomainsValues(conf.CustomDomains, gateways.Workspaces.Use),
+		OAuth:                      oauthValues(conf.OAuth),
+		SignUp:                     signUpValues(conf.SignUp),
 		DeployConfig:               deployConfig,
 		WorkspaceImages:            workspaceImages,
 		FrontendGateway:            frontendGateway,
 		IPService:                  ipService,
+		Branding:                   conf.Branding,
 		TLSCertificate:             tlsCertificateValues(conf.CustomCertificate),
 		UnderprovisionFactors:      underprovisionFactorsValues(conf.UnderprovisionFactors),
 		ExtraWorkspaceFiles:        extraWorkspaceFilesValues(conf.ExtraWorkspaceFiles),
+		SMTP:                       smtpValues(conf.Email),
 		ExtraCAPem:                 conf.ExtraCAPem,
 		ExtraWorkspaceEnvVars:      conf.ExtraWorkspaceEnvVars,
 	}, nil
