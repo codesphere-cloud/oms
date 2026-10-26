@@ -53,7 +53,7 @@ func (g *K0sctlConfigGenerator) Generate(pm PackageManager, k0s K0sManager, outp
 		return "", fmt.Errorf("--no-download cannot be combined with --airgapped, as the nodes would download k0s from the internet")
 	}
 
-	config, err := g.loadInstallConfig()
+	config, err := LoadManagedInstallConfig(g.Opts.InstallConfig)
 	if err != nil {
 		return "", err
 	}
@@ -109,8 +109,10 @@ func ResolveK0sVersion(k0s K0sManager, version string) (string, error) {
 	return version, nil
 }
 
-func (g *K0sctlConfigGenerator) loadInstallConfig() (*files.RootConfig, error) {
-	config, err := NewConfig().ParseConfigYaml(g.Opts.InstallConfig)
+// LoadManagedInstallConfig loads the install-config and ensures its Kubernetes is managed by
+// Codesphere, as only then OMS handles k0s on its nodes.
+func LoadManagedInstallConfig(path string) (*files.RootConfig, error) {
+	config, err := NewConfig().ParseConfigYaml(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load install-config: %w", err)
 	}
