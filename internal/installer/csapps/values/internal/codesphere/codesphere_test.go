@@ -204,7 +204,7 @@ var _ = Describe("Values", func() {
 				GatewayAPI:    codesphere.FrontendGatewayAPI{Enabled: true},
 			},
 			IPService: &codesphere.IPService{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
-			Branding: &codesphere.Branding{
+			Branding: &files.BrandingConfig{
 				Desc:        "Example IDE",
 				DocsURL:     "https://docs.example.com",
 				FaviconHref: "https://example.com/favicon.ico",
@@ -216,7 +216,7 @@ var _ = Describe("Values", func() {
 			ExtraWorkspaceFiles: []codesphere.ExtraWorkspaceFile{
 				{Name: ".npmrc", Content: "cmVnaXN0cnk=", Encoded: true},
 			},
-			SMTP:                  &codesphere.SMTP{Host: "smtp.example.com", Port: 587, Secure: true, Username: "codesphere"},
+			SMTP:                  &files.SMTPConfig{Host: "smtp.example.com", Port: 587, Secure: true, Username: "codesphere"},
 			ExtraCAPem:            "ca-pem",
 			ExtraWorkspaceEnvVars: map[string]string{"FOO": "bar"},
 		}))
