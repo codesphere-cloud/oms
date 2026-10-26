@@ -13,9 +13,10 @@ import (
 )
 
 var _ = Describe("OpenFGA", func() {
-	It("OpenFGA deployed in this data center -> chart default API URL kept", func() {
+	It("OpenFGA deployed and published for other data centers -> in-cluster API URL kept", func() {
 		conf := files.CodesphereConfig{OpenFga: &files.OpenFgaConfig{
 			Deploy: ptr.To(true),
+			// The published host is for the other data centers; this one keeps the in-cluster URL.
 			Expose: &files.OpenFgaExposeConfig{Enabled: true, Host: "fga.example.com"},
 		}}
 
