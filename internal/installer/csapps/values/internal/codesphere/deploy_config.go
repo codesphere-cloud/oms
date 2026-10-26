@@ -21,6 +21,7 @@ const (
 	defaultGPUAgentBOMRef      = "workspace-agent-24.04.gpu"
 )
 
+// deployment-service only allocates from the default and gpu pools, so any other flavor would pool unused pods.
 var deployFlavors = []string{"default", "gpu"}
 
 // DeployConfig are the images workspaces deploy with.
