@@ -14,8 +14,7 @@ const WorkspacePVCStorageFlag = "workspace-pvc-storage"
 
 const prodEnv = "prod"
 
-// Flags are the environments each experiment or feature is enabled in; a private cloud only has
-// prod.
+// Flags are the environments each experiment or feature is enabled in.
 type Flags map[string][]string
 
 // EnabledFlags are the flags the installer enables from the config's internal, deprecated
