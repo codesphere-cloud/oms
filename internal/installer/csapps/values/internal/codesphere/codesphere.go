@@ -30,6 +30,7 @@ type Codesphere struct {
 	OAuth                         OAuth             `yaml:"oauth"`
 	SignUp                        SignUp            `yaml:"signUp"`
 	ManagedServiceWorkspacePlanID int               `yaml:"managedServiceWorkspacePlanId"`
+	Otel                          Otel              `yaml:"otel"`
 	DeployConfig                  DeployConfig      `yaml:"deployConfig"`
 	WorkspaceImages               WorkspaceImages   `yaml:"workspaceImages"`
 	FrontendGateway               FrontendGateway   `yaml:"frontendGateway"`
@@ -83,6 +84,10 @@ func Values(
 	metalLB *files.MetalLBConfig,
 	registry *files.RegistryConfig,
 ) (Codesphere, error) {
+	if err := validateTelemetryExport(conf.TelemetryExport); err != nil {
+		return Codesphere{}, err
+	}
+
 	deployConfig, err := deployConfigValues(conf, registry, imgs)
 	if err != nil {
 		return Codesphere{}, err
@@ -129,6 +134,7 @@ func Values(
 		OAuth:                         oauthValues(conf.OAuth),
 		SignUp:                        signUpValues(conf.SignUp),
 		ManagedServiceWorkspacePlanID: ptr.Deref(conf.ManagedServiceWorkspacePlanID, defaultManagedServicePlanID),
+		Otel:                          otelValues(conf.TelemetryExport),
 		DeployConfig:                  deployConfig,
 		WorkspaceImages:               workspaceImages,
 		FrontendGateway:               frontendGateway,
