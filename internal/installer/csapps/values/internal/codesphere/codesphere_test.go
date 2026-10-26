@@ -255,7 +255,7 @@ var _ = Describe("Values", func() {
 			UnderprovisionFactors: &files.UnderprovisionFactors{CPU: 0.5, Memory: 0.75},
 			ExtraWorkspaceFiles:   []files.ExtraWorkspaceFile{{Name: ".npmrc", Content: "cmVnaXN0cnk=", Encoded: true}},
 			SMTP:                  &files.SMTPConfig{Host: "smtp.example.com", Port: 587, Secure: true, Username: "codesphere"},
-			OpenBao:               &codesphere.OpenBao{Engine: "kv", URI: "https://bao.example.com", User: "codesphere"},
+			OpenBao:               &files.OpenBaoConfig{Engine: "kv", URI: "https://bao.example.com", User: "codesphere"},
 			OpenFGA:               &codesphere.OpenFGA{APIURL: "https://fga.example.com"},
 			ExtraCAPem:            "ca-pem",
 			ExtraWorkspaceEnvVars: map[string]string{"FOO": "bar"},
