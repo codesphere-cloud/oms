@@ -12,13 +12,17 @@ import (
 // WorkspacePVCStorageFlag stores workspaces on PVCs instead of CephFS.
 const WorkspacePVCStorageFlag = "workspace-pvc-storage"
 
-const prodEnv = "prod"
+// FlagEnv is an environment an experiment or feature can be enabled in.
+type FlagEnv string
+
+// FlagEnvProd enables a flag in production.
+const FlagEnvProd FlagEnv = "prod"
 
 // Flags are the environments each experiment or feature is enabled in.
-type Flags map[string][]string
+type Flags map[string][]FlagEnv
 
-// EnabledFlags are the flags the installer enables from the config's internal, deprecated
-// experiments, preview and feature flags.
+// EnabledFlags maps each flag name to whether the installer enables it, from the config's
+// internal, deprecated experiments, preview and feature flags. Disabled flags are absent.
 func EnabledFlags(conf files.CodesphereConfig) map[string]bool {
 	flags := map[string]bool{}
 	// The installer still reads the deprecated experiments.
@@ -39,20 +43,20 @@ func EnabledFlags(conf files.CodesphereConfig) map[string]bool {
 
 func experimentsValues(conf files.CodesphereConfig, workspacesGatewayEnabled bool) Flags {
 	experiments := Flags{
-		"hermetic":       []string{prodEnv},
-		"persistent-nix": []string{prodEnv},
+		"hermetic":       []FlagEnv{FlagEnvProd},
+		"persistent-nix": []FlagEnv{FlagEnvProd},
 	}
 	if workspacesGatewayEnabled {
-		experiments["gateway-domains"] = []string{prodEnv}
+		experiments["gateway-domains"] = []FlagEnv{FlagEnvProd}
 	}
 
 	for _, flag := range slices.Concat(conf.Experiments, conf.Internal) { //nolint:staticcheck
-		experiments[flag] = []string{prodEnv}
+		experiments[flag] = []FlagEnv{FlagEnvProd}
 	}
 
 	for flag, enabled := range conf.Preview {
 		if enabled {
-			experiments[flag] = []string{prodEnv}
+			experiments[flag] = []FlagEnv{FlagEnvProd}
 		}
 	}
 
@@ -61,17 +65,17 @@ func experimentsValues(conf files.CodesphereConfig, workspacesGatewayEnabled boo
 
 func featuresValues(configured map[string]bool) Flags {
 	features := Flags{
-		"email-signup":     []string{prodEnv},
-		"email-signin":     []string{prodEnv},
-		"standalone-teams": []string{prodEnv},
-		"billing":          []string{},
+		"email-signup":     []FlagEnv{FlagEnvProd},
+		"email-signin":     []FlagEnv{FlagEnvProd},
+		"standalone-teams": []FlagEnv{FlagEnvProd},
+		"billing":          []FlagEnv{},
 	}
 
 	for feature, enabled := range configured {
 		if enabled {
-			features[feature] = []string{prodEnv}
+			features[feature] = []FlagEnv{FlagEnvProd}
 		} else {
-			features[feature] = []string{}
+			features[feature] = []FlagEnv{}
 		}
 	}
 
