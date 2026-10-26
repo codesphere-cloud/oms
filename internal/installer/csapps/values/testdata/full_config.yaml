@@ -1,0 +1,324 @@
+# Copyright (c) Codesphere Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Every field the values builder reads, set to a non-default value. The expected values in
+# full_config_values.json are what the Codesphere installer builds from this config.
+dataCenter:
+  id: 1
+  name: main
+  city: Karlsruhe
+  countryCode: DE
+dataCenters:
+  - id: 2
+    name: second
+    city: Frankfurt
+    countryCode: DE
+  - id: 1
+    name: main
+    city: Karlsruhe
+    countryCode: DE
+defaultDataCenterId: 2
+secrets:
+  baseDir: /etc/codesphere/secrets
+registry:
+  server: registry.example.com:5000
+  replaceImagesInBom: false
+  loadContainerImages: false
+postgres:
+  caCertPem: postgres-ca-pem
+  serverAddress: postgres.example.com
+  altName: postgres-rw.codesphere.svc
+  port: 5433
+  database: masterdata
+ceph:
+  cephAdmSshKey:
+    publicKey: ssh-ed25519 AAAA
+  nodesSubnet: 10.0.0.0/24
+  hosts:
+    - hostname: ceph-1
+      ipAddress: 10.0.0.10
+      isMaster: true
+  osds:
+    - specId: default
+      placement:
+        host_pattern: "*"
+      dataDevices:
+        size: "100G:"
+  volumes:
+    codesphere-prod:
+      mds:
+        count: 4
+        active: 3
+kubernetes:
+  managedByCodesphere: true
+  controlPlanes:
+    - ipAddress: 10.0.0.20
+  workers:
+    - ipAddress: 10.0.0.21
+cluster:
+  certificates: {}
+  gateway:
+    gatewayApi:
+      enabled: true
+      use: false
+  publicGateway:
+    gatewayApi:
+      enabled: true
+      use: true
+  metallb:
+    enabled: true
+    pools:
+      - name: public
+        ipAddresses:
+          - 203.0.113.0/28
+      - name: private
+        ipAddresses:
+          - 10.0.1.0/28
+codesphere:
+  domain: codesphere.example.com
+  workspaceHostingBaseDomain: ws.example.com
+  publicIp: 203.0.113.10
+  branding:
+    desc: Cloud IDE
+    docsUrl: https://docs.example.com
+    faviconHref: https://example.com/favicon.ico
+    title: Example IDE
+    tosUrl: https://example.com/tos
+  certIssuer:
+    type: acme
+    acme:
+      server: https://acme.example.com/directory
+      email: ops@example.com
+      eabKeyId: cluster-eab-key
+      customDomainsEabKeyId: custom-domains-eab-key
+  customCertificate:
+    cert: |
+      -----BEGIN CERTIFICATE-----
+      MIIBljCCAT2gAwIBAgIUQ8xH74sH2Eh2pgtD0eL+phUzeqAwCgYIKoZIzj0EAwIw
+      ITEfMB0GA1UEAwwWY29kZXNwaGVyZS5leGFtcGxlLmNvbTAeFw0yNjEwMTkwODU5
+      MzlaFw0zNjEwMTYwODU5MzlaMCExHzAdBgNVBAMMFmNvZGVzcGhlcmUuZXhhbXBs
+      ZS5jb20wWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQ4iBJbeRQd0xP5BfzvEmWv
+      3hxbvjZ7gBeqyd4R33fwYttr3JC0n+AAsigTyPPSGZXib4Pfa3ydfarVQ2OoBxrQ
+      o1MwUTAdBgNVHQ4EFgQUYJXHA1p2sgSQO3pHIkovlAxwxU0wHwYDVR0jBBgwFoAU
+      YJXHA1p2sgSQO3pHIkovlAxwxU0wDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD
+      AgNHADBEAiBHYmODgHrVQZUUTRX8f0xSQT49PBN8sTn2tCuXn+w7egIgTzT5DlLP
+      M/7HYiKZtdZj3XZc1hLTng0UOlcbtiEJi8s=
+      -----END CERTIFICATE-----
+    key: |
+      -----BEGIN PRIVATE KEY-----
+      MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgMFKefHN1fKyIyEU1
+      apyCL9PEe1MHqJQnBsTYmgjtkd+hRANCAAQ4iBJbeRQd0xP5BfzvEmWv3hxbvjZ7
+      gBeqyd4R33fwYttr3JC0n+AAsigTyPPSGZXib4Pfa3ydfarVQ2OoBxrQ
+      -----END PRIVATE KEY-----
+  sshWorkspaceProxy:
+    baseDomain: ssh.example.com
+  vpnLeftPeerId: vpn.example.com
+  customDomains:
+    cNameBaseDomain: custom.example.com
+    insecureSkipDomainControlVerify: true
+    cert:
+      algorithm: ECDSA
+      size: 256
+  dnsServers:
+    - 1.1.1.1
+    - 9.9.9.9
+  experiments:
+    - legacy-experiment
+  internal:
+    - internal-flag
+  preview:
+    preview-on: true
+    preview-off: false
+  features:
+    feature-on: true
+    feature-off: false
+  extraCaPem: extra-ca-pem
+  extraWorkspaceEnvVars:
+    FOO: foo
+    BAR: bar
+  extraWorkspaceFiles:
+    - name: .npmrc
+      content: cmVnaXN0cnk=
+      encoded: true
+  workspaceImages:
+    agent: registry.example.com/custom/workspace-agent:1.0.0
+    agentGpu:
+      bomRef: workspace-agent-24.04.gpu
+    server:
+      bomRef: workspace-server
+  deployConfig:
+    images:
+      ubuntu-24.04:
+        name: Ubuntu 24.04
+        supportedUntil: "2028-05-31"
+        default: true
+        flavors:
+          default:
+            image:
+              bomRef: workspace-agent-24.04
+              dockerfile: Dockerfile.agent
+            pool:
+              8: 2
+          gpu:
+            image:
+              bomRef: workspace-agent-24.04.gpu
+            pool:
+              9: 1
+          minimal:
+            image:
+              bomRef: workspace-agent-24.04
+            pool:
+              8: 1
+      ubuntu-22.04:
+        name: Ubuntu 22.04
+        supportedUntil: "2027-04-01"
+        flavors:
+          default:
+            image: registry.example.com/custom/ubuntu-22.04:1.0.0
+            pool:
+              8: 0
+  prePullImages: false
+  ipService:
+    loadBalancerKind: metallb
+    addressPools:
+      - public
+  plans:
+    hostingPlans:
+      8:
+        cpuTenth: 10
+        gpuParts: 0
+        memoryMb: 2048
+        storageMb: 20480
+        tempStorageMb: 1500
+      9:
+        cpuTenth: 40
+        gpuParts: 1
+        memoryMb: 8192
+        storageMb: 40960
+        tempStorageMb: 3000
+    workspacePlans:
+      20:
+        name: Micro
+        priceUsd: 9.5
+        hostingPlanId: 8
+        maxReplicas: 3
+        onDemand: true
+  signUp:
+    email:
+      allowedDomains:
+        - example.com
+  email:
+    provider: smtp
+    smtp:
+      host: smtp.example.com
+      port: 587
+      secure: true
+      username: mailer
+  underprovisionFactors:
+    cpu: 0.5
+    memory: 0.75
+  gitProviders:
+    github:
+      enabled: true
+      url: https://github.com
+      api:
+        baseUrl: https://api.github.com
+      oauth:
+        issuer: https://github.com
+        authorizationEndpoint: https://github.com/login/oauth/authorize
+        tokenEndpoint: https://github.com/login/oauth/access_token
+        redirectUri: https://codesphere.example.com/ide/auth/github/callback
+        installationUri: https://github.com/apps/codesphere/installations/new
+        clientAuthMethod: client_secret_post
+        scope: ""
+    gitlab:
+      enabled: false
+    azureDevOps:
+      enabled: true
+      url: https://dev.azure.com
+      api:
+        baseUrl: https://dev.azure.com
+      oauth:
+        issuer: https://login.microsoftonline.com/common/v2.0
+        authorizationEndpoint: https://login.microsoftonline.com/common/oauth2/v2.0/authorize
+        tokenEndpoint: https://login.microsoftonline.com/common/oauth2/v2.0/token
+        scope: openid offline_access
+    scmManager:
+      enabled: true
+      url: https://scm.example.com
+      api:
+        baseUrl: https://scm.example.com/api
+  oauth:
+    oidc:
+      type: oidc
+      enabled: true
+      name: Dex
+      issuerUrl: https://dex.example.com
+  managedServices:
+    - name: postgres
+      schemaVersion: v1
+      scope: team
+      teamSingleton: true
+      documentationUrl: https://docs.example.com/postgres
+      labels:
+        tier: database
+      capabilities:
+        backups: true
+      backend:
+        api:
+          endpoint: https://postgres-provider.example.com
+      versions:
+        1.0.0:
+          appVersion: "17.6"
+          description: Initial release
+      resourceParameters:
+        storage:
+          pricedAs: storage-mib
+          schema:
+            type: integer
+            minimum: 1024
+        cpu: null
+      plans:
+        - id: 1
+          name: small
+          description: Small
+          parameters:
+            storage: 2048
+    - name: redis
+      schemaVersion: v0
+      plans:
+        - id: 1
+          name: small
+          description: Small
+          parameters:
+            ram:
+              pricedAs: ram-mib
+              schema:
+                type: integer
+                default: 512
+    - name: s3
+      schemaVersion: v1
+  managedServiceWorkspacePlanId: 21
+  openBao:
+    engine: kv
+    uri: https://bao.example.com
+    user: codesphere
+  openFga:
+    deploy: false
+    apiUrl: https://fga.example.com
+  telemetryExport:
+    remoteEndpoint: https://otel.example.com
+    remoteExport: true
+    traces: true
+    traceEndpoint: tempo.example.com:4317
+    spanMetrics: true
+  override:
+    global:
+      hostName: cs.override.example.com
+      metrics: null
+      experiments:
+        hermetic: []
+      extraWorkspaceEnvVars:
+        FOO: overridden
+    auth-service:
+      replicas: 2

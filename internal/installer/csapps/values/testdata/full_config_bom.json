@@ -1,0 +1,56 @@
+{
+  "components": {
+    "codesphere": {
+      "containerImages": {
+        "auth-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/auth-service:v1.111.0",
+        "custom-workspace-image-init": "ghcr.io/codesphere-cloud/codesphere-monorepo/custom-workspace-image-init:v1.111.0",
+        "deployment-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/deployment-service:v1.111.0",
+        "error-page-server": "ghcr.io/codesphere-cloud/codesphere-monorepo/error-page-server:v1.111.0",
+        "frontendGatewayNginx": "ghcr.io/codesphere-cloud/docker/nginx-cs-patched:1.31.5",
+        "ide-frontend": "ghcr.io/codesphere-cloud/codesphere-monorepo/ide-frontend:v1.111.0",
+        "ide-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/ide-service:v1.111.0",
+        "integrations_bitbucket-ci": "ghcr.io/codesphere-cloud/codesphere-monorepo/integrations/bitbucket-ci:v1.111.0",
+        "integrations_github-action": "ghcr.io/codesphere-cloud/codesphere-monorepo/integrations/github-action:v1.111.0",
+        "integrations_gitlab-ci": "ghcr.io/codesphere-cloud/codesphere-monorepo/integrations/gitlab-ci:v1.111.0",
+        "kubectl": "ghcr.io/codesphere-cloud/docker/alpine/kubectl:1.34.0",
+        "marketplace": "ghcr.io/codesphere-cloud/codesphere-monorepo/marketplace:v1.111.0",
+        "mounter": "ghcr.io/codesphere-cloud/codesphere-monorepo/mounter:v1.111.0",
+        "nginx": "ghcr.io/codesphere-cloud/docker/nginx:1.31.5-alpine-otel",
+        "observabilityOtel": "ghcr.io/codesphere-cloud/docker/otel/opentelemetry-collector-contrib:0.160.0",
+        "observabilityOtelInit": "ghcr.io/codesphere-cloud/docker/curl-cs-patched:8.20.0@sha256:5829e06ef4cca44330c6808abf8f8c1fdfbcf82a0e68cb8fb9f399a468609a76",
+        "opensearch": "ghcr.io/codesphere-cloud/docker/opensearchproject/opensearch:3.8.0",
+        "opensearchInit": "ghcr.io/codesphere-cloud/docker/busybox:1.37.0",
+        "payment-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/payment-service:v1.111.0",
+        "public-api-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/public-api-service:v1.111.0",
+        "team-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/team-service:v1.111.0",
+        "vm-vnc-proxy": "ghcr.io/codesphere-cloud/codesphere-monorepo/vm-vnc-proxy:v1.111.0",
+        "vpn": "ghcr.io/codesphere-cloud/codesphere-monorepo/vpn:v1.111.0",
+        "workspace-agent": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-agent:v1.111.0",
+        "workspace-agent-20.04": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-agent-20.04:v1.111.0",
+        "workspace-agent-20.04.gpu": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-agent-20.04.gpu:v1.111.0",
+        "workspace-agent-24.04": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-agent-24.04:v1.111.0",
+        "workspace-agent-24.04-slim": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-agent-24.04-slim:v1.111.0",
+        "workspace-agent-24.04.gpu": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-agent-24.04.gpu:v1.111.0",
+        "workspace-agent-gpu": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-agent-gpu:v1.111.0",
+        "workspace-proxy": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-proxy:v1.111.0",
+        "workspace-router": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-router:v1.111.0",
+        "workspace-server": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-server:v1.111.0",
+        "workspace-service": "ghcr.io/codesphere-cloud/codesphere-monorepo/workspace-service:v1.111.0"
+      },
+      "files": {
+        "chart": {
+          "srcPath": "chart"
+        },
+        "schemaDump": {
+          "srcPath": "schemaDump"
+        }
+      }
+    }
+  },
+  "migrations": {
+    "db": {
+      "path": "migrations",
+      "from": "v1.0.0"
+    }
+  }
+}
