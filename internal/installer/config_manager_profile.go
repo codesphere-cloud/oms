@@ -233,7 +233,8 @@ func (g *InstallConfig) applyProfileDev() error {
 	}
 
 	g.ensureMonitoringDefaults("dev", false, false, false)
-	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequests); err != nil {
+
+	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequestsSingleReplica); err != nil {
 		return fmt.Errorf("applying resource profile: %w", err)
 	}
 	return nil

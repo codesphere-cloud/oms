@@ -66,7 +66,8 @@ var _ = Describe("Interactive profile usage", func() {
 
 			// Apply resource profile
 			authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
-			AssertZeroRequests(authService["requests"])
+			Expect(authService["requests"]).To(Equal(map[string]string{"cpu": "0", "memory": "0"}))
+			Expect(authService["replicas"]).To(Equal(1))
 			Expect(config.Cluster.Monitoring.Grafana.Enabled).To(BeFalse())
 		})
 

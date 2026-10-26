@@ -54,7 +54,7 @@ func (b *LocalBootstrapper) installPrerequisiteChart(cfg prerequisiteChartConfig
 		return nil
 	}
 
-	if err := helm.UpgradeChart(b.ctx, chart, installer.UpgradeChartOptions{}); err != nil {
+	if err := helm.UpgradeChart(b.ctx, chart, installer.UpgradeChartOptions{ForceConflicts: true, TakeOwnership: true}); err != nil {
 		return fmt.Errorf("failed to upgrade Helm chart %q: %w", cfg.Name, err)
 	}
 

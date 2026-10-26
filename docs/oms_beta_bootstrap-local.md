@@ -32,7 +32,7 @@ oms beta bootstrap-local [flags]
       --pod-cidr string                  Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.
       --preview-flags stringArray        Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
       --profile string                   Profile to apply to the install config like resources (supported: dev, minimal, prod) (default "dev")
-      --registry-url string              OCI registry URL used for the ArgoCD helm pull secret (default "oci://ghcr.io/codesphere-cloud/charts")
+      --registry-url string              OCI registry URL used for Codesphere and CNPG Helm charts and the ArgoCD helm pull secret (default "oci://ghcr.io/codesphere-cloud/charts")
       --registry-user string             Custom Registry username
       --secrets-file string              Path to secrets file (default: <install-dir>/prod.vault.yaml)
       --service-cidr string              Service CIDR of the Kubernetes cluster. If not specified, OMS will try to determine it.

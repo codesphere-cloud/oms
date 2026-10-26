@@ -68,7 +68,17 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 			Long: csio.Long(`Bootstraps a local Codesphere environment using a single Linux x86_64 Kubernetes cluster.
 				Rook/Ceph or a local CSI provisioner provides storage, and CNPG is used for the PostgreSQL database.
 				For local setups, use Minikube with a virtual machine on Linux.
-				Not for production use.`),
+				Not for production use.
+
+				Environment variables:
+				  OMS_REGISTRY_PASSWORD  Registry password/token; prompts when unset.
+				  OMS_GIT_PASSWORD       Optional Git password/token for ArgoCD repository access.
+				  OMS_PORTAL_API_KEY     OMS portal API key for installer downloads with --install-version.
+				  OMS_PORTAL_API         Portal API URL (default: https://oms-portal.codesphere.com/api).
+				  OMS_WORKDIR            Installer working directory (default: ./oms-workdir).
+				  KUBECONFIG             Kubeconfig file(s); uses the current context (default: ~/.kube/config).
+				  HELM_DRIVER            Helm release storage driver (default: secret).
+				  XDG_CONFIG_HOME       Overrides the config directory searched for sops/age/keys.txt.`),
 		},
 		Opts:          opts,
 		CodesphereEnv: &local.CodesphereEnvironment{},
@@ -105,8 +115,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "", "Path to secrets file (default: <install-dir>/prod.vault.yaml)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDeviceFilter, "ceph-device-filter", "", "Regular expression selecting Ceph block devices by name")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDevicePathFilter, "ceph-device-path-filter", "", "Regular expression selecting Ceph block devices by path")
-	// ArgoCD integration
-	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.ArgoCDRegistryURL, "registry-url", "oci://ghcr.io/codesphere-cloud/charts", "OCI registry URL used for the ArgoCD helm pull secret")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryURL, "registry-url", local.DefaultRegistryURL, "Registry host with optional port and repository path, without a scheme; Helm charts are pulled from <registry-url>/codesphere-cloud/charts")
 	bootstrapLocalCmd.cmd.RunE = bootstrapLocalCmd.RunE
 
 	util.MarkFlagRequired(bootstrapLocalCmd.cmd, "registry-user")

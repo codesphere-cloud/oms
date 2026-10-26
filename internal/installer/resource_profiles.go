@@ -241,10 +241,13 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 		"payment_service",
 		"public_api_service",
 		"team_service",
+		"vm_vnc_proxy",
+		"website",
 		"workspace_proxy",
 		"workspace_service",
 	} {
 		serviceProfiles[serviceName] = map[string]any{
+			"replicas": 1,
 			"requests": zeroRequests(),
 		}
 	}
@@ -254,6 +257,11 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 	serviceProfiles["workspace_service"].(map[string]any)["replicas"] = serviceReplicas
 	serviceProfiles["auth_service"].(map[string]any)["replicas"] = serviceReplicas
 
+	serviceProfiles["error_page_server"].(map[string]any)["proxy"] = map[string]any{
+		"replicas": 1,
+		"requests": zeroRequests(),
+	}
+
 	if config.Codesphere.Override == nil {
 		config.Codesphere.Override = map[string]any{}
 	}
@@ -262,6 +270,11 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 		"global": map[string]any{
 			"services": serviceProfiles,
 			"frontendGateway": map[string]any{
+				"replicas": 1,
+				"requests": zeroRequests(),
+			},
+			"otel": map[string]any{
+				"replicas": 1,
 				"requests": zeroRequests(),
 			},
 			"underprovisionFactors": map[string]string{
@@ -272,10 +285,12 @@ func applyNoRequestsProfile(config *files.RootConfig, serviceReplicas int) {
 	})
 }
 
-func zeroRequests() map[string]int {
-	return map[string]int{
-		"cpu":    0,
-		"memory": 0,
+// zeroRequests keeps zero quantities truthy in conditional Helm templates.
+// Omitting a request lets Kubernetes default it to the corresponding limit.
+func zeroRequests() map[string]string {
+	return map[string]string{
+		"cpu":    "0",
+		"memory": "0",
 	}
 }
 

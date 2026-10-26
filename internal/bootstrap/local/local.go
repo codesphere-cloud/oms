@@ -93,6 +93,7 @@ type CodesphereEnvironment struct {
 	InstallHash    string `json:"install_hash"`
 	InstallLocal   string `json:"install_local"`
 	// Registry
+	RegistryURL      string `json:"-"`
 	RegistryUser     string `json:"-"`
 	RegistryPassword string `json:"-"`
 	// Config
@@ -108,8 +109,6 @@ type CodesphereEnvironment struct {
 	ServiceCIDR          string              `json:"service_cidr"`
 	CephDeviceFilter     string              `json:"-"`
 	CephDevicePathFilter string              `json:"-"`
-	// ArgoCD integration
-	ArgoCDRegistryURL string `json:"-"`
 }
 
 // NewLocalBootstrapper creates a bootstrapper for a local Codesphere cluster.
@@ -775,6 +774,12 @@ func disablePcAppsRookCeph(config *files.RootConfig) {
 
 func (b *LocalBootstrapper) configureStorageValues() {
 	b.Env.InstallConfig.Codesphere.Internal = append([]string(nil), b.Env.InternalFlags...)
+	// Bootstrap owns the Rook release, or uses local CSI instead.
+	b.Env.InstallConfig.PcApps = util.DeepMergeMaps(b.Env.InstallConfig.PcApps, files.ChartValues{
+		"applications": map[string]any{
+			"rook-ceph": map[string]any{"enabled": false},
+		},
+	})
 	if b.Env.StorageEngine != StorageEngineLocal {
 		return
 	}
@@ -807,11 +812,31 @@ func (b *LocalBootstrapper) EnsureGitHubAccessConfigured() error {
 	if b.Env.RegistryPassword == "" {
 		return fmt.Errorf("registry password is not set")
 	}
-	b.Env.InstallConfig.Registry.Server = "ghcr.io"
+
+	registry := b.Env.InstallConfig.EnsureRegistry()
+
+	server, err := b.Env.registryURL()
+	if err != nil {
+		return err
+	}
+
+	chartsRegistry, err := b.Env.chartsRegistryURL()
+	if err != nil {
+		return err
+	}
+
+	registry.Server = server
+
+	if b.Env.InstallConfig.PcApps == nil {
+		b.Env.InstallConfig.PcApps = files.ChartValues{}
+	}
+
+	b.Env.InstallConfig.PcApps["chartsRegistry"] = chartsRegistry
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: b.Env.RegistryUser}})
 	b.icg.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.RegistryPassword}})
-	b.Env.InstallConfig.Registry.ReplaceImagesInBom = false
-	b.Env.InstallConfig.Registry.LoadContainerImages = false
+
+	registry.ReplaceImagesInBom = false
+	registry.LoadContainerImages = false
 	return nil
 }
 

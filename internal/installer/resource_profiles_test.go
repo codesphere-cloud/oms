@@ -4,8 +4,12 @@
 package installer_test
 
 import (
+	"bytes"
+	"text/template"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gopkg.in/yaml.v3"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -61,7 +65,7 @@ var _ = Describe("ApplyResourceProfile", func() {
 			AssertZeroRequests(MustMap[any](controller["resources"])["requests"])
 
 			deployService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["deployment_service"])
-			AssertZeroRequests(deployService["requests"])
+			Expect(deployService["requests"]).To(Equal(map[string]string{"cpu": "0", "memory": "0"}))
 			Expect(deployService["replicas"]).To(Equal(2))
 			authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
 			Expect(authService["replicas"]).To(Equal(2))
@@ -116,12 +120,44 @@ var _ = Describe("ApplyResourceProfile", func() {
 			Expect(installer.ApplyResourceProfile(config, installer.ResourceProfileNoRequestsSingleReplica)).To(Succeed())
 
 			services := MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])
-			for _, name := range []string{"deployment_service", "public_api_service", "team_service", "workspace_service", "auth_service"} {
-				service := MustMap[any](services[name])
-				Expect(service["replicas"]).To(Equal(1), name)
-				AssertZeroRequests(service["requests"])
-			}
+			Expect(services).To(HaveEach(And(
+				HaveKeyWithValue("replicas", 1),
+				HaveKeyWithValue("requests", map[string]string{"cpu": "0", "memory": "0"}),
+			)))
+			proxy := MustMap[any](MustMap[any](services["error_page_server"])["proxy"])
+			Expect(proxy).To(HaveKeyWithValue("replicas", 1))
+			Expect(proxy).To(HaveKeyWithValue("requests", map[string]string{"cpu": "0", "memory": "0"}))
+
+			global := MustMap[any](config.Codesphere.Override["global"])
+			Expect(global["frontendGateway"]).To(HaveKeyWithValue("replicas", 1))
+			Expect(global["frontendGateway"]).To(HaveKeyWithValue("requests", map[string]string{"cpu": "0", "memory": "0"}))
+			Expect(global["otel"]).To(HaveKeyWithValue("replicas", 1))
+			Expect(global["otel"]).To(HaveKeyWithValue("requests", map[string]string{"cpu": "0", "memory": "0"}))
 		})
+	})
+
+	It("keeps zero requests in conditional Helm templates after YAML serialization", func() {
+		config := &files.RootConfig{}
+		Expect(installer.ApplyResourceProfile(config, installer.ResourceProfileNoRequestsSingleReplica)).To(Succeed())
+
+		valuesYAML, err := yaml.Marshal(config.Codesphere.Override)
+		Expect(err).NotTo(HaveOccurred())
+
+		var values map[string]any
+		Expect(yaml.Unmarshal(valuesYAML, &values)).To(Succeed())
+
+		// The service charts conditionally emit requests. Numeric zero would be
+		// omitted here, allowing Kubernetes to copy the memory limit as a request.
+		chart, err := template.New("requests").Parse(`{{ with .global.services.deployment_service.requests }}
+{{ if .cpu }}cpu: {{ .cpu }}{{ end }}
+{{ if .memory }}memory: {{ .memory }}{{ end }}
+{{ end }}`)
+		Expect(err).NotTo(HaveOccurred())
+
+		var rendered bytes.Buffer
+		Expect(chart.Execute(&rendered, values)).To(Succeed())
+		Expect(rendered.String()).To(ContainSubstring("cpu: 0"))
+		Expect(rendered.String()).To(ContainSubstring("memory: 0"))
 	})
 
 	It("returns an error for an invalid profile", func() {
