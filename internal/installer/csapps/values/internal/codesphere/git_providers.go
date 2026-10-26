@@ -68,15 +68,15 @@ func gitProvidersValues(providers *files.GitProvidersConfig) GitProviders {
 	}
 
 	return GitProviders{
-		AzureDevOps: gitProviderValues(providers.AzureDevOps),
-		GitHub:      gitProviderValues(providers.GitHub),
-		GitLab:      gitProviderValues(providers.GitLab),
-		Bitbucket:   gitProviderValues(providers.Bitbucket),
+		AzureDevOps: singleGitProviderValues(providers.AzureDevOps),
+		GitHub:      singleGitProviderValues(providers.GitHub),
+		GitLab:      singleGitProviderValues(providers.GitLab),
+		Bitbucket:   singleGitProviderValues(providers.Bitbucket),
 		SCMManager:  scmManagerValues(providers.SCMManager),
 	}
 }
 
-func gitProviderValues(provider *files.GitProviderConfig) GitProvider {
+func singleGitProviderValues(provider *files.GitProviderConfig) GitProvider {
 	if provider == nil || !provider.Enabled {
 		return GitProvider{Enabled: false}
 	}
