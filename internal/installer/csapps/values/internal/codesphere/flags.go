@@ -15,8 +15,12 @@ const WorkspacePVCStorageFlag = "workspace-pvc-storage"
 // FlagEnv is an environment an experiment or feature can be enabled in.
 type FlagEnv string
 
-// FlagEnvProd enables a flag in production.
-const FlagEnvProd FlagEnv = "prod"
+const (
+	// FlagEnvProd enables a flag in production.
+	FlagEnvProd FlagEnv = "prod"
+	// FlagEnvDev enables a flag in development. The installer never sets it.
+	FlagEnvDev FlagEnv = "dev"
+)
 
 // Flags are the environments each experiment or feature is enabled in.
 type Flags map[string][]FlagEnv
