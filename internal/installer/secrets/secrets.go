@@ -14,9 +14,11 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/mod/semver"
 
 	"github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -60,6 +62,11 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureDefaultSecrets(vault); err != nil {
 		return fmt.Errorf("ensure default secrets: %w", err)
 	}
+	codesphereVersion := ""
+	if config.Operations != nil {
+		codesphereVersion = config.Operations.Codesphere.Version
+	}
+	EnsureSendGridApiKey(vault, codesphereVersion)
 	return nil
 }
 
@@ -280,13 +287,31 @@ func EnsureDefaultSecrets(vault *files.InstallVault) error {
 		})
 	}
 
-	// Older installers seeded this with "dummy", but Codesphere sends mail through SendGrid
-	// whenever the key is set.
+	return nil
+}
+
+// sendGridApiKeyOptionalSince is the first Codesphere release whose chart renders without
+// sendGridApiKey.
+const sendGridApiKeyOptionalSince = "v1.109.0"
+
+// EnsureSendGridApiKey sets the dummy sendGridApiKey older Codesphere releases require and
+// removes it for newer ones, which send mail through SendGrid whenever the key is set.
+// A real key is always kept.
+func EnsureSendGridApiKey(vault *files.InstallVault, codesphereVersion string) {
+	if requiresSendGridApiKey(codesphereVersion) {
+		setPasswordIfAbsent(vault, files.SecretSendGridApiKey, "dummy")
+		return
+	}
+
 	if s := vault.GetSecret(files.SecretSendGridApiKey); s != nil && s.Fields != nil && s.Fields.Password == "dummy" {
 		vault.RemoveSecret(files.SecretSendGridApiKey)
 	}
+}
 
-	return nil
+// requiresSendGridApiKey treats versions that are no release, such as branch builds, as current.
+func requiresSendGridApiKey(codesphereVersion string) bool {
+	v := "v" + strings.TrimPrefix(strings.TrimPrefix(codesphereVersion, "codesphere-"), "v")
+	return semver.IsValid(v) && semver.Compare(v, sendGridApiKeyOptionalSince) < 0
 }
 
 // optionalPasswordSecrets are set to "dummy" only when absent. They are not required for
