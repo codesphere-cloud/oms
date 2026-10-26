@@ -2201,7 +2201,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				return strings.HasPrefix(command, "oms install k0s ")
 			})).Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
-			install :=nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
+			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
 
 			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
