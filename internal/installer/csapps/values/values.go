@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"go.yaml.in/yaml/v3"
+	"helm.sh/helm/v4/pkg/chart/v2/loader"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/ceph"
@@ -46,9 +47,9 @@ func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 	}
 
 	global["hostName"] = cfg.Codesphere.Domain
-	values := mergeValues(map[string]any{"global": global}, cfg.Codesphere.Override)
+	values := mergeOverride(map[string]any{"global": global}, cfg.Codesphere.Override)
 
-	return mergeValues(values, map[string]any{
+	return loader.MergeMaps(values, map[string]any{
 		"global": map[string]any{"imageTag": imageTag},
 	}), nil
 }
