@@ -49,6 +49,31 @@ func supportedCluster() *installer.MockClusterVersionClient {
 	return client
 }
 
+func expectRegistryProbe(client *installer.MockRegistryPolicyClient, registry string) *mock.Call {
+	return client.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
+		Run(func(ctx context.Context, obj ctrlclient.Object, opts ...ctrlclient.CreateOption) {
+			_, bounded := ctx.Deadline()
+			Expect(bounded).To(BeTrue())
+
+			options := &ctrlclient.CreateOptions{}
+			for _, opt := range opts {
+				opt.ApplyToCreate(options)
+			}
+
+			Expect(options.DryRun).To(Equal([]string{metav1.DryRunAll}))
+
+			pod := obj.(*corev1.Pod)
+			Expect(pod.Namespace).To(Equal(metav1.NamespaceDefault))
+			Expect(pod.GenerateName).NotTo(BeEmpty())
+			Expect(pod.Spec.Containers[0].Image).To(Equal("ghcr.io/codesphere-cloud/registry-probe:admission"))
+			Expect(pod.Spec.InitContainers[0].Image).To(Equal("ghcr.io/codesphere-cloud/registry-probe:init"))
+			pod.Spec.Containers[0].Image = registry + "/codesphere-cloud/registry-probe:admission"
+			pod.Spec.InitContainers[0].Image = registry + "/codesphere-cloud/registry-probe:init"
+			// Other admission controllers may inject sidecars into the probe.
+			pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{Name: "sidecar", Image: "example.com/sidecar:v1"})
+		}).Return(nil).Once()
+}
+
 func installRegistryPolicy(base string) *admissionv1.MutatingAdmissionPolicy {
 	client := installer.NewMockRegistryPolicyClient(GinkgoT())
 
@@ -62,7 +87,7 @@ func installRegistryPolicy(base string) *admissionv1.MutatingAdmissionPolicy {
 			policy = &admissionv1.MutatingAdmissionPolicy{}
 			Expect(json.Unmarshal(data, policy)).To(Succeed())
 		}).Return(nil).Once()
-	client.EXPECT().Apply(mock.Anything, mock.MatchedBy(func(obj runtime.ApplyConfiguration) bool {
+	binding := client.EXPECT().Apply(mock.Anything, mock.MatchedBy(func(obj runtime.ApplyConfiguration) bool {
 		data, err := json.Marshal(obj)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -71,6 +96,9 @@ func installRegistryPolicy(base string) *admissionv1.MutatingAdmissionPolicy {
 
 		return policy != nil && binding.Spec.PolicyName == policy.Name
 	}), mock.Anything).Return(nil).Once().NotBefore(first)
+	registry, err := installer.NormalizeRegistry(base)
+	Expect(err).NotTo(HaveOccurred())
+	expectRegistryProbe(client, registry).NotBefore(binding)
 	Expect(installer.EnsureRegistryPolicy(context.Background(), client, base, supportedCluster())).To(Succeed())
 
 	return policy
@@ -116,6 +144,7 @@ var _ = Describe("Registry admission policy", func() {
 		client := installer.NewMockRegistryPolicyClient(GinkgoT())
 		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicy", "admissionregistration.k8s.io/v1beta1"), mock.Anything).Return(nil).Once()
 		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicyBinding", "admissionregistration.k8s.io/v1beta1"), mock.Anything).Return(nil).Once()
+		expectRegistryProbe(client, "registry.example.com")
 		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "registry.example.com", versions)).To(Succeed())
 	})
 	It("accepts Kubernetes 1.34 distributions with vendor version suffixes", func() {
@@ -125,6 +154,7 @@ var _ = Describe("Registry admission policy", func() {
 		client := installer.NewMockRegistryPolicyClient(GinkgoT())
 		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicy", "admissionregistration.k8s.io/v1beta1"), mock.Anything).Return(nil).Once()
 		client.EXPECT().Apply(mock.Anything, admissionResourceVersion("MutatingAdmissionPolicyBinding", "admissionregistration.k8s.io/v1beta1"), mock.Anything).Return(nil).Once()
+		expectRegistryProbe(client, "registry.example.com")
 		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "registry.example.com", versions)).To(Succeed())
 	})
 	It("reports failures to discover the cluster version before applying resources", func() {
@@ -163,6 +193,24 @@ var _ = Describe("Registry admission policy", func() {
 		Expect(result.Spec.InitContainers[0].Image).To(Equal("registry.example.com:5000/team/mirror/codesphere-cloud/init@sha256:abc"))
 		Expect(mutateRegistryPod(policy, result)).To(Equal(result))
 	})
+	It("does not rewrite an overlapping destination twice", func() {
+		registry := "ghcr.io/codesphere-cloud/mirror"
+		policy := installRegistryPolicy(registry)
+		source := "ghcr.io/codesphere-cloud/api:v1"
+		destination, err := installer.PackageImageDestination(source, registry)
+		Expect(err).NotTo(HaveOccurred())
+
+		pod := &corev1.Pod{Spec: corev1.PodSpec{
+			Containers:     []corev1.Container{{Name: "app", Image: source}, {Name: "mirrored", Image: destination}},
+			InitContainers: []corev1.Container{{Name: "init", Image: source}},
+		}}
+		result := mutateRegistryPod(policy, pod)
+		Expect(result.Spec.Containers[0].Image).To(Equal(destination))
+		Expect(result.Spec.Containers[1].Image).To(Equal(destination))
+		Expect(result.Spec.InitContainers[0].Image).To(Equal(destination))
+		Expect(mutateRegistryPod(policy, result)).To(Equal(result))
+	})
+
 	It("handles pods without init containers", func() {
 		policy := installRegistryPolicy("registry.example.com")
 		result := mutateRegistryPod(policy, &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{{Name: "app", Image: "ghcr.io/codesphere-cloud/server:v1"}}}})
@@ -186,5 +234,47 @@ var _ = Describe("Registry admission policy", func() {
 		err := installer.EnsureRegistryPolicy(context.Background(), client, "registry.example.com", supportedCluster())
 		Expect(err).To(MatchError(ContainSubstring("policy binding")))
 		Expect(errors.Is(err, cause)).To(BeTrue())
+	})
+	It("reports dry-run admission failures before installing dependencies", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		client.EXPECT().Apply(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+		cause := errors.New("probe forbidden")
+		client.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).Return(cause).Once()
+		err := installer.EnsureRegistryPolicy(context.Background(), client, "registry.example.com", supportedCluster())
+		Expect(err).To(MatchError(ContainSubstring("policy readiness")))
+		Expect(errors.Is(err, cause)).To(BeTrue())
+	})
+	It("waits until init-container admission is active and respects cancellation", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		client.EXPECT().Apply(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		client.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
+			Run(func(_ context.Context, obj ctrlclient.Object, _ ...ctrlclient.CreateOption) {
+				obj.(*corev1.Pod).Spec.Containers[0].Image = "registry.example.com/codesphere-cloud/registry-probe:admission"
+
+				cancel()
+			}).Return(nil).Once()
+		err := installer.EnsureRegistryPolicy(ctx, client, "registry.example.com", supportedCluster())
+		Expect(errors.Is(err, context.Canceled)).To(BeTrue())
+	})
+	It("waits until regular container admission is active and respects cancellation", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+		client.EXPECT().Apply(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		client.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
+			Run(func(_ context.Context, obj ctrlclient.Object, _ ...ctrlclient.CreateOption) {
+				obj.(*corev1.Pod).Spec.InitContainers[0].Image = "registry.example.com/codesphere-cloud/registry-probe:init"
+
+				cancel()
+			}).Return(nil).Once()
+		err := installer.EnsureRegistryPolicy(ctx, client, "registry.example.com", supportedCluster())
+		Expect(errors.Is(err, context.Canceled)).To(BeTrue())
 	})
 })

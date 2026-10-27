@@ -6,24 +6,34 @@ package installer
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
+	"time"
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/version"
+	"k8s.io/apimachinery/pkg/util/wait"
 	versioninfo "k8s.io/apimachinery/pkg/version"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const registryPolicyName = "codesphere-image-registry"
+const (
+	registryPolicyName         = "codesphere-image-registry"
+	codesphereImagePrefix      = DefaultRegistryURL + "/codesphere-cloud/"
+	registryPolicyReadyTimeout = 30 * time.Second
+	registryPolicyPollInterval = time.Second
+)
 
 // RegistryPolicyClient is the Kubernetes API surface needed to apply admission resources.
 //
 //mockery:generate: true
 type RegistryPolicyClient interface {
 	Apply(context.Context, runtime.ApplyConfiguration, ...ctrlclient.ApplyOption) error
+	Create(context.Context, ctrlclient.Object, ...ctrlclient.CreateOption) error
 }
 
 // ClusterVersionClient reads the configured Kubernetes API server version.
@@ -35,6 +45,8 @@ type ClusterVersionClient interface {
 
 // EnsureRegistryPolicy installs the policy and binding before dependency workloads.
 // It requires Kubernetes 1.34 or newer and uses the beta API before 1.36.
+// After applying both resources, it verifies container and init-container mutation
+// through dry-run Pod admission, waiting at most 30 seconds before returning an error.
 // The default registry needs no rewriting and causes no Kubernetes API writes.
 func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base string, versions ClusterVersionClient) error {
 	registry, err := NormalizeRegistry(base)
@@ -66,7 +78,7 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 			FailurePolicy:      &failurePolicy,
 			ReinvocationPolicy: admissionv1.IfNeededReinvocationPolicy,
 			Variables: []admissionv1.Variable{
-				{Name: "oldRegistry", Expression: strconv.Quote(DefaultRegistryURL + "/codesphere-cloud/")},
+				{Name: "oldRegistry", Expression: strconv.Quote(codesphereImagePrefix)},
 				{Name: "newRegistry", Expression: strconv.Quote(registry + "/codesphere-cloud/")},
 			},
 			Mutations: []admissionv1.Mutation{{
@@ -89,7 +101,54 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 		return fmt.Errorf("failed to apply image registry policy binding: %w", err)
 	}
 
+	return waitForRegistryPolicy(ctx, client, registry)
+}
+
+// waitForRegistryPolicy verifies admission has observed the policy and binding before
+// dependency Pods can be created. Dry-run requests never persist the probe Pod.
+func waitForRegistryPolicy(ctx context.Context, client RegistryPolicyClient, registry string) error {
+	err := wait.PollUntilContextTimeout(ctx, registryPolicyPollInterval, registryPolicyReadyTimeout, true, func(ctx context.Context) (bool, error) {
+		pod := registryProbePod()
+		if err := client.Create(ctx, pod, ctrlclient.DryRunAll); err != nil {
+			return false, fmt.Errorf("dry-run registry policy probe: %w", err)
+		}
+
+		return slices.ContainsFunc(pod.Spec.Containers, func(c corev1.Container) bool {
+			return c.Name == "probe" && c.Image == registry+"/codesphere-cloud/registry-probe:admission"
+		}) && slices.ContainsFunc(pod.Spec.InitContainers, func(c corev1.Container) bool {
+			return c.Name == "probe" && c.Image == registry+"/codesphere-cloud/registry-probe:init"
+		}), nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to verify image registry policy readiness (timeout %s): %w", registryPolicyReadyTimeout, err)
+	}
+
 	return nil
+}
+
+func registryProbePod() *corev1.Pod {
+	runAsNonRoot, allowPrivilegeEscalation := true, false
+	container := corev1.Container{
+		Name: "probe", Image: codesphereImagePrefix + "registry-probe:admission",
+		SecurityContext: &corev1.SecurityContext{
+			AllowPrivilegeEscalation: &allowPrivilegeEscalation,
+			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+		},
+	}
+	initContainer := *container.DeepCopy()
+	initContainer.Image = codesphereImagePrefix + "registry-probe:init"
+
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: registryPolicyName + "-probe-", Namespace: metav1.NamespaceDefault},
+		Spec: corev1.PodSpec{
+			RestartPolicy: corev1.RestartPolicyNever,
+			SecurityContext: &corev1.PodSecurityContext{
+				RunAsNonRoot:   &runAsNonRoot,
+				SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+			},
+			Containers: []corev1.Container{container}, InitContainers: []corev1.Container{initContainer},
+		},
+	}
 }
 
 // registryPolicyAPIVersion selects the mutating admission policy API for the server's
@@ -139,7 +198,8 @@ func applyRegistryResource(ctx context.Context, client RegistryPolicyClient, obj
 func registryImagePatches(field string) string {
 	return fmt.Sprintf(`object.spec.%[1]s
 		.map(c, object.spec.%[1]s.indexOf(c))
-		.filter(i, object.spec.%[1]s[i].image.startsWith(variables.oldRegistry))
+		.filter(i, object.spec.%[1]s[i].image.startsWith(variables.oldRegistry) &&
+			!object.spec.%[1]s[i].image.startsWith(variables.newRegistry))
 		.map(i, JSONPatch{
 			op: "replace",
 			path: "/spec/%[1]s/" + string(i) + "/image",

@@ -25,6 +25,8 @@ type PackageArtifact struct {
 }
 
 // ArtifactCopier copies an image or OCI artifact between registries.
+//
+//mockery:generate: true
 type ArtifactCopier interface {
 	Copy(ctx context.Context, source, destination string) error
 }
@@ -48,8 +50,8 @@ func (c *CraneArtifactCopier) Copy(ctx context.Context, source, destination stri
 }
 
 // ReadPackageArtifacts reads all images and OCI Helm charts from a BOM and builds their
-// destination references. Images keep their registry and repository path below dest, so that
-// repositories with the same basename cannot collide. Charts keep their repository path alone,
+// destination references. Codesphere images use the admission policy layout; other images
+// keep their source registry below dest to avoid collisions. Charts keep their repository path alone,
 // because that is where an installation looks for them.
 func ReadPackageArtifacts(bomPath, dest string) ([]PackageArtifact, error) {
 	bomConfig, err := bom.Parse(bomPath)
@@ -108,15 +110,14 @@ func splitReference(source string) (repository, tag, digest string) {
 	return repository, tag, digest
 }
 
-// destinationRepository returns the repository path a reference keeps below the destination. The
-// installer rewrites the images of a BOM onto another registry by moving the source registry into
-// the first path segment with its dots and colons replaced by underscores, so that
-// ghcr.io/codesphere-cloud/api ends up as <server>/ghcr_io/codesphere-cloud/api. The same layout
-// is built here, because an installation only finds the mirrored artifacts if both sides name them
-// identically. The repository is split as a plain string rather than parsed, since the installer
-// reads the leading segment of a reference without a registry as one, keeping alpine/kubectl below
-// alpine instead of below docker.io.
+// destinationRepository keeps Codesphere images at the same repository path used by
+// the admission policy. Other images retain their flattened source registry segment,
+// matching the existing BOM image layout.
 func destinationRepository(repository string) string {
+	if strings.HasPrefix(repository, codesphereImagePrefix) {
+		return strings.TrimPrefix(repository, DefaultRegistryURL+"/")
+	}
+
 	registry, path, found := strings.Cut(repository, "/")
 
 	registry = registrySegmentReplacer.Replace(registry)
@@ -128,8 +129,8 @@ func destinationRepository(repository string) string {
 }
 
 // PackageImageDestination maps a container image below a destination registry or repository
-// prefix. The source registry is kept as its own path segment, because that is how an
-// installation rewrites the images of its BOM onto the registry it pulls from.
+// prefix. Codesphere images omit the source registry to match admission rewriting;
+// other images retain their source registry as a flattened path segment.
 func PackageImageDestination(source, dest string) (string, error) {
 	return packageArtifactDestination(source, dest, true)
 }

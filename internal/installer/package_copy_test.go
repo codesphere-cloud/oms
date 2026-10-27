@@ -12,17 +12,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 )
-
-type recordingArtifactCopier struct {
-	copies []installer.PackageArtifact
-	err    error
-}
-
-func (c *recordingArtifactCopier) Copy(_ context.Context, source, destination string) error {
-	c.copies = append(c.copies, installer.PackageArtifact{Source: source, Destination: destination})
-	return c.err
-}
 
 var _ = Describe("Package artifact copying", func() {
 	Describe("PackageImageDestination", func() {
@@ -33,10 +24,10 @@ var _ = Describe("Package artifact copying", func() {
 			)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("registry.example.com/private-cloud/ghcr_io/codesphere-cloud/api:1.2.3"))
+			Expect(destination).To(Equal("registry.example.com/private-cloud/codesphere-cloud/api:1.2.3"))
 		})
 
-		It("keeps the source registry of every image in its own path segment", func() {
+		It("keeps the source registry of other images in its own path segment", func() {
 			destination, err := installer.PackageImageDestination(
 				"quay.io/ceph/ceph:v18.2",
 				"10.10.0.2:5000",
@@ -44,6 +35,12 @@ var _ = Describe("Package artifact copying", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(destination).To(Equal("10.10.0.2:5000/quay_io/ceph/ceph:v18.2"))
+		})
+
+		It("keeps unrelated GHCR namespaces in the existing BOM layout", func() {
+			destination, err := installer.PackageImageDestination("ghcr.io/codesphere-cloud-other/api:v1", "registry.example.com")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destination).To(Equal("registry.example.com/ghcr_io/codesphere-cloud-other/api:v1"))
 		})
 
 		It("leaves references without a registry below their first path segment", func() {
@@ -70,7 +67,7 @@ var _ = Describe("Package artifact copying", func() {
 			)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("10.10.0.2:5000/ghcr_io/codesphere-cloud/api:main"))
+			Expect(destination).To(Equal("10.10.0.2:5000/codesphere-cloud/api:main"))
 		})
 
 		It("preserves digests", func() {
@@ -80,11 +77,11 @@ var _ = Describe("Package artifact copying", func() {
 			)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("registry.example.com/mirror/ghcr_io/codesphere-cloud/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+			Expect(destination).To(Equal("registry.example.com/mirror/codesphere-cloud/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 		})
 
 		It("rejects an empty destination", func() {
-			_, err := installer.PackageImageDestination("ghcr.io/codesphere/api:v1", "")
+			_, err := installer.PackageImageDestination("ghcr.io/codesphere-cloud/api:v1", "")
 			Expect(err).To(MatchError("destination registry must not be empty"))
 		})
 	})
@@ -108,8 +105,8 @@ var _ = Describe("Package artifact copying", func() {
 			Expect(os.WriteFile(bomPath, []byte(`{
 				"components": {
 					"codesphere": {
-						"containerImages": {"api": "ghcr.io/codesphere/api:v1"},
-						"files": {"chart": {"ociRef": "oci://ghcr.io/codesphere/charts/app:v1"}}
+						"containerImages": {"api": "ghcr.io/codesphere-cloud/api:v1"},
+						"files": {"chart": {"ociRef": "oci://ghcr.io/codesphere-cloud/charts/app:v1"}}
 					}
 				}
 			}`), 0644)).To(Succeed())
@@ -117,26 +114,28 @@ var _ = Describe("Package artifact copying", func() {
 			artifacts, err := installer.ReadPackageArtifacts(bomPath, "registry.example.com/mirror")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(artifacts).To(Equal([]installer.PackageArtifact{
-				{Source: "ghcr.io/codesphere/api:v1", Destination: "registry.example.com/mirror/ghcr_io/codesphere/api:v1"},
-				{Source: "ghcr.io/codesphere/charts/app:v1", Destination: "registry.example.com/mirror/codesphere/charts/app:v1"},
+				{Source: "ghcr.io/codesphere-cloud/api:v1", Destination: "registry.example.com/mirror/codesphere-cloud/api:v1"},
+				{Source: "ghcr.io/codesphere-cloud/charts/app:v1", Destination: "registry.example.com/mirror/codesphere-cloud/charts/app:v1"},
 			}))
 		})
 	})
 
 	Describe("CopyPackageArtifacts", func() {
 		It("copies all artifacts in order", func() {
-			copier := &recordingArtifactCopier{}
+			copier := installer.NewMockArtifactCopier(GinkgoT())
 			artifacts := []installer.PackageArtifact{
 				{Source: "source/one:v1", Destination: "dest/one:v1"},
 				{Source: "source/two:v2", Destination: "dest/two:v2"},
 			}
 
+			first := copier.EXPECT().Copy(mock.Anything, "source/one:v1", "dest/one:v1").Return(nil).Once()
+			copier.EXPECT().Copy(mock.Anything, "source/two:v2", "dest/two:v2").Return(nil).Once().NotBefore(first)
 			Expect(installer.CopyPackageArtifacts(context.Background(), copier, artifacts)).To(Succeed())
-			Expect(copier.copies).To(Equal(artifacts))
 		})
 
 		It("adds source and destination context to copy failures", func() {
-			copier := &recordingArtifactCopier{err: errors.New("denied")}
+			copier := installer.NewMockArtifactCopier(GinkgoT())
+			copier.EXPECT().Copy(mock.Anything, "source/one:v1", "dest/one:v1").Return(errors.New("denied")).Once()
 			err := installer.CopyPackageArtifacts(context.Background(), copier, []installer.PackageArtifact{
 				{Source: "source/one:v1", Destination: "dest/one:v1"},
 			})
