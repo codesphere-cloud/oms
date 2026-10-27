@@ -6,30 +6,54 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"os"
 
+	"github.com/codesphere-cloud/cs-go/pkg/io"
+	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
-	"github.com/spf13/pflag"
+	"github.com/codesphere-cloud/oms/internal/bootstrap/local"
+	"github.com/codesphere-cloud/oms/internal/env"
+	"github.com/spf13/cobra"
 )
 
-// prepareBootstrapOptions validates mode-specific flags before creating external clients.
-func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
-	if c.CodesphereEnv.GitHubPAT == "" {
-		c.CodesphereEnv.GitHubPAT = os.Getenv("OMS_REGISTRY_PASSWORD")
-	}
+// AddBootstrapGcpSingleNodeCmd registers the single-node bootstrap subcommand.
+func AddBootstrapGcpSingleNodeCmd(parent *cobra.Command, opts *util.GlobalOptions) {
+	util.AddCmd(parent, newBootstrapGcpSingleNodeCmd(opts).cmd)
+}
 
-	if c.CodesphereEnv.InstallVaultPrivKey != "" && c.CodesphereEnv.InstallVaultPath == "" {
-		return fmt.Errorf("--priv-key requires --vault")
+func newBootstrapGcpSingleNodeCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
+	c := &BootstrapGcpCmd{
+		cmd: &cobra.Command{
+			Use:   "single-node",
+			Short: "Bootstrap k0s and Codesphere on one GCP VM",
+			Long: io.Long(`Install k0s and Codesphere on one GCP VM using the local bootstrap.
+				Requires --registry-user, either --github-pat or OMS_REGISTRY_PASSWORD,
+				and either --install-local or --install-version. The root disk defaults to 50 GB;
+				a separate 100 GB Ceph disk is added. Supply installation settings through --config and --vault.
+				Not for production use.`),
+			Args: cobra.NoArgs,
+		},
+		Opts:          opts,
+		Env:           env.NewEnv(),
+		CodesphereEnv: &gcp.CodesphereEnvironment{SingleVM: true},
 	}
+	c.cmd.RunE = func(command *cobra.Command, args []string) error {
+		if err := c.prepareBootstrapOptions(); err != nil {
+			return err
+		}
 
-	if err := c.validateLegacyBootstrapFlags(); err != nil {
-		return err
+		if err := c.validateSingleVMOptions(); err != nil {
+			return err
+		}
+
+		return c.RunE(command, args)
 	}
+	c.addSharedBootstrapFlags()
+	c.cmd.Flags().StringVar(&c.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine (rook-ceph or local)")
 
-	if !c.CodesphereEnv.SingleVM {
-		return nil
-	}
+	return c
+}
 
+func (c *BootstrapGcpCmd) validateSingleVMOptions() error {
 	if err := validateLocalStorageEngine(c.StorageEngine); err != nil {
 		return err
 	}
@@ -43,36 +67,6 @@ func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
 	}
 
 	return nil
-}
-
-// validateLegacyBootstrapFlags uses the subcommand's registered options as the
-// source of truth for the original flag-based entry point.
-func (c *BootstrapGcpCmd) validateLegacyBootstrapFlags() error {
-	if !c.legacyMode {
-		return nil
-	}
-
-	if !c.CodesphereEnv.SingleVM {
-		if c.cmd.Flags().Changed("storage-engine") {
-			return fmt.Errorf("--storage-engine requires --single-vm")
-		}
-
-		return nil
-	}
-
-	supported := newBootstrapGcpSingleNodeCmd(c.Opts).cmd.Flags()
-
-	var flagErr error
-
-	c.cmd.LocalNonPersistentFlags().VisitAll(func(flag *pflag.Flag) {
-		if flagErr != nil || !flag.Changed || flag.Name == "single-vm" || flag.Name == "help" || supported.Lookup(flag.Name) != nil {
-			return
-		}
-
-		flagErr = fmt.Errorf("--%s is not supported with --single-vm; supply installation settings through --config and --vault", flag.Name)
-	})
-
-	return flagErr
 }
 
 func (c *BootstrapGcpCmd) bootstrapSingleVM(bs *gcp.GCPBootstrapper) error {
