@@ -134,6 +134,11 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		return fmt.Errorf("failed to parse installer BOM: %w", err)
 	}
 
+	registryURL := ""
+	if cfg.Registry != nil {
+		registryURL = cfg.Registry.Server + installer.ChartsRepositoryPath
+	}
+
 	var install *argocdinstaller.AppInstaller
 
 	if err := stlog.Substep("Load vault data", func() error {
@@ -155,12 +160,7 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			registryUsername = secret.Fields.Password
 		}
 
-		registryURL := opts.ArgoCDRegistryURL
-		if registryURL == "" && cfg.Registry != nil {
-			registryURL = cfg.Registry.Server + installer.ChartsRepositoryPath
-		}
 		argoCDInstall, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
-			Version:           opts.ArgoCDVersion,
 			DatacenterID:      fmt.Sprintf("%d", cfg.Datacenter.ID),
 			OciUsername:       registryUsername,
 			OciPassword:       registryPassword,
@@ -169,10 +169,9 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			GitPassword:       os.Getenv("OMS_GIT_PASSWORD"),
 			FullInstall:       true,
 			ForceConflicts:    opts.ArgoCDForceConflicts,
-			RepoURL:           opts.ArgoCDRepoURL,
 			ValueFiles:        opts.ArgoCDValues,
 			RESTConfig:        restConfig,
-		})
+		}, bomConfig)
 		if err != nil {
 			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 		}

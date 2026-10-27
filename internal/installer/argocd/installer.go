@@ -7,14 +7,18 @@ package argocd
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"helm.sh/helm/v4/pkg/chart/common/util"
 	"helm.sh/helm/v4/pkg/cli/values"
@@ -23,14 +27,12 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-// Defaults for the ArgoCD Helm chart repository and the namespace ArgoCD is installed into.
-const (
-	DefaultRepoURL   = "https://argoproj.github.io/argo-helm"
-	DefaultNamespace = "argocd"
-)
+// DefaultNamespace is the namespace ArgoCD is installed into.
+const DefaultNamespace = "argocd"
 
 // InstallerConfig holds all user-facing parameters for an ArgoCD install/upgrade.
 type InstallerConfig struct {
+	ChartName      string
 	Version        string
 	DatacenterID   string
 	OciUsername    string
@@ -47,6 +49,31 @@ type InstallerConfig struct {
 	RESTConfig        *rest.Config
 }
 
+// ConfigFromBOM resolves the ArgoCD chart name, repository, and version from the
+// installer BOM, using the configured chart registry for mirrored installations.
+// The chart name and version always come from the BOM.
+func ConfigFromBOM(bomConfig *bom.Config, cfg InstallerConfig) (InstallerConfig, error) {
+	if bomConfig == nil {
+		return InstallerConfig{}, fmt.Errorf("installer BOM is required")
+	}
+
+	chart, ok := bomConfig.GetChart("argocd")
+	if !ok {
+		return InstallerConfig{}, fmt.Errorf("argocd chart with a valid tagged OCI reference not found in installer BOM")
+	}
+
+	cfg.ChartName = path.Base(chart.Name())
+
+	cfg.RepoURL = "oci://" + path.Dir(chart.Name())
+	if cfg.OciRegistryURL != "" {
+		cfg.RepoURL = "oci://" + strings.TrimPrefix(cfg.OciRegistryURL, "oci://")
+	}
+
+	cfg.Version = chart.Tag()
+
+	return cfg, nil
+}
+
 // Installer holds the resolved configuration and initialized clients.
 type Installer struct {
 	InstallerConfig
@@ -54,9 +81,14 @@ type Installer struct {
 	Resources Resources
 }
 
-// NewInstaller creates an Installer with Helm and Kubernetes clients. It uses cfg.RESTConfig
-// when set and falls back to the default kubeconfig otherwise.
-func NewInstaller(cfg InstallerConfig) (*Installer, error) {
+// NewInstaller resolves the required ArgoCD chart from the BOM before creating clients.
+// It uses cfg.RESTConfig when set and falls back to the default kubeconfig otherwise.
+func NewInstaller(cfg InstallerConfig, bomConfig *bom.Config) (*Installer, error) {
+	cfg, err := ConfigFromBOM(bomConfig, cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	if cfg.RESTConfig != nil {
 		helm, err := installer.NewHelmClientWithRESTConfig(DefaultNamespace, cfg.RESTConfig)
 		if err != nil {
@@ -134,9 +166,24 @@ func (a *Installer) Install() error {
 	}
 
 	defaults = util.MergeTables(defaults, trust)
-	vals = util.MergeTables(vals, defaults)
 
-	chartName, repoURL := a.resolveChartRef("argo-cd")
+	pullSecret, err := a.imagePullSecretValues()
+	if err != nil {
+		return err
+	}
+
+	defaults = util.MergeTables(defaults, pullSecret)
+	vals = util.MergeTables(vals, map[string]any{"argo-cd": defaults})
+
+	chartName := a.ChartName
+	if chartName == "" {
+		chartName = "argo-cd"
+	}
+
+	chartName, repoURL := a.resolveChartRef(chartName)
+	if err := a.loginChartRegistry(ctx, chartName); err != nil {
+		return err
+	}
 	cfg := installer.ChartConfig{
 		ReleaseName:     "argocd",
 		ChartName:       chartName,
@@ -173,6 +220,58 @@ func (a *Installer) Install() error {
 	a.showPostInstallHints()
 
 	return nil
+}
+
+// imagePullSecretValues supplies credentials before the chart's Redis pre-install job runs.
+func (a *Installer) imagePullSecretValues() (map[string]any, error) {
+	if a.OciPassword == "" {
+		return nil, nil
+	}
+
+	registry := strings.TrimPrefix(a.OciRegistryURL, "oci://")
+	if registry == "" {
+		registry = "ghcr.io"
+	}
+
+	host, _, _ := strings.Cut(registry, "/")
+
+	username := a.OciUsername
+	if username == "" {
+		username = defaultOciUsername
+	}
+
+	config, err := json.Marshal(map[string]any{
+		"auths": map[string]any{
+			host: map[string]string{
+				"username": username,
+				"password": a.OciPassword,
+				"auth":     base64.StdEncoding.EncodeToString([]byte(username + ":" + a.OciPassword)),
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encoding ArgoCD image pull credentials: %w", err)
+	}
+
+	return map[string]any{
+		"global": map[string]any{
+			"imagePullSecrets": []any{map[string]any{"name": "docker-regcred"}},
+		},
+		"extraObjects": []any{map[string]any{
+			"apiVersion": "v1",
+			"kind":       "Secret",
+			"metadata": map[string]any{
+				"name": "docker-regcred",
+				"annotations": map[string]any{
+					"helm.sh/hook":               "pre-install,pre-upgrade",
+					"helm.sh/hook-weight":        "-10",
+					"helm.sh/hook-delete-policy": "before-hook-creation",
+				},
+			},
+			"type": "kubernetes.io/dockerconfigjson",
+			"data": map[string]any{".dockerconfigjson": base64.StdEncoding.EncodeToString(config)},
+		}},
+	}, nil
 }
 
 // registryTrustValues puts the OCI registry's certificate authority into ArgoCD's certificate
@@ -216,6 +315,25 @@ func (a *Installer) registryTrustValues() (map[string]any, error) {
 	}, nil
 }
 
+func (a *Installer) loginChartRegistry(ctx context.Context, chartName string) error {
+	if !strings.HasPrefix(chartName, "oci://") || a.OciPassword == "" {
+		return nil
+	}
+
+	host, _, _ := strings.Cut(strings.TrimPrefix(chartName, "oci://"), "/")
+
+	username := a.OciUsername
+	if username == "" {
+		username = defaultOciUsername
+	}
+
+	if err := a.Helm.LoginRegistry(ctx, host, username, a.OciPassword); err != nil {
+		return fmt.Errorf("logging in to ArgoCD chart registry: %w", err)
+	}
+
+	return nil
+}
+
 func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) error {
 	log.Println("No existing ArgoCD release found, performing fresh install")
 
@@ -232,11 +350,13 @@ func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) erro
 	return nil
 }
 
-// upgrade validates the version constraint and then performs a Helm upgrade.
+// upgrade validates the version constraint for the same chart and then performs a Helm upgrade.
 func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, existing *installer.ReleaseInfo) error {
 	log.Printf("Found existing ArgoCD release with chart version %s\n", existing.InstalledVersion)
 
-	if a.Version != "" {
+	// Helm records the chart name, but not its original repository reference.
+	// Different charts have independent versions, so only compare matching names.
+	if a.Version != "" && existing.ChartName == path.Base(cfg.ChartName) {
 		installedSemver, err := semver.NewVersion(existing.InstalledVersion)
 		if err != nil {
 			return fmt.Errorf("failed to parse installed version %q: %w", existing.InstalledVersion, err)
@@ -253,7 +373,9 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 				a.Version, existing.InstalledVersion,
 			)
 		}
+	}
 
+	if a.Version != "" {
 		log.Printf("Upgrading ArgoCD from %s to %s\n", existing.InstalledVersion, a.Version)
 	} else {
 		log.Printf("Upgrading ArgoCD from %s to latest\n", existing.InstalledVersion)
@@ -288,10 +410,6 @@ func (a *Installer) validateRepoURL() error {
 
 func (a *Installer) resolveChartRef(chartName string) (string, string) {
 	repoURL := a.RepoURL
-	if repoURL == "" {
-		repoURL = DefaultRepoURL
-	}
-
 	if strings.HasPrefix(repoURL, "oci://") {
 		return strings.TrimRight(repoURL, "/") + "/" + chartName, ""
 	}

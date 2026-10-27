@@ -4,6 +4,9 @@
 package argocd_test
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -20,6 +23,40 @@ func writeValuesFile(content string) string {
 	Expect(os.WriteFile(path, []byte(content), 0o600)).To(Succeed())
 
 	return path
+}
+
+func expectImagePullSecret(cfg installer.ChartConfig, host, username, password string) {
+	GinkgoHelper()
+
+	values := cfg.Values["argo-cd"].(map[string]any)
+	Expect(values["global"]).To(HaveKeyWithValue("imagePullSecrets", []any{map[string]any{"name": "docker-regcred"}}))
+	objects := values["extraObjects"].([]any)
+	Expect(objects).To(HaveLen(1))
+	secret := objects[0].(map[string]any)
+	Expect(secret).To(HaveKeyWithValue("kind", "Secret"))
+	Expect(secret).To(HaveKeyWithValue("type", "kubernetes.io/dockerconfigjson"))
+	metadata := secret["metadata"].(map[string]any)
+	Expect(metadata).To(HaveKeyWithValue("name", "docker-regcred"))
+	// Redis initialization is a pre-install/pre-upgrade hook with the default weight of zero.
+	Expect(metadata["annotations"]).To(Equal(map[string]any{
+		"helm.sh/hook":               "pre-install,pre-upgrade",
+		"helm.sh/hook-weight":        "-10",
+		"helm.sh/hook-delete-policy": "before-hook-creation",
+	}))
+
+	data := secret["data"].(map[string]any)
+	config, err := base64.StdEncoding.DecodeString(data[".dockerconfigjson"].(string))
+	Expect(err).NotTo(HaveOccurred())
+
+	var decoded map[string]any
+	Expect(json.Unmarshal(config, &decoded)).To(Succeed())
+	Expect(decoded).To(Equal(map[string]any{
+		"auths": map[string]any{host: map[string]any{
+			"username": username,
+			"password": password,
+			"auth":     base64.StdEncoding.EncodeToString([]byte(username + ":" + password)),
+		}},
+	}))
 }
 
 var _ = Describe("Installer.Install", func() {
@@ -75,11 +112,15 @@ var _ = Describe("Installer.Install", func() {
 	})
 
 	Context("when an existing release is found", func() {
+		var existing *installer.ReleaseInfo
+
 		BeforeEach(func() {
-			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(&installer.ReleaseInfo{
+			existing = &installer.ReleaseInfo{
 				Name:             "argocd",
+				ChartName:        "argo-cd",
 				InstalledVersion: "6.0.0",
-			}, nil)
+			}
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(existing, nil)
 		})
 
 		It("upgrades to a newer version", func() {
@@ -121,6 +162,34 @@ var _ = Describe("Installer.Install", func() {
 			Expect(err.Error()).To(ContainSubstring("downgrade is not allowed"))
 		})
 
+		It("rejects a downgrade of the same chart using an OCI reference", func() {
+			a.RepoURL = "oci://registry.example.com/charts"
+			a.Version = "5.0.0"
+
+			Expect(a.Install()).To(MatchError(ContainSubstring("downgrade is not allowed")))
+		})
+
+		It("allows a lower version when switching charts", func() {
+			a.ChartName = "argocd"
+			a.RepoURL = "oci://registry.example.com/charts"
+			a.Version = "1.0.0"
+
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
+				return cfg.ChartName == "oci://registry.example.com/charts/argocd" && cfg.Version == "1.0.0"
+			}), mock.Anything).Return(nil)
+
+			Expect(a.Install()).To(Succeed())
+		})
+
+		It("does not parse the installed version when switching charts", func() {
+			existing.InstalledVersion = "custom-build"
+			a.ChartName = "argocd"
+
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+			Expect(a.Install()).To(Succeed())
+		})
+
 		It("returns an error when UpgradeChart fails", func() {
 			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.Anything).
 				Return(errors.New("timeout waiting for condition"))
@@ -147,15 +216,16 @@ var _ = Describe("Installer.Install", func() {
 	})
 
 	Context("chart configuration", func() {
-		It("always uses the correct chart name and repo URL", func() {
+		It("uses the configured chart repository", func() {
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
 				return cfg.ChartName == "argo-cd" &&
-					cfg.RepoURL == "https://argoproj.github.io/argo-helm"
+					cfg.RepoURL == "https://charts.example.com"
 			}), mock.Anything).Return(nil)
 
 			a = &argocd.Installer{InstallerConfig: argocd.InstallerConfig{Version: "7.0.0"}, Helm: helmMock}
 
+			a.RepoURL = "https://charts.example.com"
 			err := a.Install()
 			Expect(err).ToNot(HaveOccurred())
 		})
@@ -163,7 +233,7 @@ var _ = Describe("Installer.Install", func() {
 		It("disables dex in the values", func() {
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				dex, ok := cfg.Values["dex"].(map[string]interface{})
+				dex, ok := cfg.Values["argo-cd"].(map[string]any)["dex"].(map[string]interface{})
 				return ok && dex["enabled"] == false
 			}), mock.Anything).Return(nil)
 
@@ -179,7 +249,7 @@ var _ = Describe("Installer.Install", func() {
 
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				configs, ok := cfg.Values["configs"].(map[string]interface{})
+				configs, ok := cfg.Values["argo-cd"].(map[string]any)["configs"].(map[string]interface{})
 				if !ok {
 					return false
 				}
@@ -209,7 +279,7 @@ var _ = Describe("Installer.Install", func() {
 
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				configs, ok := cfg.Values["configs"].(map[string]interface{})
+				configs, ok := cfg.Values["argo-cd"].(map[string]any)["configs"].(map[string]interface{})
 				if !ok {
 					return false
 				}
@@ -236,7 +306,7 @@ var _ = Describe("Installer.Install", func() {
 		It("configures no certificate authority when none is given", func() {
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				_, configured := cfg.Values["configs"]
+				_, configured := cfg.Values["argo-cd"].(map[string]any)["configs"]
 				return !configured
 			}), mock.Anything).Return(nil)
 
@@ -264,11 +334,11 @@ var _ = Describe("Installer.Install", func() {
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 		})
 
-		It("lets a value file override the dex.enabled default", func() {
-			valuesFile := writeValuesFile("dex:\n  enabled: true\n")
+		It("lets a value file override the argo-cd.dex.enabled default", func() {
+			valuesFile := writeValuesFile("argo-cd:\n  dex:\n    enabled: true\n")
 
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				dex, ok := cfg.Values["dex"].(map[string]interface{})
+				dex, ok := cfg.Values["argo-cd"].(map[string]any)["dex"].(map[string]interface{})
 				return ok && dex["enabled"] == true
 			}), mock.Anything).Return(nil)
 
@@ -278,16 +348,16 @@ var _ = Describe("Installer.Install", func() {
 			Expect(err).ToNot(HaveOccurred())
 		})
 
-		It("keeps the dex.enabled default when the value file does not set it", func() {
-			valuesFile := writeValuesFile("server:\n  replicas: 2\n")
+		It("keeps the argo-cd.dex.enabled default when the value file does not set it", func() {
+			valuesFile := writeValuesFile("argo-cd:\n  server:\n    replicas: 2\n")
 
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				dex, ok := cfg.Values["dex"].(map[string]interface{})
+				dex, ok := cfg.Values["argo-cd"].(map[string]any)["dex"].(map[string]interface{})
 				if !ok || dex["enabled"] != false {
 					return false
 				}
 
-				server, ok := cfg.Values["server"].(map[string]interface{})
+				server, ok := cfg.Values["argo-cd"].(map[string]any)["server"].(map[string]interface{})
 
 				return ok && server["replicas"] == float64(2)
 			}), mock.Anything).Return(nil)
@@ -299,16 +369,16 @@ var _ = Describe("Installer.Install", func() {
 		})
 
 		It("merges values from multiple files with later files taking precedence", func() {
-			first := writeValuesFile("dex:\n  enabled: true\nserver:\n  replicas: 1\n")
-			second := writeValuesFile("server:\n  replicas: 3\n")
+			first := writeValuesFile("argo-cd:\n  dex:\n    enabled: true\n  server:\n    replicas: 1\n")
+			second := writeValuesFile("argo-cd:\n  server:\n    replicas: 3\n")
 
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
-				dex, ok := cfg.Values["dex"].(map[string]interface{})
+				dex, ok := cfg.Values["argo-cd"].(map[string]any)["dex"].(map[string]interface{})
 				if !ok || dex["enabled"] != true {
 					return false
 				}
 
-				server, ok := cfg.Values["server"].(map[string]interface{})
+				server, ok := cfg.Values["argo-cd"].(map[string]any)["server"].(map[string]interface{})
 
 				return ok && server["replicas"] == float64(3)
 			}), mock.Anything).Return(nil)
@@ -317,6 +387,52 @@ var _ = Describe("Installer.Install", func() {
 
 			err := a.Install()
 			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	Context("image pull credentials", func() {
+		It("supplies the default GHCR credentials to the chart", func() {
+			a.OciPassword = "registry-token"
+
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, cfg installer.ChartConfig, _ installer.InstallChartOptions) error {
+					expectImagePullSecret(cfg, "ghcr.io", "github", "registry-token")
+					return nil
+				})
+
+			Expect(a.Install()).To(Succeed())
+		})
+
+		It("refreshes mirror credentials on upgrade using the registry host and port", func() {
+			a.OciRegistryURL = "oci://registry.example.com:5000/charts"
+			a.OciUsername = "mirror-user"
+			a.OciPassword = "mirror-token"
+
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(&installer.ReleaseInfo{
+				Name: "argocd", ChartName: "argo-cd", InstalledVersion: "6.0.0",
+			}, nil)
+			helmMock.EXPECT().UpgradeChart(mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, cfg installer.ChartConfig, _ installer.UpgradeChartOptions) error {
+					expectImagePullSecret(cfg, "registry.example.com:5000", "mirror-user", "mirror-token")
+					return nil
+				})
+
+			Expect(a.Install()).To(Succeed())
+		})
+
+		It("omits the pull secret when no credentials are supplied", func() {
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
+			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).
+				RunAndReturn(func(_ context.Context, cfg installer.ChartConfig, _ installer.InstallChartOptions) error {
+					values := cfg.Values["argo-cd"].(map[string]any)
+					Expect(values).NotTo(HaveKey("global"))
+					Expect(values).NotTo(HaveKey("extraObjects"))
+
+					return nil
+				})
+
+			Expect(a.Install()).To(Succeed())
 		})
 	})
 
