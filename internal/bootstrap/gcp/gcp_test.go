@@ -2241,7 +2241,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		It("downloads k0s and lets k0sctl distribute it independently of the Codesphere package", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
+				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --yes --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
 
 			err := bs.InstallK0s()
 			Expect(err).NotTo(HaveOccurred())
@@ -2295,7 +2295,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 		It("generates the airgap k0sctl config on the jumpbox without installing it", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
-				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml").Return(nil)
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml --yes").Return(nil)
 
 			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
 		})
@@ -2324,8 +2324,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
 			Expect(jumpboxCommands).To(Equal([]string{
-				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml",
-				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config-dc2.yaml --airgapped --output /etc/codesphere/k0sctl-config-dc2.yaml",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml --yes",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config-dc2.yaml --airgapped --output /etc/codesphere/k0sctl-config-dc2.yaml --yes",
 			}))
 		})
 	})
@@ -2350,7 +2350,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Expect(bs.EnsureK0s()).To(Succeed())
 			Expect(jumpboxCommands).To(Equal([]string{
 				"oms download k0s --version v1.31.14+k0s.0 --airgapped",
-				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml",
+				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml --yes",
 				"oms install k0s --config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt",
 			}))
 		})
@@ -2407,7 +2407,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			Expect(bs.EnsureK0s()).To(Succeed())
 			Expect(jumpboxCommands).To(Equal([]string{
-				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt",
+				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --yes --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt",
 			}))
 		})
 	})

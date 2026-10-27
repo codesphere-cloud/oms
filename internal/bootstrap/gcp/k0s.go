@@ -245,7 +245,7 @@ func (b *GCPBootstrapper) GenerateK0sAirgapConfig() error {
 }
 
 func (b *GCPBootstrapper) generateK0sAirgapConfig(dc *datacenter.DataCenter) error {
-	generateCmd := fmt.Sprintf("oms init k0s-config --version %s --install-config %s --airgapped --output %s",
+	generateCmd := fmt.Sprintf("oms init k0s-config --version %s --install-config %s --airgapped --output %s --yes",
 		b.Env.K0sVersion, dc.RemoteConfigPath, dc.RemoteK0sctlConfigPath())
 	if err := b.Env.Jumpbox.RunSSHCommand("root", generateCmd); err != nil {
 		return fmt.Errorf("failed to generate k0s airgap config on jumpbox (data center %d): %w", dc.ID, err)
@@ -277,8 +277,9 @@ func (b *GCPBootstrapper) InstallK0s() error {
 
 func (b *GCPBootstrapper) installK0s(dc *datacenter.DataCenter) error {
 	// Reuse matching cached binaries and let k0sctl reconcile normally. Without
-	// --force, an unchanged cluster remains untouched on bootstrap retries.
-	configArgs := fmt.Sprintf("--version %s --install-config %s", b.Env.K0sVersion, dc.RemoteConfigPath)
+	// --force, an unchanged cluster remains untouched on bootstrap retries. --yes regenerates
+	// the k0sctl config of an earlier run, as there is no one to confirm it.
+	configArgs := fmt.Sprintf("--version %s --install-config %s --yes", b.Env.K0sVersion, dc.RemoteConfigPath)
 	if b.Env.Airgapped {
 		configArgs = "--config " + dc.RemoteK0sctlConfigPath()
 	}
