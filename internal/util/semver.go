@@ -10,7 +10,7 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-// releaseBranchVersion matches the version part of release branch names like codesphere-1-114-0.
+// releaseBranchVersion matches dash-separated versions like 1-114-0.
 var releaseBranchVersion = regexp.MustCompile(`^(\d+)-(\d+)-(\d+)$`)
 
 // InstallVersionAtLeast returns true if the codesphere installVersion is higher or equal to minimum.
