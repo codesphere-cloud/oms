@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
+	"github.com/spf13/pflag"
 )
 
 func (c *BootstrapGcpCmd) addBootstrapConfigFlags() {
@@ -30,6 +31,10 @@ func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
 		return fmt.Errorf("--priv-key requires --vault")
 	}
 
+	if err := c.validateLegacyBootstrapFlags(); err != nil {
+		return err
+	}
+
 	if !c.CodesphereEnv.SingleVM {
 		return nil
 	}
@@ -47,6 +52,36 @@ func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
 	}
 
 	return nil
+}
+
+// validateLegacyBootstrapFlags uses the subcommand's registered options as the
+// source of truth for the original flag-based entry point.
+func (c *BootstrapGcpCmd) validateLegacyBootstrapFlags() error {
+	if !c.legacyMode {
+		return nil
+	}
+
+	if !c.CodesphereEnv.SingleVM {
+		if c.cmd.Flags().Changed("storage-engine") {
+			return fmt.Errorf("--storage-engine requires --single-vm")
+		}
+
+		return nil
+	}
+
+	supported := newBootstrapGcpModeCmd(c.Opts, true).cmd.Flags()
+
+	var flagErr error
+
+	c.cmd.LocalNonPersistentFlags().VisitAll(func(flag *pflag.Flag) {
+		if flagErr != nil || !flag.Changed || flag.Name == "single-vm" || flag.Name == "help" || supported.Lookup(flag.Name) != nil {
+			return
+		}
+
+		flagErr = fmt.Errorf("--%s is not supported with --single-vm; supply installation settings through --config and --vault", flag.Name)
+	})
+
+	return flagErr
 }
 
 func (c *BootstrapGcpCmd) bootstrapSingleVM(bs *gcp.GCPBootstrapper) error {

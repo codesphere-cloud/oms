@@ -34,6 +34,7 @@ type BootstrapGcpCmd struct {
 	SSHQuiet          bool
 	StepTimer         bool
 	StorageEngine     string
+	legacyMode        bool
 
 	// experiments backs the deprecated --experiments flag; its values
 	// are folded into the internal bucket for backwards compatibility.
@@ -52,20 +53,26 @@ func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
 
 // AddBootstrapGcpCmd registers GCP bootstrap modes and infrastructure management commands.
 func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
-	command := &cobra.Command{
-		Use:   "bootstrap-gcp",
-		Short: "Bootstrap GCP infrastructure for Codesphere",
-		Long: io.Long(`Bootstrap GCP infrastructure for testing Codesphere.
-			Choose single-node for k0s and Codesphere on one VM, or multi-node for a cluster.
-			Not for production use.`),
-		Args: cobra.NoArgs,
-	}
+	command := newLegacyBootstrapGcpCmd(opts).cmd
 	util.AddCmd(parent, command)
 	util.AddCmd(command, newBootstrapGcpModeCmd(opts, true).cmd)
 	util.AddCmd(command, newBootstrapGcpModeCmd(opts, false).cmd)
 	AddBootstrapGcpPostconfigCmd(command, opts)
 	AddBootstrapGcpCleanupCmd(command, opts)
 	AddBootstrapGcpRestartVMsCmd(command, opts)
+}
+
+// newLegacyBootstrapGcpCmd preserves the original flag-based entry point.
+func newLegacyBootstrapGcpCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
+	c := newBootstrapGcpModeCmd(opts, false)
+	c.legacyMode = true
+	c.cmd.Use = "bootstrap-gcp"
+	c.cmd.Short = "Bootstrap GCP infrastructure for Codesphere"
+	c.cmd.Long += "\n\nDefaults to the multi-node installer. Use single-node or --single-vm for one VM."
+	c.cmd.Flags().BoolVar(&c.CodesphereEnv.SingleVM, "single-vm", false, "Install k0s and Codesphere on one GCP VM (also available as the single-node subcommand)")
+	c.cmd.Flags().StringVar(&c.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Single VM: storage engine (rook-ceph or local)")
+
+	return c
 }
 
 func newBootstrapGcpModeCmd(opts *util.GlobalOptions, singleVM bool) *BootstrapGcpCmd {
