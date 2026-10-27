@@ -11,7 +11,7 @@ Ensure you have the necessary permissions to create and manage GCP resources bef
 Not for production use.
 
 Use --single-vm to install k0s and Codesphere on one VM using the local bootstrap.
-This mode requires --registry-user, OMS_REGISTRY_PASSWORD,
+This mode requires --registry-user, either --github-pat or OMS_REGISTRY_PASSWORD,
 and either --install-local or --install-version. Both modes default to a 50 GB root disk.
 Single-VM mode adds a separate 100 GB Ceph disk.
 Both modes accept --install-config-template, --config, --vault and --priv-key.
@@ -57,7 +57,7 @@ oms beta bootstrap-gcp [flags]
       --github-app-client-id string               GitHub App Client ID (required)
       --github-app-client-secret string           GitHub App Client Secret (required)
       --github-app-name string                    GitHub App Name (optional)
-      --github-pat string                         GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.
+      --github-pat string                         GitHub Personal Access Token used for direct image access and fetching team SSH keys (defaults to OMS_REGISTRY_PASSWORD). Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.
       --github-team-org string                    GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.
       --github-team-slug string                   GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.
       --gitlab-app-client-id string               GitLab App Client ID (optional)
