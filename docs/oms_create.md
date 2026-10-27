@@ -4,7 +4,7 @@ Create resources for Codesphere
 
 ### Synopsis
 
-Create resources for Codesphere installations, such as test users for automated testing.
+Create resources for Codesphere installations, including test users created through the internal Codesphere API.
 
 ### Options
 
@@ -21,5 +21,5 @@ Create resources for Codesphere installations, such as test users for automated 
 ### SEE ALSO
 
 * [oms](oms.md)	 - Codesphere Operations Management System (OMS)
-* [oms create test-user](oms_create_test-user.md)	 - Create a test user on a Codesphere database
+* [oms create test-user](oms_create_test-user.md)	 - Create a test user through the internal Codesphere API
 

@@ -4,358 +4,249 @@
 package testuser
 
 import (
+	"bytes"
+	"context"
 	"crypto/rand"
-	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
+	"net/http"
+	"net/mail"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
-	// PostgreSQL driver
-	_ "github.com/lib/pq"
+	"k8s.io/client-go/rest"
 )
 
+// Default connection settings for the internal auth service.
 const (
-	TestEmail    = "test@codesphere.com"
-	TestTeamName = "Tests"
-	tokenPrefix  = "CS_"
-
-	// Default connection parameters.
-	DefaultPort         = 5432
-	DefaultUser         = "postgres"
-	DefaultDBName       = "codesphere"
-	DefaultSSLMode      = "disable"
-	DefaultDatacenterID = 1
+	DefaultNamespace = "codesphere"
+	DefaultService   = "auth-service"
+	DefaultPort      = 3010
 )
 
-// CreateTestUserOpts contains the options for creating a test user.
+// CreateTestUserOpts selects the internal auth service and optional credentials.
+// Empty credentials are generated independently for each invocation.
 type CreateTestUserOpts struct {
-	Host         string
-	Port         int
-	User         string
-	Password     string
-	DBName       string
-	SSLMode      string
-	DatacenterID int
-	SeedAuthz    bool
+	Namespace string
+	Service   string
+	Port      int
+	Email     string
+	Password  string
 }
 
-// TestUserResult contains the result of creating a test user.
+// TestUserResult contains the reusable credentials returned by the application.
 type TestUserResult struct {
 	Email             string `json:"email"`
 	PlaintextPassword string `json:"password"`
 	PlaintextAPIToken string `json:"api_token"`
 }
 
-// TestUserCreator manages the lifecycle of test user creation.
-type TestUserCreator struct {
-	opts  CreateTestUserOpts
-	db    *sql.DB
-	email string
+func (o CreateTestUserOpts) defaults() (CreateTestUserOpts, error) {
+	if o.Namespace == "" {
+		o.Namespace = DefaultNamespace
+	}
+
+	if o.Service == "" {
+		o.Service = DefaultService
+	}
+
+	if o.Port == 0 {
+		o.Port = DefaultPort
+	}
+
+	if o.Port < 1 || o.Port > 65535 {
+		return o, fmt.Errorf("service port must be between 1 and 65535")
+	}
+
+	if o.Email == "" {
+		o.Email = "test+" + strings.ToLower(rand.Text()) + "@codesphere.com"
+	}
+
+	addr, err := mail.ParseAddress(o.Email)
+	if err != nil || addr.Address != o.Email {
+		return o, fmt.Errorf("a plain email address is required")
+	}
+
+	if o.Password == "" {
+		o.Password = "Aa1!" + rand.Text()
+	}
+
+	return o, nil
 }
 
-// New creates a new TestUserCreator with the given options.
-func New(opts CreateTestUserOpts) (*TestUserCreator, error) {
-	if opts.Port == 0 {
-		opts.Port = DefaultPort
-	}
-	if opts.User == "" {
-		opts.User = DefaultUser
-	}
-	if opts.DBName == "" {
-		opts.DBName = DefaultDBName
-	}
-	if opts.SSLMode == "" {
-		opts.SSLMode = DefaultSSLMode
-	}
-	if opts.DatacenterID == 0 {
-		opts.DatacenterID = DefaultDatacenterID
-	}
-	if opts.Host == "" {
-		return nil, fmt.Errorf("host is required")
-	}
-	if opts.Password == "" {
-		return nil, fmt.Errorf("password is required")
-	}
-
-	connStr := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=%s sslmode=%s connect_timeout=10",
-		opts.Host, opts.Port, opts.User, opts.Password, opts.DBName, opts.SSLMode,
-	)
-
-	db, err := sql.Open("postgres", connStr)
+// CreateTestUser reaches auth-service through an ephemeral loopback-only Kubernetes
+// port-forward. Signup and API-token creation use the application's normal rules.
+func CreateTestUser(ctx context.Context, cfg *rest.Config, opts CreateTestUserOpts) (*TestUserResult, error) {
+	opts, err := opts.defaults()
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database connection: %w", err)
+		return nil, err
 	}
 
-	db.SetConnMaxLifetime(30 * time.Second)
-	db.SetMaxOpenConns(1)
-
-	if err := db.Ping(); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("failed to connect to database at %s:%d: %w", opts.Host, opts.Port, err)
-	}
-
-	log.Printf("Connected to PostgreSQL at %s:%d", opts.Host, opts.Port)
-
-	suffix, err := generateEmailSuffix()
+	address, closeForward, err := forwardAuthService(ctx, cfg, opts)
 	if err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("failed to generate email suffix: %w", err)
+		return nil, err
 	}
-	email := fmt.Sprintf("test+%s@codesphere.com", suffix)
+	defer closeForward()
 
-	return &TestUserCreator{opts: opts, db: db, email: email}, nil
+	return createViaAPI(ctx, address, opts)
 }
 
-// close closes the underlying database connection.
-func (c *TestUserCreator) close() error {
-	if c.db != nil {
-		return c.db.Close()
+func createViaAPI(ctx context.Context, address string, opts CreateTestUserOpts) (*TestUserResult, error) {
+	client := &http.Client{
+		Timeout:       30 * time.Second,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}
-	return nil
+	credentials := map[string]string{"email": opts.Email, "password": opts.Password}
+
+	signup := map[string]string{"email": opts.Email, "password": opts.Password, "recaptchaToken": "test"}
+	if err := rpc(ctx, client, address, "Auth", "signUp", signup, "", nil); err != nil {
+		return nil, fmt.Errorf("signup failed (email signup and reCAPTCHA-free signup must be enabled for this test installation): %w", err)
+	}
+
+	var session struct {
+		SessionID string `json:"sessionId"`
+	}
+	if err := rpc(ctx, client, address, "Auth", "signIn", credentials, "", &session); err != nil {
+		return nil, fmt.Errorf("sign-in failed for %s (email sign-in must be enabled and email confirmation disabled): %w", opts.Email, err)
+	}
+
+	if session.SessionID == "" {
+		return nil, fmt.Errorf("sign-in returned no session ID")
+	}
+	// Close the temporary login session even when token creation fails. Cookies from
+	// auth-service target /auth-service, so pass the session explicitly on direct calls.
+	defer func() {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, address+"/session/v1/sign-out", nil)
+		if err != nil {
+			return
+		}
+
+		req.AddCookie(&http.Cookie{Name: "sessionId", Value: session.SessionID})
+
+		if resp, err := client.Do(req); err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+
+	var access struct {
+		AccessToken string `json:"accessToken"`
+	}
+	if err := post(ctx, client, address+"/session/v1/gen-access-token", map[string]string{"id": session.SessionID}, "", false, &access); err != nil {
+		return nil, fmt.Errorf("generating access token failed: %w", err)
+	}
+
+	if access.AccessToken == "" {
+		return nil, fmt.Errorf("auth service returned no access token")
+	}
+
+	var token struct {
+		Token string `json:"token"`
+	}
+	if err := rpc(ctx, client, address, "ApiTokenService", "createToken", map[string]string{"name": "oms-test-user"}, access.AccessToken, &token); err != nil {
+		return nil, fmt.Errorf("creating API token failed: %w", err)
+	}
+
+	if token.Token == "" {
+		return nil, fmt.Errorf("auth service returned no API token")
+	}
+
+	return &TestUserResult{Email: opts.Email, PlaintextPassword: opts.Password, PlaintextAPIToken: token.Token}, nil
 }
 
-// Create generates credentials and inserts the test user into the database.
-func (c *TestUserCreator) Create() (*TestUserResult, error) {
-	plaintextPassword := os.Getenv("OMS_CS_TEST_USER_PASSWORD")
-	if plaintextPassword == "" {
-		return nil, fmt.Errorf("OMS_CS_TEST_USER_PASSWORD environment variable is not set")
-	}
-	hashedPassword := os.Getenv("OMS_CS_TEST_USER_PASSWORD_HASHED")
-	if hashedPassword == "" {
-		return nil, fmt.Errorf("OMS_CS_TEST_USER_PASSWORD_HASHED environment variable is not set")
-	}
-
-	plaintextToken, err := generateAPIToken()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate API token: %w", err)
-	}
-
-	hashedToken := HashAPIToken(plaintextToken)
-
-	result, err := c.createInDB(hashedPassword, hashedToken)
-	if err != nil {
-		return nil, err
-	}
-
-	result.PlaintextPassword = plaintextPassword
-	result.PlaintextAPIToken = plaintextToken
-
-	return result, nil
+func rpc(ctx context.Context, client *http.Client, address, service, method string, data any, token string, result any) error {
+	return post(ctx, client, address+"/internal/v1/"+service+"/"+method, map[string]any{"data": data}, token, true, result)
 }
 
-// CreateTestUser is a convenience facade: New -> Create -> close.
-func CreateTestUser(opts CreateTestUserOpts) (*TestUserResult, error) {
-	creator, err := New(opts)
+func post(ctx context.Context, client *http.Client, address string, data any, token string, envelope bool, result any) error {
+	body, err := json.Marshal(data)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("encoding internal API request: %w", err)
 	}
-	defer func() { _ = creator.close() }()
-	return creator.Create()
-}
 
-// createInDB executes the database inserts inside a transaction.
-func (c *TestUserCreator) createInDB(hashedPassword, hashedToken string) (*TestUserResult, error) {
-	exists, err := c.userExists()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, address, bytes.NewReader(body))
 	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, fmt.Errorf("test user %s already exists", c.email)
+		return fmt.Errorf("creating internal API request: %w", err)
 	}
 
-	tx, err := c.db.Begin()
+	req.Header.Set("Content-Type", "application/json")
+
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+		return fmt.Errorf("internal API request failed: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }()
 
-	userID, err := c.insertCredentials(tx, hashedPassword)
+	defer func() { _ = resp.Body.Close() }()
+	// Error bodies can contain credentials or internal details; never include them.
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("internal API returned HTTP %d", resp.StatusCode)
+	}
+
+	body, err = io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("reading internal API response: %w", err)
 	}
 
-	if err := c.insertEmailConfirmation(tx); err != nil {
-		return nil, err
+	if envelope {
+		var reply struct {
+			Kind int             `json:"kind"`
+			Data json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(body, &reply); err != nil {
+			return fmt.Errorf("invalid internal RPC response")
+		}
+
+		if reply.Kind != 12 {
+			return fmt.Errorf("internal API did not return a successful RPC response")
+		}
+
+		body = reply.Data
 	}
 
-	teamID, err := c.insertTeam(tx)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := c.insertTeamMember(tx, userID, teamID); err != nil {
-		return nil, err
-	}
-
-	if c.opts.SeedAuthz {
-		if err := c.insertAuthzOutbox(tx, userID, teamID); err != nil {
-			return nil, err
+	if result != nil {
+		if err := json.Unmarshal(body, result); err != nil {
+			return fmt.Errorf("invalid internal API response data")
 		}
 	}
 
-	if err := c.insertAPIToken(tx, hashedToken, userID); err != nil {
-		return nil, err
-	}
-
-	if err = tx.Commit(); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	log.Printf("Test user created: email=%s, userID=%d, teamID=%d", c.email, userID, teamID)
-
-	return &TestUserResult{Email: c.email}, nil
-}
-
-func (c *TestUserCreator) userExists() (bool, error) {
-	var exists bool
-	err := c.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM authservice.credentials WHERE email = $1)`, c.email).Scan(&exists)
-	if err != nil {
-		return false, fmt.Errorf("failed to check for existing test user: %w", err)
-	}
-	return exists, nil
-}
-
-func (c *TestUserCreator) insertCredentials(tx *sql.Tx, hashedPassword string) (int, error) {
-	var userID int
-	err := tx.QueryRow(`
-		INSERT INTO authservice.credentials
-			(user_id, email, password_hash, authentication_method, signed_up, banned)
-		VALUES(nextval('authservice.credentials_user_id_seq'::regclass), $1, $2, 'password'::text, false, false)
-		RETURNING user_id`,
-		c.email, hashedPassword,
-	).Scan(&userID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to insert credentials: %w", err)
-	}
-	return userID, nil
-}
-
-func (c *TestUserCreator) insertEmailConfirmation(tx *sql.Tx) error {
-	_, err := tx.Exec(`
-		INSERT INTO authservice.email_confirmations
-			(id, email, pending, created_at)
-		VALUES(uuid_generate_v4(), $1, false, CURRENT_TIMESTAMP)`,
-		c.email,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to insert email confirmation: %w", err)
-	}
 	return nil
 }
 
-func (c *TestUserCreator) insertTeam(tx *sql.Tx) (int, error) {
-	var teamID int
-	datacenterID := c.opts.DatacenterID
-	if datacenterID == 0 {
-		datacenterID = DefaultDatacenterID
-	}
-	err := tx.QueryRow(`
-		INSERT INTO "teamService".teams
-			(id, "name", description, first_team, default_data_center_id, deleted, deletion_pending, created_at)
-		VALUES(nextval('"teamService".teams_id_seq'::regclass), $1, '', true, $2, false, false, CURRENT_TIMESTAMP)
-		RETURNING id`,
-		TestTeamName, datacenterID,
-	).Scan(&teamID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to insert team: %w", err)
-	}
-	return teamID, nil
-}
-
-func (c *TestUserCreator) insertTeamMember(tx *sql.Tx, userID, teamID int) error {
-	_, err := tx.Exec(`
-		INSERT INTO "teamService".team_members
-			(user_id, team_id, "role", pending, created_at)
-		VALUES($1, $2, 0, false, CURRENT_TIMESTAMP)`,
-		userID, teamID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to insert team member: %w", err)
-	}
-	return nil
-}
-
-// insertAuthzOutbox queues the OpenFGA tuple that makes the test team visible to the
-// authorization-filtered API. The team service drains teamService.fga_outbox and writes
-// the tuple to OpenFGA, so no OpenFGA credentials are needed here.
-func (c *TestUserCreator) insertAuthzOutbox(tx *sql.Tx, userID, teamID int) error {
-	_, err := tx.Exec(`
-		INSERT INTO "teamService".fga_outbox
-			(subject, relation, object, operation)
-		VALUES($1, 'member', $2, 'write')`,
-		fmt.Sprintf("user:%d", userID),
-		fmt.Sprintf("resource_group:%d", teamID),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to insert authz outbox entry: %w", err)
-	}
-
-	return nil
-}
-
-func (c *TestUserCreator) insertAPIToken(tx *sql.Tx, hashedToken string, userID int) error {
-	_, err := tx.Exec(`
-		INSERT INTO public_api_service.tokens
-			(id, "token", user_id, "name", created_at)
-		VALUES(nextval('public_api_service.tokens_id_seq'::regclass), $1, $2, 'testkey', now())`,
-		hashedToken, userID,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to insert API token: %w", err)
-	}
-	return nil
-}
-
-// LogAndPersistResult writes the test user result to a JSON file and logs the credentials.
-func LogAndPersistResult(result *TestUserResult, workdir string) {
-	filePath, err := WriteResultToFile(result, workdir)
-	if err != nil {
-		log.Printf("warning: failed to write test user result to file: %v", err)
-	} else {
-		log.Printf("Test user credentials written to %s", filePath)
-	}
-
-	log.Printf("Email:     %s", result.Email)
-	log.Printf("Password:  %s", result.PlaintextPassword)
-	log.Printf("API Token: %s", result.PlaintextAPIToken)
-}
-
-// WriteResultToFile writes the test user result to a JSON file in the given directory.
+// WriteResultToFile persists reusable credentials with owner-only permissions.
 func WriteResultToFile(result *TestUserResult, dir string) (string, error) {
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal test user result: %w", err)
+		return "", fmt.Errorf("persisting test-user credentials: %w", err)
 	}
-
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create directory %s: %w", dir, err)
+		return "", fmt.Errorf("persisting test-user credentials: %w", err)
+	}
+	filePath := filepath.Join(dir, "test-user.json")
+
+	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return "", fmt.Errorf("persisting test-user credentials: %w", err)
 	}
 
-	filePath := filepath.Join(dir, "test-user.json")
-	if err := os.WriteFile(filePath, data, 0600); err != nil {
-		return "", fmt.Errorf("failed to write test user file: %w", err)
+	defer func() { _ = f.Close() }()
+
+	if err := f.Chmod(0600); err != nil {
+		return "", fmt.Errorf("persisting test-user credentials: %w", err)
+	}
+
+	if _, err := f.Write(data); err != nil {
+		return "", fmt.Errorf("persisting test-user credentials: %w", err)
+	}
+
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("persisting test-user credentials: %w", err)
 	}
 
 	return filePath, nil
-}
-
-func generateAPIToken() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return tokenPrefix + hex.EncodeToString(b), nil
-}
-
-func generateEmailSuffix() (string, error) {
-	b := make([]byte, 4)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
 }
