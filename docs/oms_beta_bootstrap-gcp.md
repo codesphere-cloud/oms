@@ -10,7 +10,7 @@ config script, which restarts k0s. To replace only Codesphere, add
 --install-codesphere-only and --recover-config.
 Not for production use.
 
-Defaults to the multi-node installer. Use single-node or --single-vm for one VM.
+Defaults to the multi-node installer. Use single-node for one VM. The legacy --single-vm flag is deprecated.
 
 ```
 oms beta bootstrap-gcp [flags]
@@ -91,7 +91,6 @@ oms beta bootstrap-gcp [flags]
       --root-disk-size int                        Instance root disk size in GB (default: 50) (default 50)
       --secrets-dir string                        Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")
       --secrets-file string                       Path to secrets files (optional) (default "prod.vault.yaml")
-      --single-vm                                 Install k0s and Codesphere on one GCP VM (also available as the single-node subcommand)
       --spot-vms                                  Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. Mutually exclusive with --preemptible (default: false)
       --ssh-private-key-path string               SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string                SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
