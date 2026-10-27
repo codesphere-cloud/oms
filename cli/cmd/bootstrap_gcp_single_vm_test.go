@@ -113,7 +113,7 @@ var _ = Describe("Single VM restart environment", func() {
 	})
 })
 
-var _ = Describe("GCP bootstrap mode options", func() {
+var _ = Describe("Multi-node GCP bootstrap options", func() {
 	var command *BootstrapGcpCmd
 
 	BeforeEach(func() {
@@ -122,7 +122,6 @@ var _ = Describe("GCP bootstrap mode options", func() {
 		command = newBootstrapGcpMultiNodeCmd(nil)
 		command.CodesphereEnv.RemoteOmsBinaryPath = "/oms"
 		command.CodesphereEnv.RegistryUser = "registry"
-		command.StorageEngine = "rook-ceph"
 	})
 
 	It("preserves multi-VM defaults without single-VM credentials", func() {
@@ -154,34 +153,54 @@ var _ = Describe("GCP bootstrap mode options", func() {
 		Expect(command.CodesphereEnv.GitHubPAT).To(Equal("explicit-token"))
 	})
 
+	It("accepts config and vault inputs in multi-VM mode", func() {
+		Expect(command.cmd.Flags().Set("install-config-template", "template.yaml")).To(Succeed())
+		Expect(command.cmd.Flags().Set("config", "base.yaml")).To(Succeed())
+		Expect(command.cmd.Flags().Set("vault", "secrets.yaml")).To(Succeed())
+		Expect(command.cmd.Flags().Set("priv-key", "age-key")).To(Succeed())
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+	})
+
+	It("rejects a private key without a vault in multi-node mode", func() {
+		Expect(command.cmd.Flags().Set("priv-key", "age-key")).To(Succeed())
+		Expect(command.prepareBootstrapOptions()).To(MatchError("--priv-key requires --vault"))
+	})
+})
+
+var _ = Describe("Single-node GCP bootstrap options", func() {
+	var command *BootstrapGcpCmd
+
+	BeforeEach(func() {
+		GinkgoT().Setenv("OMS_REGISTRY_PASSWORD", "password")
+
+		command = newBootstrapGcpSingleNodeCmd(nil)
+		command.CodesphereEnv.RemoteOmsBinaryPath = "/oms"
+		command.CodesphereEnv.RegistryUser = "registry"
+	})
+
 	It("uses the same root disk default in single-VM mode", func() {
-		command.CodesphereEnv.SingleVM = true
 		Expect(command.prepareBootstrapOptions()).To(Succeed())
 		Expect(command.CodesphereEnv.SingleVM).To(BeTrue())
 		Expect(command.CodesphereEnv.RootDiskSize).To(Equal(int64(50)))
 	})
 
 	It("preserves an explicit larger single-VM disk size", func() {
-		command.CodesphereEnv.SingleVM = true
 		Expect(command.cmd.Flags().Set("root-disk-size", "100")).To(Succeed())
 		Expect(command.prepareBootstrapOptions()).To(Succeed())
 		Expect(command.CodesphereEnv.RootDiskSize).To(Equal(int64(100)))
 	})
 
 	It("allows single-VM bootstrap without a local OMS binary", func() {
-		command.CodesphereEnv.SingleVM = true
 		command.CodesphereEnv.RemoteOmsBinaryPath = ""
 		Expect(command.prepareBootstrapOptions()).To(Succeed())
 	})
 
 	It("requires a registry user in single-VM mode", func() {
-		command.CodesphereEnv.SingleVM = true
 		command.CodesphereEnv.RegistryUser = ""
 		Expect(command.prepareBootstrapOptions()).To(MatchError(ContainSubstring("--registry-user is required")))
 	})
 
 	It("accepts a GitHub PAT without the registry password environment variable in single-VM mode", func() {
-		command.CodesphereEnv.SingleVM = true
 		command.CodesphereEnv.GitHubPAT = "explicit-token"
 
 		GinkgoT().Setenv("OMS_REGISTRY_PASSWORD", "")
@@ -191,20 +210,16 @@ var _ = Describe("GCP bootstrap mode options", func() {
 	})
 
 	It("requires either credential in single-VM mode", func() {
-		command.CodesphereEnv.SingleVM = true
-
 		GinkgoT().Setenv("OMS_REGISTRY_PASSWORD", "")
 		Expect(command.prepareBootstrapOptions()).To(MatchError(ContainSubstring("--github-pat or OMS_REGISTRY_PASSWORD must be set")))
 	})
 
 	It("rejects an unsupported single-VM storage engine", func() {
-		command.CodesphereEnv.SingleVM = true
 		command.StorageEngine = "unknown"
 		Expect(command.prepareBootstrapOptions()).To(MatchError(ContainSubstring("unsupported storage engine")))
 	})
 
 	It("accepts local storage and merged configuration in single-VM mode", func() {
-		command.CodesphereEnv.SingleVM = true
 		command.StorageEngine = "local"
 		Expect(command.cmd.Flags().Set("config", "base.yaml")).To(Succeed())
 		Expect(command.cmd.Flags().Set("config", "override.yaml")).To(Succeed())
@@ -215,7 +230,6 @@ var _ = Describe("GCP bootstrap mode options", func() {
 	})
 
 	It("accepts inherited global flags in single-VM mode", func() {
-		command.CodesphereEnv.SingleVM = true
 		root := &cobra.Command{}
 		root.PersistentFlags().Bool("verbose", false, "")
 		root.AddCommand(command.cmd)
@@ -223,18 +237,8 @@ var _ = Describe("GCP bootstrap mode options", func() {
 		Expect(command.prepareBootstrapOptions()).To(Succeed())
 	})
 
-	It("accepts config and vault inputs in multi-VM mode", func() {
-		Expect(command.cmd.Flags().Set("install-config-template", "template.yaml")).To(Succeed())
-		Expect(command.cmd.Flags().Set("config", "base.yaml")).To(Succeed())
-		Expect(command.cmd.Flags().Set("vault", "secrets.yaml")).To(Succeed())
+	It("rejects a private key without a vault in single-node mode", func() {
 		Expect(command.cmd.Flags().Set("priv-key", "age-key")).To(Succeed())
-		Expect(command.prepareBootstrapOptions()).To(Succeed())
-	})
-
-	It("rejects a private key without a vault in either mode", func() {
-		Expect(command.cmd.Flags().Set("priv-key", "age-key")).To(Succeed())
-		Expect(command.prepareBootstrapOptions()).To(MatchError("--priv-key requires --vault"))
-		command.CodesphereEnv.SingleVM = true
 		Expect(command.prepareBootstrapOptions()).To(MatchError("--priv-key requires --vault"))
 	})
 })
@@ -320,6 +324,13 @@ var _ = Describe("Legacy GCP bootstrap compatibility", func() {
 		Expect(command.CodesphereEnv.MultiDC).To(BeTrue())
 		Expect(command.CodesphereEnv.Airgapped).To(BeTrue())
 		Expect(command.prepareBootstrapOptions()).To(Succeed())
+	})
+
+	It("deprecates the legacy single-vm flag in favor of single-node", func() {
+		command := newLegacyBootstrapGcpCmd(nil)
+		flag := command.cmd.Flags().Lookup("single-vm")
+		Expect(flag.Deprecated).To(Equal("use bootstrap-gcp single-node instead"))
+		Expect(flag.Hidden).To(BeTrue())
 	})
 
 	It("preserves single-VM mode and storage selection on the original command", func() {

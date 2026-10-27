@@ -68,8 +68,9 @@ func newLegacyBootstrapGcpCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
 	c.legacyMode = true
 	c.cmd.Use = "bootstrap-gcp"
 	c.cmd.Short = "Bootstrap GCP infrastructure for Codesphere"
-	c.cmd.Long += "\n\nDefaults to the multi-node installer. Use single-node or --single-vm for one VM."
+	c.cmd.Long += "\n\nDefaults to the multi-node installer. Use single-node for one VM. The legacy --single-vm flag is deprecated."
 	c.cmd.Flags().BoolVar(&c.CodesphereEnv.SingleVM, "single-vm", false, "Install k0s and Codesphere on one GCP VM (also available as the single-node subcommand)")
+	_ = c.cmd.Flags().MarkDeprecated("single-vm", "use bootstrap-gcp single-node instead")
 	c.cmd.Flags().StringVar(&c.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Single VM: storage engine (rook-ceph or local)")
 
 	return c
@@ -93,6 +94,9 @@ func newBootstrapGcpSingleNodeCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
 	}
 	c.cmd.RunE = c.RunE
 	c.addSharedBootstrapFlags()
+	c.cmd.Flags().Lookup("spot-vms").Usage = "Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. (default: false)"
+	c.cmd.Flags().Lookup("github-pat").Usage = "GitHub Personal Access Token for pulling Codesphere images from ghcr.io (defaults to OMS_REGISTRY_PASSWORD). Required scope: read:packages."
+	c.cmd.Flags().Lookup("registry-user").Usage = "Registry username for pulling Codesphere images from ghcr.io (required)"
 	c.cmd.Flags().StringVar(&c.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine (rook-ceph or local)")
 
 	return c
