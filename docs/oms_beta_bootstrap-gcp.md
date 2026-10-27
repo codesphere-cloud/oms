@@ -10,6 +10,12 @@ Depending on your setup, additional configuration may be required after bootstra
 Ensure you have the necessary permissions to create and manage GCP resources before proceeding.
 Not for production use.
 
+Use --single-vm to install k0s and Codesphere on one VM using the local bootstrap.
+This mode requires --registry-user, either --github-pat or OMS_REGISTRY_PASSWORD,
+and either --install-local or --install-version. Both modes default to a 50 GB root disk.
+Single-VM mode adds a separate 100 GB Ceph disk.
+Both modes accept --install-config-template, --config, --vault and --priv-key.
+
 Running it again against an existing project with --install-version installs that version on top
 and repeats every install step, including the k0s config script, which restarts k0s.
 To replace only Codesphere, e.g. to roll back to an earlier release, add --install-codesphere-only
@@ -36,6 +42,7 @@ oms beta bootstrap-gcp [flags]
       --central-otel-span-metrics                 Enable span metrics in Central OpenTelemetry export (default: false)
       --central-otel-username string              Central OpenTelemetry username. Needed when sending spans to central collector (optional)
       --cluster-admin-email string                Email address of the initial cluster admin. Written to the install config and applied as the cluster-admin-email secret before the Codesphere platform is installed (optional)
+      --config stringArray                        Local config.yaml file; repeat to merge in order before VM settings
       --create-test-user                          Create a test user with API token on the bootstrapped instance for smoke testing (default: false)
       --custom-pg-ip string                       Custom PostgreSQL IP (optional)
       --datacenter-id int                         Datacenter ID (default: 1) (default 1)
@@ -50,7 +57,7 @@ oms beta bootstrap-gcp [flags]
       --github-app-client-id string               GitHub App Client ID (required)
       --github-app-client-secret string           GitHub App Client Secret (required)
       --github-app-name string                    GitHub App Name (optional)
-      --github-pat string                         GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.
+      --github-pat string                         GitHub Personal Access Token used for direct image access and fetching team SSH keys (defaults to OMS_REGISTRY_PASSWORD). Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.
       --github-team-org string                    GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.
       --github-team-slug string                   GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.
       --gitlab-app-client-id string               GitLab App Client ID (optional)
@@ -59,6 +66,7 @@ oms beta bootstrap-gcp [flags]
   -h, --help                                      help for bootstrap-gcp
       --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the "oms install codesphere" the bootstrap runs on the jumpbox, and skips installing k0s and its config script, which would restart k0s. Requires --install-version or --install-local, and --recover-config (default: false)
       --install-config string                     Path to install config file (optional) (default "config.yaml")
+      --install-config-template string            Initial config.yaml template, applied before --config files
       --install-hash string                       Codesphere package hash to install (default: none)
       --install-local string                      Install Codesphere from local package (default: none)
   -s, --install-skip-steps stringArray            Installation steps to skip during Codesphere installation (optional)
@@ -66,6 +74,7 @@ oms beta bootstrap-gcp [flags]
       --internal-flags stringArray                Internal flags to enable in Codesphere installation (optional) (default [headless-services,vcluster,custom-service-image,ms-in-ls])
       --k0s-version string                        K0s version to use for bootstrapping (optional) (default "v1.31.14+k0s.0")
       --local-trace-endpoint string               Endpoint for exporting traces to an in-cluster storage (optional)
+      --machine-type string                       GCP machine type override for all VMs (default: role-specific sizes; e2-standard-8 for a single VM)
       --multi-dc                                  Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)
       --oidc-client-id string                     OIDC OAuth provider Client ID (optional)
       --oidc-client-secret string                 OIDC OAuth provider Client Secret (optional)
@@ -78,6 +87,7 @@ oms beta bootstrap-gcp [flags]
       --pc-apps-values stringArray                pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)
       --preemptible                               Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)
       --preview-flags stringArray                 Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])
+      --priv-key string                           Age private key for --vault (or use the age key environment variable)
       --project-name string                       Unique GCP Project Name (required)
       --project-ttl string                        Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours) (default "2h")
       --prometheus-remote-write-password string   Prometheus remote write password stored in the generated vault (optional)
@@ -91,11 +101,14 @@ oms beta bootstrap-gcp [flags]
       --root-disk-size int                        Instance root disk size in GB (default: 50) (default 50)
       --secrets-dir string                        Directory for secrets (default: /etc/codesphere/secrets) (default "/etc/codesphere/secrets")
       --secrets-file string                       Path to secrets files (optional) (default "prod.vault.yaml")
+      --single-vm                                 Install k0s and Codesphere on one GCP VM using the local bootstrap
       --spot-vms                                  Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. Mutually exclusive with --preemptible (default: false)
       --ssh-private-key-path string               SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
       --ssh-public-key-path string                SSH Public Key Path (default: ~/.ssh/id_rsa.pub) (default "~/.ssh/id_rsa.pub")
       --ssh-quiet                                 Suppress SSH command output (default: false)
-      --timer                                     Show how long each step took after it finishes
+      --storage-engine string                     Single VM: storage engine (rook-ceph or local) (default "rook-ceph")
+      --timer                                     Show how long each step took and a final timing summary table
+      --vault string                              SOPS vault for config templating and initial install secrets
       --write-config                              Write generated install config to file (default: true) (default true)
       --zone string                               GCP Zone (default: europe-west4-a) (default "europe-west4-a")
 ```

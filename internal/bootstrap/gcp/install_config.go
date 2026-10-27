@@ -65,7 +65,8 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 		}
 	}
 
-	if b.fw.Exists(dc.InstallConfigPath) {
+	configExists := b.fw.Exists(dc.InstallConfigPath)
+	if configExists {
 		if err := b.loadVaultForConfigTemplating(dc); err != nil {
 			return fmt.Errorf("failed to load vault templating: %w", err)
 		}
@@ -88,6 +89,31 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 	// A secondary data center without a config of its own is left unset here, so
 	// seedSecondaryDataCenter can derive it from the primary data center instead of the profile.
 
+	if !dc.IsPrimary() {
+		return nil
+	}
+
+	if err := b.loadInstallVault(dc.ConfigManager); err != nil {
+		return err
+	}
+
+	if len(b.installInputPaths()) == 0 {
+		return nil
+	}
+
+	if !configExists {
+		if err := b.loadVaultForConfigTemplating(dc); err != nil {
+			return err
+		}
+	}
+
+	config, err := b.loadInstallInputs(*dc.InstallConfig, dc.ConfigManager)
+	if err != nil {
+		return err
+	}
+
+	dc.InstallConfig = &config
+	dc.ConfigManager.SetInstallConfig(&config)
 	return nil
 }
 
@@ -96,6 +122,9 @@ func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *datacenter.DataCenter
 		return fmt.Errorf("failed to load vault from file: %w", err)
 	}
 
+	if dc.IsPrimary() {
+		return b.loadInstallVault(dc.ConfigManager)
+	}
 	return nil
 }
 
@@ -954,6 +983,9 @@ func (b *GCPBootstrapper) ensureSecrets(dc *datacenter.DataCenter) error {
 	}
 
 	if dc.IsPrimary() {
+		if err := b.loadInstallVault(dc.ConfigManager); err != nil {
+			return err
+		}
 		b.Env.Secrets = dc.ConfigManager.GetVault()
 	}
 	return nil
