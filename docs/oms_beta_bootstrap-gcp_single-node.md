@@ -35,7 +35,7 @@ oms beta bootstrap-gcp single-node [flags]
       --project-ttl string               Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours) (default "2h")
       --region string                    GCP Region (default: europe-west4) (default "europe-west4")
       --registry-user string             Registry username for pulling Codesphere images from ghcr.io (required)
-      --remote-oms-binary string         Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)
+      --remote-oms-binary string         Path to a local Linux amd64 OMS binary to copy to and use on the remote host instead of downloading a release (optional)
       --root-disk-size int               Instance root disk size in GB (default: 50) (default 50)
       --spot-vms                         Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. (default: false)
       --ssh-private-key-path string      SSH Private Key Path (default: ~/.ssh/id_rsa) (default "~/.ssh/id_rsa")
