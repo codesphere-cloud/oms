@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/google/go-containerregistry/pkg/name"
 )
 
 // DefaultRegistryURL is the public registry base for Codesphere artifacts.
@@ -32,7 +34,12 @@ func NormalizeRegistry(base string) (string, error) {
 		return "", fmt.Errorf("registry must contain a host and optional port and repository path")
 	}
 
-	return strings.TrimRight(strings.TrimPrefix(registry.JoinPath().String(), "//"), "/"), nil
+	normalized := strings.TrimRight(strings.TrimPrefix(registry.JoinPath().String(), "//"), "/")
+	if _, err := name.ParseReference(normalized+"/codesphere-cloud/registry-probe:admission", name.StrictValidation); err != nil {
+		return "", fmt.Errorf("invalid image registry %q: %w", normalized, err)
+	}
+
+	return normalized, nil
 }
 
 // ChartsRegistryURL appends the Codesphere chart repository to a registry base.

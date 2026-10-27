@@ -55,6 +55,7 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 	}
 
 	if registry == DefaultRegistryURL {
+		// TODO: Clean up an existing policy and binding when reverting from a custom registry.
 		return nil
 	}
 
@@ -116,7 +117,7 @@ func waitForRegistryPolicy(ctx context.Context, client RegistryPolicyClient, reg
 		return slices.ContainsFunc(pod.Spec.Containers, func(c corev1.Container) bool {
 			return c.Name == "probe" && c.Image == registry+"/codesphere-cloud/registry-probe:admission"
 		}) && slices.ContainsFunc(pod.Spec.InitContainers, func(c corev1.Container) bool {
-			return c.Name == "probe" && c.Image == registry+"/codesphere-cloud/registry-probe:init"
+			return c.Name == "probe-init" && c.Image == registry+"/codesphere-cloud/registry-probe:init"
 		}), nil
 	})
 	if err != nil {
@@ -136,6 +137,7 @@ func registryProbePod() *corev1.Pod {
 		},
 	}
 	initContainer := *container.DeepCopy()
+	initContainer.Name = "probe-init"
 	initContainer.Image = codesphereImagePrefix + "registry-probe:init"
 
 	return &corev1.Pod{

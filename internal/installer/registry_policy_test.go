@@ -65,6 +65,8 @@ func expectRegistryProbe(client *installer.MockRegistryPolicyClient, registry st
 			pod := obj.(*corev1.Pod)
 			Expect(pod.Namespace).To(Equal(metav1.NamespaceDefault))
 			Expect(pod.GenerateName).NotTo(BeEmpty())
+			Expect(pod.Spec.Containers[0].Name).To(Equal("probe"))
+			Expect(pod.Spec.InitContainers[0].Name).NotTo(Equal(pod.Spec.Containers[0].Name))
 			Expect(pod.Spec.Containers[0].Image).To(Equal("ghcr.io/codesphere-cloud/registry-probe:admission"))
 			Expect(pod.Spec.InitContainers[0].Image).To(Equal("ghcr.io/codesphere-cloud/registry-probe:init"))
 			pod.Spec.Containers[0].Image = registry + "/codesphere-cloud/registry-probe:admission"
@@ -132,6 +134,38 @@ func mutateRegistryPod(policy *admissionv1.MutatingAdmissionPolicy, pod *corev1.
 }
 
 var _ = Describe("Registry admission policy", func() {
+	It("updates the existing policy and binding when switching custom registries", func() {
+		client := installer.NewMockRegistryPolicyClient(GinkgoT())
+
+		var policies []*admissionv1.MutatingAdmissionPolicy
+
+		client.EXPECT().Apply(mock.Anything, admissionResource("MutatingAdmissionPolicy"), mock.Anything).
+			Run(func(_ context.Context, obj runtime.ApplyConfiguration, _ ...ctrlclient.ApplyOption) {
+				data, err := json.Marshal(obj)
+				Expect(err).NotTo(HaveOccurred())
+
+				policy := &admissionv1.MutatingAdmissionPolicy{}
+				Expect(json.Unmarshal(data, policy)).To(Succeed())
+				policies = append(policies, policy)
+			}).Return(nil).Twice()
+		client.EXPECT().Apply(mock.Anything, admissionResource("MutatingAdmissionPolicyBinding"), mock.Anything).Return(nil).Twice()
+		expectRegistryProbe(client, "old.example.com")
+		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "old.example.com", supportedCluster())).To(Succeed())
+		expectRegistryProbe(client, "new.example.com/team")
+		Expect(installer.EnsureRegistryPolicy(context.Background(), client, "new.example.com/team", supportedCluster())).To(Succeed())
+
+		Expect(policies).To(HaveLen(2))
+		Expect(policies[1].Name).To(Equal(policies[0].Name))
+		pod := &corev1.Pod{Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "app", Image: "ghcr.io/codesphere-cloud/api:v1"}},
+		}}
+		Expect(mutateRegistryPod(policies[1], pod).Spec.Containers[0].Image).To(Equal("new.example.com/team/codesphere-cloud/api:v1"))
+	})
+
+	It("rejects an invalid repository path before contacting Kubernetes", func() {
+		Expect(installer.EnsureRegistryPolicy(context.Background(), installer.NewMockRegistryPolicyClient(GinkgoT()), "registry.example.com/Team", installer.NewMockClusterVersionClient(GinkgoT()))).To(MatchError(ContainSubstring("invalid image registry")))
+	})
+
 	It("rejects clusters older than 1.34 before applying resources", func() {
 		versions := installer.NewMockClusterVersionClient(GinkgoT())
 		versions.EXPECT().ServerVersion().Return(&versioninfo.Info{GitVersion: "v1.33.9"}, nil).Once()
