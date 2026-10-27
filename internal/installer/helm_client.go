@@ -5,8 +5,11 @@ package installer
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -79,6 +82,9 @@ type HelmClient interface {
 	// UpgradeChart upgrades an existing Helm release and returns an error on failure.
 	UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error
 
+	// ConfigureRegistry adds a PEM certificate authority for login and chart downloads.
+	ConfigureRegistry(caPEM []byte) error
+
 	// LoginRegistry authenticates against an OCI registry for private chart pulls.
 	LoginRegistry(ctx context.Context, host, username, password string) error
 }
@@ -113,20 +119,48 @@ func NewHelmClientWithRESTConfig(namespace string, restConfig *rest.Config) (Hel
 	}, nil
 }
 
-// LoginRegistry authenticates against an OCI registry. The context parameter
-// is accepted for interface consistency but is not used by the underlying
-// Helm registry client.
-func (h *helmClient) LoginRegistry(_ context.Context, host, username, password string) error {
-	registryClient, err := registry.NewClient()
+// ConfigureRegistry configures registry trust independently of authentication.
+func (h *helmClient) ConfigureRegistry(caPEM []byte) error {
+	roots, err := x509.SystemCertPool()
 	if err != nil {
-		return fmt.Errorf("creating registry client: %w", err)
+		return fmt.Errorf("loading system certificate authorities: %w", err)
 	}
 
-	if err := registryClient.Login(host, registry.LoginOptBasicAuth(username, password)); err != nil {
+	if !roots.AppendCertsFromPEM(caPEM) {
+		return fmt.Errorf("registry certificate authority contains no valid PEM certificates")
+	}
+
+	transport := registry.NewTransport(false)
+	transport.Base = &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
+		TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
+	}
+
+	client, err := registry.NewClient(registry.ClientOptHTTPClient(&http.Client{Transport: transport}))
+	if err != nil {
+		return fmt.Errorf("creating trusted registry client: %w", err)
+	}
+
+	h.registryClient = client
+
+	return nil
+}
+
+// LoginRegistry reuses the configured registry client so private CA trust survives login.
+// Helm's registry login does not accept a context.
+func (h *helmClient) LoginRegistry(_ context.Context, host, username, password string) error {
+	if h.registryClient == nil {
+		client, err := registry.NewClient()
+		if err != nil {
+			return fmt.Errorf("creating registry client: %w", err)
+		}
+
+		h.registryClient = client
+	}
+
+	if err := h.registryClient.Login(host, registry.LoginOptBasicAuth(username, password)); err != nil {
 		return fmt.Errorf("registry login to %q failed: %w", host, err)
 	}
-
-	h.registryClient = registryClient
 	return nil
 }
 

@@ -33,7 +33,10 @@ var _ = Describe("ArgoCD chart from BOM", func() {
 		helm.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(chart installer.ChartConfig) bool {
 			return chart.ChartName == "oci://registry.example.com/charts/argocd" && chart.Version == "2.3.4" && chart.RepoURL == ""
 		}), mock.Anything).Return(nil)
-		install := &argocd.Installer{InstallerConfig: cfg, Helm: helm}
+
+		kube := NewMockClient(GinkgoT())
+		expectNewImagePullSecret(kube)
+		install := &argocd.Installer{InstallerConfig: cfg, Helm: helm, Client: kube}
 		Expect(install.Install()).To(Succeed())
 	})
 

@@ -24,7 +24,12 @@ import (
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlconfig "sigs.k8s.io/controller-runtime/pkg/client/config"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
 // DefaultNamespace is the namespace ArgoCD is installed into.
@@ -79,6 +84,7 @@ type Installer struct {
 	InstallerConfig
 	Helm      installer.HelmClient
 	Resources Resources
+	Client    client.Client
 }
 
 // NewInstaller resolves the required ArgoCD chart from the BOM before creating clients.
@@ -89,37 +95,27 @@ func NewInstaller(cfg InstallerConfig, bomConfig *bom.Config) (*Installer, error
 		return nil, err
 	}
 
-	if cfg.RESTConfig != nil {
-		helm, err := installer.NewHelmClientWithRESTConfig(DefaultNamespace, cfg.RESTConfig)
+	restConfig := cfg.RESTConfig
+	if restConfig == nil {
+		restConfig, err = ctrlconfig.GetConfig()
 		if err != nil {
-			return nil, fmt.Errorf("init helm client failed: %w", err)
+			return nil, fmt.Errorf("loading kubernetes config: %w", err)
 		}
-
-		clientset, _, err := k8s.NewClientsFromRESTConfig(cfg.RESTConfig)
-		if err != nil {
-			return nil, fmt.Errorf("creating kubernetes clients: %w", err)
-		}
-
-		resources, err := NewResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
-		if err != nil {
-			return nil, fmt.Errorf("init argocd resources client failed: %w", err)
-		}
-
-		return &Installer{
-			InstallerConfig: cfg,
-			Helm:            helm,
-			Resources:       resources,
-		}, nil
 	}
 
-	helm, err := installer.NewHelmClient(DefaultNamespace)
+	helm, err := installer.NewHelmClientWithRESTConfig(DefaultNamespace, restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("init helm client failed: %w", err)
 	}
 
-	clientset, _, err := k8s.NewClients()
+	clientset, _, err := k8s.NewClientsFromRESTConfig(restConfig)
 	if err != nil {
 		return nil, fmt.Errorf("creating kubernetes clients: %w", err)
+	}
+
+	kubeClient, err := installer.NewKubeClient(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("creating kubernetes client: %w", err)
 	}
 
 	resources, err := NewResources(clientset, cfg.DatacenterID, cfg.OciUsername, cfg.OciPassword, cfg.OciRegistryURL, cfg.GitPassword)
@@ -131,6 +127,7 @@ func NewInstaller(cfg InstallerConfig, bomConfig *bom.Config) (*Installer, error
 		InstallerConfig: cfg,
 		Helm:            helm,
 		Resources:       resources,
+		Client:          kubeClient,
 	}, nil
 }
 
@@ -167,12 +164,17 @@ func (a *Installer) Install() error {
 
 	defaults = util.MergeTables(defaults, trust)
 
-	pullSecret, err := a.imagePullSecretValues()
+	pullSecret, err := a.imagePullSecret()
 	if err != nil {
 		return err
 	}
 
-	defaults = util.MergeTables(defaults, pullSecret)
+	if pullSecret != nil {
+		defaults = util.MergeTables(defaults, map[string]any{
+			"global": map[string]any{"imagePullSecrets": []any{map[string]any{"name": pullSecret.Name}}},
+		})
+	}
+
 	vals = util.MergeTables(vals, map[string]any{"argo-cd": defaults})
 
 	chartName := a.ChartName
@@ -193,6 +195,12 @@ func (a *Installer) Install() error {
 		CreateNamespace: true,
 		Values:          vals,
 		WaitStrategy:    kube.LegacyStrategy, // StatusWatcherStrategy causes issues with ArgoCD's post-install hooks
+	}
+
+	if pullSecret != nil {
+		if err := a.provisionImagePullSecret(ctx, pullSecret); err != nil {
+			return fmt.Errorf("provisioning ArgoCD image pull secret: %w", err)
+		}
 	}
 
 	existing, err := a.Helm.FindRelease(cfg.Namespace, cfg.ReleaseName)
@@ -222,8 +230,34 @@ func (a *Installer) Install() error {
 	return nil
 }
 
-// imagePullSecretValues supplies credentials before the chart's Redis pre-install job runs.
-func (a *Installer) imagePullSecretValues() (map[string]any, error) {
+// provisionImagePullSecret ensures credentials exist before Helm hooks need them.
+func (a *Installer) provisionImagePullSecret(ctx context.Context, desired *corev1.Secret) error {
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: desired.Namespace}}
+	if _, err := controllerutil.CreateOrUpdate(ctx, a.Client, namespace, func() error { return nil }); err != nil {
+		return fmt.Errorf("ensuring ArgoCD namespace: %w", err)
+	}
+
+	secret := &corev1.Secret{ObjectMeta: desired.ObjectMeta}
+
+	_, err := controllerutil.CreateOrUpdate(ctx, a.Client, secret, func() error {
+		secret.Type = desired.Type
+		secret.Data = desired.Data
+		// Retire the old Helm hook while preserving other metadata.
+		delete(secret.Annotations, "helm.sh/hook")
+		delete(secret.Annotations, "helm.sh/hook-weight")
+		delete(secret.Annotations, "helm.sh/hook-delete-policy")
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("applying image pull secret: %w", err)
+	}
+
+	return nil
+}
+
+// imagePullSecret supplies credentials before the chart's Redis pre-install job runs.
+func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
 	if a.OciPassword == "" {
 		return nil, nil
 	}
@@ -253,24 +287,10 @@ func (a *Installer) imagePullSecretValues() (map[string]any, error) {
 		return nil, fmt.Errorf("encoding ArgoCD image pull credentials: %w", err)
 	}
 
-	return map[string]any{
-		"global": map[string]any{
-			"imagePullSecrets": []any{map[string]any{"name": "docker-regcred"}},
-		},
-		"extraObjects": []any{map[string]any{
-			"apiVersion": "v1",
-			"kind":       "Secret",
-			"metadata": map[string]any{
-				"name": "docker-regcred",
-				"annotations": map[string]any{
-					"helm.sh/hook":               "pre-install,pre-upgrade",
-					"helm.sh/hook-weight":        "-10",
-					"helm.sh/hook-delete-policy": "before-hook-creation",
-				},
-			},
-			"type": "kubernetes.io/dockerconfigjson",
-			"data": map[string]any{".dockerconfigjson": base64.StdEncoding.EncodeToString(config)},
-		}},
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "docker-regcred", Namespace: DefaultNamespace},
+		Type:       corev1.SecretTypeDockerConfigJson,
+		Data:       map[string][]byte{corev1.DockerConfigJsonKey: config},
 	}, nil
 }
 
@@ -286,6 +306,10 @@ func (a *Installer) registryTrustValues() (map[string]any, error) {
 	authority, err := os.ReadFile(a.OciRegistryCAFile)
 	if err != nil {
 		return nil, fmt.Errorf("reading registry certificate authority: %w", err)
+	}
+
+	if err := a.Helm.ConfigureRegistry(authority); err != nil {
+		return nil, fmt.Errorf("configuring Helm registry trust: %w", err)
 	}
 
 	// A registry URL may name its scheme, which is neither part of the host nor recognised as

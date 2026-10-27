@@ -917,6 +917,57 @@ func (_m *MockHelmClient) EXPECT() *MockHelmClient_Expecter {
 	return &MockHelmClient_Expecter{mock: &_m.Mock}
 }
 
+// ConfigureRegistry provides a mock function for the type MockHelmClient
+func (_mock *MockHelmClient) ConfigureRegistry(caPEM []byte) error {
+	ret := _mock.Called(caPEM)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ConfigureRegistry")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func([]byte) error); ok {
+		r0 = returnFunc(caPEM)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockHelmClient_ConfigureRegistry_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ConfigureRegistry'
+type MockHelmClient_ConfigureRegistry_Call struct {
+	*mock.Call
+}
+
+// ConfigureRegistry is a helper method to define mock.On call
+//   - caPEM []byte
+func (_e *MockHelmClient_Expecter) ConfigureRegistry(caPEM any) *MockHelmClient_ConfigureRegistry_Call {
+	return &MockHelmClient_ConfigureRegistry_Call{Call: _e.mock.On("ConfigureRegistry", caPEM)}
+}
+
+func (_c *MockHelmClient_ConfigureRegistry_Call) Run(run func(caPEM []byte)) *MockHelmClient_ConfigureRegistry_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 []byte
+		if args[0] != nil {
+			arg0 = args[0].([]byte)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockHelmClient_ConfigureRegistry_Call) Return(err error) *MockHelmClient_ConfigureRegistry_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockHelmClient_ConfigureRegistry_Call) RunAndReturn(run func(caPEM []byte) error) *MockHelmClient_ConfigureRegistry_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindRelease provides a mock function for the type MockHelmClient
 func (_mock *MockHelmClient) FindRelease(namespace string, releaseName string) (*ReleaseInfo, error) {
 	ret := _mock.Called(namespace, releaseName)
