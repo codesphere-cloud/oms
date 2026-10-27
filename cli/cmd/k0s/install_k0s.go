@@ -173,6 +173,7 @@ func (c *InstallK0sCmd) getK0sctlConfigPath(pm installer.PackageManager, k0s ins
 		Verbose:    c.Opts.Verbose,
 		Env:        c.Env,
 		FileWriter: c.FileWriter,
+		Overwrite:  true,
 	}
 
 	path, err := generator.Generate(pm, k0s, "")
