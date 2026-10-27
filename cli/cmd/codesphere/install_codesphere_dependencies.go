@@ -135,7 +135,7 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 	}
 
 	registryURL := ""
-	if cfg.Registry != nil {
+	if cfg.Registry != nil && cfg.Registry.Server != "" {
 		registryURL = cfg.Registry.Server + installer.ChartsRepositoryPath
 	}
 

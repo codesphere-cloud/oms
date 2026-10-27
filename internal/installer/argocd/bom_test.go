@@ -47,6 +47,7 @@ var _ = Describe("ArgoCD chart from BOM", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.ChartName).To(Equal("argocd"))
 		Expect(cfg.RepoURL).To(Equal("oci://registry.example.com/charts"))
+		Expect(cfg.OciRegistryURL).To(Equal("registry.example.com/charts"))
 		Expect(cfg.Version).To(Equal("2.3.4"))
 		Expect(cfg.ForceConflicts).To(BeTrue())
 	})
@@ -56,6 +57,7 @@ var _ = Describe("ArgoCD chart from BOM", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.ChartName).To(Equal("argocd"))
 		Expect(cfg.RepoURL).To(Equal("oci://mirror.example.com/codesphere-cloud/charts"))
+		Expect(cfg.OciRegistryURL).To(Equal("mirror.example.com/codesphere-cloud/charts"))
 		Expect(cfg.Version).To(Equal("2.3.4"))
 	})
 
@@ -67,7 +69,27 @@ var _ = Describe("ArgoCD chart from BOM", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.ChartName).To(Equal("argo-cd"))
 		Expect(cfg.RepoURL).To(Equal("oci://registry.example.com/custom"))
+		Expect(cfg.OciRegistryURL).To(Equal("registry.example.com/custom"))
 		Expect(cfg.Version).To(Equal("4.5.6"))
+	})
+
+	It("uses the BOM registry directory including its port for trust and credentials", func() {
+		config.Components["argocd"] = bom.ComponentConfig{Files: map[string]bom.FileRef{
+			"chart": {OciRef: "oci://registry.example.com:5000/custom/argocd:2.3.4"},
+		}}
+		cfg, err := argocd.ConfigFromBOM(config, argocd.InstallerConfig{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.OciRegistryURL).To(Equal("registry.example.com:5000/custom"))
+		Expect(cfg.RepoURL).To(Equal("oci://registry.example.com:5000/custom"))
+	})
+
+	It("preserves an explicit mirror with an OCI scheme", func() {
+		cfg, err := argocd.ConfigFromBOM(config, argocd.InstallerConfig{
+			OciRegistryURL: "oci://mirror.example.com:5000/custom",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.OciRegistryURL).To(Equal("oci://mirror.example.com:5000/custom"))
+		Expect(cfg.RepoURL).To(Equal("oci://mirror.example.com:5000/custom"))
 	})
 
 	It("requires a BOM before initializing installer clients", func() {

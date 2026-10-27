@@ -69,10 +69,11 @@ func ConfigFromBOM(bomConfig *bom.Config, cfg InstallerConfig) (InstallerConfig,
 
 	cfg.ChartName = path.Base(chart.Name())
 
-	cfg.RepoURL = "oci://" + path.Dir(chart.Name())
-	if cfg.OciRegistryURL != "" {
-		cfg.RepoURL = "oci://" + strings.TrimPrefix(cfg.OciRegistryURL, "oci://")
+	if cfg.OciRegistryURL == "" {
+		cfg.OciRegistryURL = path.Dir(chart.Name())
 	}
+
+	cfg.RepoURL = "oci://" + strings.TrimPrefix(cfg.OciRegistryURL, "oci://")
 
 	cfg.Version = chart.Tag()
 
