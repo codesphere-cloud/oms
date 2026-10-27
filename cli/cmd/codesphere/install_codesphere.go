@@ -54,6 +54,7 @@ type InstallCodesphereOpts struct {
 	StepTimer        bool
 	LocalComponents  bool
 	LocalConfigDir   string
+	Registry         string
 	// ArgoCD deployment (pre-step in Phase 2)
 	ArgoCDRegistryURL    string
 	ArgoCDRepoURL        string
@@ -159,6 +160,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.LocalComponents, "local-components", false, "Run selected install components on the local host")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.LocalConfigDir, "local-config-dir", "", "Config directory for local install components")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.Registry, "registry", "", "Registry host with optional port and repository path, without a scheme (overrides registry.server); Codesphere artifacts use <registry>/codesphere-cloud")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDVersion, "argo-version", "", "Upstream ArgoCD Helm chart version; overrides the packaged chart")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryURL, "argo-registry-url", "", "OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)")
@@ -274,6 +276,16 @@ func prepareInstallConfig(opts *InstallCodesphereOpts, cm installer.ConfigManage
 			}
 		}
 		merged = intutil.DeepMergeMaps(merged, partial)
+	}
+
+	if opts.Registry != "" {
+		registry, err := installer.NormalizeRegistry(opts.Registry)
+		if err != nil {
+			cleanup()
+			return nil, files.RootConfig{}, func() {}, fmt.Errorf("invalid --registry: %w", err)
+		}
+
+		merged = intutil.DeepMergeMaps(merged, map[string]any{"registry": map[string]any{"server": registry}})
 	}
 
 	mergedBytes, err := yaml.Marshal(merged)

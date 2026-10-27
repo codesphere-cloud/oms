@@ -21,6 +21,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/discovery"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -92,6 +93,22 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 	kubeClient, err := installer.NewKubeClient(restConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create Kubernetes client: %w", err)
+	}
+
+	registry := ""
+	if cfg.Registry != nil {
+		registry = cfg.Registry.Server
+	}
+
+	if err := stlog.Step("Configure Codesphere image registry", func() error {
+		versionClient, err := discovery.NewDiscoveryClientForConfig(restConfig)
+		if err != nil {
+			return fmt.Errorf("failed to create Kubernetes discovery client: %w", err)
+		}
+
+		return installer.EnsureRegistryPolicy(ctx, kubeClient, registry, versionClient)
+	}); err != nil {
+		return fmt.Errorf("failed to configure Codesphere image registry: %w", err)
 	}
 
 	err = stlog.Step("Ensure Codesphere prerequisites", func() error {
