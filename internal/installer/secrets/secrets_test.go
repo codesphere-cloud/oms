@@ -368,6 +368,13 @@ var _ = Describe("EnsureSendGridAPIKey", func() {
 		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("dummy"))
 	})
 
+	It("accepts v-prefixed releases", func() {
+		vault := newVault()
+		secrets.EnsureSendGridAPIKey(vault, "v1.108.0")
+
+		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("dummy"))
+	})
+
 	It("does not create a key for v1.109.0", func() {
 		vault := newVault()
 		secrets.EnsureSendGridAPIKey(vault, "1.109.0")
@@ -417,6 +424,13 @@ var _ = Describe("EnsureSendGridAPIKey", func() {
 
 		Expect(secrets.EnsureSecrets(vault, config)).To(Succeed())
 		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("dummy"))
+	})
+
+	It("is applied by EnsureSecrets as current when no Codesphere package is configured", func() {
+		vault := vaultWithSendGridAPIKey("dummy")
+
+		Expect(secrets.EnsureSecrets(vault, &files.RootConfig{})).To(Succeed())
+		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
 	})
 })
 

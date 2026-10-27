@@ -212,7 +212,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		log.Println("\nNo changes detected that require secret regeneration.")
 	}
 
-	secretSync, err := c.confirmAndSyncSecrets(config, vault)
+	secretChanges, err := c.confirmAndSyncSecrets(config, vault)
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	c.printSuccessMessage(tracker, secretSync)
+	c.printSuccessMessage(tracker, secretChanges)
 
 	return nil
 }
@@ -485,7 +485,7 @@ func (c *UpdateInstallConfigCmd) confirmAndSyncSecrets(config *files.RootConfig,
 		return secretChanges{}, nil
 	}
 
-	if !c.approve("Apply them?", "The vault needs these secret changes:", pending.describe()) {
+	if !c.approve("Apply them?", pending.intro(), pending.describe()) {
 		log.Printf("\nSkipped %d secret change(s): %s\n", len(pending.describe()), strings.Join(pending.describe(), ", "))
 
 		return secretChanges{}, nil
@@ -509,6 +509,15 @@ type secretChanges struct {
 
 func (s secretChanges) empty() bool {
 	return len(s.added) == 0 && len(s.removed) == 0
+}
+
+func (s secretChanges) intro() string {
+	if len(s.removed) == 0 {
+		return "The vault needs these secret changes:"
+	}
+
+	return "The vault needs these secret changes. Removing a secret deletes its value from the vault; " +
+		"it is only removed when it holds a placeholder the configured Codesphere version no longer accepts:"
 }
 
 func (s secretChanges) describe() []string {
@@ -615,7 +624,7 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vau
 	return nil
 }
 
-func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTracker, secretSync secretChanges) {
+func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTracker, secretChanges secretChanges) {
 	log.Println("\n" + strings.Repeat("=", 70))
 	log.Println("Configuration successfully updated!")
 	log.Println(strings.Repeat("=", 70))
@@ -628,18 +637,18 @@ func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTr
 		}
 	}
 
-	if len(secretSync.added) > 0 {
+	if len(secretChanges.added) > 0 {
 		log.Println("\nGenerated missing secrets:")
 
-		for _, name := range secretSync.added {
+		for _, name := range secretChanges.added {
 			log.Printf("  ✓ %s\n", name)
 		}
 	}
 
-	if len(secretSync.removed) > 0 {
+	if len(secretChanges.removed) > 0 {
 		log.Println("\nRemoved obsolete secrets:")
 
-		for _, name := range secretSync.removed {
+		for _, name := range secretChanges.removed {
 			log.Printf("  ✓ %s\n", name)
 		}
 	}
