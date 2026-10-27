@@ -389,6 +389,20 @@ var _ = Describe("EnsureSendGridAPIKey", func() {
 		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
 	})
 
+	It("sets a dummy key for v1.109.0 release candidates", func() {
+		vault := newVault()
+		secrets.EnsureSendGridAPIKey(vault, "1.109.0-rc.1")
+
+		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("dummy"))
+	})
+
+	It("removes a dummy key for release candidates after v1.109.0", func() {
+		vault := vaultWithSendGridAPIKey("dummy")
+		secrets.EnsureSendGridAPIKey(vault, "1.110.0-rc.1")
+
+		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
+	})
+
 	It("removes a dummy key for a branch build", func() {
 		vault := vaultWithSendGridAPIKey("dummy")
 		secrets.EnsureSendGridAPIKey(vault, "main")

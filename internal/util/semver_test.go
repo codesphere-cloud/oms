@@ -29,6 +29,12 @@ var _ = Describe("CodesphereRelease", func() {
 		Expect(release).To(Equal("v1.109.0"))
 	})
 
+	It("accepts pre-release versions", func() {
+		release, ok := util.CodesphereRelease("codesphere-v1.109.0-rc.1")
+		Expect(ok).To(BeTrue())
+		Expect(release).To(Equal("v1.109.0-rc.1"))
+	})
+
 	It("rejects branch names", func() {
 		_, ok := util.CodesphereRelease("feature-branch")
 		Expect(ok).To(BeFalse())

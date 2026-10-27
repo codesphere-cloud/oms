@@ -684,3 +684,67 @@ var _ = Describe("syncSecrets", func() {
 		Expect(vault.GetSecret(files.SecretSendGridApiKey)).To(BeNil())
 	})
 })
+
+var _ = Describe("confirmAndSyncSecrets", func() {
+	var (
+		config   *files.RootConfig
+		vault    *files.InstallVault
+		prompter *prompt.MockPrompter
+		cmd      *UpdateInstallConfigCmd
+	)
+
+	BeforeEach(func() {
+		config = &files.RootConfig{}
+		vault = &files.InstallVault{}
+		prompter = prompt.NewMockPrompter(GinkgoT())
+		cmd = &UpdateInstallConfigCmd{Opts: &UpdateInstallConfigOpts{GlobalOptions: &util.GlobalOptions{}}, Prompter: prompter}
+	})
+
+	completeVaultWithDummySendGridAPIKey := func() {
+		_, err := syncSecrets(config, vault)
+		Expect(err).ToNot(HaveOccurred())
+		vault.SetSecret(files.SecretEntry{Name: files.SecretSendGridApiKey, Fields: &files.SecretFields{Password: "dummy"}})
+	}
+
+	It("does not ask when nothing is pending", func() {
+		_, err := syncSecrets(config, vault)
+		Expect(err).ToNot(HaveOccurred())
+
+		changes, err := cmd.confirmAndSyncSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(changes.empty()).To(BeTrue())
+	})
+
+	It("applies the pending changes once approved", func() {
+		completeVaultWithDummySendGridAPIKey()
+		prompter.EXPECT().Bool("Apply them?", false).Return(true)
+
+		changes, err := cmd.confirmAndSyncSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(changes.removed).To(ConsistOf(files.SecretSendGridApiKey))
+		Expect(vault.GetSecret(files.SecretSendGridApiKey)).To(BeNil())
+	})
+
+	It("leaves the vault unchanged when declined", func() {
+		completeVaultWithDummySendGridAPIKey()
+		prompter.EXPECT().Bool("Apply them?", false).Return(false)
+
+		changes, err := cmd.confirmAndSyncSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(changes.empty()).To(BeTrue())
+		Expect(vault.GetSecret(files.SecretSendGridApiKey).Fields.Password).To(Equal("dummy"))
+	})
+
+	It("applies the pending changes without asking when --yes is set", func() {
+		cmd.Opts.Yes = true
+
+		changes, err := cmd.confirmAndSyncSecrets(config, vault)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(changes.added).To(ContainElement(files.SecretMounterHmacSecret))
+		Expect(vault.GetSecret(files.SecretMounterHmacSecret)).ToNot(BeNil())
+	})
+})
