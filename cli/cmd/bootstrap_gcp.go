@@ -55,8 +55,8 @@ func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
 func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	command := newLegacyBootstrapGcpCmd(opts).cmd
 	util.AddCmd(parent, command)
-	util.AddCmd(command, newBootstrapGcpModeCmd(opts, true).cmd)
-	util.AddCmd(command, newBootstrapGcpModeCmd(opts, false).cmd)
+	util.AddCmd(command, newBootstrapGcpSingleNodeCmd(opts).cmd)
+	util.AddCmd(command, newBootstrapGcpMultiNodeCmd(opts).cmd)
 	AddBootstrapGcpPostconfigCmd(command, opts)
 	AddBootstrapGcpCleanupCmd(command, opts)
 	AddBootstrapGcpRestartVMsCmd(command, opts)
@@ -64,7 +64,7 @@ func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 
 // newLegacyBootstrapGcpCmd preserves the original flag-based entry point.
 func newLegacyBootstrapGcpCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
-	c := newBootstrapGcpModeCmd(opts, false)
+	c := newBootstrapGcpMultiNodeCmd(opts)
 	c.legacyMode = true
 	c.cmd.Use = "bootstrap-gcp"
 	c.cmd.Short = "Bootstrap GCP infrastructure for Codesphere"
@@ -75,39 +75,48 @@ func newLegacyBootstrapGcpCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
 	return c
 }
 
-func newBootstrapGcpModeCmd(opts *util.GlobalOptions, singleVM bool) *BootstrapGcpCmd {
+func newBootstrapGcpSingleNodeCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
 	c := &BootstrapGcpCmd{
-		cmd:           &cobra.Command{Args: cobra.NoArgs},
+		cmd: &cobra.Command{
+			Use:   "single-node",
+			Short: "Bootstrap k0s and Codesphere on one GCP VM",
+			Long: io.Long(`Install k0s and Codesphere on one GCP VM using the local bootstrap.
+				Requires --registry-user, either --github-pat or OMS_REGISTRY_PASSWORD,
+				and either --install-local or --install-version. The root disk defaults to 50 GB;
+				a separate 100 GB Ceph disk is added. Supply installation settings through --config and --vault.
+				Not for production use.`),
+			Args: cobra.NoArgs,
+		},
 		Opts:          opts,
 		Env:           env.NewEnv(),
-		CodesphereEnv: &gcp.CodesphereEnvironment{SingleVM: singleVM},
+		CodesphereEnv: &gcp.CodesphereEnvironment{SingleVM: true},
 	}
 	c.cmd.RunE = c.RunE
 	c.addSharedBootstrapFlags()
+	c.cmd.Flags().StringVar(&c.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine (rook-ceph or local)")
 
-	if singleVM {
-		c.cmd.Use = "single-node"
-		c.cmd.Short = "Bootstrap k0s and Codesphere on one GCP VM"
-		c.cmd.Long = io.Long(`Install k0s and Codesphere on one GCP VM using the local bootstrap.
-			Requires --registry-user, either --github-pat or OMS_REGISTRY_PASSWORD,
-			and either --install-local or --install-version. The root disk defaults to 50 GB;
-			a separate 100 GB Ceph disk is added. Supply installation settings through --config and --vault.
-			Not for production use.`)
-		c.cmd.Flags().StringVar(&c.StorageEngine, "storage-engine", local.StorageEngineRookCeph, "Storage engine (rook-ceph or local)")
-	} else {
-		c.cmd.Use = "multi-node"
-		c.cmd.Short = "Bootstrap a multi-node Codesphere cluster on GCP"
-		c.cmd.Long = io.Long(`Bootstrap GCP projects, service accounts, and VMs for a Codesphere cluster.
-			Running again with --install-version repeats every install step, including the k0s
-			config script, which restarts k0s. To replace only Codesphere, add
-			--install-codesphere-only and --recover-config.
-			Not for production use.`)
-		c.addMultiNodeBootstrapFlags()
+	return c
+}
+
+func newBootstrapGcpMultiNodeCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
+	c := &BootstrapGcpCmd{
+		cmd: &cobra.Command{
+			Use:   "multi-node",
+			Short: "Bootstrap a multi-node Codesphere cluster on GCP",
+			Long: io.Long(`Bootstrap GCP projects, service accounts, and VMs for a Codesphere cluster.
+				Running again with --install-version repeats every install step, including the k0s
+				config script, which restarts k0s. To replace only Codesphere, add
+				--install-codesphere-only and --recover-config.
+				Not for production use.`),
+			Args: cobra.NoArgs,
+		},
+		Opts:          opts,
+		Env:           env.NewEnv(),
+		CodesphereEnv: &gcp.CodesphereEnvironment{},
 	}
-
-	util.MarkFlagRequired(c.cmd, "project-name")
-	util.MarkFlagRequired(c.cmd, "billing-account")
-	util.MarkFlagRequired(c.cmd, "base-domain")
+	c.cmd.RunE = c.RunE
+	c.addSharedBootstrapFlags()
+	c.addMultiNodeBootstrapFlags()
 
 	return c
 }
@@ -136,6 +145,10 @@ func (c *BootstrapGcpCmd) addSharedBootstrapFlags() {
 	flags.StringVar(&c.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
 	flags.StringVar(&c.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
 	flags.StringVar(&c.CodesphereEnv.RegistryUser, "registry-user", "", "Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)")
+
+	util.MarkFlagRequired(c.cmd, "project-name")
+	util.MarkFlagRequired(c.cmd, "billing-account")
+	util.MarkFlagRequired(c.cmd, "base-domain")
 }
 
 func (c *BootstrapGcpCmd) addMultiNodeBootstrapFlags() {

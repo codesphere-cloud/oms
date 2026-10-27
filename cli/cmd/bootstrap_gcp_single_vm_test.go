@@ -119,7 +119,7 @@ var _ = Describe("GCP bootstrap mode options", func() {
 	BeforeEach(func() {
 		GinkgoT().Setenv("OMS_REGISTRY_PASSWORD", "password")
 
-		command = newBootstrapGcpModeCmd(nil, false)
+		command = newBootstrapGcpMultiNodeCmd(nil)
 		command.CodesphereEnv.RemoteOmsBinaryPath = "/oms"
 		command.CodesphereEnv.RegistryUser = "registry"
 		command.StorageEngine = "rook-ceph"
@@ -251,7 +251,7 @@ var _ = Describe("GCP bootstrap subcommands", func() {
 	})
 
 	It("registers multi-node flags and preserves shared defaults", func() {
-		command := newBootstrapGcpModeCmd(nil, false)
+		command := newBootstrapGcpMultiNodeCmd(nil)
 		Expect(command.CodesphereEnv.SingleVM).To(BeFalse())
 		Expect(command.cmd.Flags().Lookup("root-disk-size").DefValue).To(Equal("50"))
 		Expect(command.cmd.Flags().Lookup("multi-dc")).NotTo(BeNil())
@@ -264,34 +264,34 @@ var _ = Describe("GCP bootstrap subcommands", func() {
 	})
 
 	It("selects single-node behavior and parses its storage option", func() {
-		command := newBootstrapGcpModeCmd(nil, true)
+		command := newBootstrapGcpSingleNodeCmd(nil)
 		Expect(command.CodesphereEnv.SingleVM).To(BeTrue())
 		Expect(command.cmd.ParseFlags([]string{"--storage-engine", "local"})).To(Succeed())
 		Expect(command.StorageEngine).To(Equal("local"))
 	})
 
 	It("rejects single-node storage flags on multi-node", func() {
-		command := newBootstrapGcpModeCmd(nil, false)
+		command := newBootstrapGcpMultiNodeCmd(nil)
 		Expect(command.cmd.ParseFlags([]string{"--storage-engine", "local"})).To(MatchError(ContainSubstring("unknown flag: --storage-engine")))
 	})
 
 	It("rejects a multi-data-center layout on single-node", func() {
-		command := newBootstrapGcpModeCmd(nil, true)
+		command := newBootstrapGcpSingleNodeCmd(nil)
 		Expect(command.cmd.ParseFlags([]string{"--multi-dc"})).To(MatchError(ContainSubstring("unknown flag: --multi-dc")))
 	})
 
 	It("rejects airgapped installation on single-node", func() {
-		command := newBootstrapGcpModeCmd(nil, true)
+		command := newBootstrapGcpSingleNodeCmd(nil)
 		Expect(command.cmd.ParseFlags([]string{"--airgapped"})).To(MatchError(ContainSubstring("unknown flag: --airgapped")))
 	})
 
 	It("rejects Codesphere-only installation on single-node", func() {
-		command := newBootstrapGcpModeCmd(nil, true)
+		command := newBootstrapGcpSingleNodeCmd(nil)
 		Expect(command.cmd.ParseFlags([]string{"--install-codesphere-only"})).To(MatchError(ContainSubstring("unknown flag: --install-codesphere-only")))
 	})
 
 	It("rejects multi-node config output paths on single-node", func() {
-		command := newBootstrapGcpModeCmd(nil, true)
+		command := newBootstrapGcpSingleNodeCmd(nil)
 		Expect(command.cmd.ParseFlags([]string{"--install-config", "custom.yaml"})).To(MatchError(ContainSubstring("unknown flag: --install-config")))
 	})
 

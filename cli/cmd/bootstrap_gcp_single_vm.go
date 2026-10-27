@@ -69,7 +69,7 @@ func (c *BootstrapGcpCmd) validateLegacyBootstrapFlags() error {
 		return nil
 	}
 
-	supported := newBootstrapGcpModeCmd(c.Opts, true).cmd.Flags()
+	supported := newBootstrapGcpSingleNodeCmd(c.Opts).cmd.Flags()
 
 	var flagErr error
 
