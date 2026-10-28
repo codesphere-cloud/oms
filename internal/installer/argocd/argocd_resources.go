@@ -39,14 +39,10 @@ type argoCDResources struct {
 // all the repository credentials it pulls the Helm charts with. An empty ociUsername falls back to
 // the GHCR user.
 func NewResources(clientset kubernetes.Interface, dataCenterID string, ociUsername string, ociPassword string, ociRegistryURL string, gitPassword string) (Resources, error) {
-	if ociUsername == "" {
-		ociUsername = defaultOciUsername
-	}
-
 	return &argoCDResources{
 		clientset:      clientset,
 		DatacenterID:   dataCenterID,
-		OciUsername:    ociUsername,
+		OciUsername:    ociUsernameOrDefault(ociUsername),
 		OciPassword:    ociPassword,
 		OciRegistryURL: ociRegistryURL,
 		GitPassword:    gitPassword,
