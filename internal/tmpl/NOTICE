@@ -497,15 +497,15 @@ License URL: https://github.com/go-gorp/gorp/blob/v3.1.0/LICENSE
  
 ----------
 Module: github.com/go-jose/go-jose/v4
-Version: v4.1.4
+Version: v4.1.6
 License: Apache-2.0
-License URL: https://github.com/go-jose/go-jose/blob/v4.1.4/LICENSE
+License URL: https://github.com/go-jose/go-jose/blob/v4.1.6/LICENSE
  
 ----------
 Module: github.com/go-jose/go-jose/v4/json
-Version: v4.1.4
+Version: v4.1.6
 License: BSD-3-Clause
-License URL: https://github.com/go-jose/go-jose/blob/v4.1.4/json/LICENSE
+License URL: https://github.com/go-jose/go-jose/blob/v4.1.6/json/LICENSE
  
 ----------
 Module: github.com/go-logr/logr
@@ -1175,9 +1175,9 @@ License URL: https://github.com/robfig/cron/blob/bc59245fe10e/LICENSE
  
 ----------
 Module: github.com/rook/rook/pkg/apis/ceph.rook.io
-Version: v0.0.0-20261022223044-d4548cbb5834
+Version: v0.0.0-20261027125818-d0d8797721ad
 License: Apache-2.0
-License URL: https://github.com/rook/rook/blob/d4548cbb5834/pkg/apis/LICENSE
+License URL: https://github.com/rook/rook/blob/d0d8797721ad/pkg/apis/LICENSE
  
 ----------
 Module: github.com/rubenv/sql-migrate
