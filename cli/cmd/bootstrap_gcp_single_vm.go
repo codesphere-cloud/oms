@@ -90,7 +90,7 @@ func singleVMSupportsFlag(name string) bool {
 		"ssh-public-key-path", "ssh-private-key-path", "install-local", "install-version",
 		"install-hash", "remote-oms-binary", "registry-user", "github-pat", "spot-vms",
 		"root-disk-size", "ssh-quiet", "timer", "install-config-template", "config",
-		"vault", "priv-key", "machine-type", "storage-engine", "help":
+		"vault", "priv-key", "machine-type", "os", "storage-engine", "help":
 		return true
 	default:
 		return false

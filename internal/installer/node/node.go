@@ -207,7 +207,8 @@ func (n *Node) HasCommand(command string) bool {
 // InstallOms installs the OMS CLI on the remote node via SSH
 func (n *Node) InstallOms() error {
 	remoteCommands := []string{
-		"wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms",
+		// curl rather than wget, which RHEL cloud images don't ship.
+		"curl -fsSL 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms.*linux_amd64\")) | .browser_download_url' | xargs curl -fsSL -o oms",
 		"chmod +x oms; sudo mv oms /usr/local/bin/",
 	}
 	for _, cmd := range remoteCommands {
@@ -232,7 +233,7 @@ func (n *Node) EnsureOmsDependencies() error {
 		},
 		{
 			command: "age-keygen",
-			install: "wget https://dl.filippo.io/age/latest?for=linux/amd64 -O age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
+			install: "curl -fsSL 'https://dl.filippo.io/age/latest?for=linux/amd64' -o age.tar.gz; tar -xvf age.tar.gz; sudo mv age/age* /usr/local/bin/",
 		},
 	}
 

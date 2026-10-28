@@ -281,6 +281,18 @@ var _ = Describe("GCE", func() {
 			Entry("neither", false, false),
 		)
 
+		It("accepts RHEL 9 as host OS", func() {
+			csEnv.HostOS = gcp.HostOSRHEL9
+			bs := newTestBootstrapper(csEnv, gcp.NewMockGCPClientManager(GinkgoT()))
+			Expect(bs.ValidateInput()).To(Succeed())
+		})
+
+		It("fails for an unsupported host OS", func() {
+			csEnv.HostOS = "debian-12"
+			bs := newTestBootstrapper(csEnv, gcp.NewMockGCPClientManager(GinkgoT()))
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring(`invalid --os: unsupported host OS "debian-12" (supported: rhel-9, ubuntu)`)))
+		})
+
 		It("fails when both spot and preemptible are set", func() {
 			csEnv.SpotVMs = true
 			csEnv.Preemptible = true
@@ -651,6 +663,40 @@ var _ = Describe("GCE", func() {
 					err := bs.EnsureComputeInstances()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(allRootDiskSizesCorrect).To(BeTrue())
+				})
+			})
+
+			Context("When the host OS is selected", func() {
+				var sourceImages []string
+
+				BeforeEach(func() {
+					sourceImages = nil
+					mu := sync.Mutex{}
+
+					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
+					mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, makeRunningInstance("10.0.0.x", "1.2.3.x"), 8)
+					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
+						func(_, _ string, instance *computepb.Instance) error {
+							mu.Lock()
+							defer mu.Unlock()
+
+							sourceImages = append(sourceImages, instance.GetDisks()[0].GetInitializeParams().GetSourceImage())
+
+							return nil
+						},
+					).Times(8)
+				})
+
+				It("boots Ubuntu when no host OS is set", func() {
+					Expect(bs.EnsureComputeInstances()).To(Succeed())
+					Expect(sourceImages).To(HaveEach("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"))
+				})
+
+				It("boots RHEL 9.6 with Extended Update Support for rhel-9", func() {
+					csEnv.HostOS = gcp.HostOSRHEL9
+
+					Expect(bs.EnsureComputeInstances()).To(Succeed())
+					Expect(sourceImages).To(HaveEach("projects/rhel-cloud/global/images/family/rhel-9-6-eus"))
 				})
 			})
 

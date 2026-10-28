@@ -20,6 +20,7 @@ var _ = Describe("Single VM bootstrap command", func() {
 		Expect(command.Flags().Lookup("install-local")).NotTo(BeNil())
 		Expect(command.Flags().Lookup("install-version")).NotTo(BeNil())
 		Expect(command.Flags().Lookup("machine-type").DefValue).To(BeEmpty())
+		Expect(command.Flags().Lookup("os").DefValue).To(Equal("ubuntu"))
 		Expect(command.Flags().Lookup("spot-vms").DefValue).To(Equal("false"))
 		Expect(command.Flags().Lookup("storage-engine").DefValue).To(Equal("rook-ceph"))
 		Expect(command.Flags().Lookup("install-config-template")).NotTo(BeNil())
@@ -128,6 +129,7 @@ var _ = Describe("GCP bootstrap mode options", func() {
 		}
 		command.addBootstrapModeFlags()
 		command.cmd.Flags().Int64Var(&command.CodesphereEnv.RootDiskSize, "root-disk-size", 50, "")
+		command.cmd.Flags().StringVar((*string)(&command.CodesphereEnv.HostOS), "os", "ubuntu", "")
 		command.cmd.Flags().BoolVar(&command.CodesphereEnv.MultiDC, "multi-dc", false, "")
 		command.cmd.Flags().BoolVar(&command.CodesphereEnv.Airgapped, "airgapped", false, "")
 		command.cmd.Flags().BoolVar(&command.CodesphereEnv.InstallCodesphereOnly, "install-codesphere-only", false, "")
@@ -221,6 +223,13 @@ var _ = Describe("GCP bootstrap mode options", func() {
 		Expect(command.cmd.Flags().Set("priv-key", "age-key")).To(Succeed())
 		Expect(command.prepareBootstrapOptions()).To(Succeed())
 		Expect(command.CodesphereEnv.InstallConfigs).To(Equal([]string{"base.yaml", "override.yaml"}))
+	})
+
+	It("accepts the host OS in single-VM mode", func() {
+		command.CodesphereEnv.SingleVM = true
+		Expect(command.cmd.Flags().Set("os", "rhel-9")).To(Succeed())
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.HostOS).To(Equal(gcp.HostOSRHEL9))
 	})
 
 	It("accepts inherited global flags in single-VM mode", func() {

@@ -144,6 +144,10 @@ func (b *GCPBootstrapper) validateVMProvisioningOptions() error {
 		return fmt.Errorf("cannot specify both --spot-vms and --preemptible flags; use --spot-vms for the newer spot VM model")
 	}
 
+	if _, err := b.Env.HostOS.SourceImage(); err != nil {
+		return fmt.Errorf("invalid --os: %w", err)
+	}
+
 	return nil
 }
 
@@ -336,6 +340,11 @@ func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64, sshKey
 	subnetwork := fmt.Sprintf("projects/%s/regions/%s/subnetworks/%s-%s-subnet", projectID, region, projectID, region)
 	diskType := fmt.Sprintf("projects/%s/zones/%s/diskTypes/pd-ssd", projectID, zone)
 
+	sourceImage, err := b.Env.HostOS.SourceImage()
+	if err != nil {
+		return nil, err
+	}
+
 	disks := []*computepb.AttachedDisk{
 		{
 			Boot:       protoBool(true),
@@ -344,7 +353,7 @@ func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64, sshKey
 			InitializeParams: &computepb.AttachedDiskInitializeParams{
 				DiskType:    &diskType,
 				DiskSizeGb:  protoInt64(rootDiskSize),
-				SourceImage: protoString("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"),
+				SourceImage: &sourceImage,
 			},
 		},
 	}
