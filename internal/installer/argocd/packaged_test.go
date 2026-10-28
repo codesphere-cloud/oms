@@ -63,24 +63,30 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 
 	It("retains the same Codesphere chart version and still configures credentials", func() {
 		expectExisting("argocd", "2.3.0")
+		expectChartValues(nil)
 		expectResources()
 		Expect(a.Install()).To(Succeed())
 	})
 
 	It("retains a newer Codesphere chart without downgrading", func() {
 		expectExisting("argocd", "2.4.0")
+		expectChartValues(nil)
 		expectResources()
 		Expect(a.Install()).To(Succeed())
 	})
 
 	It("preserves an upstream chart without comparing unrelated chart versions", func() {
+		a.OciPassword = "registry-token"
+
 		expectExisting("argo-cd", "10.3.2")
+		expectChartValues(nil)
 		expectResources()
 		Expect(a.Install()).To(Succeed())
 	})
 
 	It("preserves a release whose chart identity is unknown", func() {
 		expectExisting("", "unparseable")
+		expectChartValues(nil)
 		expectResources()
 		Expect(a.Install()).To(Succeed())
 	})
@@ -107,7 +113,7 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 	})
 
 	It("propagates chart loading or validation failures without installing", func() {
-		expectFresh()
+		loader.EXPECT().LoadValues(a.ValueFiles).Return(nil, nil)
 		loader.EXPECT().LoadChart(a.PackageChart, a.Version).Return(nil, errors.New("chart does not match BOM"))
 		Expect(a.Install()).To(MatchError(ContainSubstring("does not match BOM")))
 	})
@@ -126,6 +132,24 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 			upstream := c.Values["argo-cd"].(map[string]any)
 			Expect(upstream["server"].(map[string]any)["replicas"]).To(Equal(2))
 			Expect(upstream["global"].(map[string]any)["image"].(map[string]any)["repository"]).To(Equal("custom.example.com/argocd"))
+
+			return nil
+		})
+		expectResources()
+		Expect(a.Install()).To(Succeed())
+	})
+	It("uses root values for an explicit upstream installation", func() {
+		a.PackageChart = ""
+		a.UseUpstream = true
+		a.RepoURL = argocd.DefaultRepoURL
+
+		expectFresh()
+		loader.EXPECT().LoadValues(a.ValueFiles).Return(map[string]any{"server": map[string]any{"replicas": 2}}, nil)
+		helm.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, c installer.ChartConfig, _ installer.InstallChartOptions) error {
+			Expect(c.ChartName).To(Equal("argo-cd"))
+			Expect(c.RepoURL).To(Equal(argocd.DefaultRepoURL))
+			Expect(c.Values).NotTo(HaveKey("argo-cd"))
+			Expect(c.Values["server"]).To(Equal(map[string]any{"replicas": 2}))
 
 			return nil
 		})
@@ -164,6 +188,13 @@ var _ = Describe("Codesphere ArgoCD chart selection", func() {
 		Expect(cfg.PackageChart).To(BeEmpty())
 		Expect(cfg.Version).To(Equal("10.3.2"))
 		Expect(cfg.RepoURL).To(Equal("oci://registry.example.com/helm"))
+	})
+
+	It("uses the official repository when an upstream version has no repository override", func() {
+		cfg, err := argocd.CodesphereChartConfig(&bom.Config{}, "/package/chart", "10.3.2", "")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.UseUpstream).To(BeTrue())
+		Expect(cfg.RepoURL).To(Equal(argocd.DefaultRepoURL))
 	})
 
 	It("rejects a repository override without an upstream version", func() {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -40,6 +41,11 @@ type K0sctlConfigGenerator struct {
 	// CacheOnly takes the k0s binary and the airgap bundle from the OMS cache and fails
 	// if they are missing, instead of downloading them.
 	CacheOnly bool
+	// Overwrite replaces an existing k0sctl config without asking.
+	Overwrite bool
+	// Prompter asks whether to replace an existing k0sctl config. Without one, an existing
+	// config is only replaced with Overwrite.
+	Prompter prompt.Prompter
 }
 
 // Generate writes the k0sctl config to outputPath, or to the OMS workdir when outputPath
@@ -55,6 +61,14 @@ func (g *K0sctlConfigGenerator) Generate(pm PackageManager, k0s K0sManager, outp
 
 	config, err := LoadManagedInstallConfig(g.Opts.InstallConfig)
 	if err != nil {
+		return "", err
+	}
+
+	if outputPath == "" {
+		outputPath = filepath.Join(g.Env.GetOmsWorkdir(), fmt.Sprintf("k0sctl-config-%s.yaml", config.Datacenter.Name))
+	}
+
+	if err := g.confirmOverwrite(outputPath); err != nil {
 		return "", err
 	}
 
@@ -85,11 +99,21 @@ func (g *K0sctlConfigGenerator) Generate(pm PackageManager, k0s K0sManager, outp
 		AirgapBundlePath: airgapBundlePath,
 	}
 
-	if outputPath == "" {
-		outputPath = filepath.Join(g.Env.GetOmsWorkdir(), fmt.Sprintf("k0sctl-config-%s.yaml", config.Datacenter.Name))
+	return g.writeK0sctlConfig(config, k0sctlOptions, outputPath)
+}
+
+// confirmOverwrite fails if a k0sctl config already exists at path, unless it may be
+// overwritten or the operator agrees to overwrite it.
+func (g *K0sctlConfigGenerator) confirmOverwrite(path string) error {
+	if g.Overwrite || !g.FileWriter.Exists(path) {
+		return nil
 	}
 
-	return g.writeK0sctlConfig(config, k0sctlOptions, outputPath)
+	if g.Prompter != nil && g.Prompter.Bool(fmt.Sprintf("k0sctl config '%s' already exists. Overwrite it?", path), false) {
+		return nil
+	}
+
+	return fmt.Errorf("k0sctl config '%s' already exists, confirm overwriting it or use --yes", path)
 }
 
 // ResolveK0sVersion returns the requested k0s version, or the latest version when

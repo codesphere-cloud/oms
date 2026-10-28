@@ -5,6 +5,7 @@ package codesphere
 
 import (
 	"fmt"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"maps"
 	"os"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/configtemplating"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
-	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
@@ -55,11 +55,11 @@ type InstallCodesphereOpts struct {
 	LocalComponents  bool
 	LocalConfigDir   string
 	// ArgoCD deployment (pre-step in Phase 2)
-	ArgoCDVersion        string
 	ArgoCDRegistryURL    string
+	ArgoCDRepoURL        string
+	ArgoCDVersion        string
 	ArgoCDRegistryCA     string
 	ArgoCDForceConflicts bool
-	ArgoCDRepoURL        string
 	ArgoCDValues         []string
 	PCAppsValues         []string
 	// Name of the k8s secret containing the entire vault; source for ESO.

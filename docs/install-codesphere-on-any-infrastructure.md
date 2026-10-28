@@ -498,4 +498,4 @@ of the packaged wrapper. In this mode `--argo-repo` can select a custom HTTP or
 OCI repository, and `--argo-values` files use upstream settings at the root.
 A custom `--argo-repo` requires `--argo-version`; without a version override the
 packaged chart remains the default. Explicit upstream installs retain the
-standalone installer's downgrade protection.
+upstream installer's downgrade protection.

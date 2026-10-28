@@ -114,6 +114,7 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 
 	dc.InstallConfig = &config
 	dc.ConfigManager.SetInstallConfig(&config)
+
 	return nil
 }
 
@@ -125,6 +126,7 @@ func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *datacenter.DataCenter
 	if dc.IsPrimary() {
 		return b.loadInstallVault(dc.ConfigManager)
 	}
+
 	return nil
 }
 
@@ -236,7 +238,10 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 			dc.InstallConfig.PcApps = files.ChartValues{}
 		}
 
-		chartsRegistry := dc.InstallConfig.Registry.Server + installer.ChartsRepositoryPath
+		chartsRegistry, err := installer.ChartRegistryURL(dc.InstallConfig.Registry.Server)
+		if err != nil {
+			return fmt.Errorf("resolving pc-apps chart registry: %w", err)
+		}
 		if existing, _ := dc.InstallConfig.PcApps["chartsRegistry"].(string); existing != "" && existing != chartsRegistry {
 			b.stlog.Logf("Replacing pcApps.chartsRegistry %s from the install config with the local registry at %s", existing, chartsRegistry)
 		}
@@ -986,8 +991,10 @@ func (b *GCPBootstrapper) ensureSecrets(dc *datacenter.DataCenter) error {
 		if err := b.loadInstallVault(dc.ConfigManager); err != nil {
 			return err
 		}
+
 		b.Env.Secrets = dc.ConfigManager.GetVault()
 	}
+
 	return nil
 }
 

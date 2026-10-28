@@ -18,7 +18,11 @@ import (
 // selects the upstream installer, whose chart version and repo have their own semantics.
 func CodesphereChartConfig(config *bom.Config, chartPath, version, repoURL string) (InstallerConfig, error) {
 	if version != "" {
-		return InstallerConfig{Version: version, RepoURL: repoURL}, nil
+		if repoURL == "" {
+			repoURL = DefaultRepoURL
+		}
+
+		return InstallerConfig{Version: version, RepoURL: repoURL, UseUpstream: true}, nil
 	}
 
 	if repoURL != "" && repoURL != DefaultRepoURL {

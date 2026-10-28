@@ -165,12 +165,34 @@ var _ = Describe("IAM & Admin", func() {
 			It("does nothing if billing already enabled correctly", func() {
 				bi := &cloudbilling.ProjectBillingInfo{
 					BillingEnabled:     true,
-					BillingAccountName: csEnv.BillingAccount,
+					BillingAccountName: "billingAccounts/" + csEnv.BillingAccount,
 				}
 				gc.EXPECT().GetBillingInfo(csEnv.ProjectID).Return(bi, nil)
 
 				err := bs.EnsureBilling()
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("links the project when it is billed to another account", func() {
+				bi := &cloudbilling.ProjectBillingInfo{
+					BillingEnabled:     true,
+					BillingAccountName: "billingAccounts/other-account",
+				}
+				gc.EXPECT().GetBillingInfo(csEnv.ProjectID).Return(bi, nil)
+				gc.EXPECT().EnableBilling(csEnv.ProjectID, csEnv.BillingAccount).Return(nil)
+
+				Expect(bs.EnsureBilling()).To(Succeed())
+			})
+
+			It("links the project when billing is disabled but the account name matches", func() {
+				bi := &cloudbilling.ProjectBillingInfo{
+					BillingEnabled:     false,
+					BillingAccountName: "billingAccounts/" + csEnv.BillingAccount,
+				}
+				gc.EXPECT().GetBillingInfo(csEnv.ProjectID).Return(bi, nil)
+				gc.EXPECT().EnableBilling(csEnv.ProjectID, csEnv.BillingAccount).Return(nil)
+
+				Expect(bs.EnsureBilling()).To(Succeed())
 			})
 
 			It("enables billing if not enabled", func() {
