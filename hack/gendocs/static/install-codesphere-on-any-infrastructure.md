@@ -493,6 +493,9 @@ and nests registry certificate trust under `argo-cd.configs`. Explicit values
 files override these defaults. When `registry.replaceImagesInBom` is enabled,
 bootstrap image repositories use the same destination mapping as `oms copy package`.
 
-`--argo-version`, if supplied, must equal the packaged wrapper chart version.
-`--argo-repo` cannot select a custom chart repository for package installation.
-Use `oms beta install argocd` for explicit standalone upstream installations.
+Supplying `--argo-version` selects the official upstream `argo-cd` chart instead
+of the packaged wrapper. In this mode `--argo-repo` can select a custom HTTP or
+OCI repository, and `--argo-values` files use upstream settings at the root.
+A custom `--argo-repo` requires `--argo-version`; without a version override the
+packaged chart remains the default. Explicit upstream installs retain the
+standalone installer's downgrade protection.

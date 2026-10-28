@@ -7,18 +7,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/distribution/reference"
-	helmchart "helm.sh/helm/v4/pkg/chart"
 	"helm.sh/helm/v4/pkg/chart/common/util"
-	"helm.sh/helm/v4/pkg/chart/loader"
-	"helm.sh/helm/v4/pkg/cli/values"
-	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // installPackaged only manages releases from the Codesphere chart family. Upstream
@@ -31,58 +25,8 @@ func (a *Installer) installPackaged() error {
 		return fmt.Errorf("finding existing ArgoCD release: %w", err)
 	}
 
-	manage := true
-
-	if existing != nil {
-		if existing.ChartName != "argocd" {
-			log.Printf("Preserving existing ArgoCD release using chart %q", existing.ChartName)
-
-			manage = false
-		} else {
-			installed, err := semver.StrictNewVersion(existing.InstalledVersion)
-			if err != nil {
-				return fmt.Errorf("invalid installed Codesphere ArgoCD chart version: %w", err)
-			}
-
-			requested, err := semver.StrictNewVersion(a.Version)
-			if err != nil {
-				return fmt.Errorf("invalid packaged ArgoCD chart version: %w", err)
-			}
-
-			if !requested.GreaterThan(installed) {
-				log.Printf("Retaining ArgoCD chart %s; package contains %s", existing.InstalledVersion, a.Version)
-
-				manage = false
-			}
-		}
-	} else {
-		found, err := a.hasArgoCDWorkloads(ctx)
-		if err != nil {
-			return err
-		}
-
-		if found {
-			log.Print("Preserving existing ArgoCD workloads without the expected Helm release")
-
-			manage = false
-		}
-	}
-
-	if manage {
-		cfg, err := a.packagedChartConfig()
-		if err != nil {
-			return err
-		}
-
-		if existing == nil {
-			err = a.Helm.InstallChart(ctx, cfg, installer.InstallChartOptions{ForceConflicts: a.ForceConflicts})
-		} else {
-			err = a.Helm.UpgradeChart(ctx, cfg, installer.UpgradeChartOptions{ForceConflicts: a.ForceConflicts})
-		}
-
-		if err != nil {
-			return fmt.Errorf("installing packaged ArgoCD chart: %w", err)
-		}
+	if err := a.reconcilePackagedChart(ctx, existing); err != nil {
+		return err
 	}
 	// Retaining an existing chart must not skip credentials or subsequent app setup.
 	if a.FullInstall {
@@ -96,32 +40,74 @@ func (a *Installer) installPackaged() error {
 	return nil
 }
 
-func (a *Installer) hasArgoCDWorkloads(ctx context.Context) (bool, error) {
-	if a.Clientset == nil {
-		return false, fmt.Errorf("kubernetes client is required to detect existing ArgoCD installations")
-	}
-
-	deployments, err := a.Clientset.AppsV1().Deployments(DefaultNamespace).List(ctx, metav1.ListOptions{})
+func (a *Installer) reconcilePackagedChart(ctx context.Context, existing *installer.ReleaseInfo) error {
+	manage, err := a.shouldManagePackagedChart(ctx, existing)
 	if err != nil {
-		return false, fmt.Errorf("checking existing ArgoCD deployments: %w", err)
+		return err
 	}
 
-	for _, d := range deployments.Items {
-		if d.Name == "argocd-server" || d.Labels["app.kubernetes.io/part-of"] == "argocd" || strings.HasPrefix(d.Labels["app.kubernetes.io/name"], "argocd-") {
-			return true, nil
-		}
+	if !manage {
+		return nil
 	}
 
-	statefulsets, err := a.Clientset.AppsV1().StatefulSets(DefaultNamespace).List(ctx, metav1.ListOptions{})
+	cfg, err := a.packagedChartConfig()
 	if err != nil {
-		return false, fmt.Errorf("checking existing ArgoCD statefulsets: %w", err)
+		return err
 	}
 
-	for _, s := range statefulsets.Items {
-		if s.Name == "argocd-application-controller" || s.Labels["app.kubernetes.io/part-of"] == "argocd" || strings.HasPrefix(s.Labels["app.kubernetes.io/name"], "argocd-") {
-			return true, nil
+	if existing == nil {
+		if err := a.Helm.InstallChart(ctx, cfg, installer.InstallChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
+			return fmt.Errorf("installing packaged ArgoCD chart: %w", err)
 		}
+
+		return nil
 	}
+
+	if err := a.Helm.UpgradeChart(ctx, cfg, installer.UpgradeChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
+		return fmt.Errorf("upgrading packaged ArgoCD chart: %w", err)
+	}
+
+	return nil
+}
+
+func (a *Installer) shouldManagePackagedChart(ctx context.Context, existing *installer.ReleaseInfo) (bool, error) {
+	if existing == nil {
+		found, err := a.Workloads.Exists(ctx)
+		if err != nil {
+			return false, fmt.Errorf("checking existing ArgoCD workloads: %w", err)
+		}
+
+		if found {
+			log.Print("Preserving existing ArgoCD workloads without the expected Helm release")
+		}
+
+		return !found, nil
+	}
+
+	if existing.ChartName != "argocd" {
+		log.Printf("Preserving existing ArgoCD release using chart %q", existing.ChartName)
+		return false, nil
+	}
+
+	return a.isNewerPackagedChart(existing.InstalledVersion)
+}
+
+func (a *Installer) isNewerPackagedChart(installedVersion string) (bool, error) {
+	installed, err := semver.StrictNewVersion(installedVersion)
+	if err != nil {
+		return false, fmt.Errorf("invalid installed Codesphere ArgoCD chart version: %w", err)
+	}
+
+	requested, err := semver.StrictNewVersion(a.Version)
+	if err != nil {
+		return false, fmt.Errorf("invalid packaged ArgoCD chart version: %w", err)
+	}
+
+	if requested.GreaterThan(installed) {
+		return true, nil
+	}
+
+	log.Printf("Retaining ArgoCD chart %s; package contains %s", installedVersion, a.Version)
 
 	return false, nil
 }
@@ -129,40 +115,9 @@ func (a *Installer) hasArgoCDWorkloads(ctx context.Context) (bool, error) {
 func (a *Installer) packagedChartConfig() (installer.ChartConfig, error) {
 	cfg := installer.ChartConfig{ReleaseName: "argocd", Namespace: DefaultNamespace, ChartName: a.PackageChart, Version: a.Version, CreateNamespace: true, WaitStrategy: kube.LegacyStrategy}
 
-	loaded, err := loader.Load(a.PackageChart)
+	chartValues, err := a.PackageLoader.LoadChart(a.PackageChart, a.Version)
 	if err != nil {
 		return cfg, fmt.Errorf("loading packaged ArgoCD chart: %w", err)
-	}
-
-	chart, err := helmchart.NewAccessor(loaded)
-	if err != nil {
-		return cfg, fmt.Errorf("accessing packaged ArgoCD chart: %w", err)
-	}
-
-	metadata := chart.MetadataAsMap()
-	if metadata["Name"] != "argocd" || metadata["Version"] != a.Version {
-		return cfg, fmt.Errorf("packaged ArgoCD chart %v:%v does not match BOM argocd:%s", metadata["Name"], metadata["Version"], a.Version)
-	}
-
-	if _, err := semver.StrictNewVersion(a.Version); err != nil {
-		return cfg, fmt.Errorf("invalid packaged ArgoCD chart version: %w", err)
-	}
-
-	dependencyFound := false
-
-	for _, dep := range chart.Dependencies() {
-		accessor, err := helmchart.NewAccessor(dep)
-		if err != nil {
-			return cfg, fmt.Errorf("accessing packaged ArgoCD dependency: %w", err)
-		}
-
-		if accessor.Name() == "argo-cd" {
-			dependencyFound = true
-		}
-	}
-
-	if !dependencyFound {
-		return cfg, fmt.Errorf("packaged ArgoCD chart is missing its bundled argo-cd dependency")
 	}
 
 	trust, err := a.registryTrustValues()
@@ -173,7 +128,7 @@ func (a *Installer) packagedChartConfig() (installer.ChartConfig, error) {
 	upstream := util.MergeTables(map[string]any{"dex": map[string]any{"enabled": false}}, trust)
 
 	if a.ImageRegistry != "" {
-		images, err := a.packagedImageValues(chart.Values())
+		images, err := a.packagedImageValues(chartValues)
 		if err != nil {
 			return cfg, err
 		}
@@ -183,7 +138,7 @@ func (a *Installer) packagedChartConfig() (installer.ChartConfig, error) {
 
 	defaults := map[string]any{"argo-cd": upstream, "extraSecrets": []any{}}
 
-	overrides, err := (&values.Options{ValueFiles: a.ValueFiles}).MergeValues(getter.Getters())
+	overrides, err := a.PackageLoader.LoadValues(a.ValueFiles)
 	if err != nil {
 		return cfg, fmt.Errorf("loading packaged ArgoCD values: %w", err)
 	}

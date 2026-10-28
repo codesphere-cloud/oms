@@ -20,7 +20,6 @@ import (
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
@@ -54,9 +53,10 @@ type InstallerConfig struct {
 // Installer holds the resolved configuration and initialized clients.
 type Installer struct {
 	InstallerConfig
-	Helm      installer.HelmClient
-	Resources Resources
-	Clientset kubernetes.Interface
+	Helm          installer.HelmClient
+	Resources     Resources
+	PackageLoader PackagedChartLoader
+	Workloads     WorkloadDetector
 }
 
 // NewInstaller creates an Installer with Helm and Kubernetes clients. It uses cfg.RESTConfig
@@ -82,7 +82,8 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 			InstallerConfig: cfg,
 			Helm:            helm,
 			Resources:       resources,
-			Clientset:       clientset,
+			PackageLoader:   packagedChartLoader{},
+			Workloads:       workloadDetector{client: clientset},
 		}, nil
 	}
 
@@ -105,7 +106,8 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 		InstallerConfig: cfg,
 		Helm:            helm,
 		Resources:       resources,
-		Clientset:       clientset,
+		PackageLoader:   packagedChartLoader{},
+		Workloads:       workloadDetector{client: clientset},
 	}, nil
 }
 

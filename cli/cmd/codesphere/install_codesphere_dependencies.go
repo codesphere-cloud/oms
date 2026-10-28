@@ -134,17 +134,9 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		return fmt.Errorf("failed to parse installer BOM: %w", err)
 	}
 
-	chart, ok := bomConfig.GetChart("argocd")
-	if !ok {
-		return fmt.Errorf("installer BOM has no tagged argocd chart reference")
-	}
-
-	if opts.ArgoCDVersion != "" && opts.ArgoCDVersion != chart.Tag() {
-		return fmt.Errorf("--argo-version must match the packaged Codesphere argocd chart version %s", chart.Tag())
-	}
-
-	if opts.ArgoCDRepoURL != "" && opts.ArgoCDRepoURL != argocdinstaller.DefaultRepoURL {
-		return fmt.Errorf("--argo-repo cannot override the packaged ArgoCD chart; use 'oms beta install argocd' for a custom installation")
+	chartConfig, err := argocdinstaller.CodesphereChartConfig(bomConfig, pm.GetDependencyPath("argocd/files/chart"), opts.ArgoCDVersion, opts.ArgoCDRepoURL)
+	if err != nil {
+		return fmt.Errorf("selecting ArgoCD chart: %w", err)
 	}
 
 	imageRegistry := ""
@@ -177,8 +169,8 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			registryURL = cfg.Registry.Server + installer.ChartsRepositoryPath
 		}
 		argoCDInstall, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
-			Version:           chart.Tag(),
-			PackageChart:      pm.GetDependencyPath("argocd/files/chart"),
+			Version:           chartConfig.Version,
+			PackageChart:      chartConfig.PackageChart,
 			ImageRegistry:     imageRegistry,
 			DatacenterID:      fmt.Sprintf("%d", cfg.Datacenter.ID),
 			OciUsername:       registryUsername,
@@ -188,7 +180,7 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			GitPassword:       os.Getenv("OMS_GIT_PASSWORD"),
 			FullInstall:       true,
 			ForceConflicts:    opts.ArgoCDForceConflicts,
-			RepoURL:           opts.ArgoCDRepoURL,
+			RepoURL:           chartConfig.RepoURL,
 			ValueFiles:        opts.ArgoCDValues,
 			RESTConfig:        restConfig,
 		})

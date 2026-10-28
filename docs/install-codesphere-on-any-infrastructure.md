@@ -463,36 +463,3 @@ Run the Codesphere smoke test when an API key for the environment is available:
 ```bash
 oms smoketest codesphere --help
 ```
-
-### Argo CD chart selection and upgrades
-
-`oms install codesphere` (including its `dependencies` command) installs the
-Codesphere `argocd` chart extracted from the installer package. Its version is
-pinned by `components.argocd.files.chart.ociRef` in the package's merged BOM;
-its upstream chart dependency is bundled and no upstream chart download is needed.
-
-An existing `argocd` Helm release in the `argocd` namespace is upgraded only when
-it uses the Codesphere `argocd` chart and the package contains a newer chart
-version. Equal or newer installed versions are retained. Releases using upstream
-`argo-cd` or an unknown chart, and Argo CD workloads without the expected release,
-are preserved. Repository credentials, vault synchronization, and pc-applications
-setup still run when the chart is retained. Use `--skip-steps argocd` to skip the
-entire Argo CD pre-step instead.
-
-`--argo-values` files target the wrapper chart: put upstream settings beneath
-`argo-cd`, for example:
-
-```yaml
-argo-cd:
-  server:
-    replicas: 2
-```
-
-OMS disables Dex and the wrapper's `extraSecrets` by default during bootstrap,
-and nests registry certificate trust under `argo-cd.configs`. Explicit values
-files override these defaults. When `registry.replaceImagesInBom` is enabled,
-bootstrap image repositories use the same destination mapping as `oms copy package`.
-
-`--argo-version`, if supplied, must equal the packaged wrapper chart version.
-`--argo-repo` cannot select a custom chart repository for package installation.
-Use `oms beta install argocd` for explicit standalone upstream installations.
