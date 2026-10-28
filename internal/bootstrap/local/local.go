@@ -220,7 +220,12 @@ func (b *LocalBootstrapper) Bootstrap() error {
 	}
 
 	err = b.stlog.Step("Install CloudNativePG and PostgreSQL", func() error {
-		err := b.stlog.Substep("Install CloudNativePG operator", b.InstallCloudNativePGHelmChart)
+		err := b.stlog.Substep("Ensure registry pull secret", b.EnsureRegistryPullSecret)
+		if err != nil {
+			return fmt.Errorf("failed to ensure registry pull secret: %w", err)
+		}
+
+		err = b.stlog.Substep("Install CloudNativePG operator", b.InstallCloudNativePGHelmChart)
 		if err != nil {
 			return err
 		}
