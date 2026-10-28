@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
@@ -192,11 +193,12 @@ func sharedInstallCodesphereSteps() []string {
 	return []string{"copy-dependencies", "extract-dependencies"}
 }
 
-// laterPhaseOpts returns the options for the dependencies and platform phases of a full install,
-// which must not copy and extract the package again after the infrastructure phase did.
+// laterPhaseOpts returns a copy of opts for the dependencies and platform phases of a full install,
+// with copying and extracting the package skipped. That is only safe because both steps are part of
+// installer.InfraSteps, so the infrastructure phase has already run them.
 func laterPhaseOpts(opts *InstallCodesphereOpts) *InstallCodesphereOpts {
 	later := *opts
-	later.SkipSteps = append(sharedInstallCodesphereSteps(), opts.SkipSteps...)
+	later.SkipSteps = slices.Concat(sharedInstallCodesphereSteps(), opts.SkipSteps)
 	return &later
 }
 
