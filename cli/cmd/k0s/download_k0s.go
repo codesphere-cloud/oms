@@ -75,6 +75,8 @@ func AddDownloadCmd(download *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.RunE = k0s.RunE
 }
 
+// DownloadK0s downloads the k0s and k0sctl binaries and, with --airgapped, the airgap
+// image bundle.
 func (c *DownloadK0sCmd) DownloadK0s(k0s installer.K0sManager, k0sctl installer.K0sctlManager) error {
 	if c.Opts.Path != "" && !c.Opts.Airgap {
 		return fmt.Errorf("--path requires --airgapped")
