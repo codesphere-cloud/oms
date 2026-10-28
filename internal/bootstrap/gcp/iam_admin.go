@@ -147,7 +147,7 @@ func (b *GCPBootstrapper) EnsureBilling() error {
 	}
 
 	// The API names the account as billingAccounts/<id>, while --billing-account takes the bare ID.
-	if bi.BillingEnabled && strings.TrimPrefix(bi.BillingAccountName, "billingAccounts/") == b.Env.BillingAccount {
+	if bi.BillingEnabled && bi.BillingAccountName == getBillingAccountResourceName(b.Env.BillingAccount) {
 		return nil
 	}
 

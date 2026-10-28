@@ -114,6 +114,7 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 
 	dc.InstallConfig = &config
 	dc.ConfigManager.SetInstallConfig(&config)
+
 	return nil
 }
 
@@ -125,6 +126,7 @@ func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *datacenter.DataCenter
 	if dc.IsPrimary() {
 		return b.loadInstallVault(dc.ConfigManager)
 	}
+
 	return nil
 }
 
@@ -986,8 +988,10 @@ func (b *GCPBootstrapper) ensureSecrets(dc *datacenter.DataCenter) error {
 		if err := b.loadInstallVault(dc.ConfigManager); err != nil {
 			return err
 		}
+
 		b.Env.Secrets = dc.ConfigManager.GetVault()
 	}
+
 	return nil
 }
 
