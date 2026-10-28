@@ -5,9 +5,9 @@ This project includes code licensed under the following terms:
  
 ----------
 Module: cloud.google.com/go/artifactregistry
-Version: v1.28.0
+Version: v1.28.1
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.28.0/artifactregistry/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/artifactregistry/v1.28.1/artifactregistry/LICENSE
  
 ----------
 Module: cloud.google.com/go/auth
@@ -41,9 +41,9 @@ License URL: https://github.com/googleapis/google-cloud-go/blob/iam/v1.15.0/iam/
  
 ----------
 Module: cloud.google.com/go/longrunning
-Version: v1.2.0
+Version: v1.3.0
 License: Apache-2.0
-License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v1.2.0/longrunning/LICENSE
+License URL: https://github.com/googleapis/google-cloud-go/blob/longrunning/v1.3.0/longrunning/LICENSE
  
 ----------
 Module: cloud.google.com/go/resourcemanager
@@ -719,9 +719,9 @@ License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.
  
 ----------
 Module: github.com/googleapis/gax-go/v2
-Version: v2.26.2
+Version: v2.27.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/gax-go/blob/v2.26.2/v2/LICENSE
+License URL: https://github.com/googleapis/gax-go/blob/v2.27.0/v2/LICENSE
  
 ----------
 Module: github.com/gorilla/websocket
@@ -1373,39 +1373,51 @@ License URL: https://github.com/open-telemetry/opentelemetry-go-contrib/blob/ins
  
 ----------
 Module: go.opentelemetry.io/otel
-Version: v1.45.0
+Version: v1.47.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.45.0/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.47.0/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel
-Version: v1.45.0
+Version: v1.47.0
 License: BSD-3-Clause
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.45.0/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/v1.47.0/LICENSE
+ 
+----------
+Module: go.opentelemetry.io/otel/log
+Version: v1.47.0
+License: Apache-2.0
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/log/v1.47.0/log/LICENSE
+ 
+----------
+Module: go.opentelemetry.io/otel/log
+Version: v1.47.0
+License: BSD-3-Clause
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/log/v1.47.0/log/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/metric
-Version: v1.45.0
+Version: v1.47.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.45.0/metric/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.47.0/metric/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/metric
-Version: v1.45.0
+Version: v1.47.0
 License: BSD-3-Clause
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.45.0/metric/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/metric/v1.47.0/metric/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/trace
-Version: v1.45.0
+Version: v1.47.0
 License: Apache-2.0
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.45.0/trace/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.47.0/trace/LICENSE
  
 ----------
 Module: go.opentelemetry.io/otel/trace
-Version: v1.45.0
+Version: v1.47.0
 License: BSD-3-Clause
-License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.45.0/trace/LICENSE
+License URL: https://github.com/open-telemetry/opentelemetry-go/blob/trace/v1.47.0/trace/LICENSE
  
 ----------
 Module: go.opentelemetry.io/proto/otlp
@@ -1517,15 +1529,15 @@ License URL: https://github.com/googleapis/google-api-go-client/blob/v0.309.0/in
  
 ----------
 Module: google.golang.org/genproto/googleapis
-Version: v0.0.0-20260720171339-e059f2f05d78
+Version: v0.0.0-20261012220534-4341edf3f941
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/e059f2f05d78/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/4341edf3f941/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/api
-Version: v0.0.0-20260817212433-ac3dfec99bb1
+Version: v0.0.0-20261012220534-4341edf3f941
 License: Apache-2.0
-License URL: https://github.com/googleapis/go-genproto/blob/ac3dfec99bb1/googleapis/api/LICENSE
+License URL: https://github.com/googleapis/go-genproto/blob/4341edf3f941/googleapis/api/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis/rpc
