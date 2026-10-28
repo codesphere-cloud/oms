@@ -104,8 +104,8 @@ func (c *InitK0sConfigCmd) InitK0sConfig(pm installer.PackageManager, k0s instal
 		return fmt.Errorf("--path requires --airgapped")
 	}
 
-	if err := c.validateClusterSource(); err != nil {
-		return err
+	if c.Opts.InstallConfig == "" && c.Opts.DatacenterName == "" {
+		return fmt.Errorf("--datacenter-name is required without --install-config")
 	}
 
 	if err := c.FileWriter.MkdirAll(c.Env.GetOmsWorkdir(), 0755); err != nil {
@@ -122,20 +122,6 @@ func (c *InitK0sConfigCmd) InitK0sConfig(pm installer.PackageManager, k0s instal
 
 	if _, err := generator.Generate(pm, k0s, c.Opts.Output); err != nil {
 		return fmt.Errorf("failed to generate k0sctl config: %w", err)
-	}
-
-	return nil
-}
-
-// validateClusterSource checks that the flags define where the cluster nodes and the data
-// center name come from.
-func (c *InitK0sConfigCmd) validateClusterSource() error {
-	if c.Opts.InstallConfig == "" && c.Opts.AnsibleInventory == "" && len(c.Opts.ControlPlanes) == 0 {
-		return fmt.Errorf("one of --install-config, --ansible-inventory or --control-plane is required")
-	}
-
-	if c.Opts.InstallConfig == "" && c.Opts.DatacenterName == "" {
-		return fmt.Errorf("--datacenter-name is required without --install-config")
 	}
 
 	return nil

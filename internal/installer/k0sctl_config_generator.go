@@ -191,7 +191,7 @@ func (g *K0sctlConfigGenerator) applyAnsibleInventory(config *files.RootConfig) 
 }
 
 // loadAnsibleKubernetesHosts reads the Kubernetes hosts of the Ansible inventory with
-// canonical IP addresses.
+// validated IP addresses.
 func (g *K0sctlConfigGenerator) loadAnsibleKubernetesHosts() (controlPlanes, workers []files.K8sNode, err error) {
 	data, err := g.FileWriter.ReadFile(g.Opts.AnsibleInventory)
 	if err != nil {
@@ -262,7 +262,7 @@ func k8sNodesFromIPs(addresses []string) ([]files.K8sNode, error) {
 // validateK8sNodeIPs checks that the nodes have valid IP addresses.
 func validateK8sNodeIPs(nodes []files.K8sNode) error {
 	for _, node := range nodes {
-		if net.ParseIP(node.IPAddress) == nil {
+		if !IsValidIP(node.IPAddress) {
 			return fmt.Errorf("invalid IP address %q", node.IPAddress)
 		}
 	}

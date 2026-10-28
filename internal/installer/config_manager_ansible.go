@@ -51,19 +51,14 @@ func (g *InstallConfig) FetchFromAnsibleInventory(inventoryPath string) error {
 		g.Config.Ceph.Hosts = cephHosts
 	}
 
-	k8sCPHosts, err := inventory.fetchK8sControlPlaneHosts()
+	k8sCPHosts, k8sWorkerHosts, err := inventory.fetchK8sHosts()
 	if err != nil {
-		return fmt.Errorf("failed to fetch k8s control plane hosts from inventory: %w", err)
+		return err
 	}
 
 	if len(k8sCPHosts) > 0 {
 		g.Config.Kubernetes.ControlPlanes = k8sCPHosts
 		g.Config.Kubernetes.APIServerHost = k8sCPHosts[0].IPAddress
-	}
-
-	k8sWorkerHosts, err := inventory.fetchK8sWorkerHosts()
-	if err != nil {
-		return fmt.Errorf("failed to fetch k8s worker node hosts from inventory: %w", err)
 	}
 
 	if len(k8sWorkerHosts) > 0 {
@@ -81,17 +76,7 @@ func ParseAnsibleKubernetesHosts(data []byte) (controlPlanes, workers []files.K8
 		return nil, nil, err
 	}
 
-	controlPlanes, err = inventory.fetchK8sControlPlaneHosts()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch k8s control plane hosts from inventory: %w", err)
-	}
-
-	workers, err = inventory.fetchK8sWorkerHosts()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch k8s worker node hosts from inventory: %w", err)
-	}
-
-	return controlPlanes, workers, nil
+	return inventory.fetchK8sHosts()
 }
 
 // readAnsibleInventory reads and parses the ansible inventory file.
@@ -152,6 +137,21 @@ func (i *ansibleInventory) fetchCephHosts() ([]files.CephHost, error) {
 	}
 
 	return hosts, nil
+}
+
+// fetchK8sHosts extracts the K8s control plane and worker hosts from the ansible inventory.
+func (i *ansibleInventory) fetchK8sHosts() (controlPlanes, workers []files.K8sNode, err error) {
+	controlPlanes, err = i.fetchK8sControlPlaneHosts()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch k8s control plane hosts from inventory: %w", err)
+	}
+
+	workers, err = i.fetchK8sWorkerHosts()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch k8s worker node hosts from inventory: %w", err)
+	}
+
+	return controlPlanes, workers, nil
 }
 
 // fetchK8sControlPlaneHosts extracts K8s control plane hosts from the ansible inventory

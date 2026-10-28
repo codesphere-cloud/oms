@@ -190,12 +190,6 @@ var _ = Describe("InitK0sConfigCmd", func() {
 		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("--no-download cannot be combined with --airgapped")))
 	})
 
-	It("fails without install-config, Ansible inventory and control planes", func() {
-		c.Opts.InstallConfig = ""
-
-		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError("one of --install-config, --ansible-inventory or --control-plane is required"))
-	})
-
 	It("fails without a data center name when there is no install-config", func() {
 		c.Opts.InstallConfig = ""
 		c.Opts.ControlPlanes = []string{"10.0.0.1"}
