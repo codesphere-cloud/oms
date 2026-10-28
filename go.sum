@@ -2059,8 +2059,8 @@ cloud.google.com/go/resourcemanager v1.10.0/go.mod h1:kIx3TWDCjLnUQUdjQ/e8EXsS9G
 cloud.google.com/go/resourcemanager v1.10.1/go.mod h1:A/ANV/Sv7y7fcjd4LSH7PJGTZcWRkO/69yN5UhYUmvE=
 cloud.google.com/go/resourcemanager v1.10.2/go.mod h1:5f+4zTM/ZOTDm6MmPOp6BQAhR0fi8qFPnvVGSoWszcc=
 cloud.google.com/go/resourcemanager v1.10.3/go.mod h1:JSQDy1JA3K7wtaFH23FBGld4dMtzqCoOpwY55XYR8gs=
-cloud.google.com/go/resourcemanager v1.18.0 h1:mcWSOOT7zh/elr0mF4DYyOsCUJctVlaUwdBgj9A3vb4=
-cloud.google.com/go/resourcemanager v1.18.0/go.mod h1:1zfRgos5yRuyjX4n4eEm7XCUo9Gy2slBOKR9RSz3vKI=
+cloud.google.com/go/resourcemanager v1.18.1 h1:xdaDmfzM08PA2Zs8hU8ej1TXQTJAcRoHbvQpaAEPYj0=
+cloud.google.com/go/resourcemanager v1.18.1/go.mod h1:LjIioOpdFo5J1aFG9R51YqeBN5L55vElAG70dzFD/wg=
 cloud.google.com/go/resourcesettings v1.3.0/go.mod h1:lzew8VfESA5DQ8gdlHwMrqZs1S9V87v3oCnKCWoOuQU=
 cloud.google.com/go/resourcesettings v1.4.0/go.mod h1:ldiH9IJpcrlC3VSuCGvjR5of/ezRrOxFtpJoJo5SmXg=
 cloud.google.com/go/resourcesettings v1.5.0/go.mod h1:+xJF7QSG6undsQDfsCJyqWXyBwUoJLhetkRMDRnIoXA=
