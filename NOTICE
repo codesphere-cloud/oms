@@ -497,15 +497,15 @@ License URL: https://github.com/go-gorp/gorp/blob/v3.1.0/LICENSE
  
 ----------
 Module: github.com/go-jose/go-jose/v4
-Version: v4.1.4
+Version: v4.1.6
 License: Apache-2.0
-License URL: https://github.com/go-jose/go-jose/blob/v4.1.4/LICENSE
+License URL: https://github.com/go-jose/go-jose/blob/v4.1.6/LICENSE
  
 ----------
 Module: github.com/go-jose/go-jose/v4/json
-Version: v4.1.4
+Version: v4.1.6
 License: BSD-3-Clause
-License URL: https://github.com/go-jose/go-jose/blob/v4.1.4/json/LICENSE
+License URL: https://github.com/go-jose/go-jose/blob/v4.1.6/json/LICENSE
  
 ----------
 Module: github.com/go-logr/logr
