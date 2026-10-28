@@ -722,4 +722,4 @@ replace (
 
 replace k8s.io/cri-streaming => k8s.io/cri-streaming v0.37.2
 
-replace k8s.io/streaming => k8s.io/streaming v0.37.1
+replace k8s.io/streaming => k8s.io/streaming v0.37.2
