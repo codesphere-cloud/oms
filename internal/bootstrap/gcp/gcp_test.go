@@ -200,6 +200,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 	Describe("ValidateInput pc-apps values", func() {
 		It("rejects a missing values file", func() {
 			csEnv.PCAppsValues = []string{"base.yaml"}
+
 			fw.EXPECT().Exists("base.yaml").Return(false)
 
 			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring("pc-apps values file not found at path: base.yaml")))

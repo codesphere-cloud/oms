@@ -83,6 +83,7 @@ func VMDefsForEnv(env *CodesphereEnvironment) []VMDef {
 	if env.SingleVM {
 		return []VMDef{SingleVMDef(env.MachineType)}
 	}
+
 	defs := sharedVMDefs()
 
 	dcs := env.DataCenters
