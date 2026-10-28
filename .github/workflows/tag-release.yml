@@ -36,6 +36,8 @@ jobs:
         env:
           # PAT-published releases trigger the CLI reference release workflow.
           GITHUB_TOKEN: ${{ secrets.PAT_UPDATE_DOCS }}
+          # The runner's /tmp has a quota that goreleaser's parallel cross-builds exceed.
+          GOTMPDIR: ${{ runner.temp }}
 
       - name: Slack Notification on Failure
         if: ${{ failure() }}
