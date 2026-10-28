@@ -20,6 +20,7 @@ import (
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
@@ -31,6 +32,9 @@ const (
 
 // InstallerConfig holds all user-facing parameters for an ArgoCD install/upgrade.
 type InstallerConfig struct {
+	// PackageChart selects the extracted Codesphere chart instead of upstream.
+	PackageChart   string
+	ImageRegistry  string
 	Version        string
 	DatacenterID   string
 	OciUsername    string
@@ -52,6 +56,7 @@ type Installer struct {
 	InstallerConfig
 	Helm      installer.HelmClient
 	Resources Resources
+	Clientset kubernetes.Interface
 }
 
 // NewInstaller creates an Installer with Helm and Kubernetes clients. It uses cfg.RESTConfig
@@ -77,6 +82,7 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 			InstallerConfig: cfg,
 			Helm:            helm,
 			Resources:       resources,
+			Clientset:       clientset,
 		}, nil
 	}
 
@@ -99,12 +105,16 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 		InstallerConfig: cfg,
 		Helm:            helm,
 		Resources:       resources,
+		Clientset:       clientset,
 	}, nil
 }
 
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
 func (a *Installer) Install() error {
+	if a.PackageChart != "" {
+		return a.installPackaged()
+	}
 	if err := a.validateRepoURL(); err != nil {
 		return err
 	}

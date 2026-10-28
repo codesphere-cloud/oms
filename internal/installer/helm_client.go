@@ -38,6 +38,7 @@ const maxReleaseHistory = 10
 // the application cares about — completely decoupled from the Helm SDK types.
 type ReleaseInfo struct {
 	Name             string
+	ChartName        string // identifies the chart family, independently of its version
 	InstalledVersion string // chart version currently deployed
 }
 
@@ -272,9 +273,11 @@ func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, e
 		}
 		metadata := chartAcc.MetadataAsMap()
 		version, _ := metadata["Version"].(string)
+		chartName, _ := metadata["Name"].(string)
 
 		return &ReleaseInfo{
 			Name:             acc.Name(),
+			ChartName:        chartName,
 			InstalledVersion: version,
 		}, nil
 	}
