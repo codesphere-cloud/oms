@@ -217,7 +217,7 @@ var _ = Describe("Shared remote OMS installation", func() {
 
 	It("downloads OMS on the single VM when the command is missing", func() {
 		client.EXPECT().RunCommand(host, "root", "command -v oms >/dev/null 2>&1").Return(errors.New("not installed")).Once()
-		client.EXPECT().RunCommand(host, "root", "wget -qO- 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms.*linux_amd64\")) | .browser_download_url' | xargs wget -O oms").Return(nil).Once()
+		client.EXPECT().RunCommand(host, "root", "curl -fsSL 'https://api.github.com/repos/codesphere-cloud/oms/releases/latest' | jq -r '.assets[] | select(.name | match(\"oms.*linux_amd64\")) | .browser_download_url' | xargs curl -fsSL -o oms").Return(nil).Once()
 		client.EXPECT().RunCommand(host, "root", "chmod +x oms; sudo mv oms /usr/local/bin/").Return(nil).Once()
 		Expect(b.EnsureOmsInstalled()).To(Succeed())
 	})
