@@ -30,6 +30,10 @@ type K0sctlConfigOpts struct {
 	Airgap bool
 	// AirgapBundlePath is the airgap image bundle to upload. Empty uses the OMS cache.
 	AirgapBundlePath string
+	// The following options are only exposed by 'oms init k0s-config'. 'oms install k0s'
+	// generates its config from an install-config alone, or applies a config created by
+	// 'oms init k0s-config' with --config.
+
 	// AnsibleInventory replaces the Kubernetes control planes and workers of the
 	// install-config with the hosts of the inventory groups it defines.
 	AnsibleInventory string
@@ -56,10 +60,6 @@ type K0sctlConfigGenerator struct {
 // Generate writes the k0sctl config to outputPath, or to the OMS workdir when outputPath
 // is empty, and returns its path.
 func (g *K0sctlConfigGenerator) Generate(pm PackageManager, k0s K0sManager, outputPath string) (string, error) {
-	if g.Opts.InstallConfig == "" && g.Opts.AnsibleInventory == "" && len(g.Opts.ControlPlanes) == 0 {
-		return "", fmt.Errorf("one of --install-config, --ansible-inventory or --control-plane is required")
-	}
-
 	if g.Opts.NoDownload && g.Opts.Airgap {
 		return "", fmt.Errorf("--no-download cannot be combined with --airgapped, as the nodes would download k0s from the internet")
 	}
@@ -138,11 +138,11 @@ func (g *K0sctlConfigGenerator) loadClusterConfig() (*files.RootConfig, error) {
 	}
 
 	if len(config.Kubernetes.ControlPlanes) == 0 {
-		return nil, fmt.Errorf("no Kubernetes control plane defined, set --control-plane")
+		return nil, fmt.Errorf("no Kubernetes control plane defined")
 	}
 
 	if config.Datacenter.Name == "" {
-		return nil, fmt.Errorf("no data center name defined, set --datacenter-name")
+		return nil, fmt.Errorf("no data center name defined")
 	}
 
 	return config, nil
@@ -158,18 +158,23 @@ func (g *K0sctlConfigGenerator) loadBaseConfig() (*files.RootConfig, error) {
 	return LoadManagedInstallConfig(g.Opts.InstallConfig)
 }
 
+// applyAnsibleInventory replaces the control planes and workers of the config with the
+// k8s-cp and k8s-workers hosts of the Ansible inventory, keeping the ones of groups the
+// inventory does not define. Unlike FetchFromAnsibleInventory, it keeps the API server
+// host of the install-config, as that usually is a DNS name or load balancer that stays
+// valid when the control plane nodes change.
 func (g *K0sctlConfigGenerator) applyAnsibleInventory(config *files.RootConfig) error {
 	if g.Opts.AnsibleInventory == "" {
 		return nil
 	}
 
-	controlPlanes, workers, err := LoadAnsibleKubernetesHosts(g.Opts.AnsibleInventory)
+	controlPlanes, workers, err := g.loadAnsibleKubernetesHosts()
 	if err != nil {
-		return fmt.Errorf("failed to load Ansible inventory: %w", err)
+		return fmt.Errorf("failed to load Ansible inventory %q: %w", g.Opts.AnsibleInventory, err)
 	}
 
 	if len(controlPlanes) == 0 && len(workers) == 0 {
-		return fmt.Errorf("ansible inventory '%s' defines no k8s-cp or k8s-workers hosts", g.Opts.AnsibleInventory)
+		return fmt.Errorf("no k8s-cp or k8s-workers hosts defined in Ansible inventory %q", g.Opts.AnsibleInventory)
 	}
 
 	if len(controlPlanes) > 0 {
@@ -183,20 +188,47 @@ func (g *K0sctlConfigGenerator) applyAnsibleInventory(config *files.RootConfig) 
 	return nil
 }
 
+// loadAnsibleKubernetesHosts reads the Kubernetes hosts of the Ansible inventory with
+// canonical IP addresses.
+func (g *K0sctlConfigGenerator) loadAnsibleKubernetesHosts() (controlPlanes, workers []files.K8sNode, err error) {
+	data, err := g.FileWriter.ReadFile(g.Opts.AnsibleInventory)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read file: %w", err)
+	}
+
+	controlPlanes, workers, err = ParseAnsibleKubernetesHosts(data)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	controlPlanes, err = canonicalK8sNodes(controlPlanes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid k8s-cp host: %w", err)
+	}
+
+	workers, err = canonicalK8sNodes(workers)
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid k8s-workers host: %w", err)
+	}
+
+	return controlPlanes, workers, nil
+}
+
+// applyFlags replaces the values of the config with the ones set in the options.
 func (g *K0sctlConfigGenerator) applyFlags(config *files.RootConfig) error {
 	if len(g.Opts.ControlPlanes) > 0 {
-		controlPlanes, err := k8sNodesFromIPs("--control-plane", g.Opts.ControlPlanes)
+		controlPlanes, err := k8sNodesFromIPs(g.Opts.ControlPlanes)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid control plane: %w", err)
 		}
 
 		config.Kubernetes.ControlPlanes = controlPlanes
 	}
 
 	if len(g.Opts.Workers) > 0 {
-		workers, err := k8sNodesFromIPs("--worker", g.Opts.Workers)
+		workers, err := k8sNodesFromIPs(g.Opts.Workers)
 		if err != nil {
-			return err
+			return fmt.Errorf("invalid worker: %w", err)
 		}
 
 		config.Kubernetes.Workers = workers
@@ -213,18 +245,30 @@ func (g *K0sctlConfigGenerator) applyFlags(config *files.RootConfig) error {
 	return nil
 }
 
-// k8sNodesFromIPs turns the IPs given with flag into Kubernetes nodes.
-func k8sNodesFromIPs(flag string, ips []string) ([]files.K8sNode, error) {
-	nodes := make([]files.K8sNode, 0, len(ips))
-	for _, ip := range ips {
-		if net.ParseIP(ip) == nil {
-			return nil, fmt.Errorf("invalid IP address '%s' for %s", ip, flag)
+// k8sNodesFromIPs turns IP addresses into Kubernetes nodes with canonical IP addresses, so
+// that a node given in different notations is recognized as the same node.
+func k8sNodesFromIPs(addresses []string) ([]files.K8sNode, error) {
+	nodes := make([]files.K8sNode, 0, len(addresses))
+	for _, address := range addresses {
+		ip := net.ParseIP(address)
+		if ip == nil {
+			return nil, fmt.Errorf("invalid IP address %q", address)
 		}
 
-		nodes = append(nodes, files.K8sNode{IPAddress: ip})
+		nodes = append(nodes, files.K8sNode{IPAddress: ip.String()})
 	}
 
 	return nodes, nil
+}
+
+// canonicalK8sNodes returns the nodes with canonical IP addresses.
+func canonicalK8sNodes(nodes []files.K8sNode) ([]files.K8sNode, error) {
+	addresses := make([]string, 0, len(nodes))
+	for _, node := range nodes {
+		addresses = append(addresses, node.IPAddress)
+	}
+
+	return k8sNodesFromIPs(addresses)
 }
 
 // LoadManagedInstallConfig loads the install-config and ensures its Kubernetes is managed by

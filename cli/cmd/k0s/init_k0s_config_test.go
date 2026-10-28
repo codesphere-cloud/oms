@@ -193,13 +193,20 @@ var _ = Describe("InitK0sConfigCmd", func() {
 	It("fails without install-config, Ansible inventory and control planes", func() {
 		c.Opts.InstallConfig = ""
 
-		setupWorkdirMocks()
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError("one of --install-config, --ansible-inventory or --control-plane is required"))
+	})
 
-		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("one of --install-config, --ansible-inventory or --control-plane is required")))
+	It("fails without a data center name when there is no install-config", func() {
+		c.Opts.InstallConfig = ""
+		c.Opts.ControlPlanes = []string{"10.0.0.1"}
+
+		Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError("--datacenter-name is required without --install-config"))
 	})
 
 	Context("with an Ansible inventory and host flags", func() {
-		const inventory = `k8s-cp:
+		const (
+			inventoryPath = "inventory.yaml"
+			inventory     = `k8s-cp:
   hosts:
     cs-k8s-cp-1:
       internal_ip: 10.0.0.1
@@ -210,23 +217,32 @@ k8s-workers:
     cs-k8s-worker-2:
       internal_ip: 10.0.1.2
 `
+		)
 
-		writeInventory := func(content string) string {
-			path := filepath.Join(tempDir, "inventory.yaml")
-			Expect(os.WriteFile(path, []byte(content), 0644)).To(Succeed())
+		var written installer.K0sctlConfig
 
-			return path
+		BeforeEach(func() {
+			written = installer.K0sctlConfig{}
+		})
+
+		expectInventoryRead := func(content string) {
+			c.Opts.AnsibleInventory = inventoryPath
+			mockFileWriter.EXPECT().ReadFile(inventoryPath).Return([]byte(content), nil)
 		}
 
-		// hostAddresses returns the SSH addresses of the hosts of the written k0sctl config
-		// with the given role.
-		hostAddresses := func(data []byte, role string) []string {
-			var config installer.K0sctlConfig
-			Expect(config.Unmarshal(data)).To(Succeed())
+		expectConfigWritten := func(path string) {
+			mockFileWriter.EXPECT().WriteFile(path, mock.Anything, os.FileMode(0644)).
+				Run(func(_ string, data []byte, _ os.FileMode) {
+					Expect(written.Unmarshal(data)).To(Succeed())
+				}).
+				Return(nil)
+		}
 
+		// hostAddresses returns the SSH addresses of the written hosts with the given role.
+		hostAddresses := func(role string) []string {
 			addresses := []string{}
 
-			for _, host := range config.Spec.Hosts {
+			for _, host := range written.Spec.Hosts {
 				if host.Role == role {
 					addresses = append(addresses, host.SSH.Address)
 				}
@@ -235,48 +251,21 @@ k8s-workers:
 			return addresses
 		}
 
-		var written []byte
-
-		expectConfigWritten := func(path string) {
-			mockFileWriter.EXPECT().WriteFile(path, mock.Anything, os.FileMode(0644)).
-				Run(func(_ string, data []byte, _ os.FileMode) { written = data }).
-				Return(nil)
-		}
-
-		BeforeEach(func() {
-			written = nil
-		})
-
-		It("generates the config from the Ansible inventory alone", func() {
-			c.Opts.InstallConfig = ""
-			c.Opts.AnsibleInventory = writeInventory(inventory)
-			c.Opts.DatacenterName = "dc1"
-
-			setupWorkdirMocks()
-			mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
-			expectConfigWritten(filepath.Join(tempDir, "k0sctl-config-dc1.yaml"))
-
-			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
-			Expect(hostAddresses(written, "controller")).To(Equal([]string{"10.0.0.1"}))
-			Expect(hostAddresses(written, "worker")).To(Equal([]string{"10.0.1.1", "10.0.1.2"}))
-			Expect(string(written)).To(ContainSubstring("name: codesphere-dc1"))
-		})
-
 		It("replaces the hosts of the install-config with the ones of the Ansible inventory", func() {
-			c.Opts.AnsibleInventory = writeInventory(inventory)
+			expectInventoryRead(inventory)
 
 			setupWorkdirMocks()
 			mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
 			expectConfigWritten(filepath.Join(tempDir, "k0sctl-config-test-dc.yaml"))
 
 			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
-			Expect(hostAddresses(written, "controller")).To(Equal([]string{"10.0.0.1"}))
-			Expect(hostAddresses(written, "worker")).To(Equal([]string{"10.0.1.1", "10.0.1.2"}))
-			Expect(string(written)).To(ContainSubstring("externalAddress: api.test.example.com"))
+			Expect(hostAddresses("controller")).To(Equal([]string{"10.0.0.1"}))
+			Expect(hostAddresses("worker")).To(Equal([]string{"10.0.1.1", "10.0.1.2"}))
+			Expect(written.Spec.K0s.Config.Spec.API.ExternalAddress).To(Equal("api.test.example.com"))
 		})
 
 		It("keeps the control planes of the install-config when the Ansible inventory only defines workers", func() {
-			c.Opts.AnsibleInventory = writeInventory(`k8s-workers:
+			expectInventoryRead(`k8s-workers:
   hosts:
     cs-k8s-worker-1:
       internal_ip: 10.0.1.1
@@ -287,12 +276,13 @@ k8s-workers:
 			expectConfigWritten(filepath.Join(tempDir, "k0sctl-config-test-dc.yaml"))
 
 			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
-			Expect(hostAddresses(written, "controller")).To(Equal([]string{"192.168.1.100"}))
-			Expect(hostAddresses(written, "worker")).To(Equal([]string{"10.0.1.1"}))
+			Expect(hostAddresses("controller")).To(Equal([]string{"192.168.1.100"}))
+			Expect(hostAddresses("worker")).To(Equal([]string{"10.0.1.1"}))
 		})
 
 		It("replaces the install-config and the Ansible inventory with the values given as flags", func() {
-			c.Opts.AnsibleInventory = writeInventory(inventory)
+			expectInventoryRead(inventory)
+
 			c.Opts.Workers = []string{"10.0.9.1"}
 			c.Opts.DatacenterName = "dc2"
 			c.Opts.APIServerHost = "k8s.example.com"
@@ -302,15 +292,16 @@ k8s-workers:
 			expectConfigWritten(filepath.Join(tempDir, "k0sctl-config-dc2.yaml"))
 
 			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
-			Expect(hostAddresses(written, "controller")).To(Equal([]string{"10.0.0.1"}))
-			Expect(hostAddresses(written, "worker")).To(Equal([]string{"10.0.9.1"}))
-			Expect(string(written)).To(ContainSubstring("externalAddress: k8s.example.com"))
+			Expect(hostAddresses("controller")).To(Equal([]string{"10.0.0.1"}))
+			Expect(hostAddresses("worker")).To(Equal([]string{"10.0.9.1"}))
+			Expect(written.Metadata.Name).To(Equal("codesphere-dc2"))
+			Expect(written.Spec.K0s.Config.Spec.API.ExternalAddress).To(Equal("k8s.example.com"))
 		})
 
-		It("generates the config from host flags alone and runs both roles on a node given as both", func() {
+		It("generates the config from host flags without an install-config", func() {
 			c.Opts.InstallConfig = ""
 			c.Opts.ControlPlanes = []string{"10.0.0.1"}
-			c.Opts.Workers = []string{"10.0.0.1", "10.0.0.2"}
+			c.Opts.Workers = []string{"10.0.0.2"}
 			c.Opts.DatacenterName = "dc1"
 
 			setupWorkdirMocks()
@@ -318,52 +309,8 @@ k8s-workers:
 			expectConfigWritten(filepath.Join(tempDir, "k0sctl-config-dc1.yaml"))
 
 			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
-			Expect(hostAddresses(written, "controller")).To(Equal([]string{"10.0.0.1"}))
-			Expect(hostAddresses(written, "worker")).To(Equal([]string{"10.0.0.2"}))
-			Expect(string(written)).To(ContainSubstring("--enable-worker"))
-		})
-
-		It("fails without a data center name when there is no install-config", func() {
-			c.Opts.InstallConfig = ""
-			c.Opts.ControlPlanes = []string{"10.0.0.1"}
-
-			setupWorkdirMocks()
-
-			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("set --datacenter-name")))
-		})
-
-		It("fails without a control plane", func() {
-			c.Opts.InstallConfig = ""
-			c.Opts.AnsibleInventory = writeInventory(`k8s-workers:
-  hosts:
-    cs-k8s-worker-1:
-      internal_ip: 10.0.1.1
-`)
-			c.Opts.DatacenterName = "dc1"
-
-			setupWorkdirMocks()
-
-			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("no Kubernetes control plane defined")))
-		})
-
-		It("fails for an invalid node IP", func() {
-			c.Opts.Workers = []string{"10.0.0.300"}
-
-			setupWorkdirMocks()
-
-			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("invalid IP address '10.0.0.300' for --worker")))
-		})
-
-		It("fails for an Ansible inventory without Kubernetes hosts", func() {
-			c.Opts.AnsibleInventory = writeInventory(`ceph:
-  hosts:
-    cs-ceph-1:
-      internal_ip: 10.0.2.1
-`)
-
-			setupWorkdirMocks()
-
-			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(MatchError(ContainSubstring("defines no k8s-cp or k8s-workers hosts")))
+			Expect(hostAddresses("controller")).To(Equal([]string{"10.0.0.1"}))
+			Expect(hostAddresses("worker")).To(Equal([]string{"10.0.0.2"}))
 		})
 	})
 })

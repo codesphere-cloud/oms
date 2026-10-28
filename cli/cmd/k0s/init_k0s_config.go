@@ -52,8 +52,9 @@ func AddInitK0sConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 			'oms download k0s'.
 
 			The cluster is defined by a Codesphere install-config, an Ansible inventory and flags,
-			in that order: the k8s-cp and k8s-workers hosts of the Ansible inventory replace the
-			control planes and workers of the install-config, and flags replace both. Without an
+			with increasing precedence: install-config < Ansible inventory < flags. Each source
+			only replaces the control planes or workers it defines, so --worker alone keeps the
+			control planes of the install-config or the Ansible inventory. Without an
 			install-config, --datacenter-name is required. A node given as both control plane and
 			worker runs both roles.
 
@@ -78,8 +79,8 @@ func AddInitK0sConfigCmd(init *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&k0sConfig.Opts.AnsibleInventory, "ansible-inventory", "", "Path to Ansible inventory file whose k8s-cp and k8s-workers hosts replace the ones of the install-config")
 	flags.StringSliceVar(&k0sConfig.Opts.ControlPlanes, "control-plane", nil, "IP addresses of the Kubernetes control plane nodes, replacing the ones of the install-config and the Ansible inventory")
 	flags.StringSliceVar(&k0sConfig.Opts.Workers, "worker", nil, "IP addresses of the Kubernetes worker nodes, replacing the ones of the install-config and the Ansible inventory")
-	flags.StringVar(&k0sConfig.Opts.DatacenterName, "datacenter-name", "", "Name of the data center (required without --install-config)")
-	flags.StringVar(&k0sConfig.Opts.APIServerHost, "api-server-host", "", "External host name or address of the Kubernetes API server")
+	flags.StringVar(&k0sConfig.Opts.DatacenterName, "datacenter-name", "", "Name of the data center, overriding the one of the install-config (required without --install-config)")
+	flags.StringVar(&k0sConfig.Opts.APIServerHost, "api-server-host", "", "External host name or address of the Kubernetes API server, overriding the one of the install-config")
 	flags.StringVarP(&k0sConfig.Opts.Output, "output", "o", "", "Output file path for the k0sctl config (default: k0sctl-config-<datacenter>.yaml in the OMS workdir)")
 	flags.StringVarP(&k0sConfig.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
 	flags.StringVarP(&k0sConfig.Opts.Package, "package", "p", "", "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from")
@@ -103,6 +104,10 @@ func (c *InitK0sConfigCmd) InitK0sConfig(pm installer.PackageManager, k0s instal
 		return fmt.Errorf("--path requires --airgapped")
 	}
 
+	if err := c.validateClusterSource(); err != nil {
+		return err
+	}
+
 	if err := c.FileWriter.MkdirAll(c.Env.GetOmsWorkdir(), 0755); err != nil {
 		return fmt.Errorf("failed to create oms workdir: %w", err)
 	}
@@ -117,6 +122,20 @@ func (c *InitK0sConfigCmd) InitK0sConfig(pm installer.PackageManager, k0s instal
 
 	if _, err := generator.Generate(pm, k0s, c.Opts.Output); err != nil {
 		return fmt.Errorf("failed to generate k0sctl config: %w", err)
+	}
+
+	return nil
+}
+
+// validateClusterSource checks that the flags define where the cluster nodes and the data
+// center name come from.
+func (c *InitK0sConfigCmd) validateClusterSource() error {
+	if c.Opts.InstallConfig == "" && c.Opts.AnsibleInventory == "" && len(c.Opts.ControlPlanes) == 0 {
+		return fmt.Errorf("one of --install-config, --ansible-inventory or --control-plane is required")
+	}
+
+	if c.Opts.InstallConfig == "" && c.Opts.DatacenterName == "" {
+		return fmt.Errorf("--datacenter-name is required without --install-config")
 	}
 
 	return nil
