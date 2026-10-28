@@ -38,10 +38,7 @@ $ oms install codesphere dependencies -p codesphere-v1.2.3-installer-lite.tar.gz
 ```
       --argo-force-conflicts         Force SSA ownership conflicts during ArgoCD install
       --argo-registry-ca string      Path to the certificate authority of the OCI registry, needed when its certificate is self-signed
-      --argo-registry-url string     OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)
-      --argo-repo string             ArgoCD Helm chart repository URL (default "https://argoproj.github.io/argo-helm")
       --argo-values stringArray      ArgoCD values YAML file (can be specified multiple times)
-      --argo-version string          ArgoCD Helm chart version to install
       --auto-approve                 Auto approve confirmation prompts with default values (default true)
   -c, --config stringArray           Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order
       --direct-connection            Use direct connection for installation, requires having access to the cluster nodes from your machine
@@ -52,7 +49,7 @@ $ oms install codesphere dependencies -p codesphere-v1.2.3-installer-lite.tar.gz
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
   -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)
   -s, --skip-steps strings           Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd
-      --timer                        Show how long each step took after it finishes
+      --timer                        Show how long each step took and a final timing summary table
       --vault string                 Path to the prod.vault.yaml file used for config templating
       --vault-secret-name string     Secret in the codesphere namespace the vault is written to (as source for ESO). (default "cs-vault")
       --verbose                      Enable verbose output

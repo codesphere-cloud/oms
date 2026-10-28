@@ -7,6 +7,9 @@ package bootstrap
 // Line resets don't work with log.Print as expected.
 import (
 	"fmt"
+	"os"
+	"strings"
+	"text/tabwriter"
 	"time"
 )
 
@@ -23,6 +26,15 @@ type StepLogger struct {
 	config      StepLoggerConfig
 	subSteps    int
 	currentStep string
+	timings     []stepTiming
+	depth       int
+}
+
+type stepTiming struct {
+	name     string
+	duration time.Duration
+	depth    int
+	failed   bool
 }
 
 // StepLoggerConfig controls step logger output.
@@ -34,7 +46,7 @@ type StepLoggerConfig struct {
 // StepLoggerOption configures a step logger.
 type StepLoggerOption func(*StepLoggerConfig)
 
-// WithTimer controls whether completed steps show their elapsed time.
+// WithTimer enables elapsed times and the final timing summary.
 func WithTimer(enabled bool) StepLoggerOption {
 	return func(config *StepLoggerConfig) {
 		config.Timer = enabled
@@ -57,6 +69,53 @@ func (b *StepLogger) elapsed(start time.Time) string {
 	return fmt.Sprintf(" (%s)", time.Since(start).Round(time.Millisecond))
 }
 
+func (b *StepLogger) runTimed(name string, fn func() error) error {
+	if !b.config.Timer {
+		return fn()
+	}
+
+	index := len(b.timings)
+	b.timings = append(b.timings, stepTiming{name: name, depth: b.depth})
+	b.depth++
+	start := time.Now()
+	err := fn()
+	b.depth--
+	b.timings[index].duration = time.Since(start)
+	b.timings[index].failed = err != nil
+
+	return err
+}
+
+// PrintSummary prints recorded steps in execution order when timing is enabled.
+// Defer this at the command boundary to include completed steps on failure too.
+func (b *StepLogger) PrintSummary() {
+	if b.config.Silent || !b.config.Timer || len(b.timings) == 0 {
+		return
+	}
+
+	fmt.Println("\nStep timing summary:")
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
+	_, _ = fmt.Fprintln(w, "Step\tStatus\tDuration")
+
+	var total time.Duration
+
+	for _, step := range b.timings {
+		status := "OK"
+		if step.failed {
+			status = "FAILED"
+		}
+
+		_, _ = fmt.Fprintf(w, "%s%s\t%s\t%s\n", strings.Repeat("  ", step.depth), step.name, status, step.duration.Round(time.Millisecond))
+		if step.depth == 0 {
+			total += step.duration
+		}
+	}
+
+	_, _ = fmt.Fprintf(w, "Total\t\t%s\n", total.Round(time.Millisecond))
+	_ = w.Flush()
+}
+
 func (b *StepLogger) Step(name string, fn func() error) error {
 	if b.config.Silent {
 		return fn()
@@ -67,7 +126,8 @@ func (b *StepLogger) Step(name string, fn func() error) error {
 
 	fmt.Printf("%s%s%s...", LINE_RESET, RESET_TEXT, name)
 	start := time.Now()
-	err := fn()
+
+	err := b.runTimed(name, fn)
 	if err != nil {
 		fmt.Printf("%s%s%s failed: %v%s%s\n", LINE_RESET, RED_TEXT, name, err, b.elapsed(start), RESET_TEXT)
 	} else {
@@ -89,7 +149,8 @@ func (b *StepLogger) Substep(name string, fn func() error) error {
 
 	fmt.Printf("%s%s   %s...", LINE_RESET, RESET_TEXT, name)
 	start := time.Now()
-	err := fn()
+
+	err := b.runTimed(name, fn)
 	if err != nil {
 		fmt.Printf("%s%s   %s failed: %v%s%s\n", LINE_RESET, RED_TEXT, name, err, b.elapsed(start), RESET_TEXT)
 	} else {

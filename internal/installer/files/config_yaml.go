@@ -4,8 +4,10 @@
 package files
 
 import (
+	"cmp"
 	"fmt"
 	"log"
+	"maps"
 	"slices"
 	"strings"
 
@@ -181,6 +183,72 @@ func (c *RootConfig) CodespherePackageVersion() (string, error) {
 	return c.Operations.Codesphere.FormatVersionForPortal(), nil
 }
 
+// AllDataCenters returns .dataCenters, or only .dataCenter when .dataCenters is empty.
+func (c *RootConfig) AllDataCenters() []DatacenterConfig {
+	if len(c.DataCenters) == 0 {
+		return []DatacenterConfig{c.Datacenter}
+	}
+
+	return c.DataCenters
+}
+
+// ValidateDataCenters checks that the data centers have unique ids, include .dataCenter unchanged
+// and include .defaultDataCenterId if it is set.
+func (c *RootConfig) ValidateDataCenters() error {
+	byID, err := dataCentersByID(c.AllDataCenters())
+	if err != nil {
+		return err
+	}
+
+	ids := slices.Sorted(maps.Keys(byID))
+
+	target, ok := byID[c.Datacenter.ID]
+	if !ok {
+		return fmt.Errorf(".dataCenters (ids: %v) is missing .dataCenter (id %d)", ids, c.Datacenter.ID)
+	}
+
+	if target != c.Datacenter {
+		return fmt.Errorf(
+			"the .dataCenters entry with id %d differs from .dataCenter: %+v vs %+v",
+			c.Datacenter.ID,
+			target,
+			c.Datacenter,
+		)
+	}
+
+	if c.DefaultDataCenterID == 0 {
+		return nil
+	}
+
+	if _, ok := byID[c.DefaultDataCenterID]; !ok {
+		return fmt.Errorf(
+			".defaultDataCenterId %d is not one of the configured data centers (ids: %v)",
+			c.DefaultDataCenterID,
+			ids,
+		)
+	}
+
+	return nil
+}
+
+func dataCentersByID(dataCenters []DatacenterConfig) (map[int]DatacenterConfig, error) {
+	byID := make(map[int]DatacenterConfig, len(dataCenters))
+	for _, dc := range dataCenters {
+		// 0 means an unset .defaultDataCenterId, so no data center may have it.
+		if dc.ID < 1 {
+			return nil, fmt.Errorf("data center %q has id %d, ids start at 1", dc.Name, dc.ID)
+		}
+
+		if _, ok := byID[dc.ID]; ok {
+			return nil, fmt.Errorf("duplicate data center id %d in .dataCenters", dc.ID)
+		}
+
+		byID[dc.ID] = dc
+	}
+
+	return byID, nil
+}
+
 // DatacenterConfig describes one data center. RootConfig.Datacenter is the data center an installer
 // run installs; RootConfig.DataCenters lists every data center of the installation, which the
 // installer needs to render the platform's data center picker. Both are the same in a
@@ -202,6 +270,9 @@ type RegistryConfig struct {
 	ReplaceImagesInBom  bool   `yaml:"replaceImagesInBom"`
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
 }
+
+// PostgresPort is the port the Postgres installed by OMS listens on.
+const PostgresPort = 5432
 
 type PostgresConfig struct {
 	Mode          string                 `yaml:"mode,omitempty"`
@@ -280,6 +351,15 @@ type CephDBDevices struct {
 	Limit int    `yaml:"limit,omitempty"`
 }
 
+// Default Kubernetes pod and service CIDRs.
+const (
+	DefaultKubernetesPodCIDR     = "100.96.0.0/11"
+	DefaultKubernetesServiceCIDR = "100.64.0.0/13"
+)
+
+// WorkspacesNamespace is the namespace workspaces run in.
+const WorkspacesNamespace = "workspaces"
+
 type KubernetesConfig struct {
 	ManagedByCodesphere bool      `yaml:"managedByCodesphere"`
 	APIServerHost       string    `yaml:"apiServerHost,omitempty"`
@@ -290,6 +370,15 @@ type KubernetesConfig struct {
 
 	// Internal flag
 	NeedsKubeConfig bool `yaml:"-"`
+}
+
+// CIDRs returns the cluster CIDRs, falling back to the defaults on a Codesphere-managed cluster.
+func (k KubernetesConfig) CIDRs() (pod, service string) {
+	if !k.ManagedByCodesphere {
+		return k.PodCIDR, k.ServiceCIDR
+	}
+
+	return cmp.Or(k.PodCIDR, DefaultKubernetesPodCIDR), cmp.Or(k.ServiceCIDR, DefaultKubernetesServiceCIDR)
 }
 
 type K8sNode struct {
@@ -372,8 +461,11 @@ type RookExternalClusterConfig struct {
 }
 
 type PgOperatorConfig struct {
-	Enabled  bool          `yaml:"enabled"`
-	Override ChartOverride `yaml:"override,omitempty"`
+	Enabled bool `yaml:"enabled"`
+	// ManagedExternally marks a disabled operator as installed by something other than the
+	// PC installer, such as bootstrap-local, so its CRDs exist even though Enabled is false.
+	ManagedExternally bool          `yaml:"managedExternally,omitempty"`
+	Override          ChartOverride `yaml:"override,omitempty"`
 }
 
 type BarmanCloudPluginConfig struct {

@@ -7,4 +7,4 @@ package util
 const TimerFlag = "timer"
 
 // ShowStepDurationHelp describes the step duration flag.
-const ShowStepDurationHelp = "Show how long each step took after it finishes"
+const ShowStepDurationHelp = "Show how long each step took and a final timing summary table"

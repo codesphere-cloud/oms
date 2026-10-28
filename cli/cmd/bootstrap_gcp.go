@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/codesphere-cloud/cs-go/pkg/io"
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/bootstrap"
 	"github.com/codesphere-cloud/oms/internal/bootstrap/gcp"
@@ -32,6 +31,7 @@ type BootstrapGcpCmd struct {
 	InputRegistryType string
 	SSHQuiet          bool
 	StepTimer         bool
+	StorageEngine     string
 
 	// experiments backs the deprecated --experiments flag; its values
 	// are folded into the internal bucket for backwards compatibility.
@@ -48,133 +48,89 @@ func (c *BootstrapGcpCmd) RunE(_ *cobra.Command, args []string) error {
 	return nil
 }
 
-// AddBootstrapGcpCmd registers the gcp bootstrap command in the parent command
+// AddBootstrapGcpCmd registers GCP bootstrap modes and infrastructure management commands.
 func AddBootstrapGcpCmd(parent *cobra.Command, opts *util.GlobalOptions) {
-	bootstrapGcpCmd := BootstrapGcpCmd{
-		cmd: &cobra.Command{
-			Use:   "bootstrap-gcp",
-			Short: "Bootstrap GCP infrastructure for Codesphere",
-			Long: io.Long(`Bootstraps GCP infrastructure required to run Codesphere clusters on GCP.
-				This includes setting up projects, service accounts, and necessary IAM roles.
-				Depending on your setup, additional configuration may be required after bootstrapping.
-				Ensure you have the necessary permissions to create and manage GCP resources before proceeding.
-				Not for production use.
-
-				Running it again against an existing project with --install-version installs that version on top
-				and repeats every install step, including the k0s config script, which restarts k0s.
-				To replace only Codesphere, e.g. to roll back to an earlier release, add --install-codesphere-only
-				and --recover-config: the bootstrap then runs "oms install codesphere --codesphere-only" on the jumpbox and leaves k0s,
-				PostgreSQL, Ceph and the other dependencies as they are.`),
-		},
-		Opts:          opts,
-		Env:           env.NewEnv(),
-		CodesphereEnv: &gcp.CodesphereEnvironment{},
-	}
-	bootstrapGcpCmd.cmd.RunE = bootstrapGcpCmd.RunE
-
-	flags := bootstrapGcpCmd.cmd.Flags()
-	flags.BoolVar(&bootstrapGcpCmd.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP Project Name (required)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ProjectTTL, "project-ttl", "2h", "Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.BillingAccount, "billing-account", "", "GCP Billing Account ID (required)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.BaseDomain, "base-domain", "", "Base domain for Codesphere (required)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SecretsDir, "secrets-dir", "/etc/codesphere/secrets", "Directory for secrets (default: /etc/codesphere/secrets)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.FolderID, "folder-id", "", "GCP Folder ID (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SSHPublicKeyPath, "ssh-public-key-path", "~/.ssh/id_rsa.pub", "SSH Public Key Path (default: ~/.ssh/id_rsa.pub)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SSHPrivateKeyPath, "ssh-private-key-path", "~/.ssh/id_rsa", "SSH Private Key Path (default: ~/.ssh/id_rsa)")
-
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.BitbucketAppClientID, "bitbucket-app-client-id", "", "Bitbucket App Client ID (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.BitbucketAppClientSecret, "bitbucket-app-client-secret", "", "Bitbucket App Client Secret (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.AzureDevOpsAppClientID, "azure-devops-app-client-id", "", "Azure DevOps App Client ID (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.AzureDevOpsAppClientSecret, "azure-devops-app-client-secret", "", "Azure DevOps App Client Secret (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcProviderName, "oidc-provider-name", "", "OIDC OAuth provider display name (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcIssuerURL, "oidc-issuer-url", "", "OIDC OAuth provider issuer URL (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcClientID, "oidc-client-id", "", "OIDC OAuth provider Client ID (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OidcClientSecret, "oidc-client-secret", "", "OIDC OAuth provider Client Secret (optional)")
-
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppClientID, "github-app-client-id", "", "GitHub App Client ID (required)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppClientSecret, "github-app-client-secret", "", "GitHub App Client Secret (required)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitLabAppClientID, "gitlab-app-client-id", "", "GitLab App Client ID (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitLabAppClientSecret, "gitlab-app-client-secret", "", "GitLab App Client Secret (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubPAT, "github-pat", "", "GitHub Personal Access Token used for direct image access and fetching team SSH keys. Required when using --github-team-org/--github-team-slug, and for the local-container registry type when installing Codesphere. Required scopes: read:packages, read:org.")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubAppName, "github-app-name", "", "GitHub App Name (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamOrg, "github-team-org", "", "GitHub organization used to fetch team SSH keys (optional, used with --github-team-slug). Requires --github-pat with at least the read:org scope.")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.GitHubTeamSlug, "github-team-slug", "", "GitHub team slug used to fetch team SSH keys (optional, used with --github-team-org). Requires --github-pat with at least the read:org scope.")
-
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSProjectID, "dns-project-id", "", "GCP Project ID for Cloud DNS (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DNSZoneName, "dns-zone-name", "oms-testing", "Cloud DNS Zone Name (optional)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Preemptible, "preemptible", false, "Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.SpotVMs, "spot-vms", false, "Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. Mutually exclusive with --preemptible (default: false)")
-	flags.Int64Var(&bootstrapGcpCmd.CodesphereEnv.RootDiskSize, "root-disk-size", 50, "Instance root disk size in GB (default: 50)")
-
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.WriteConfig, "write-config", true, "Write generated install config to file (default: true)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.RecoverConfig, "recover-config", false, "Recover previously generated install config from the jumpbox. This will overwrite the local config! (default: false)")
-	flags.BoolVar(&bootstrapGcpCmd.SSHQuiet, "ssh-quiet", false, "Suppress SSH command output (default: false)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.CreateTestUser, "create-test-user", false, "Create a test user with API token on the bootstrapped instance for smoke testing (default: false)")
-
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallConfigPath, "install-config", "config.yaml", "Path to install config file (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "prod.vault.yaml", "Path to secrets files (optional)")
-
-	flags.IntVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterID, "datacenter-id", 1, "Datacenter ID (default: 1)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.DatacenterName, "datacenter-name", "dev", "Datacenter name (default: dev)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.MultiDC, "multi-dc", false, "Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CustomPgIP, "custom-pg-ip", "", "Custom PostgreSQL IP (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Region, "region", "europe-west4", "GCP Region (default: europe-west4)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallLocal, "install-local", "", "Install Codesphere from local package (default: none)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (default: none)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
-	flags.StringArrayVarP(&bootstrapGcpCmd.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.InstallCodesphereOnly, "install-codesphere-only", false, "Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the \"oms install codesphere\" the bootstrap runs on the jumpbox, and skips installing k0s and its config script, which would restart k0s. Requires --install-version or --install-local, and --recover-config (default: false)")
-	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the jumpbox instead of downloading a release (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.RegistryUser, "registry-user", "", "Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere, where it is used with --github-pat to mirror the Codesphere images into the local container registry (optional)")
-	flags.StringVar(&bootstrapGcpCmd.InputRegistryType, "registry-type", "github", "Container registry type to use (options: local-container, artifact-registry, github) (default: github)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.Airgapped, "airgapped", false, "Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox. Selects the local-container registry type and fails if another --registry-type is given. (default: false)")
-	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.InternalFlags, "internal-flags", gcp.DefaultInternalFlags, "Internal flags to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapGcpCmd.experiments, "experiments", []string{}, "Deprecated: use --internal-flags instead. Values are added to the internal flags.")
-	_ = flags.MarkDeprecated("experiments", "use --internal-flags instead")
-	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.PreviewFlags, "preview-flags", gcp.DefaultPreviewFlags, "Preview flags to enable in Codesphere installation (optional)")
-	flags.StringArrayVar(&bootstrapGcpCmd.CodesphereEnv.FeatureFlags, "feature-flags", gcp.DefaultFeatureFlags, "Feature flags to enable in Codesphere installation (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiEndpoint, "external-loki-endpoint", "", "External Loki endpoint for Grafana Alloy log forwarding (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiSecret, "external-loki-secret", "", "External Loki password stored in the generated vault (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ExternalLokiUser, "external-loki-user", "", "External Loki username for Grafana Alloy log forwarding (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.PrometheusRemoteWriteURL, "prometheus-remote-write-url", "", "Prometheus remote write URL (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.PrometheusRemoteWriteUser, "prometheus-remote-write-user", "", "Prometheus remote write username (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.PrometheusRemoteWritePassword, "prometheus-remote-write-password", "", "Prometheus remote write password stored in the generated vault (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.ClusterAdminEmail, "cluster-admin-email", "", "Email address of the initial cluster admin. Written to the install config and applied as the cluster-admin-email secret before the Codesphere platform is installed (optional)")
-
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.GoogleACMEIssuer, "google-acme-issuer", false, "Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.ACMEStaging, "acme-staging", false, "Use the Let's Encrypt staging ACME endpoint (certificates are not browser-trusted)")
-
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoURI, "openbao-uri", "", "URI for OpenBao (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoEngine, "openbao-engine", "cs-secrets-engine", "OpenBao engine name (default: cs-secrets-engine)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoUser, "openbao-user", "admin", "OpenBao username (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.OpenBaoPassword, "openbao-password", "", "OpenBao password (optional)")
-
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelEndpoint, "central-otel-endpoint", "", "Central OpenTelemetry collector endpoint. Needed when sending spans to central collector (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelUsername, "central-otel-username", "", "Central OpenTelemetry username. Needed when sending spans to central collector (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelPassword, "central-otel-password", "", "Central OpenTelemetry password. Needed when sending spans to central collector (optional)")
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.LocalTraceEndpoint, "local-trace-endpoint", "", "Endpoint for exporting traces to an in-cluster storage (optional)")
-	flags.BoolVar(&bootstrapGcpCmd.CodesphereEnv.CentralOtelSpanMetrics, "central-otel-span-metrics", false, "Enable span metrics in Central OpenTelemetry export (default: false)")
-
-	flags.StringVar(&bootstrapGcpCmd.CodesphereEnv.K0sVersion, "k0s-version", installer.DefaultK0sVersion, "K0s version to use for bootstrapping (optional)")
-
-	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "project-name")
-	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "billing-account")
-	util.MarkFlagRequired(bootstrapGcpCmd.cmd, "base-domain")
-
-	util.AddCmd(parent, bootstrapGcpCmd.cmd)
-	AddBootstrapGcpPostconfigCmd(bootstrapGcpCmd.cmd, opts)
-	AddBootstrapGcpCleanupCmd(bootstrapGcpCmd.cmd, opts)
-	AddBootstrapGcpRestartVMsCmd(bootstrapGcpCmd.cmd, opts)
+	command := newBootstrapGcpCmd(opts).cmd
+	util.AddCmd(parent, command)
+	AddBootstrapGcpSingleNodeCmd(command, opts)
+	AddBootstrapGcpMultiNodeCmd(command, opts)
+	AddBootstrapGcpPostconfigCmd(command, opts)
+	AddBootstrapGcpCleanupCmd(command, opts)
+	AddBootstrapGcpRestartVMsCmd(command, opts)
 }
 
-// BootstrapGcp initializes the bootstrapper, validates the input flags and starts bootstrapping.
-// Returns an error if validation or github client connection fails
+// newBootstrapGcpCmd exposes the multi-node workflow at the root command.
+func newBootstrapGcpCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
+	c := newBootstrapGcpMultiNodeCmd(opts)
+	c.cmd.Use = "bootstrap-gcp"
+	c.cmd.Short = "Bootstrap GCP infrastructure for Codesphere"
+	c.cmd.Long += "\n\nUses the multi-node installer. Use single-node for one VM."
+
+	return c
+}
+
+func (c *BootstrapGcpCmd) addSharedBootstrapFlags() {
+	flags := c.cmd.Flags()
+	flags.StringVar(&c.CodesphereEnv.InstallConfigTemplatePath, "install-config-template", "", "Initial config.yaml template, applied before --config files")
+	flags.StringArrayVar(&c.CodesphereEnv.InstallConfigs, "config", nil, "Local config.yaml file; repeat to merge in order before VM settings")
+	flags.StringVar(&c.CodesphereEnv.InstallVaultPath, "vault", "", "SOPS vault for config templating and initial install secrets")
+	flags.StringVar(&c.CodesphereEnv.InstallVaultPrivKey, "priv-key", "", "Age private key for --vault (or use the age key environment variable)")
+	flags.StringVar(&c.CodesphereEnv.MachineType, "machine-type", "", "GCP machine type override for all VMs (default: role-specific sizes; e2-standard-8 for a single VM)")
+
+	patHelp := "GitHub Personal Access Token for pulling Codesphere images from ghcr.io (defaults to OMS_REGISTRY_PASSWORD). Required scope: read:packages."
+	userHelp := "Registry username for pulling Codesphere images from ghcr.io (required)"
+
+	if !c.CodesphereEnv.SingleVM {
+		patHelp += " Team SSH key lookup with --github-team-org/--github-team-slug also requires read:org. Required for the local-container registry type when installing Codesphere."
+		userHelp = "Registry username for ghcr.io. Required for the GitHub registry type, and for the local-container registry type when installing Codesphere."
+	}
+
+	flags.StringVar(&c.CodesphereEnv.GitHubPAT, "github-pat", "", patHelp)
+	flags.StringVar(&c.CodesphereEnv.RegistryUser, "registry-user", "", userHelp)
+
+	flags.BoolVar(&c.StepTimer, util.TimerFlag, false, util.ShowStepDurationHelp)
+	flags.StringVar(&c.CodesphereEnv.ProjectName, "project-name", "", "Unique GCP Project Name (required)")
+	flags.StringVar(&c.CodesphereEnv.ProjectTTL, "project-ttl", "2h", "Time to live for the GCP project. Cleanup workflows will remove it afterwards. (default: 2 hours)")
+	flags.StringVar(&c.CodesphereEnv.BillingAccount, "billing-account", "", "GCP Billing Account ID (required)")
+	flags.StringVar(&c.CodesphereEnv.BaseDomain, "base-domain", "", "Base domain for Codesphere (required)")
+	flags.StringVar(&c.CodesphereEnv.FolderID, "folder-id", "", "GCP Folder ID (optional)")
+	flags.StringVar(&c.CodesphereEnv.SSHPublicKeyPath, "ssh-public-key-path", "~/.ssh/id_rsa.pub", "SSH Public Key Path (default: ~/.ssh/id_rsa.pub)")
+	flags.StringVar(&c.CodesphereEnv.SSHPrivateKeyPath, "ssh-private-key-path", "~/.ssh/id_rsa", "SSH Private Key Path (default: ~/.ssh/id_rsa)")
+	flags.StringVar(&c.CodesphereEnv.DNSProjectID, "dns-project-id", "", "GCP Project ID for Cloud DNS (optional)")
+	flags.StringVar(&c.CodesphereEnv.DNSZoneName, "dns-zone-name", "oms-testing", "Cloud DNS Zone Name (optional)")
+	flags.BoolVar(&c.CodesphereEnv.SpotVMs, "spot-vms", false, "Use Spot VMs for Codesphere infrastructure. Falls back to standard VMs if spot capacity unavailable. (default: false)")
+	flags.Int64Var(&c.CodesphereEnv.RootDiskSize, "root-disk-size", 50, "Instance root disk size in GB (default: 50)")
+	flags.BoolVar(&c.SSHQuiet, "ssh-quiet", false, "Suppress SSH command output (default: false)")
+	flags.StringVar(&c.CodesphereEnv.Region, "region", "europe-west4", "GCP Region (default: europe-west4)")
+	flags.StringVar(&c.CodesphereEnv.Zone, "zone", "europe-west4-a", "GCP Zone (default: europe-west4-a)")
+	flags.StringVar(&c.CodesphereEnv.InstallLocal, "install-local", "", "Install Codesphere from local package (default: none)")
+	flags.StringVar(&c.CodesphereEnv.InstallVersion, "install-version", "", "Codesphere version to install (default: none)")
+	flags.StringVar(&c.CodesphereEnv.InstallHash, "install-hash", "", "Codesphere package hash to install (default: none)")
+	flags.StringVar(&c.CodesphereEnv.RemoteOmsBinaryPath, "remote-oms-binary", "", "Path to a local Linux amd64 OMS binary to copy to and use on the remote host instead of downloading a release (optional)")
+
+	util.MarkFlagRequired(c.cmd, "project-name")
+	util.MarkFlagRequired(c.cmd, "billing-account")
+	util.MarkFlagRequired(c.cmd, "base-domain")
+}
+
+// prepareBootstrapOptions resolves credentials and validates shared configuration flags.
+func (c *BootstrapGcpCmd) prepareBootstrapOptions() error {
+	if c.CodesphereEnv.GitHubPAT == "" {
+		c.CodesphereEnv.GitHubPAT = os.Getenv("OMS_REGISTRY_PASSWORD")
+	}
+
+	if c.CodesphereEnv.InstallVaultPrivKey != "" && c.CodesphereEnv.InstallVaultPath == "" {
+		return fmt.Errorf("--priv-key requires --vault")
+	}
+
+	return nil
+}
+
+// BootstrapGcp initializes external clients and starts the selected bootstrap workflow.
 func (c *BootstrapGcpCmd) BootstrapGcp() error {
 	ctx := c.cmd.Context()
 	stlog := bootstrap.NewStepLogger(false, bootstrap.WithTimer(c.StepTimer))
+	defer stlog.PrintSummary()
 
 	icg, err := installer.NewInstallConfigManager("plain", "")
 	if err != nil {
@@ -190,6 +146,11 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return fmt.Errorf("failed to create github client: %w", err)
 	}
 
+	sshClient := node.NewSSHNodeClient(c.SSHQuiet)
+	if c.CodesphereEnv.SingleVM {
+		sshClient.RegistryPassword = c.CodesphereEnv.GitHubPAT
+	}
+
 	bs, err := gcp.NewGCPBootstrapper(
 		ctx,
 		c.Env,
@@ -198,7 +159,7 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		icg,
 		gcpClient,
 		fw,
-		node.NewSSHNodeClient(c.SSHQuiet),
+		sshClient,
 		portalClient,
 		intutil.NewTime(),
 		githubClient,
@@ -207,9 +168,13 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return fmt.Errorf("failed to create gcp bootstrapper: %w", err)
 	}
 
+	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
+	if c.CodesphereEnv.SingleVM {
+		return c.bootstrapSingleVM(bs)
+	}
+
 	c.CodesphereEnv.RegistryType = gcp.ResolveRegistryType(c.InputRegistryType, c.cmd.Flags().Changed("registry-type"), c.CodesphereEnv.Airgapped)
 
-	c.CodesphereEnv.OmsWorkdir = c.Env.GetOmsWorkdir()
 	// The value alone cannot distinguish the default 1 from an explicit --datacenter-id=1.
 	c.CodesphereEnv.DatacenterIDExplicit = c.cmd.Flags().Changed("datacenter-id")
 

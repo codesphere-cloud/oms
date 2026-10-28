@@ -18,12 +18,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-const (
-	remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
-	// sharedPostgresPort is the port the shared PostgreSQL server listens on. Secondary data
-	// centers need it spelled out because they connect to it as an external server.
-	sharedPostgresPort int = 5432
-)
+const remoteInstallConfigPath string = "/etc/codesphere/config.yaml"
 
 // errRemoteConfigMissing reports that the jumpbox holds no config for a data center. Recovering
 // a secondary data center tolerates this, since --multi-dc can add one to an existing project.
@@ -70,7 +65,8 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 		}
 	}
 
-	if b.fw.Exists(dc.InstallConfigPath) {
+	configExists := b.fw.Exists(dc.InstallConfigPath)
+	if configExists {
 		if err := b.loadVaultForConfigTemplating(dc); err != nil {
 			return fmt.Errorf("failed to load vault templating: %w", err)
 		}
@@ -93,12 +89,42 @@ func (b *GCPBootstrapper) ensureInstallConfig(dc *datacenter.DataCenter) error {
 	// A secondary data center without a config of its own is left unset here, so
 	// seedSecondaryDataCenter can derive it from the primary data center instead of the profile.
 
+	if !dc.IsPrimary() {
+		return nil
+	}
+
+	if err := b.loadInstallVault(dc.ConfigManager); err != nil {
+		return err
+	}
+
+	if len(b.installInputPaths()) == 0 {
+		return nil
+	}
+
+	if !configExists {
+		if err := b.loadVaultForConfigTemplating(dc); err != nil {
+			return err
+		}
+	}
+
+	config, err := b.loadInstallInputs(*dc.InstallConfig, dc.ConfigManager)
+	if err != nil {
+		return err
+	}
+
+	dc.InstallConfig = &config
+	dc.ConfigManager.SetInstallConfig(&config)
+
 	return nil
 }
 
 func (b *GCPBootstrapper) loadVaultForConfigTemplating(dc *datacenter.DataCenter) error {
 	if err := dc.ConfigManager.LoadVaultFromUnecryptedFile(dc.SecretsFilePath); err != nil {
 		return fmt.Errorf("failed to load vault from file: %w", err)
+	}
+
+	if dc.IsPrimary() {
+		return b.loadInstallVault(dc.ConfigManager)
 	}
 
 	return nil
@@ -212,7 +238,10 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 			dc.InstallConfig.PcApps = files.ChartValues{}
 		}
 
-		chartsRegistry := dc.InstallConfig.Registry.Server + installer.ChartsRepositoryPath
+		chartsRegistry, err := installer.ChartRegistryURL(dc.InstallConfig.Registry.Server)
+		if err != nil {
+			return fmt.Errorf("resolving pc-apps chart registry: %w", err)
+		}
 		if existing, _ := dc.InstallConfig.PcApps["chartsRegistry"].(string); existing != "" && existing != chartsRegistry {
 			b.stlog.Logf("Replacing pcApps.chartsRegistry %s from the install config with the local registry at %s", existing, chartsRegistry)
 		}
@@ -639,7 +668,8 @@ func (b *GCPBootstrapper) applyPostgresConfig(dc *datacenter.DataCenter) (previo
 			Mode: "external",
 			// The server certificate carries only an IP SAN, so the address must be the IP.
 			ServerAddress: b.Env.PostgreSQLNode.GetInternalIP(),
-			Port:          sharedPostgresPort,
+			// Secondary data centers connect to the installed server as an external one.
+			Port: files.PostgresPort,
 			// The CA certificate lives in the config, not the vault, and cannot be re-derived
 			// from the CA key — so it has to be copied from the primary data center.
 			CACertPem: b.primaryDC().InstallConfig.Postgres.CACertPem,
@@ -958,8 +988,13 @@ func (b *GCPBootstrapper) ensureSecrets(dc *datacenter.DataCenter) error {
 	}
 
 	if dc.IsPrimary() {
+		if err := b.loadInstallVault(dc.ConfigManager); err != nil {
+			return err
+		}
+
 		b.Env.Secrets = dc.ConfigManager.GetVault()
 	}
+
 	return nil
 }
 
