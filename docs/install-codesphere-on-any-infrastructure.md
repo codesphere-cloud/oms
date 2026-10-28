@@ -53,13 +53,11 @@ Provision x86-64 machines and choose a topology based on the purpose of the inst
 
 Codesphere requires:
 
-- Ubuntu 22.04 LTS or a newer supported version, or Red Hat Enterprise Linux (RHEL) 9.6 on x86-64
+- Ubuntu 22.04 LTS or a newer supported version
 - Kubernetes 1.31 or newer
 - Ceph 18.2 or newer
 
 The Kubernetes and Ceph minimums also apply when those components are installed or managed outside OMS.
-
-RHEL support is limited to release 9.6. Keep the hosts on 9.6 by using the Extended Update Support (EUS) repositories instead of the default rolling 9.x repositories. With a Red Hat subscription, run `subscription-manager release --set=9.6` and enable `rhel-9-for-x86_64-baseos-eus-rpms` and `rhel-9-for-x86_64-appstream-eus-rpms`. With Satellite, pin the content view to 9.6 EUS. On a public cloud, boot the provider's RHEL 9.6 EUS image, such as the `rhel-9-6-eus` image family on Google Cloud. Other RHEL-compatible distributions are not supported. Read [RHEL host preparation](#rhel-host-preparation) before provisioning RHEL hosts.
 
 ### POC topology
 
@@ -103,8 +101,6 @@ Provide unrestricted communication between Codesphere hosts on the private netwo
 
 Hosts without public addresses need outbound access through NAT or an HTTP proxy. They must be able to reach package repositories, the selected container registry, certificate endpoints, and any source URLs referenced by the installer.
 
-RHEL hosts additionally need `dnf` access to the BaseOS and AppStream repositories, through Red Hat Update Infrastructure (RHUI), Satellite, or a subscription. The installer does not bundle `container-selinux`, which the container runtime packages require, so `dnf` must be able to install it.
-
 Avoid CIDR overlap between the host network, Kubernetes pod network, Kubernetes service network, connected corporate networks, and VPNs.
 
 ## 4. Configure external access and firewalls
@@ -144,8 +140,6 @@ ssh root@<ceph-private-ip> hostname
 ssh root@<k0s-private-ip> hostname
 ```
 
-RHEL images ship with root SSH login disabled. See [RHEL host preparation](#rhel-host-preparation) for how to enable it.
-
 ## 6. Tune every installation host
 
 Apply and persist the following kernel settings on the PostgreSQL, Ceph, and k0s hosts:
@@ -170,62 +164,9 @@ sysctl vm.max_map_count
 
 Keep time synchronized on every host. Confirm that hostnames, private addresses, attached disks, DNS resolution, outbound connectivity, and SSH access survive a reboot before installing Codesphere.
 
-### RHEL host preparation
-
-> **Airgapped installations on RHEL are not supported yet.** The hosts need `dnf` access to package repositories during installation, and `container-selinux` cannot be installed without it. Use Ubuntu for airgapped environments.
-
-On RHEL 9.6 hosts, complete the following on the PostgreSQL, Ceph, and k0s hosts in addition to the kernel settings above. The `sysctl.d` file shown above works unchanged on RHEL. `wget` is not required because the installer uses `curl`.
-
-**Packages.** Install the packages the installer expects but RHEL images do not always include. `lvm2` is needed to create Ceph OSDs and `container-selinux` is needed by the container runtime packages:
-
-```bash
-dnf install -y lvm2 container-selinux chrony curl jq tar
-systemctl enable --now chronyd
-```
-
-**SELinux.** Keep SELinux in `enforcing` mode, which is the RHEL default. The installer sets up Docker, k0s with Calico, and the Ceph and Codesphere components on hosts with SELinux enforcing, so do not switch to `permissive` or `disabled` to get the installation through. Verify the mode with `getenforce`.
-
-**Firewall.** `firewalld` is active on most RHEL images and blocks the traffic between Codesphere hosts. Either trust the private host network or allow the required ports explicitly. The simplest option, which matches the unrestricted internal communication described in [section 3](#3-create-the-private-network), is to trust the network CIDR on every host:
-
-```bash
-firewall-cmd --permanent --zone=trusted --add-source=<private-network-cidr>
-firewall-cmd --reload
-```
-
-On Google Cloud RHEL images, the primary network interface is already in the `trusted` zone and needs no change. If you open ports instead, derive and test the port matrix as described in section 3, and also allow the external ports from [section 4](#4-configure-external-access-and-firewalls) on the hosts that serve them.
-
-**Kernel modules.** The modules `overlay`, `br_netfilter`, `ceph`, and `rbd` must be available and loaded. They are included in `kernel-modules-core`, which cloud images install. If an image lacks them, install `kernel-modules-extra`. Load them now and on every boot:
-
-```bash
-cat >/etc/modules-load.d/codesphere.conf <<'EOF'
-overlay
-br_netfilter
-ceph
-rbd
-EOF
-
-systemctl restart systemd-modules-load.service
-lsmod | grep -E '^(overlay|br_netfilter|ceph|rbd)\b'
-```
-
-**Root SSH.** The installer connects as `root`, but RHEL images ship with `PermitRootLogin` disabled. `sshd` reads the files in `/etc/ssh/sshd_config.d/` before the rest of `sshd_config`, and the first value it finds for a setting wins. A drop-in that sets `PermitRootLogin` therefore overrides an edit of the main `sshd_config`. Create a drop-in that sorts before the existing ones, then check the effective value:
-
-```bash
-cat >/etc/ssh/sshd_config.d/00-codesphere-root-login.conf <<'EOF'
-PermitRootLogin prohibit-password
-EOF
-
-systemctl restart sshd
-sshd -T | grep -i '^permitrootlogin'
-```
-
-The output must show `permitrootlogin prohibit-password`. If it does not, another drop-in sorts earlier and sets a different value. Also make sure the administrator's public key is in `/root/.ssh/authorized_keys` without a `command=` prefix that blocks login, as cloud images add to root keys.
-
 ## 7. Prepare the jumpbox
 
 Install [OMS](https://github.com/codesphere-cloud/oms) on the jumpbox together with `sops` and `age`. Pin and verify approved versions so the environment is repeatable.
-
-On a RHEL jumpbox, install OMS with `curl` rather than `wget`, which RHEL images do not ship. The installer also uses `curl` when it installs OMS and `age` on the hosts, so `wget` is not required anywhere. The jumpbox and every host need `dnf` repository access as described in [section 3](#3-create-the-private-network).
 
 The jumpbox must have enough free space for the installer package and extracted installation dependencies. Create a root-only secrets directory:
 
