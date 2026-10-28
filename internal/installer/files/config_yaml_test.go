@@ -4,6 +4,8 @@
 package files_test
 
 import (
+	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -618,6 +620,41 @@ var _ = Describe("RootConfig Clone", func() {
 var _ = Describe("Barman Cloud plugin config", func() {
 	legacyOverride := "    override:\n      plugin-barman-cloud:\n        replicaCount: 2\n"
 
+	var logOutput bytes.Buffer
+
+	BeforeEach(func() {
+		logOutput.Reset()
+
+		previousLogWriter := log.Writer()
+
+		log.SetOutput(&logOutput)
+		DeferCleanup(func() { log.SetOutput(previousLogWriter) })
+	})
+
+	It("with the legacy cluster key enabled, unmarshal logs the move without a warning", func() {
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal([]byte("cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n"))).To(Succeed())
+
+		Expect(logOutput.String()).To(ContainSubstring("Moved cluster.BarmanCloudPluginConfig to managedServiceBackends.barmanCloudPlugin"))
+		Expect(logOutput.String()).NotTo(ContainSubstring("Warning"))
+	})
+
+	It("with the legacy cluster key disabled, unmarshal warns that the plugin is now enabled", func() {
+		config := files.NewRootConfig()
+		Expect(config.Unmarshal([]byte("cluster:\n  BarmanCloudPluginConfig:\n    enabled: false\n"))).To(Succeed())
+
+		Expect(logOutput.String()).To(ContainSubstring("Warning: cluster.BarmanCloudPluginConfig had enabled: false"))
+	})
+
+	It("with both keys set, unmarshal warns that the legacy key is ignored", func() {
+		config := files.NewRootConfig()
+		yamlData := "cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n" +
+			"managedServiceBackends:\n  barmanCloudPlugin:\n    enabled: false\n"
+		Expect(config.Unmarshal([]byte(yamlData))).To(Succeed())
+
+		Expect(logOutput.String()).To(ContainSubstring("Warning: ignoring cluster.BarmanCloudPluginConfig"))
+	})
+
 	It("with the legacy cluster key, unmarshal moves it to managedServiceBackends", func() {
 		config := files.NewRootConfig()
 		Expect(config.Unmarshal([]byte("cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n" + legacyOverride))).To(Succeed())
@@ -668,6 +705,82 @@ var _ = Describe("Barman Cloud plugin config", func() {
 			"enabled":  true,
 			"override": map[string]any{"plugin-barman-cloud": map[string]any{"replicaCount": 2}},
 		}))
+	})
+})
+
+var _ = Describe("MigrateLegacyBarmanCloudPluginKey", func() {
+	var logOutput bytes.Buffer
+
+	BeforeEach(func() {
+		logOutput.Reset()
+
+		previousLogWriter := log.Writer()
+
+		log.SetOutput(&logOutput)
+		DeferCleanup(func() { log.SetOutput(previousLogWriter) })
+	})
+
+	legacyPlugin := func(enabled bool) map[string]any {
+		return map[string]any{
+			"enabled":  enabled,
+			"override": map[string]any{"plugin-barman-cloud": map[string]any{"replicaCount": 2}},
+		}
+	}
+
+	It("with the legacy key, migrating moves it with its override to managedServiceBackends", func() {
+		config := map[string]any{
+			"cluster":                map[string]any{"BarmanCloudPluginConfig": legacyPlugin(true)},
+			"managedServiceBackends": map[string]any{"postgres": map[string]any{}},
+		}
+
+		files.MigrateLegacyBarmanCloudPluginKey(config)
+
+		Expect(config).To(Equal(map[string]any{
+			"cluster": map[string]any{},
+			"managedServiceBackends": map[string]any{
+				"postgres":          map[string]any{},
+				"barmanCloudPlugin": legacyPlugin(true),
+			},
+		}))
+	})
+
+	It("with the legacy key disabled, migrating enables it and warns", func() {
+		config := map[string]any{"cluster": map[string]any{"BarmanCloudPluginConfig": legacyPlugin(false)}}
+
+		files.MigrateLegacyBarmanCloudPluginKey(config)
+
+		Expect(config["managedServiceBackends"]).To(HaveKeyWithValue("barmanCloudPlugin", legacyPlugin(true)))
+		Expect(logOutput.String()).To(ContainSubstring("Warning: cluster.BarmanCloudPluginConfig had enabled: false"))
+	})
+
+	It("with both keys set, migrating keeps managedServiceBackends, drops the legacy key and warns", func() {
+		config := map[string]any{
+			"cluster":                map[string]any{"BarmanCloudPluginConfig": legacyPlugin(true)},
+			"managedServiceBackends": map[string]any{"barmanCloudPlugin": map[string]any{"enabled": false}},
+		}
+
+		files.MigrateLegacyBarmanCloudPluginKey(config)
+
+		Expect(config["cluster"]).To(Equal(map[string]any{}))
+		Expect(config["managedServiceBackends"]).To(Equal(map[string]any{"barmanCloudPlugin": map[string]any{"enabled": false}}))
+		Expect(logOutput.String()).To(ContainSubstring("Warning: ignoring cluster.BarmanCloudPluginConfig"))
+	})
+
+	It("with a null legacy key, migrating drops it without creating the new key", func() {
+		config := map[string]any{"cluster": map[string]any{"BarmanCloudPluginConfig": nil}}
+
+		files.MigrateLegacyBarmanCloudPluginKey(config)
+
+		Expect(config).To(Equal(map[string]any{"cluster": map[string]any{}}))
+	})
+
+	It("without the legacy key, migrating leaves the config unchanged", func() {
+		config := map[string]any{"cluster": map[string]any{"pgOperator": map[string]any{"enabled": true}}}
+
+		files.MigrateLegacyBarmanCloudPluginKey(config)
+
+		Expect(config).To(Equal(map[string]any{"cluster": map[string]any{"pgOperator": map[string]any{"enabled": true}}}))
+		Expect(logOutput.String()).To(BeEmpty())
 	})
 })
 

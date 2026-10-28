@@ -178,11 +178,15 @@ func (g *InstallConfig) applyCommonProperties() {
 		}
 	}
 	if g.Config.ManagedServiceBackends == nil {
-		g.Config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{
-			Postgres: &files.PgManagedServiceConfig{},
-		}
-	} else if g.Config.ManagedServiceBackends.Postgres == nil {
+		g.Config.ManagedServiceBackends = &files.ManagedServiceBackendsConfig{}
+	}
+
+	if g.Config.ManagedServiceBackends.Postgres == nil {
 		g.Config.ManagedServiceBackends.Postgres = &files.PgManagedServiceConfig{}
+	}
+
+	if g.Config.ManagedServiceBackends.BarmanCloudPlugin == nil {
+		g.Config.ManagedServiceBackends.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
 	}
 	if g.Config.Secrets.BaseDir == "" {
 		g.Config.Secrets.BaseDir = "/root/secrets"
@@ -191,10 +195,6 @@ func (g *InstallConfig) applyCommonProperties() {
 	// OpenFGA's database is a CloudNativePG cluster, so every profile needs the operator.
 	if g.Config.Cluster.PgOperator == nil {
 		g.Config.Cluster.PgOperator = &files.PgOperatorConfig{Enabled: true}
-	}
-
-	if g.Config.ManagedServiceBackends.BarmanCloudPlugin == nil {
-		g.Config.ManagedServiceBackends.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{Enabled: true}
 	}
 }
 
