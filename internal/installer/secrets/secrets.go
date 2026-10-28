@@ -17,9 +17,11 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/mod/semver"
 
 	"github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 // EnsureSecrets generates all secrets required by the Helm chart that are not derived from
@@ -60,6 +62,11 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureDefaultSecrets(vault); err != nil {
 		return fmt.Errorf("ensure default secrets: %w", err)
 	}
+	codesphereVersion := ""
+	if config.Operations != nil {
+		codesphereVersion = config.Operations.Codesphere.Version
+	}
+	EnsureSendGridAPIKey(vault, codesphereVersion)
 	return nil
 }
 
@@ -251,14 +258,17 @@ func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
 	return nil
 }
 
+// dummyPassword is the placeholder for secrets the Helm chart requires but private cloud does not use.
+const dummyPassword = "dummy"
+
 // EnsureDefaultSecrets sets dummy defaults for all Helm chart secrets not managed by
 // the installer config. Idempotent: a value the vault already holds is kept.
 func EnsureDefaultSecrets(vault *files.InstallVault) error {
 	// Unused in private cloud, but the chart does not render without a value.
-	setPasswordIfEmpty(vault, files.SecretDigitalOceanApiToken, "dummy")
+	setPasswordIfEmpty(vault, files.SecretDigitalOceanApiToken, dummyPassword)
 
 	for _, name := range optionalPasswordSecrets {
-		setPasswordIfAbsent(vault, name, "dummy")
+		setPasswordIfAbsent(vault, name, dummyPassword)
 	}
 
 	// Requires a valid AES key: base64(hex(16 random bytes)).
@@ -281,6 +291,34 @@ func EnsureDefaultSecrets(vault *files.InstallVault) error {
 	}
 
 	return nil
+}
+
+// sendGridAPIKeyOptionalSince is the first Codesphere release whose chart renders without
+// sendGridApiKey.
+const sendGridAPIKeyOptionalSince = "v1.109.0"
+
+// EnsureSendGridAPIKey sets the dummy sendGridApiKey older Codesphere releases require and
+// removes it for newer ones, which send mail through SendGrid whenever the key is set.
+// A real key is always kept.
+func EnsureSendGridAPIKey(vault *files.InstallVault, codesphereVersion string) {
+	if requiresSendGridAPIKey(codesphereVersion) {
+		setPasswordIfAbsent(vault, files.SecretSendGridApiKey, dummyPassword)
+		return
+	}
+
+	if isDummyPassword(vault.GetSecret(files.SecretSendGridApiKey)) {
+		vault.RemoveSecret(files.SecretSendGridApiKey)
+	}
+}
+
+// requiresSendGridAPIKey treats versions that are no release, such as branch builds, as current.
+func requiresSendGridAPIKey(codesphereVersion string) bool {
+	release, ok := util.CodesphereRelease(codesphereVersion)
+	return ok && semver.Compare(release, sendGridAPIKeyOptionalSince) < 0
+}
+
+func isDummyPassword(secret *files.SecretEntry) bool {
+	return secret != nil && secret.Fields != nil && secret.Fields.Password == dummyPassword
 }
 
 // optionalPasswordSecrets are set to "dummy" only when absent. They are not required for
@@ -315,7 +353,6 @@ var optionalPasswordSecrets = []string{
 	files.SecretStripeWebhookEndpointSecret,
 	files.SecretStripePublishableKey,
 	files.SecretStripeSecretKey,
-	files.SecretSendGridApiKey,
 	files.SecretOpenBaoPassword,
 	files.SecretOpenfgaDbBackupAccessKeyId,
 	files.SecretOpenfgaDbBackupSecretAccessKey,
