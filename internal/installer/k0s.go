@@ -75,7 +75,9 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 		return "", err
 	}
 
-	cachePath := filepath.Join(cacheDir, k0sBinaryName)
+	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
+
+	cachePath := filepath.Join(cacheDir, assetName)
 	if reuseCachedBinary(k.FileWriter, cachePath, version, k0sBinaryName, opts) {
 		return cachePath, nil
 	}
@@ -84,7 +86,6 @@ func (k *K0s) Download(version string, opts DownloadOptions) (string, error) {
 		return "", fmt.Errorf("k0s %s not found in OMS cache at '%s', download it first with 'oms download k0s --version %s'", version, cachePath, version)
 	}
 
-	assetName := fmt.Sprintf("%s-%s-%s", k0sBinaryName, version, k.Goarch)
 	downloadURL := fmt.Sprintf("%s/%s/%s", k0sReleaseURL, version, assetName)
 
 	if err := downloadToPath(k.FileWriter, k.Http, cachePath, downloadURL, opts.Quiet, 0755); err != nil {
