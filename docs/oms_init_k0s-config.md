@@ -9,8 +9,9 @@ downloaded: the k0s binary is taken from the package or the OMS cache, see
 'oms download k0s'.
 
 The cluster is defined by a Codesphere install-config, an Ansible inventory and flags,
-in that order: the k8s-cp and k8s-workers hosts of the Ansible inventory replace the
-control planes and workers of the install-config, and flags replace both. Without an
+with increasing precedence: install-config < Ansible inventory < flags. Each source
+only replaces the control planes or workers it defines, so --worker alone keeps the
+control planes of the install-config or the Ansible inventory. Without an
 install-config, --datacenter-name is required. A node given as both control plane and
 worker runs both roles.
 
@@ -52,9 +53,9 @@ $ oms init k0s-config --install-config <path> --airgapped --path <bundle>
 ```
       --airgapped                  Generate a config for installing k0s without internet access from the airgap image bundle
       --ansible-inventory string   Path to Ansible inventory file whose k8s-cp and k8s-workers hosts replace the ones of the install-config
-      --api-server-host string     External host name or address of the Kubernetes API server
+      --api-server-host string     External host name or address of the Kubernetes API server, overriding the one of the install-config
       --control-plane strings      IP addresses of the Kubernetes control plane nodes, replacing the ones of the install-config and the Ansible inventory
-      --datacenter-name string     Name of the data center (required without --install-config)
+      --datacenter-name string     Name of the data center, overriding the one of the install-config (required without --install-config)
   -f, --force                      Force extracting k0s from the package even if it was extracted before
   -h, --help                       help for k0s-config
       --install-config string      Path to Codesphere install-config file
