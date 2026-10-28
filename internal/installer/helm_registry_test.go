@@ -40,11 +40,11 @@ var _ = Describe("Helm registry trust", func() {
 	})
 
 	It("rejects invalid CA data before accessing the registry", func() {
-		Expect(helm.ConfigureRegistry([]byte("invalid"))).To(MatchError(ContainSubstring("no valid PEM certificates")))
+		Expect(helm.ConfigureRegistryCA([]byte("invalid"))).To(MatchError(ContainSubstring("no valid PEM certificates")))
 	})
 
 	It("uses the configured CA during login", func() {
-		Expect(helm.ConfigureRegistry(authority)).To(Succeed())
+		Expect(helm.ConfigureRegistryCA(authority)).To(Succeed())
 		// Failed authentication avoids writing Helm credentials to disk.
 		err := helm.LoginRegistry(context.Background(), strings.TrimPrefix(server.URL, "https://"), "user", "password")
 		Expect(err).To(HaveOccurred())
@@ -53,7 +53,7 @@ var _ = Describe("Helm registry trust", func() {
 	})
 
 	It("uses the configured CA for anonymous chart downloads", func() {
-		Expect(helm.ConfigureRegistry(authority)).To(Succeed())
+		Expect(helm.ConfigureRegistryCA(authority)).To(Succeed())
 		err := helm.InstallChart(context.Background(), installer.ChartConfig{
 			ChartName: "oci://" + strings.TrimPrefix(server.URL, "https://") + "/charts/argocd",
 			Version:   "1.0.0", Namespace: "argocd", ReleaseName: "argocd",
@@ -64,7 +64,7 @@ var _ = Describe("Helm registry trust", func() {
 	})
 
 	It("retains CA trust for chart downloads after a login attempt", func() {
-		Expect(helm.ConfigureRegistry(authority)).To(Succeed())
+		Expect(helm.ConfigureRegistryCA(authority)).To(Succeed())
 
 		host := strings.TrimPrefix(server.URL, "https://")
 		Expect(helm.LoginRegistry(context.Background(), host, "user", "password")).NotTo(Succeed())

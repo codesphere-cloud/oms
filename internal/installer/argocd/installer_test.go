@@ -255,7 +255,7 @@ var _ = Describe("Installer.Install", func() {
 		It("trusts the registry certificate authority under the host without its port", func() {
 			authority := filepath.Join(GinkgoT().TempDir(), "registry.crt")
 			Expect(os.WriteFile(authority, []byte("-----BEGIN CERTIFICATE-----\n"), 0o600)).To(Succeed())
-			helmMock.EXPECT().ConfigureRegistry([]byte("-----BEGIN CERTIFICATE-----\n")).Return(nil)
+			helmMock.EXPECT().ConfigureRegistryCA([]byte("-----BEGIN CERTIFICATE-----\n")).Return(nil)
 
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {
@@ -286,7 +286,7 @@ var _ = Describe("Installer.Install", func() {
 		It("trusts the certificate authority under the host of a registry URL naming its scheme", func() {
 			authority := filepath.Join(GinkgoT().TempDir(), "registry.crt")
 			Expect(os.WriteFile(authority, []byte("-----BEGIN CERTIFICATE-----\n"), 0o600)).To(Succeed())
-			helmMock.EXPECT().ConfigureRegistry([]byte("-----BEGIN CERTIFICATE-----\n")).Return(nil)
+			helmMock.EXPECT().ConfigureRegistryCA([]byte("-----BEGIN CERTIFICATE-----\n")).Return(nil)
 
 			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.MatchedBy(func(cfg installer.ChartConfig) bool {

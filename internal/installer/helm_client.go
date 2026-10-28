@@ -82,8 +82,8 @@ type HelmClient interface {
 	// UpgradeChart upgrades an existing Helm release and returns an error on failure.
 	UpgradeChart(ctx context.Context, cfg ChartConfig, opts UpgradeChartOptions) error
 
-	// ConfigureRegistry adds a PEM certificate authority for login and chart downloads.
-	ConfigureRegistry(caPEM []byte) error
+	// ConfigureRegistryCA adds a PEM certificate authority for login and chart downloads.
+	ConfigureRegistryCA(caPEM []byte) error
 
 	// LoginRegistry authenticates against an OCI registry for private chart pulls.
 	LoginRegistry(ctx context.Context, host, username, password string) error
@@ -119,8 +119,8 @@ func NewHelmClientWithRESTConfig(namespace string, restConfig *rest.Config) (Hel
 	}, nil
 }
 
-// ConfigureRegistry configures registry trust independently of authentication.
-func (h *helmClient) ConfigureRegistry(caPEM []byte) error {
+// ConfigureRegistryCA configures registry trust independently of authentication.
+func (h *helmClient) ConfigureRegistryCA(caPEM []byte) error {
 	roots, err := x509.SystemCertPool()
 	if err != nil {
 		return fmt.Errorf("loading system certificate authorities: %w", err)

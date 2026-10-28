@@ -917,12 +917,12 @@ func (_m *MockHelmClient) EXPECT() *MockHelmClient_Expecter {
 	return &MockHelmClient_Expecter{mock: &_m.Mock}
 }
 
-// ConfigureRegistry provides a mock function for the type MockHelmClient
-func (_mock *MockHelmClient) ConfigureRegistry(caPEM []byte) error {
+// ConfigureRegistryCA provides a mock function for the type MockHelmClient
+func (_mock *MockHelmClient) ConfigureRegistryCA(caPEM []byte) error {
 	ret := _mock.Called(caPEM)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ConfigureRegistry")
+		panic("no return value specified for ConfigureRegistryCA")
 	}
 
 	var r0 error
@@ -934,18 +934,18 @@ func (_mock *MockHelmClient) ConfigureRegistry(caPEM []byte) error {
 	return r0
 }
 
-// MockHelmClient_ConfigureRegistry_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ConfigureRegistry'
-type MockHelmClient_ConfigureRegistry_Call struct {
+// MockHelmClient_ConfigureRegistryCA_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ConfigureRegistryCA'
+type MockHelmClient_ConfigureRegistryCA_Call struct {
 	*mock.Call
 }
 
-// ConfigureRegistry is a helper method to define mock.On call
+// ConfigureRegistryCA is a helper method to define mock.On call
 //   - caPEM []byte
-func (_e *MockHelmClient_Expecter) ConfigureRegistry(caPEM any) *MockHelmClient_ConfigureRegistry_Call {
-	return &MockHelmClient_ConfigureRegistry_Call{Call: _e.mock.On("ConfigureRegistry", caPEM)}
+func (_e *MockHelmClient_Expecter) ConfigureRegistryCA(caPEM any) *MockHelmClient_ConfigureRegistryCA_Call {
+	return &MockHelmClient_ConfigureRegistryCA_Call{Call: _e.mock.On("ConfigureRegistryCA", caPEM)}
 }
 
-func (_c *MockHelmClient_ConfigureRegistry_Call) Run(run func(caPEM []byte)) *MockHelmClient_ConfigureRegistry_Call {
+func (_c *MockHelmClient_ConfigureRegistryCA_Call) Run(run func(caPEM []byte)) *MockHelmClient_ConfigureRegistryCA_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 []byte
 		if args[0] != nil {
@@ -958,12 +958,12 @@ func (_c *MockHelmClient_ConfigureRegistry_Call) Run(run func(caPEM []byte)) *Mo
 	return _c
 }
 
-func (_c *MockHelmClient_ConfigureRegistry_Call) Return(err error) *MockHelmClient_ConfigureRegistry_Call {
+func (_c *MockHelmClient_ConfigureRegistryCA_Call) Return(err error) *MockHelmClient_ConfigureRegistryCA_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockHelmClient_ConfigureRegistry_Call) RunAndReturn(run func(caPEM []byte) error) *MockHelmClient_ConfigureRegistry_Call {
+func (_c *MockHelmClient_ConfigureRegistryCA_Call) RunAndReturn(run func(caPEM []byte) error) *MockHelmClient_ConfigureRegistryCA_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -276,7 +276,7 @@ func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
 		host = "ghcr.io"
 	}
 
-	username := a.ociUsername()
+	username := ociUsernameOrDefault(a.OciUsername)
 
 	config, err := json.Marshal(map[string]any{
 		"auths": map[string]any{
@@ -312,7 +312,7 @@ func (a *Installer) configureRegistryCA() (map[string]any, error) {
 		return nil, fmt.Errorf("reading registry certificate authority: %w", err)
 	}
 
-	if err := a.Helm.ConfigureRegistry(authority); err != nil {
+	if err := a.Helm.ConfigureRegistryCA(authority); err != nil {
 		return nil, fmt.Errorf("configuring Helm registry trust: %w", err)
 	}
 
@@ -343,7 +343,7 @@ func (a *Installer) loginChartRegistry(ctx context.Context, chartName string) er
 		return nil
 	}
 
-	if err := a.Helm.LoginRegistry(ctx, registryHost(chartName), a.ociUsername(), a.OciPassword); err != nil {
+	if err := a.Helm.LoginRegistry(ctx, registryHost(chartName), ociUsernameOrDefault(a.OciUsername), a.OciPassword); err != nil {
 		return fmt.Errorf("logging in to ArgoCD chart registry: %w", err)
 	}
 
@@ -360,9 +360,9 @@ func registryHost(registryURL string) string {
 	return host
 }
 
-func (a *Installer) ociUsername() string {
-	if a.OciUsername != "" {
-		return a.OciUsername
+func ociUsernameOrDefault(username string) string {
+	if username != "" {
+		return username
 	}
 
 	return defaultOciUsername
