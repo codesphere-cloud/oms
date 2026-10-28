@@ -33,7 +33,10 @@ $ oms install codesphere -p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-
 ```
       --argo-force-conflicts         Force SSA ownership conflicts during ArgoCD install
       --argo-registry-ca string      Path to the certificate authority of the OCI registry, needed when its certificate is self-signed
-      --argo-values stringArray      ArgoCD values YAML file (can be specified multiple times)
+      --argo-registry-url string     OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)
+      --argo-repo string             Upstream ArgoCD chart repository; requires --argo-version (default "https://argoproj.github.io/argo-helm")
+      --argo-values stringArray      ArgoCD values YAML file; packaged chart settings go under argo-cd (repeatable)
+      --argo-version string          Upstream ArgoCD Helm chart version; overrides the packaged chart
       --auto-approve                 Auto approve confirmation prompts with default values (default true)
       --codesphere-only              Install only Codesphere without dependencies
   -c, --config stringArray           Path to a Codesphere Private Cloud configuration file (yaml). Can be specified multiple times and merged in order
