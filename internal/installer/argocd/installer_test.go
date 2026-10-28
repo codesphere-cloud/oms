@@ -171,6 +171,13 @@ var _ = Describe("Installer.Install", func() {
 			Expect(a.Install()).To(MatchError(ContainSubstring("downgrade is not allowed")))
 		})
 
+		It("rejects a downgrade before provisioning registry credentials", func() {
+			a.Version = "5.0.0"
+			a.OciPassword = "registry-token"
+
+			Expect(a.Install()).To(MatchError(ContainSubstring("downgrade is not allowed")))
+		})
+
 		It("allows a lower version when switching charts", func() {
 			a.ChartName = "argocd"
 			a.RepoURL = "oci://registry.example.com/charts"
@@ -415,9 +422,10 @@ var _ = Describe("Installer.Install", func() {
 		It("creates the namespace before provisioning credentials on a fresh installation", func() {
 			a.OciPassword = "token"
 
+			find := helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			kube.EXPECT().Get(mock.Anything, client.ObjectKey{Name: argocd.DefaultNamespace}, mock.AnythingOfType("*v1.Namespace")).Return(
 				apierrors.NewNotFound(schema.GroupResource{Resource: "namespaces"}, argocd.DefaultNamespace),
-			)
+			).NotBefore(find.Call)
 			namespace := kube.EXPECT().Create(mock.Anything, mock.MatchedBy(func(ns *corev1.Namespace) bool {
 				return ns.Name == argocd.DefaultNamespace
 			})).Return(nil)
@@ -425,7 +433,6 @@ var _ = Describe("Installer.Install", func() {
 				apierrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, "docker-regcred"),
 			).NotBefore(namespace.Call)
 			provision := kube.EXPECT().Create(mock.Anything, mock.AnythingOfType("*v1.Secret")).Return(nil).NotBefore(namespace.Call)
-			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			helmMock.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).Return(nil).NotBefore(provision)
 			Expect(a.Install()).To(Succeed())
 		})
@@ -479,6 +486,8 @@ var _ = Describe("Installer.Install", func() {
 		It("stops before Helm when credential provisioning fails", func() {
 			a.OciPassword = "token"
 			provisionErr := errors.New("permission denied")
+
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			expectNewImagePullSecret(kube).Return(provisionErr)
 
 			err := a.Install()
@@ -489,6 +498,8 @@ var _ = Describe("Installer.Install", func() {
 		It("stops before writing credentials when the namespace cannot be ensured", func() {
 			a.OciPassword = "token"
 			permissionErr := errors.New("permission denied")
+
+			helmMock.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 			kube.EXPECT().Get(mock.Anything, client.ObjectKey{Name: argocd.DefaultNamespace}, mock.AnythingOfType("*v1.Namespace")).Return(permissionErr)
 
 			err := a.Install()

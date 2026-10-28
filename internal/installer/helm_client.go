@@ -131,10 +131,19 @@ func (h *helmClient) ConfigureRegistry(caPEM []byte) error {
 	}
 
 	transport := registry.NewTransport(false)
-	transport.Base = &http.Transport{
-		Proxy:           http.ProxyFromEnvironment,
-		TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
+	base := http.DefaultTransport.(*http.Transport).Clone()
+
+	tlsConfig := base.TLSClientConfig
+	if tlsConfig == nil {
+		tlsConfig = &tls.Config{}
+	} else {
+		tlsConfig = tlsConfig.Clone()
 	}
+
+	tlsConfig.RootCAs = roots
+	tlsConfig.MinVersion = tls.VersionTLS12
+	base.TLSClientConfig = tlsConfig
+	transport.Base = base
 
 	client, err := registry.NewClient(registry.ClientOptHTTPClient(&http.Client{Transport: transport}))
 	if err != nil {

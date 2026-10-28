@@ -236,7 +236,10 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 			dc.InstallConfig.PcApps = files.ChartValues{}
 		}
 
-		chartsRegistry := dc.InstallConfig.Registry.Server + installer.ChartsRepositoryPath
+		chartsRegistry, err := installer.ChartRegistryURL(dc.InstallConfig.Registry.Server)
+		if err != nil {
+			return fmt.Errorf("resolving pc-apps chart registry: %w", err)
+		}
 		if existing, _ := dc.InstallConfig.PcApps["chartsRegistry"].(string); existing != "" && existing != chartsRegistry {
 			b.stlog.Logf("Replacing pcApps.chartsRegistry %s from the install config with the local registry at %s", existing, chartsRegistry)
 		}

@@ -35,6 +35,8 @@ import (
 // DefaultNamespace is the namespace ArgoCD is installed into.
 const DefaultNamespace = "argocd"
 
+const imagePullSecretName = "docker-regcred"
+
 // InstallerConfig holds all user-facing parameters for an ArgoCD install/upgrade.
 type InstallerConfig struct {
 	ChartName      string
@@ -158,7 +160,7 @@ func (a *Installer) Install() error {
 		"dex": map[string]any{"enabled": false},
 	}
 
-	trust, err := a.registryTrustValues()
+	trust, err := a.configureRegistryCA()
 	if err != nil {
 		return err
 	}
@@ -198,15 +200,21 @@ func (a *Installer) Install() error {
 		WaitStrategy:    kube.LegacyStrategy, // StatusWatcherStrategy causes issues with ArgoCD's post-install hooks
 	}
 
+	existing, err := a.Helm.FindRelease(cfg.Namespace, cfg.ReleaseName)
+	if err != nil {
+		return fmt.Errorf("finding existing ArgoCD release: %w", err)
+	}
+
+	if existing != nil {
+		if err := a.validateUpgradeVersion(cfg, existing); err != nil {
+			return err
+		}
+	}
+
 	if pullSecret != nil {
 		if err := a.provisionImagePullSecret(ctx, pullSecret); err != nil {
 			return fmt.Errorf("provisioning ArgoCD image pull secret: %w", err)
 		}
-	}
-
-	existing, err := a.Helm.FindRelease(cfg.Namespace, cfg.ReleaseName)
-	if err != nil {
-		return fmt.Errorf("finding existing ArgoCD release: %w", err)
 	}
 
 	if existing != nil {
@@ -263,17 +271,12 @@ func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
 		return nil, nil
 	}
 
-	registry := strings.TrimPrefix(a.OciRegistryURL, "oci://")
-	if registry == "" {
-		registry = "ghcr.io"
+	host := registryHost(a.OciRegistryURL)
+	if host == "" {
+		host = "ghcr.io"
 	}
 
-	host, _, _ := strings.Cut(registry, "/")
-
-	username := a.OciUsername
-	if username == "" {
-		username = defaultOciUsername
-	}
+	username := a.ociUsername()
 
 	config, err := json.Marshal(map[string]any{
 		"auths": map[string]any{
@@ -289,17 +292,17 @@ func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
 	}
 
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "docker-regcred", Namespace: DefaultNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: imagePullSecretName, Namespace: DefaultNamespace},
 		Type:       corev1.SecretTypeDockerConfigJson,
 		Data:       map[string][]byte{corev1.DockerConfigJsonKey: config},
 	}, nil
 }
 
-// registryTrustValues puts the OCI registry's certificate authority into ArgoCD's certificate
-// store. The repo server runs in a container and reads that store instead of the trust store of
-// the node it runs on, so it rejects a registry with a self-signed certificate until the
-// authority is configured here. The store is keyed by host name without its port.
-func (a *Installer) registryTrustValues() (map[string]any, error) {
+// configureRegistryCA adds the OCI registry's certificate authority to Helm's registry client
+// and returns values for ArgoCD's certificate store. The repo server runs in a container and
+// reads that store instead of the trust store of the node it runs on. The store is keyed by
+// host name without its port.
+func (a *Installer) configureRegistryCA() (map[string]any, error) {
 	if a.OciRegistryCAFile == "" {
 		return nil, nil
 	}
@@ -315,12 +318,7 @@ func (a *Installer) registryTrustValues() (map[string]any, error) {
 
 	// A registry URL may name its scheme, which is neither part of the host nor recognised as
 	// one: splitting "oci:" into host and port succeeds and yields the scheme itself.
-	registryURL := a.OciRegistryURL
-	if _, rest, found := strings.Cut(registryURL, "://"); found {
-		registryURL = rest
-	}
-
-	address, _, _ := strings.Cut(registryURL, "/")
+	address := registryHost(a.OciRegistryURL)
 
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -345,18 +343,29 @@ func (a *Installer) loginChartRegistry(ctx context.Context, chartName string) er
 		return nil
 	}
 
-	host, _, _ := strings.Cut(strings.TrimPrefix(chartName, "oci://"), "/")
-
-	username := a.OciUsername
-	if username == "" {
-		username = defaultOciUsername
-	}
-
-	if err := a.Helm.LoginRegistry(ctx, host, username, a.OciPassword); err != nil {
+	if err := a.Helm.LoginRegistry(ctx, registryHost(chartName), a.ociUsername(), a.OciPassword); err != nil {
 		return fmt.Errorf("logging in to ArgoCD chart registry: %w", err)
 	}
 
 	return nil
+}
+
+func registryHost(registryURL string) string {
+	if _, rest, found := strings.Cut(registryURL, "://"); found {
+		registryURL = rest
+	}
+
+	host, _, _ := strings.Cut(registryURL, "/")
+
+	return host
+}
+
+func (a *Installer) ociUsername() string {
+	if a.OciUsername != "" {
+		return a.OciUsername
+	}
+
+	return defaultOciUsername
 }
 
 func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) error {
@@ -375,10 +384,29 @@ func (a *Installer) install(ctx context.Context, cfg installer.ChartConfig) erro
 	return nil
 }
 
-// upgrade validates the version constraint for the same chart and then performs a Helm upgrade.
+// upgrade performs a Helm upgrade after the requested version has been validated.
 func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, existing *installer.ReleaseInfo) error {
 	log.Printf("Found existing ArgoCD release with chart version %s\n", existing.InstalledVersion)
+	if a.Version != "" {
+		log.Printf("Upgrading ArgoCD from %s to %s\n", existing.InstalledVersion, a.Version)
+	} else {
+		log.Printf("Upgrading ArgoCD from %s to latest\n", existing.InstalledVersion)
+	}
 
+	if err := a.Helm.UpgradeChart(ctx, cfg, installer.UpgradeChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
+		return fmt.Errorf("upgrading ArgoCD chart: %w", err)
+	}
+
+	if cfg.Version != "" {
+		fmt.Printf("Successfully upgraded Argo CD to chart version %s\n", cfg.Version)
+	} else {
+		fmt.Println("Successfully upgraded Argo CD to the latest chart version")
+	}
+
+	return nil
+}
+
+func (a *Installer) validateUpgradeVersion(cfg installer.ChartConfig, existing *installer.ReleaseInfo) error {
 	// Helm records the chart name, but not its original repository reference.
 	// Different charts have independent versions, so only compare matching names.
 	if a.Version != "" && existing.ChartName == path.Base(cfg.ChartName) {
@@ -398,22 +426,6 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 				a.Version, existing.InstalledVersion,
 			)
 		}
-	}
-
-	if a.Version != "" {
-		log.Printf("Upgrading ArgoCD from %s to %s\n", existing.InstalledVersion, a.Version)
-	} else {
-		log.Printf("Upgrading ArgoCD from %s to latest\n", existing.InstalledVersion)
-	}
-
-	if err := a.Helm.UpgradeChart(ctx, cfg, installer.UpgradeChartOptions{ForceConflicts: a.ForceConflicts}); err != nil {
-		return fmt.Errorf("upgrading ArgoCD chart: %w", err)
-	}
-
-	if cfg.Version != "" {
-		fmt.Printf("Successfully upgraded Argo CD to chart version %s\n", cfg.Version)
-	} else {
-		fmt.Println("Successfully upgraded Argo CD to the latest chart version")
 	}
 
 	return nil

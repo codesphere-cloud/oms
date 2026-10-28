@@ -134,9 +134,14 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		return fmt.Errorf("failed to parse installer BOM: %w", err)
 	}
 
-	registryURL := ""
-	if cfg.Registry != nil && cfg.Registry.Server != "" {
-		registryURL = cfg.Registry.Server + installer.ChartsRepositoryPath
+	registryServer := ""
+	if cfg.Registry != nil {
+		registryServer = cfg.Registry.Server
+	}
+
+	registryURL, err := installer.ChartRegistryURL(registryServer)
+	if err != nil {
+		return fmt.Errorf("resolving chart registry: %w", err)
 	}
 
 	var install *argocdinstaller.AppInstaller
