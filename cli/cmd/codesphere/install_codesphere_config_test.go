@@ -57,6 +57,33 @@ var _ = Describe("prepareInstallConfig", func() {
 		}))
 	})
 
+	It("with the new barman key in the base and the legacy key in an overlay, the merged file keeps the base", func() {
+		dir := GinkgoT().TempDir()
+		basePath := filepath.Join(dir, "base.yaml")
+		overlayPath := filepath.Join(dir, "overlay.yaml")
+
+		Expect(os.WriteFile(basePath, []byte("managedServiceBackends:\n  barmanCloudPlugin:\n    enabled: false\n"), 0600)).To(Succeed())
+		Expect(os.WriteFile(overlayPath, []byte("cluster:\n  BarmanCloudPluginConfig:\n    enabled: true\n"), 0600)).To(Succeed())
+
+		effectiveOpts, _, cleanup, err := prepareInstallConfig(&InstallCodesphereOpts{Configs: []string{basePath, overlayPath}}, installer.NewConfig())
+		Expect(err).NotTo(HaveOccurred())
+
+		defer cleanup()
+
+		merged := readMergedConfig(effectiveOpts.ConfigPath)
+		Expect(merged["cluster"]).NotTo(HaveKey("BarmanCloudPluginConfig"))
+		Expect(merged["managedServiceBackends"]).To(Equal(map[string]any{"barmanCloudPlugin": map[string]any{"enabled": false}}))
+	})
+
+	It("with a legacy barman key that is not a mapping, preparing the install config fails", func() {
+		basePath := filepath.Join(GinkgoT().TempDir(), "base.yaml")
+		Expect(os.WriteFile(basePath, []byte("cluster:\n  BarmanCloudPluginConfig: enabled\n"), 0600)).To(Succeed())
+
+		_, _, _, err := prepareInstallConfig(&InstallCodesphereOpts{Configs: []string{basePath}}, installer.NewConfig())
+
+		Expect(err).To(MatchError(ContainSubstring("failed to migrate merged config.yaml")))
+	})
+
 	It("with the legacy barman key in the base and the new key in an overlay, the merged file keeps the overlay", func() {
 		dir := GinkgoT().TempDir()
 		basePath := filepath.Join(dir, "base.yaml")

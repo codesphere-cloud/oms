@@ -395,8 +395,8 @@ type ClusterConfig struct {
 	MetalLB             *MetalLBConfig             `yaml:"metallb,omitempty"`
 	RookExternalCluster *RookExternalClusterConfig `yaml:"rookExternalCluster,omitempty"`
 	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
-	// LegacyBarmanCloudPlugin is only read: Unmarshal moves it to
-	// managedServiceBackends.barmanCloudPlugin, the key the PC installer reads.
+	// Deprecated: use ManagedServiceBackendsConfig.BarmanCloudPlugin. The PC installer never
+	// read this key; Unmarshal moves it to managedServiceBackends.barmanCloudPlugin.
 	LegacyBarmanCloudPlugin *BarmanCloudPluginConfig `yaml:"BarmanCloudPluginConfig,omitempty"`
 	RgwLoadBalancer         *RgwLoadBalancerConfig   `yaml:"rgwLoadBalancer,omitempty"`
 	Kyverno                 *KyvernoConfig           `yaml:"kyverno,omitempty"`
@@ -1221,7 +1221,7 @@ const (
 )
 
 // migrateLegacyBarmanCloudPlugin moves cluster.BarmanCloudPluginConfig to
-// managedServiceBackends.barmanCloudPlugin. The new key wins when both are set.
+// managedServiceBackends.barmanCloudPlugin.
 func (c *RootConfig) migrateLegacyBarmanCloudPlugin() {
 	legacy := c.Cluster.LegacyBarmanCloudPlugin
 	if legacy == nil {
@@ -1234,38 +1234,49 @@ func (c *RootConfig) migrateLegacyBarmanCloudPlugin() {
 		c.ManagedServiceBackends = &ManagedServiceBackendsConfig{}
 	}
 
-	if c.ManagedServiceBackends.BarmanCloudPlugin != nil {
+	c.ManagedServiceBackends.BarmanCloudPlugin = mergeLegacyBarmanCloudPlugin(legacy, c.ManagedServiceBackends.BarmanCloudPlugin)
+}
+
+// mergeLegacyBarmanCloudPlugin returns the barmanCloudPlugin entry once the legacy one is
+// moved in. The new key wins when both are set.
+func mergeLegacyBarmanCloudPlugin(legacy, current *BarmanCloudPluginConfig) *BarmanCloudPluginConfig {
+	if current != nil {
 		logLegacyBarmanCloudPluginIgnored()
-		return
+		return current
 	}
 
 	logLegacyBarmanCloudPluginMoved(legacy.Enabled)
 	// The PC installer never read the legacy key, so every install that has it runs the
 	// plugin; its enabled: false, which the dev profile wrote by accident, must not now
 	// stop installing the plugin that database backups depend on.
-	c.ManagedServiceBackends.BarmanCloudPlugin = &BarmanCloudPluginConfig{
+	return &BarmanCloudPluginConfig{
 		Enabled:  true,
 		Override: legacy.Override,
 	}
 }
 
-// MigrateLegacyBarmanCloudPluginKey does what Unmarshal does for the barman plugin on a raw
-// config map, for a map that reaches the PC installer without passing through RootConfig.
-func MigrateLegacyBarmanCloudPluginKey(config map[string]any) {
+// MigrateLegacyBarmanCloudPluginKey applies Unmarshal's barman plugin migration to a raw config
+// map, for a map that reaches the PC installer without passing through RootConfig.
+func MigrateLegacyBarmanCloudPluginKey(config map[string]any) error {
 	cluster, ok := config["cluster"].(map[string]any)
 	if !ok {
-		return
+		return nil
 	}
 
-	legacy, ok := cluster[legacyBarmanCloudPluginKey]
+	legacyValue, ok := cluster[legacyBarmanCloudPluginKey]
 	if !ok {
-		return
+		return nil
 	}
 
 	delete(cluster, legacyBarmanCloudPluginKey)
 
+	var legacy *BarmanCloudPluginConfig
+	if err := convertThroughYAML(legacyValue, &legacy); err != nil {
+		return fmt.Errorf("read %s: %w", legacyBarmanCloudPluginPath, err)
+	}
+
 	if legacy == nil {
-		return
+		return nil
 	}
 
 	backends, ok := config["managedServiceBackends"].(map[string]any)
@@ -1274,21 +1285,39 @@ func MigrateLegacyBarmanCloudPluginKey(config map[string]any) {
 		config["managedServiceBackends"] = backends
 	}
 
-	if backends[barmanCloudPluginKey] != nil {
-		logLegacyBarmanCloudPluginIgnored()
-		return
+	var current *BarmanCloudPluginConfig
+	if err := convertThroughYAML(backends[barmanCloudPluginKey], &current); err != nil {
+		return fmt.Errorf("read %s: %w", barmanCloudPluginPath, err)
 	}
 
-	legacyFields, _ := legacy.(map[string]any)
-	legacyEnabled, _ := legacyFields["enabled"].(bool)
-	logLegacyBarmanCloudPluginMoved(legacyEnabled)
-
-	migrated := map[string]any{"enabled": true}
-	if override, ok := legacyFields["override"]; ok {
-		migrated["override"] = override
+	migrated := mergeLegacyBarmanCloudPlugin(legacy, current)
+	// A new key that wins stays as written, with any fields the struct does not model.
+	if migrated == current {
+		return nil
 	}
 
-	backends[barmanCloudPluginKey] = migrated
+	var migratedFields map[string]any
+	if err := convertThroughYAML(migrated, &migratedFields); err != nil {
+		return fmt.Errorf("write %s: %w", barmanCloudPluginPath, err)
+	}
+
+	backends[barmanCloudPluginKey] = migratedFields
+
+	return nil
+}
+
+// convertThroughYAML decodes value into target as yaml.Unmarshal would decode it from a file.
+func convertThroughYAML(value, target any) error {
+	data, err := yaml.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+
+	if err := yaml.Unmarshal(data, target); err != nil {
+		return fmt.Errorf("decode: %w", err)
+	}
+
+	return nil
 }
 
 func logLegacyBarmanCloudPluginMoved(legacyEnabled bool) {
