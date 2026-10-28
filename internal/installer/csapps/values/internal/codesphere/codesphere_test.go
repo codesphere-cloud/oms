@@ -32,31 +32,27 @@ var _ = Describe("Values", func() {
 		Expect(values).To(Equal(codesphere.Codesphere{
 			PublicIP:                   "203.0.113.10",
 			WorkspaceHostingBaseDomain: "ws.example.com",
-			SSHWorkspaceProxy:          codesphere.SSHWorkspaceProxy{BaseDomain: "ssh.example.com"},
 			VPN:                        codesphere.VPN{LeftPeerID: "vpn.example.com"},
 			DNSServers:                 []string{"1.1.1.1", "9.9.9.9"},
 			Hosts:                      []string{"codesphere.example.com"},
 			PrePullImages:              false,
+			SSHWorkspaceProxy:          &files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"},
 			TLSCertificate:             &codesphere.TLSCertificate{Cert: "cert-pem", Key: "key-pem"},
-			UnderprovisionFactors:      &codesphere.UnderprovisionFactors{CPU: 0.5, Memory: 0.75},
-			ExtraWorkspaceFiles: []codesphere.ExtraWorkspaceFile{
-				{Name: ".npmrc", Content: "cmVnaXN0cnk=", Encoded: true},
-			},
-			ExtraCAPem:            "ca-pem",
-			ExtraWorkspaceEnvVars: map[string]string{"FOO": "bar"},
+			UnderprovisionFactors:      &files.UnderprovisionFactors{CPU: 0.5, Memory: 0.75},
+			ExtraWorkspaceFiles:        []files.ExtraWorkspaceFile{{Name: ".npmrc", Content: "cmVnaXN0cnk=", Encoded: true}},
+			ExtraCAPem:                 "ca-pem",
+			ExtraWorkspaceEnvVars:      map[string]string{"FOO": "bar"},
 		}))
 	})
 
 	It("no keys configured -> default DNS server and pre-pulling, optional keys left out", func() {
 		values := codesphere.Values(files.CodesphereConfig{})
 
-		Expect(values.DNSServers).To(Equal([]string{"8.8.8.8"}))
-		Expect(values.PrePullImages).To(BeTrue())
-		Expect(values.SSHWorkspaceProxy).To(Equal(codesphere.SSHWorkspaceProxy{}))
-		Expect(values.TLSCertificate).To(BeNil())
-		Expect(values.UnderprovisionFactors).To(BeNil())
-		Expect(values.ExtraWorkspaceFiles).To(BeNil())
-		Expect(values.ExtraWorkspaceEnvVars).To(BeNil())
+		Expect(values).To(Equal(codesphere.Codesphere{
+			DNSServers:    []string{"8.8.8.8"},
+			Hosts:         []string{""},
+			PrePullImages: true,
+		}))
 	})
 
 	It("empty DNS server list -> kept empty", func() {
