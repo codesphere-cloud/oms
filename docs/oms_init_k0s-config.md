@@ -8,6 +8,8 @@ Generate a k0sctl configuration from a Codesphere install-config without
 installing k0s. Nothing is downloaded: the k0s binary is taken from the package or
 the OMS cache, see 'oms download k0s'.
 
+An existing k0sctl config is only overwritten after confirmation or with --yes.
+
 With --airgapped, the generated config makes k0sctl upload the k0s airgap image
 bundle to every node that runs a worker and stops k0s from pulling images.
 
@@ -23,6 +25,9 @@ $ oms init k0s-config --install-config <path>
 
 # Generate a k0sctl config at the given path
 $ oms init k0s-config --install-config <path> --output <path>
+
+# Regenerate the k0sctl config, overwriting an existing one without asking
+$ oms init k0s-config --install-config <path> --yes
 
 # Generate an airgap k0sctl config using the airgap bundle from the OMS cache
 $ oms init k0s-config --install-config <path> --airgapped
@@ -45,6 +50,7 @@ $ oms init k0s-config --install-config <path> --airgapped --path <bundle>
       --path string             Path to the k0s airgap image bundle (requires --airgapped; default: the bundle in the OMS cache)
       --ssh-key-path string     SSH private key path for remote installation
   -v, --version string          Version of k0s to install (default "v1.31.14+k0s.0")
+  -y, --yes                     Overwrite an existing k0sctl config without asking
 ```
 
 ### Options inherited from parent commands
