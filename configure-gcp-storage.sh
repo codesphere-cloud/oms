@@ -71,7 +71,7 @@ $KUBECTL -n rwx-csi-system create secret docker-registry rwox-csi-ghcr \
 rwox_archive="$workdir/rwox-csi.tar.gz"
 mkdir "$workdir/rwox-csi"
 curl -fsSL \
-  "https://api.github.com/repos/codesphere-cloud/rwox-csi/tarball/7af7126cafcbfbe050ba0f72c7ca482bc678b924" \
+  "https://api.github.com/repos/codesphere-cloud/rwox-csi/tarball/07b9e650c564848d06e4fc031080697dd854f431" \
   -o "$rwox_archive"
 tar -xzf "$rwox_archive" -C "$workdir/rwox-csi" --strip-components=1
 
@@ -87,6 +87,6 @@ helm upgrade --install rwox-csi "$workdir/rwox-csi/chart/rwox-csi" \
   --post-renderer /root/rwox-k0s-post-renderer.sh \
   --set-string storageClass.name=codesphere \
   --set-string storageClass.backingStorageClass=gce-pd-rwo \
-  --set-string image.tag=sha-7af7126 \
+  --set-string image.tag=sha-07b9e65 \
   --set-string 'imagePullSecrets[0].name=rwox-csi-ghcr' \
   --wait --timeout 10m

@@ -4,6 +4,7 @@
 package gcp
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
@@ -16,8 +17,8 @@ const (
 	helmDownloadSHA256         = "ee88b3c851ae6466a3de507f7be73fe94d54cbf2987cbaa3d1a3832ea331f2cd"
 	helmVersion                = "v3.17.3"
 	remoteGCPStorageScriptPath = "/root/configure-gcp-storage.sh"
-	rwoxCSICommit              = "7af7126cafcbfbe050ba0f72c7ca482bc678b924"
-	rwoxCSIImageTag            = "sha-7af7126"
+	rwoxCSICommit              = "1ab0c853f47e1c2254a4c8e5b093f51b6ee99b07"
+	rwoxCSIImageTag            = "sha-1ab0c85"
 	rwoxCSINamespace           = "rwx-csi-system"
 	rwoxCSIRegistrySecretName  = "rwox-csi-ghcr"
 	rwoxStorageClassName       = "codesphere"
@@ -53,7 +54,6 @@ func (b *GCPBootstrapper) EnsureGCPStorage() error {
 }
 
 func (b *GCPBootstrapper) generateGCPStorageScript(dc *datacenter.DataCenter) error {
-	localScript := fmt.Sprintf("configure-gcp-storage%s.sh", dc.Suffix)
 	script := fmt.Sprintf(`#!/bin/bash
 set -euo pipefail
 
@@ -131,11 +131,29 @@ curl -fsSL \
   -o "$rwox_archive"
 tar -xzf "$rwox_archive" -C "$workdir/rwox-csi" --strip-components=1
 
+# Helm installs CRDs but does not upgrade them. Apply the schema explicitly so
+# new per-volume ownership fields are accepted on both fresh and existing clusters.
+$KUBECTL apply -f "$workdir/rwox-csi/chart/rwox-csi/crds/storage.example.io_rwxvolumes.yaml"
+
 cat <<'EOF' >/root/rwox-k0s-post-renderer.sh
 #!/bin/sh
 sed 's#/var/lib/kubelet#/var/lib/k0s/kubelet#g'
 EOF
 chmod 0755 /root/rwox-k0s-post-renderer.sh
+
+# StorageClass parameters are immutable. A retry or upgrade from an older rwox-csi
+# configuration must recreate the class when its managed parameters differ.
+if $KUBECTL get storageclass %s >/dev/null 2>&1; then
+  current_backing="$($KUBECTL get storageclass %s -o jsonpath='{.parameters.backingStorageClass}')"
+  current_mode="$($KUBECTL get storageclass %s -o jsonpath='{.parameters.directoryMode}')"
+  current_uid="$($KUBECTL get storageclass %s -o jsonpath='{.parameters.directoryUID}')"
+  current_gid="$($KUBECTL get storageclass %s -o jsonpath='{.parameters.directoryGID}')"
+  current_directory="$($KUBECTL get storageclass %s -o jsonpath='{.parameters.backingDirectory}')"
+  if [[ "$current_backing" != %s || "$current_mode" != "0777" || "$current_uid" != "1501" || "$current_gid" != "1010" || "$current_directory" != "export" ]]; then
+    echo "Recreating StorageClass %s because its immutable parameters differ"
+    $KUBECTL delete storageclass %s
+  fi
+fi
 
 helm upgrade --install rwox-csi "$workdir/rwox-csi/chart/rwox-csi" \
   --namespace %s \
@@ -143,25 +161,26 @@ helm upgrade --install rwox-csi "$workdir/rwox-csi/chart/rwox-csi" \
   --post-renderer /root/rwox-k0s-post-renderer.sh \
   --set-string storageClass.name=%s \
   --set-string storageClass.backingStorageClass=%s \
+  --set-string storageClass.directoryMode=0777 \
+  --set-string storageClass.directoryUID=1501 \
+  --set-string storageClass.directoryGID=1010 \
+  --set-string storageClass.backingDirectory=export \
   --set-string image.tag=%s \
   --set-string 'imagePullSecrets[0].name=%s' \
   --wait --timeout 10m
 `, helmVersion, helmVersion, helmDownloadSHA256, gcePDCSIDriverVersion, gcePDCSIDriverSHA256,
 		gcePDRWOStorageClassName, rwoxCSINamespace, rwoxCSINamespace, rwoxCSIRegistrySecretName,
-		rwoxCSICommit, rwoxCSINamespace, rwoxStorageClassName,
+		rwoxCSICommit, rwoxStorageClassName, rwoxStorageClassName, rwoxStorageClassName,
+		rwoxStorageClassName, rwoxStorageClassName, rwoxStorageClassName, gcePDRWOStorageClassName, rwoxStorageClassName, rwoxStorageClassName,
+		rwoxCSINamespace, rwoxStorageClassName,
 		gcePDRWOStorageClassName, rwoxCSIImageTag, rwoxCSIRegistrySecretName)
 
-	if err := b.fw.WriteFile(localScript, []byte(script), 0755); err != nil {
-		return fmt.Errorf("failed to write %s: %w", localScript, err)
-	}
-
 	controller := dc.ControlPlaneNodes[0]
-	if err := controller.NodeClient.CopyFile(controller, localScript, remoteGCPStorageScriptPath); err != nil {
-		return fmt.Errorf("failed to copy %s to control plane node: %w", localScript, err)
-	}
-
-	if err := controller.RunSSHCommand("root", "chmod +x "+remoteGCPStorageScriptPath); err != nil {
-		return fmt.Errorf("failed to make %s executable: %w", localScript, err)
+	encodedScript := base64.StdEncoding.EncodeToString([]byte(script))
+	uploadCommand := fmt.Sprintf("printf '%%s' %s | base64 -d > %s && chmod 0755 %s",
+		encodedScript, remoteGCPStorageScriptPath, remoteGCPStorageScriptPath)
+	if err := controller.RunSSHCommand("root", uploadCommand); err != nil {
+		return fmt.Errorf("failed to upload GCP storage setup script to control plane node: %w", err)
 	}
 
 	return nil

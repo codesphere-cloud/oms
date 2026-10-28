@@ -5,6 +5,7 @@ package gcp_test
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"strings"
@@ -2226,13 +2227,14 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.RegistryUser = "codesphere"
 			csEnv.GitHubPAT = "secret-pat"
 
-			var script string
-
-			fw.EXPECT().WriteFile("configure-gcp-storage.sh", mock.Anything, os.FileMode(0755)).
-				Run(func(_ string, content []byte, _ os.FileMode) { script = string(content) }).
-				Return(nil)
-			nodeClient.EXPECT().CopyFile(csEnv.ControlPlaneNodes[0], "configure-gcp-storage.sh", "/root/configure-gcp-storage.sh").Return(nil)
-			nodeClient.EXPECT().RunCommand(csEnv.ControlPlaneNodes[0], "root", "chmod +x /root/configure-gcp-storage.sh").Return(nil)
+			var uploadCommand string
+			nodeClient.EXPECT().RunCommand(csEnv.ControlPlaneNodes[0], "root", mock.MatchedBy(func(command string) bool {
+				if !strings.Contains(command, "| base64 -d > /root/configure-gcp-storage.sh && chmod 0755 /root/configure-gcp-storage.sh") {
+					return false
+				}
+				uploadCommand = command
+				return true
+			})).Return(nil)
 			nodeClient.EXPECT().RunCommand(csEnv.ControlPlaneNodes[0], "root", mock.MatchedBy(func(command string) bool {
 				return strings.Contains(command, "RWX_REGISTRY_USER='codesphere'") &&
 					strings.Contains(command, "RWX_REGISTRY_PASSWORD='secret-pat'") &&
@@ -2240,6 +2242,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})).Return(nil)
 
 			Expect(bs.EnsureGCPStorage()).To(Succeed())
+			fields := strings.Fields(uploadCommand)
+			Expect(fields).To(HaveLen(12))
+			decodedScript, err := base64.StdEncoding.DecodeString(fields[2])
+			Expect(err).NotTo(HaveOccurred())
+			script := string(decodedScript)
 			Expect(script).To(ContainSubstring("pd.csi.storage.gke.io"))
 			Expect(script).To(ContainSubstring("deploy/kubernetes/overlays/noauth"))
 			Expect(script).To(ContainSubstring("create namespace gce-pd-csi-driver --dry-run=client"))
@@ -2248,10 +2255,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 			Expect(script).To(ContainSubstring(`storageclass.kubernetes.io/is-default-class: "true"`))
 			Expect(script).To(ContainSubstring("volumeBindingMode: WaitForFirstConsumer"))
 			Expect(script).To(ContainSubstring("/var/lib/k0s/kubelet"))
-			Expect(script).To(ContainSubstring("codesphere-cloud/rwox-csi/tarball/7af7126cafcbfbe050ba0f72c7ca482bc678b924"))
-			Expect(script).To(ContainSubstring("image.tag=sha-7af7126"))
+			Expect(script).To(ContainSubstring("codesphere-cloud/rwox-csi/tarball/1ab0c853f47e1c2254a4c8e5b093f51b6ee99b07"))
+			Expect(script).To(ContainSubstring("image.tag=sha-1ab0c85"))
 			Expect(script).To(ContainSubstring("storageClass.name=codesphere"))
 			Expect(script).To(ContainSubstring("storageClass.backingStorageClass=gce-pd-rwo"))
+			Expect(script).To(ContainSubstring("storageClass.directoryMode=0777"))
+			Expect(script).To(ContainSubstring("storageClass.directoryUID=1501"))
+			Expect(script).To(ContainSubstring("storageClass.directoryGID=1010"))
+			Expect(script).To(ContainSubstring("storageClass.backingDirectory=export"))
+			Expect(script).To(ContainSubstring("Recreating StorageClass codesphere because its immutable parameters differ"))
+			Expect(script).To(ContainSubstring("delete storageclass codesphere"))
 			Expect(script).NotTo(ContainSubstring("secret-pat"))
 		})
 
@@ -2260,15 +2273,28 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.RegistryUser = "codesphere"
 			csEnv.GitHubPAT = "secret-pat"
 
-			fw.EXPECT().WriteFile("configure-gcp-storage.sh", mock.Anything, os.FileMode(0755)).Return(nil)
-			nodeClient.EXPECT().CopyFile(mock.Anything, mock.Anything, mock.Anything).Return(nil)
-			nodeClient.EXPECT().RunCommand(mock.Anything, "root", "chmod +x /root/configure-gcp-storage.sh").Return(nil)
-			nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("setup failed"))
+			nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.MatchedBy(func(command string) bool {
+				return strings.Contains(command, "| base64 -d > /root/configure-gcp-storage.sh")
+			})).Return(nil)
+			nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.MatchedBy(func(command string) bool {
+				return strings.HasSuffix(command, "/root/configure-gcp-storage.sh")
+			})).Return(fmt.Errorf("setup failed"))
 
 			err := bs.EnsureGCPStorage()
 
 			Expect(err).To(MatchError(ContainSubstring("setup failed")))
 			Expect(err.Error()).NotTo(ContainSubstring("secret-pat"))
+		})
+
+		It("reports a failure to upload the remote setup script", func() {
+			csEnv.StorageBackend = gcp.StorageBackendGCPPD
+			nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.MatchedBy(func(command string) bool {
+				return strings.Contains(command, "| base64 -d > /root/configure-gcp-storage.sh")
+			})).Return(fmt.Errorf("upload failed"))
+
+			err := bs.EnsureGCPStorage()
+
+			Expect(err).To(MatchError(ContainSubstring("failed to upload GCP storage setup script")))
 		})
 	})
 })

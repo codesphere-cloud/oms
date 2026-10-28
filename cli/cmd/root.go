@@ -50,9 +50,6 @@ func GetRootCmd() *cobra.Command {
 	// Smoke test commands
 	AddSmoketestCmd(rootCmd, opts)
 
-	// Resource creation commands
-	AddCreateCmd(rootCmd, opts)
-
 	// Cluster administration commands
 	AddAddClusterAdminCmd(rootCmd, opts)
 
