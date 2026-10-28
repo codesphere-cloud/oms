@@ -56,7 +56,6 @@ type Installer struct {
 	Helm          installer.HelmClient
 	Resources     Resources
 	PackageLoader PackagedChartLoader
-	Workloads     WorkloadDetector
 }
 
 // NewInstaller creates an Installer with Helm and Kubernetes clients. It uses cfg.RESTConfig
@@ -83,7 +82,6 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 			Helm:            helm,
 			Resources:       resources,
 			PackageLoader:   packagedChartLoader{},
-			Workloads:       workloadDetector{client: clientset},
 		}, nil
 	}
 
@@ -107,7 +105,6 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 		Helm:            helm,
 		Resources:       resources,
 		PackageLoader:   packagedChartLoader{},
-		Workloads:       workloadDetector{client: clientset},
 	}, nil
 }
 

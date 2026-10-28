@@ -4,9 +4,7 @@
 package argocd
 
 import (
-	"context"
 	"fmt"
-	"strings"
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
@@ -14,8 +12,6 @@ import (
 	"helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 // CodesphereChartConfig selects the bundled chart by default. An explicit version
@@ -96,43 +92,4 @@ func (packagedChartLoader) LoadValues(paths []string) (map[string]any, error) {
 	}
 
 	return result, nil
-}
-
-// WorkloadDetector recognizes installations that must be preserved without Helm.
-//
-//mockery:generate: true
-type WorkloadDetector interface {
-	Exists(context.Context) (bool, error)
-}
-
-type workloadDetector struct{ client kubernetes.Interface }
-
-func (d workloadDetector) Exists(ctx context.Context) (bool, error) {
-	deployments, err := d.client.AppsV1().Deployments(DefaultNamespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return false, fmt.Errorf("checking existing ArgoCD deployments: %w", err)
-	}
-
-	for _, deployment := range deployments.Items {
-		if isArgoCDWorkload(deployment.ObjectMeta) {
-			return true, nil
-		}
-	}
-
-	statefulsets, err := d.client.AppsV1().StatefulSets(DefaultNamespace).List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return false, fmt.Errorf("checking existing ArgoCD statefulsets: %w", err)
-	}
-
-	for _, statefulset := range statefulsets.Items {
-		if isArgoCDWorkload(statefulset.ObjectMeta) {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
-func isArgoCDWorkload(meta metav1.ObjectMeta) bool {
-	return meta.Name == "argocd-server" || meta.Name == "argocd-application-controller" || meta.Labels["app.kubernetes.io/part-of"] == "argocd" || strings.HasPrefix(meta.Labels["app.kubernetes.io/name"], "argocd-")
 }

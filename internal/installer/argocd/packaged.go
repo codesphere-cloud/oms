@@ -41,7 +41,7 @@ func (a *Installer) installPackaged() error {
 }
 
 func (a *Installer) reconcilePackagedChart(ctx context.Context, existing *installer.ReleaseInfo) error {
-	manage, err := a.shouldManagePackagedChart(ctx, existing)
+	manage, err := a.shouldManagePackagedChart(existing)
 	if err != nil {
 		return err
 	}
@@ -70,18 +70,9 @@ func (a *Installer) reconcilePackagedChart(ctx context.Context, existing *instal
 	return nil
 }
 
-func (a *Installer) shouldManagePackagedChart(ctx context.Context, existing *installer.ReleaseInfo) (bool, error) {
+func (a *Installer) shouldManagePackagedChart(existing *installer.ReleaseInfo) (bool, error) {
 	if existing == nil {
-		found, err := a.Workloads.Exists(ctx)
-		if err != nil {
-			return false, fmt.Errorf("checking existing ArgoCD workloads: %w", err)
-		}
-
-		if found {
-			log.Print("Preserving existing ArgoCD workloads without the expected Helm release")
-		}
-
-		return !found, nil
+		return true, nil
 	}
 
 	if existing.ChartName != "argocd" {

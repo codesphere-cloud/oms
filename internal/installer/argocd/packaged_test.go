@@ -20,7 +20,6 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 		helm      *installer.MockHelmClient
 		resources *argocd.MockResources
 		loader    *argocd.MockPackagedChartLoader
-		workloads *argocd.MockWorkloadDetector
 		a         *argocd.Installer
 	)
 
@@ -28,10 +27,9 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 		helm = installer.NewMockHelmClient(GinkgoT())
 		resources = argocd.NewMockResources(GinkgoT())
 		loader = argocd.NewMockPackagedChartLoader(GinkgoT())
-		workloads = argocd.NewMockWorkloadDetector(GinkgoT())
 		a = &argocd.Installer{
 			InstallerConfig: argocd.InstallerConfig{PackageChart: "/package/argocd/files/chart", Version: "2.3.0", FullInstall: true},
-			Helm:            helm, Resources: resources, PackageLoader: loader, Workloads: workloads,
+			Helm:            helm, Resources: resources, PackageLoader: loader,
 		}
 	})
 
@@ -51,7 +49,6 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 	expectResources := func() { resources.EXPECT().ApplyAll(mock.Anything).Return(nil) }
 	expectFresh := func() {
 		helm.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
-		workloads.EXPECT().Exists(mock.Anything).Return(false, nil)
 	}
 
 	It("upgrades an older Codesphere chart using the local package", func() {
@@ -88,19 +85,6 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 		Expect(a.Install()).To(Succeed())
 	})
 
-	It("preserves workloads without the expected Helm release", func() {
-		helm.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
-		workloads.EXPECT().Exists(mock.Anything).Return(true, nil)
-		expectResources()
-		Expect(a.Install()).To(Succeed())
-	})
-
-	It("does not install when workload detection fails", func() {
-		helm.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
-		workloads.EXPECT().Exists(mock.Anything).Return(false, errors.New("forbidden"))
-		Expect(a.Install()).To(MatchError(ContainSubstring("forbidden")))
-	})
-
 	It("installs the local chart with nested bootstrap settings and mirrored images", func() {
 		expectFresh()
 
@@ -135,12 +119,12 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 		a.ValueFiles = []string{"custom-values.yaml"}
 
 		expectChartValues(map[string]any{"argo-cd": map[string]any{
-			"dex":    map[string]any{"enabled": true},
+			"server": map[string]any{"replicas": 2},
 			"global": map[string]any{"image": map[string]any{"repository": "custom.example.com/argocd"}},
 		}})
 		helm.EXPECT().InstallChart(mock.Anything, mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, c installer.ChartConfig, _ installer.InstallChartOptions) error {
 			upstream := c.Values["argo-cd"].(map[string]any)
-			Expect(upstream["dex"].(map[string]any)["enabled"]).To(BeTrue())
+			Expect(upstream["server"].(map[string]any)["replicas"]).To(Equal(2))
 			Expect(upstream["global"].(map[string]any)["image"].(map[string]any)["repository"]).To(Equal("custom.example.com/argocd"))
 
 			return nil
