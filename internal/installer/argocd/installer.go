@@ -17,8 +17,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"helm.sh/helm/v4/pkg/chart/common/util"
-	"helm.sh/helm/v4/pkg/cli/values"
-	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
 	"k8s.io/client-go/rest"
 )
@@ -111,9 +109,6 @@ func NewInstaller(cfg InstallerConfig) (*Installer, error) {
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
 func (a *Installer) Install() error {
-	if a.PackageChart != "" {
-		return a.installPackaged()
-	}
 	if err := a.validateRepoURL(); err != nil {
 		return err
 	}
@@ -126,50 +121,20 @@ func (a *Installer) Install() error {
 
 	ctx := context.Background()
 
-	vals, err := (&values.Options{
-		ValueFiles: a.ValueFiles,
-	}).MergeValues(getter.Getters())
-	if err != nil {
-		return fmt.Errorf("loading values files: %w", err)
-	}
-
-	defaults := map[string]any{
-		"dex": map[string]any{"enabled": false},
-	}
-
 	trust, err := a.registryTrustValues()
 	if err != nil {
 		return err
 	}
 
-	defaults = util.MergeTables(defaults, trust)
-	vals = util.MergeTables(vals, defaults)
+	defaults := util.MergeTables(map[string]any{"dex": map[string]any{"enabled": false}}, trust)
 
-	chartName, repoURL := a.resolveChartRef("argo-cd")
-	cfg := installer.ChartConfig{
-		ReleaseName:     "argocd",
-		ChartName:       chartName,
-		RepoURL:         repoURL,
-		Namespace:       DefaultNamespace,
-		Version:         a.Version,
-		CreateNamespace: true,
-		Values:          vals,
-		WaitStrategy:    kube.LegacyStrategy, // StatusWatcherStrategy causes issues with ArgoCD's post-install hooks
-	}
-
-	existing, err := a.Helm.FindRelease(cfg.Namespace, cfg.ReleaseName)
+	existing, err := a.Helm.FindRelease(DefaultNamespace, "argocd")
 	if err != nil {
 		return fmt.Errorf("finding existing ArgoCD release: %w", err)
 	}
 
-	if existing != nil {
-		if err := a.upgrade(ctx, cfg, existing); err != nil {
-			return err
-		}
-	} else {
-		if err := a.install(ctx, cfg); err != nil {
-			return err
-		}
+	if err := a.reconcileChart(ctx, existing, defaults); err != nil {
+		return err
 	}
 
 	if a.FullInstall {
@@ -182,6 +147,68 @@ func (a *Installer) Install() error {
 	a.showPostInstallHints()
 
 	return nil
+}
+
+// reconcileChart shares Helm operations between upstream and packaged charts.
+func (a *Installer) reconcileChart(ctx context.Context, existing *installer.ReleaseInfo, defaults map[string]any) error {
+	if a.PackageChart != "" {
+		manage, err := a.shouldManagePackagedChart(existing)
+		if err != nil {
+			return err
+		}
+
+		if !manage {
+			return nil
+		}
+	}
+
+	cfg, err := a.chartConfig(defaults)
+	if err != nil {
+		return err
+	}
+
+	if existing == nil {
+		return a.install(ctx, cfg)
+	}
+
+	return a.upgrade(ctx, cfg, existing)
+}
+
+func (a *Installer) chartLoader() PackagedChartLoader {
+	if a.PackageLoader != nil {
+		return a.PackageLoader
+	}
+
+	return packagedChartLoader{}
+}
+
+func (a *Installer) chartConfig(defaults map[string]any) (installer.ChartConfig, error) {
+	chartName, repoURL := a.resolveChartRef("argo-cd")
+
+	cfg := installer.ChartConfig{
+		ReleaseName: "argocd", ChartName: chartName, RepoURL: repoURL,
+		Namespace: DefaultNamespace, Version: a.Version, CreateNamespace: true,
+		WaitStrategy: kube.LegacyStrategy,
+	}
+	if a.PackageChart != "" {
+		var err error
+
+		defaults, err = a.packagedDefaults(defaults)
+		if err != nil {
+			return cfg, err
+		}
+
+		cfg.ChartName, cfg.RepoURL = a.PackageChart, ""
+	}
+
+	overrides, err := a.chartLoader().LoadValues(a.ValueFiles)
+	if err != nil {
+		return cfg, fmt.Errorf("loading ArgoCD values: %w", err)
+	}
+
+	cfg.Values = util.MergeTables(overrides, defaults)
+
+	return cfg, nil
 }
 
 // registryTrustValues puts the OCI registry's certificate authority into ArgoCD's certificate
@@ -246,21 +273,13 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 	log.Printf("Found existing ArgoCD release with chart version %s\n", existing.InstalledVersion)
 
 	if a.Version != "" {
-		installedSemver, err := semver.NewVersion(existing.InstalledVersion)
+		comparison, err := a.compareChartVersion(existing.InstalledVersion)
 		if err != nil {
-			return fmt.Errorf("failed to parse installed version %q: %w", existing.InstalledVersion, err)
+			return err
 		}
 
-		requestedSemver, err := semver.NewVersion(a.Version)
-		if err != nil {
-			return fmt.Errorf("failed to parse requested version %q: %w", a.Version, err)
-		}
-
-		if requestedSemver.LessThan(installedSemver) {
-			return fmt.Errorf(
-				"requested version %s is older than installed version %s; downgrade is not allowed",
-				a.Version, existing.InstalledVersion,
-			)
+		if comparison < 0 {
+			return fmt.Errorf("requested version %s is older than installed version %s; downgrade is not allowed", a.Version, existing.InstalledVersion)
 		}
 
 		log.Printf("Upgrading ArgoCD from %s to %s\n", existing.InstalledVersion, a.Version)
@@ -279,6 +298,20 @@ func (a *Installer) upgrade(ctx context.Context, cfg installer.ChartConfig, exis
 	}
 
 	return nil
+}
+
+func (a *Installer) compareChartVersion(installedVersion string) (int, error) {
+	installed, err := semver.NewVersion(installedVersion)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse installed version %q: %w", installedVersion, err)
+	}
+
+	requested, err := semver.NewVersion(a.Version)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse requested version %q: %w", a.Version, err)
+	}
+
+	return requested.Compare(installed), nil
 }
 
 func (a *Installer) validateRepoURL() error {
