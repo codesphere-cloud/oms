@@ -298,6 +298,22 @@ k8s-workers:
 			Expect(written.Spec.K0s.Config.Spec.API.ExternalAddress).To(Equal("k8s.example.com"))
 		})
 
+		It("runs both roles on an install-config control plane given as worker in another notation", func() {
+			config := newTestInstallConfig(true)
+			config.Kubernetes.ControlPlanes = []files.K8sNode{{IPAddress: "fd00:0:0::1"}}
+			c.Opts.InstallConfig = writeTestInstallConfig(tempDir, config)
+			c.Opts.Workers = []string{"fd00::1"}
+
+			setupWorkdirMocks()
+			mockK0s.EXPECT().Download("v1.30.0+k0s.0", cacheOnly).Return("/cache/k0s", nil)
+			expectConfigWritten(filepath.Join(tempDir, "k0sctl-config-test-dc.yaml"))
+
+			Expect(c.InitK0sConfig(mockPM, mockK0s)).To(Succeed())
+			Expect(written.Spec.Hosts).To(HaveLen(1))
+			Expect(written.Spec.Hosts[0].SSH.Address).To(Equal("fd00::1"))
+			Expect(written.Spec.Hosts[0].InstallFlags).To(Equal([]string{"--enable-worker", "--no-taints=true"}))
+		})
+
 		It("generates the config from host flags without an install-config", func() {
 			c.Opts.InstallConfig = ""
 			c.Opts.ControlPlanes = []string{"10.0.0.1"}

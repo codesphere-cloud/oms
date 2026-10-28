@@ -137,6 +137,8 @@ func (g *K0sctlConfigGenerator) loadClusterConfig() (*files.RootConfig, error) {
 		return nil, err
 	}
 
+	normalizeK8sNodeIPs(config)
+
 	if len(config.Kubernetes.ControlPlanes) == 0 {
 		return nil, fmt.Errorf("no Kubernetes control plane defined")
 	}
@@ -201,13 +203,11 @@ func (g *K0sctlConfigGenerator) loadAnsibleKubernetesHosts() (controlPlanes, wor
 		return nil, nil, err
 	}
 
-	controlPlanes, err = canonicalK8sNodes(controlPlanes)
-	if err != nil {
+	if err := validateK8sNodeIPs(controlPlanes); err != nil {
 		return nil, nil, fmt.Errorf("invalid k8s-cp host: %w", err)
 	}
 
-	workers, err = canonicalK8sNodes(workers)
-	if err != nil {
+	if err := validateK8sNodeIPs(workers); err != nil {
 		return nil, nil, fmt.Errorf("invalid k8s-workers host: %w", err)
 	}
 
@@ -245,30 +245,43 @@ func (g *K0sctlConfigGenerator) applyFlags(config *files.RootConfig) error {
 	return nil
 }
 
-// k8sNodesFromIPs turns IP addresses into Kubernetes nodes with canonical IP addresses, so
-// that a node given in different notations is recognized as the same node.
+// k8sNodesFromIPs turns IP addresses into Kubernetes nodes.
 func k8sNodesFromIPs(addresses []string) ([]files.K8sNode, error) {
 	nodes := make([]files.K8sNode, 0, len(addresses))
 	for _, address := range addresses {
-		ip := net.ParseIP(address)
-		if ip == nil {
-			return nil, fmt.Errorf("invalid IP address %q", address)
-		}
+		nodes = append(nodes, files.K8sNode{IPAddress: address})
+	}
 
-		nodes = append(nodes, files.K8sNode{IPAddress: ip.String()})
+	if err := validateK8sNodeIPs(nodes); err != nil {
+		return nil, err
 	}
 
 	return nodes, nil
 }
 
-// canonicalK8sNodes returns the nodes with canonical IP addresses.
-func canonicalK8sNodes(nodes []files.K8sNode) ([]files.K8sNode, error) {
-	addresses := make([]string, 0, len(nodes))
+// validateK8sNodeIPs checks that the nodes have valid IP addresses.
+func validateK8sNodeIPs(nodes []files.K8sNode) error {
 	for _, node := range nodes {
-		addresses = append(addresses, node.IPAddress)
+		if net.ParseIP(node.IPAddress) == nil {
+			return fmt.Errorf("invalid IP address %q", node.IPAddress)
+		}
 	}
 
-	return k8sNodesFromIPs(addresses)
+	return nil
+}
+
+// normalizeK8sNodeIPs rewrites the IP addresses of the control planes and workers into
+// their canonical form, so that a node given in different notations by different sources
+// is recognized as the same node. Addresses of the install-config that are no valid IP
+// addresses are kept as they are.
+func normalizeK8sNodeIPs(config *files.RootConfig) {
+	for _, nodes := range [][]files.K8sNode{config.Kubernetes.ControlPlanes, config.Kubernetes.Workers} {
+		for i := range nodes {
+			if ip := net.ParseIP(nodes[i].IPAddress); ip != nil {
+				nodes[i].IPAddress = ip.String()
+			}
+		}
+	}
 }
 
 // LoadManagedInstallConfig loads the install-config and ensures its Kubernetes is managed by
