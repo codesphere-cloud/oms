@@ -5,6 +5,7 @@ package codesphere
 
 import (
 	"fmt"
+	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"maps"
 	"os"
 	"path/filepath"
@@ -54,6 +55,9 @@ type InstallCodesphereOpts struct {
 	LocalComponents  bool
 	LocalConfigDir   string
 	// ArgoCD deployment (pre-step in Phase 2)
+	ArgoCDRegistryURL    string
+	ArgoCDRepoURL        string
+	ArgoCDVersion        string
 	ArgoCDRegistryCA     string
 	ArgoCDForceConflicts bool
 	ArgoCDValues         []string
@@ -156,9 +160,12 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.LocalComponents, "local-components", false, "Run selected install components on the local host")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.LocalConfigDir, "local-config-dir", "", "Config directory for local install components")
 	codesphere.cmd.Flags().BoolVar(&codesphere.Opts.CodesphereOnly, "codesphere-only", false, "Install only Codesphere without dependencies")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDVersion, "argo-version", "", "Upstream ArgoCD Helm chart version; overrides the packaged chart")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryURL, "argo-registry-url", "", "OCI registry URL for the ArgoCD Helm chart (defaults to registry.server from config.yaml)")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRegistryCA, "argo-registry-ca", "", "Path to the certificate authority of the OCI registry, needed when its certificate is self-signed")
 	codesphere.cmd.PersistentFlags().BoolVar(&codesphere.Opts.ArgoCDForceConflicts, "argo-force-conflicts", false, "Force SSA ownership conflicts during ArgoCD install")
-	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file (can be specified multiple times)")
+	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.ArgoCDRepoURL, "argo-repo", argocd.DefaultRepoURL, "Upstream ArgoCD chart repository; requires --argo-version")
+	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.ArgoCDValues, "argo-values", nil, "ArgoCD values YAML file; packaged chart settings go under argo-cd (repeatable)")
 	codesphere.cmd.PersistentFlags().StringArrayVar(&codesphere.Opts.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file (can be specified multiple times)")
 	codesphere.cmd.PersistentFlags().StringVar(&codesphere.Opts.VaultSecretName, "vault-secret-name", vault.VaultSecretName, "Secret in the codesphere namespace the vault is written to (as source for ESO).")
 

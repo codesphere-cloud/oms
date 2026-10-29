@@ -39,3 +39,14 @@ func ChartRegistryURL(server string) (string, error) {
 
 	return strings.TrimPrefix(registry.JoinPath(ChartsRepositoryPath).String(), "//"), nil
 }
+
+// RegistryHost extracts the host and optional port from a registry URL or reference.
+func RegistryHost(registryURL string) string {
+	if _, rest, found := strings.Cut(registryURL, "://"); found {
+		registryURL = rest
+	}
+
+	host, _, _ := strings.Cut(registryURL, "/")
+
+	return host
+}

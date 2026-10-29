@@ -16,13 +16,10 @@ import (
 	"path"
 	"strings"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	k8s "github.com/codesphere-cloud/oms/internal/util"
 	"helm.sh/helm/v4/pkg/chart/common/util"
-	"helm.sh/helm/v4/pkg/cli/values"
-	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -35,10 +32,22 @@ import (
 // DefaultNamespace is the namespace ArgoCD is installed into.
 const DefaultNamespace = "argocd"
 
+// DefaultRepoURL is used only for an explicit upstream version override.
+const DefaultRepoURL = "https://argoproj.github.io/argo-helm"
+
 const imagePullSecretName = "docker-regcred"
+
+// PackagedChartName identifies the Codesphere wrapper chart and its BOM component.
+const PackagedChartName = "argocd"
+
+// UpstreamChartName identifies the upstream chart and its wrapper values key.
+const UpstreamChartName = "argo-cd"
 
 // InstallerConfig holds all user-facing parameters for an ArgoCD install/upgrade.
 type InstallerConfig struct {
+	PackageChart   string
+	ImageRegistry  string
+	UseUpstream    bool
 	ChartName      string
 	Version        string
 	DatacenterID   string
@@ -64,7 +73,7 @@ func ConfigFromBOM(bomConfig *bom.Config, cfg InstallerConfig) (InstallerConfig,
 		return InstallerConfig{}, fmt.Errorf("installer BOM is required")
 	}
 
-	chart, ok := bomConfig.GetChart("argocd")
+	chart, ok := bomConfig.GetChart(PackagedChartName)
 	if !ok {
 		return InstallerConfig{}, fmt.Errorf("argocd chart with a valid tagged OCI reference not found in installer BOM")
 	}
@@ -85,17 +94,21 @@ func ConfigFromBOM(bomConfig *bom.Config, cfg InstallerConfig) (InstallerConfig,
 // Installer holds the resolved configuration and initialized clients.
 type Installer struct {
 	InstallerConfig
-	Helm      installer.HelmClient
-	Resources Resources
-	Client    client.Client
+	Helm        installer.HelmClient
+	Resources   Resources
+	Client      client.Client
+	ChartLoader installer.ChartLoader
 }
 
 // NewInstaller resolves the required ArgoCD chart from the BOM before creating clients.
 // It uses cfg.RESTConfig when set and falls back to the default kubeconfig otherwise.
 func NewInstaller(cfg InstallerConfig, bomConfig *bom.Config) (*Installer, error) {
-	cfg, err := ConfigFromBOM(bomConfig, cfg)
-	if err != nil {
-		return nil, err
+	var err error
+	if !cfg.UseUpstream {
+		cfg, err = ConfigFromBOM(bomConfig, cfg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	restConfig := cfg.RESTConfig
@@ -131,14 +144,15 @@ func NewInstaller(cfg InstallerConfig, bomConfig *bom.Config) (*Installer, error
 		Helm:            helm,
 		Resources:       resources,
 		Client:          kubeClient,
+		ChartLoader:     installer.NewChartLoader(),
 	}, nil
 }
 
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
 func (a *Installer) Install() error {
-	if err := a.validateRepoURL(); err != nil {
-		return err
+	if err := installer.ValidateChartRepositoryURL(a.RepoURL); err != nil {
+		return fmt.Errorf("validating ArgoCD chart repository: %w", err)
 	}
 
 	if a.Version != "" {
@@ -149,9 +163,7 @@ func (a *Installer) Install() error {
 
 	ctx := context.Background()
 
-	vals, err := (&values.Options{
-		ValueFiles: a.ValueFiles,
-	}).MergeValues(getter.Getters())
+	vals, err := a.chartLoader().LoadValues(a.ValueFiles)
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
 	}
@@ -178,16 +190,25 @@ func (a *Installer) Install() error {
 		})
 	}
 
-	vals = util.MergeTables(vals, map[string]any{"argo-cd": defaults})
+	defaults, err = a.chartDefaults(defaults)
+	if err != nil {
+		return err
+	}
+
+	vals = util.MergeTables(vals, defaults)
 
 	chartName := a.ChartName
 	if chartName == "" {
-		chartName = "argo-cd"
+		chartName = UpstreamChartName
 	}
 
-	chartName, repoURL := a.resolveChartRef(chartName)
-	if err := a.loginChartRegistry(ctx, chartName); err != nil {
-		return err
+	chartName, repoURL := installer.ResolveChartReference(a.RepoURL, chartName)
+	if a.PackageChart != "" {
+		chartName, repoURL = a.PackageChart, ""
+	}
+
+	if err := installer.LoginChartRegistry(ctx, a.Helm, chartName, ociUsernameOrDefault(a.OciUsername), a.OciPassword); err != nil {
+		return fmt.Errorf("logging in to ArgoCD chart registry: %w", err)
 	}
 	cfg := installer.ChartConfig{
 		ReleaseName:     "argocd",
@@ -205,6 +226,54 @@ func (a *Installer) Install() error {
 		return fmt.Errorf("finding existing ArgoCD release: %w", err)
 	}
 
+	if err := a.reconcileChart(ctx, cfg, existing, pullSecret); err != nil {
+		return err
+	}
+
+	if a.FullInstall {
+		err = a.Resources.ApplyAll(ctx)
+		if err != nil {
+			return fmt.Errorf("failed apply post chart install resources: %v", err)
+		}
+	}
+
+	a.showPostInstallHints()
+
+	return nil
+}
+
+func (a *Installer) chartLoader() installer.ChartLoader {
+	if a.ChartLoader != nil {
+		return a.ChartLoader
+	}
+
+	return installer.NewChartLoader()
+}
+
+func (a *Installer) chartDefaults(defaults map[string]any) (map[string]any, error) {
+	if a.PackageChart != "" {
+		return a.packagedDefaults(defaults)
+	}
+
+	if a.UseUpstream {
+		return defaults, nil
+	}
+
+	return map[string]any{UpstreamChartName: defaults}, nil
+}
+
+func (a *Installer) reconcileChart(ctx context.Context, cfg installer.ChartConfig, existing *installer.ReleaseInfo, pullSecret *corev1.Secret) error {
+	if a.PackageChart != "" {
+		manage, err := a.shouldManagePackagedChart(existing)
+		if err != nil {
+			return err
+		}
+
+		if !manage {
+			return a.refreshRetainedPullSecret(ctx, existing, pullSecret)
+		}
+	}
+
 	if existing != nil {
 		if err := a.validateUpgradeVersion(cfg, existing); err != nil {
 			return err
@@ -217,25 +286,23 @@ func (a *Installer) Install() error {
 		}
 	}
 
-	if existing != nil {
-		if err := a.upgrade(ctx, cfg, existing); err != nil {
-			return err
-		}
-	} else {
-		if err := a.install(ctx, cfg); err != nil {
-			return err
-		}
+	if existing == nil {
+		return a.install(ctx, cfg)
 	}
 
-	if a.FullInstall {
-		err = a.Resources.ApplyAll(ctx)
-		if err != nil {
-			return fmt.Errorf("failed apply post chart install resources: %v", err)
-		}
+	return a.upgrade(ctx, cfg, existing)
+}
+
+// Retained OMS-managed releases still need current image credentials. Externally
+// managed releases keep their own pull-secret configuration and ownership.
+func (a *Installer) refreshRetainedPullSecret(ctx context.Context, existing *installer.ReleaseInfo, pullSecret *corev1.Secret) error {
+	if existing.ChartName != PackagedChartName || pullSecret == nil {
+		return nil
 	}
 
-	a.showPostInstallHints()
-
+	if err := a.provisionImagePullSecret(ctx, pullSecret); err != nil {
+		return fmt.Errorf("refreshing retained ArgoCD image pull secret: %w", err)
+	}
 	return nil
 }
 
@@ -271,7 +338,7 @@ func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
 		return nil, nil
 	}
 
-	host := registryHost(a.OciRegistryURL)
+	host := installer.RegistryHost(a.OciRegistryURL)
 	if host == "" {
 		host = "ghcr.io"
 	}
@@ -318,7 +385,7 @@ func (a *Installer) configureRegistryCA() (map[string]any, error) {
 
 	// A registry URL may name its scheme, which is neither part of the host nor recognised as
 	// one: splitting "oci:" into host and port succeeds and yields the scheme itself.
-	address := registryHost(a.OciRegistryURL)
+	address := installer.RegistryHost(a.OciRegistryURL)
 
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -336,28 +403,6 @@ func (a *Installer) configureRegistryCA() (map[string]any, error) {
 			},
 		},
 	}, nil
-}
-
-func (a *Installer) loginChartRegistry(ctx context.Context, chartName string) error {
-	if !strings.HasPrefix(chartName, "oci://") || a.OciPassword == "" {
-		return nil
-	}
-
-	if err := a.Helm.LoginRegistry(ctx, registryHost(chartName), ociUsernameOrDefault(a.OciUsername), a.OciPassword); err != nil {
-		return fmt.Errorf("logging in to ArgoCD chart registry: %w", err)
-	}
-
-	return nil
-}
-
-func registryHost(registryURL string) string {
-	if _, rest, found := strings.Cut(registryURL, "://"); found {
-		registryURL = rest
-	}
-
-	host, _, _ := strings.Cut(registryURL, "/")
-
-	return host
 }
 
 func ociUsernameOrDefault(username string) string {
@@ -410,17 +455,12 @@ func (a *Installer) validateUpgradeVersion(cfg installer.ChartConfig, existing *
 	// Helm records the chart name, but not its original repository reference.
 	// Different charts have independent versions, so only compare matching names.
 	if a.Version != "" && existing.ChartName == path.Base(cfg.ChartName) {
-		installedSemver, err := semver.NewVersion(existing.InstalledVersion)
+		comparison, err := installer.CompareChartVersions(a.Version, existing.InstalledVersion)
 		if err != nil {
-			return fmt.Errorf("failed to parse installed version %q: %w", existing.InstalledVersion, err)
+			return fmt.Errorf("comparing ArgoCD chart versions: %w", err)
 		}
 
-		requestedSemver, err := semver.NewVersion(a.Version)
-		if err != nil {
-			return fmt.Errorf("failed to parse requested version %q: %w", a.Version, err)
-		}
-
-		if requestedSemver.LessThan(installedSemver) {
+		if comparison < 0 {
 			return fmt.Errorf(
 				"requested version %s is older than installed version %s; downgrade is not allowed",
 				a.Version, existing.InstalledVersion,
@@ -429,29 +469,6 @@ func (a *Installer) validateUpgradeVersion(cfg installer.ChartConfig, existing *
 	}
 
 	return nil
-}
-
-func (a *Installer) validateRepoURL() error {
-	if a.RepoURL == "" {
-		return nil
-	}
-
-	for _, prefix := range []string{"http://", "https://", "oci://"} {
-		if strings.HasPrefix(a.RepoURL, prefix) {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("invalid repo URL %q: must start with http://, https://, or oci://", a.RepoURL)
-}
-
-func (a *Installer) resolveChartRef(chartName string) (string, string) {
-	repoURL := a.RepoURL
-	if strings.HasPrefix(repoURL, "oci://") {
-		return strings.TrimRight(repoURL, "/") + "/" + chartName, ""
-	}
-
-	return chartName, repoURL
 }
 
 func (a *Installer) showPostInstallHints() {
