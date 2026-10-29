@@ -12,7 +12,8 @@ import (
 
 // EnsureK0s executed all steps to ensure a k0s cluster in gcp for every data center.
 // Only executing the config script needs to be done after installing codesphere, as crucial parts are still in the ts-installer.
-// Airgapped bootstraps download the airgap bundle and generate an airgap k0sctl config first.
+// k0s is downloaded to the jumpbox before installing, airgapped bootstraps also download the
+// airgap bundle and generate an airgap k0sctl config first.
 // Returns an error if k0s could not be ensured.
 func (b *GCPBootstrapper) EnsureK0s() error {
 	err := b.GenerateK0sConfigScript()
@@ -20,12 +21,12 @@ func (b *GCPBootstrapper) EnsureK0s() error {
 		return fmt.Errorf("failed to generate k0s config script: %w", err)
 	}
 
-	if b.Env.Airgapped {
-		err = b.stlog.Step("Download k0s airgap bundle", b.DownloadK0sAirgapBundle)
-		if err != nil {
-			return fmt.Errorf("failed to download k0s airgap bundle: %w", err)
-		}
+	err = b.stlog.Step("Download k0s", b.DownloadK0s)
+	if err != nil {
+		return fmt.Errorf("failed to download k0s: %w", err)
+	}
 
+	if b.Env.Airgapped {
 		err = b.GenerateK0sAirgapConfig()
 		if err != nil {
 			return err
@@ -214,12 +215,16 @@ func (b *GCPBootstrapper) runK0sConfigScript(dc *datacenter.DataCenter) error {
 	return nil
 }
 
-// DownloadK0sAirgapBundle caches the k0s binary and its airgap image bundle on the jumpbox. All
-// data centers install the same k0s version, so they share the cached bundle.
-func (b *GCPBootstrapper) DownloadK0sAirgapBundle() error {
-	downloadCmd := fmt.Sprintf("oms download k0s --version %s --airgapped", b.Env.K0sVersion)
+// DownloadK0s caches the k0s binary on the jumpbox, together with its airgap image bundle for
+// airgapped bootstraps. All data centers install the same k0s version, so they share the cache.
+func (b *GCPBootstrapper) DownloadK0s() error {
+	downloadCmd := fmt.Sprintf("oms download k0s --version %s", b.Env.K0sVersion)
+	if b.Env.Airgapped {
+		downloadCmd += " --airgapped"
+	}
+
 	if err := b.Env.Jumpbox.RunSSHCommand("root", downloadCmd); err != nil {
-		return fmt.Errorf("failed to download k0s airgap bundle on jumpbox: %w", err)
+		return fmt.Errorf("failed to download k0s on jumpbox: %w", err)
 	}
 
 	return nil
