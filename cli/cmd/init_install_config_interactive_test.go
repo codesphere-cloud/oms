@@ -144,9 +144,11 @@ var _ = Describe("Interactive profile usage", func() {
 	Context("when interactive mode has validation warnings", func() {
 		It("should generate config files despite validation errors", func() {
 			mockIcg := installer.NewMockInstallConfigManager(GinkgoT())
+			config := &files.RootConfig{Registry: &files.RegistryConfig{Server: "mirror.example.com/team"}}
 
 			mockIcg.EXPECT().ApplyProfile("dev").Return(nil)
 			mockIcg.EXPECT().CollectInteractively().Return(nil)
+			mockIcg.EXPECT().GetInstallConfig().Return(config)
 			mockIcg.EXPECT().ValidateInstallConfig().Return([]string{"configuration validation failed"})
 			mockIcg.EXPECT().GenerateSecrets().Return(nil)
 			mockIcg.EXPECT().WriteInstallConfig("config.yaml", false).Return(nil)
@@ -165,6 +167,7 @@ var _ = Describe("Interactive profile usage", func() {
 
 			err := c.InitInstallConfig(mockIcg)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(config.PcApps).To(HaveKeyWithValue("chartsRegistry", "mirror.example.com/team/codesphere-cloud/charts"))
 		})
 
 		It("should still fail in non-interactive mode with validation errors", func() {

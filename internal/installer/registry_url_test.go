@@ -5,9 +5,38 @@ package installer_test
 
 import (
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
+
+var _ = Describe("DefaultChartsRegistry", func() {
+	It("writes the configured mirror and repository prefix into pc-apps values", func() {
+		config := &files.RootConfig{Registry: &files.RegistryConfig{Server: "mirror.example.com:5000/team"}}
+		Expect(installer.DefaultChartsRegistry(config)).To(Succeed())
+		Expect(config.PcApps).To(HaveKeyWithValue("chartsRegistry", "mirror.example.com:5000/team/codesphere-cloud/charts"))
+	})
+
+	It("preserves an explicit chart repository", func() {
+		config := &files.RootConfig{
+			Registry: &files.RegistryConfig{Server: "mirror.example.com"},
+			PcApps:   files.ChartValues{"chartsRegistry": "custom.example.com/charts"},
+		}
+		Expect(installer.DefaultChartsRegistry(config)).To(Succeed())
+		Expect(config.PcApps).To(HaveKeyWithValue("chartsRegistry", "custom.example.com/charts"))
+	})
+
+	It("leaves the chart default in place when no mirror is configured", func() {
+		config := &files.RootConfig{}
+		Expect(installer.DefaultChartsRegistry(config)).To(Succeed())
+		Expect(config.PcApps).To(BeEmpty())
+	})
+
+	It("rejects an invalid mirror address", func() {
+		config := &files.RootConfig{Registry: &files.RegistryConfig{Server: "https://mirror.example.com"}}
+		Expect(installer.DefaultChartsRegistry(config)).To(MatchError(ContainSubstring("must not include a scheme")))
+	})
+})
 
 var _ = Describe("ChartRegistryURL", func() {
 	It("keeps the BOM chart repository when no registry server is configured", func() {
