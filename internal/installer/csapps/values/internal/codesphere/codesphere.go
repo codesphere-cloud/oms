@@ -7,6 +7,7 @@ package codesphere
 import (
 	"k8s.io/utils/ptr"
 
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/cluster"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/images"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
@@ -15,15 +16,19 @@ import (
 // The optional ones are left out when the config has none, so the chart's defaults apply.
 type Codesphere struct {
 	PublicIP                   string            `yaml:"publicIP"`
+	CertIssuer                 CertIssuer        `yaml:"certIssuer"`
 	WorkspaceHostingBaseDomain string            `yaml:"workspaceHostingBaseDomain"`
 	SSHWorkspaceProxy          SSHWorkspaceProxy `yaml:"sshWorkspaceProxy"`
 	VPN                        VPN               `yaml:"vpn"`
 	DNSServers                 []string          `yaml:"dnsServers"`
 	Hosts                      []string          `yaml:"hosts"`
 	PrePullImages              bool              `yaml:"prePullImages"`
+	CustomDomains              CustomDomains     `yaml:"customDomains"`
 	DeployConfig               DeployConfig      `yaml:"deployConfig"`
 	WorkspaceImages            WorkspaceImages   `yaml:"workspaceImages"`
+	FrontendGateway            FrontendGateway   `yaml:"frontendGateway"`
 
+	IPService             *IPService             `yaml:"ipService,omitempty"`
 	TLSCertificate        *TLSCertificate        `yaml:"tlsCertificate,omitempty"`
 	UnderprovisionFactors *UnderprovisionFactors `yaml:"underprovisionFactors,omitempty"`
 	ExtraWorkspaceFiles   []ExtraWorkspaceFile   `yaml:"extraWorkspaceFiles,omitempty"`
@@ -60,8 +65,15 @@ type ExtraWorkspaceFile struct {
 	Encoded bool   `yaml:"encoded"`
 }
 
-// Values builds the values of the codesphere key. The images also depend on the registry.
-func Values(conf files.CodesphereConfig, imgs images.Images, registry *files.RegistryConfig) (Codesphere, error) {
+// Values builds the values of the codesphere key. Some of them also depend on the cluster gateways,
+// MetalLB and the registry.
+func Values(
+	conf files.CodesphereConfig,
+	imgs images.Images,
+	gateways cluster.Gateways,
+	metalLB *files.MetalLBConfig,
+	registry *files.RegistryConfig,
+) (Codesphere, error) {
 	deployConfig, err := deployConfigValues(conf, registry, imgs)
 	if err != nil {
 		return Codesphere{}, err
@@ -72,16 +84,35 @@ func Values(conf files.CodesphereConfig, imgs images.Images, registry *files.Reg
 		return Codesphere{}, err
 	}
 
+	certIssuer, err := certIssuerValues(conf.CertIssuer)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
+	frontendGateway, err := frontendGatewayValues(imgs, conf.CertIssuer, gateways.Codesphere.Enabled)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
+	ipService, err := ipServiceValues(conf.IPService, metalLB)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
 	return Codesphere{
 		PublicIP:                   conf.PublicIP,
+		CertIssuer:                 certIssuer,
 		WorkspaceHostingBaseDomain: conf.WorkspaceHostingBaseDomain,
 		SSHWorkspaceProxy:          SSHWorkspaceProxy{BaseDomain: sshBaseDomain(conf.SSHWorkspaceProxy)},
 		VPN:                        VPN{LeftPeerID: conf.VPNLeftPeerID},
 		DNSServers:                 dnsServers(conf.DNSServers),
 		Hosts:                      []string{conf.Domain},
 		PrePullImages:              ptr.Deref(conf.PrePullImages, true),
+		CustomDomains:              customDomainsValues(conf.CustomDomains, gateways.Workspaces.Use),
 		DeployConfig:               deployConfig,
 		WorkspaceImages:            workspaceImages,
+		FrontendGateway:            frontendGateway,
+		IPService:                  ipService,
 		TLSCertificate:             tlsCertificateValues(conf.CustomCertificate),
 		UnderprovisionFactors:      underprovisionFactorsValues(conf.UnderprovisionFactors),
 		ExtraWorkspaceFiles:        extraWorkspaceFilesValues(conf.ExtraWorkspaceFiles),
