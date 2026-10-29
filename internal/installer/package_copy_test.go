@@ -33,17 +33,27 @@ var _ = Describe("Package artifact copying", func() {
 			)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("registry.example.com/private-cloud/ghcr_io/codesphere-cloud/api:1.2.3"))
+			Expect(destination).To(Equal("registry.example.com/private-cloud/codesphere-cloud/api:1.2.3"))
 		})
 
-		It("keeps the source registry of every image in its own path segment", func() {
+		It("replaces the source registry without adding a registry path segment", func() {
 			destination, err := installer.PackageImageDestination(
 				"quay.io/ceph/ceph:v18.2",
 				"10.10.0.2:5000",
 			)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("10.10.0.2:5000/quay_io/ceph/ceph:v18.2"))
+			Expect(destination).To(Equal("10.10.0.2:5000/ceph/ceph:v18.2"))
+		})
+
+		It("drops the source registry port while retaining the destination port", func() {
+			destination, err := installer.PackageImageDestination(
+				"source.example.com:5001/ceph/ceph:v18.2",
+				"mirror.example.com:5000/private-cloud",
+			)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(destination).To(Equal("mirror.example.com:5000/private-cloud/ceph/ceph:v18.2"))
 		})
 
 		It("leaves references without a registry below their first path segment", func() {
@@ -56,11 +66,11 @@ var _ = Describe("Package artifact copying", func() {
 			Expect(destination).To(Equal("10.10.0.2:5000/alpine/kubectl:1.35.4"))
 		})
 
-		It("leaves a single segment reference unqualified", func() {
+		It("uses the Docker Hub library path for a single segment reference", func() {
 			destination, err := installer.PackageImageDestination("alpine:3.21", "10.10.0.2:5000")
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("10.10.0.2:5000/alpine:3.21"))
+			Expect(destination).To(Equal("10.10.0.2:5000/library/alpine:3.21"))
 		})
 
 		It("copies a reference carrying a tag and a digest to its tag", func() {
@@ -70,7 +80,7 @@ var _ = Describe("Package artifact copying", func() {
 			)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("10.10.0.2:5000/ghcr_io/codesphere-cloud/api:main"))
+			Expect(destination).To(Equal("10.10.0.2:5000/codesphere-cloud/api:main"))
 		})
 
 		It("preserves digests", func() {
@@ -80,7 +90,7 @@ var _ = Describe("Package artifact copying", func() {
 			)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(destination).To(Equal("registry.example.com/mirror/ghcr_io/codesphere-cloud/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+			Expect(destination).To(Equal("registry.example.com/mirror/codesphere-cloud/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 		})
 
 		It("rejects an empty destination", func() {
@@ -117,7 +127,7 @@ var _ = Describe("Package artifact copying", func() {
 			artifacts, err := installer.ReadPackageArtifacts(bomPath, "registry.example.com/mirror")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(artifacts).To(Equal([]installer.PackageArtifact{
-				{Source: "ghcr.io/codesphere/api:v1", Destination: "registry.example.com/mirror/ghcr_io/codesphere/api:v1"},
+				{Source: "ghcr.io/codesphere/api:v1", Destination: "registry.example.com/mirror/codesphere/api:v1"},
 				{Source: "ghcr.io/codesphere/charts/app:v1", Destination: "registry.example.com/mirror/codesphere/charts/app:v1"},
 			}))
 		})

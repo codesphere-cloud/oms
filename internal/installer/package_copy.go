@@ -48,9 +48,8 @@ func (c *CraneArtifactCopier) Copy(ctx context.Context, source, destination stri
 }
 
 // ReadPackageArtifacts reads all images and OCI Helm charts from a BOM and builds their
-// destination references. Images keep their registry and repository path below dest, so that
-// repositories with the same basename cannot collide. Charts keep their repository path alone,
-// because that is where an installation looks for them.
+// destination references. Images and charts keep their repository path below dest,
+// replacing the source registry.
 func ReadPackageArtifacts(bomPath, dest string) ([]PackageArtifact, error) {
 	bomConfig, err := bom.Parse(bomPath)
 	if err != nil {
@@ -88,9 +87,6 @@ func ReadPackageArtifacts(bomPath, dest string) ([]PackageArtifact, error) {
 	return artifacts, nil
 }
 
-// registrySegmentReplacer flattens a registry into a single path segment.
-var registrySegmentReplacer = strings.NewReplacer(".", "_", ":", "_")
-
 // splitReference separates a reference into its repository, tag and digest. A reference can carry
 // both a tag and a digest, which the installer keeps and the reference parser does not.
 func splitReference(source string) (repository, tag, digest string) {
@@ -108,30 +104,10 @@ func splitReference(source string) (repository, tag, digest string) {
 	return repository, tag, digest
 }
 
-// destinationRepository returns the repository path a reference keeps below the destination. The
-// installer rewrites the images of a BOM onto another registry by moving the source registry into
-// the first path segment with its dots and colons replaced by underscores, so that
-// ghcr.io/codesphere-cloud/api ends up as <server>/ghcr_io/codesphere-cloud/api. The same layout
-// is built here, because an installation only finds the mirrored artifacts if both sides name them
-// identically. The repository is split as a plain string rather than parsed, since the installer
-// reads the leading segment of a reference without a registry as one, keeping alpine/kubectl below
-// alpine instead of below docker.io.
-func destinationRepository(repository string) string {
-	registry, path, found := strings.Cut(repository, "/")
-
-	registry = registrySegmentReplacer.Replace(registry)
-	if !found {
-		return registry
-	}
-
-	return registry + "/" + path
-}
-
 // PackageImageDestination maps a container image below a destination registry or repository
-// prefix. The source registry is kept as its own path segment, because that is how an
-// installation rewrites the images of its BOM onto the registry it pulls from.
+// prefix, replacing the source registry while preserving the repository path.
 func PackageImageDestination(source, dest string) (string, error) {
-	return packageArtifactDestination(source, dest, true)
+	return packageArtifactDestination(source, dest)
 }
 
 // ChartsRepositoryPath is the repository path the Codesphere Helm charts keep below a mirror they
@@ -143,12 +119,12 @@ const ChartsRepositoryPath = "/codesphere-cloud/charts"
 // prefix. An installation does not rewrite its chart references and addresses them by their
 // repository path alone, so the source registry is dropped.
 func PackageChartDestination(source, dest string) (string, error) {
-	return packageArtifactDestination(source, dest, false)
+	return packageArtifactDestination(source, dest)
 }
 
 // packageArtifactDestination maps a source reference below a destination
 // registry or repository prefix while preserving its tag or digest.
-func packageArtifactDestination(source, dest string, keepRegistry bool) (string, error) {
+func packageArtifactDestination(source, dest string) (string, error) {
 	source = strings.TrimPrefix(source, "oci://")
 
 	dest = strings.TrimSuffix(strings.TrimPrefix(dest, "oci://"), "/")
@@ -161,7 +137,7 @@ func packageArtifactDestination(source, dest string, keepRegistry bool) (string,
 		return "", fmt.Errorf("invalid package artifact reference %q: %w", source, err)
 	}
 
-	repository, tag, digest := splitReference(source)
+	_, tag, digest := splitReference(source)
 
 	// A reference carrying both a tag and a digest is copied to its tag, because a manifest pushed
 	// under a digest alone leaves the repository without the tag the Helm charts pull by. Its
@@ -179,9 +155,6 @@ func packageArtifactDestination(source, dest string, keepRegistry bool) (string,
 	}
 
 	repositoryPath := sourceRef.Context().RepositoryStr()
-	if keepRegistry {
-		repositoryPath = destinationRepository(repository)
-	}
 
 	candidate := dest + "/" + repositoryPath + identifier
 
