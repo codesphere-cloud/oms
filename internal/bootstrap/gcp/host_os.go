@@ -37,7 +37,13 @@ type hostOSSettings struct {
 	// what the installer needs; RHEL images lack the LVM tools Ceph creates its OSDs with and
 	// the SELinux policy the Docker packages require.
 	hostPackages []string
+	// dockerInstallCommands install and start Docker on a node, after the host packages. They are
+	// empty where the installer provides Docker itself.
+	dockerInstallCommands []string
 }
+
+// dockerRHELRepoFile is where Docker's RHEL package repository definition is kept on a host.
+const dockerRHELRepoFile = "/etc/yum.repos.d/docker-ce.repo"
 
 var hostOSes = map[HostOS]hostOSSettings{
 	HostOSUbuntu: {
@@ -55,6 +61,15 @@ var hostOSes = map[HostOS]hostOSSettings{
 		trustedCADir:           "/etc/pki/ca-trust/source/anchors",
 		updateCATrustCommand:   "update-ca-trust",
 		hostPackages:           []string{"lvm2", "container-selinux"},
+		dockerInstallCommands: []string{
+			// podman-docker provides /usr/bin/docker and conflicts with docker-ce.
+			"if rpm -q podman-docker >/dev/null 2>&1; then dnf remove -y podman-docker; fi",
+			"curl -fsSL https://download.docker.com/linux/rhel/docker-ce.repo -o " + dockerRHELRepoFile,
+			// Docker publishes one repository per major release, so pin it to 9 in case $releasever carries the minor release.
+			`sed -i 's/\$releasever/9/g' ` + dockerRHELRepoFile,
+			"dnf install -y docker-ce docker-ce-cli containerd.io",
+			"systemctl enable --now docker.service",
+		},
 	},
 }
 

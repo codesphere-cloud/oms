@@ -1119,6 +1119,10 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 			return err
 		}
 
+		if err := b.ensureDocker(node); err != nil {
+			return fmt.Errorf("docker check failed: %w", err)
+		}
+
 		if !node.HasInotifyWatchesConfigured() {
 			err := node.ConfigureInotifyWatches()
 			if err != nil {
@@ -1174,6 +1178,25 @@ func (b *GCPBootstrapper) ensureHostPackages(n *node.Node) error {
 		err := n.RunSSHCommand("root", cmd)
 		if err != nil {
 			return fmt.Errorf("failed to install %s on %s: %w", strings.Join(hostOS.hostPackages, ", "), n.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
+// ensureDocker installs and starts Docker on the node where the installer does not provide it.
+// The installer's docker step only checks that Docker runs, so it has to be there before the
+// installation starts. Every step is safe to re-run.
+func (b *GCPBootstrapper) ensureDocker(n *node.Node) error {
+	hostOS, err := b.Env.HostOS.settings()
+	if err != nil {
+		return fmt.Errorf("failed to get the host OS settings to install Docker: %w", err)
+	}
+
+	for _, cmd := range hostOS.dockerInstallCommands {
+		err := n.RunSSHCommand("root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to install Docker on %s: %w", n.GetName(), err)
 		}
 	}
 

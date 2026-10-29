@@ -1825,6 +1825,75 @@ var _ = Describe("GCP Bootstrapper", func() {
 				}))
 			})
 
+			It("installs and starts Docker from Docker's repository on every RHEL host", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				installs := map[string]int{}
+				starts := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						switch command {
+						case "dnf install -y docker-ce docker-ce-cli containerd.io":
+							installs[n.GetName()]++
+						case "systemctl enable --now docker.service":
+							starts[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+
+				hosts := map[string]int{
+					"postgres": 1,
+					"k0s-1":    1, "k0s-2": 1, "k0s-3": 1,
+					"ceph-1": 1, "ceph-2": 1, "ceph-3": 1,
+				}
+				Expect(installs).To(Equal(hosts))
+				Expect(starts).To(Equal(hosts))
+			})
+
+			It("installs Docker only after the container SELinux policy it requires", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				var commands []string
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if n.GetName() == "postgres" {
+							commands = append(commands, command)
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(slices.Index(commands, "dnf install -y lvm2 container-selinux")).To(BeNumerically(">=", 0))
+				Expect(slices.Index(commands, "dnf install -y docker-ce docker-ce-cli containerd.io")).To(BeNumerically(">", slices.Index(commands, "dnf install -y lvm2 container-selinux")))
+			})
+
+			It("points the Docker repository at the RHEL 9 packages and removes the podman-docker shim", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				var commands []string
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if n.GetName() == "postgres" {
+							commands = append(commands, command)
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(commands).To(ContainElements(
+					"curl -fsSL https://download.docker.com/linux/rhel/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo",
+					`sed -i 's/\$releasever/9/g' /etc/yum.repos.d/docker-ce.repo`,
+					"if rpm -q podman-docker >/dev/null 2>&1; then dnf remove -y podman-docker; fi",
+				))
+			})
+
 			It("creates the directory the installer uploads the age key to on every node", func() {
 				mkdirs := map[string]int{}
 
@@ -1890,6 +1959,16 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				err := bs.EnsureHostsConfigured()
 				Expect(err).To(MatchError(ContainSubstring("failed to install lvm2, container-selinux on postgres: no repos")))
+			})
+
+			It("names Docker and the node when the Docker installation fails on RHEL", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(fmt.Errorf("repo unreachable")).Once()
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to install Docker on postgres: repo unreachable")))
 			})
 
 			It("fails when the secrets directory cannot be created", func() {
