@@ -7,9 +7,9 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -99,24 +99,90 @@ var _ = Describe("Package artifact copying", func() {
 	})
 
 	Describe("ReadPackageArtifacts", func() {
+		var (
+			fileIO         *util.MockFileIO
+			packageManager *installer.MockPackageManager
+		)
+
+		BeforeEach(func() {
+			fileIO = util.NewMockFileIO(GinkgoT())
+			packageManager = installer.NewMockPackageManager(GinkgoT())
+			packageManager.EXPECT().FileIO().Return(fileIO)
+			packageManager.EXPECT().GetDependencyPath("bom-index.json").Return("index/location.json")
+		})
+
 		It("reads images and charts and prepares a stable transfer plan", func() {
-			tempDir := GinkgoT().TempDir()
-			bomPath := filepath.Join(tempDir, "bom.json")
-			Expect(os.WriteFile(bomPath, []byte(`{
+			packageManager.EXPECT().GetDependencyPath("bom.json").Return("legacy/bom.json")
+			fileIO.EXPECT().ReadFile("index/location.json").Return(nil, os.ErrNotExist)
+			fileIO.EXPECT().ReadFile("legacy/bom.json").Return([]byte(`{
 				"components": {
 					"codesphere": {
 						"containerImages": {"api": "ghcr.io/codesphere-cloud/api:v1"},
 						"files": {"chart": {"ociRef": "oci://ghcr.io/codesphere-cloud/charts/app:v1"}}
 					}
 				}
-			}`), 0644)).To(Succeed())
+			}`), nil)
 
-			artifacts, err := installer.ReadPackageArtifacts(bomPath, "registry.example.com/mirror")
+			artifacts, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com/mirror")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(artifacts).To(Equal([]installer.PackageArtifact{
 				{Source: "ghcr.io/codesphere-cloud/api:v1", Destination: "registry.example.com/mirror/codesphere-cloud/api:v1"},
 				{Source: "ghcr.io/codesphere-cloud/charts/app:v1", Destination: "registry.example.com/mirror/codesphere-cloud/charts/app:v1"},
 			}))
+		})
+
+		It("prefers the index and includes unique images and both chart sources", func() {
+			fileIO.EXPECT().ReadFile("index/location.json").Return([]byte(`{
+				"version": "v3",
+				"components": [
+					{"name": "app", "version": "2",
+					 "containerImages": {"api": {"ref": "ghcr.io/codesphere/api:v2", "sources": ["Deployment/api"]}},
+					 "helmCharts": {"dependency": {"ref": "oci://ghcr.io/codesphere/charts/dependency:v2"}},
+					 "files": {"chart": {"ociRef": "ghcr.io/codesphere/charts/app:v2"}, "local": {"srcPath": "script.js"}}},
+					{"name": "dependency", "version": "2",
+					 "containerImages": {"duplicate": {"ref": "ghcr.io/codesphere/api:v2"}, "empty": {"ref": ""}},
+					 "helmCharts": {"empty": {"ref": ""}},
+					 "files": {"chart": {"ociRef": "ghcr.io/codesphere/charts/dependency:v2"}}}
+				]
+			}`), nil)
+
+			artifacts, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com/mirror")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(artifacts).To(Equal([]installer.PackageArtifact{
+				{Source: "ghcr.io/codesphere/api:v2", Destination: "registry.example.com/mirror/ghcr_io/codesphere/api:v2"},
+				{Source: "ghcr.io/codesphere/charts/app:v2", Destination: "registry.example.com/mirror/codesphere/charts/app:v2"},
+				{Source: "ghcr.io/codesphere/charts/dependency:v2", Destination: "registry.example.com/mirror/codesphere/charts/dependency:v2"},
+			}))
+		})
+
+		It("reports malformed indexes without falling back", func() {
+			fileIO.EXPECT().ReadFile("index/location.json").Return([]byte(`{"components":`), nil)
+
+			_, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com")
+			Expect(err).To(MatchError(ContainSubstring("failed to parse JSON BOM index")))
+		})
+
+		It("reports unreadable indexes without falling back", func() {
+			fileIO.EXPECT().ReadFile("index/location.json").Return(nil, os.ErrPermission)
+
+			_, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com")
+			Expect(errors.Is(err, os.ErrPermission)).To(BeTrue())
+		})
+
+		It("rejects unsupported index versions without falling back", func() {
+			fileIO.EXPECT().ReadFile("index/location.json").Return([]byte(`{"version":"v4","components":[]}`), nil)
+
+			_, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com")
+			Expect(err).To(MatchError(ContainSubstring(`unsupported BOM index version "v4"`)))
+		})
+
+		It("reports a missing legacy BOM when neither file exists", func() {
+			packageManager.EXPECT().GetDependencyPath("bom.json").Return("legacy/bom.json")
+			fileIO.EXPECT().ReadFile("index/location.json").Return(nil, os.ErrNotExist)
+			fileIO.EXPECT().ReadFile("legacy/bom.json").Return(nil, os.ErrNotExist)
+
+			_, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com")
+			Expect(errors.Is(err, os.ErrNotExist)).To(BeTrue())
 		})
 	})
 

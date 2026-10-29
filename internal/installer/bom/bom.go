@@ -93,6 +93,12 @@ func Parse(filePath string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read BOM file: %w", err)
 	}
+
+	return ParseJSON(data)
+}
+
+// ParseJSON parses a legacy BOM document.
+func ParseJSON(data []byte) (*Config, error) {
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON BOM: %w", err)
