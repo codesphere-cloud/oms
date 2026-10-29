@@ -1115,6 +1115,10 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.clusterNodes()...)
 
 	for _, node := range allNodes {
+		if err := b.ensureHostPackages(node); err != nil {
+			return err
+		}
+
 		if !node.HasInotifyWatchesConfigured() {
 			err := node.ConfigureInotifyWatches()
 			if err != nil {
@@ -1148,6 +1152,28 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 			if err != nil {
 				return fmt.Errorf("failed to create secrets directory on %s: %w", n.GetName(), err)
 			}
+		}
+	}
+
+	return nil
+}
+
+// ensureHostPackages installs the packages the host OS lacks for Codesphere on the node. dnf and
+// apt-get skip packages that are already installed, so this is safe to re-run.
+func (b *GCPBootstrapper) ensureHostPackages(n *node.Node) error {
+	hostOS, err := b.Env.HostOS.settings()
+	if err != nil {
+		return err
+	}
+
+	if len(hostOS.hostPackages) == 0 {
+		return nil
+	}
+
+	for _, cmd := range hostOS.installCommands(hostOS.hostPackages) {
+		err := n.RunSSHCommand("root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to install %s on %s: %w", strings.Join(hostOS.hostPackages, ", "), n.GetName(), err)
 		}
 	}
 

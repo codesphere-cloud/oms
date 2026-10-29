@@ -20,6 +20,7 @@ var _ = Describe("Single VM bootstrap command", func() {
 		Expect(command.Flags().Lookup("install-local")).NotTo(BeNil())
 		Expect(command.Flags().Lookup("install-version")).NotTo(BeNil())
 		Expect(command.Flags().Lookup("machine-type").DefValue).To(BeEmpty())
+		Expect(command.Flags().Lookup("os").DefValue).To(Equal("ubuntu"))
 		Expect(command.Flags().Lookup("spot-vms").DefValue).To(Equal("false"))
 		Expect(command.Flags().Lookup("storage-engine").DefValue).To(Equal("rook-ceph"))
 		Expect(command.Flags().Lookup("install-config-template")).NotTo(BeNil())
@@ -161,6 +162,18 @@ var _ = Describe("Multi-node GCP bootstrap options", func() {
 		Expect(command.prepareBootstrapOptions()).To(Succeed())
 	})
 
+	It("boots Ubuntu VMs unless another host OS is selected", func() {
+		Expect(command.cmd.Flags().Lookup("os").DefValue).To(Equal("ubuntu"))
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.HostOS).To(Equal(gcp.HostOSUbuntu))
+	})
+
+	It("accepts the host OS in multi-node mode", func() {
+		Expect(command.cmd.Flags().Set("os", "rhel-9")).To(Succeed())
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.HostOS).To(Equal(gcp.HostOSRHEL9))
+	})
+
 	It("rejects a private key without a vault in multi-node mode", func() {
 		Expect(command.cmd.Flags().Set("priv-key", "age-key")).To(Succeed())
 		Expect(command.prepareBootstrapOptions()).To(MatchError("--priv-key requires --vault"))
@@ -235,6 +248,13 @@ var _ = Describe("Single-node GCP bootstrap options", func() {
 		Expect(command.prepareBootstrapOptions()).To(Succeed())
 		Expect(command.validateSingleVMOptions()).To(Succeed())
 		Expect(command.CodesphereEnv.InstallConfigs).To(Equal([]string{"base.yaml", "override.yaml"}))
+	})
+
+	It("accepts the host OS in single-VM mode", func() {
+		Expect(command.cmd.Flags().Set("os", "rhel-9")).To(Succeed())
+		Expect(command.prepareBootstrapOptions()).To(Succeed())
+		Expect(command.validateSingleVMOptions()).To(Succeed())
+		Expect(command.CodesphereEnv.HostOS).To(Equal(gcp.HostOSRHEL9))
 	})
 
 	It("accepts inherited global flags in single-VM mode", func() {

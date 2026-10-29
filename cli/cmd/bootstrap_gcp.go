@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -76,6 +77,7 @@ func (c *BootstrapGcpCmd) addSharedBootstrapFlags() {
 	flags.StringVar(&c.CodesphereEnv.InstallVaultPath, "vault", "", "SOPS vault for config templating and initial install secrets")
 	flags.StringVar(&c.CodesphereEnv.InstallVaultPrivKey, "priv-key", "", "Age private key for --vault (or use the age key environment variable)")
 	flags.StringVar(&c.CodesphereEnv.MachineType, "machine-type", "", "GCP machine type override for all VMs (default: role-specific sizes; e2-standard-8 for a single VM)")
+	flags.StringVar((*string)(&c.CodesphereEnv.HostOS), "os", string(gcp.HostOSUbuntu), "Operating system of all VMs (options: "+strings.Join(gcp.SupportedHostOSes(), ", ")+"). rhel-9 boots RHEL 9.6 with Extended Update Support, which GCP bills as a premium image. Existing VMs keep their OS")
 
 	patHelp := "GitHub Personal Access Token for pulling Codesphere images from ghcr.io (defaults to OMS_REGISTRY_PASSWORD). Required scope: read:packages."
 	userHelp := "Registry username for pulling Codesphere images from ghcr.io (required)"

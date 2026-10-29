@@ -1272,6 +1272,89 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(commands).To(ContainElement("cp /root/registry.crt /usr/local/share/ca-certificates/registry.crt"))
 				Expect(commands).To(ContainElement("update-ca-certificates"))
 			})
+
+			It("runs the registry with SELinux relabeled mounts and a fully qualified image", func() {
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(fmt.Errorf("not running"))
+
+				commands := []string{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).RunAndReturn(func(_ *node.Node, _ string, cmd string) error {
+					commands = append(commands, cmd)
+					return nil
+				})
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(commands).To(ContainElement(SatisfyAll(
+					ContainSubstring("-v /root/registry.password:/auth/registry.password:Z"),
+					ContainSubstring("-v /root/registry.crt:/certs/registry.crt:Z"),
+					ContainSubstring("-v /root/registry.key:/certs/registry.key:Z"),
+					HaveSuffix("docker.io/library/registry:3"),
+				)))
+			})
+
+			It("installs the registry and trusts its certificate the RHEL way on RHEL hosts", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(fmt.Errorf("not running"))
+
+				jumpboxCommands := []string{}
+				nodeCommands := map[string][]string{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).RunAndReturn(func(n *node.Node, _ string, cmd string) error {
+					if n == bs.Env.Jumpbox {
+						jumpboxCommands = append(jumpboxCommands, cmd)
+					} else {
+						nodeCommands[n.GetName()] = append(nodeCommands[n.GetName()], cmd)
+					}
+
+					return nil
+				})
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(jumpboxCommands).To(ContainElement("dnf install -y podman httpd-tools"))
+				Expect(jumpboxCommands).NotTo(ContainElement(ContainSubstring("apt-get")))
+				Expect(jumpboxCommands).To(ContainElement("cp /root/registry.crt /etc/pki/ca-trust/source/anchors/registry.crt"))
+				Expect(jumpboxCommands).To(ContainElement("update-ca-trust"))
+				Expect(jumpboxCommands).To(ContainElement(HaveSuffix(":/etc/pki/ca-trust/source/anchors/registry.crt")))
+				Expect(jumpboxCommands).NotTo(ContainElement(ContainSubstring("/usr/local/share/ca-certificates")))
+				Expect(nodeCommands).NotTo(BeEmpty())
+
+				for name, commands := range nodeCommands {
+					Expect(commands).To(ContainElement("update-ca-trust"), "node %s", name)
+				}
+			})
+
+			It("only distributes the certificate to RHEL nodes that lack it in the RHEL trust store", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				vault := &files.InstallVault{}
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryUsername, Fields: &files.SecretFields{Password: "custom-registry"}})
+				vault.SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: "existing-password"}})
+				icg.EXPECT().GetVault().Return(vault)
+
+				bs.Env.DataCenters = []*datacenter.DataCenter{{
+					ID:                1,
+					ControlPlaneNodes: []*node.Node{fakeNode("k0s-1", nodeClient)},
+					CephNodes:         []*node.Node{},
+					InstallConfig:     &files.RootConfig{Registry: &files.RegistryConfig{Server: bs.Env.Jumpbox.GetInternalIP()}},
+				}}
+				bs.Env.DataCenters[0].ConfigManager = icg
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).Return(nil).Times(5)
+				nodeClient.EXPECT().HasFile(mock.Anything, "/etc/pki/ca-trust/source/anchors/registry.crt").Return(true)
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+			})
 		})
 
 		Describe("Invalid cases", func() {
@@ -1711,6 +1794,37 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
+			It("installs no packages on Ubuntu hosts", func() {
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						Expect(command).NotTo(ContainSubstring("install -y"))
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+			})
+
+			It("installs the LVM tools and the container SELinux policy on every RHEL host", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				installs := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if command == "dnf install -y lvm2 container-selinux" {
+							installs[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(installs).To(Equal(map[string]int{
+					"postgres": 1,
+					"k0s-1":    1, "k0s-2": 1, "k0s-3": 1,
+					"ceph-1": 1, "ceph-2": 1, "ceph-3": 1,
+				}))
+			})
+
 			It("creates the directory the installer uploads the age key to on every node", func() {
 				mkdirs := map[string]int{}
 
@@ -1769,6 +1883,15 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 
 		Describe("Invalid cases", func() {
+			It("names the packages and the node when the RHEL package install fails", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "dnf install -y lvm2 container-selinux").Return(fmt.Errorf("no repos")).Once()
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to install lvm2, container-selinux on postgres: no repos")))
+			})
+
 			It("fails when the secrets directory cannot be created", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
 					RunAndReturn(func(_ *node.Node, _ string, command string) error {

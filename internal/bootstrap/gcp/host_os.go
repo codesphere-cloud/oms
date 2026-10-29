@@ -13,9 +13,11 @@ import (
 // HostOS selects the operating system every VM of the bootstrap boots.
 type HostOS string
 
-// The host operating systems the GCP bootstrapper supports.
+// The host operating systems the GCP bootstrapper supports. HostOSRHEL9 boots the RHEL 9.6
+// image with Extended Update Support, so the hosts stay on the minor release Codesphere supports.
 const (
 	HostOSUbuntu HostOS = "ubuntu"
+	HostOSRHEL9  HostOS = "rhel-9"
 )
 
 // hostOSSettings holds what differs between the host operating systems of the VMs.
@@ -28,6 +30,10 @@ type hostOSSettings struct {
 	// trustedCADir is where the system trust store picks up additional CA certificates.
 	trustedCADir         string
 	updateCATrustCommand string
+	// hostPackages are installed on every node Codesphere is installed on. Ubuntu images ship
+	// what the installer needs; RHEL images lack the LVM tools Ceph creates its OSDs with and
+	// the SELinux policy the Docker packages require.
+	hostPackages []string
 }
 
 var hostOSes = map[HostOS]hostOSSettings{
@@ -37,6 +43,14 @@ var hostOSes = map[HostOS]hostOSSettings{
 		registryPackages:       []string{"podman", "apache2-utils"},
 		trustedCADir:           "/usr/local/share/ca-certificates",
 		updateCATrustCommand:   "update-ca-certificates",
+	},
+	HostOSRHEL9: {
+		sourceImage:            "projects/rhel-cloud/global/images/family/rhel-9-6-eus",
+		packageInstallCommands: []string{"dnf install -y"},
+		registryPackages:       []string{"podman", "httpd-tools"},
+		trustedCADir:           "/etc/pki/ca-trust/source/anchors",
+		updateCATrustCommand:   "update-ca-trust",
+		hostPackages:           []string{"lvm2", "container-selinux"},
 	},
 }
 

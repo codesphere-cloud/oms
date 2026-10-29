@@ -145,6 +145,10 @@ func (b *GCPBootstrapper) validateVMProvisioningOptions() error {
 		return fmt.Errorf("cannot specify both --spot-vms and --preemptible flags; use --spot-vms for the newer spot VM model")
 	}
 
+	if _, err := b.Env.HostOS.SourceImage(); err != nil {
+		return fmt.Errorf("invalid --os: %w", err)
+	}
+
 	return nil
 }
 

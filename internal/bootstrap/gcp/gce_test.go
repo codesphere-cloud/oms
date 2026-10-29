@@ -281,6 +281,18 @@ var _ = Describe("GCE", func() {
 			Entry("neither", false, false),
 		)
 
+		It("accepts RHEL 9 as host OS", func() {
+			csEnv.HostOS = gcp.HostOSRHEL9
+			bs := newTestBootstrapper(csEnv, gcp.NewMockGCPClientManager(GinkgoT()))
+			Expect(bs.ValidateInput()).To(Succeed())
+		})
+
+		It("fails for an unsupported host OS", func() {
+			csEnv.HostOS = "debian-12"
+			bs := newTestBootstrapper(csEnv, gcp.NewMockGCPClientManager(GinkgoT()))
+			Expect(bs.ValidateInput()).To(MatchError(ContainSubstring(`invalid --os: unsupported host OS "debian-12" (supported: rhel-9, ubuntu)`)))
+		})
+
 		It("fails when both spot and preemptible are set", func() {
 			csEnv.SpotVMs = true
 			csEnv.Preemptible = true
@@ -678,6 +690,13 @@ var _ = Describe("GCE", func() {
 				It("boots Ubuntu when no host OS is set", func() {
 					Expect(bs.EnsureComputeInstances()).To(Succeed())
 					Expect(sourceImages).To(HaveEach("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"))
+				})
+
+				It("boots RHEL 9.6 with Extended Update Support for rhel-9", func() {
+					csEnv.HostOS = gcp.HostOSRHEL9
+
+					Expect(bs.EnsureComputeInstances()).To(Succeed())
+					Expect(sourceImages).To(HaveEach("projects/rhel-cloud/global/images/family/rhel-9-6-eus"))
 				})
 			})
 
