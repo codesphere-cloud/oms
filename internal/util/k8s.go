@@ -10,7 +10,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -25,15 +24,6 @@ func RenderTemplate(raw []byte, vars map[string]string) ([]byte, error) {
 		content = strings.ReplaceAll(content, "${"+key+"}", val)
 	}
 	return []byte(content), nil
-}
-
-// VaultGVR returns the GroupVersionResource for the bank-vaults Vault CRD.
-func VaultGVR() schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    "vault.banzaicloud.com",
-		Version:  "v1alpha1",
-		Resource: "vaults",
-	}
 }
 
 // ApplySecretFromYAML creates or updates a corev1.Secret parsed from YAML bytes.
