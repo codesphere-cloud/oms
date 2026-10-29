@@ -6,6 +6,7 @@ package codesphere_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.yaml.in/yaml/v3"
 	"k8s.io/utils/ptr"
 
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/codesphere"
@@ -37,7 +38,7 @@ var _ = Describe("Values", func() {
 			Hosts:                      []string{"codesphere.example.com"},
 			PrePullImages:              false,
 			SSHWorkspaceProxy:          &files.SSHWorkspaceProxyConfig{BaseDomain: "ssh.example.com"},
-			TLSCertificate:             &codesphere.TLSCertificate{Cert: "cert-pem", Key: "key-pem"},
+			TLSCertificate:             &codesphere.TLSCertificate{Cert: "cert-pem", KeyName: "customCertificateKey"},
 			UnderprovisionFactors:      &files.UnderprovisionFactors{CPU: 0.5, Memory: 0.75},
 			ExtraWorkspaceFiles:        []files.ExtraWorkspaceFile{{Name: ".npmrc", Content: "cmVnaXN0cnk=", Encoded: true}},
 			ExtraCAPem:                 "ca-pem",
@@ -53,6 +54,16 @@ var _ = Describe("Values", func() {
 			Hosts:         []string{""},
 			PrePullImages: true,
 		}))
+	})
+
+	It("custom certificate key in the config -> key left out of the values", func() {
+		values := codesphere.Values(files.CodesphereConfig{
+			CustomCertificate: &files.CustomCertificate{Cert: "cert-pem", Key: "key-pem"},
+		})
+
+		rendered, err := yaml.Marshal(values)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(rendered)).NotTo(ContainSubstring("key-pem"))
 	})
 
 	It("empty DNS server list -> kept empty", func() {

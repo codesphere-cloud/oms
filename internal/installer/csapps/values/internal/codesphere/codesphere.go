@@ -33,10 +33,10 @@ type VPN struct {
 	LeftPeerID string `yaml:"leftPeerId,omitempty"`
 }
 
-// TLSCertificate is the custom certificate Codesphere serves.
+// TLSCertificate is the custom certificate Codesphere serves. Its key is the vault entry KeyName.
 type TLSCertificate struct {
-	Cert string `yaml:"cert"`
-	Key  string `yaml:"key"`
+	Cert    string `yaml:"cert"`
+	KeyName string `yaml:"keyName"`
 }
 
 // Values builds the global values from config.codesphere.
@@ -70,5 +70,5 @@ func tlsCertificateValues(certificate *files.CustomCertificate) *TLSCertificate 
 		return nil
 	}
 
-	return &TLSCertificate{Cert: certificate.Cert, Key: certificate.Key}
+	return &TLSCertificate{Cert: certificate.Cert, KeyName: files.SecretCustomCertificateKey}
 }
