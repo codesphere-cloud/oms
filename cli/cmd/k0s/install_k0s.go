@@ -23,6 +23,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/portal"
+	"github.com/codesphere-cloud/oms/internal/prompt"
 	intutil "github.com/codesphere-cloud/oms/internal/util"
 )
 
@@ -32,6 +33,8 @@ type InstallK0sCmd struct {
 	Opts       InstallK0sOpts
 	Env        env.Env
 	FileWriter intutil.FileIO
+	// Prompter asks whether to overwrite an existing generated k0sctl config.
+	Prompter prompt.Prompter
 }
 
 type InstallK0sOpts struct {
@@ -44,6 +47,8 @@ type InstallK0sOpts struct {
 	Vault         string
 	VaultPrivKey  string
 	VaultType     string
+	// Yes overwrites an existing generated k0sctl config without asking.
+	Yes bool
 }
 
 func (c *InstallK0sCmd) RunE(_ *cobra.Command, args []string) error {
@@ -77,9 +82,12 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 			- Generate a k0sctl configuration for cluster deployment
 			- Deploy k0s to all nodes defined in the install-config using k0sctl
 
+			An existing generated k0sctl config is only overwritten after confirmation or with --yes.
+
 			Alternatively, apply a k0sctl config created with 'oms init k0s-config' with --config.`),
 			Example: util.FormatExamples("install k0s", []packageio.Example{
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
+				{Cmd: "--install-config <path> --yes", Desc: "Overwrite a previously generated k0sctl config without asking"},
 				{Cmd: "--config <path>", Desc: "Path to an existing k0sctl config to apply"},
 				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.31.14+k0s.0)"},
 				{Cmd: "--k0sctl-version <version>", Desc: "Version of k0sctl to use (e.g., v0.17.4)"},
@@ -93,6 +101,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 		Opts:       InstallK0sOpts{GlobalOptions: opts},
 		Env:        env.NewEnv(),
 		FileWriter: intutil.NewFilesystemWriter(),
+		Prompter:   prompt.NewPrompter(true),
 	}
 	k0s.cmd.Flags().StringVarP(&k0s.Opts.Version, "version", "v", installer.DefaultK0sVersion, "Version of k0s to install")
 	k0s.cmd.Flags().StringVar(&k0s.Opts.K0sctlVersion, "k0sctl-version", installer.DefaultK0sctlVersion, "Version of k0sctl to use")
@@ -102,6 +111,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.Flags().StringVar(&k0s.Opts.SSHKeyPath, "ssh-key-path", "", "SSH private key path for remote installation")
 	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Force, "force", "f", false, "Force new download and installation")
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.NoDownload, "no-download", false, "Skip downloading k0s binary")
+	k0s.cmd.Flags().BoolVarP(&k0s.Opts.Yes, "yes", "y", false, "Overwrite an existing generated k0sctl config without asking")
 
 	k0s.cmd.Flags().BoolVar(&k0s.Opts.Single, "single", false, "Install a single-node controller and worker on this machine")
 
@@ -112,7 +122,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 	k0s.cmd.MarkFlagsOneRequired("install-config", "config", "single")
 	k0s.cmd.MarkFlagsMutuallyExclusive("install-config", "config", "single")
 
-	for _, flag := range []string{"version", "package", "ssh-key-path", "no-download"} {
+	for _, flag := range []string{"version", "package", "ssh-key-path", "no-download", "yes"} {
 		k0s.cmd.MarkFlagsMutuallyExclusive("config", flag)
 	}
 
@@ -173,6 +183,8 @@ func (c *InstallK0sCmd) getK0sctlConfigPath(pm installer.PackageManager, k0s ins
 		Verbose:    c.Opts.Verbose,
 		Env:        c.Env,
 		FileWriter: c.FileWriter,
+		Overwrite:  c.Opts.Yes,
+		Prompter:   c.Prompter,
 	}
 
 	path, err := generator.Generate(pm, k0s, "")

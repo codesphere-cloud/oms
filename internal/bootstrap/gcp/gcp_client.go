@@ -229,6 +229,10 @@ func getProjectResourceName(projectID string) string {
 	return fmt.Sprintf("projects/%s", projectID)
 }
 
+func getBillingAccountResourceName(billingAccount string) string {
+	return fmt.Sprintf("billingAccounts/%s", billingAccount)
+}
+
 // GetBillingInfo retrieves the billing information for the given project.
 func (c *GCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error) {
 	billingService, err := cloudbilling.NewService(context.Background())
@@ -255,7 +259,7 @@ func (c *GCPClient) EnableBilling(projectID, billingAccount string) error {
 
 	projectName := getProjectResourceName(projectID)
 	billingInfo := &cloudbilling.ProjectBillingInfo{
-		BillingAccountName: fmt.Sprintf("billingAccounts/%s", billingAccount),
+		BillingAccountName: getBillingAccountResourceName(billingAccount),
 	}
 	_, err = billingService.Projects.UpdateBillingInfo(projectName, billingInfo).Context(c.ctx).Do()
 

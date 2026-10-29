@@ -19,14 +19,10 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	"helm.sh/helm/v4/pkg/cli"
-	"helm.sh/helm/v4/pkg/cli/values"
-	"helm.sh/helm/v4/pkg/getter"
 )
 
 const (
-	// ociCredentialSecretName is the K8s Secret created by "oms beta install argocd"
+	// ociCredentialSecretName is the K8s Secret created by "oms install codesphere dependencies"
 	// that stores OCI registry credentials for pulling Codesphere charts.
 	ociCredentialSecretName = "argocd-codesphere-oci-read"
 	// ociCredentialNamespace is the namespace where the credential secret lives.
@@ -39,7 +35,7 @@ const (
 	// argoAppProject is the ArgoCD project the app-of-apps belongs to.
 	argoAppProject = "default"
 	// argoDestinationServer is the in-cluster API server address, matching the
-	// cluster secret applied by "oms beta install argocd --deploy-dc-config".
+	// cluster secret applied by "oms install codesphere dependencies".
 	argoDestinationServer = "https://kubernetes.default.svc"
 )
 
@@ -121,7 +117,7 @@ func checkArgoCDScheme(c client.Client) error {
 }
 
 // resolveRepoURL reads the OCI registry base URL from the K8s Secret created by
-// "oms beta install argocd --deploy-dc-config". The Application's repoURL must
+// "oms install codesphere dependencies". The Application's repoURL must
 // match that secret's url verbatim, otherwise ArgoCD cannot match the
 // credentials to the repository.
 func (p *PCApps) resolveRepoURL(ctx context.Context) (string, error) {
@@ -130,7 +126,7 @@ func (p *PCApps) resolveRepoURL(ctx context.Context) (string, error) {
 	if err := p.client.Get(ctx, key, secret); err != nil {
 		return "", fmt.Errorf(
 			"K8s secret %q not found in namespace %q: %w\n"+
-				"Run 'oms beta install argocd --deploy-dc-config' first to create registry credentials",
+				"Run 'oms install codesphere dependencies' first to create registry credentials",
 			ociCredentialSecretName, ociCredentialNamespace, err,
 		)
 	}
@@ -199,8 +195,7 @@ func (p *PCApps) createApplication(repoURL string, vals map[string]interface{}) 
 // the pc-applications chart. Rolling the chart out is left to ArgoCD.
 func (p *PCApps) Install(ctx context.Context) error {
 	// Validate values files before any cluster calls so local errors fail fast.
-	valueOpts := values.Options{ValueFiles: p.valuesFiles}
-	fileVals, err := valueOpts.MergeValues(getter.All(cli.New()))
+	fileVals, err := NewChartLoader().LoadValues(p.valuesFiles)
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
 	}

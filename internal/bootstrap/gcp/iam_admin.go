@@ -146,7 +146,8 @@ func (b *GCPBootstrapper) EnsureBilling() error {
 		return fmt.Errorf("failed to get billing info: %w", err)
 	}
 
-	if bi.BillingEnabled && bi.BillingAccountName == b.Env.BillingAccount {
+	// The API names the account as billingAccounts/<id>, while --billing-account takes the bare ID.
+	if bi.BillingEnabled && bi.BillingAccountName == getBillingAccountResourceName(b.Env.BillingAccount) {
 		return nil
 	}
 

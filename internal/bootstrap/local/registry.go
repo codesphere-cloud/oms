@@ -5,7 +5,6 @@ package local
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
@@ -32,12 +31,12 @@ func (e *CodesphereEnvironment) chartsRegistryURL() (string, error) {
 		return "", err
 	}
 
-	registry, err := url.Parse("//" + base)
+	chartsRegistry, err := installer.ChartRegistryURL(base)
 	if err != nil {
-		return "", fmt.Errorf("parse chart registry URL: %w", err)
+		return "", fmt.Errorf("resolving chart registry URL: %w", err)
 	}
 
-	return strings.TrimPrefix(registry.JoinPath(installer.ChartsRepositoryPath).String(), "//"), nil
+	return chartsRegistry, nil
 }
 
 // mirrorsImages reports whether the bootstrap pulls from a registry other than ghcr.io, such as

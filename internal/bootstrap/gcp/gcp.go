@@ -1256,6 +1256,7 @@ func (b *GCPBootstrapper) ensureCodespherePackageOnJumpbox() error {
 	if b.Env.RegistryType != RegistryTypeLocalContainer {
 		return nil
 	}
+
 	if b.Env.InstallHash == "" {
 		return fmt.Errorf("install hash must be set when install version is set")
 	}

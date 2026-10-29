@@ -18,6 +18,12 @@ func TestInstallVersionAtLeast(t *testing.T) {
 		}
 	})
 
+	t.Run("accepts release branch names", func(t *testing.T) {
+		if !InstallVersionAtLeast("codesphere-1-114-0", "v1.106.0") {
+			t.Fatal("expected codesphere-1-114-0 to satisfy v1.106.0")
+		}
+	})
+
 	t.Run("rejects invalid versions", func(t *testing.T) {
 		if InstallVersionAtLeast("not-a-version", "v1.106.0") {
 			t.Fatal("expected invalid versions to be rejected")
