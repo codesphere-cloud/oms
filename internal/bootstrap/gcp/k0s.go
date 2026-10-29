@@ -4,16 +4,20 @@
 package gcp
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/bootstrap/datacenter"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"golang.org/x/crypto/ssh"
 )
 
 // EnsureK0s executed all steps to ensure a k0s cluster in gcp for every data center.
 // Only executing the config script needs to be done after installing codesphere, as crucial parts are still in the ts-installer.
-// k0s is downloaded to the jumpbox before installing, airgapped bootstraps also download the
-// airgap bundle and generate an airgap k0sctl config first.
+// k0s is installed only into data centers where it is not configured yet. It is downloaded to the
+// jumpbox before installing, airgapped bootstraps also download the airgap bundle and generate an
+// airgap k0sctl config first.
 // Returns an error if k0s could not be ensured.
 func (b *GCPBootstrapper) EnsureK0s() error {
 	err := b.GenerateK0sConfigScript()
@@ -21,19 +25,26 @@ func (b *GCPBootstrapper) EnsureK0s() error {
 		return fmt.Errorf("failed to generate k0s config script: %w", err)
 	}
 
-	err = b.stlog.Step("Download k0s", b.DownloadK0s)
+	unconfigured, err := b.dataCentersWithoutConfiguredK0s()
 	if err != nil {
-		return fmt.Errorf("failed to download k0s: %w", err)
+		return err
+	}
+
+	if len(unconfigured) > 0 {
+		err = b.stlog.Step("Download k0s", b.DownloadK0s)
+		if err != nil {
+			return fmt.Errorf("failed to download k0s: %w", err)
+		}
 	}
 
 	if b.Env.Airgapped {
-		err = b.GenerateK0sAirgapConfig()
+		err = b.GenerateK0sAirgapConfig(unconfigured)
 		if err != nil {
 			return err
 		}
 	}
 
-	err = b.InstallK0s()
+	err = b.InstallK0s(unconfigured)
 	if err != nil {
 		return fmt.Errorf("failed to install k0s: %w", err)
 	}
@@ -44,6 +55,109 @@ func (b *GCPBootstrapper) EnsureK0s() error {
 	}
 
 	return nil
+}
+
+// dataCentersWithoutConfiguredK0s returns the data centers k0s has to be installed into. A data
+// center whose k0s is already configured is left out: k0sctl would take the cloud provider flag
+// the config script adds for changed install flags, reinstall the k0s service and restart it.
+func (b *GCPBootstrapper) dataCentersWithoutConfiguredK0s() ([]*datacenter.DataCenter, error) {
+	var unconfigured []*datacenter.DataCenter
+
+	for _, dc := range b.Env.DataCenters {
+		var reinstallReason string
+
+		err := b.stlog.Step(dc.StepName("Check running k0s"), func() error {
+			var err error
+
+			reinstallReason, err = b.k0sReinstallReason(dc)
+			if err != nil {
+				return err
+			}
+
+			if reinstallReason == "" {
+				b.stlog.Logf("k0s %s already runs with the cloud provider enabled, leaving it running", b.Env.K0sVersion)
+			} else {
+				b.stlog.Logf("Installing k0s %s: %s", b.Env.K0sVersion, reinstallReason)
+			}
+
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to check the running k0s (data center %d): %w", dc.ID, err)
+		}
+
+		if reinstallReason != "" {
+			unconfigured = append(unconfigured, dc)
+		}
+	}
+
+	return unconfigured, nil
+}
+
+// k0sReinstallReason returns why k0s has to be installed into the data center, or "" when its
+// vault holds the kubeconfig and every k0s node runs the requested k0s version with the cloud
+// provider enabled, which the k0s config script does last. Only "oms install k0s" adds the
+// kubeconfig the Codesphere install reads, and a vault kept locally from the first bootstrap lacks
+// it but still replaces the jumpbox's copy. Workers are checked too, since recovering a project
+// recreates a missing VM without k0s. A node failing the check needs k0s; a node that cannot be
+// checked at all is an error, so an unreachable node never leads to reinstalling k0s.
+func (b *GCPBootstrapper) k0sReinstallReason(dc *datacenter.DataCenter) (string, error) {
+	vault := dc.ConfigManager.GetVault()
+	if vault == nil || vault.GetSecret(files.SecretKubeConfig) == nil {
+		return "the vault has no kubeconfig", nil
+	}
+
+	for i, n := range dc.ControlPlaneNodes {
+		service := k0sServiceName(i)
+		err := n.RunSSHCommand("root", k0sConfiguredCheckCmd(service, b.Env.K0sVersion))
+
+		var exitErr *ssh.ExitError
+		if errors.As(err, &exitErr) {
+			return fmt.Sprintf("%s on %s is not active, runs another k0s version or lacks the cloud provider flag", service, n.Name), nil
+		}
+
+		if err != nil {
+			return "", fmt.Errorf("failed to check k0s on %s: %w", n.Name, err)
+		}
+	}
+
+	return "", nil
+}
+
+// k0sServiceName returns the k0s systemd service of a data center's i-th control plane node: the
+// first one runs the controller with an enabled worker, the others are dedicated workers.
+func k0sServiceName(i int) string {
+	if i == 0 {
+		return "k0scontroller"
+	}
+
+	return "k0sworker"
+}
+
+// k0sConfiguredCheckCmd returns a shell command that succeeds only on a node whose k0s service is
+// active, runs the given version and was started with the cloud provider flag the k0s config
+// script adds.
+func k0sConfiguredCheckCmd(service, version string) string {
+	return fmt.Sprintf("systemctl is-active --quiet %s && [ \"$(k0s version)\" = %s ] && %s",
+		service, shellQuote(version), cloudProviderRunningCheck(service))
+}
+
+func k0sUnitPath(service string) string {
+	return "/etc/systemd/system/" + service + ".service"
+}
+
+// cloudProviderRunningCheck returns a shell command that succeeds when the running k0s service was
+// started with --enable-cloud-provider. It reads the process, not the unit, so a unit that was
+// patched but never reloaded or restarted does not count.
+func cloudProviderRunningCheck(service string) string {
+	return fmt.Sprintf("tr '\\0' ' ' < /proc/$(systemctl show --property MainPID --value %s)/cmdline"+
+		" | grep -q -- ' --enable-cloud-provider'", service)
+}
+
+// cloudProviderInUnitCheck returns a shell command that succeeds when the k0s unit starts k0s
+// with --enable-cloud-provider.
+func cloudProviderInUnitCheck(unit string) string {
+	return "grep -q '^ExecStart=.*--enable-cloud-provider' " + unit
 }
 
 // GenerateK0sConfigScript writes and uploads the k0s cloud-provider configuration script of
@@ -176,14 +290,15 @@ $KUBECTL patch svc gateway-controller -n codesphere -p '{"spec": {"loadBalancerI
 // enableCloudProviderCmd returns a shell command that adds --enable-cloud-provider to the k0s
 // systemd service's ExecStart line and restarts the service. The unit starts k0s as
 // "k0s worker ..." or "k0s controller ...", so the flag is appended to the end of that line.
-// A rerun leaves an already patched unit unchanged, and the command fails if the flag is not
-// present afterwards.
+// A service already running with the flag is neither changed nor restarted, so rerunning the
+// script keeps a configured k0s running, while a unit patched by an interrupted run is still
+// reloaded and restarted. The command fails if the flag is not in the unit afterwards.
 func enableCloudProviderCmd(service string) string {
-	unit := "/etc/systemd/system/" + service + ".service"
+	unit := k0sUnitPath(service)
 
-	return fmt.Sprintf("sed -i '/^ExecStart=/{/--enable-cloud-provider/!s/$/ --enable-cloud-provider/}' %[1]s"+
-		" && grep -q '^ExecStart=.*--enable-cloud-provider' %[1]s"+
-		" && systemctl daemon-reload && systemctl restart %[2]s", unit, service)
+	return fmt.Sprintf("%s || { sed -i '/^ExecStart=/{/--enable-cloud-provider/!s/$/ --enable-cloud-provider/}' %s"+
+		" && %s && systemctl daemon-reload && systemctl restart %s; }",
+		cloudProviderRunningCheck(service), unit, cloudProviderInUnitCheck(unit), service)
 }
 
 // RunK0sConfigScript runs every data center's k0s configuration script on its first control
@@ -230,14 +345,10 @@ func (b *GCPBootstrapper) DownloadK0s() error {
 	return nil
 }
 
-// GenerateK0sAirgapConfig generates every data center's airgap k0sctl config on the jumpbox from
-// the cached airgap bundle, without installing it yet.
-func (b *GCPBootstrapper) GenerateK0sAirgapConfig() error {
-	if err := b.ensureDataCenters(); err != nil {
-		return err
-	}
-
-	for _, dc := range b.Env.DataCenters {
+// GenerateK0sAirgapConfig generates the given data centers' airgap k0sctl configs on the jumpbox
+// from the cached airgap bundle, without installing them yet.
+func (b *GCPBootstrapper) GenerateK0sAirgapConfig(dataCenters []*datacenter.DataCenter) error {
+	for _, dc := range dataCenters {
 		err := b.stlog.Step(dc.StepName("Generate k0s airgap config"), func() error {
 			return b.generateK0sAirgapConfig(dc)
 		})
@@ -259,16 +370,12 @@ func (b *GCPBootstrapper) generateK0sAirgapConfig(dc *datacenter.DataCenter) err
 	return nil
 }
 
-// InstallK0s deploys k0s into every data center with the native OMS installer. Each data center
-// gets its own cluster, so every run stores its kubeconfig in that data center's encrypted
+// InstallK0s deploys k0s into the given data centers with the native OMS installer. Each data
+// center gets its own cluster, so every run stores its kubeconfig in that data center's encrypted
 // install vault for the remaining installer steps. Airgapped bootstraps apply the airgap
 // k0sctl config generated by GenerateK0sAirgapConfig.
-func (b *GCPBootstrapper) InstallK0s() error {
-	if err := b.ensureDataCenters(); err != nil {
-		return err
-	}
-
-	for _, dc := range b.Env.DataCenters {
+func (b *GCPBootstrapper) InstallK0s(dataCenters []*datacenter.DataCenter) error {
+	for _, dc := range dataCenters {
 		err := b.stlog.Step(dc.StepName("Install k0s"), func() error {
 			return b.installK0s(dc)
 		})

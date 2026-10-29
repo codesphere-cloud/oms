@@ -5,6 +5,8 @@ package gcp_test
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 
 	"cloud.google.com/go/compute/apiv1/computepb"
@@ -13,16 +15,39 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/github"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/node"
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/util"
 	. "github.com/onsi/ginkgo/v2"
 	"github.com/stretchr/testify/mock"
+	"golang.org/x/crypto/ssh"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 func protoString(s string) *string { return &s }
+
+// errK0sNotConfigured is how a node answers the k0s check when the check ran and failed.
+var errK0sNotConfigured = fmt.Errorf("command failed: %w", &ssh.ExitError{})
+
+// k0sCheckCommand is the command that checks whether a node's k0s service runs the given version
+// with the cloud provider enabled.
+func k0sCheckCommand(service, version string) string {
+	return "systemctl is-active --quiet " + service +
+		" && [ \"$(k0s version)\" = '" + version + "' ]" +
+		" && tr '\\0' ' ' < /proc/$(systemctl show --property MainPID --value " + service + ")/cmdline" +
+		" | grep -q -- ' --enable-cloud-provider'"
+}
+
+// addKubeconfig stores the kubeconfig "oms install k0s" adds to a data center's vault.
+func addKubeconfig(vault *files.InstallVault) {
+	vault.SetSecret(files.SecretEntry{Name: files.SecretKubeConfig, File: &files.SecretFile{Name: files.SecretKubeConfig, Content: "kubeconfig"}})
+}
+
+func isK0sCheck(command string) bool {
+	return strings.HasPrefix(command, "systemctl is-active --quiet k0s")
+}
 
 // vmNames returns the names of the given VM definitions, in order.
 func vmNames(defs []gcp.VMDef) []string {

@@ -9,10 +9,36 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/distribution/reference"
 )
 
 var registryHostPattern = regexp.MustCompile("^" + reference.DomainRegexp.String() + "$")
+
+// DefaultChartsRegistry writes the mirror default into a generated install
+// config, preserving an explicitly configured child chart repository.
+func DefaultChartsRegistry(config *files.RootConfig) error {
+	if registry, _ := config.PcApps["chartsRegistry"].(string); registry != "" {
+		return nil
+	}
+
+	if config.Registry == nil || config.Registry.Server == "" {
+		return nil
+	}
+
+	registry, err := ChartRegistryURL(config.Registry.Server)
+	if err != nil {
+		return err
+	}
+
+	if config.PcApps == nil {
+		config.PcApps = files.ChartValues{}
+	}
+
+	config.PcApps["chartsRegistry"] = registry
+
+	return nil
+}
 
 // ChartRegistryURL joins the chart repository path to a registry host or repository prefix.
 // For example, "registry.example.com" becomes "registry.example.com/codesphere-cloud/charts",

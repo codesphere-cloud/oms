@@ -23,8 +23,9 @@ func newBootstrapGcpMultiNodeCmd(opts *util.GlobalOptions) *BootstrapGcpCmd {
 			Use:   "multi-node",
 			Short: "Bootstrap a multi-node Codesphere cluster on GCP",
 			Long: io.Long(`Bootstrap GCP projects, service accounts, and VMs for a Codesphere cluster.
-				Running again with --install-version repeats every install step, including the k0s
-				config script, which restarts k0s. To replace only Codesphere, add
+				Running again with --install-version repeats every install step. k0s is reinstalled,
+				which restarts it, only in data centers where a node does not run --k0s-version with
+				its config script applied yet. To replace only Codesphere, add
 				--install-codesphere-only and --recover-config.
 				Not for production use.`),
 			Args: cobra.NoArgs,
@@ -75,7 +76,7 @@ func (c *BootstrapGcpCmd) addMultiNodeBootstrapFlags() {
 	flags.BoolVar(&c.CodesphereEnv.MultiDC, "multi-dc", false, "Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)")
 	flags.StringVar(&c.CodesphereEnv.CustomPgIP, "custom-pg-ip", "", "Custom PostgreSQL IP (optional)")
 	flags.StringArrayVarP(&c.CodesphereEnv.InstallSkipSteps, "install-skip-steps", "s", []string{}, "Installation steps to skip during Codesphere installation (optional)")
-	flags.BoolVar(&c.CodesphereEnv.InstallCodesphereOnly, "install-codesphere-only", false, "Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the \"oms install codesphere\" the bootstrap runs on the jumpbox, and skips installing k0s and its config script, which would restart k0s. Requires --install-version or --install-local, and --recover-config (default: false)")
+	flags.BoolVar(&c.CodesphereEnv.InstallCodesphereOnly, "install-codesphere-only", false, "Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the \"oms install codesphere\" the bootstrap runs on the jumpbox, and skips installing k0s and its config script. Requires --install-version or --install-local, and --recover-config (default: false)")
 	flags.StringArrayVar(&c.CodesphereEnv.PCAppsValues, "pc-apps-values", nil, "pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)")
 	flags.StringVar(&c.InputRegistryType, "registry-type", "github", "Container registry type to use (options: local-container, artifact-registry, github) (default: github)")
 	flags.BoolVar(&c.CodesphereEnv.Airgapped, "airgapped", false, "Set up an airgapped installation: run a local container registry on the jumpbox, copy the package images into it and point the install config at it. k0s is installed from the k0s airgap image bundle. Firewall rules block internet egress of all VMs except the jumpbox. Selects the local-container registry type and fails if another --registry-type is given. (default: false)")

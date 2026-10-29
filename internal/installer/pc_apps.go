@@ -207,6 +207,10 @@ func (p *PCApps) Install(ctx context.Context) error {
 		return fmt.Errorf("failed to resolve repo url: %w", err)
 	}
 
+	if registry, _ := vals["chartsRegistry"].(string); registry == "" {
+		vals["chartsRegistry"] = repoURL
+	}
+
 	app, err := p.createApplication(repoURL, vals)
 	if err != nil {
 		return fmt.Errorf("failed to create argo appliaction: %w", err)

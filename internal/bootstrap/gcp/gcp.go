@@ -1208,8 +1208,7 @@ func ensureDocker(n *node.Node, hostOS hostOSSettings) error {
 }
 
 // InstallK0sAndCodesphere installs k0s and Codesphere into every data center and then runs the
-// k0s config scripts. A Codesphere-only install leaves k0s alone, since the config script restarts
-// the k0s services of a cluster that is already running.
+// k0s config scripts. A Codesphere-only install leaves k0s and its config script alone.
 func (b *GCPBootstrapper) InstallK0sAndCodesphere() error {
 	if b.Env.InstallCodesphereOnly {
 		log.Printf("Warning: installing only Codesphere. k0s, PostgreSQL, Ceph and the database keep their current state, so installing an older version than the running one, e.g. for a rollback, can fail or leave the instance broken.")
