@@ -34,7 +34,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/argoproj/argo-cd/v3 v3.5.6
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.55.0
+	github.com/codesphere-cloud/cs-go v1.58.0
 	github.com/creativeprojects/go-selfupdate v1.7.0
 	github.com/distribution/reference v0.6.0
 	github.com/getsops/sops/v3 v3.13.3
@@ -60,8 +60,8 @@ require (
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v4 v4.3.0
-	k8s.io/api v0.37.1
-	k8s.io/apimachinery v0.37.1
+	k8s.io/api v0.37.2
+	k8s.io/apimachinery v0.37.2
 	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
 	sigs.k8s.io/controller-runtime v0.24.1
@@ -656,7 +656,7 @@ require (
 	honnef.co/go/tools v0.8.1 // indirect
 	k8s.io/apiextensions-apiserver v0.37.0 // indirect
 	k8s.io/apiserver v0.37.0 // indirect
-	k8s.io/cli-runtime v0.37.1 // indirect
+	k8s.io/cli-runtime v0.37.2 // indirect
 	k8s.io/component-base v0.37.0 // indirect
 	k8s.io/component-helpers v0.36.4 // indirect
 	k8s.io/controller-manager v0.36.1 // indirect
