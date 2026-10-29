@@ -27,7 +27,7 @@ func NormalizeRegistry(base string) (string, error) {
 
 	registry, err := url.Parse("//" + base)
 	if err != nil {
-		return "", fmt.Errorf("parse chart registry URL: %w", err)
+		return "", fmt.Errorf("parse image registry: %w", err)
 	}
 
 	if registry.Host == "" || registry.User != nil || registry.RawQuery != "" || registry.Fragment != "" {
@@ -40,14 +40,4 @@ func NormalizeRegistry(base string) (string, error) {
 	}
 
 	return normalized, nil
-}
-
-// ChartsRegistryURL appends the Codesphere chart repository to a registry base.
-func ChartsRegistryURL(base string) (string, error) {
-	registry, err := NormalizeRegistry(base)
-	if err != nil {
-		return "", err
-	}
-
-	return registry + ChartsRepositoryPath, nil
 }

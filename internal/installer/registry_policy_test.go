@@ -15,8 +15,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	versioninfo "k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/admission"
 	plugincel "k8s.io/apiserver/pkg/admission/plugin/cel"
@@ -74,6 +76,23 @@ func expectRegistryProbe(client *installer.MockRegistryPolicyClient, registry st
 			// Other admission controllers may inject sidecars into the probe.
 			pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{Name: "sidecar", Image: "example.com/sidecar:v1"})
 		}).Return(nil).Once()
+}
+
+// Cancellation makes the retry path deterministic without waiting for a poll interval.
+func expectTransientProbeRetry(cause error) {
+	client := installer.NewMockRegistryPolicyClient(GinkgoT())
+	client.EXPECT().Apply(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	client.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
+		Run(func(_ context.Context, _ ctrlclient.Object, _ ...ctrlclient.CreateOption) {
+			cancel()
+		}).Return(cause).Once()
+	err := installer.EnsureRegistryPolicy(ctx, client, "registry.example.com", supportedCluster())
+	Expect(errors.Is(err, context.Canceled)).To(BeTrue())
+	Expect(errors.Is(err, cause)).To(BeTrue())
 }
 
 func installRegistryPolicy(base string) *admissionv1.MutatingAdmissionPolicy {
@@ -273,11 +292,20 @@ var _ = Describe("Registry admission policy", func() {
 		client := installer.NewMockRegistryPolicyClient(GinkgoT())
 		client.EXPECT().Apply(mock.Anything, mock.Anything, mock.Anything).Return(nil).Twice()
 
-		cause := errors.New("probe forbidden")
+		cause := apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "probe", errors.New("probe forbidden"))
 		client.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).Return(cause).Once()
 		err := installer.EnsureRegistryPolicy(context.Background(), client, "registry.example.com", supportedCluster())
 		Expect(err).To(MatchError(ContainSubstring("policy readiness")))
 		Expect(errors.Is(err, cause)).To(BeTrue())
+	})
+	It("retries rate-limited probes and retains the last error on cancellation", func() {
+		expectTransientProbeRetry(apierrors.NewTooManyRequests("API rate limited", 1))
+	})
+	It("retries timed-out probes and retains the last error on cancellation", func() {
+		expectTransientProbeRetry(apierrors.NewTimeoutError("API timed out", 1))
+	})
+	It("retries temporarily unavailable probes and retains the last error on cancellation", func() {
+		expectTransientProbeRetry(apierrors.NewServiceUnavailable("API restarting"))
 	})
 	It("waits until init-container admission is active and respects cancellation", func() {
 		client := installer.NewMockRegistryPolicyClient(GinkgoT())

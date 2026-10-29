@@ -5,6 +5,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -12,9 +13,11 @@ import (
 
 	admissionv1 "k8s.io/api/admissionregistration/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	utilnet "k8s.io/apimachinery/pkg/util/net"
 	"k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
 	versioninfo "k8s.io/apimachinery/pkg/version"
@@ -44,18 +47,20 @@ type ClusterVersionClient interface {
 }
 
 // EnsureRegistryPolicy installs the policy and binding before dependency workloads.
-// It requires Kubernetes 1.34 or newer and uses the beta API before 1.36.
+// It requires Kubernetes 1.34 or newer and uses the beta API before 1.36,
+// where the MutatingAdmissionPolicy feature and v1beta1 API must be enabled.
 // After applying both resources, it verifies container and init-container mutation
 // through dry-run Pod admission, waiting at most 30 seconds before returning an error.
 // The default registry needs no rewriting and causes no Kubernetes API writes.
 func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base string, versions ClusterVersionClient) error {
 	registry, err := NormalizeRegistry(base)
 	if err != nil {
-		return fmt.Errorf("invalid image registry: %w", err)
+		return err
 	}
 
 	if registry == DefaultRegistryURL {
 		// TODO: Clean up an existing policy and binding when reverting from a custom registry.
+		// https://app.clickup.com/t/1an123k8zcb
 		return nil
 	}
 
@@ -108,11 +113,22 @@ func EnsureRegistryPolicy(ctx context.Context, client RegistryPolicyClient, base
 // waitForRegistryPolicy verifies admission has observed the policy and binding before
 // dependency Pods can be created. Dry-run requests never persist the probe Pod.
 func waitForRegistryPolicy(ctx context.Context, client RegistryPolicyClient, registry string) error {
+	var lastProbeErr error
+
 	err := wait.PollUntilContextTimeout(ctx, registryPolicyPollInterval, registryPolicyReadyTimeout, true, func(ctx context.Context) (bool, error) {
 		pod := registryProbePod()
 		if err := client.Create(ctx, pod, ctrlclient.DryRunAll); err != nil {
+			if isTransientRegistryProbeError(err) {
+				lastProbeErr = fmt.Errorf("dry-run registry policy probe: %w", err)
+				return false, nil
+			}
+
+			lastProbeErr = nil
+
 			return false, fmt.Errorf("dry-run registry policy probe: %w", err)
 		}
+
+		lastProbeErr = nil
 
 		return slices.ContainsFunc(pod.Spec.Containers, func(c corev1.Container) bool {
 			return c.Name == "probe" && c.Image == registry+"/codesphere-cloud/registry-probe:admission"
@@ -121,10 +137,17 @@ func waitForRegistryPolicy(ctx context.Context, client RegistryPolicyClient, reg
 		}), nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to verify image registry policy readiness (timeout %s): %w", registryPolicyReadyTimeout, err)
+		return fmt.Errorf("failed to verify image registry policy readiness (timeout %s): %w", registryPolicyReadyTimeout, errors.Join(err, lastProbeErr))
 	}
 
 	return nil
+}
+
+func isTransientRegistryProbeError(err error) bool {
+	return apierrors.IsTooManyRequests(err) || apierrors.IsTimeout(err) ||
+		apierrors.IsServerTimeout(err) || apierrors.IsServiceUnavailable(err) ||
+		apierrors.IsInternalError(err) || utilnet.IsTimeout(err) ||
+		utilnet.IsConnectionReset(err) || utilnet.IsProbableEOF(err)
 }
 
 func registryProbePod() *corev1.Pod {
