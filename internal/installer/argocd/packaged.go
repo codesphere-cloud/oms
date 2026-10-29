@@ -22,9 +22,9 @@ func (a *Installer) shouldManagePackagedChart(existing *installer.ReleaseInfo) (
 		return false, nil
 	}
 
-	comparison, err := a.compareChartVersion(existing.InstalledVersion)
+	comparison, err := installer.CompareChartVersions(a.Version, existing.InstalledVersion)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("comparing ArgoCD chart versions: %w", err)
 	}
 
 	if comparison > 0 {
@@ -37,13 +37,17 @@ func (a *Installer) shouldManagePackagedChart(existing *installer.ReleaseInfo) (
 }
 
 func (a *Installer) packagedDefaults(upstream map[string]any) (map[string]any, error) {
-	chartValues, err := a.chartLoader().LoadChart(a.PackageChart, a.Version)
+	chart, err := a.chartLoader().LoadChart(a.PackageChart)
 	if err != nil {
 		return nil, fmt.Errorf("loading packaged ArgoCD chart: %w", err)
 	}
 
+	if err := chart.Validate("argocd", a.Version, "argo-cd"); err != nil {
+		return nil, fmt.Errorf("validating packaged ArgoCD chart: %w", err)
+	}
+
 	if a.ImageRegistry != "" {
-		images, err := a.packagedImageValues(chartValues)
+		images, err := a.packagedImageValues(chart.Values)
 		if err != nil {
 			return nil, err
 		}

@@ -27,7 +27,7 @@ func (b *LocalBootstrapper) installPrerequisiteChart(cfg prerequisiteChartConfig
 	repoURL := cfg.RepoURL
 	if !strings.HasPrefix(repoURL, "https://") && !strings.HasPrefix(repoURL, "http://") {
 		repoURL = strings.TrimPrefix(repoURL, "oci://")
-		if err := helm.LoginRegistry(b.ctx, strings.Split(repoURL, "/")[0], b.Env.RegistryUser, b.Env.RegistryPassword); err != nil {
+		if err := helm.LoginRegistry(b.ctx, installer.RegistryHost(repoURL), b.Env.RegistryUser, b.Env.RegistryPassword); err != nil {
 			return fmt.Errorf("failed to log in to chart registry: %w", err)
 		}
 

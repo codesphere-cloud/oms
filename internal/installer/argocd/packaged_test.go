@@ -19,17 +19,17 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 	var (
 		helm      *installer.MockHelmClient
 		resources *argocd.MockResources
-		loader    *argocd.MockPackagedChartLoader
+		loader    *installer.MockChartLoader
 		a         *argocd.Installer
 	)
 
 	BeforeEach(func() {
 		helm = installer.NewMockHelmClient(GinkgoT())
 		resources = argocd.NewMockResources(GinkgoT())
-		loader = argocd.NewMockPackagedChartLoader(GinkgoT())
+		loader = installer.NewMockChartLoader(GinkgoT())
 		a = &argocd.Installer{
 			InstallerConfig: argocd.InstallerConfig{PackageChart: "/package/argocd/files/chart", Version: "2.3.0", FullInstall: true},
-			Helm:            helm, Resources: resources, PackageLoader: loader,
+			Helm:            helm, Resources: resources, ChartLoader: loader,
 		}
 	})
 
@@ -37,13 +37,14 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 		helm.EXPECT().FindRelease("argocd", "argocd").Return(&installer.ReleaseInfo{Name: "argocd", ChartName: chart, InstalledVersion: version}, nil)
 	}
 	expectChartValues := func(overrides map[string]any) {
-		loader.EXPECT().LoadChart(a.PackageChart, a.Version).Return(map[string]any{
-			"argo-cd": map[string]any{
-				"global": map[string]any{"image": map[string]any{"repository": "ghcr.io/codesphere-cloud/docker/quay.io/argoproj/argocd"}},
-				"dex":    map[string]any{"image": map[string]any{"repository": "ghcr.io/codesphere-cloud/docker/ghcr.io/dexidp/dex"}},
-				"redis":  map[string]any{"image": map[string]any{"repository": "ghcr.io/codesphere-cloud/docker/redis"}},
-			},
-		}, nil)
+		loader.EXPECT().LoadChart(a.PackageChart).Return(installer.ChartInfo{
+			Name: "argocd", Version: a.Version, Dependencies: []string{"argo-cd"}, Values: map[string]any{
+				"argo-cd": map[string]any{
+					"global": map[string]any{"image": map[string]any{"repository": "ghcr.io/codesphere-cloud/docker/quay.io/argoproj/argocd"}},
+					"dex":    map[string]any{"image": map[string]any{"repository": "ghcr.io/codesphere-cloud/docker/ghcr.io/dexidp/dex"}},
+					"redis":  map[string]any{"image": map[string]any{"repository": "ghcr.io/codesphere-cloud/docker/redis"}},
+				},
+			}}, nil)
 		loader.EXPECT().LoadValues(a.ValueFiles).Return(overrides, nil)
 	}
 	expectResources := func() { resources.EXPECT().ApplyAll(mock.Anything).Return(nil) }
@@ -114,7 +115,7 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 
 	It("propagates chart loading or validation failures without installing", func() {
 		loader.EXPECT().LoadValues(a.ValueFiles).Return(nil, nil)
-		loader.EXPECT().LoadChart(a.PackageChart, a.Version).Return(nil, errors.New("chart does not match BOM"))
+		loader.EXPECT().LoadChart(a.PackageChart).Return(installer.ChartInfo{}, errors.New("chart does not match BOM"))
 		Expect(a.Install()).To(MatchError(ContainSubstring("does not match BOM")))
 	})
 

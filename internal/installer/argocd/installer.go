@@ -16,7 +16,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/Masterminds/semver/v3"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	k8s "github.com/codesphere-cloud/oms/internal/util"
@@ -89,10 +88,10 @@ func ConfigFromBOM(bomConfig *bom.Config, cfg InstallerConfig) (InstallerConfig,
 // Installer holds the resolved configuration and initialized clients.
 type Installer struct {
 	InstallerConfig
-	Helm          installer.HelmClient
-	Resources     Resources
-	Client        client.Client
-	PackageLoader PackagedChartLoader
+	Helm        installer.HelmClient
+	Resources   Resources
+	Client      client.Client
+	ChartLoader installer.ChartLoader
 }
 
 // NewInstaller resolves the required ArgoCD chart from the BOM before creating clients.
@@ -139,15 +138,15 @@ func NewInstaller(cfg InstallerConfig, bomConfig *bom.Config) (*Installer, error
 		Helm:            helm,
 		Resources:       resources,
 		Client:          kubeClient,
-		PackageLoader:   packagedChartLoader{},
+		ChartLoader:     installer.NewChartLoader(),
 	}, nil
 }
 
 // Install is the top-level orchestrator. It delegates every Helm interaction
 // to the HelmClient interface, keeping this function short and testable.
 func (a *Installer) Install() error {
-	if err := a.validateRepoURL(); err != nil {
-		return err
+	if err := installer.ValidateChartRepositoryURL(a.RepoURL); err != nil {
+		return fmt.Errorf("validating ArgoCD chart repository: %w", err)
 	}
 
 	if a.Version != "" {
@@ -189,6 +188,7 @@ func (a *Installer) Install() error {
 	if err != nil {
 		return err
 	}
+
 	vals = util.MergeTables(vals, defaults)
 
 	chartName := a.ChartName
@@ -196,13 +196,13 @@ func (a *Installer) Install() error {
 		chartName = "argo-cd"
 	}
 
-	chartName, repoURL := a.resolveChartRef(chartName)
+	chartName, repoURL := installer.ResolveChartReference(a.RepoURL, chartName)
 	if a.PackageChart != "" {
 		chartName, repoURL = a.PackageChart, ""
 	}
 
-	if err := a.loginChartRegistry(ctx, chartName); err != nil {
-		return err
+	if err := installer.LoginChartRegistry(ctx, a.Helm, chartName, ociUsernameOrDefault(a.OciUsername), a.OciPassword); err != nil {
+		return fmt.Errorf("logging in to ArgoCD chart registry: %w", err)
 	}
 	cfg := installer.ChartConfig{
 		ReleaseName:     "argocd",
@@ -236,12 +236,12 @@ func (a *Installer) Install() error {
 	return nil
 }
 
-func (a *Installer) chartLoader() PackagedChartLoader {
-	if a.PackageLoader != nil {
-		return a.PackageLoader
+func (a *Installer) chartLoader() installer.ChartLoader {
+	if a.ChartLoader != nil {
+		return a.ChartLoader
 	}
 
-	return packagedChartLoader{}
+	return installer.NewChartLoader()
 }
 
 func (a *Installer) chartDefaults(defaults map[string]any) (map[string]any, error) {
@@ -319,7 +319,7 @@ func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
 		return nil, nil
 	}
 
-	host := registryHost(a.OciRegistryURL)
+	host := installer.RegistryHost(a.OciRegistryURL)
 	if host == "" {
 		host = "ghcr.io"
 	}
@@ -366,7 +366,7 @@ func (a *Installer) configureRegistryCA() (map[string]any, error) {
 
 	// A registry URL may name its scheme, which is neither part of the host nor recognised as
 	// one: splitting "oci:" into host and port succeeds and yields the scheme itself.
-	address := registryHost(a.OciRegistryURL)
+	address := installer.RegistryHost(a.OciRegistryURL)
 
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
@@ -384,28 +384,6 @@ func (a *Installer) configureRegistryCA() (map[string]any, error) {
 			},
 		},
 	}, nil
-}
-
-func (a *Installer) loginChartRegistry(ctx context.Context, chartName string) error {
-	if !strings.HasPrefix(chartName, "oci://") || a.OciPassword == "" {
-		return nil
-	}
-
-	if err := a.Helm.LoginRegistry(ctx, registryHost(chartName), ociUsernameOrDefault(a.OciUsername), a.OciPassword); err != nil {
-		return fmt.Errorf("logging in to ArgoCD chart registry: %w", err)
-	}
-
-	return nil
-}
-
-func registryHost(registryURL string) string {
-	if _, rest, found := strings.Cut(registryURL, "://"); found {
-		registryURL = rest
-	}
-
-	host, _, _ := strings.Cut(registryURL, "/")
-
-	return host
 }
 
 func ociUsernameOrDefault(username string) string {
@@ -458,9 +436,9 @@ func (a *Installer) validateUpgradeVersion(cfg installer.ChartConfig, existing *
 	// Helm records the chart name, but not its original repository reference.
 	// Different charts have independent versions, so only compare matching names.
 	if a.Version != "" && existing.ChartName == path.Base(cfg.ChartName) {
-		comparison, err := a.compareChartVersion(existing.InstalledVersion)
+		comparison, err := installer.CompareChartVersions(a.Version, existing.InstalledVersion)
 		if err != nil {
-			return err
+			return fmt.Errorf("comparing ArgoCD chart versions: %w", err)
 		}
 
 		if comparison < 0 {
@@ -472,43 +450,6 @@ func (a *Installer) validateUpgradeVersion(cfg installer.ChartConfig, existing *
 	}
 
 	return nil
-}
-
-func (a *Installer) compareChartVersion(installedVersion string) (int, error) {
-	installed, err := semver.NewVersion(installedVersion)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse installed version %q: %w", installedVersion, err)
-	}
-
-	requested, err := semver.NewVersion(a.Version)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse requested version %q: %w", a.Version, err)
-	}
-
-	return requested.Compare(installed), nil
-}
-
-func (a *Installer) validateRepoURL() error {
-	if a.RepoURL == "" {
-		return nil
-	}
-
-	for _, prefix := range []string{"http://", "https://", "oci://"} {
-		if strings.HasPrefix(a.RepoURL, prefix) {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("invalid repo URL %q: must start with http://, https://, or oci://", a.RepoURL)
-}
-
-func (a *Installer) resolveChartRef(chartName string) (string, string) {
-	repoURL := a.RepoURL
-	if strings.HasPrefix(repoURL, "oci://") {
-		return strings.TrimRight(repoURL, "/") + "/" + chartName, ""
-	}
-
-	return chartName, repoURL
 }
 
 func (a *Installer) showPostInstallHints() {

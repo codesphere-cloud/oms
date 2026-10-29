@@ -19,10 +19,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-
-	"helm.sh/helm/v4/pkg/cli"
-	"helm.sh/helm/v4/pkg/cli/values"
-	"helm.sh/helm/v4/pkg/getter"
 )
 
 const (
@@ -199,8 +195,7 @@ func (p *PCApps) createApplication(repoURL string, vals map[string]interface{}) 
 // the pc-applications chart. Rolling the chart out is left to ArgoCD.
 func (p *PCApps) Install(ctx context.Context) error {
 	// Validate values files before any cluster calls so local errors fail fast.
-	valueOpts := values.Options{ValueFiles: p.valuesFiles}
-	fileVals, err := valueOpts.MergeValues(getter.All(cli.New()))
+	fileVals, err := NewChartLoader().LoadValues(p.valuesFiles)
 	if err != nil {
 		return fmt.Errorf("loading values files: %w", err)
 	}
