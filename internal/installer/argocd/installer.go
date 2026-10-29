@@ -7,8 +7,6 @@ package argocd
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net"
@@ -345,15 +343,7 @@ func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
 
 	username := ociUsernameOrDefault(a.OciUsername)
 
-	config, err := json.Marshal(map[string]any{
-		"auths": map[string]any{
-			host: map[string]string{
-				"username": username,
-				"password": a.OciPassword,
-				"auth":     base64.StdEncoding.EncodeToString([]byte(username + ":" + a.OciPassword)),
-			},
-		},
-	})
+	config, err := installer.DockerConfigJSON(host, username, a.OciPassword)
 	if err != nil {
 		return nil, fmt.Errorf("encoding ArgoCD image pull credentials: %w", err)
 	}

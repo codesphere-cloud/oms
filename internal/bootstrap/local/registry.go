@@ -38,3 +38,36 @@ func (e *CodesphereEnvironment) chartsRegistryURL() (string, error) {
 
 	return chartsRegistry, nil
 }
+
+// mirrorsImages reports whether the bootstrap pulls from a registry other than ghcr.io, such as
+// a mirror in an air-gapped installation. Images are then resolved onto that registry and pulled
+// with its credentials.
+func (e *CodesphereEnvironment) mirrorsImages() (bool, error) {
+	registry, err := e.registryURL()
+	if err != nil {
+		return false, err
+	}
+
+	return registry != DefaultRegistryURL, nil
+}
+
+// resolveImage maps an upstream image reference onto the configured registry. A mirror stores
+// images in the layout 'oms copy package' writes, so the same mapping finds them there. Without
+// a mirror the reference is returned unchanged.
+func (e *CodesphereEnvironment) resolveImage(ref string) (string, error) {
+	registry, err := e.registryURL()
+	if err != nil {
+		return "", err
+	}
+
+	if registry == DefaultRegistryURL {
+		return ref, nil
+	}
+
+	image, err := installer.PackageImageDestination(ref, registry)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve image %q on registry %q: %w", ref, registry, err)
+	}
+
+	return image, nil
+}
