@@ -255,6 +255,12 @@ registry:
   loadContainerImages: false
 ```
 
+`oms init install-config` defaults `pcApps.chartsRegistry` to
+`<registry.server>/codesphere-cloud/charts`, preserving an existing override.
+If you change `registry.server` afterwards, update `pcApps.chartsRegistry` too.
+For older configs without this value, installation defaults child chart sources
+to Argo CD's configured OCI repository. `--pc-apps-values` can override it.
+
 As part of install-config generation, set the existing registry entries in `prod.vault.yaml` to the GHCR username and token supplied by Codesphere. The token is the registry password:
 
 ```yaml

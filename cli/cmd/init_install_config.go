@@ -322,6 +322,10 @@ func (c *InitInstallConfigCmd) InitInstallConfig(icg installer.InstallConfigMana
 		c.updateConfigFromOpts(icg.GetInstallConfig(), icg.GetVault())
 	}
 
+	if err := installer.DefaultChartsRegistry(icg.GetInstallConfig()); err != nil {
+		return fmt.Errorf("resolving pc-apps chart registry: %w", err)
+	}
+
 	validationWarnings := icg.ValidateInstallConfig()
 	if len(validationWarnings) > 0 {
 		if !c.Opts.Interactive {
