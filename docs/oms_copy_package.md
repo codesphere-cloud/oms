@@ -6,6 +6,7 @@ Copy all images and Helm charts from an installer package
 
 Read all container images and OCI Helm charts from an installer package BOM
 and copy them to another registry.
+Prefer bom-index.json when present, otherwise use the legacy bom.json.
 
 Use --package for a local installer package or --version to download one
 from the OMS portal. Codesphere container images omit their source registry,
