@@ -94,6 +94,13 @@ var _ = Describe("Values", func() {
 				Title:       "Example",
 				TosURL:      "https://example.com/tos",
 			},
+			ManagedServices: []files.ManagedServiceConfig{{
+				Name:          "valkey",
+				SchemaVersion: "v0",
+				Backend:       map[string]any{"landscape": map[string]any{"gitUrl": "https://git.example.com/valkey"}},
+				Versions:      map[string]any{"1.0.0": map[string]any{"appVersion": "8.1"}},
+			}},
+			ManagedServiceWorkspacePlanID: ptr.To(21),
 		}
 		gateways := cluster.Gateways{
 			Codesphere: cluster.GatewayAPI{Enabled: true},
@@ -182,7 +189,8 @@ var _ = Describe("Values", func() {
 					},
 				},
 			},
-			SignUp: codesphere.SignUp{Email: codesphere.SignUpEmail{AllowedDomains: []string{"example.com"}}},
+			SignUp:                        codesphere.SignUp{Email: codesphere.SignUpEmail{AllowedDomains: []string{"example.com"}}},
+			ManagedServiceWorkspacePlanID: 21,
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",
@@ -204,6 +212,13 @@ var _ = Describe("Values", func() {
 				GatewayAPI:    codesphere.FrontendGatewayAPI{Enabled: true},
 			},
 			IPService: &codesphere.IPService{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
+			ManagedServices: []files.ManagedServiceConfig{{
+				Name:          "valkey",
+				Scope:         "global",
+				SchemaVersion: "v0",
+				Backend:       map[string]any{"landscape": map[string]any{"gitUrl": "https://git.example.com/valkey"}},
+				Versions:      map[string]any{"1.0.0": map[string]any{"appVersion": "8.1"}},
+			}},
 			Branding: &files.BrandingConfig{
 				Desc:        "Example IDE",
 				DocsURL:     "https://docs.example.com",
