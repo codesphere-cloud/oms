@@ -28,7 +28,7 @@ require (
 	cloud.google.com/go/compute v1.74.1
 	cloud.google.com/go/iam v1.15.1
 	cloud.google.com/go/resourcemanager v1.18.1
-	cloud.google.com/go/serviceusage v1.16.0
+	cloud.google.com/go/serviceusage v1.16.1
 	filippo.io/age v1.3.2
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/Masterminds/semver/v3 v3.5.0
