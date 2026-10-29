@@ -49,7 +49,11 @@ var _ = Describe("Values", func() {
 				InsecureSkipDomainControlVerify: ptr.To(true),
 				Cert:                            &files.CustomDomainsCertConfig{Algorithm: "ECDSA", Size: 256},
 			},
-			IPService: &files.IPServiceConfig{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
+			IPService:   &files.IPServiceConfig{LoadBalancerKind: "metallb", AddressPools: []string{"public"}},
+			Experiments: []string{"legacy"}, //nolint:staticcheck
+			Internal:    []string{"internal-flag"},
+			Preview:     map[string]bool{"preview-on": true},
+			Features:    map[string]bool{"feature-on": true, "billing": false},
 		}
 		gateways := cluster.Gateways{
 			Codesphere: cluster.GatewayAPI{Enabled: true},
@@ -78,6 +82,21 @@ var _ = Describe("Values", func() {
 			DNSServers:                 []string{"1.1.1.1", "9.9.9.9"},
 			Hosts:                      []string{"codesphere.example.com"},
 			PrePullImages:              false,
+			Experiments: codesphere.Flags{
+				"hermetic":        {codesphere.FlagEnvProd},
+				"persistent-nix":  {codesphere.FlagEnvProd},
+				"gateway-domains": {codesphere.FlagEnvProd},
+				"legacy":          {codesphere.FlagEnvProd},
+				"internal-flag":   {codesphere.FlagEnvProd},
+				"preview-on":      {codesphere.FlagEnvProd},
+			},
+			Features: codesphere.Flags{
+				"email-signup":     {codesphere.FlagEnvProd},
+				"email-signin":     {codesphere.FlagEnvProd},
+				"standalone-teams": {codesphere.FlagEnvProd},
+				"billing":          {},
+				"feature-on":       {codesphere.FlagEnvProd},
+			},
 			CustomDomains: codesphere.CustomDomains{
 				CNameBaseDomain:                 "custom.example.com",
 				GatewayAPI:                      codesphere.CustomDomainsGatewayAPI{UseGateway: true},
@@ -137,11 +156,12 @@ var _ = Describe("Values", func() {
 		Expect(values.DNSServers).To(Equal([]string{}))
 	})
 
-	It("disabled gateway APIs -> frontend gateway and custom domains without them", func() {
+	It("disabled gateway APIs -> no gateway domains experiment", func() {
 		values, err := codesphere.Values(files.CodesphereConfig{}, defaultTestImages(), cluster.Gateways{}, noMetalLB, noRegistry)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.FrontendGateway.GatewayAPI.Enabled).To(BeFalse())
 		Expect(values.CustomDomains.GatewayAPI.UseGateway).To(BeFalse())
+		Expect(values.Experiments).NotTo(HaveKey("gateway-domains"))
 	})
 })
