@@ -5,8 +5,6 @@ package local
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -14,6 +12,7 @@ import (
 	"time"
 
 	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
+	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/distribution/reference"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -42,11 +41,10 @@ const (
 	// cnpgPullSecretName holds the mirror credentials the operator and PostgreSQL pods pull
 	// with. It is kept apart from the installer's docker-regcred, which does not exist yet.
 	cnpgPullSecretName = "oms-registry-credentials"
+	// cnpgDatabaseImage is the PostgreSQL image of the masterdata cluster. The BOM does not list
+	// it, so a mirror has to be filled with it separately from 'oms copy package'.
+	cnpgDatabaseImage = "ghcr.io/cloudnative-pg/postgresql:" + cnpgDatabaseVersion + "-system-trixie"
 )
-
-// cnpgDatabaseImage is the PostgreSQL image of the masterdata cluster. The BOM does not list it,
-// so a mirror has to be filled with it separately from 'oms copy package'.
-var cnpgDatabaseImage = fmt.Sprintf("ghcr.io/cloudnative-pg/postgresql:%s-system-trixie", cnpgDatabaseVersion)
 
 func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
 	if b.installerBOM == nil {
@@ -128,7 +126,7 @@ func (b *LocalBootstrapper) cnpgOperatorImageValues() (map[string]interface{}, e
 		return nil, err
 	}
 
-	repository, tag, err := splitImageTag(image)
+	repository, tag, err := splitChartImage(image)
 	if err != nil {
 		return nil, fmt.Errorf("invalid CloudNativePG operator image: %w", err)
 	}
@@ -146,9 +144,9 @@ func (b *LocalBootstrapper) cnpgOperatorImageValues() (map[string]interface{}, e
 	return values, nil
 }
 
-// splitImageTag splits an image reference into the repository and tag the CloudNativePG chart
+// splitChartImage splits an image reference into the repository and tag the CloudNativePG chart
 // joins with a colon. A digest stays attached to the tag, so the image keeps resolving to it.
-func splitImageTag(image string) (string, string, error) {
+func splitChartImage(image string) (string, string, error) {
 	parsed, err := reference.ParseNamed(image)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to parse image %q: %w", image, err)
@@ -172,24 +170,20 @@ func splitImageTag(image string) (string, string, error) {
 // there is nothing to do.
 func (b *LocalBootstrapper) EnsureRegistryPullSecret() error {
 	mirrored, err := b.Env.mirrorsImages()
-	if err != nil || !mirrored {
-		return err
-	}
-
-	host, err := b.Env.registryHost()
 	if err != nil {
 		return err
 	}
 
-	dockerConfig, err := json.Marshal(map[string]interface{}{
-		"auths": map[string]interface{}{
-			host: map[string]string{
-				"username": b.Env.RegistryUser,
-				"password": b.Env.RegistryPassword,
-				"auth":     base64.StdEncoding.EncodeToString([]byte(b.Env.RegistryUser + ":" + b.Env.RegistryPassword)),
-			},
-		},
-	})
+	if !mirrored {
+		return nil
+	}
+
+	registry, err := b.Env.registryURL()
+	if err != nil {
+		return err
+	}
+
+	dockerConfig, err := installer.DockerConfigJSON(installer.RegistryHost(registry), b.Env.RegistryUser, b.Env.RegistryPassword)
 	if err != nil {
 		return fmt.Errorf("failed to encode registry credentials: %w", err)
 	}
@@ -217,6 +211,11 @@ func (b *LocalBootstrapper) EnsureRegistryPullSecret() error {
 // postgresClusterSpec returns the masterdata cluster's spec. With a mirror its PostgreSQL image
 // is pulled from there with the mirror credentials.
 func (b *LocalBootstrapper) postgresClusterSpec() (cnpgv1.ClusterSpec, error) {
+	mirrored, err := b.Env.mirrorsImages()
+	if err != nil {
+		return cnpgv1.ClusterSpec{}, err
+	}
+
 	image, err := b.Env.resolveImage(cnpgDatabaseImage)
 	if err != nil {
 		return cnpgv1.ClusterSpec{}, err
@@ -232,7 +231,7 @@ func (b *LocalBootstrapper) postgresClusterSpec() (cnpgv1.ClusterSpec, error) {
 		EnableSuperuserAccess: ptr.To(true),
 	}
 
-	if image != cnpgDatabaseImage {
+	if mirrored {
 		b.stlog.Logf("Pulling PostgreSQL from %s. It is not part of the installer package, so copy it there first, e.g. crane copy %s %s",
 			image, cnpgDatabaseImage, image)
 

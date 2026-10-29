@@ -71,16 +71,3 @@ func (e *CodesphereEnvironment) resolveImage(ref string) (string, error) {
 
 	return image, nil
 }
-
-// registryHost returns the host, with port, of the configured registry. Registry credentials
-// are keyed by it rather than by the full URL with its repository path.
-func (e *CodesphereEnvironment) registryHost() (string, error) {
-	registry, err := e.registryURL()
-	if err != nil {
-		return "", err
-	}
-
-	host, _, _ := strings.Cut(registry, "/")
-
-	return host, nil
-}
