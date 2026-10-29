@@ -145,7 +145,7 @@ func (b *GCPBootstrapper) validateVMProvisioningOptions() error {
 		return fmt.Errorf("cannot specify both --spot-vms and --preemptible flags; use --spot-vms for the newer spot VM model")
 	}
 
-	if _, err := b.Env.HostOS.SourceImage(); err != nil {
+	if _, err := b.Env.HostOS.settings(); err != nil {
 		return fmt.Errorf("invalid --os: %w", err)
 	}
 
@@ -343,7 +343,7 @@ func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64, sshKey
 
 	sourceImage, err := b.Env.HostOS.SourceImage()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get the source image for the VMs: %w", err)
 	}
 
 	disks := []*computepb.AttachedDisk{

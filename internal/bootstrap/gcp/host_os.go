@@ -23,8 +23,11 @@ const (
 // hostOSSettings holds what differs between the host operating systems of the VMs.
 type hostOSSettings struct {
 	sourceImage string
-	// packageInstallCommands install packages. The package names are appended to the last one.
-	packageInstallCommands []string
+	// updatePackageIndexCommand refreshes the package index before packages are installed. It is
+	// empty where the installation command refreshes the index itself.
+	updatePackageIndexCommand string
+	// installPackagesCommand installs the packages passed to it as arguments.
+	installPackagesCommand string
 	// registryPackages provide podman and htpasswd for the local container registry.
 	registryPackages []string
 	// trustedCADir is where the system trust store picks up additional CA certificates.
@@ -38,15 +41,16 @@ type hostOSSettings struct {
 
 var hostOSes = map[HostOS]hostOSSettings{
 	HostOSUbuntu: {
-		sourceImage:            "projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts",
-		packageInstallCommands: []string{"apt-get update", "apt-get install -y"},
-		registryPackages:       []string{"podman", "apache2-utils"},
-		trustedCADir:           "/usr/local/share/ca-certificates",
-		updateCATrustCommand:   "update-ca-certificates",
+		sourceImage:               "projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts",
+		updatePackageIndexCommand: "apt-get update",
+		installPackagesCommand:    "apt-get install -y",
+		registryPackages:          []string{"podman", "apache2-utils"},
+		trustedCADir:              "/usr/local/share/ca-certificates",
+		updateCATrustCommand:      "update-ca-certificates",
 	},
 	HostOSRHEL9: {
 		sourceImage:            "projects/rhel-cloud/global/images/family/rhel-9-6-eus",
-		packageInstallCommands: []string{"dnf install -y"},
+		installPackagesCommand: "dnf install -y",
 		registryPackages:       []string{"podman", "httpd-tools"},
 		trustedCADir:           "/etc/pki/ca-trust/source/anchors",
 		updateCATrustCommand:   "update-ca-trust",
@@ -85,7 +89,7 @@ func (o HostOS) settings() (hostOSSettings, error) {
 func (o HostOS) SourceImage() (string, error) {
 	settings, err := o.settings()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get the settings to resolve the source image: %w", err)
 	}
 
 	return settings.sourceImage, nil
@@ -93,10 +97,12 @@ func (o HostOS) SourceImage() (string, error) {
 
 // installCommands returns the commands that install the given packages.
 func (s hostOSSettings) installCommands(packages []string) []string {
-	commands := slices.Clone(s.packageInstallCommands)
-	commands[len(commands)-1] += " " + strings.Join(packages, " ")
+	commands := []string{}
+	if s.updatePackageIndexCommand != "" {
+		commands = append(commands, s.updatePackageIndexCommand)
+	}
 
-	return commands
+	return append(commands, s.installPackagesCommand+" "+strings.Join(packages, " "))
 }
 
 // trustedCAPath returns where a CA certificate file of the given name joins the system trust store.
