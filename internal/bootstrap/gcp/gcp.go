@@ -1112,15 +1112,20 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 		return err
 	}
 
+	hostOS, err := b.Env.HostOS.settings()
+	if err != nil {
+		return fmt.Errorf("failed to get the host OS settings: %w", err)
+	}
+
 	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.clusterNodes()...)
 
 	for _, node := range allNodes {
-		if err := b.ensureHostPackages(node); err != nil {
-			return err
+		if err := ensureHostPackages(node, hostOS); err != nil {
+			return fmt.Errorf("failed to ensure host packages: %w", err)
 		}
 
-		if err := b.ensureDocker(node); err != nil {
-			return fmt.Errorf("docker check failed: %w", err)
+		if err := ensureDocker(node, hostOS); err != nil {
+			return fmt.Errorf("failed to ensure Docker: %w", err)
 		}
 
 		if !node.HasInotifyWatchesConfigured() {
@@ -1164,12 +1169,7 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 
 // ensureHostPackages installs the packages the host OS lacks for Codesphere on the node. dnf and
 // apt-get skip packages that are already installed, so this is safe to re-run.
-func (b *GCPBootstrapper) ensureHostPackages(n *node.Node) error {
-	hostOS, err := b.Env.HostOS.settings()
-	if err != nil {
-		return err
-	}
-
+func ensureHostPackages(n *node.Node, hostOS hostOSSettings) error {
 	if len(hostOS.hostPackages) == 0 {
 		return nil
 	}
@@ -1186,11 +1186,15 @@ func (b *GCPBootstrapper) ensureHostPackages(n *node.Node) error {
 
 // ensureDocker installs and starts Docker on the node where the installer does not provide it.
 // The installer's docker step only checks that Docker runs, so it has to be there before the
-// installation starts. Every step is safe to re-run.
-func (b *GCPBootstrapper) ensureDocker(n *node.Node) error {
-	hostOS, err := b.Env.HostOS.settings()
-	if err != nil {
-		return fmt.Errorf("failed to get the host OS settings to install Docker: %w", err)
+// installation starts. A node that already runs Docker is left alone, so a re-run neither needs the
+// Docker repository to be reachable nor touches healthy hosts.
+func ensureDocker(n *node.Node, hostOS hostOSSettings) error {
+	if len(hostOS.dockerInstallCommands) == 0 {
+		return nil
+	}
+
+	if n.RunSSHCommand("root", hostOS.dockerInstalledCommand) == nil {
+		return nil
 	}
 
 	for _, cmd := range hostOS.dockerInstallCommands {

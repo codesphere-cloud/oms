@@ -1326,10 +1326,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(jumpboxCommands).To(ContainElement(HaveSuffix(":/etc/pki/ca-trust/source/anchors/registry.crt")))
 				Expect(jumpboxCommands).NotTo(ContainElement(ContainSubstring("/usr/local/share/ca-certificates")))
 				Expect(nodeCommands).NotTo(BeEmpty())
-
-				for name, commands := range nodeCommands {
-					Expect(commands).To(ContainElement("update-ca-trust"), "node %s", name)
-				}
+				Expect(nodeCommands).To(HaveEach(ContainElement("update-ca-trust")))
 			})
 
 			It("only distributes the certificate to RHEL nodes that lack it in the RHEL trust store", func() {
@@ -1786,6 +1783,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("EnsureHostsConfigured", func() {
+		const dockerRunningCheck = "rpm -q docker-ce >/dev/null 2>&1 && systemctl is-active --quiet docker.service"
+
 		Describe("Valid EnsureHostsConfigured", func() {
 			It("configures hosts", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
@@ -1833,6 +1832,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
 					RunAndReturn(func(n *node.Node, _ string, command string) error {
 						switch command {
+						case dockerRunningCheck:
+							return fmt.Errorf("docker is not installed")
 						case "dnf install -y docker-ce docker-ce-cli containerd.io":
 							installs[n.GetName()]++
 						case "systemctl enable --now docker.service":
@@ -1853,6 +1854,21 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(starts).To(Equal(hosts))
 			})
 
+			It("leaves hosts alone that already run Docker, so a re-run does not need the Docker repository", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						Expect(command).NotTo(ContainSubstring("docker.com"))
+						Expect(command).NotTo(ContainSubstring("docker-ce docker-ce-cli"))
+						Expect(command).NotTo(ContainSubstring("systemctl enable --now docker"))
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+			})
+
 			It("installs Docker only after the container SELinux policy it requires", func() {
 				bs.Env.HostOS = gcp.HostOSRHEL9
 
@@ -1862,6 +1878,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 					RunAndReturn(func(n *node.Node, _ string, command string) error {
 						if n.GetName() == "postgres" {
 							commands = append(commands, command)
+						}
+
+						if command == dockerRunningCheck {
+							return fmt.Errorf("docker is not installed")
 						}
 
 						return nil
@@ -1881,6 +1901,10 @@ var _ = Describe("GCP Bootstrapper", func() {
 					RunAndReturn(func(n *node.Node, _ string, command string) error {
 						if n.GetName() == "postgres" {
 							commands = append(commands, command)
+						}
+
+						if command == dockerRunningCheck {
+							return fmt.Errorf("docker is not installed")
 						}
 
 						return nil
@@ -1958,17 +1982,25 @@ var _ = Describe("GCP Bootstrapper", func() {
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "dnf install -y lvm2 container-selinux").Return(fmt.Errorf("no repos")).Once()
 
 				err := bs.EnsureHostsConfigured()
-				Expect(err).To(MatchError(ContainSubstring("failed to install lvm2, container-selinux on postgres: no repos")))
+				Expect(err).To(MatchError(ContainSubstring("failed to ensure host packages: failed to install lvm2, container-selinux on postgres: no repos")))
+			})
+
+			It("fails for an unsupported host OS, as an edited infra file can set one", func() {
+				bs.Env.HostOS = "debian-12"
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring(`failed to get the host OS settings: unsupported host OS "debian-12"`)))
 			})
 
 			It("names Docker and the node when the Docker installation fails on RHEL", func() {
 				bs.Env.HostOS = gcp.HostOSRHEL9
 
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", dockerRunningCheck).Return(fmt.Errorf("docker is not installed"))
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "dnf install -y docker-ce docker-ce-cli containerd.io").Return(fmt.Errorf("repo unreachable")).Once()
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
 
 				err := bs.EnsureHostsConfigured()
-				Expect(err).To(MatchError(ContainSubstring("failed to install Docker on postgres: repo unreachable")))
+				Expect(err).To(MatchError(ContainSubstring("failed to ensure Docker: failed to install Docker on postgres: repo unreachable")))
 			})
 
 			It("fails when the secrets directory cannot be created", func() {

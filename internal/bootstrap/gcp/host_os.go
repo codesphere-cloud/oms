@@ -37,6 +37,9 @@ type hostOSSettings struct {
 	// what the installer needs; RHEL images lack the LVM tools Ceph creates its OSDs with and
 	// the SELinux policy the Docker packages require.
 	hostPackages []string
+	// dockerInstalledCommand succeeds on a node that already runs the Docker installed by
+	// dockerInstallCommands, so a re-run does not fetch and install it again.
+	dockerInstalledCommand string
 	// dockerInstallCommands install and start Docker on a node, after the host packages. They are
 	// empty where the installer provides Docker itself.
 	dockerInstallCommands []string
@@ -61,6 +64,7 @@ var hostOSes = map[HostOS]hostOSSettings{
 		trustedCADir:           "/etc/pki/ca-trust/source/anchors",
 		updateCATrustCommand:   "update-ca-trust",
 		hostPackages:           []string{"lvm2", "container-selinux"},
+		dockerInstalledCommand: "rpm -q docker-ce >/dev/null 2>&1 && systemctl is-active --quiet docker.service",
 		dockerInstallCommands: []string{
 			// podman-docker provides /usr/bin/docker and conflicts with docker-ce.
 			"if rpm -q podman-docker >/dev/null 2>&1; then dnf remove -y podman-docker; fi",

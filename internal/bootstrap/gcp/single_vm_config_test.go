@@ -266,6 +266,12 @@ var _ = Describe("Single VM configuration", func() {
 		Expect(b.configureSingleVMHost()).To(Succeed())
 	})
 
+	It("fails for an unsupported host OS", func() {
+		b.Env.HostOS = "debian-12"
+
+		Expect(b.configureSingleVMHost()).To(MatchError(ContainSubstring(`get host OS settings: unsupported host OS "debian-12"`)))
+	})
+
 	It("installs the RHEL host packages on the VM", func() {
 		b.Env.HostOS = HostOSRHEL9
 
