@@ -5,8 +5,9 @@ Bootstrap GCP infrastructure for Codesphere
 ### Synopsis
 
 Bootstrap GCP projects, service accounts, and VMs for a Codesphere cluster.
-Running again with --install-version repeats every install step, including the k0s
-config script, which restarts k0s. To replace only Codesphere, add
+Running again with --install-version repeats every install step. k0s is reinstalled,
+which restarts it, only in data centers where a node does not run --k0s-version with
+its config script applied yet. To replace only Codesphere, add
 --install-codesphere-only and --recover-config.
 Not for production use.
 
@@ -54,7 +55,7 @@ oms beta bootstrap-gcp [flags]
       --gitlab-app-client-secret string           GitLab App Client Secret (optional)
       --google-acme-issuer                        Use Google Public CA as the ACME issuer instead of Let's Encrypt. External Account Binding credentials are obtained automatically via the publicca API (default: false)
   -h, --help                                      help for bootstrap-gcp
-      --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the "oms install codesphere" the bootstrap runs on the jumpbox, and skips installing k0s and its config script, which would restart k0s. Requires --install-version or --install-local, and --recover-config (default: false)
+      --install-codesphere-only                   Re-install only Codesphere into an already bootstrapped project, e.g. to roll back to an earlier release. Passes --codesphere-only to the "oms install codesphere" the bootstrap runs on the jumpbox, and skips installing k0s and its config script. Requires --install-version or --install-local, and --recover-config (default: false)
       --install-config string                     Path to install config file (optional) (default "config.yaml")
       --install-config-template string            Initial config.yaml template, applied before --config files
       --install-hash string                       Codesphere package hash to install (default: none)

@@ -2201,6 +2201,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 	})
 
 	Describe("InstallK0sAndCodesphere", func() {
+		var vault *files.InstallVault
+
 		const installCommand = "oms install codesphere -c /etc/codesphere/config.yaml -k /etc/codesphere/secrets/age_key.txt --vault /etc/codesphere/secrets/prod.vault.yaml -s kubernetes,load-container-images"
 
 		BeforeEach(func() {
@@ -2210,23 +2212,84 @@ var _ = Describe("GCP Bootstrapper", func() {
 			csEnv.RegistryType = gcp.RegistryTypeGitHub
 
 			icg.EXPECT().GetSecretFilePath().Return("/etc/codesphere/secrets/prod.vault.yaml").Maybe()
+
+			vault = &files.InstallVault{}
+			addKubeconfig(vault)
+			icg.EXPECT().GetVault().Return(vault).Maybe()
 		})
 
-		It("given a full install, when Codesphere is installed, then k0s is installed first and configured afterwards", func() {
+		expectConfigScriptUploaded := func() {
 			fw.EXPECT().WriteFile("configure-k0s.sh", mock.Anything, os.FileMode(0755)).Return(nil)
 			nodeClient.EXPECT().CopyFile(bs.Env.ControlPlaneNodes[0], "configure-k0s.sh", "/root/configure-k0s.sh").Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "chmod +x /root/configure-k0s.sh").Return(nil)
-			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
-				return strings.HasPrefix(command, "oms download k0s ")
-			})).Return(nil)
-			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(func(command string) bool {
-				return strings.HasPrefix(command, "oms install k0s ")
-			})).Return(nil)
+		}
+
+		// expectK0sChecks answers the k0s check of the i-th control plane node with results[i].
+		expectK0sChecks := func(results ...error) {
+			services := []string{"k0scontroller", "k0sworker", "k0sworker"}
+			for i, result := range results {
+				nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[i], "root", k0sCheckCommand(services[i], "v1.31.14+k0s.0")).Return(result)
+			}
+		}
+
+		isK0sInstall := func(command string) bool {
+			return strings.HasPrefix(command, "oms install k0s ")
+		}
+
+		expectK0sDownloaded := func() {
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", "oms download k0s --version v1.31.14+k0s.0").Return(nil)
+		}
+
+		It("given a controller without configured k0s, when Codesphere is installed, then k0s is installed first and configured afterwards", func() {
+			expectConfigScriptUploaded()
+			expectK0sChecks(errK0sNotConfigured)
+			expectK0sDownloaded()
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(isK0sInstall)).Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
 			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
 			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
 
 			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+		})
+
+		It("given k0s configured in the requested version on every node, when Codesphere is installed, then k0s is not reinstalled but waited for and configured", func() {
+			expectConfigScriptUploaded()
+			expectK0sChecks(nil, nil, nil)
+
+			wait := nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "k0s kubectl wait --for=condition=Ready nodes --all --timeout=30m").Return(nil)
+			install := nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", installCommand).Return(nil)
+			install.NotBefore(wait.Call)
+			nodeClient.EXPECT().RunCommand(bs.Env.ControlPlaneNodes[0], "root", "/root/configure-k0s.sh").Return(nil).NotBefore(install.Call)
+
+			Expect(bs.InstallK0sAndCodesphere()).To(Succeed())
+		})
+
+		It("given a vault without the kubeconfig, when Codesphere is installed, then k0s is installed again without checking the nodes", func() {
+			vault.Secrets = nil
+
+			expectConfigScriptUploaded()
+			expectK0sDownloaded()
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(isK0sInstall)).Return(fmt.Errorf("stop after the decision"))
+
+			Expect(bs.InstallK0sAndCodesphere()).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
+		})
+
+		It("given a worker VM recreated without k0s, when Codesphere is installed, then k0s is installed again", func() {
+			expectConfigScriptUploaded()
+			expectK0sChecks(nil, nil, errK0sNotConfigured)
+			expectK0sDownloaded()
+			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root", mock.MatchedBy(isK0sInstall)).Return(fmt.Errorf("stop after the decision"))
+
+			Expect(bs.InstallK0sAndCodesphere()).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
+		})
+
+		It("given a node the check cannot reach, when Codesphere is installed, then the bootstrap fails without reinstalling k0s", func() {
+			expectConfigScriptUploaded()
+			expectK0sChecks(nil, fmt.Errorf("failed to get client: i/o timeout"))
+
+			err := bs.InstallK0sAndCodesphere()
+			Expect(err).To(MatchError(ContainSubstring("failed to check the running k0s (data center 1)")))
+			Expect(err).To(MatchError(ContainSubstring("failed to check k0s on k0s-2: failed to get client: i/o timeout")))
 		})
 
 		Context("when only Codesphere is installed", func() {
@@ -2268,7 +2331,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 				"oms install k0s --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --yes --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
 
-			err := bs.InstallK0s()
+			err := bs.InstallK0s(gcp.BuildDataCenters(bs.Env))
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -2277,7 +2340,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				return strings.HasPrefix(command, "oms install k0s ")
 			})).Return(fmt.Errorf("k0s error"))
 
-			err := bs.InstallK0s()
+			err := bs.InstallK0s(gcp.BuildDataCenters(bs.Env))
 			Expect(err).To(MatchError(ContainSubstring("failed to install k0s from jumpbox")))
 		})
 
@@ -2287,7 +2350,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 				"oms install k0s --config /etc/codesphere/k0sctl-config.yaml --vault /etc/codesphere/secrets/prod.vault.yaml --vault-priv-key /etc/codesphere/secrets/age_key.txt").Return(nil)
 
-			Expect(bs.InstallK0s()).To(Succeed())
+			Expect(bs.InstallK0s(gcp.BuildDataCenters(bs.Env))).To(Succeed())
 		})
 	})
 
@@ -2331,7 +2394,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			nodeClient.EXPECT().RunCommand(mock.MatchedBy(jumpboxMatcher), "root",
 				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml --yes").Return(nil)
 
-			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
+			Expect(bs.GenerateK0sAirgapConfig(gcp.BuildDataCenters(bs.Env))).To(Succeed())
 		})
 
 		It("reports a failing config generation on the jumpbox", func() {
@@ -2339,7 +2402,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				return strings.HasPrefix(command, "oms init k0s-config ")
 			})).Return(fmt.Errorf("airgap bundle not found"))
 
-			err := bs.GenerateK0sAirgapConfig()
+			err := bs.GenerateK0sAirgapConfig(gcp.BuildDataCenters(bs.Env))
 			Expect(err).To(MatchError(ContainSubstring("failed to generate k0s airgap config (data center 1)")))
 			Expect(err).To(MatchError(ContainSubstring("airgap bundle not found")))
 		})
@@ -2356,7 +2419,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Run(func(_ *node.Node, _ string, command string) { jumpboxCommands = append(jumpboxCommands, command) }).
 				Return(nil)
 
-			Expect(bs.GenerateK0sAirgapConfig()).To(Succeed())
+			Expect(bs.GenerateK0sAirgapConfig(bs.Env.DataCenters)).To(Succeed())
 			Expect(jumpboxCommands).To(Equal([]string{
 				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config.yaml --airgapped --output /etc/codesphere/k0sctl-config.yaml --yes",
 				"oms init k0s-config --version v1.31.14+k0s.0 --install-config /etc/codesphere/config-dc2.yaml --airgapped --output /etc/codesphere/k0sctl-config-dc2.yaml --yes",
@@ -2368,6 +2431,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 		BeforeEach(func() {
 			csEnv.K0sVersion = "v1.31.14+k0s.0"
 			csEnv.Airgapped = true
+
+			vault := &files.InstallVault{}
+			addKubeconfig(vault)
+			icg.EXPECT().GetVault().Return(vault).Maybe()
+			nodeClient.EXPECT().RunCommand(csEnv.ControlPlaneNodes[0], "root", k0sCheckCommand("k0scontroller", "v1.31.14+k0s.0")).Return(errK0sNotConfigured)
 		})
 
 		It("installs an airgapped cluster from the airgap config it generates", func() {
@@ -2511,6 +2579,11 @@ var _ = Describe("GCP Bootstrapper", func() {
 				It("given any failing command, when the script runs, then it exits with an error", func() {
 					Expect(script).To(HavePrefix("#!/bin/bash\n\nset -eo pipefail\n"))
 					Expect(script).NotTo(ContainSubstring("set +e"))
+				})
+
+				It("given a rerun on a configured cluster, when the script runs, then k0s is restarted only where it does not run with the cloud provider flag", func() {
+					Expect(script).To(ContainSubstring("tr '\\0' ' ' < /proc/$(systemctl show --property MainPID --value k0scontroller)/cmdline | grep -q -- ' --enable-cloud-provider' || { sed -i "))
+					Expect(script).To(ContainSubstring("systemctl restart k0scontroller; }"))
 				})
 
 				It("given a rerun on an existing cluster, when the script runs, then the cloud-config configmap is applied instead of created", func() {
