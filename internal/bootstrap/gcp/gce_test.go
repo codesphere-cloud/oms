@@ -654,6 +654,33 @@ var _ = Describe("GCE", func() {
 				})
 			})
 
+			Context("When the host OS is selected", func() {
+				var sourceImages []string
+
+				BeforeEach(func() {
+					sourceImages = nil
+					mu := sync.Mutex{}
+
+					fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
+					mockGetInstanceNotFoundThenRunning(gc, csEnv.ProjectID, csEnv.Zone, makeRunningInstance("10.0.0.x", "1.2.3.x"), 8)
+					gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).RunAndReturn(
+						func(_, _ string, instance *computepb.Instance) error {
+							mu.Lock()
+							defer mu.Unlock()
+
+							sourceImages = append(sourceImages, instance.GetDisks()[0].GetInitializeParams().GetSourceImage())
+
+							return nil
+						},
+					).Times(8)
+				})
+
+				It("boots Ubuntu when no host OS is set", func() {
+					Expect(bs.EnsureComputeInstances()).To(Succeed())
+					Expect(sourceImages).To(HaveEach("projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"))
+				})
+			})
+
 			It("creates all instances", func() {
 				fw.EXPECT().ReadFile(mock.Anything).Return([]byte("ssh-rsa AAA..."), nil).Times(1)
 				gc.EXPECT().CreateInstance(csEnv.ProjectID, csEnv.Zone, mock.Anything).Return(nil).Times(8)
