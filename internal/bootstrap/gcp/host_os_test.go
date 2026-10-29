@@ -28,6 +28,6 @@ var _ = Describe("HostOS", func() {
 
 	It("rejects an unsupported host OS and names the supported ones", func() {
 		_, err := gcp.HostOS("debian-12").SourceImage()
-		Expect(err).To(MatchError(`unsupported host OS "debian-12" (supported: ubuntu)`))
+		Expect(err).To(MatchError(ContainSubstring(`unsupported host OS "debian-12" (supported: ubuntu)`)))
 	})
 })

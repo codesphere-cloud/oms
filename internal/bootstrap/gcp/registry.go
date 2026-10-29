@@ -143,7 +143,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 	hostOSSettings, err := b.Env.HostOS.settings()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get the host OS settings for the local registry: %w", err)
 	}
 
 	if err := b.ensureDataCenters(); err != nil {

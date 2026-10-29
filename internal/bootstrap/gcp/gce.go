@@ -339,7 +339,7 @@ func (b *GCPBootstrapper) buildInstanceSpec(vm VMDef, rootDiskSize int64, sshKey
 
 	sourceImage, err := b.Env.HostOS.SourceImage()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get the source image for the VMs: %w", err)
 	}
 
 	disks := []*computepb.AttachedDisk{

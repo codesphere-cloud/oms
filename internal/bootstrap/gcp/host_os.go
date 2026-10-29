@@ -71,7 +71,7 @@ func (o HostOS) settings() (hostOSSettings, error) {
 func (o HostOS) SourceImage() (string, error) {
 	settings, err := o.settings()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get the settings to resolve the source image: %w", err)
 	}
 
 	return settings.sourceImage, nil
