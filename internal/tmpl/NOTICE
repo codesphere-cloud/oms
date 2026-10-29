@@ -713,9 +713,9 @@ License URL: https://github.com/google/uuid/blob/2d3c2a9cc518/LICENSE
  
 ----------
 Module: github.com/googleapis/enterprise-certificate-proxy/client
-Version: v0.3.23
+Version: v0.3.24
 License: Apache-2.0
-License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.23/LICENSE
+License URL: https://github.com/googleapis/enterprise-certificate-proxy/blob/v0.3.24/LICENSE
  
 ----------
 Module: github.com/googleapis/gax-go/v2
@@ -1517,15 +1517,15 @@ License URL: https://github.com/gomodules/jsonpatch/blob/v2.5.0/v2/LICENSE
  
 ----------
 Module: google.golang.org/api
-Version: v0.309.0
+Version: v0.310.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.309.0/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.310.0/LICENSE
  
 ----------
 Module: google.golang.org/api/internal/third_party/uritemplates
-Version: v0.309.0
+Version: v0.310.0
 License: BSD-3-Clause
-License URL: https://github.com/googleapis/google-api-go-client/blob/v0.309.0/internal/third_party/uritemplates/LICENSE
+License URL: https://github.com/googleapis/google-api-go-client/blob/v0.310.0/internal/third_party/uritemplates/LICENSE
  
 ----------
 Module: google.golang.org/genproto/googleapis
