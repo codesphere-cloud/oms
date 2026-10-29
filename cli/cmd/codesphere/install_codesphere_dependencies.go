@@ -134,7 +134,7 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		return fmt.Errorf("failed to parse installer BOM: %w", err)
 	}
 
-	chartConfig, err := argocdinstaller.CodesphereChartConfig(bomConfig, pm.GetDependencyPath("argocd/files/chart"), opts.ArgoCDVersion, opts.ArgoCDRepoURL)
+	chartSelection, err := argocdinstaller.SelectChart(bomConfig, pm.GetDependencyPath("argocd/files/chart"), opts.ArgoCDVersion, opts.ArgoCDRepoURL)
 	if err != nil {
 		return fmt.Errorf("selecting ArgoCD chart: %w", err)
 	}
@@ -180,7 +180,11 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		}
 
 		argoCDInstall, err := argocdinstaller.NewInstaller(argocdinstaller.InstallerConfig{
-			Version: chartConfig.Version, PackageChart: chartConfig.PackageChart, UseUpstream: chartConfig.UseUpstream, RepoURL: chartConfig.RepoURL, ImageRegistry: imageRegistry,
+			Version:           chartSelection.Version,
+			PackageChart:      chartSelection.PackageChart,
+			UseUpstream:       chartSelection.UseUpstream,
+			RepoURL:           chartSelection.RepoURL,
+			ImageRegistry:     imageRegistry,
 			DatacenterID:      fmt.Sprintf("%d", cfg.Datacenter.ID),
 			OciUsername:       registryUsername,
 			OciPassword:       registryPassword,

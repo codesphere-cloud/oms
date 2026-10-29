@@ -6,6 +6,9 @@ package argocd_test
 import (
 	"context"
 	"errors"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
@@ -51,6 +54,36 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 	expectFresh := func() {
 		helm.EXPECT().FindRelease("argocd", "argocd").Return(nil, nil)
 	}
+
+	expectCredentialRefresh := func(version string) {
+		a.OciUsername = "mirror-user"
+		a.OciPassword = "new-token"
+		a.OciRegistryURL = "mirror.example.com/charts"
+		kube := NewMockClient(GinkgoT())
+		a.Client = kube
+
+		expectExisting(argocd.PackagedChartName, version)
+		expectChartValues(nil)
+		kube.EXPECT().Get(mock.Anything, client.ObjectKey{Name: argocd.DefaultNamespace}, mock.AnythingOfType("*v1.Namespace")).Return(nil)
+		kube.EXPECT().Get(mock.Anything, client.ObjectKey{Name: "docker-regcred", Namespace: argocd.DefaultNamespace}, mock.AnythingOfType("*v1.Secret")).Run(func(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) {
+			*obj.(*corev1.Secret) = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "docker-regcred", Namespace: argocd.DefaultNamespace}, Type: corev1.SecretTypeDockerConfigJson, Data: map[string][]byte{corev1.DockerConfigJsonKey: []byte("old credentials")}}
+		}).Return(nil)
+		kube.EXPECT().Update(mock.Anything, mock.MatchedBy(func(secret *corev1.Secret) bool {
+			expectImagePullSecret(secret, "mirror.example.com", "mirror-user", "new-token")
+			return true
+		})).Return(nil)
+		expectResources()
+	}
+
+	It("refreshes image credentials while retaining the same Codesphere chart", func() {
+		expectCredentialRefresh("2.3.0")
+		Expect(a.Install()).To(Succeed())
+	})
+
+	It("refreshes image credentials without downgrading a newer Codesphere chart", func() {
+		expectCredentialRefresh("2.4.0")
+		Expect(a.Install()).To(Succeed())
+	})
 
 	It("upgrades an older Codesphere chart using the local package", func() {
 		expectExisting("argocd", "2.2.0")
@@ -169,14 +202,14 @@ var _ = Describe("Codesphere ArgoCD chart selection", func() {
 	})
 
 	It("uses the BOM chart when no version override is given", func() {
-		cfg, err := argocd.CodesphereChartConfig(config, "/package/chart", "", argocd.DefaultRepoURL)
+		cfg, err := argocd.SelectChart(config, "/package/chart", "", argocd.DefaultRepoURL)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.PackageChart).To(Equal("/package/chart"))
 		Expect(cfg.Version).To(Equal("2.3.0"))
 	})
 
 	It("selects upstream for an explicit version even if it matches the wrapper version", func() {
-		cfg, err := argocd.CodesphereChartConfig(config, "/package/chart", "2.3.0", argocd.DefaultRepoURL)
+		cfg, err := argocd.SelectChart(config, "/package/chart", "2.3.0", argocd.DefaultRepoURL)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.PackageChart).To(BeEmpty())
 		Expect(cfg.Version).To(Equal("2.3.0"))
@@ -184,7 +217,7 @@ var _ = Describe("Codesphere ArgoCD chart selection", func() {
 	})
 
 	It("accepts a custom repository with an explicit upstream version without an ArgoCD BOM entry", func() {
-		cfg, err := argocd.CodesphereChartConfig(&bom.Config{}, "/package/chart", "10.3.2", "oci://registry.example.com/helm")
+		cfg, err := argocd.SelectChart(&bom.Config{}, "/package/chart", "10.3.2", "oci://registry.example.com/helm")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.PackageChart).To(BeEmpty())
 		Expect(cfg.Version).To(Equal("10.3.2"))
@@ -192,19 +225,19 @@ var _ = Describe("Codesphere ArgoCD chart selection", func() {
 	})
 
 	It("uses the official repository when an upstream version has no repository override", func() {
-		cfg, err := argocd.CodesphereChartConfig(&bom.Config{}, "/package/chart", "10.3.2", "")
+		cfg, err := argocd.SelectChart(&bom.Config{}, "/package/chart", "10.3.2", "")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg.UseUpstream).To(BeTrue())
 		Expect(cfg.RepoURL).To(Equal(argocd.DefaultRepoURL))
 	})
 
 	It("rejects a repository override without an upstream version", func() {
-		_, err := argocd.CodesphereChartConfig(config, "/package/chart", "", "https://custom.example.com")
+		_, err := argocd.SelectChart(config, "/package/chart", "", "https://custom.example.com")
 		Expect(err).To(MatchError(ContainSubstring("requires --argo-version")))
 	})
 
 	It("requires the packaged chart reference when no upstream version is given", func() {
-		_, err := argocd.CodesphereChartConfig(&bom.Config{}, "/package/chart", "", "")
+		_, err := argocd.SelectChart(&bom.Config{}, "/package/chart", "", "")
 		Expect(err).To(MatchError(ContainSubstring("no tagged argocd chart")))
 	})
 })

@@ -17,7 +17,7 @@ func (a *Installer) shouldManagePackagedChart(existing *installer.ReleaseInfo) (
 		return true, nil
 	}
 
-	if existing.ChartName != "argocd" {
+	if existing.ChartName != PackagedChartName {
 		log.Printf("Preserving existing ArgoCD release using chart %q", existing.ChartName)
 		return false, nil
 	}
@@ -42,7 +42,7 @@ func (a *Installer) packagedDefaults(upstream map[string]any) (map[string]any, e
 		return nil, fmt.Errorf("loading packaged ArgoCD chart: %w", err)
 	}
 
-	if err := chart.Validate("argocd", a.Version, "argo-cd"); err != nil {
+	if err := chart.Validate(PackagedChartName, a.Version, UpstreamChartName); err != nil {
 		return nil, fmt.Errorf("validating packaged ArgoCD chart: %w", err)
 	}
 
@@ -55,12 +55,12 @@ func (a *Installer) packagedDefaults(upstream map[string]any) (map[string]any, e
 		upstream = util.MergeTables(upstream, images)
 	}
 
-	return map[string]any{"argo-cd": upstream, "extraSecrets": []any{}}, nil
+	return map[string]any{UpstreamChartName: upstream, "extraSecrets": []any{}}, nil
 }
 
 // Resolve image destinations by the same rule used by `oms copy package`.
 func (a *Installer) packagedImageValues(chartValues map[string]any) (map[string]any, error) {
-	upstream, ok := chartValues["argo-cd"].(map[string]any)
+	upstream, ok := chartValues[UpstreamChartName].(map[string]any)
 	if !ok {
 		return nil, fmt.Errorf("packaged ArgoCD chart has no argo-cd values")
 	}

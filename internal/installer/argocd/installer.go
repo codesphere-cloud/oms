@@ -37,6 +37,12 @@ const DefaultRepoURL = "https://argoproj.github.io/argo-helm"
 
 const imagePullSecretName = "docker-regcred"
 
+// PackagedChartName identifies the Codesphere wrapper chart and its BOM component.
+const PackagedChartName = "argocd"
+
+// UpstreamChartName identifies the upstream chart and its wrapper values key.
+const UpstreamChartName = "argo-cd"
+
 // InstallerConfig holds all user-facing parameters for an ArgoCD install/upgrade.
 type InstallerConfig struct {
 	PackageChart   string
@@ -67,7 +73,7 @@ func ConfigFromBOM(bomConfig *bom.Config, cfg InstallerConfig) (InstallerConfig,
 		return InstallerConfig{}, fmt.Errorf("installer BOM is required")
 	}
 
-	chart, ok := bomConfig.GetChart("argocd")
+	chart, ok := bomConfig.GetChart(PackagedChartName)
 	if !ok {
 		return InstallerConfig{}, fmt.Errorf("argocd chart with a valid tagged OCI reference not found in installer BOM")
 	}
@@ -193,7 +199,7 @@ func (a *Installer) Install() error {
 
 	chartName := a.ChartName
 	if chartName == "" {
-		chartName = "argo-cd"
+		chartName = UpstreamChartName
 	}
 
 	chartName, repoURL := installer.ResolveChartReference(a.RepoURL, chartName)
@@ -253,7 +259,7 @@ func (a *Installer) chartDefaults(defaults map[string]any) (map[string]any, erro
 		return defaults, nil
 	}
 
-	return map[string]any{"argo-cd": defaults}, nil
+	return map[string]any{UpstreamChartName: defaults}, nil
 }
 
 func (a *Installer) reconcileChart(ctx context.Context, cfg installer.ChartConfig, existing *installer.ReleaseInfo, pullSecret *corev1.Secret) error {
@@ -264,7 +270,7 @@ func (a *Installer) reconcileChart(ctx context.Context, cfg installer.ChartConfi
 		}
 
 		if !manage {
-			return nil
+			return a.refreshRetainedPullSecret(ctx, existing, pullSecret)
 		}
 	}
 
@@ -285,6 +291,19 @@ func (a *Installer) reconcileChart(ctx context.Context, cfg installer.ChartConfi
 	}
 
 	return a.upgrade(ctx, cfg, existing)
+}
+
+// Retained OMS-managed releases still need current image credentials. Externally
+// managed releases keep their own pull-secret configuration and ownership.
+func (a *Installer) refreshRetainedPullSecret(ctx context.Context, existing *installer.ReleaseInfo, pullSecret *corev1.Secret) error {
+	if existing.ChartName != PackagedChartName || pullSecret == nil {
+		return nil
+	}
+
+	if err := a.provisionImagePullSecret(ctx, pullSecret); err != nil {
+		return fmt.Errorf("refreshing retained ArgoCD image pull secret: %w", err)
+	}
+	return nil
 }
 
 // provisionImagePullSecret ensures credentials exist before Helm hooks need them.
