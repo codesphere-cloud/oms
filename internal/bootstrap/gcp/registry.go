@@ -150,6 +150,8 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 		return err
 	}
 
+	certPath := hostOS.trustedCAPath(registryCertFileName)
+
 	registryServer, created, err := b.ensureRegistryRunning(registryNode, hostOS)
 	if err != nil {
 		return err
@@ -157,7 +159,7 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 
 	b.Env.ContainerRegistryURL = registryServer
 
-	err = b.ensureJumpboxRegistryAccess(registryNode, hostOS, registryServer, b.Env.RegistryUsername, b.Env.RegistryPassword)
+	err = b.ensureJumpboxRegistryAccess(registryNode, hostOS, certPath, registryServer, b.Env.RegistryUsername, b.Env.RegistryPassword)
 	if err != nil {
 		return err
 	}
@@ -167,10 +169,10 @@ func (b *GCPBootstrapper) EnsureLocalContainerRegistry() error {
 	// as those of an added data center, get it: distributing restarts Docker, and with it Postgres
 	// and the Ceph daemons.
 	if !created {
-		nodes = nodesWithoutRegistryCert(nodes, hostOS.trustedCAPath(registryCertFileName))
+		nodes = nodesWithoutRegistryCert(nodes, certPath)
 	}
 
-	return b.distributeRegistryCert(registryNode, hostOS, nodes)
+	return b.distributeRegistryCert(registryNode, hostOS, certPath, nodes)
 }
 
 // registryCertFileName is the name a node keeps the local registry's certificate under among its
@@ -306,11 +308,11 @@ func (b *GCPBootstrapper) configuredRegistryServer() string {
 
 // distributeRegistryCert installs the local registry's self-signed certificate on the given
 // nodes. It is idempotent, so it is safe to re-run for an additional data center.
-func (b *GCPBootstrapper) distributeRegistryCert(registryNode *node.Node, hostOS hostOSSettings, nodes []*node.Node) error {
+func (b *GCPBootstrapper) distributeRegistryCert(registryNode *node.Node, hostOS hostOSSettings, certPath string, nodes []*node.Node) error {
 	for _, node := range nodes {
 		b.stlog.Logf("Configuring node '%s' to trust local registry certificate", node.GetName())
 
-		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no "+jumpboxRegistryCertFile+" root@"+node.GetInternalIP()+":"+hostOS.trustedCAPath(registryCertFileName))
+		err := registryNode.RunSSHCommand("root", "scp -o StrictHostKeyChecking=no "+jumpboxRegistryCertFile+" root@"+node.GetInternalIP()+":"+certPath)
 		if err != nil {
 			return fmt.Errorf("failed to copy registry certificate to node %s: %w", node.GetInternalIP(), err)
 		}
@@ -341,11 +343,11 @@ type jumpboxStep struct {
 // installation writes to, so the registry CA and the credentials are installed where they can
 // find them. The upstream login is what allows 'oms copy package' to mirror the Codesphere
 // images into the local registry.
-func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, hostOS hostOSSettings, server, username, password string) error {
+func (b *GCPBootstrapper) ensureJumpboxRegistryAccess(registryNode *node.Node, hostOS hostOSSettings, certPath, server, username, password string) error {
 	// Each step is logged by its description rather than its command, since the login commands
 	// carry the registry passwords.
 	steps := []jumpboxStep{
-		{"trusting the registry certificate", "cp " + jumpboxRegistryCertFile + " " + hostOS.trustedCAPath(registryCertFileName)},
+		{"trusting the registry certificate", "cp " + jumpboxRegistryCertFile + " " + certPath},
 		{"updating the system CA certificates", hostOS.updateCATrustCommand},
 		{"creating the Docker config directory", "mkdir -p " + path.Dir(jumpboxRegistryAuthFile)},
 		// A freshly started registry container is not serving yet when podman returns, so wait
