@@ -342,6 +342,31 @@ func installCodesphereSopsAndAgeAvailable() bool {
 }
 
 var _ = Describe("install codesphere vault type", func() {
+	It("persists the registry flag override in the merged config while preserving registry options", func() {
+		configPath := filepath.Join(GinkgoT().TempDir(), "config.yaml")
+		Expect(os.WriteFile(configPath, []byte("registry:\n  server: ghcr.io\n  replaceImagesInBom: true\n"), 0600)).To(Succeed())
+		opts, cfg, cleanup, err := prepareInstallConfig(&InstallCodesphereOpts{
+			Configs: []string{configPath}, Registry: "registry.example.com:5000/team/",
+		}, installer.NewConfig())
+		Expect(err).NotTo(HaveOccurred())
+
+		defer cleanup()
+
+		Expect(cfg.Registry.Server).To(Equal("registry.example.com:5000/team"))
+		Expect(cfg.Registry.ReplaceImagesInBom).To(BeTrue())
+
+		persisted, err := installer.NewConfig().ParseConfigYaml(opts.ConfigPath)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(persisted.Registry).To(Equal(cfg.Registry))
+	})
+
+	It("overrides the configured registry through the inherited registry flag", func() {
+		parent := &cobra.Command{Use: "install"}
+		AddInstallCmd(parent, &util.GlobalOptions{})
+		child, _, err := parent.Find([]string{"codesphere", "dependencies"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(child.InheritedFlags().Lookup("registry")).NotTo(BeNil())
+	})
 	It("accepts sops", func() {
 		opts := &InstallCodesphereOpts{VaultType: string(vault.TypeSOPS), PrivKey: "age-key.txt", VaultSecretName: vault.VaultSecretName}
 		Expect(validateInstallCodesphereVault(opts)).To(Succeed())

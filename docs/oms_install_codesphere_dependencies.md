@@ -51,6 +51,7 @@ $ oms install codesphere dependencies -p codesphere-v1.2.3-installer-lite.tar.gz
   -p, --package string               Package file to use. This flag overrides the version specified in the configuration file.
       --pc-apps-values stringArray   pc-apps values YAML file (can be specified multiple times)
   -k, --priv-key string              Path to the age private key (required for sops unless an age key environment variable is set)
+      --registry string              Registry host with optional port and repository path, without a scheme (overrides registry.server); Codesphere artifacts use <registry>/codesphere-cloud
   -s, --skip-steps strings           Steps to be skipped. E.g. copy-dependencies, extract-dependencies, load-container-images, ceph, postgres, kubernetes, docker, argocd
       --timer                        Show how long each step took and a final timing summary table
       --vault string                 Path to the prod.vault.yaml file used for config templating
