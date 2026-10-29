@@ -138,7 +138,9 @@ var _ = Describe("Packaged ArgoCD installation", func() {
 			upstream := c.Values["argo-cd"].(map[string]any)
 			Expect(upstream["dex"].(map[string]any)["enabled"]).To(BeFalse())
 			image := upstream["global"].(map[string]any)["image"].(map[string]any)
-			Expect(image["repository"]).To(Equal("mirror.example.com/ghcr_io/codesphere-cloud/docker/quay.io/argoproj/argocd"))
+			Expect(image["repository"]).To(Equal("mirror.example.com/codesphere-cloud/docker/quay.io/argoproj/argocd"))
+			Expect(upstream["dex"].(map[string]any)["image"].(map[string]any)["repository"]).To(Equal("mirror.example.com/codesphere-cloud/docker/ghcr.io/dexidp/dex"))
+			Expect(upstream["redis"].(map[string]any)["image"].(map[string]any)["repository"]).To(Equal("mirror.example.com/codesphere-cloud/docker/redis"))
 
 			return nil
 		})
