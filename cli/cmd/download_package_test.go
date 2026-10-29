@@ -232,12 +232,13 @@ var _ = Describe("DownloadPackages", func() {
 				},
 			}
 
-			fakeFile := os.NewFile(uintptr(0), filename)
+			fakeFile, err := os.CreateTemp(GinkgoT().TempDir(), "download-*")
+			Expect(err).NotTo(HaveOccurred())
 			mockFileWriter.EXPECT().OpenAppend(version+"-"+hash+"-"+filename).Return(fakeFile, nil)
 			mockFileWriter.EXPECT().Open(version+"-"+hash+"-"+filename).Return(fakeFile, nil)
 			mockPortal.EXPECT().DownloadBuildArtifact(portal.CodesphereProduct, expectedBuildToDownload, mock.Anything, 0, false).Return(nil)
 			mockPortal.EXPECT().VerifyBuildArtifactDownload(mock.Anything, expectedBuildToDownload).Return(nil)
-			err := c.DownloadBuild(mockPortal, build, filename)
+			err = c.DownloadBuild(mockPortal, build, filename)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
