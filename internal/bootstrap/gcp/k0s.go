@@ -64,23 +64,29 @@ func (b *GCPBootstrapper) dataCentersWithoutConfiguredK0s() ([]*datacenter.DataC
 	var unconfigured []*datacenter.DataCenter
 
 	for _, dc := range b.Env.DataCenters {
-		var configured bool
+		var reinstallReason string
 
 		err := b.stlog.Step(dc.StepName("Check running k0s"), func() error {
 			var err error
 
-			configured, err = b.k0sConfigured(dc)
-			if configured {
-				b.stlog.Logf("k0s %s already runs with the cloud provider enabled, leaving it running", b.Env.K0sVersion)
+			reinstallReason, err = b.k0sReinstallReason(dc)
+			if err != nil {
+				return err
 			}
 
-			return err
+			if reinstallReason == "" {
+				b.stlog.Logf("k0s %s already runs with the cloud provider enabled, leaving it running", b.Env.K0sVersion)
+			} else {
+				b.stlog.Logf("Installing k0s %s: %s", b.Env.K0sVersion, reinstallReason)
+			}
+
+			return nil
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to check the running k0s (data center %d): %w", dc.ID, err)
 		}
 
-		if !configured {
+		if reinstallReason != "" {
 			unconfigured = append(unconfigured, dc)
 		}
 	}
@@ -88,33 +94,34 @@ func (b *GCPBootstrapper) dataCentersWithoutConfiguredK0s() ([]*datacenter.DataC
 	return unconfigured, nil
 }
 
-// k0sConfigured reports whether the data center's vault holds the kubeconfig and every k0s node
-// runs the requested k0s version with the cloud provider enabled, which the k0s config script does
-// last. Only "oms install k0s" adds the kubeconfig the Codesphere install reads, and a vault kept
-// locally from the first bootstrap lacks it but still replaces the jumpbox's copy. Workers are
-// checked too, since recovering a project recreates a missing VM without k0s. A node failing the
-// check is not configured; a node that cannot be checked at all is an error, so an unreachable
-// node never leads to reinstalling k0s.
-func (b *GCPBootstrapper) k0sConfigured(dc *datacenter.DataCenter) (bool, error) {
+// k0sReinstallReason returns why k0s has to be installed into the data center, or "" when its
+// vault holds the kubeconfig and every k0s node runs the requested k0s version with the cloud
+// provider enabled, which the k0s config script does last. Only "oms install k0s" adds the
+// kubeconfig the Codesphere install reads, and a vault kept locally from the first bootstrap lacks
+// it but still replaces the jumpbox's copy. Workers are checked too, since recovering a project
+// recreates a missing VM without k0s. A node failing the check needs k0s; a node that cannot be
+// checked at all is an error, so an unreachable node never leads to reinstalling k0s.
+func (b *GCPBootstrapper) k0sReinstallReason(dc *datacenter.DataCenter) (string, error) {
 	vault := dc.ConfigManager.GetVault()
 	if vault == nil || vault.GetSecret(files.SecretKubeConfig) == nil {
-		return false, nil
+		return "the vault has no kubeconfig", nil
 	}
 
 	for i, n := range dc.ControlPlaneNodes {
-		err := n.RunSSHCommand("root", k0sConfiguredCheckCmd(k0sServiceName(i), b.Env.K0sVersion))
+		service := k0sServiceName(i)
+		err := n.RunSSHCommand("root", k0sConfiguredCheckCmd(service, b.Env.K0sVersion))
 
 		var exitErr *ssh.ExitError
 		if errors.As(err, &exitErr) {
-			return false, nil
+			return fmt.Sprintf("%s on %s is not active, runs another k0s version or lacks the cloud provider flag", service, n.Name), nil
 		}
 
 		if err != nil {
-			return false, fmt.Errorf("failed to check k0s on %s: %w", n.Name, err)
+			return "", fmt.Errorf("failed to check k0s on %s: %w", n.Name, err)
 		}
 	}
 
-	return true, nil
+	return "", nil
 }
 
 // k0sServiceName returns the k0s systemd service of a data center's i-th control plane node: the
