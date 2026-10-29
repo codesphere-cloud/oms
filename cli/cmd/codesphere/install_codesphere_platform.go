@@ -47,11 +47,31 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	}
 	defer cleanup()
 
+	if err := validateArgoCDConfig(effectiveOpts, cfg); err != nil {
+		return err
+	}
+
 	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
 
 	return installCodespherePlatform(cmd.Context(), effectiveOpts, cfg, c.Env)
+}
+
+func deploysViaArgoCD(opts *InstallCodesphereOpts, cfg files.RootConfig) bool {
+	return opts.CodesphereViaArgoCD && !installer.IsStepSkipped(cfg, opts.SkipSteps, codesphereStep)
+}
+
+func validateArgoCDConfig(opts *InstallCodesphereOpts, cfg files.RootConfig) error {
+	if !deploysViaArgoCD(opts, cfg) {
+		return nil
+	}
+
+	if err := csapps.ValidateConfig(&cfg); err != nil {
+		return fmt.Errorf("invalid config for deploying through ArgoCD: %w", err)
+	}
+
+	return nil
 }
 
 func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
@@ -71,7 +91,7 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		}
 	}
 
-	viaArgoCD := opts.CodesphereViaArgoCD && !installer.IsStepSkipped(cfg, opts.SkipSteps, codesphereStep)
+	viaArgoCD := deploysViaArgoCD(opts, cfg)
 
 	var kubeClient client.Client
 

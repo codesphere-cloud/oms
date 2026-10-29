@@ -76,6 +76,28 @@ func at(values map[string]any, keys ...string) any {
 	return current
 }
 
+var _ = Describe("ValidateConfig", func() {
+	It("custom certificate key in the config -> error naming the vault entry", func() {
+		cfg := &files.RootConfig{Codesphere: files.CodesphereConfig{
+			CustomCertificate: &files.CustomCertificate{Cert: "cert-pem", Key: "key-pem"},
+		}}
+
+		Expect(csapps.ValidateConfig(cfg)).To(MatchError(ContainSubstring(`vault entry "customCertificateKey"`)))
+	})
+
+	It("custom certificate without key -> no error", func() {
+		cfg := &files.RootConfig{Codesphere: files.CodesphereConfig{
+			CustomCertificate: &files.CustomCertificate{Cert: "cert-pem"},
+		}}
+
+		Expect(csapps.ValidateConfig(cfg)).To(Succeed())
+	})
+
+	It("no custom certificate -> no error", func() {
+		Expect(csapps.ValidateConfig(&files.RootConfig{})).To(Succeed())
+	})
+})
+
 var _ = Describe("Values", func() {
 	It("full config -> the Codesphere chart version and values, with secrets from the vault", func() {
 		cfg := fullConfig("pr-1")
@@ -96,6 +118,7 @@ var _ = Describe("Values", func() {
 		expectedGlobal := expected["global"].(map[string]any)
 		expectedGlobal["externalSecrets"] = true
 		expectedGlobal["externalSecretsSyncTrigger"] = "trigger-1"
+		expectedGlobal["argoCd"] = true
 
 		Expect(at(values, "applications", "codesphere", "valuesObject")).To(Equal(expected))
 	})

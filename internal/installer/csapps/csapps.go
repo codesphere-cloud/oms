@@ -28,7 +28,21 @@ const (
 	csAppsAppNameSuffix  = "-" + csAppsComponent
 	externalSecretsKey   = "externalSecrets"
 	syncTriggerValuesKey = "externalSecretsSyncTrigger"
+	argoCDValuesKey      = "argoCd"
 )
+
+// ValidateConfig rejects what the legacy installer accepts but must not reach the ArgoCD
+// Application, where the values sit in plain text.
+func ValidateConfig(cfg *files.RootConfig) error {
+	if cert := cfg.Codesphere.CustomCertificate; cert != nil && cert.Key != "" {
+		return fmt.Errorf(
+			"codesphere.customCertificate.key must not be in the config when deploying through ArgoCD, move it into the vault entry %q",
+			files.SecretCustomCertificateKey,
+		)
+	}
+
+	return nil
+}
 
 // Install applies the cs-applications Application of the release cfg configures and waits until
 // ArgoCD has deployed Codesphere with the values built from cfg.
@@ -90,6 +104,7 @@ func Values(cfg *files.RootConfig, b *bom.Config, chartsRegistry, syncTrigger st
 	// The values hold no secrets: the release Secret must come from the vault.
 	global[externalSecretsKey] = true
 	global[syncTriggerValuesKey] = syncTrigger
+	global[argoCDValuesKey] = true
 
 	built := map[string]any{
 		"chartsRegistry": chartsRegistry,

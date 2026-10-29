@@ -81,6 +81,10 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 	defer cleanup()
 
+	if err := validateArgoCDConfig(effectiveOpts, cfg); err != nil {
+		return err
+	}
+
 	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
