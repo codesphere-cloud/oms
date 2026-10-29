@@ -1251,6 +1251,27 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
 			})
+
+			It("installs the registry with apt-get and trusts its certificate the Ubuntu way", func() {
+				icg.EXPECT().GetVault().Return(&files.InstallVault{})
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.MatchedBy(func(cmd string) bool {
+					return strings.Contains(cmd, "podman ps")
+				})).Return(fmt.Errorf("not running"))
+
+				commands := []string{}
+
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).RunAndReturn(func(_ *node.Node, _ string, cmd string) error {
+					commands = append(commands, cmd)
+					return nil
+				})
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(nil)
+
+				Expect(bs.EnsureLocalContainerRegistry()).To(Succeed())
+				Expect(commands).To(ContainElements("apt-get update", "apt-get install -y podman apache2-utils"))
+				Expect(commands).To(ContainElement("cp /root/registry.crt /usr/local/share/ca-certificates/registry.crt"))
+				Expect(commands).To(ContainElement("update-ca-certificates"))
+			})
 		})
 
 		Describe("Invalid cases", func() {
