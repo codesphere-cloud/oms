@@ -400,6 +400,16 @@ func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// shellQuoteAll passes each of words to a POSIX shell as a single literal word.
+func shellQuoteAll(words []string) string {
+	quoted := make([]string, len(words))
+	for i, word := range words {
+		quoted[i] = shellQuote(word)
+	}
+
+	return strings.Join(quoted, " ")
+}
+
 // EnsureGitHubAccessConfigured resolves ghcr.io as the registry all data centers pull from. The
 // credentials are written into every data center's vault by updateInstallConfig.
 func (b *GCPBootstrapper) EnsureGitHubAccessConfigured() error {
