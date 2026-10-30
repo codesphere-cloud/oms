@@ -220,13 +220,8 @@ func (b *GCPBootstrapper) updateInstallConfig(dc *datacenter.DataCenter) error {
 		dc.ConfigManager.GetVault().SetSecret(files.SecretEntry{Name: files.SecretRegistryPassword, Fields: &files.SecretFields{Password: b.Env.RegistryPassword}})
 	}
 
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		dc.InstallConfig.Registry.ReplaceImagesInBom = false
-		dc.InstallConfig.Registry.LoadContainerImages = false
-	} else {
-		dc.InstallConfig.Registry.ReplaceImagesInBom = true
-		dc.InstallConfig.Registry.LoadContainerImages = true
-	}
+	dc.InstallConfig.Registry.LoadContainerImages = false
+	dc.InstallConfig.Registry.ReplaceImagesInBom = b.Env.RegistryType != RegistryTypeGitHub
 
 	// The pc-applications chart pulls the chart of every application it creates from
 	// chartsRegistry and defaults it to GHCR. Only a local container registry is filled with the
