@@ -1808,6 +1808,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("installs podman with apt to run the same proxy container", func() {
 				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(len(commands)).To(BeNumerically(">=", 2), "recorded commands: %v", commands)
 				Expect(commands[:2]).To(Equal([]string{"apt-get update", "apt-get install -y podman"}))
 				Expect(commands).To(ContainElement(HavePrefix("podman run -d --restart=always --name package-proxy")))
 			})
@@ -1842,6 +1843,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				recordJumpboxCommands()
 
 				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).NotTo(BeEmpty())
 				Expect(commands[0]).To(Equal("dnf install -y podman"))
 				Expect(commands).To(ContainElement(
 					"podman run -d --restart=always --name package-proxy --net=host" +
@@ -1888,6 +1890,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				recordJumpboxCommands()
 
 				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).NotTo(BeEmpty())
 				Expect(commands[len(commands)-1]).To(Equal("timeout 60 sh -c 'until curl -s -o /dev/null http://127.0.0.1:3128; do sleep 2; done'"))
 			})
 
