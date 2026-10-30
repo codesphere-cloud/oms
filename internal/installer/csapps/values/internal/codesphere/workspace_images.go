@@ -11,7 +11,7 @@ import (
 )
 
 // workspaceImage resolves a configured workspace image to an image name without tag.
-func workspaceImage(imgs images.Images, configured files.ImageRef) (string, error) {
+func workspaceImage(configured files.ImageRef, imgs images.Images) (string, error) {
 	if configured.ImageName != "" {
 		return configured.ImageName, nil
 	}
@@ -38,23 +38,23 @@ func workspaceImagesValues(
 		configured = &files.WorkspaceImagesConfig{}
 	}
 
-	configuredOrBOM := func(image *files.ImageRef, bomRef string) files.ImageRef {
-		if image != nil {
-			return *image
-		}
-
-		return files.ImageRef{BomRef: bomRef}
-	}
-
-	server, err := workspaceImage(imgs, configuredOrBOM(configured.Server, "workspace-server"))
+	server, err := workspaceImage(configuredOrBOM(configured.Server, "workspace-server"), imgs)
 	if err != nil {
 		return WorkspaceImages{}, fmt.Errorf("failed to resolve the workspace server image: %w", err)
 	}
 
-	vpn, err := workspaceImage(imgs, configuredOrBOM(configured.VPN, "vpn"))
+	vpn, err := workspaceImage(configuredOrBOM(configured.VPN, "vpn"), imgs)
 	if err != nil {
 		return WorkspaceImages{}, fmt.Errorf("failed to resolve the workspace VPN image: %w", err)
 	}
 
 	return WorkspaceImages{Server: server, VPN: vpn}, nil
+}
+
+func configuredOrBOM(image *files.ImageRef, bomRef string) files.ImageRef {
+	if image != nil {
+		return *image
+	}
+
+	return files.ImageRef{BomRef: bomRef}
 }
