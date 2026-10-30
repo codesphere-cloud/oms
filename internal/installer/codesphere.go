@@ -503,6 +503,9 @@ func (ci *CodesphereInstaller) executableInstallerSteps(config files.RootConfig)
 
 	ApplySkippedSteps(executableSteps, config, ci.SkipSteps)
 
+	// Installer-lite packages contain no image archives; registries are populated separately.
+	executableSteps["load-container-images"] = false
+
 	return executableSteps
 }
 

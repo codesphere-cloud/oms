@@ -43,7 +43,7 @@ $ oms download k0s --airgapped --path <file>
   -h, --help                    help for k0s
       --k0sctl-version string   Version of k0sctl to download (default "v0.33.1")
       --path string             File to save the airgap image bundle to (requires --airgapped; default: the OMS cache)
-  -v, --version string          Version of k0s to download (default "v1.31.14+k0s.0")
+  -v, --version string          Version of k0s to download (default "v1.36.5+k0s.0")
 ```
 
 ### Options inherited from parent commands

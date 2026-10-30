@@ -1353,9 +1353,7 @@ func (b *GCPBootstrapper) generateSkipStepsArg() string {
 	skipSteps := []string{"kubernetes"}
 	skipSteps = util.AppendUnique(skipSteps, b.Env.InstallSkipSteps...)
 
-	if b.Env.RegistryType == RegistryTypeGitHub {
-		skipSteps = util.AppendUnique(skipSteps, "load-container-images")
-	}
+	skipSteps = util.AppendUnique(skipSteps, "load-container-images")
 
 	if len(skipSteps) == 0 {
 		return ""

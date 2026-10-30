@@ -268,7 +268,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 			primary, secondary := bs.Env.DataCenters[0], bs.Env.DataCenters[1]
 			for _, dc := range []*datacenter.DataCenter{primary, secondary} {
 				Expect(dc.InstallConfig.Registry.Server).To(Equal(server), "data center %d", dc.ID)
-				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeTrue(), "data center %d", dc.ID)
+				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeFalse(), "data center %d", dc.ID)
 				Expect(dc.InstallConfig.Registry.ReplaceImagesInBom).To(BeTrue(), "data center %d", dc.ID)
 				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryUsername).Fields.Password).To(Equal("custom-registry"))
 			}
@@ -291,7 +291,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 			Expect(len(secondary.CephNodes) + len(secondary.ControlPlaneNodes)).To(BeNumerically(">", 0))
 
 			for _, dc := range []*datacenter.DataCenter{primary, secondary} {
-				Expect(bs.InstallCommand(dc, "pkg.tar.gz")).NotTo(ContainSubstring("load-container-images"))
+				Expect(bs.InstallCommand(dc, "pkg.tar.gz")).To(ContainSubstring("load-container-images"))
 			}
 		})
 	})
@@ -320,7 +320,7 @@ var _ = Describe("Multi-DC bootstrap", func() {
 
 			for _, dc := range bs.Env.DataCenters {
 				Expect(dc.InstallConfig.Registry.Server).To(Equal(uri), "data center %d", dc.ID)
-				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeTrue(), "data center %d", dc.ID)
+				Expect(dc.InstallConfig.Registry.LoadContainerImages).To(BeFalse(), "data center %d", dc.ID)
 				// Only the primary vault is written when the key is created; the others must inherit it.
 				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword)).NotTo(BeNil(), "data center %d", dc.ID)
 				Expect(dc.ConfigManager.GetVault().GetSecret(files.SecretRegistryPassword).Fields.Password).To(Equal("writer-key"), "data center %d", dc.ID)
