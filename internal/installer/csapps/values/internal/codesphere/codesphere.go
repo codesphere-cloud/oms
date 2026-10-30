@@ -7,18 +7,21 @@ package codesphere
 import (
 	"k8s.io/utils/ptr"
 
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/images"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
 // Codesphere are the global values built from config.codesphere, with the old installer's defaults.
 // The optional ones are left out when the config has none, so the chart's defaults apply.
 type Codesphere struct {
-	PublicIP                   string   `yaml:"publicIP"`
-	WorkspaceHostingBaseDomain string   `yaml:"workspaceHostingBaseDomain"`
-	VPN                        VPN      `yaml:"vpn"`
-	DNSServers                 []string `yaml:"dnsServers"`
-	Hosts                      []string `yaml:"hosts"`
-	PrePullImages              bool     `yaml:"prePullImages"`
+	PublicIP                   string          `yaml:"publicIP"`
+	WorkspaceHostingBaseDomain string          `yaml:"workspaceHostingBaseDomain"`
+	VPN                        VPN             `yaml:"vpn"`
+	DNSServers                 []string        `yaml:"dnsServers"`
+	Hosts                      []string        `yaml:"hosts"`
+	PrePullImages              bool            `yaml:"prePullImages"`
+	DeployConfig               DeployConfig    `yaml:"deployConfig"`
+	WorkspaceImages            WorkspaceImages `yaml:"workspaceImages"`
 
 	SSHWorkspaceProxy     *files.SSHWorkspaceProxyConfig `yaml:"sshWorkspaceProxy,omitempty"`
 	TLSCertificate        *TLSCertificate                `yaml:"tlsCertificate,omitempty"`
@@ -39,8 +42,18 @@ type TLSCertificate struct {
 	KeyName string `yaml:"keyName"`
 }
 
-// Values builds the global values from config.codesphere.
-func Values(conf files.CodesphereConfig) Codesphere {
+// Values builds the global values from config.codesphere. The images also depend on the registry.
+func Values(conf files.CodesphereConfig, imgs images.Images, registry *files.RegistryConfig) (Codesphere, error) {
+	deployConfig, err := deployConfigValues(conf, registry, imgs)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
+	workspaceImages, err := workspaceImagesValues(conf.WorkspaceImages, imgs)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
 	return Codesphere{
 		PublicIP:                   conf.PublicIP,
 		WorkspaceHostingBaseDomain: conf.WorkspaceHostingBaseDomain,
@@ -48,13 +61,15 @@ func Values(conf files.CodesphereConfig) Codesphere {
 		DNSServers:                 dnsServers(conf.DNSServers),
 		Hosts:                      []string{conf.Domain},
 		PrePullImages:              ptr.Deref(conf.PrePullImages, true),
+		DeployConfig:               deployConfig,
+		WorkspaceImages:            workspaceImages,
 		SSHWorkspaceProxy:          conf.SSHWorkspaceProxy,
 		TLSCertificate:             tlsCertificateValues(conf.CustomCertificate),
 		UnderprovisionFactors:      conf.UnderprovisionFactors,
 		ExtraWorkspaceFiles:        conf.ExtraWorkspaceFiles,
 		ExtraCAPem:                 conf.ExtraCAPem,
 		ExtraWorkspaceEnvVars:      conf.ExtraWorkspaceEnvVars,
-	}
+	}, nil
 }
 
 func dnsServers(configured []string) []string {
