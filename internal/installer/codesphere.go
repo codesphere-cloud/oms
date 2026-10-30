@@ -298,7 +298,7 @@ func (ci *CodesphereInstaller) buildWorkspaceImage(
 		return err
 	}
 
-	buildTag := workspaceImageBuildTag(config.Registry.Server, imageKey, flavorKey, version)
+	buildTag := fmt.Sprintf("%s:%s", config.Registry.WorkspaceImage(imageKey, flavorKey), version)
 	dockerfileName := filepath.Base(dockerfile)
 	dockerfileDir := filepath.Dir(dockerfile)
 
@@ -359,11 +359,6 @@ func updateDockerfileFromStatement(pm PackageManager, dockerfile, fullImageTag s
 
 	log.Printf("Successfully updated FROM statement in %s to use %s", dockerfile, fullImageTag)
 	return nil
-}
-
-func workspaceImageBuildTag(registryServer, imageKey, flavorKey, version string) string {
-	registryURL := strings.TrimRight(registryServer, "/")
-	return fmt.Sprintf("%s/%s-%s:%s", registryURL, imageKey, flavorKey, version)
 }
 
 func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.RootConfig) error {
