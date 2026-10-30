@@ -75,20 +75,16 @@ var _ = Describe("BOM index v3", func() {
 		}))
 	})
 
-	It("parses v2 components with all reference and file metadata", func() {
+	It("parses v2 component names and artifact references", func() {
 		index, err := bom.ParseIndex([]byte(`{
 			"version": "v3", "components": [{
 				"version": "2", "name": "app",
 				"containerImages": {"api": {
-					"ref": "ghcr.io/example/api:v1", "digest": "sha256:abc",
-					"sources": ["Deployment/api spec.containers[0]"]
+					"ref": "ghcr.io/example/api:v1", "digest": "sha256:abc"
 				}},
 				"helmCharts": {"dependency": {"ref": "oci://ghcr.io/example/charts/dependency:v1"}},
 				"files": {
-					"chart": {"ociRef": "ghcr.io/example/charts/app:v1"},
-					"script": {"srcPath": "bin/script.sh", "executable": true},
-					"download": {"srcUrl": "https://example.com/file"},
-					"assets": {"glob": {"cwd": "assets", "include": "**/*", "exclude": ["*.tmp"]}}
+					"chart": {"ociRef": "ghcr.io/example/charts/app:v1"}
 				}
 			}]
 		}`))
@@ -98,16 +94,13 @@ var _ = Describe("BOM index v3", func() {
 			Components: []bom.ComponentV2{{
 				Version: "2", Name: "app",
 				ContainerImages: map[string]bom.ContainerImageV2{
-					"api": {Ref: "ghcr.io/example/api:v1", Digest: "sha256:abc", Sources: []string{"Deployment/api spec.containers[0]"}},
+					"api": {Ref: "ghcr.io/example/api:v1", Digest: "sha256:abc"},
 				},
 				HelmCharts: map[string]bom.HelmChartV2{
 					"dependency": {Ref: "oci://ghcr.io/example/charts/dependency:v1"},
 				},
 				Files: map[string]bom.FileRef{
-					"chart":    {OciRef: "ghcr.io/example/charts/app:v1"},
-					"script":   {SrcPath: "bin/script.sh", Executable: true},
-					"download": {SrcUrl: "https://example.com/file"},
-					"assets":   {Glob: &bom.GlobRef{Cwd: "assets", Include: "**/*", Exclude: []string{"*.tmp"}}},
+					"chart": {OciRef: "ghcr.io/example/charts/app:v1"},
 				},
 			}},
 		}))

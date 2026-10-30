@@ -29,11 +29,10 @@ type ComponentV2 struct {
 	Files           map[string]FileRef          `json:"files,omitempty"`
 }
 
-// ContainerImageV2 describes a container image and its discovery metadata.
+// ContainerImageV2 describes a container image reference and its optional digest.
 type ContainerImageV2 struct {
-	Ref     string   `json:"ref"`
-	Digest  string   `json:"digest,omitempty"`
-	Sources []string `json:"sources,omitempty"`
+	Ref    string `json:"ref"`
+	Digest string `json:"digest,omitempty"`
 }
 
 // HelmChartV2 describes an OCI Helm chart referenced by a v2 component.
