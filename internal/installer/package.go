@@ -159,12 +159,12 @@ func (p *Package) GetFullImageTag(baseimage string) (string, error) {
 		return "", fmt.Errorf("baseimage not specified")
 	}
 
-	bomJson, err := bom.Parse(p.GetDependencyPath("bom.json"))
+	bomJSON, err := bom.Parse(p.GetDependencyPath(bom.Filename))
 	if err != nil {
 		return "", fmt.Errorf("failed to load bom.json: %w", err)
 	}
 
-	containerImages, err := bomJson.GetCodesphereContainerImages()
+	containerImages, err := bomJSON.GetCodesphereContainerImages()
 	if err != nil {
 		return "", fmt.Errorf("failed to get codesphere container images from bom.json: %w", err)
 	}
@@ -202,12 +202,12 @@ func (p *Package) GetBaseimagePath(baseimage string, force bool, verbose bool) (
 }
 
 func (p *Package) GetCodesphereVersion() (string, error) {
-	bomJson, err := bom.Parse(p.GetDependencyPath("bom.json"))
+	bomJSON, err := bom.Parse(p.GetDependencyPath(bom.Filename))
 	if err != nil {
 		return "", fmt.Errorf("failed to load bom.json: %w", err)
 	}
 
-	containerImages, err := bomJson.GetCodesphereContainerImages()
+	containerImages, err := bomJSON.GetCodesphereContainerImages()
 	if err != nil {
 		return "", fmt.Errorf("failed to get codesphere container images from bom.json: %w", err)
 	}

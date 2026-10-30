@@ -155,6 +155,21 @@ var _ = Describe("Package artifact copying", func() {
 			}))
 		})
 
+		It("uses the declared image digest as the source while preserving the destination tag", func() {
+			fileIO.EXPECT().ReadFile("index/location.json").Return([]byte(`{
+				"version": "v3", "components": [{"name": "app", "version": "2",
+				"containerImages": {"api": {"ref": "ghcr.io/codesphere-cloud/api:v2",
+				"digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}}]
+			}`), nil)
+
+			artifacts, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com/mirror")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(artifacts).To(Equal([]installer.PackageArtifact{{
+				Source:      "ghcr.io/codesphere-cloud/api:v2@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Destination: "registry.example.com/mirror/codesphere-cloud/api:v2",
+			}}))
+		})
+
 		It("reports malformed indexes without falling back", func() {
 			fileIO.EXPECT().ReadFile("index/location.json").Return([]byte(`{"components":`), nil)
 
@@ -174,6 +189,15 @@ var _ = Describe("Package artifact copying", func() {
 
 			_, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com")
 			Expect(err).To(MatchError(ContainSubstring(`unsupported BOM index version "v4"`)))
+		})
+
+		It("rejects unsupported component versions without falling back", func() {
+			fileIO.EXPECT().ReadFile("index/location.json").Return([]byte(`{
+				"version":"v3", "components":[{"name":"app","version":"3"}]
+			}`), nil)
+
+			_, err := installer.ReadPackageArtifacts(packageManager, "registry.example.com")
+			Expect(err).To(MatchError(ContainSubstring(`unsupported BOM component "app" version "3"`)))
 		})
 
 		It("reports a missing legacy BOM when neither file exists", func() {

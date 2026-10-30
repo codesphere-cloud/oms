@@ -10,6 +10,71 @@ import (
 )
 
 var _ = Describe("BOM index v3", func() {
+	It("returns sorted unique image refs across components and skips empty refs", func() {
+		index := &bom.IndexV3{Components: []bom.ComponentV2{
+			{ContainerImages: map[string]bom.ContainerImageV2{
+				"worker": {Ref: "ghcr.io/example/worker:v1"},
+				"api":    {Ref: "ghcr.io/example/api:v1"},
+			}},
+			{ContainerImages: map[string]bom.ContainerImageV2{
+				"duplicate": {Ref: "ghcr.io/example/api:v1"},
+				"empty":     {},
+			}},
+		}}
+
+		Expect(index.GetContainerImages()).To(Equal([]string{
+			"ghcr.io/example/api:v1", "ghcr.io/example/worker:v1",
+		}))
+	})
+
+	It("pins image refs to their declared digest and deduplicates the resulting refs", func() {
+		index := &bom.IndexV3{Components: []bom.ComponentV2{{
+			ContainerImages: map[string]bom.ContainerImageV2{
+				"tagged":    {Ref: "ghcr.io/example/api:v1", Digest: "sha256:abc"},
+				"duplicate": {Ref: "ghcr.io/example/api:v1@sha256:abc"},
+				"empty":     {Digest: "sha256:abc"},
+			},
+		}}}
+
+		Expect(index.GetContainerImages()).To(Equal([]string{"ghcr.io/example/api:v1@sha256:abc"}))
+	})
+
+	It("preserves a digest already in the ref when metadata declares a different digest", func() {
+		index := &bom.IndexV3{Components: []bom.ComponentV2{{
+			ContainerImages: map[string]bom.ContainerImageV2{
+				"api": {Ref: "ghcr.io/example/api@sha256:abc", Digest: "sha256:def"},
+			},
+		}}}
+
+		Expect(index.GetContainerImages()).To(Equal([]string{"ghcr.io/example/api@sha256:abc"}))
+	})
+
+	It("returns sorted unique charts from both sources after normalizing OCI schemes", func() {
+		index := &bom.IndexV3{Components: []bom.ComponentV2{
+			{
+				HelmCharts: map[string]bom.HelmChartV2{
+					"dependency": {Ref: "oci://ghcr.io/example/charts/dependency:v1"},
+					"legacy":     {Ref: "ghcr.io/example/charts/app:v1"},
+					"empty":      {},
+				},
+				Files: map[string]bom.FileRef{
+					"chart": {OciRef: "oci://ghcr.io/example/charts/app:v1"},
+					"local": {SrcPath: "script.sh"},
+				},
+			},
+			{Files: map[string]bom.FileRef{
+				"dependency": {OciRef: "ghcr.io/example/charts/dependency:v1"},
+				"other":      {OciRef: "ghcr.io/example/charts/other:v1"},
+			}},
+		}}
+
+		Expect(index.GetChartRefs()).To(Equal([]string{
+			"ghcr.io/example/charts/app:v1",
+			"ghcr.io/example/charts/dependency:v1",
+			"ghcr.io/example/charts/other:v1",
+		}))
+	})
+
 	It("parses v2 components with all reference and file metadata", func() {
 		index, err := bom.ParseIndex([]byte(`{
 			"version": "v3", "components": [{

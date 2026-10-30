@@ -14,6 +14,9 @@ import (
 	"github.com/distribution/reference"
 )
 
+// Filename is the legacy BOM filename within an installer package's dependencies.
+const Filename = "bom.json"
+
 // Config represents the Bill of Materials configuration.
 type Config struct {
 	Components map[string]ComponentConfig `json:"components"`

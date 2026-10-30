@@ -96,7 +96,7 @@ func ReadPackageArtifacts(packageManager PackageManager, dest string) ([]Package
 // when the index is absent so that broken indexes do not silently omit artifacts.
 func readPackageBOM(packageManager PackageManager) (packageBOM, error) {
 	fileIO := packageManager.FileIO()
-	indexPath := packageManager.GetDependencyPath("bom-index.json")
+	indexPath := packageManager.GetDependencyPath(bom.IndexFilename)
 
 	data, err := fileIO.ReadFile(indexPath)
 	if err == nil {
@@ -112,9 +112,13 @@ func readPackageBOM(packageManager PackageManager) (packageBOM, error) {
 		return nil, fmt.Errorf("failed to read BOM index %q: %w", indexPath, err)
 	}
 
-	bomPath := packageManager.GetDependencyPath("bom.json")
+	return readLegacyBOM(packageManager)
+}
 
-	data, err = fileIO.ReadFile(bomPath)
+func readLegacyBOM(packageManager PackageManager) (*bom.Config, error) {
+	bomPath := packageManager.GetDependencyPath(bom.Filename)
+
+	data, err := packageManager.FileIO().ReadFile(bomPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read BOM file %q: %w", bomPath, err)
 	}

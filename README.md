@@ -79,6 +79,34 @@ For the complete infrastructure preparation and installation workflow, see [Prep
 
 Use `oms beta bootstrap-gcp` or `oms beta bootstrap-gcp multi-node` for a multi-node GCP cluster; the bare command keeps its existing multi-node behavior. For an all-in-one GCP test installation, `oms beta bootstrap-gcp single-node` creates one VM with an extra Ceph disk, runs `oms install k0s --single`, and runs `bootstrap-local --expose-shared` on the VM using the installer archive. Both bootstrap modes accept `--install-config-template` as an initial overlay and repeated `--config` files merged in order before infrastructure settings; use `--vault` and `--priv-key` when they reference SOPS vault secrets. The command uploads the config files and applies VM-specific settings to the result. `--install-config-template` remains available for one initial base file. The local bootstrap runs `oms install codesphere dependencies` and then `oms install codesphere platform`; the dependencies phase installs Argo CD. It writes the effective config to `single-vm-config.yaml` in the OMS workdir, creates Google Public CA EAB credentials in `single-vm-vault.yaml`, and provides both files to the VM. The VM's one external IP serves HTTPS on port 443, HTTP on port 80, and the SSH workspace proxy on port 2222; VM administration stays on port 22. Set `OMS_REGISTRY_PASSWORD` and provide `--project-name`, `--billing-account`, `--base-domain`, `--registry-user`, and either `--install-local` for an archive on your machine or `--install-version` to download one through the OMS portal. The boot disk defaults to 50 GB in both modes; use `--root-disk-size` to override it. The extra 100 GB Ceph disk uses the fixed Rook device filter `^sdb$`. Both modes reuse OMS on the remote host or download the latest release when absent; optionally supply `--remote-oms-binary` to upload a local Linux amd64 build. Use `--machine-type` to override the machine type for every VM in either mode; omitting it preserves the existing sizes for each role. The GCP account must be allowed to create projects, VMs, service accounts, DNS records, and Public CA external account keys. The command writes the usual `gcp-infra.json`, and `oms beta bootstrap-gcp cleanup` removes the project and DNS records. This workflow is for testing. VMs use standard provisioning by default; pass `--spot-vms` to use a Spot VM, which can be interrupted and falls back to a standard VM if Spot capacity is unavailable.
 
+### Installer BOM compatibility
+
+For OMS builds with BOM index support, `oms copy package` uses the following format compatibility matrix:
+
+| Package contents | Copy behavior |
+| --- | --- |
+| `bom-index.json` with version `v3` and all components at version `2` | Copy images and charts from the index, including dependency charts. |
+| No `bom-index.json`, with a valid legacy `bom.json` | Copy images and charts listed in the legacy BOM. |
+| Index or component version is unsupported or missing | Fail without falling back to `bom.json`. |
+| Index is malformed or unreadable | Fail without falling back to `bom.json`. |
+| Neither BOM file exists | Fail. |
+
+An unsupported index must fail because the legacy BOM can omit dependency charts;
+falling back could produce an incomplete mirror for an offline installation.
+Image references use the index's declared digest when the reference does not already
+contain one. A source carrying both a tag and a digest is copied to the destination tag.
+
+Other installation paths still read the legacy `bom.json`, so packages used with
+those paths must retain it alongside the index. Publishing both formats preserves
+legacy consumers, but does not make a newer index version compatible with an older
+index-aware `oms copy package` binary: that binary will reject the newer version.
+
+Before changing either format version, coordinate the producer documentation and
+OMS reader support. Release notes must identify the minimum compatible OMS release
+for the affected Codesphere releases and specify any overlap period for supported
+LTS releases. This format matrix does not assign compatibility to specific release
+numbers or promise an LTS overlap period; those require a release-owner decision.
+
 ### How to Build?
 
 ```shell

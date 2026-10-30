@@ -109,7 +109,7 @@ func (b *LocalBootstrapper) PrepareInstaller() error {
 		return err
 	}
 
-	bomConfig, err := bom.Parse(filepath.Join(bundleDir, "deps", "bom.json"))
+	bomConfig, err := bom.Parse(filepath.Join(bundleDir, "deps", bom.Filename))
 	if err != nil {
 		return fmt.Errorf("failed to parse installer BOM: %w", err)
 	}

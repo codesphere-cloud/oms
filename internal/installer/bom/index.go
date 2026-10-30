@@ -11,6 +11,9 @@ import (
 	"strings"
 )
 
+// IndexFilename is the BOM index filename within an installer package's dependencies.
+const IndexFilename = "bom-index.json"
+
 // IndexV3 is a v3 BOM index containing v2 component manifests.
 type IndexV3 struct {
 	Version    string        `json:"version"`
@@ -58,15 +61,23 @@ func ParseIndex(data []byte) (*IndexV3, error) {
 	return &index, nil
 }
 
-// GetContainerImages returns sorted, unique image references from the index.
+// GetContainerImages returns sorted, unique image references from the index,
+// pinning each reference to its declared digest unless it already includes one.
 func (b *IndexV3) GetContainerImages() []string {
 	images := map[string]struct{}{}
 
 	for _, component := range b.Components {
 		for _, image := range component.ContainerImages {
-			if image.Ref != "" {
-				images[image.Ref] = struct{}{}
+			if image.Ref == "" {
+				continue
 			}
+
+			ref := image.Ref
+			if image.Digest != "" && !strings.Contains(ref, "@") {
+				ref += "@" + image.Digest
+			}
+
+			images[ref] = struct{}{}
 		}
 	}
 
@@ -77,6 +88,7 @@ func (b *IndexV3) GetContainerImages() []string {
 func (b *IndexV3) GetChartRefs() []string {
 	charts := map[string]struct{}{}
 
+	// Normalize refs with and without oci:// so older and newer index layouts deduplicate together.
 	for _, component := range b.Components {
 		for _, chart := range component.HelmCharts {
 			if chart.Ref != "" {
