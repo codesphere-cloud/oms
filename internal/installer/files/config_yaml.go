@@ -880,57 +880,16 @@ type ManagedServiceConfig struct {
 }
 
 type ServicePlan struct {
-	ID          int                  `yaml:"id"`
-	Description string               `yaml:"description"`
-	Name        string               `yaml:"name"`
-	Parameters  map[string]PlanParam `yaml:"parameters"`
+	ID          int                    `yaml:"id"`
+	Description string                 `yaml:"description"`
+	Name        string                 `yaml:"name"`
+	Parameters  map[string]interface{} `yaml:"parameters"`
 }
 
 // ResourceParam defines the schema for provider plan parameters.
 type ResourceParam struct {
 	PricedAs string                 `yaml:"pricedAs,omitempty"`
 	Schema   map[string]interface{} `yaml:"schema"`
-}
-
-// PlanParam is a provider plan's value for a resource parameter: a scalar (new format) or an inline
-// ResourceParam definition (old format).
-//
-// TODO(CU-869ev5bn2): once legacy support is dropped, delete PlanParam and its custom
-// (Un)MarshalYAML methods; ServicePlan.Parameters becomes map[string]interface{}.
-type PlanParam struct {
-	IsScalar bool
-	Value    interface{}
-	Legacy   ResourceParam
-}
-
-// UnmarshalYAML reads a plan parameter in either the scalar or object form.
-func (p *PlanParam) UnmarshalYAML(value *yaml.Node) error {
-	switch value.Kind {
-	case yaml.ScalarNode:
-		p.IsScalar = true
-		if err := value.Decode(&p.Value); err != nil {
-			return fmt.Errorf("decode scalar plan parameter: %w", err)
-		}
-		return nil
-	case yaml.MappingNode:
-		if err := value.Decode(&p.Legacy); err != nil {
-			return fmt.Errorf("decode legacy plan parameter: %w", err)
-		}
-		return nil
-	default:
-		return fmt.Errorf("unsupported plan parameter shape %s at line %d", value.ShortTag(), value.Line)
-	}
-}
-
-// MarshalYAML writes the parameter back in the form it was read, rendering a null/empty value as null rather than an empty {schema: {}} object.
-func (p PlanParam) MarshalYAML() (interface{}, error) {
-	if p.IsScalar {
-		return p.Value, nil
-	}
-	if p.Legacy.PricedAs == "" && p.Legacy.Schema == nil {
-		return nil, nil
-	}
-	return p.Legacy, nil
 }
 
 type ManagedServiceBackendsConfig struct {
