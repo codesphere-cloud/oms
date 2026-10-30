@@ -397,6 +397,14 @@ func (b *GCPBootstrapper) Bootstrap() error {
 		return fmt.Errorf("failed to ensure jumpbox is configured: %w", err)
 	}
 
+	// Air-gapped nodes install the packages the host OS lacks through the package proxy.
+	if b.Env.Airgapped {
+		err = b.stlog.Step("Ensure package proxy", b.EnsurePackageProxy)
+		if err != nil {
+			return fmt.Errorf("failed to ensure package proxy: %w", err)
+		}
+	}
+
 	err = b.stlog.Step("Ensure hosts are configured", b.EnsureHostsConfigured)
 	if err != nil {
 		return fmt.Errorf("failed to ensure hosts are configured: %w", err)
@@ -1120,6 +1128,10 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.clusterNodes()...)
 
 	for _, node := range allNodes {
+		if err := b.ensureNodePackageProxy(node, hostOSSettings); err != nil {
+			return fmt.Errorf("failed to ensure package proxy: %w", err)
+		}
+
 		if err := ensureHostPackages(node, hostOSSettings); err != nil {
 			return fmt.Errorf("failed to ensure host packages: %w", err)
 		}

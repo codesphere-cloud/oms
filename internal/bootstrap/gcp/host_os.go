@@ -41,12 +41,37 @@ type hostOSSettings struct {
 	// dockerInstallCommands, so a re-run does not fetch and install it again.
 	dockerInstalledCommand string
 	// dockerInstallCommands install and start Docker on a node, after the host packages. They are
-	// empty where the installer provides Docker itself.
+	// empty where the installer provides Docker itself. They reach the internet through the
+	// package manager only, so air-gapped nodes fetch Docker through the package proxy as well.
 	dockerInstallCommands []string
+	// packageProxy points the package manager of air-gapped nodes at the package proxy on the jumpbox.
+	packageProxy nodePackageProxy
+	// packageRepoFiles are the file patterns of the repository definitions the image ships. The
+	// package proxy lets the hosts they point at through.
+	packageRepoFiles []string
+	// packageProxyDomains are let through the package proxy in addition to the hosts of the
+	// image's repositories.
+	packageProxyDomains []string
 }
 
 // dockerRHELRepoFile is where Docker's RHEL package repository definition is kept on a host.
 const dockerRHELRepoFile = "/etc/yum.repos.d/docker-ce.repo"
+
+// dockerRHELRepoHost serves Docker's RHEL package repository.
+const dockerRHELRepoHost = "download.docker.com"
+
+// dockerRHELRepo is Docker's stable RHEL repository as Docker's own repository file defines it.
+// Docker publishes one repository per major release, so it is pinned to 9 rather than $releasever,
+// which carries the minor release on EUS images. It is written on the host rather than downloaded,
+// so only dnf reaches the internet, through the package proxy where the node is air-gapped.
+var dockerRHELRepo = []string{
+	"[docker-ce-stable]",
+	"name=Docker CE Stable - $basearch",
+	"baseurl=https://" + dockerRHELRepoHost + "/linux/rhel/9/$basearch/stable",
+	"enabled=1",
+	"gpgcheck=1",
+	"gpgkey=https://" + dockerRHELRepoHost + "/linux/rhel/gpg",
+}
 
 var hostOSes = map[HostOS]hostOSSettings{
 	HostOSUbuntu: {
@@ -56,6 +81,9 @@ var hostOSes = map[HostOS]hostOSSettings{
 		registryPackages:          []string{"podman", "apache2-utils"},
 		trustedCADir:              "/usr/local/share/ca-certificates",
 		updateCATrustCommand:      "update-ca-certificates",
+		packageProxy:              aptPackageProxy{configFile: "/etc/apt/apt.conf.d/99oms-package-proxy"},
+		// Ubuntu 22.04 lists its repositories one per line, later releases in deb822 .sources files.
+		packageRepoFiles: []string{"/etc/apt/sources.list", "/etc/apt/sources.list.d/*.list", "/etc/apt/sources.list.d/*.sources"},
 	},
 	HostOSRHEL9: {
 		sourceImage:            "projects/rhel-cloud/global/images/family/rhel-9-6-eus",
@@ -68,12 +96,13 @@ var hostOSes = map[HostOS]hostOSSettings{
 		dockerInstallCommands: []string{
 			// podman-docker provides /usr/bin/docker and conflicts with docker-ce.
 			"if rpm -q podman-docker >/dev/null 2>&1; then dnf remove -y podman-docker; fi",
-			"curl -fsSL https://download.docker.com/linux/rhel/docker-ce.repo -o " + dockerRHELRepoFile,
-			// Docker publishes one repository per major release, so pin it to 9 in case $releasever carries the minor release.
-			`sed -i 's/\$releasever/9/g' ` + dockerRHELRepoFile,
+			"printf '%s\\n' " + shellQuoteAll(dockerRHELRepo) + " > " + dockerRHELRepoFile,
 			"dnf install -y docker-ce docker-ce-cli containerd.io",
 			"systemctl enable --now docker.service",
 		},
+		packageProxy:        dnfPackageProxy{configFile: "/etc/dnf/dnf.conf"},
+		packageRepoFiles:    []string{"/etc/yum.repos.d/*.repo"},
+		packageProxyDomains: []string{dockerRHELRepoHost},
 	},
 }
 

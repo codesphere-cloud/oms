@@ -1782,6 +1782,131 @@ var _ = Describe("GCP Bootstrapper", func() {
 		})
 	})
 
+	Describe("EnsurePackageProxy", func() {
+		It("starts no proxy for an installation that is not air-gapped", func() {
+			bs.Env.HostOS = gcp.HostOSRHEL9
+
+			Expect(bs.EnsurePackageProxy()).To(Succeed())
+			nodeClient.AssertNotCalled(GinkgoT(), "RunCommand", mock.Anything, mock.Anything, mock.Anything)
+		})
+
+		Context("for air-gapped Ubuntu hosts", func() {
+			var commands []string
+
+			BeforeEach(func() {
+				csEnv.Airgapped = true
+				commands = nil
+			})
+
+			JustBeforeEach(func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						commands = append(commands, command)
+						return nil
+					})
+			})
+
+			It("installs podman with apt to run the same proxy container", func() {
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands[:2]).To(Equal([]string{"apt-get update", "apt-get install -y podman"}))
+				Expect(commands).To(ContainElement(HavePrefix("podman run -d --restart=always --name package-proxy")))
+			})
+
+			It("allows the hosts of the apt sources the image ships, in both the one-line and the deb822 format", func() {
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).To(ContainElement(
+					"{ grep -hv '^[[:space:]]*#' /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources 2>/dev/null" +
+						" | grep -oE 'https?://[^/:[:space:]]+' | sed -E 's#^https?://##'; } | sort -u > /etc/oms/package-proxy/allowed-domains",
+				))
+			})
+		})
+
+		Context("for air-gapped RHEL hosts", func() {
+			var commands []string
+
+			BeforeEach(func() {
+				csEnv.HostOS = gcp.HostOSRHEL9
+				csEnv.Airgapped = true
+				commands = nil
+			})
+
+			recordJumpboxCommands := func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						commands = append(commands, command)
+						return nil
+					})
+			}
+
+			It("runs the proxy on the jumpbox with podman", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands[0]).To(Equal("dnf install -y podman"))
+				Expect(commands).To(ContainElement(
+					"podman run -d --restart=always --name package-proxy --net=host" +
+						" -v /etc/oms/package-proxy/squid.conf:/etc/squid/squid.conf:Z" +
+						" -v /etc/oms/package-proxy/allowed-domains:/etc/squid/allowed-domains:Z" +
+						" docker.io/ubuntu/squid:6.6-24.04_beta",
+				))
+			})
+
+			It("only passes HTTPS and plain HTTP from the VPC to the allowed hosts", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).To(ContainElement(
+					"printf '%s\\n' 'http_port 3128' 'acl vpc src 10.10.0.0/20' " +
+						"'acl package_repos dstdomain \"/etc/squid/allowed-domains\"' 'acl https_port port 443' 'acl http_port port 80' " +
+						"'acl CONNECT method CONNECT' 'http_access allow vpc CONNECT https_port package_repos' " +
+						"'http_access allow vpc !CONNECT http_port package_repos' " +
+						"'http_access deny all' > /etc/oms/package-proxy/squid.conf",
+				))
+			})
+
+			It("allows Docker's repository and the repositories the image ships, which the nodes share with the jumpbox", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands).To(ContainElement(
+					"{ printf '%s\\n' 'download.docker.com'; " +
+						"grep -hv '^[[:space:]]*#' /etc/yum.repos.d/*.repo 2>/dev/null" +
+						" | grep -oE 'https?://[^/:[:space:]]+' | sed -E 's#^https?://##'; } " +
+						"| sort -u > /etc/oms/package-proxy/allowed-domains",
+				))
+			})
+
+			It("replaces a running proxy, so a re-run picks up changed repositories", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(slices.Index(commands, "podman rm -f package-proxy || true")).To(BeNumerically("<",
+					slices.IndexFunc(commands, func(command string) bool { return strings.HasPrefix(command, "podman run") })))
+			})
+
+			It("waits for the proxy to answer before the nodes use it", func() {
+				recordJumpboxCommands()
+
+				Expect(bs.EnsurePackageProxy()).To(Succeed())
+				Expect(commands[len(commands)-1]).To(Equal("timeout 60 sh -c 'until curl -s -o /dev/null http://127.0.0.1:3128; do sleep 2; done'"))
+			})
+
+			It("names the failed step", func() {
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", "dnf install -y podman").Return(nil)
+				nodeClient.EXPECT().RunCommand(bs.Env.Jumpbox, "root", "mkdir -p /etc/oms/package-proxy").Return(fmt.Errorf("permission denied"))
+
+				err := bs.EnsurePackageProxy()
+				Expect(err).To(MatchError(ContainSubstring("failed to set up the package proxy on the jumpbox while creating the configuration directory: permission denied")))
+			})
+
+			It("fails without a jumpbox to run on", func() {
+				bs.Env.Jumpbox = nil
+
+				Expect(bs.EnsurePackageProxy()).To(MatchError(ContainSubstring("jumpbox not found")))
+			})
+		})
+	})
+
 	Describe("EnsureHostsConfigured", func() {
 		const dockerRunningCheck = "rpm -q docker-ce >/dev/null 2>&1 && systemctl is-active --quiet docker.service"
 
@@ -1912,10 +2037,115 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 				Expect(bs.EnsureHostsConfigured()).To(Succeed())
 				Expect(commands).To(ContainElements(
-					"curl -fsSL https://download.docker.com/linux/rhel/docker-ce.repo -o /etc/yum.repos.d/docker-ce.repo",
-					`sed -i 's/\$releasever/9/g' /etc/yum.repos.d/docker-ce.repo`,
+					"printf '%s\\n' '[docker-ce-stable]' 'name=Docker CE Stable - $basearch' "+
+						"'baseurl=https://download.docker.com/linux/rhel/9/$basearch/stable' 'enabled=1' 'gpgcheck=1' "+
+						"'gpgkey=https://download.docker.com/linux/rhel/gpg' > /etc/yum.repos.d/docker-ce.repo",
 					"if rpm -q podman-docker >/dev/null 2>&1; then dnf remove -y podman-docker; fi",
 				))
+			})
+
+			It("installs Docker through dnf only, so air-gapped hosts fetch it through the package proxy", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(_ *node.Node, _ string, command string) error {
+						Expect(command).NotTo(HavePrefix("curl"))
+
+						if command == dockerRunningCheck {
+							return fmt.Errorf("docker is not installed")
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+			})
+
+			It("points dnf at the package proxy on the jumpbox on every air-gapped RHEL host before installing packages", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				bs.Env.Airgapped = true
+
+				const proxyCommand = "sed -i '/^proxy=/d' /etc/dnf/dnf.conf" +
+					` && sed -i '/^\[main\]/a proxy=http://10.0.0.1:3128' /etc/dnf/dnf.conf` +
+					" && grep -qx 'proxy=http://10.0.0.1:3128' /etc/dnf/dnf.conf"
+
+				commands := map[string][]string{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						commands[n.GetName()] = append(commands[n.GetName()], command)
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(commands).To(HaveLen(7))
+
+				for name, nodeCommands := range commands {
+					Expect(nodeCommands).To(ContainElement(proxyCommand), name)
+					Expect(slices.Index(nodeCommands, proxyCommand)).To(BeNumerically("<", slices.Index(nodeCommands, "dnf install -y lvm2 container-selinux")), name)
+				}
+			})
+
+			It("removes the package proxy from RHEL hosts that are not air-gapped, so a re-run without air-gapping installs directly", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				removals := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						Expect(command).NotTo(ContainSubstring("proxy=http"))
+
+						if command == "sed -i '/^proxy=/d' /etc/dnf/dnf.conf" {
+							removals[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(removals).To(HaveLen(7))
+			})
+
+			It("points apt at the package proxy on the jumpbox on every air-gapped Ubuntu host", func() {
+				bs.Env.Airgapped = true
+
+				const proxyCommand = `printf '%s\n' 'Acquire::http::Proxy "http://10.0.0.1:3128";' 'Acquire::https::Proxy "http://10.0.0.1:3128";'` +
+					" > /etc/apt/apt.conf.d/99oms-package-proxy"
+
+				configured := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						if command == proxyCommand {
+							configured[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(configured).To(Equal(map[string]int{
+					"postgres": 1,
+					"k0s-1":    1, "k0s-2": 1, "k0s-3": 1,
+					"ceph-1": 1, "ceph-2": 1, "ceph-3": 1,
+				}))
+			})
+
+			It("removes the apt proxy drop-in from Ubuntu hosts that are not air-gapped", func() {
+				removals := map[string]int{}
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
+					RunAndReturn(func(n *node.Node, _ string, command string) error {
+						Expect(command).NotTo(ContainSubstring("Acquire::"))
+
+						if command == "rm -f /etc/apt/apt.conf.d/99oms-package-proxy" {
+							removals[n.GetName()]++
+						}
+
+						return nil
+					})
+
+				Expect(bs.EnsureHostsConfigured()).To(Succeed())
+				Expect(removals).To(HaveLen(7))
 			})
 
 			It("creates the directory the installer uploads the age key to on every node", func() {
@@ -1979,10 +2209,21 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("names the packages and the node when the RHEL package install fails", func() {
 				bs.Env.HostOS = gcp.HostOSRHEL9
 
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sed -i '/^proxy=/d' /etc/dnf/dnf.conf").Return(nil).Once()
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "dnf install -y lvm2 container-selinux").Return(fmt.Errorf("no repos")).Once()
 
 				err := bs.EnsureHostsConfigured()
 				Expect(err).To(MatchError(ContainSubstring("failed to ensure host packages: failed to install lvm2, container-selinux on postgres: no repos")))
+			})
+
+			It("names the node when dnf cannot be pointed at the package proxy", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				bs.Env.Airgapped = true
+
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("read-only file system")).Once()
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to ensure package proxy: failed to configure the package proxy on postgres: read-only file system")))
 			})
 
 			It("fails for an unsupported host OS, as an edited infra file can set one", func() {
@@ -2018,6 +2259,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			})
 
 			It("fails when ConfigureInotifyWatches fails", func() {
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "rm -f /etc/apt/apt.conf.d/99oms-package-proxy").Return(nil)
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).Return(fmt.Errorf("ouch"))
 
 				err := bs.EnsureHostsConfigured()
@@ -2027,6 +2269,8 @@ var _ = Describe("GCP Bootstrapper", func() {
 
 			It("fails when ConfigureMemoryMap fails", func() {
 				mock.InOrder(
+					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "rm -f /etc/apt/apt.conf.d/99oms-package-proxy").Return(nil).Once(),
+
 					// HasInotifyWatchesConfigured: all 4 checks pass → skip ConfigureInotifyWatches
 					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo grep -E '^fs.inotify.max_user_watches=1048576' /etc/sysctl.conf >/dev/null 2>&1").Return(nil).Once(),
 					nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sudo sysctl -n fs.inotify.max_user_watches | grep -q '^1048576$'").Return(nil).Once(),
