@@ -89,7 +89,7 @@ func AddInstallCmd(install *cobra.Command, opts *util.GlobalOptions) {
 				{Cmd: "--install-config <path>", Desc: "Path to Codesphere install-config file to generate k0s config from"},
 				{Cmd: "--install-config <path> --yes", Desc: "Overwrite a previously generated k0sctl config without asking"},
 				{Cmd: "--config <path>", Desc: "Path to an existing k0sctl config to apply"},
-				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.31.14+k0s.0)"},
+				{Cmd: "--version <version>", Desc: "Version of k0s to install (e.g., v1.36.5+k0s.0)"},
 				{Cmd: "--k0sctl-version <version>", Desc: "Version of k0sctl to use (e.g., v0.17.4)"},
 				{Cmd: "--package <file>", Desc: "Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from"},
 				{Cmd: "--ssh-key-path <path>", Desc: "SSH private key path for remote installation"},
