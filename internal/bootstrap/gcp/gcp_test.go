@@ -2069,21 +2069,25 @@ var _ = Describe("GCP Bootstrapper", func() {
 					` && sed -i '/^\[main\]/a proxy=http://10.0.0.1:3128' /etc/dnf/dnf.conf` +
 					" && grep -qx 'proxy=http://10.0.0.1:3128' /etc/dnf/dnf.conf"
 
-				commands := map[string][]string{}
+				// Whether each node's dnf was pointed at the proxy by the time it installed packages.
+				proxied := map[string]bool{}
+				proxiedAtInstall := map[string]bool{}
 
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", mock.Anything).
 					RunAndReturn(func(n *node.Node, _ string, command string) error {
-						commands[n.GetName()] = append(commands[n.GetName()], command)
+						switch command {
+						case proxyCommand:
+							proxied[n.GetName()] = true
+						case "dnf install -y lvm2 container-selinux":
+							proxiedAtInstall[n.GetName()] = proxied[n.GetName()]
+						}
+
 						return nil
 					})
 
 				Expect(bs.EnsureHostsConfigured()).To(Succeed())
-				Expect(commands).To(HaveLen(7))
-
-				for name, nodeCommands := range commands {
-					Expect(nodeCommands).To(ContainElement(proxyCommand), name)
-					Expect(slices.Index(nodeCommands, proxyCommand)).To(BeNumerically("<", slices.Index(nodeCommands, "dnf install -y lvm2 container-selinux")), name)
-				}
+				Expect(proxiedAtInstall).To(HaveLen(7))
+				Expect(proxiedAtInstall).To(HaveEach(BeTrue()))
 			})
 
 			It("removes the package proxy from RHEL hosts that are not air-gapped, so a re-run without air-gapping installs directly", func() {
