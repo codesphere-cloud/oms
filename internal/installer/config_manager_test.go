@@ -10,6 +10,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/utils/ptr"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -516,6 +517,81 @@ var _ = Describe("ConfigManager", func() {
 				configManager.Config.Codesphere.Domain = ""
 				errors := configManager.ValidateInstallConfig()
 				Expect(errors).To(ContainElement(ContainSubstring("Codesphere domain is required")))
+			})
+		})
+
+		Context("deploy config validation", func() {
+			deployConfig := files.DeployConfig{Images: map[string]files.ImageConfig{"ubuntu-24.04": {}}}
+
+			It("deploy config and nonzero pooled instances -> ambiguity error", func() {
+				configManager.Config.Codesphere.DeployConfig = deployConfig
+				configManager.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{1: {PooledInstances: ptr.To(1)}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ContainElement(ContainSubstring(".pooledInstances is ambiguous")))
+			})
+
+			It("deploy config and zero pooled instances -> no ambiguity error", func() {
+				configManager.Config.Codesphere.DeployConfig = deployConfig
+				configManager.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{1: {PooledInstances: ptr.To(0)}, 2: {}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring(".pooledInstances is ambiguous")))
+			})
+
+			It("pooled instances without a deploy config -> no ambiguity error", func() {
+				configManager.Config.Codesphere.DeployConfig = files.DeployConfig{}
+				configManager.Config.Codesphere.Plans.HostingPlans = map[int]files.HostingPlan{1: {PooledInstances: ptr.To(1)}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring(".pooledInstances is ambiguous")))
+			})
+		})
+
+		Context("workspace image build validation", func() {
+			agentWithDockerfile := &files.ImageRef{BomRef: "workspace-agent-24.04", Dockerfile: "Dockerfile.agent"}
+
+			It("agent Dockerfile without a registry -> registry error", func() {
+				configManager.Config.Registry = nil
+				configManager.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{Agent: agentWithDockerfile}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ContainElement(ContainSubstring("Dockerfile.agent requires registry.server")))
+			})
+
+			It("deploy config flavor Dockerfile with an empty registry server -> registry error", func() {
+				configManager.Config.Registry = &files.RegistryConfig{}
+				configManager.Config.Codesphere.DeployConfig = files.DeployConfig{Images: map[string]files.ImageConfig{
+					"ubuntu-24.04": {Flavors: map[string]files.FlavorConfig{"gpu": {Image: files.ImageRef{Dockerfile: "Dockerfile.gpu"}}}},
+				}}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).To(ContainElement(ContainSubstring("Dockerfile.gpu requires registry.server")))
+			})
+
+			It("agent Dockerfile with a registry -> no registry error", func() {
+				configManager.Config.Registry = &files.RegistryConfig{Server: "registry.example.com"}
+				configManager.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{Agent: agentWithDockerfile}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring("requires registry.server")))
+			})
+
+			It("Dockerfile next to an explicit image name -> no registry error", func() {
+				configManager.Config.Registry = nil
+				configManager.Config.Codesphere.WorkspaceImages = &files.WorkspaceImagesConfig{
+					Agent: &files.ImageRef{ImageName: "registry.example.com/agent", Dockerfile: "Dockerfile.agent"},
+				}
+
+				errors := configManager.ValidateInstallConfig()
+
+				Expect(errors).NotTo(ContainElement(ContainSubstring("requires registry.server")))
 			})
 		})
 
