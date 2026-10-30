@@ -184,7 +184,13 @@ func (b *GCPBootstrapper) ensureNodePackageProxy(n *node.Node, hostOSSettings ho
 
 	cmd := hostOSSettings.packageProxy.removeCommand()
 	if b.needsPackageProxy(hostOSSettings) {
-		cmd = hostOSSettings.packageProxy.configureCommand(packageProxyURL(b.Env.Jumpbox))
+		// The proxy runs on the jumpbox, so without its address the node would be pointed nowhere.
+		jumpbox, err := b.registryNode()
+		if err != nil {
+			return fmt.Errorf("failed to find the package proxy for %s: %w", n.GetName(), err)
+		}
+
+		cmd = hostOSSettings.packageProxy.configureCommand(packageProxyURL(jumpbox))
 	}
 
 	err := n.RunSSHCommand("root", cmd)

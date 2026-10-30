@@ -2216,6 +2216,26 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(err).To(MatchError(ContainSubstring("failed to ensure host packages: failed to install lvm2, container-selinux on postgres: no repos")))
 			})
 
+			It("fails without a jumpbox to point air-gapped hosts at, before touching any node", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				bs.Env.Airgapped = true
+				bs.Env.Jumpbox = nil
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to find the package proxy for postgres: jumpbox not found")))
+				nodeClient.AssertNotCalled(GinkgoT(), "RunCommand", mock.Anything, mock.Anything, mock.Anything)
+			})
+
+			It("fails when the jumpbox has no internal IP, rather than pointing hosts at a proxy without an address", func() {
+				bs.Env.HostOS = gcp.HostOSRHEL9
+				bs.Env.Airgapped = true
+				bs.Env.Jumpbox.InternalIP = ""
+
+				err := bs.EnsureHostsConfigured()
+				Expect(err).To(MatchError(ContainSubstring("failed to find the package proxy for postgres: jumpbox has no internal IP")))
+				nodeClient.AssertNotCalled(GinkgoT(), "RunCommand", mock.Anything, mock.Anything, mock.Anything)
+			})
+
 			It("names the node when dnf cannot be pointed at the package proxy", func() {
 				bs.Env.HostOS = gcp.HostOSRHEL9
 				bs.Env.Airgapped = true
