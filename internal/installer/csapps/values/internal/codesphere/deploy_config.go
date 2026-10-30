@@ -5,6 +5,8 @@ package codesphere
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"k8s.io/utils/ptr"
@@ -14,14 +16,16 @@ import (
 )
 
 const (
-	defaultImageKey            = "ubuntu-24.04"
-	defaultImageName           = "Ubuntu 24.04"
-	defaultImageSupportedUntil = "2028-05-31"
-	defaultAgentBOMRef         = "workspace-agent-24.04"
-	defaultGPUAgentBOMRef      = "workspace-agent-24.04.gpu"
+	defaultImageKey       = "ubuntu-24.04"
+	defaultImageName      = "Ubuntu 24.04"
+	defaultAgentBOMRef    = "workspace-agent-24.04"
+	defaultGPUAgentBOMRef = "workspace-agent-24.04.gpu"
 )
 
-// deployment-service only allocates from the default and gpu pools, so any other flavor would pool unused pods.
+// The old installer's default, also in config_manager_profile.go and bootstrap's DefaultCodesphereDeployConfig.
+const defaultImageSupportedUntil = "2028-05-31"
+
+// deployment-service only reads the default and gpu flavors.
 var deployFlavors = []string{"default", "gpu"}
 
 // DeployConfig are the images workspaces deploy with.
@@ -45,8 +49,8 @@ type Flavor struct {
 
 func deployConfigValues(
 	conf files.CodesphereConfig,
-	registry *files.RegistryConfig,
 	imgs images.Images,
+	registry *files.RegistryConfig,
 ) (DeployConfig, error) {
 	configured := conf.DeployConfig.Images
 	if configured == nil {
@@ -56,7 +60,7 @@ func deployConfigValues(
 	resolved := make(map[string]DeployImage, len(configured))
 
 	for imageKey, image := range configured {
-		value, err := deployImageValues(imageKey, image, registry, imgs)
+		value, err := deployImageValues(imageKey, image, imgs, registry)
 		if err != nil {
 			return DeployConfig{}, fmt.Errorf("deployConfig image %s: %w", imageKey, err)
 		}
@@ -87,8 +91,7 @@ func defaultDeployImages(
 		"default": {Image: agent, Pool: pool(conf.Plans.HostingPlans, withoutGPU)},
 	}
 
-	bomHasGPUAgent := imgs[defaultGPUAgentBOMRef] != ""
-	if hasGPUAgent || bomHasGPUAgent {
+	if hasGPUAgent || imgs.Has(defaultGPUAgentBOMRef) {
 		flavors["gpu"] = files.FlavorConfig{
 			Image: gpuAgent,
 			Pool:  pool(conf.Plans.HostingPlans, withGPU),
@@ -133,8 +136,8 @@ func poolValues(instances map[int]int) map[string]int {
 func deployImageValues(
 	imageKey string,
 	image files.ImageConfig,
-	registry *files.RegistryConfig,
 	imgs images.Images,
+	registry *files.RegistryConfig,
 ) (DeployImage, error) {
 	supportedUntil, err := jsDateString(image.SupportedUntil)
 	if err != nil {
@@ -145,15 +148,14 @@ func deployImageValues(
 		return DeployImage{}, fmt.Errorf("the default flavor is required")
 	}
 
-	flavors := map[string]Flavor{}
+	flavors := make(map[string]Flavor, len(image.Flavors))
 
-	for _, flavorKey := range deployFlavors {
-		flavor, ok := image.Flavors[flavorKey]
-		if !ok {
-			continue
+	for flavorKey, flavor := range image.Flavors {
+		if !slices.Contains(deployFlavors, flavorKey) {
+			return DeployImage{}, fmt.Errorf("unsupported flavor %s (supported: %s)", flavorKey, strings.Join(deployFlavors, ", "))
 		}
 
-		resolved, err := flavorImage(imageKey, flavorKey, flavor.Image, registry, imgs)
+		resolved, err := flavorImage(imageKey, flavorKey, flavor.Image, imgs, registry)
 		if err != nil {
 			return DeployImage{}, fmt.Errorf("flavor %s: %w", flavorKey, err)
 		}
@@ -170,12 +172,12 @@ func deployImageValues(
 }
 
 // flavorImage resolves a flavor's image. A flavor with a Dockerfile uses the image built from it,
-// which `oms build-images` pushes to the registry as <image>-<flavor>.
+// which `oms build images` pushes to the registry as <image>-<flavor>.
 func flavorImage(
 	imageKey, flavorKey string,
 	image files.ImageRef,
-	registry *files.RegistryConfig,
 	imgs images.Images,
+	registry *files.RegistryConfig,
 ) (string, error) {
 	if image.ImageName == "" && image.Dockerfile != "" {
 		if registry == nil || registry.Server == "" {
@@ -185,7 +187,7 @@ func flavorImage(
 		return registry.WorkspaceImage(imageKey, flavorKey), nil
 	}
 
-	resolved, err := workspaceImage(imgs, image)
+	resolved, err := workspaceImage(image, imgs)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve the workspace image: %w", err)
 	}

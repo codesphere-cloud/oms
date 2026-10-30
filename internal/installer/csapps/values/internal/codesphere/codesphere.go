@@ -44,7 +44,7 @@ type TLSCertificate struct {
 
 // Values builds the global values from config.codesphere. The images also depend on the registry.
 func Values(conf files.CodesphereConfig, imgs images.Images, registry *files.RegistryConfig) (Codesphere, error) {
-	deployConfig, err := deployConfigValues(conf, registry, imgs)
+	deployConfig, err := deployConfigValues(conf, imgs, registry)
 	if err != nil {
 		return Codesphere{}, err
 	}
