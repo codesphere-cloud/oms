@@ -43,31 +43,11 @@ type Flavor struct {
 	Pool  map[string]int `yaml:"pool"`
 }
 
-func validateDeployConfig(conf files.CodesphereConfig) error {
-	if conf.DeployConfig.Images == nil {
-		return nil
-	}
-
-	for _, plan := range conf.Plans.HostingPlans {
-		if plan.PooledInstances != nil && *plan.PooledInstances != 0 {
-			return fmt.Errorf(
-				"configuring .deployConfig AND .pooledInstances is ambiguous (remove the .pooledInstances config)",
-			)
-		}
-	}
-
-	return nil
-}
-
 func deployConfigValues(
 	conf files.CodesphereConfig,
 	registry *files.RegistryConfig,
 	imgs images.Images,
 ) (DeployConfig, error) {
-	if err := validateDeployConfig(conf); err != nil {
-		return DeployConfig{}, err
-	}
-
 	configured := conf.DeployConfig.Images
 	if configured == nil {
 		configured = defaultDeployImages(conf, imgs)
@@ -197,7 +177,11 @@ func flavorImage(
 	registry *files.RegistryConfig,
 	imgs images.Images,
 ) (string, error) {
-	if image.ImageName == "" && image.Dockerfile != "" && registry != nil && registry.Server != "" {
+	if image.ImageName == "" && image.Dockerfile != "" {
+		if registry == nil || registry.Server == "" {
+			return "", fmt.Errorf("the Dockerfile %s needs a registry server to push the built image to", image.Dockerfile)
+		}
+
 		return registry.WorkspaceImage(imageKey, flavorKey), nil
 	}
 
