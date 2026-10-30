@@ -49,7 +49,7 @@ $ oms init k0s-config --install-config <path> --airgapped --path <bundle>
   -p, --package string          Package file (e.g. codesphere-v1.2.3-installer-lite.tar.gz) to load k0s from
       --path string             Path to the k0s airgap image bundle (requires --airgapped; default: the bundle in the OMS cache)
       --ssh-key-path string     SSH private key path for remote installation
-  -v, --version string          Version of k0s to install (default "v1.31.14+k0s.0")
+  -v, --version string          Version of k0s to install (default "v1.36.5+k0s.0")
   -y, --yes                     Overwrite an existing k0sctl config without asking
 ```
 
