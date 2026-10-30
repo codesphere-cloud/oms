@@ -1859,7 +1859,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				Expect(bs.EnsurePackageProxy()).To(Succeed())
 				Expect(commands).To(ContainElement(
 					"printf '%s\\n' 'http_port 3128' 'acl vpc src 10.10.0.0/20' " +
-						"'acl package_repos dstdomain \"/etc/squid/allowed-domains\"' 'acl https_port port 443' 'acl http_port port 80' " +
+						"'acl package_repos dstdomain -n \"/etc/squid/allowed-domains\"' 'acl https_port port 443' 'acl http_port port 80' " +
 						"'acl CONNECT method CONNECT' 'http_access allow vpc CONNECT https_port package_repos' " +
 						"'http_access allow vpc !CONNECT http_port package_repos' " +
 						"'http_access deny all' > /etc/oms/package-proxy/squid.conf",
@@ -2068,7 +2068,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 				bs.Env.HostOS = gcp.HostOSRHEL9
 				bs.Env.Airgapped = true
 
-				const proxyCommand = "sed -i '/^proxy=/d' /etc/dnf/dnf.conf" +
+				const proxyCommand = "sed -i '/^[[:space:]]*proxy[[:space:]]*=/d' /etc/dnf/dnf.conf" +
 					` && sed -i '/^\[main\]/a proxy=http://10.0.0.1:3128' /etc/dnf/dnf.conf` +
 					" && grep -qx 'proxy=http://10.0.0.1:3128' /etc/dnf/dnf.conf"
 
@@ -2101,7 +2101,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 					RunAndReturn(func(n *node.Node, _ string, command string) error {
 						Expect(command).NotTo(ContainSubstring("proxy=http"))
 
-						if command == "sed -i '/^proxy=/d' /etc/dnf/dnf.conf" {
+						if command == "sed -i '/^[[:space:]]*proxy[[:space:]]*=/d' /etc/dnf/dnf.conf" {
 							removals[n.GetName()]++
 						}
 
@@ -2216,7 +2216,7 @@ var _ = Describe("GCP Bootstrapper", func() {
 			It("names the packages and the node when the RHEL package install fails", func() {
 				bs.Env.HostOS = gcp.HostOSRHEL9
 
-				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sed -i '/^proxy=/d' /etc/dnf/dnf.conf").Return(nil).Once()
+				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "sed -i '/^[[:space:]]*proxy[[:space:]]*=/d' /etc/dnf/dnf.conf").Return(nil).Once()
 				nodeClient.EXPECT().RunCommand(mock.Anything, "root", "dnf install -y lvm2 container-selinux").Return(fmt.Errorf("no repos")).Once()
 
 				err := bs.EnsureHostsConfigured()

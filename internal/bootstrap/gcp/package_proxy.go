@@ -28,7 +28,9 @@ const (
 var packageProxyConfig = []string{
 	"http_port " + packageProxyPort,
 	"acl vpc src " + vpcSubnetCIDR,
-	"acl package_repos dstdomain \"/etc/squid/allowed-domains\"",
+	// -n keeps squid from reverse-resolving an IP-literal destination to match it, which would let
+	// a PTR record naming an allowed host authorize a tunnel to any address.
+	"acl package_repos dstdomain -n \"/etc/squid/allowed-domains\"",
 	"acl https_port port 443",
 	"acl http_port port 80",
 	"acl CONNECT method CONNECT",
@@ -61,7 +63,9 @@ func (p dnfPackageProxy) configureCommand(proxyURL string) string {
 }
 
 func (p dnfPackageProxy) removeCommand() string {
-	return "sed -i '/^proxy=/d' " + p.configFile
+	// dnf's INI parser also accepts an indented assignment and blanks around the equals sign, and
+	// the last assignment wins, so an old proxy spelled that way would outlive the removal.
+	return "sed -i '/^[[:space:]]*proxy[[:space:]]*=/d' " + p.configFile
 }
 
 // aptPackageProxy keeps the proxy in a drop-in file of its own, so the image's apt configuration is
