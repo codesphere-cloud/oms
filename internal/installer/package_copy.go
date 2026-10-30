@@ -135,6 +135,7 @@ func readLegacyBOM(packageManager PackageManager) (*bom.Config, error) {
 type packageBOM interface {
 	GetContainerImages() []string
 	GetChartRefs() []string
+	GetCodesphereContainerImages() (map[string]string, error)
 }
 
 // registrySegmentReplacer flattens a registry into a single path segment.

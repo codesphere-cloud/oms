@@ -41,6 +41,25 @@ type HelmChartV2 struct {
 	Ref string `json:"ref"`
 }
 
+// GetCodesphereContainerImages returns named image refs for workspace image builds.
+// Keep the declared tag: workspace builds use it to name the derived image.
+func (b *IndexV3) GetCodesphereContainerImages() (map[string]string, error) {
+	for _, component := range b.Components {
+		if component.Name != "codesphere" {
+			continue
+		}
+
+		images := make(map[string]string, len(component.ContainerImages))
+		for name, image := range component.ContainerImages {
+			images[name] = image.Ref
+		}
+
+		return images, nil
+	}
+
+	return nil, fmt.Errorf("codesphere component not found in BOM index")
+}
+
 // ParseIndex parses a BOM index, accepting only v3 indexes with v2 components.
 func ParseIndex(data []byte) (*IndexV3, error) {
 	var index IndexV3

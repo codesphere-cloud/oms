@@ -367,7 +367,7 @@ var _ = Describe("Package GetFullImageTag", func() {
 			It("returns an error", func() {
 				_, err := pkg.GetFullImageTag("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
+				Expect(err.Error()).To(ContainSubstring("failed to load package BOM"))
 			})
 		})
 
@@ -384,7 +384,7 @@ var _ = Describe("Package GetFullImageTag", func() {
 
 				_, err = pkg.GetFullImageTag("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to load bom.json"))
+				Expect(err.Error()).To(ContainSubstring("failed to load package BOM"))
 			})
 		})
 
@@ -408,7 +408,7 @@ var _ = Describe("Package GetFullImageTag", func() {
 
 				_, err = pkg.GetFullImageTag("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to get codesphere container images from bom.json"))
+				Expect(err.Error()).To(ContainSubstring("failed to get codesphere container images from package BOM"))
 			})
 		})
 
@@ -434,7 +434,7 @@ var _ = Describe("Package GetFullImageTag", func() {
 
 				_, err = pkg.GetFullImageTag("workspace-agent-24.04")
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("baseimage workspace-agent-24.04 not found in bom.json"))
+				Expect(err.Error()).To(ContainSubstring("baseimage workspace-agent-24.04 not found in package BOM"))
 			})
 		})
 
