@@ -16,7 +16,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/util"
 )
 
-const depsDir = "deps"
+// DepsDir is the dependencies directory within an extracted installer package.
+const DepsDir = "deps"
 const depsTar = "deps.tar.gz"
 
 //mockery:generate: true
@@ -64,7 +65,7 @@ func (p *Package) GetWorkDir() string {
 // GetDependencyPath returns the full path to a dependency file within the package's deps directory.
 func (p *Package) GetDependencyPath(filename string) string {
 	workDir := p.GetWorkDir()
-	return path.Join(workDir, depsDir, filename)
+	return path.Join(workDir, DepsDir, filename)
 }
 
 // alreadyExtracted checks if the package has already been extracted to the given directory.
@@ -105,7 +106,7 @@ func (p *Package) Extract(force bool, verbose bool) error {
 
 	depsArchivePath := path.Join(workDir, depsTar)
 	if p.fileIO.Exists(depsArchivePath) {
-		depsTargetDir := path.Join(workDir, depsDir)
+		depsTargetDir := path.Join(workDir, DepsDir)
 
 		err = util.ExtractTarGz(p.fileIO, depsArchivePath, depsTargetDir, verbose)
 		if err != nil {
@@ -129,7 +130,7 @@ func (p *Package) ExtractDependency(file string, force bool, verbose bool) error
 		return nil
 	}
 
-	err = util.ExtractTarGzSingleFile(p.fileIO, path.Join(workDir, "deps.tar.gz"), file, path.Join(workDir, depsDir), verbose)
+	err = util.ExtractTarGzSingleFile(p.fileIO, path.Join(workDir, "deps.tar.gz"), file, path.Join(workDir, DepsDir), verbose)
 	if err != nil {
 		return fmt.Errorf("failed to extract dependency %s from deps archive to %s: %w", file, workDir, err)
 	}
@@ -155,23 +156,29 @@ func (p *Package) ExtractOciImageIndex(imagefile string, verbose bool) (files.OC
 }
 
 func (p *Package) GetFullImageTag(baseimage string) (string, error) {
+	return ReadPackageBaseImage(p, baseimage)
+}
+
+// ReadPackageBaseImage looks up a workspace base image by its codesphere BOM key.
+// It prefers the index and falls back to the legacy BOM only when the index is absent.
+func ReadPackageBaseImage(packageManager PackageManager, baseimage string) (string, error) {
 	if baseimage == "" {
 		return "", fmt.Errorf("baseimage not specified")
 	}
 
-	bomJson, err := bom.Parse(p.GetDependencyPath("bom.json"))
+	packageConfig, err := readPackageBOM(packageManager)
 	if err != nil {
-		return "", fmt.Errorf("failed to load bom.json: %w", err)
+		return "", fmt.Errorf("failed to load package BOM: %w", err)
 	}
 
-	containerImages, err := bomJson.GetCodesphereContainerImages()
+	containerImages, err := packageConfig.GetCodesphereContainerImages()
 	if err != nil {
-		return "", fmt.Errorf("failed to get codesphere container images from bom.json: %w", err)
+		return "", fmt.Errorf("failed to get codesphere container images from package BOM: %w", err)
 	}
 
 	imageName, exists := containerImages[baseimage]
 	if !exists {
-		return "", fmt.Errorf("baseimage %s not found in bom.json", baseimage)
+		return "", fmt.Errorf("baseimage %s not found in package BOM", baseimage)
 	}
 
 	return imageName, nil
@@ -202,12 +209,12 @@ func (p *Package) GetBaseimagePath(baseimage string, force bool, verbose bool) (
 }
 
 func (p *Package) GetCodesphereVersion() (string, error) {
-	bomJson, err := bom.Parse(p.GetDependencyPath("bom.json"))
+	bomJSON, err := bom.Parse(p.GetDependencyPath(bom.Filename))
 	if err != nil {
 		return "", fmt.Errorf("failed to load bom.json: %w", err)
 	}
 
-	containerImages, err := bomJson.GetCodesphereContainerImages()
+	containerImages, err := bomJSON.GetCodesphereContainerImages()
 	if err != nil {
 		return "", fmt.Errorf("failed to get codesphere container images from bom.json: %w", err)
 	}

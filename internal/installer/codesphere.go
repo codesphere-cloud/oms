@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/prompt"
 	"github.com/codesphere-cloud/oms/internal/system"
@@ -216,7 +217,7 @@ func (ci *CodesphereInstaller) ExtractAndValidatePackage(pm PackageManager) erro
 		return fmt.Errorf("node executable not found in package")
 	}
 
-	if err := pm.ExtractDependency("bom.json", ci.Force, ci.Verbose); err != nil {
+	if err := pm.ExtractDependency(bom.Filename, ci.Force, ci.Verbose); err != nil {
 		return fmt.Errorf("failed to extract package to workdir: %w", err)
 	}
 
