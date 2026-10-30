@@ -75,7 +75,7 @@ var _ = Describe("Local bootstrap chart registry URL", func() {
 	It("returns a parse error for an invalid registry port", func() {
 		env := &CodesphereEnvironment{RegistryURL: "registry.example.com:invalid/mirror"}
 		_, err := env.chartsRegistryURL()
-		Expect(err).To(MatchError(ContainSubstring("parse chart registry URL")))
+		Expect(err).To(MatchError(ContainSubstring("parse image registry")))
 	})
 
 	It("joins paths for a registry host with a port", func() {
