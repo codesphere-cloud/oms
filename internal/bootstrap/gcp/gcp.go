@@ -1112,9 +1112,22 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 		return err
 	}
 
+	hostOSSettings, err := b.Env.HostOS.settings()
+	if err != nil {
+		return fmt.Errorf("failed to get the host OS settings: %w", err)
+	}
+
 	allNodes := append([]*node.Node{b.Env.PostgreSQLNode}, b.clusterNodes()...)
 
 	for _, node := range allNodes {
+		if err := ensureHostPackages(node, hostOSSettings); err != nil {
+			return fmt.Errorf("failed to ensure host packages: %w", err)
+		}
+
+		if err := ensureDocker(node, hostOSSettings); err != nil {
+			return fmt.Errorf("failed to ensure Docker: %w", err)
+		}
+
 		if !node.HasInotifyWatchesConfigured() {
 			err := node.ConfigureInotifyWatches()
 			if err != nil {
@@ -1148,6 +1161,46 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 			if err != nil {
 				return fmt.Errorf("failed to create secrets directory on %s: %w", n.GetName(), err)
 			}
+		}
+	}
+
+	return nil
+}
+
+// ensureHostPackages installs the packages the host OS lacks for Codesphere on the node. dnf and
+// apt-get skip packages that are already installed, so this is safe to re-run.
+func ensureHostPackages(n *node.Node, hostOSSettings hostOSSettings) error {
+	if len(hostOSSettings.hostPackages) == 0 {
+		return nil
+	}
+
+	for _, cmd := range hostOSSettings.installCommands(hostOSSettings.hostPackages) {
+		err := n.RunSSHCommand("root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to install %s on %s: %w", strings.Join(hostOSSettings.hostPackages, ", "), n.GetName(), err)
+		}
+	}
+
+	return nil
+}
+
+// ensureDocker installs and starts Docker on the node where the installer does not provide it.
+// The installer's docker step only checks that Docker runs, so it has to be there before the
+// installation starts. A node that already runs Docker is left alone, so a re-run neither needs the
+// Docker repository to be reachable nor touches healthy hosts.
+func ensureDocker(n *node.Node, hostOSSettings hostOSSettings) error {
+	if len(hostOSSettings.dockerInstallCommands) == 0 {
+		return nil
+	}
+
+	if n.RunSSHCommand("root", hostOSSettings.dockerInstalledCommand) == nil {
+		return nil
+	}
+
+	for _, cmd := range hostOSSettings.dockerInstallCommands {
+		err := n.RunSSHCommand("root", cmd)
+		if err != nil {
+			return fmt.Errorf("failed to install Docker on %s: %w", n.GetName(), err)
 		}
 	}
 

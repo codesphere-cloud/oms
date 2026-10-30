@@ -268,18 +268,20 @@ func (b *GCPBootstrapper) ensureRegistryRunning(registryNode *node.Node, hostOSS
 		"htpasswd -bBc /root/registry.password " + registryUsername + " " + registryPassword,
 		"openssl req -newkey rsa:4096 -nodes -sha256 -keyout /root/registry.key -x509 -days 365 -out " + jumpboxRegistryCertFile + " -subj \"/C=DE/ST=BW/L=Karlsruhe/O=Codesphere/CN=" + registryNode.GetInternalIP() + "\" -addext \"subjectAltName = DNS:" + registryNode.GetName() + ",IP:" + registryNode.GetInternalIP() + "\"",
 		"podman rm -f registry || true",
+		// :Z relabels the mounted files for the container, which SELinux would otherwise deny
+		// access to. Hosts without SELinux ignore it.
 		`podman run -d \
 		--restart=always --name registry --net=host\
 		--env REGISTRY_HTTP_ADDR=0.0.0.0:443 \
 		--env REGISTRY_AUTH=htpasswd \
 		--env REGISTRY_AUTH_HTPASSWD_REALM='Registry Realm' \
 		--env REGISTRY_AUTH_HTPASSWD_PATH=/auth/registry.password \
-		-v /root/registry.password:/auth/registry.password \
+		-v /root/registry.password:/auth/registry.password:Z \
 		--env REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
 		--env REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
-		-v ` + jumpboxRegistryCertFile + `:/certs/registry.crt \
-		-v /root/registry.key:/certs/registry.key \
-		registry:3`,
+		-v ` + jumpboxRegistryCertFile + `:/certs/registry.crt:Z \
+		-v /root/registry.key:/certs/registry.key:Z \
+		docker.io/library/registry:3`,
 		`mkdir -p /etc/docker/certs.d/` + localRegistryServer,
 		`cp ` + jumpboxRegistryCertFile + ` /etc/docker/certs.d/` + localRegistryServer + `/ca.crt`,
 	}...)

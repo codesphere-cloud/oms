@@ -75,6 +75,7 @@ oms beta bootstrap-gcp [flags]
       --openbao-password string                   OpenBao password (optional)
       --openbao-uri string                        URI for OpenBao (optional)
       --openbao-user string                       OpenBao username (optional) (default "admin")
+      --os string                                 Operating system of all VMs (options: rhel-9, ubuntu). rhel-9 boots RHEL 9.6 with Extended Update Support, which GCP bills as a premium image. Existing VMs keep their OS (default "ubuntu")
       --pc-apps-values stringArray                pc-apps values YAML file passed unchanged to the Codesphere installation (can be specified multiple times, optional)
       --preemptible                               Use preemptible VMs for Codesphere infrastructure. Mutually exclusive with --spot-vms (default: false)
       --preview-flags stringArray                 Preview flags to enable in Codesphere installation (optional) (default [openfga-authz,secret-management,sub-path-mount,workspace-ssh,virtual-machines])

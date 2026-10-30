@@ -265,4 +265,18 @@ var _ = Describe("Single VM configuration", func() {
 		nodeClient.EXPECT().RunCommand(n, "root", "mkdir -p /root/.kube /root/codesphere").Return(nil).Once()
 		Expect(b.configureSingleVMHost()).To(Succeed())
 	})
+
+	It("fails for an unsupported host OS", func() {
+		b.Env.HostOS = "debian-12"
+
+		Expect(b.configureSingleVMHost()).To(MatchError(ContainSubstring(`get host OS settings: unsupported host OS "debian-12"`)))
+	})
+
+	It("installs the RHEL host packages on the VM", func() {
+		b.Env.HostOS = HostOSRHEL9
+
+		nodeClient.EXPECT().RunCommand(n, "root", "dnf install -y lvm2 container-selinux").Return(nil).Once()
+		nodeClient.EXPECT().RunCommand(n, "root", mock.Anything).Return(nil)
+		Expect(b.configureSingleVMHost()).To(Succeed())
+	})
 })
