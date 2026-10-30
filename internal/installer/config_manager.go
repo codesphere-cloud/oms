@@ -283,6 +283,7 @@ func validateWorkspaceImageBuilds(config *files.RootConfig) []string {
 	}
 
 	errors := []string{}
+
 	for _, image := range workspaceAgentImages(config.Codesphere) {
 		if image.Dockerfile != "" && image.ImageName == "" {
 			errors = append(errors, fmt.Sprintf("workspace image Dockerfile %s requires registry.server to push the built image to", image.Dockerfile))
@@ -297,9 +298,11 @@ func workspaceAgentImages(config files.CodesphereConfig) []files.ImageRef {
 	if config.WorkspaceImages != nil && config.WorkspaceImages.Agent != nil {
 		images = append(images, *config.WorkspaceImages.Agent)
 	}
+
 	if config.WorkspaceImages != nil && config.WorkspaceImages.AgentGpu != nil {
 		images = append(images, *config.WorkspaceImages.AgentGpu)
 	}
+
 	for _, image := range config.DeployConfig.Images {
 		for _, flavor := range image.Flavors {
 			images = append(images, flavor.Image)
