@@ -11,6 +11,21 @@ import (
 )
 
 var _ = Describe("Codesphere skip steps", func() {
+	It("always excludes archive loading even when the config enables it", func() {
+		config := files.RootConfig{
+			Registry: &files.RegistryConfig{LoadContainerImages: true},
+		}
+		ci := &installer.CodesphereInstaller{}
+
+		Expect(ci.ExecutableSteps(config)).NotTo(ContainElement("load-container-images"))
+	})
+
+	It("does not execute archive loading when it is explicitly allowed", func() {
+		ci := &installer.CodesphereInstaller{AllowedSteps: []string{"load-container-images"}}
+
+		Expect(ci.HasExecutableSteps(files.RootConfig{})).To(BeFalse())
+	})
+
 	It("detects persisted and CLI skip steps", func() {
 		config := files.RootConfig{
 			Operations: &files.OperationsConfig{
@@ -73,7 +88,6 @@ var _ = Describe("Codesphere skip steps", func() {
 
 		Expect(ci.ExecutableSteps(config)).To(Equal([]string{
 			"copy-dependencies",
-			"load-container-images",
 			"sops",
 			"postgres",
 			"ceph",

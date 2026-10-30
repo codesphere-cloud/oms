@@ -61,7 +61,7 @@ oms beta bootstrap-gcp multi-node [flags]
   -s, --install-skip-steps stringArray            Installation steps to skip during Codesphere installation (optional)
       --install-version string                    Codesphere version to install (default: none)
       --internal-flags stringArray                Internal flags to enable in Codesphere installation (optional) (default [headless-services,vcluster,custom-service-image,ms-in-ls])
-      --k0s-version string                        K0s version to use for bootstrapping (optional) (default "v1.31.14+k0s.0")
+      --k0s-version string                        K0s version to use for bootstrapping (optional) (default "v1.36.5+k0s.0")
       --local-trace-endpoint string               Endpoint for exporting traces to an in-cluster storage (optional)
       --machine-type string                       GCP machine type override for all VMs (default: role-specific sizes; e2-standard-8 for a single VM)
       --multi-dc                                  Bootstrap two data centers that share one PostgreSQL server but run separate Kubernetes and Ceph clusters. Doubles the Ceph and k0s nodes to 14 VMs (~100 vCPUs) and reserves 6 static IPs, so the region's CPU quota may need raising. Cannot be combined with --datacenter-id. (default: false)
