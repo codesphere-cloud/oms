@@ -5,7 +5,6 @@ package codesphere
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"k8s.io/utils/ptr"
@@ -199,7 +198,7 @@ func flavorImage(
 	imgs images.Images,
 ) (string, error) {
 	if image.ImageName == "" && image.Dockerfile != "" && registry != nil && registry.Server != "" {
-		return fmt.Sprintf("%s/%s-%s", strings.TrimRight(registry.Server, "/"), imageKey, flavorKey), nil
+		return registry.WorkspaceImage(imageKey, flavorKey), nil
 	}
 
 	resolved, err := workspaceImage(imgs, image)
