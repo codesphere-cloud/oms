@@ -95,6 +95,12 @@ type CodesphereInstaller struct {
 	// LocalComponents runs install-components.js on this host for the selected steps.
 	LocalComponents bool
 	LocalConfigDir  string
+	// SkipChartDeploy sets up the Codesphere secrets and database, but leaves the chart to OMS,
+	// which deploys it through ArgoCD.
+	SkipChartDeploy bool
+	// InstalledVersion is the Codesphere version ArgoCD last deployed, which the installer
+	// migrates the database from. ArgoCD leaves no Helm release to read it from.
+	InstalledVersion string
 }
 
 // Install validates the platform, extracts the package, builds any custom workspace images,
@@ -431,6 +437,9 @@ func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config file
 			"--component", components[step], "--configDir", configDir,
 			"--dependenciesDir", filepath.Join(bundleDir, "deps"),
 			"--config", ci.ConfigPath, "--privKey", privKey}
+		if step == CodesphereStep {
+			args = append(args, ci.argoCDHandoverArgs()...)
+		}
 
 		ctx := ci.Context
 		if ctx == nil {
@@ -486,7 +495,20 @@ func (ci *CodesphereInstaller) installerCommandArgs(pm PackageManager, config fi
 		cmdArgs = append(cmdArgs, "--directConnection")
 	}
 
-	return cmdArgs, nil
+	return append(cmdArgs, ci.argoCDHandoverArgs()...), nil
+}
+
+func (ci *CodesphereInstaller) argoCDHandoverArgs() []string {
+	args := []string{}
+	if ci.SkipChartDeploy {
+		args = append(args, "--skipChartDeploy")
+	}
+
+	if ci.InstalledVersion != "" {
+		args = append(args, "--installedVersion", ci.InstalledVersion)
+	}
+
+	return args
 }
 
 func (ci *CodesphereInstaller) executableInstallerSteps(config files.RootConfig) map[string]bool {

@@ -53,6 +53,10 @@ func (o *OpenBaoInstaller) OperatorRunningClusterWide() (bool, error) {
 	return o.operatorRunningClusterWide()
 }
 
+func (ci *CodesphereInstaller) ArgoCDHandoverArgs() []string {
+	return ci.argoCDHandoverArgs()
+}
+
 func BuildRetryJoinAddrs(replicas int, namespace string) []string {
 	return buildRetryJoinAddrs(replicas, namespace)
 }

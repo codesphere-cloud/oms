@@ -57,4 +57,22 @@ var _ = Describe("Codesphere installer", func() {
 
 		Expect(err).To(MatchError(ContainSubstring("postgres.serverAddress must not be set when postgres.mode is 'install'")))
 	})
+
+	It("deploys through ArgoCD with an installed version -> skips the chart, migrates from that version", func() {
+		ci := &installer.CodesphereInstaller{SkipChartDeploy: true, InstalledVersion: "1.113.0"}
+
+		Expect(ci.ArgoCDHandoverArgs()).To(Equal([]string{"--skipChartDeploy", "--installedVersion", "1.113.0"}))
+	})
+
+	It("deploys through ArgoCD, nothing installed yet -> skips the chart, no installed version", func() {
+		ci := &installer.CodesphereInstaller{SkipChartDeploy: true}
+
+		Expect(ci.ArgoCDHandoverArgs()).To(Equal([]string{"--skipChartDeploy"}))
+	})
+
+	It("deploys through Helm -> no hand-over flags", func() {
+		ci := &installer.CodesphereInstaller{}
+
+		Expect(ci.ArgoCDHandoverArgs()).To(BeEmpty())
+	})
 })

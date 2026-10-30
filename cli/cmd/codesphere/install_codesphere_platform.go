@@ -95,10 +95,12 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 
 	var kubeClient client.Client
 
+	installedVersion := ""
+
 	if viaArgoCD {
 		var err error
 
-		kubeClient, err = handOverDeployToArgoCD(ctx, opts, cfg)
+		kubeClient, installedVersion, err = readArgoCDInstall(ctx, opts, cfg)
 		if err != nil {
 			return err
 		}
@@ -126,6 +128,8 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		LocalComponents:   opts.LocalComponents,
 		LocalConfigDir:    opts.LocalConfigDir,
 		SkipImageBuilding: opts.LocalComponents,
+		SkipChartDeploy:   viaArgoCD,
+		InstalledVersion:  installedVersion,
 		Context:           ctx,
 	}
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
@@ -141,29 +145,25 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 	return nil
 }
 
-// handOverDeployToArgoCD tells the Codesphere installer to leave the chart to OMS, and which
-// version ArgoCD has installed, before the installer migrates the database.
-func handOverDeployToArgoCD(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) (client.Client, error) {
+// readArgoCDInstall returns a client for the cluster and the Codesphere version ArgoCD has
+// installed there, which the installer migrates the database from.
+func readArgoCDInstall(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) (client.Client, string, error) {
 	_, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load the Kubernetes config: %w", err)
+		return nil, "", fmt.Errorf("failed to load the Kubernetes config: %w", err)
 	}
 
 	kubeClient, err := installer.NewKubeClient(restConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Kubernetes client: %w", err)
+		return nil, "", fmt.Errorf("failed to create Kubernetes client: %w", err)
 	}
 
 	installedVersion, err := csapps.InstalledVersion(ctx, kubeClient, &cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read the installed Codesphere version: %w", err)
+		return nil, "", fmt.Errorf("failed to read the installed Codesphere version: %w", err)
 	}
 
-	if err := csapps.HandOverToInstaller(opts.ConfigPath, installedVersion); err != nil {
-		return nil, fmt.Errorf("failed to hand the chart deploy over to OMS: %w", err)
-	}
-
-	return kubeClient, nil
+	return kubeClient, installedVersion, nil
 }
 
 func deployCodesphereViaArgoCD(ctx context.Context, kubeClient client.Client, cfg files.RootConfig, pm installer.PackageManager) error {

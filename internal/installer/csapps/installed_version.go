@@ -6,11 +6,9 @@ package csapps
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/Masterminds/semver/v3"
 	argov1alpha1 "github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1"
-	"go.yaml.in/yaml/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -46,41 +44,4 @@ func InstalledVersion(ctx context.Context, kubeClient client.Client, cfg *files.
 	}
 
 	return fmt.Sprintf("%d.%d.%d", version.Major(), version.Minor(), version.Patch()), nil
-}
-
-// HandOverToInstaller tells the Codesphere installer, through the merged config at configPath,
-// that OMS deploys the chart, and which version is installed. The installer would otherwise read
-// the installed version from a Helm release, which ArgoCD does not create.
-func HandOverToInstaller(configPath, installedVersion string) error {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return fmt.Errorf("failed to read config %s: %w", configPath, err)
-	}
-
-	config := map[string]any{}
-	if err := yaml.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("failed to parse config %s: %w", configPath, err)
-	}
-
-	codesphere, ok := config["codesphere"].(map[string]any)
-	if !ok {
-		codesphere = map[string]any{}
-		config["codesphere"] = codesphere
-	}
-
-	codesphere["skipChartDeploy"] = true
-	if installedVersion != "" {
-		codesphere["installedVersion"] = installedVersion
-	}
-
-	updated, err := yaml.Marshal(config)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
-	if err := os.WriteFile(configPath, updated, 0o600); err != nil {
-		return fmt.Errorf("failed to write config %s: %w", configPath, err)
-	}
-
-	return nil
 }
