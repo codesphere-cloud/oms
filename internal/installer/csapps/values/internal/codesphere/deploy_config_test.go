@@ -35,7 +35,7 @@ var _ = Describe("Deploy config", func() {
 			}},
 		}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		values, err := codesphere.Values(conf, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.DeployConfig).To(Equal(codesphere.DeployConfig{
@@ -65,7 +65,7 @@ var _ = Describe("Deploy config", func() {
 			"workspace-agent-24.04.gpu": imagePrefix + "workspace-agent-24.04-gpu:v1.2.3",
 		})
 
-		values, err := codesphere.Values(conf, imgs, noRegistry)
+		values, err := codesphere.Values(conf, codesphere.Inputs{Images: imgs, Gateways: defaultTestGateways()})
 		Expect(err).NotTo(HaveOccurred())
 
 		flavors := deployImage(values, "ubuntu-24.04").Flavors
@@ -82,7 +82,7 @@ var _ = Describe("Deploy config", func() {
 			"gpu":     {Image: agent, Pool: map[int]int{9: 2}},
 		})
 
-		values, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		values, err := codesphere.Values(conf, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(deployImage(values, "ubuntu-22.04")).To(Equal(codesphere.DeployImage{
@@ -102,7 +102,7 @@ var _ = Describe("Deploy config", func() {
 			"minimal": {Image: agent},
 		})
 
-		_, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		_, err := codesphere.Values(conf, defaultTestInputs())
 
 		Expect(err).To(MatchError(ContainSubstring("unsupported flavor minimal")))
 	})
@@ -110,7 +110,7 @@ var _ = Describe("Deploy config", func() {
 	It("image without a default flavor -> error", func() {
 		conf := deployConfigWith(map[string]files.FlavorConfig{"gpu": {Image: agent}})
 
-		_, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		_, err := codesphere.Values(conf, defaultTestInputs())
 
 		Expect(err).To(MatchError(ContainSubstring("the default flavor is required")))
 	})
@@ -121,7 +121,7 @@ var _ = Describe("Deploy config", func() {
 		image.SupportedUntil = "next year"
 		conf.DeployConfig.Images["ubuntu-22.04"] = image
 
-		_, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		_, err := codesphere.Values(conf, defaultTestInputs())
 
 		Expect(err).To(MatchError(ContainSubstring(`invalid date "next year"`)))
 	})
@@ -131,7 +131,7 @@ var _ = Describe("Deploy config", func() {
 			"default": {Image: files.ImageRef{BomRef: "workspace-agent-20.04"}},
 		})
 
-		_, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		_, err := codesphere.Values(conf, defaultTestInputs())
 
 		Expect(err).To(MatchError(ContainSubstring("workspace-agent-20.04 not found")))
 	})
@@ -141,7 +141,7 @@ var _ = Describe("Deploy config", func() {
 			Agent: &files.ImageRef{BomRef: "workspace-agent-24.04", Dockerfile: "Dockerfile.agent"},
 		}}
 
-		_, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		_, err := codesphere.Values(conf, defaultTestInputs())
 
 		Expect(err).To(MatchError(ContainSubstring("Dockerfile.agent needs a registry server")))
 	})
@@ -151,7 +151,7 @@ var _ = Describe("Deploy config", func() {
 			Agent: &files.ImageRef{ImageName: "registry.example.com/agent", Dockerfile: "Dockerfile.agent"},
 		}}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), noRegistry)
+		values, err := codesphere.Values(conf, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(deployImage(values, "ubuntu-24.04").Flavors["default"].Image).To(Equal("registry.example.com/agent"))
@@ -163,7 +163,9 @@ var _ = Describe("Deploy config", func() {
 		}}
 		registry := &files.RegistryConfig{Server: "registry.example.com"}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), registry)
+		values, err := codesphere.Values(conf, codesphere.Inputs{
+			Images: defaultTestImages(), Gateways: defaultTestGateways(), Registry: registry,
+		})
 		Expect(err).NotTo(HaveOccurred())
 
 		defaultFlavor := deployImage(values, "ubuntu-24.04").Flavors["default"]
@@ -176,7 +178,9 @@ var _ = Describe("Deploy config", func() {
 		}}
 		registry := &files.RegistryConfig{Server: "registry.example.com/private-cloud/"}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), registry)
+		values, err := codesphere.Values(conf, codesphere.Inputs{
+			Images: defaultTestImages(), Gateways: defaultTestGateways(), Registry: registry,
+		})
 		Expect(err).NotTo(HaveOccurred())
 
 		defaultFlavor := deployImage(values, "ubuntu-24.04").Flavors["default"]

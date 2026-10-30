@@ -82,7 +82,7 @@ var _ = Describe("Values", func() {
 				},
 			},
 			WorkspaceRouter: platform.WorkspaceRouter{
-				Image:      platform.Image{Name: namePrefix + "nginx", Tag: "1.31.5-alpine-otel"},
+				Image:      images.Image{Name: namePrefix + "nginx", Tag: "1.31.5-alpine-otel"},
 				HAReplicas: 2,
 			},
 			WorkspaceObservability: platform.WorkspaceObservability{

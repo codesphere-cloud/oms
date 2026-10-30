@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
+	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/cluster"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/csapps/values/internal/images"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -14,7 +15,13 @@ import (
 
 const imagePrefix = "ghcr.io/codesphere-cloud/codesphere-monorepo/"
 
-var noRegistry *files.RegistryConfig
+func defaultTestInputs() codesphere.Inputs {
+	return codesphere.Inputs{Images: defaultTestImages(), Gateways: defaultTestGateways()}
+}
+
+func defaultTestGateways() cluster.Gateways {
+	return cluster.GatewayAPIs(files.ClusterConfig{})
+}
 
 func defaultTestImages() images.Images {
 	return testImagesWith(nil)
@@ -26,6 +33,7 @@ func testImagesWith(extraImages map[string]string) images.Images {
 		"workspace-agent":       imagePrefix + "workspace-agent:v1.2.3",
 		"workspace-server":      imagePrefix + "workspace-server:v1.2.3",
 		"vpn":                   imagePrefix + "vpn:v1.2.3",
+		"frontendGatewayNginx":  "ghcr.io/codesphere-cloud/docker/nginx-gateway:1.31.5",
 	}
 	for name, image := range extraImages {
 		bomImages[name] = image
