@@ -571,7 +571,7 @@ type CustomCertificate struct {
 
 // SSHWorkspaceProxyConfig configures the SSH proxy into workspaces.
 type SSHWorkspaceProxyConfig struct {
-	// BaseDomain defaults to the Codesphere domain.
+	// BaseDomain defaults to the Codesphere domain in the chart.
 	BaseDomain string `yaml:"baseDomain,omitempty"`
 }
 
