@@ -26,6 +26,16 @@ func testImages(reference string) images.Images {
 	return imgs
 }
 
+var _ = Describe("Has", func() {
+	It("image in the BOM -> true", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api:1.2.3").Has("api")).To(BeTrue())
+	})
+
+	It("image missing from the BOM -> false", func() {
+		Expect(testImages("ghcr.io/codesphere-cloud/api:1.2.3").Has("auth")).To(BeFalse())
+	})
+})
+
 var _ = Describe("Reference", func() {
 	It("image in the BOM -> its reference unchanged", func() {
 		Expect(testImages("localhost:5000/api:1.31.5").Reference("api")).To(Equal("localhost:5000/api:1.31.5"))
