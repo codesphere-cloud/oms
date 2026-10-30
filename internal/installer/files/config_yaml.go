@@ -271,6 +271,11 @@ type RegistryConfig struct {
 	LoadContainerImages bool   `yaml:"loadContainerImages"`
 }
 
+// WorkspaceImage is the name, without tag, that a flavor built from a Dockerfile is pushed under.
+func (r RegistryConfig) WorkspaceImage(imageKey, flavorKey string) string {
+	return fmt.Sprintf("%s/%s-%s", strings.TrimRight(r.Server, "/"), imageKey, flavorKey)
+}
+
 // PostgresPort is the port the Postgres installed by OMS listens on.
 const PostgresPort = 5432
 
