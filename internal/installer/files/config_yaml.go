@@ -395,9 +395,11 @@ type ClusterConfig struct {
 	MetalLB             *MetalLBConfig             `yaml:"metallb,omitempty"`
 	RookExternalCluster *RookExternalClusterConfig `yaml:"rookExternalCluster,omitempty"`
 	PgOperator          *PgOperatorConfig          `yaml:"pgOperator,omitempty"`
-	BarmanCloudPlugin   *BarmanCloudPluginConfig   `yaml:"BarmanCloudPluginConfig,omitempty"`
-	RgwLoadBalancer     *RgwLoadBalancerConfig     `yaml:"rgwLoadBalancer,omitempty"`
-	Kyverno             *KyvernoConfig             `yaml:"kyverno,omitempty"`
+	// LegacyBarmanCloudPlugin is only read: Unmarshal moves it to
+	// managedServiceBackends.barmanCloudPlugin, the key the PC installer reads.
+	LegacyBarmanCloudPlugin *BarmanCloudPluginConfig `yaml:"BarmanCloudPluginConfig,omitempty"`
+	RgwLoadBalancer         *RgwLoadBalancerConfig   `yaml:"rgwLoadBalancer,omitempty"`
+	Kyverno                 *KyvernoConfig           `yaml:"kyverno,omitempty"`
 }
 
 type ClusterCertificates struct {
@@ -934,8 +936,9 @@ func (p PlanParam) MarshalYAML() (interface{}, error) {
 }
 
 type ManagedServiceBackendsConfig struct {
-	Postgres *PgManagedServiceConfig `yaml:"postgres,omitempty"`
-	S3       *S3ManagedServiceConfig `yaml:"s3,omitempty"`
+	Postgres          *PgManagedServiceConfig  `yaml:"postgres,omitempty"`
+	S3                *S3ManagedServiceConfig  `yaml:"s3,omitempty"`
+	BarmanCloudPlugin *BarmanCloudPluginConfig `yaml:"barmanCloudPlugin,omitempty"`
 }
 
 type MonitoringConfig struct {
@@ -1049,6 +1052,7 @@ func (c *RootConfig) Unmarshal(data []byte) error {
 		return err
 	}
 	c.extractACMESolverFromOverride()
+	c.migrateLegacyBarmanCloudPlugin()
 	return nil
 }
 
@@ -1207,6 +1211,96 @@ func (c *RootConfig) buildOpenfgaBackupValues() {
 	openfga["valuesObject"] = valuesObject
 	applications["openfga"] = openfga
 	c.PcApps["applications"] = applications
+}
+
+const (
+	legacyBarmanCloudPluginKey  = "BarmanCloudPluginConfig"
+	barmanCloudPluginKey        = "barmanCloudPlugin"
+	legacyBarmanCloudPluginPath = "cluster.BarmanCloudPluginConfig"
+	barmanCloudPluginPath       = "managedServiceBackends.barmanCloudPlugin"
+)
+
+// migrateLegacyBarmanCloudPlugin moves cluster.BarmanCloudPluginConfig to
+// managedServiceBackends.barmanCloudPlugin. The new key wins when both are set.
+func (c *RootConfig) migrateLegacyBarmanCloudPlugin() {
+	legacy := c.Cluster.LegacyBarmanCloudPlugin
+	if legacy == nil {
+		return
+	}
+
+	c.Cluster.LegacyBarmanCloudPlugin = nil
+
+	if c.ManagedServiceBackends == nil {
+		c.ManagedServiceBackends = &ManagedServiceBackendsConfig{}
+	}
+
+	if c.ManagedServiceBackends.BarmanCloudPlugin != nil {
+		logLegacyBarmanCloudPluginIgnored()
+		return
+	}
+
+	logLegacyBarmanCloudPluginMoved(legacy.Enabled)
+	// The PC installer never read the legacy key, so every install that has it runs the
+	// plugin; its enabled: false, which the dev profile wrote by accident, must not now
+	// stop installing the plugin that database backups depend on.
+	c.ManagedServiceBackends.BarmanCloudPlugin = &BarmanCloudPluginConfig{
+		Enabled:  true,
+		Override: legacy.Override,
+	}
+}
+
+// MigrateLegacyBarmanCloudPluginKey does what Unmarshal does for the barman plugin on a raw
+// config map, for a map that reaches the PC installer without passing through RootConfig.
+func MigrateLegacyBarmanCloudPluginKey(config map[string]any) {
+	cluster, ok := config["cluster"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	legacy, ok := cluster[legacyBarmanCloudPluginKey]
+	if !ok {
+		return
+	}
+
+	delete(cluster, legacyBarmanCloudPluginKey)
+
+	if legacy == nil {
+		return
+	}
+
+	backends, ok := config["managedServiceBackends"].(map[string]any)
+	if !ok {
+		backends = map[string]any{}
+		config["managedServiceBackends"] = backends
+	}
+
+	if backends[barmanCloudPluginKey] != nil {
+		logLegacyBarmanCloudPluginIgnored()
+		return
+	}
+
+	legacyFields, _ := legacy.(map[string]any)
+	legacyEnabled, _ := legacyFields["enabled"].(bool)
+	logLegacyBarmanCloudPluginMoved(legacyEnabled)
+
+	migrated := map[string]any{"enabled": true}
+	if override, ok := legacyFields["override"]; ok {
+		migrated["override"] = override
+	}
+
+	backends[barmanCloudPluginKey] = migrated
+}
+
+func logLegacyBarmanCloudPluginMoved(legacyEnabled bool) {
+	log.Printf("Moved %s to %s, the key the PC installer reads", legacyBarmanCloudPluginPath, barmanCloudPluginPath)
+
+	if !legacyEnabled {
+		log.Printf("Warning: %s had enabled: false, which the PC installer never applied; %s is set to enabled: true so the plugin stays installed", legacyBarmanCloudPluginPath, barmanCloudPluginPath)
+	}
+}
+
+func logLegacyBarmanCloudPluginIgnored() {
+	log.Printf("Warning: ignoring %s because %s is set", legacyBarmanCloudPluginPath, barmanCloudPluginPath)
 }
 
 // extractACMESolverFromOverride populates the ACMEConfig.Solver from
