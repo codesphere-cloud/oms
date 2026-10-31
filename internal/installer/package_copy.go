@@ -6,6 +6,7 @@ package installer
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -49,12 +50,13 @@ func (c *CraneArtifactCopier) Copy(ctx context.Context, source, destination stri
 	return nil
 }
 
-// ReadPackageArtifacts reads all images and OCI Helm charts from a BOM and builds their
-// destination references. Codesphere images use the admission policy layout; other images
-// keep their source registry below dest to avoid collisions. Charts keep their repository path alone,
+// ReadPackageArtifacts prefers the package's bom-index.json, falling back to
+// the legacy BOM when the index is absent. Codesphere images use the admission policy
+// layout; other images keep their source registry below dest to avoid collisions.
+// Charts keep their repository path alone,
 // because that is where an installation looks for them.
-func ReadPackageArtifacts(bomPath, dest string) ([]PackageArtifact, error) {
-	bomConfig, err := bom.Parse(bomPath)
+func ReadPackageArtifacts(packageManager PackageManager, dest string) ([]PackageArtifact, error) {
+	bomConfig, err := readPackageBOM(packageManager)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse BOM: %w", err)
 	}
@@ -88,6 +90,52 @@ func ReadPackageArtifacts(bomPath, dest string) ([]PackageArtifact, error) {
 	}
 
 	return artifacts, nil
+}
+
+// readPackageBOM prefers the package index, falling back only
+// when the index is absent so that broken indexes do not silently omit artifacts.
+func readPackageBOM(packageManager PackageManager) (packageBOM, error) {
+	fileIO := packageManager.FileIO()
+	indexPath := packageManager.GetDependencyPath(bom.IndexFilename)
+
+	data, err := fileIO.ReadFile(indexPath)
+	if err == nil {
+		config, err := bom.ParseIndex(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse BOM index %q: %w", indexPath, err)
+		}
+
+		return config, nil
+	}
+
+	if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("failed to read BOM index %q: %w", indexPath, err)
+	}
+
+	return readLegacyBOM(packageManager)
+}
+
+func readLegacyBOM(packageManager PackageManager) (*bom.Config, error) {
+	bomPath := packageManager.GetDependencyPath(bom.Filename)
+
+	data, err := packageManager.FileIO().ReadFile(bomPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read BOM file %q: %w", bomPath, err)
+	}
+
+	config, err := bom.ParseJSON(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse BOM file %q: %w", bomPath, err)
+	}
+
+	return config, nil
+}
+
+// packageBOM exposes the artifact references shared by legacy BOMs and v3 indexes.
+type packageBOM interface {
+	GetContainerImages() []string
+	GetChartRefs() []string
+	GetCodesphereContainerImages() (map[string]string, error)
 }
 
 // registrySegmentReplacer flattens a registry into a single path segment.
