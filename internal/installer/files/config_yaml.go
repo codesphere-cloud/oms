@@ -1153,7 +1153,9 @@ func (c *RootConfig) buildACMEOverride() {
 // apply otherwise. Existing pcApps entries (e.g. other applications) are preserved.
 func (c *RootConfig) buildOpenfgaBackupValues() {
 	ob := c.Codesphere.OpenfgaBackups
-	if ob == nil {
+	// Backups belong to the data center that runs OpenFGA; enabling the application here would
+	// override openFga.deploy: false and deploy a second, empty OpenFGA.
+	if ob == nil || !c.Codesphere.OpenFga.DeploysOpenFga() {
 		return
 	}
 
