@@ -280,9 +280,11 @@ type PostgresConfig struct {
 	Primary       *PostgresPrimaryConfig `yaml:"primary,omitempty"`
 	Replica       *PostgresReplicaConfig `yaml:"replica,omitempty"`
 	ServerAddress string                 `yaml:"serverAddress,omitempty"`
+	UseSSL        *bool                  `yaml:"useSsl,omitempty"`
 	AltName       string                 `yaml:"altName,omitempty"`
 	Port          int                    `yaml:"port,omitempty"`
 	Database      string                 `yaml:"database,omitempty"`
+	RolesPrefix   string                 `yaml:"rolesPrefix,omitempty"`
 }
 
 type PostgresPrimaryConfig struct {
@@ -515,6 +517,10 @@ type MetalLBBGPConfig struct {
 }
 
 type CodesphereConfig struct {
+	MaintenanceMode *bool  `yaml:"maintenanceMode,omitempty"`
+	ReleaseName     string `yaml:"releaseName,omitempty"`
+	// SkipDatabaseSetup selects the chart Job and skips database setup in the legacy script.
+	SkipDatabaseSetup          bool                     `yaml:"skipDatabaseSetup,omitempty"`
 	Domain                     string                   `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                   `yaml:"workspaceHostingBaseDomain"`
 	PublicIP                   string                   `yaml:"publicIp"`
