@@ -17,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/postgres"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -626,13 +627,13 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 	}
 
 	b.Env.InstallConfig.Postgres.Mode = "external"
-	b.Env.InstallConfig.Postgres.Database = cnpgDatabaseName
+	b.Env.InstallConfig.Postgres.Database = postgres.DatabaseName
 	b.Env.InstallConfig.Postgres.CACertPem, err = b.ReadPostgresCA()
 	if err != nil {
 		return fmt.Errorf("failed to read PostgreSQL CA: %w", err)
 	}
 
-	b.Env.InstallConfig.Postgres.ServerAddress = "masterdata-rw.codesphere.svc.cluster.local"
+	b.Env.InstallConfig.Postgres.ServerAddress = postgres.ServiceAddress
 	b.Env.InstallConfig.Postgres.Port = 5432
 	b.Env.InstallConfig.Postgres.Primary = nil
 	b.Env.InstallConfig.Postgres.Replica = nil

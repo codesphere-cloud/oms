@@ -4,251 +4,60 @@
 package local
 
 import (
-	"context"
-	"errors"
 	"fmt"
-	"path"
-	"time"
 
-	cnpgv1 "github.com/cloudnative-pg/cloudnative-pg/api/v1"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/ptr"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"github.com/codesphere-cloud/oms/internal/installer/postgres"
 )
 
-const (
-	cnpgReleaseName         = "cnpg"
-	cnpgDatabaseClusterName = "masterdata"
-	cnpgDatabaseName        = "masterdata"
-	cnpgDatabaseVersion     = "15.14"
-	cnpgDatabaseStorageSize = "10Gi"
-	cnpgReadyTimeout        = 15 * time.Minute
-	cnpgReadyPollInterval   = 5 * time.Second
-	cnpgSecretPasswordKey   = "password"
-	cnpgBOMComponent        = "postgres-operator"
-)
+func (b *LocalBootstrapper) postgresInstaller() *postgres.Installer {
+	return &postgres.Installer{
+		Context: b.ctx, KubeClient: b.kubeClient, HelmClient: b.helmClient,
+		BOM: b.installerBOM, RegistryUser: b.Env.RegistryUser,
+		RegistryPassword: b.Env.RegistryPassword, StorageClass: b.storageClassName(),
+	}
+}
 
+// InstallCloudNativePGHelmChart installs the operator from the installer BOM.
 func (b *LocalBootstrapper) InstallCloudNativePGHelmChart() error {
-	if b.installerBOM == nil {
-		return fmt.Errorf("installer BOM is not prepared")
-	}
-
-	chart, ok := b.installerBOM.GetChart(cnpgBOMComponent)
-	if !ok {
-		return fmt.Errorf("CloudNativePG chart is missing from BOM component %q", cnpgBOMComponent)
-	}
-
 	repoURL, err := b.Env.chartsRegistryURL()
 	if err != nil {
 		return err
 	}
 
-	// The BOM component is Codesphere's wrapper chart around the upstream
-	// cloudnative-pg chart. Its tag is the wrapper's own version, so it must be
-	// installed using the chart name and version from the BOM.
-	return b.installPrerequisiteChart(prerequisiteChartConfig{
-		Name: cnpgReleaseName, Chart: path.Base(chart.Name()), RepoURL: repoURL,
-		TargetRevision: chart.Tag(), Namespace: codesphereNamespace,
-		Values: map[string]interface{}{
-			// Values for the upstream chart are nested below its dependency name.
-			"cloudnative-pg": map[string]interface{}{
-				// Reset the wrapper's production defaults that don't exist on a local cluster.
-				"priorityClassName": "",
-				"monitoring": map[string]interface{}{
-					"podMonitorEnabled": false,
-				},
-				"config": map[string]interface{}{
-					"clusterWide": true,
-					"data": map[string]interface{}{
-						"INHERITED_LABELS": "teamId",
-					},
-				},
-				"resources": map[string]interface{}{
-					"requests": map[string]interface{}{
-						"cpu":    "0",
-						"memory": "0",
-					},
-				},
-			},
-		},
-	})
+	pg := b.postgresInstaller()
+	pg.RegistryURL = repoURL
+
+	if err := pg.InstallOperator(); err != nil {
+		return fmt.Errorf("install CloudNativePG operator: %w", err)
+	}
+	return nil
 }
 
+// DeployPostgresDatabase creates the local bootstrap database.
 func (b *LocalBootstrapper) DeployPostgresDatabase() error {
-	postgresCluster := &cnpgv1.Cluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cnpgDatabaseClusterName,
-			Namespace: codesphereNamespace,
-		},
-	}
-
-	_, err := controllerutil.CreateOrUpdate(b.ctx, b.kubeClient, postgresCluster, func() error {
-		postgresCluster.Spec = cnpgv1.ClusterSpec{
-			ImageName: fmt.Sprintf("ghcr.io/cloudnative-pg/postgresql:%s-system-trixie", cnpgDatabaseVersion),
-			Instances: 1,
-			StorageConfiguration: cnpgv1.StorageConfiguration{
-				StorageClass: ptr.To(b.storageClassName()),
-				Size:         cnpgDatabaseStorageSize,
-			},
-			EnableSuperuserAccess: ptr.To(true),
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create or update PostgreSQL cluster %q: %w", cnpgDatabaseClusterName, err)
-	}
-
-	if err := b.WaitForPostgresDatabaseReady(); err != nil {
-		return err
+	if err := b.postgresInstaller().DeployDatabase(); err != nil {
+		return fmt.Errorf("deploy PostgreSQL database: %w", err)
 	}
 
 	return nil
 }
 
-func (b *LocalBootstrapper) WaitForPostgresDatabaseReady() error {
-	ctx, cancel := context.WithTimeout(b.ctx, cnpgReadyTimeout)
-	defer cancel()
-
-	clusterKey := client.ObjectKey{
-		Name:      cnpgDatabaseClusterName,
-		Namespace: codesphereNamespace,
-	}
-
-	steps := int(cnpgReadyTimeout / cnpgReadyPollInterval)
-	if steps < 1 {
-		steps = 1
-	}
-
-	backoff := wait.Backoff{
-		Duration: cnpgReadyPollInterval,
-		Factor:   1.0,
-		Jitter:   0.1,
-		Steps:    steps,
-	}
-
-	lastPhase := ""
-	lastReadyInstances := 0
-	lastInstances := 0
-
-	err := retry.OnError(backoff, isRetryableWaitError, func() error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		cluster := &cnpgv1.Cluster{}
-		err := b.kubeClient.Get(ctx, clusterKey, cluster)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return &retryableWaitError{err: fmt.Errorf("PostgreSQL cluster %q not found yet", cnpgDatabaseClusterName)}
-			}
-
-			return err
-		}
-
-		lastPhase = cluster.Status.Phase
-		lastReadyInstances = cluster.Status.ReadyInstances
-		lastInstances = cluster.Status.Instances
-
-		if isCNPGClusterReady(cluster) {
-			return nil
-		}
-
-		return &retryableWaitError{err: fmt.Errorf(
-			"PostgreSQL cluster is not ready yet (phase=%q, readyInstances=%d, instances=%d)",
-			lastPhase,
-			lastReadyInstances,
-			lastInstances,
-		)}
-	})
-	if err == nil {
-		return nil
-	}
-
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) || isRetryableWaitError(err) {
-		return fmt.Errorf(
-			"timed out waiting for PostgreSQL cluster %q to become ready (phase=%q, readyInstances=%d, instances=%d, error=%v)",
-			cnpgDatabaseClusterName,
-			lastPhase,
-			lastReadyInstances,
-			lastInstances,
-			err,
-		)
-	}
-
-	return fmt.Errorf("failed to fetch PostgreSQL cluster %q: %w", cnpgDatabaseClusterName, err)
-}
-
+// ReadPostgresSuperuserPassword reads the CNPG generated superuser password.
 func (b *LocalBootstrapper) ReadPostgresSuperuserPassword() (string, error) {
-	clusterKey := client.ObjectKey{
-		Name:      cnpgDatabaseClusterName,
-		Namespace: codesphereNamespace,
+	password, err := b.postgresInstaller().ReadSuperuserPassword()
+	if err != nil {
+		return "", fmt.Errorf("read PostgreSQL superuser password: %w", err)
 	}
 
-	cluster := &cnpgv1.Cluster{}
-	if err := b.kubeClient.Get(b.ctx, clusterKey, cluster); err != nil {
-		return "", fmt.Errorf("failed to get PostgreSQL cluster %q: %w", cnpgDatabaseClusterName, err)
-	}
-
-	secretName := cluster.GetSuperuserSecretName()
-	secretKey := client.ObjectKey{
-		Name:      secretName,
-		Namespace: codesphereNamespace,
-	}
-
-	secret := &corev1.Secret{}
-	if err := b.kubeClient.Get(b.ctx, secretKey, secret); err != nil {
-		return "", fmt.Errorf("failed to get PostgreSQL superuser secret %q: %w", secretName, err)
-	}
-
-	passwordBytes, ok := secret.Data[cnpgSecretPasswordKey]
-	if !ok {
-		return "", fmt.Errorf("PostgreSQL superuser secret %q does not contain key %q", secretName, cnpgSecretPasswordKey)
-	}
-	if len(passwordBytes) == 0 {
-		return "", fmt.Errorf("PostgreSQL superuser secret %q contains an empty %q value", secretName, cnpgSecretPasswordKey)
-	}
-
-	return string(passwordBytes), nil
+	return password, nil
 }
 
+// ReadPostgresCA reads the CNPG generated CA certificate.
 func (b *LocalBootstrapper) ReadPostgresCA() (string, error) {
-	secretName := cnpgDatabaseClusterName + "-ca"
-	secretKey := client.ObjectKey{
-		Name:      secretName,
-		Namespace: codesphereNamespace,
+	ca, err := b.postgresInstaller().ReadCA()
+	if err != nil {
+		return "", fmt.Errorf("read PostgreSQL CA: %w", err)
 	}
 
-	secret := &corev1.Secret{}
-	if err := b.kubeClient.Get(b.ctx, secretKey, secret); err != nil {
-		return "", fmt.Errorf("failed to get PostgreSQL CA secret %q: %w", secretName, err)
-	}
-
-	caCert, ok := secret.Data["ca.crt"]
-	if !ok {
-		return "", fmt.Errorf("PostgreSQL CA secret %q does not contain key %q", secretName, "ca.crt")
-	}
-	if len(caCert) == 0 {
-		return "", fmt.Errorf("PostgreSQL CA secret %q contains an empty %q value", secretName, "ca.crt")
-	}
-
-	return string(caCert), nil
-}
-
-func isCNPGClusterReady(cluster *cnpgv1.Cluster) bool {
-	if cluster == nil {
-		return false
-	}
-
-	readyCondition := apimeta.FindStatusCondition(cluster.Status.Conditions, string(cnpgv1.ConditionClusterReady))
-	if readyCondition != nil && readyCondition.Status == metav1.ConditionTrue {
-		return true
-	}
-
-	return cluster.Status.Instances > 0 && cluster.Status.ReadyInstances == cluster.Status.Instances
+	return ca, nil
 }

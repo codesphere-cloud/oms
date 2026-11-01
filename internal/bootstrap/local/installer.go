@@ -9,23 +9,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/portal"
-	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 // installerArtifactFilename is the artifact to download from the OMS portal.
 const installerArtifactFilename = "installer-lite.tar.gz"
-
-const temporaryPostgresNodePortPrefix = "oms-masterdata-nodeport"
 
 // DownloadInstallerPackage downloads the Codesphere installer package from the
 // OMS portal, similar to how the GCP bootstrapper fetches it onto a jumpbox.
@@ -118,132 +110,6 @@ func (b *LocalBootstrapper) PrepareInstaller() error {
 	b.installerBOM = bomConfig
 
 	return nil
-}
-
-func (b *LocalBootstrapper) createTemporaryPostgresNodePortEndpoint() (string, int32, func(), error) {
-	masterdataSvc := &corev1.Service{}
-	masterdataSvcKey := types.NamespacedName{Name: "masterdata-rw", Namespace: codesphereNamespace}
-	if err := b.kubeClient.Get(b.ctx, masterdataSvcKey, masterdataSvc); err != nil {
-		return "", 0, nil, fmt.Errorf("failed to get PostgreSQL service %s/%s: %w", codesphereNamespace, "masterdata-rw", err)
-	}
-
-	if len(masterdataSvc.Spec.Selector) == 0 {
-		return "", 0, nil, fmt.Errorf("service %s/%s has no selector; cannot create NodePort proxy", codesphereNamespace, "masterdata-rw")
-	}
-
-	postgresPort, err := getPostgresServicePort(masterdataSvc)
-	if err != nil {
-		return "", 0, nil, err
-	}
-
-	nowNanos := time.Now().UnixNano()
-	tmpServiceName := fmt.Sprintf("%s-%d", temporaryPostgresNodePortPrefix, nowNanos)
-
-	selector := make(map[string]string, len(masterdataSvc.Spec.Selector))
-	for k, v := range masterdataSvc.Spec.Selector {
-		selector[k] = v
-	}
-
-	tmpService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      tmpServiceName,
-			Namespace: codesphereNamespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Type:     corev1.ServiceTypeNodePort,
-			Selector: selector,
-			Ports: []corev1.ServicePort{{
-				Name:       "postgres",
-				Protocol:   corev1.ProtocolTCP,
-				Port:       postgresPort.Port,
-				TargetPort: postgresPort.TargetPort,
-			}},
-		},
-	}
-
-	if err := b.kubeClient.Create(b.ctx, tmpService); err != nil {
-		return "", 0, nil, fmt.Errorf("failed to create temporary PostgreSQL NodePort service %s/%s: %w", codesphereNamespace, tmpServiceName, err)
-	}
-
-	cleanup := func() {
-		if err := b.kubeClient.Delete(b.ctx, tmpService); err != nil && !apierrors.IsNotFound(err) {
-			log.Printf("Warning: failed to delete temporary PostgreSQL NodePort service %s/%s: %v", codesphereNamespace, tmpServiceName, err)
-		}
-	}
-
-	if len(tmpService.Spec.Ports) == 0 || tmpService.Spec.Ports[0].NodePort == 0 {
-		if err := b.kubeClient.Get(b.ctx, types.NamespacedName{Name: tmpServiceName, Namespace: codesphereNamespace}, tmpService); err != nil {
-			cleanup()
-			return "", 0, nil, fmt.Errorf("failed to read temporary PostgreSQL NodePort service %s/%s: %w", codesphereNamespace, tmpServiceName, err)
-		}
-	}
-
-	if len(tmpService.Spec.Ports) == 0 || tmpService.Spec.Ports[0].NodePort == 0 {
-		cleanup()
-		return "", 0, nil, fmt.Errorf("temporary PostgreSQL NodePort service %s/%s has no allocated nodePort", codesphereNamespace, tmpServiceName)
-	}
-
-	nodeIP, err := b.resolveNodeIPForNodePort()
-	if err != nil {
-		cleanup()
-		return "", 0, nil, err
-	}
-
-	return nodeIP, tmpService.Spec.Ports[0].NodePort, cleanup, nil
-}
-
-func getPostgresServicePort(svc *corev1.Service) (corev1.ServicePort, error) {
-	for _, port := range svc.Spec.Ports {
-		if port.Port == 5432 {
-			if port.TargetPort.Type == intstr.Int && port.TargetPort.IntValue() == 0 {
-				port.TargetPort = intstr.FromInt(5432)
-			}
-			if port.TargetPort.Type == intstr.String && port.TargetPort.String() == "" {
-				port.TargetPort = intstr.FromInt(5432)
-			}
-			return port, nil
-		}
-	}
-
-	if len(svc.Spec.Ports) == 0 {
-		return corev1.ServicePort{}, fmt.Errorf("service %s/%s has no ports", svc.Namespace, svc.Name)
-	}
-
-	port := svc.Spec.Ports[0]
-	if port.TargetPort.Type == intstr.Int && port.TargetPort.IntValue() == 0 {
-		port.TargetPort = intstr.FromInt(int(port.Port))
-	}
-	if port.TargetPort.Type == intstr.String && port.TargetPort.String() == "" {
-		port.TargetPort = intstr.FromInt(int(port.Port))
-	}
-
-	return port, nil
-}
-
-func (b *LocalBootstrapper) resolveNodeIPForNodePort() (string, error) {
-	nodeList := &corev1.NodeList{}
-	if err := b.kubeClient.List(b.ctx, nodeList); err != nil {
-		return "", fmt.Errorf("failed to list cluster nodes for NodePort endpoint: %w", err)
-	}
-
-	if len(nodeList.Items) == 0 {
-		return "", fmt.Errorf("connected to Kubernetes cluster but no nodes are available")
-	}
-
-	for _, node := range nodeList.Items {
-		for _, addr := range node.Status.Addresses {
-			if addr.Type == corev1.NodeInternalIP && addr.Address != "" {
-				return addr.Address, nil
-			}
-		}
-		for _, addr := range node.Status.Addresses {
-			if addr.Type == corev1.NodeExternalIP && addr.Address != "" {
-				return addr.Address, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("failed to resolve node IP address for NodePort endpoint")
 }
 
 func (b *LocalBootstrapper) configurePostgresForMigration(host string, port int32) (func() error, error) {

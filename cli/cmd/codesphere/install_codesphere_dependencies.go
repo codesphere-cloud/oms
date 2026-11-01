@@ -126,7 +126,7 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 
 		appsConfig := cfg
 		if opts.LocalComponents {
-			// The temporary NodePort is only for local component migrations.
+			// The temporary port-forward is only for local component migrations.
 			appsConfig.Codesphere.Migration = nil
 		}
 		err = stlog.Step("Install ArgoCD pre-step", func() error {
