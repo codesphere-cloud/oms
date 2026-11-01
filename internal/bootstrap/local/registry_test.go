@@ -87,4 +87,15 @@ var _ = Describe("Local bootstrap chart registry URL", func() {
 		env := &CodesphereEnvironment{RegistryURL: "registry.example.com/team//mirror/"}
 		Expect(env.chartsRegistryURL()).To(Equal("registry.example.com/team/mirror/codesphere-cloud/charts"))
 	})
+
+	It("keeps image references on ghcr.io unchanged", func() {
+		env := &CodesphereEnvironment{}
+		Expect(env.resolveImage("ghcr.io/cloudnative-pg/postgresql:15.14")).To(Equal("ghcr.io/cloudnative-pg/postgresql:15.14"))
+	})
+
+	It("resolves images onto a mirror in the layout of oms copy package", func() {
+		env := &CodesphereEnvironment{RegistryURL: "registry.example.com:5000/team/"}
+		Expect(env.resolveImage("ghcr.io/cloudnative-pg/postgresql:15.14")).To(
+			Equal("registry.example.com:5000/team/ghcr_io/cloudnative-pg/postgresql:15.14"))
+	})
 })

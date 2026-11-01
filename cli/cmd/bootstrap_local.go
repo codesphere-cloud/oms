@@ -115,7 +115,7 @@ func AddBootstrapLocalCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.SecretsFilePath, "secrets-file", "", "Path to secrets file (default: <install-dir>/prod.vault.yaml)")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDeviceFilter, "ceph-device-filter", "", "Regular expression selecting Ceph block devices by name")
 	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.CephDevicePathFilter, "ceph-device-path-filter", "", "Regular expression selecting Ceph block devices by path")
-	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryURL, "registry-url", local.DefaultRegistryURL, "Registry host with optional port and repository path, without a scheme; Helm charts are pulled from <registry-url>/codesphere-cloud/charts")
+	flags.StringVar(&bootstrapLocalCmd.CodesphereEnv.RegistryURL, "registry-url", local.DefaultRegistryURL, "Registry host with optional port and repository path, without a scheme; Helm charts are pulled from <registry-url>/codesphere-cloud/charts. A registry other than ghcr.io is treated as a mirror filled by 'oms copy package', which CloudNativePG and its PostgreSQL image are pulled from as well; that PostgreSQL image has to be copied there separately")
 	bootstrapLocalCmd.cmd.RunE = bootstrapLocalCmd.RunE
 
 	util.MarkFlagRequired(bootstrapLocalCmd.cmd, "registry-user")
