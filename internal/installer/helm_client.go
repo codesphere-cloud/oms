@@ -55,6 +55,7 @@ type ChartConfig struct {
 	Values          map[string]interface{}
 	CreateNamespace bool
 	WaitStrategy    kube.WaitStrategy // "" defaults to kube.StatusWatcherStrategy
+	Timeout         time.Duration     // zero uses the default Helm timeout
 }
 
 type InstallChartOptions struct {
@@ -282,6 +283,14 @@ func waitStrategy(s kube.WaitStrategy) kube.WaitStrategy {
 	return s
 }
 
+func chartTimeout(timeout time.Duration) time.Duration {
+	if timeout > 0 {
+		return timeout
+	}
+
+	return 5 * time.Minute
+}
+
 func (h *helmClient) FindRelease(namespace, releaseName string) (*ReleaseInfo, error) {
 	env, err := h.newHelmEnv(namespace)
 	if err != nil {
@@ -342,7 +351,7 @@ func (h *helmClient) InstallChart(ctx context.Context, cfg ChartConfig, opts Ins
 	installClient.WaitStrategy = waitStrategy(cfg.WaitStrategy)
 	installClient.Version = cfg.Version
 	installClient.RepoURL = cfg.RepoURL
-	installClient.Timeout = 5 * time.Minute
+	installClient.Timeout = chartTimeout(cfg.Timeout)
 	installClient.ForceConflicts = opts.ForceConflicts
 
 	chartPath, err := installClient.LocateChart(cfg.ChartName, env.settings)
@@ -384,7 +393,7 @@ func (h *helmClient) UpgradeChart(ctx context.Context, cfg ChartConfig, opts Upg
 	upgradeClient.WaitStrategy = waitStrategy(cfg.WaitStrategy)
 	upgradeClient.Version = cfg.Version
 	upgradeClient.RepoURL = cfg.RepoURL
-	upgradeClient.Timeout = 5 * time.Minute
+	upgradeClient.Timeout = chartTimeout(cfg.Timeout)
 	upgradeClient.MaxHistory = maxReleaseHistory
 	upgradeClient.ForceConflicts = opts.ForceConflicts
 	upgradeClient.TakeOwnership = opts.TakeOwnership

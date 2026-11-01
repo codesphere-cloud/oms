@@ -95,6 +95,8 @@ type CodesphereInstaller struct {
 	// LocalComponents runs install-components.js on this host for the selected steps.
 	LocalComponents bool
 	LocalConfigDir  string
+	VaultType       string
+	VaultSecretName string
 }
 
 // Install validates the platform, extracts the package, builds any custom workspace images,
@@ -370,6 +372,12 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 	if ci.LocalComponents {
 		return ci.runLocalComponents(pm, config)
 	}
+
+	if ci.executableInstallerSteps(config)[CodesphereStep] && config.Codesphere.SkipDatabaseSetup {
+		if err := ci.runDatabaseSetupJob(pm, config); err != nil {
+			return fmt.Errorf("database setup Job failed: %w", err)
+		}
+	}
 	nodePath := filepath.Join(pm.GetWorkDir(), "node")
 	if err := os.Chmod(nodePath, 0755); err != nil {
 		return fmt.Errorf("failed to make node executable: %w", err)
@@ -425,6 +433,12 @@ func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config file
 	for _, step := range []string{"set-up-cluster", "codesphere", "ms-backends"} {
 		if !selected[step] {
 			continue
+		}
+
+		if step == "codesphere" && config.Codesphere.SkipDatabaseSetup {
+			if err := ci.runDatabaseSetupJob(pm, config); err != nil {
+				return fmt.Errorf("database setup Job failed: %w", err)
+			}
 		}
 
 		args := []string{filepath.Join(bundleDir, "install-components.js"),
