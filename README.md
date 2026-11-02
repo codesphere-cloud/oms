@@ -111,7 +111,7 @@ The Codesphere installation commands (`oms install codesphere`, `oms install k0s
 | `oms` | Copied from the local machine when `--remote-oms-binary` is set; otherwise downloaded and moved to `/usr/local/bin/oms`. | `oms-portal.codesphere.com` | Install `oms` in the image, or pass `--remote-oms-binary`. |
 | `sops` | Downloaded as v3.11.0 to `/usr/local/bin/sops`. | `github.com/getsops/sops/releases` | Install `sops` in the image so `sops` is in `PATH`. |
 | `age`, `age-keygen` | Downloaded as the **latest** release and moved to `/usr/local/bin/`. The version is not pinned. | `dl.filippo.io/age` | Install `age` and `age-keygen` in the image so `age-keygen` is in `PATH`. |
-| `curl`, `jq`, `tar`, `sudo` | Not installed. The downloads above need them, and the readiness checks for the registry and package proxy need `curl`. RHEL cloud images ship `curl` rather than `wget`. | OS package repositories | Install them in the image. |
+| `curl`, `jq`, `tar`, `sudo` | Not installed. The downloads above need them, and the readiness checks for the registry and package proxy need `curl`. | OS package repositories | Install them in the image. |
 | `podman` | Installed with the OS package manager when an air-gapped installation needs the local registry or the package proxy. | OS package repositories | Install `podman` in the image. |
 | `apache2-utils` (Ubuntu) or `httpd-tools` (RHEL), `openssl` | `htpasswd` and `openssl` create the registry credentials and its self-signed certificate. `httpd-tools` or `apache2-utils` is installed together with `podman` for the registry; `openssl` is used but not installed. | OS package repositories | Install them in the image. |
 
