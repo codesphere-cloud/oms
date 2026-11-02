@@ -108,7 +108,7 @@ The Codesphere installation commands (`oms install codesphere`, `oms install k0s
 
 | Item | How OMS provides it | Source | Preinstall to avoid the download |
 |---|---|---|---|
-| `oms` | Copied from the local machine when `--remote-oms-binary` is set; otherwise downloaded and moved to `/usr/local/bin/oms`. | `api.github.com` and the release assets of `codesphere-cloud/oms` | Install `oms` in the image, or pass `--remote-oms-binary`. |
+| `oms` | Copied from the local machine when `--remote-oms-binary` is set; otherwise downloaded and moved to `/usr/local/bin/oms`. | `oms-portal.codesphere.com` | Install `oms` in the image, or pass `--remote-oms-binary`. |
 | `sops` | Downloaded as v3.11.0 to `/usr/local/bin/sops`. | `github.com/getsops/sops/releases` | Install `sops` in the image so `sops` is in `PATH`. |
 | `age`, `age-keygen` | Downloaded as the **latest** release and moved to `/usr/local/bin/`. The version is not pinned. | `dl.filippo.io/age` | Install `age` and `age-keygen` in the image so `age-keygen` is in `PATH`. |
 | `curl`, `jq`, `tar`, `sudo` | Not installed. The downloads above need them, and the readiness checks for the registry and package proxy need `curl`. RHEL cloud images ship `curl` rather than `wget`. | OS package repositories | Install them in the image. |
