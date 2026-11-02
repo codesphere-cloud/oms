@@ -32,9 +32,13 @@ var _ = Describe("CNPG Argo CD application", func() {
 	})
 	It("uses the Argo CD registry and BOM version and waits for the operator to sync", func() {
 		key := client.ObjectKey{Namespace: "argocd", Name: "cnpg"}
+
+		var requestedSource *argov1alpha1.ApplicationSource
+
 		kube.EXPECT().Get(mock.Anything, key, mock.Anything).Return(apierrors.NewNotFound(schema.GroupResource{Resource: "applications"}, "cnpg")).Once()
 		kube.EXPECT().Create(mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, obj client.Object, _ ...client.CreateOption) error {
 			app := obj.(*argov1alpha1.Application)
+			requestedSource = app.Spec.Source.DeepCopy()
 			Expect(app.Spec.Source.RepoURL).To(Equal("mirror.example.com/custom/charts"))
 			Expect(app.Spec.Source.Chart).To(Equal("postgres-operator"))
 			Expect(app.Spec.Source.TargetRevision).To(Equal("1.2.3"))
@@ -49,7 +53,7 @@ var _ = Describe("CNPG Argo CD application", func() {
 			app := obj.(*argov1alpha1.Application)
 			app.Status.Health.Status = "Healthy"
 			app.Status.Sync.Status = argov1alpha1.SyncStatusCodeSynced
-			app.Status.Sync.ComparedTo.Source.TargetRevision = "1.2.3"
+			app.Status.Sync.ComparedTo.Source = *requestedSource.DeepCopy()
 
 			return nil
 		}).Once()

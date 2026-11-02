@@ -68,7 +68,7 @@ var _ = Describe("Masterdata database readiness", func() {
 	}
 	expectPods := func() {
 		GinkgoHelper()
-		kube.EXPECT().List(mock.Anything, mock.AnythingOfType("*v1.PodList"), mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, obj client.ObjectList, opts ...client.ListOption) error {
+		kube.EXPECT().List(mock.Anything, mock.AnythingOfType("*v1.PodList"), mock.AnythingOfType("[]client.ListOption")).RunAndReturn(func(_ context.Context, obj client.ObjectList, opts ...client.ListOption) error {
 			options := &client.ListOptions{}
 			options.ApplyOptions(opts)
 			Expect(options.Namespace).To(Equal("codesphere"))
@@ -245,7 +245,7 @@ var _ = Describe("Masterdata database readiness", func() {
 		defer cancel()
 
 		expectCluster()
-		kube.EXPECT().List(mock.Anything, mock.AnythingOfType("*v1.PodList"), mock.Anything, mock.Anything).RunAndReturn(func(_ context.Context, obj client.ObjectList, _ ...client.ListOption) error {
+		kube.EXPECT().List(mock.Anything, mock.AnythingOfType("*v1.PodList"), mock.AnythingOfType("[]client.ListOption")).RunAndReturn(func(_ context.Context, obj client.ObjectList, _ ...client.ListOption) error {
 			obj.(*corev1.PodList).Items = nil
 
 			cancel()

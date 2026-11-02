@@ -58,6 +58,7 @@ func OperatorValues(cfg files.RootConfig, packageBOM *bom.Config) (map[string]an
 		}})
 	}
 
+	// OMS owns operator pull credentials; custom pull-secret lists are intentionally replaced.
 	return util.DeepMergeMaps(values, map[string]any{"cloudnative-pg": map[string]any{
 		"imagePullSecrets": []any{map[string]any{"name": cnpgImagePullSecretName}},
 	}}), nil

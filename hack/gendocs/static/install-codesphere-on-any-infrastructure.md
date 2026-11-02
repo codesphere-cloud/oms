@@ -583,8 +583,11 @@ for the upstream tickets, proposed fixes, and cleanup details.
 
 The dependency phase copies Argo CD's image pull credentials into an OMS-managed
 `oms-cnpg-regcred` secret in the database namespace and references it from the
-operator and database pods. Database
-readiness requires the Cluster status to match its desired instance count and
+operator and database pods. Kubernetes-managed PostgreSQL currently assumes the
+chart and private operator images use the same registry host. OMS always sets
+the operator's `imagePullSecrets` to `oms-cnpg-regcred`, replacing any custom
+pull-secret list. Separate private image registries are not currently supported.
+Database readiness requires the Cluster status to match its desired instance count and
 all instance pods to be ready with the current image, resource settings, and pull
 secrets. The read-write service must select the ready primary. The platform
 phase repeats this check before exposing the migration endpoint and waits through restarts

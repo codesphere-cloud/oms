@@ -53,5 +53,5 @@ func InstallCNPGOperator(ctx context.Context, kube client.Client, packageBOM *bo
 		return fmt.Errorf("apply CNPG Argo CD application: %w", err)
 	}
 
-	return WaitForApplicationHealthy(ctx, kube, app.Name, chart.Tag(), 0, log.Printf)
+	return WaitForApplicationHealthy(ctx, kube, app.Name, *app.Spec.Source, 0, log.Printf)
 }

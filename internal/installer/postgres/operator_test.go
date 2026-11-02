@@ -41,6 +41,15 @@ var _ = Describe("CloudNativePG operator chart values", func() {
 		Expect(packageBOM.Components["postgres-operator"].ContainerImages["cloudnativePg"]).To(Equal("ghcr.io/codesphere-cloud/docker/ghcr.io/cloudnative-pg/cloudnative-pg:1.30.0"))
 	})
 
+	It("always uses the OMS-managed pull secret instead of a custom operator pull-secret list", func() {
+		cfg.Cluster.PgOperator = &files.PgOperatorConfig{Override: files.ChartOverride{"cloudnative-pg": map[string]any{
+			"imagePullSecrets": []any{map[string]any{"name": "custom-secret"}},
+		}}}
+		values, err := postgres.OperatorValues(cfg, packageBOM)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(values["cloudnative-pg"].(map[string]any)["imagePullSecrets"]).To(Equal([]any{map[string]any{"name": "oms-cnpg-regcred"}}))
+	})
+
 	It("uses the original BOM image without redundant config overrides when no mirror is configured", func() {
 		cfg.Registry = nil
 		values, err := postgres.OperatorValues(cfg, packageBOM)
