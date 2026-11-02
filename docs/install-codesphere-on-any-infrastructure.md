@@ -202,6 +202,20 @@ In an air-gapped environment, hosts without internet access need a package proxy
 
 Install [OMS](https://github.com/codesphere-cloud/oms) on the jumpbox together with `sops` and `age`. Pin and verify approved versions so the environment is repeatable.
 
+The jumpbox needs these tools in `PATH`:
+
+| Tool | Used for |
+|---|---|
+| `oms` | All installation commands. |
+| `sops` | Encrypting and decrypting the installation vault. |
+| `age-keygen` (from `age`) | Generating the vault's age identity and deriving its public key. |
+| `curl`, `tar` | Downloading and unpacking tools, and checking that a registry or proxy answers. |
+| `podman` | Only for a local container registry or package proxy on the jumpbox. |
+| `docker` or `podman` | Only to build workspace images during `oms install codesphere` (`docker` is preferred when both exist). |
+| `openssl`, `htpasswd` (`httpd-tools` or `apache2-utils`) | Only for a local container registry on the jumpbox. |
+
+`oms beta bootstrap-gcp` downloads missing `sops` (v3.11.0, from GitHub) and `age` (the latest release, from `dl.filippo.io`) on its own. In an air-gapped environment, install them yourself before you start; OMS skips the download for tools it finds. See [Dependencies and network requirements](https://github.com/codesphere-cloud/oms#dependencies-and-network-requirements) for everything OMS downloads and which hosts it contacts.
+
 The jumpbox must have enough free space for the installer package and extracted installation dependencies. Create a root-only secrets directory:
 
 ```bash
