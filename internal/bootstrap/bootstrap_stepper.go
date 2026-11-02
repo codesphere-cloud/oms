@@ -12,7 +12,7 @@ import (
 	"text/tabwriter"
 	"time"
 )
-
+ 
 const (
 	LINE_RESET         = "\r\033[2K"
 	MOVE_UP            = "\033[1A"
