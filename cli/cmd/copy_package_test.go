@@ -19,32 +19,26 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-type commandRecordingCopier struct {
-	copies []installer.PackageArtifact
-}
-
-func (c *commandRecordingCopier) Copy(_ context.Context, source, destination string) error {
-	c.copies = append(c.copies, installer.PackageArtifact{Source: source, Destination: destination})
-	return nil
-}
-
 var _ = Describe("CopyPackageCmd", func() {
 	var (
 		packageManager *installer.MockPackageManager
-		bomPath        string
+		fileIO         *intutil.MockFileIO
 	)
 
 	BeforeEach(func() {
 		packageManager = installer.NewMockPackageManager(GinkgoT())
-		bomPath = filepath.Join(GinkgoT().TempDir(), "bom.json")
-		Expect(os.WriteFile(bomPath, []byte(`{
-			"components": {"codesphere": {"containerImages": {"api": "ghcr.io/codesphere/api:v1"}}}
-		}`), 0644)).To(Succeed())
+		fileIO = intutil.NewMockFileIO(GinkgoT())
 	})
 
 	preparePackageManager := func() {
 		packageManager.EXPECT().Extract(false, false).Return(nil)
-		packageManager.EXPECT().GetDependencyPath("bom.json").Return(bomPath)
+		packageManager.EXPECT().GetDependencyPath("bom-index.json").Return("bom-index.json")
+		packageManager.EXPECT().GetDependencyPath("bom.json").Return("bom.json")
+		packageManager.EXPECT().FileIO().Return(fileIO)
+		fileIO.EXPECT().ReadFile("bom-index.json").Return(nil, os.ErrNotExist)
+		fileIO.EXPECT().ReadFile("bom.json").Return([]byte(`{
+			"components": {"codesphere": {"containerImages": {"api": "ghcr.io/codesphere/api:v1"}}}
+		}`), nil)
 	}
 
 	It("asks for confirmation before copying", func() {
@@ -53,17 +47,14 @@ var _ = Describe("CopyPackageCmd", func() {
 		prompter := prompt.NewMockPrompter(GinkgoT())
 		prompter.EXPECT().Bool("Copy these artifacts?", false).Return(true)
 
-		copier := &commandRecordingCopier{}
+		copier := installer.NewMockArtifactCopier(GinkgoT())
+		copier.EXPECT().Copy(context.Background(), "ghcr.io/codesphere/api:v1", "registry.example.com/mirror/ghcr_io/codesphere/api:v1").Return(nil).Once()
 		command := &CopyPackageCmd{
 			Opts:     CopyPackageOpts{Dest: "registry.example.com/mirror"},
 			Prompter: prompter,
 		}
 
 		Expect(command.CopyPackage(context.Background(), packageManager, copier)).To(Succeed())
-		Expect(copier.copies).To(Equal([]installer.PackageArtifact{{
-			Source:      "ghcr.io/codesphere/api:v1",
-			Destination: "registry.example.com/mirror/ghcr_io/codesphere/api:v1",
-		}}))
 	})
 
 	It("cancels without copying when confirmation is declined", func() {
@@ -72,7 +63,7 @@ var _ = Describe("CopyPackageCmd", func() {
 		prompter := prompt.NewMockPrompter(GinkgoT())
 		prompter.EXPECT().Bool("Copy these artifacts?", false).Return(false)
 
-		copier := &commandRecordingCopier{}
+		copier := installer.NewMockArtifactCopier(GinkgoT())
 		command := &CopyPackageCmd{
 			Opts:     CopyPackageOpts{Dest: "registry.example.com/mirror"},
 			Prompter: prompter,
@@ -80,20 +71,37 @@ var _ = Describe("CopyPackageCmd", func() {
 
 		err := command.CopyPackage(context.Background(), packageManager, copier)
 		Expect(err).To(MatchError("transfer cancelled"))
-		Expect(copier.copies).To(BeEmpty())
+		copier.AssertNotCalled(GinkgoT(), "Copy", mock.Anything, mock.Anything, mock.Anything)
 	})
 
 	It("skips confirmation with --yes", func() {
 		preparePackageManager()
 
-		copier := &commandRecordingCopier{}
+		copier := installer.NewMockArtifactCopier(GinkgoT())
+		copier.EXPECT().Copy(context.Background(), "ghcr.io/codesphere/api:v1", "registry.example.com/mirror/ghcr_io/codesphere/api:v1").Return(nil).Once()
 		command := &CopyPackageCmd{
 			Opts:     CopyPackageOpts{Dest: "registry.example.com/mirror", Yes: true},
 			Prompter: prompt.NewMockPrompter(GinkgoT()),
 		}
 
 		Expect(command.CopyPackage(context.Background(), packageManager, copier)).To(Succeed())
-		Expect(copier.copies).To(HaveLen(1))
+	})
+
+	It("copies from an index without reading the legacy BOM", func() {
+		packageManager.EXPECT().Extract(false, false).Return(nil)
+		packageManager.EXPECT().GetDependencyPath("bom-index.json").Return("bom-index.json")
+		packageManager.EXPECT().FileIO().Return(fileIO)
+		fileIO.EXPECT().ReadFile("bom-index.json").Return([]byte(`{
+			"version": "v3", "components": [{"name": "app", "version": "2",
+			"containerImages": {"api": {"ref": "ghcr.io/codesphere/api:v2"}}}]
+		}`), nil)
+
+		copier := installer.NewMockArtifactCopier(GinkgoT())
+		copier.EXPECT().Copy(context.Background(), "ghcr.io/codesphere/api:v2", "registry.example.com/mirror/ghcr_io/codesphere/api:v2").Return(nil).Once()
+
+		command := &CopyPackageCmd{Opts: CopyPackageOpts{Dest: "registry.example.com/mirror", Yes: true}}
+
+		Expect(command.CopyPackage(context.Background(), packageManager, copier)).To(Succeed())
 	})
 
 	It("registers the command and validates package source flags", func() {

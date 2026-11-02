@@ -146,7 +146,7 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 // installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
 // before the main dependency steps.
 func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, kubeClient ctrlclient.Client, stlog *bootstrap.StepLogger) error {
-	bomConfig, err := bom.Parse(pm.GetDependencyPath("bom.json"))
+	bomConfig, err := bom.Parse(pm.GetDependencyPath(bom.Filename))
 	if err != nil {
 		return fmt.Errorf("failed to parse installer BOM: %w", err)
 	}

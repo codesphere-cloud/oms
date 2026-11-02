@@ -14,6 +14,9 @@ import (
 	"github.com/distribution/reference"
 )
 
+// Filename is the legacy BOM filename within an installer package's dependencies.
+const Filename = "bom.json"
+
 // Config represents the Bill of Materials configuration.
 type Config struct {
 	Components map[string]ComponentConfig `json:"components"`
@@ -93,6 +96,12 @@ func Parse(filePath string) (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read BOM file: %w", err)
 	}
+
+	return ParseJSON(data)
+}
+
+// ParseJSON parses a legacy BOM document.
+func ParseJSON(data []byte) (*Config, error) {
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON BOM: %w", err)

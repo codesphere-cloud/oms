@@ -73,6 +73,7 @@ func AddCopyPackageCmd(parent *cobra.Command, opts *util.GlobalOptions) {
 			Short: "Copy all images and Helm charts from an installer package",
 			Long: csio.Long(`Read all container images and OCI Helm charts from an installer package BOM
 				and copy them to another registry.
+				Prefer bom-index.json when present, otherwise use the legacy bom.json.
 
 				Use --package for a local installer package or --version to download one
 				from the OMS portal. Codesphere container images omit their source registry,
@@ -123,7 +124,7 @@ func (c *CopyPackageCmd) CopyPackage(ctx context.Context, packageManager install
 		return fmt.Errorf("failed to extract package: %w", err)
 	}
 
-	artifacts, err := installer.ReadPackageArtifacts(packageManager.GetDependencyPath("bom.json"), c.Opts.Dest)
+	artifacts, err := installer.ReadPackageArtifacts(packageManager, c.Opts.Dest)
 	if err != nil {
 		return fmt.Errorf("failed to read package BOM: %w", err)
 	}
