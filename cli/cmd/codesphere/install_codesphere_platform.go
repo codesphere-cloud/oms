@@ -6,6 +6,7 @@ package codesphere
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"runtime"
@@ -15,6 +16,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/postgres"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
@@ -48,7 +50,17 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	return installCodespherePlatform(cmd.Context(), effectiveOpts, cfg, c.Env)
 }
 
-func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
+func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) (err error) {
+	cleanup, err := prepareMasterdataDBMigration(ctx, opts, &cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, cleanup()) }()
+
+	if err := configureMasterdataDBConnection(ctx, opts, &cfg); err != nil {
+		return err
+	}
+
 	if err := installer.EnsureClusterAdminSecret(ctx, opts.Vault, opts.PrivKey, opts.VaultType, cfg); err != nil {
 		return fmt.Errorf("failed to set cluster admin email: %w", err)
 	}
@@ -138,4 +150,52 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 
 	util.AddCmd(codesphere, platform.cmd)
 	platform.cmd.RunE = platform.RunE
+}
+
+// configureMasterdataDBConnection reads the existing database's CA for this phase's
+// temporary config. Deployment and vault credential writes belong to dependencies.
+func configureMasterdataDBConnection(ctx context.Context, opts *InstallCodesphereOpts, cfg *files.RootConfig) error {
+	if cfg.Postgres.Mode != "k8s-managed" {
+		return nil
+	}
+
+	pg, _, err := postgres.NewInstaller(ctx, opts.Vault, opts.PrivKey, opts.VaultType, *cfg)
+	if err != nil {
+		return fmt.Errorf("initialize PostgreSQL connection: %w", err)
+	}
+
+	if err := pg.WriteConnectionConfig(opts.ConfigPath, cfg); err != nil {
+		return fmt.Errorf("configure PostgreSQL connection: %w", err)
+	}
+
+	return nil
+}
+
+// prepareMasterdataDBMigration gives local component migrations access to the database.
+// The platform phase owns the temporary NodePort Service and config.
+func prepareMasterdataDBMigration(ctx context.Context, opts *InstallCodesphereOpts, cfg *files.RootConfig) (func() error, error) {
+	if cfg.Postgres.Mode != "k8s-managed" || !opts.LocalComponents || installer.IsStepSkipped(*cfg, opts.SkipSteps, installer.CodesphereStep) {
+		return func() error { return nil }, nil
+	}
+
+	_, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, *cfg)
+	if err != nil {
+		return nil, fmt.Errorf("load masterdata database migration Kubernetes config: %w", err)
+	}
+
+	kube, err := installer.NewKubeClient(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("create masterdata database migration Kubernetes client: %w", err)
+	}
+
+	pg := &postgres.Installer{Context: ctx, KubeClient: kube}
+
+	endpoint, err := pg.CreateMigrationEndpoint(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("expose masterdata database for migrations: %w", err)
+	}
+
+	cfg.Codesphere.Migration = postgres.MigrationConfig(endpoint.Host, endpoint.Port)
+
+	return endpoint.Close, nil
 }

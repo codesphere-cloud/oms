@@ -29,9 +29,9 @@ const (
 // LogFunc records formatted application readiness messages.
 type LogFunc func(format string, args ...interface{})
 
-// WaitForApplicationHealthy waits until Argo CD has compared the requested target revision
-// and reports the Application as healthy and synced.
-func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, name, targetRevision string, timeout time.Duration, logf LogFunc) error {
+// WaitForApplicationHealthy waits until Argo CD has compared the full requested
+// source, including Helm values, and reports the Application as healthy and synced.
+func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, name string, source argov1alpha1.ApplicationSource, timeout time.Duration, logf LogFunc) error {
 	if logf == nil {
 		logf = func(string, ...interface{}) {}
 	}
@@ -43,6 +43,7 @@ func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, na
 	logf("Waiting for ArgoCD Application %q to become healthy and synced (timeout %s)", name, timeout)
 
 	lastHealth, lastSync, lastTargetRevision := "", "", ""
+	lastSourceMatches := false
 
 	err := wait.PollUntilContextTimeout(ctx, applicationReadyPollInterval, timeout, true, func(ctx context.Context) (bool, error) {
 		app := &argov1alpha1.Application{}
@@ -59,17 +60,19 @@ func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, na
 		lastHealth, lastSync = string(app.Status.Health.Status), string(app.Status.Sync.Status)
 
 		lastTargetRevision = app.Status.Sync.ComparedTo.Source.TargetRevision
-		if lastTargetRevision == targetRevision && app.Status.Health.Status == "Healthy" && app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced {
+
+		lastSourceMatches = source.Equals(&app.Status.Sync.ComparedTo.Source)
+		if lastSourceMatches && app.Status.Health.Status == "Healthy" && app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced {
 			logf("ArgoCD Application %q is healthy and synced", name)
 			return true, nil
 		}
 
-		logf("Waiting for ArgoCD Application %q (target-revision=%q/%q, health=%q, sync=%q)", name, lastTargetRevision, targetRevision, lastHealth, lastSync)
+		logf("Waiting for ArgoCD Application %q (target-revision=%q/%q, source-matches=%t, health=%q, sync=%q)", name, lastTargetRevision, source.TargetRevision, lastSourceMatches, lastHealth, lastSync)
 
 		return false, nil
 	})
 	if err != nil {
-		return fmt.Errorf("timed out waiting for ArgoCD Application %q to become healthy and synced at target revision %q (observed target revision=%q, health=%q, sync=%q): %w", name, targetRevision, lastTargetRevision, lastHealth, lastSync, err)
+		return fmt.Errorf("timed out waiting for ArgoCD Application %q to become healthy and synced at target revision %q (observed target revision=%q, source-matches=%t, health=%q, sync=%q): %w", name, source.TargetRevision, lastTargetRevision, lastSourceMatches, lastHealth, lastSync, err)
 	}
 
 	return nil

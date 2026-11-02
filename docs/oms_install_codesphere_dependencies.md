@@ -5,9 +5,10 @@ Install Codesphere cluster dependencies (Phase 2)
 ### Synopsis
 
 Install cluster dependencies for a Codesphere instance (Phase 2).
-Runs ArgoCD install, vault secret sync, and pc-apps deployment first, then steps: set-up-cluster, ms-backends.
+Installs ArgoCD, syncs the vault, installs the masterdata database when postgres.mode is k8s-managed, then pc-apps, set-up-cluster, and ms-backends.
 Requires the infrastructure phase to have completed successfully.
 Pass --skip-steps argocd or add argocd to operations.skip to skip the ArgoCD pre-step.
+The k8s-managed PostgreSQL mode requires ArgoCD and cannot skip that pre-step.
 
 ```
 oms install codesphere dependencies [flags]

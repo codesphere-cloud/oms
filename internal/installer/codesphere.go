@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 
+	"go.yaml.in/yaml/v3"
+
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/prompt"
@@ -368,6 +370,14 @@ func workspaceImageBuildTag(registryServer, imageKey, flavorKey, version string)
 }
 
 func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.RootConfig) error {
+	if config.Postgres.Mode == "k8s-managed" {
+		restore, err := ci.prepareK8sManagedPostgresInfraConfig()
+		if err != nil {
+			return err
+		}
+		defer restore()
+	}
+
 	if ci.LocalComponents {
 		return ci.runLocalComponents(pm, config)
 	}
@@ -402,6 +412,49 @@ func (ci *CodesphereInstaller) runInstaller(pm PackageManager, config files.Root
 
 	log.Println("Private cloud installer script finished.")
 	return nil
+}
+
+// prepareK8sManagedPostgresInfraConfig adapts the config for packages predating k8s-managed mode.
+// Database installation itself is skipped here and runs in the dependencies phase.
+func (ci *CodesphereInstaller) prepareK8sManagedPostgresInfraConfig() (func(), error) {
+	data, err := os.ReadFile(ci.ConfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("read Kubernetes-managed PostgreSQL infrastructure config: %w", err)
+	}
+
+	var config map[string]any
+	if err := yaml.Unmarshal(data, &config); err != nil {
+		return nil, fmt.Errorf("parse Kubernetes-managed PostgreSQL infrastructure config: %w", err)
+	}
+
+	config["postgres"] = files.PostgresConfig{Mode: "external", ServerAddress: files.MasterdataServiceAddress, Port: files.PostgresPort, Database: files.MasterdataDatabaseName}
+
+	data, err = yaml.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Kubernetes-managed PostgreSQL infrastructure config: %w", err)
+	}
+
+	tmp, err := os.CreateTemp("", "oms-k8s-postgres-infra-*.yaml")
+	if err != nil {
+		return nil, fmt.Errorf("create Kubernetes-managed PostgreSQL infrastructure config: %w", err)
+	}
+
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmp.Name())
+
+		return nil, fmt.Errorf("write Kubernetes-managed PostgreSQL infrastructure config: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmp.Name())
+		return nil, fmt.Errorf("close Kubernetes-managed PostgreSQL infrastructure config: %w", err)
+	}
+
+	previousPath := ci.ConfigPath
+	ci.ConfigPath = tmp.Name()
+
+	return func() { ci.ConfigPath = previousPath; _ = os.Remove(tmp.Name()) }, nil
 }
 
 func (ci *CodesphereInstaller) runLocalComponents(pm PackageManager, config files.RootConfig) error {
@@ -500,6 +553,10 @@ func (ci *CodesphereInstaller) executableInstallerSteps(config files.RootConfig)
 		for _, step := range ci.AllowedSteps {
 			executableSteps[step] = true
 		}
+	}
+
+	if config.Postgres.Mode == "k8s-managed" {
+		executableSteps["postgres"] = false
 	}
 
 	ApplySkippedSteps(executableSteps, config, ci.SkipSteps)

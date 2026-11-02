@@ -17,6 +17,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/postgres"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/installer/vault/sops"
 	"github.com/codesphere-cloud/oms/internal/util"
@@ -217,23 +218,6 @@ func (b *LocalBootstrapper) Bootstrap() error {
 		if err != nil {
 			return fmt.Errorf("failed to install Rook and deploy test Ceph cluster: %w", err)
 		}
-	}
-
-	err = b.stlog.Step("Install CloudNativePG and PostgreSQL", func() error {
-		err := b.stlog.Substep("Install CloudNativePG operator", b.InstallCloudNativePGHelmChart)
-		if err != nil {
-			return err
-		}
-
-		err = b.stlog.Substep("Deploy PostgreSQL database", b.DeployPostgresDatabase)
-		if err != nil {
-			return err
-		}
-
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to install CloudNativePG and deploy PostgreSQL database: %w", err)
 	}
 
 	err = b.stlog.Step("Update install config", b.UpdateInstallConfig)
@@ -601,16 +585,18 @@ func (b *LocalBootstrapper) ResolveAgeKey() error {
 	return nil
 }
 
-// setLocalClusterComponents keeps the PC installer away from the components bootstrap-local
-// brings itself: the Rook cluster and the CNPG operator from InstallCloudNativePGHelmChart.
+// setLocalClusterComponents keeps the legacy installer from deploying components
+// owned by local bootstrap or the Argo CD dependency step.
 func setLocalClusterComponents(config *files.RootConfig) {
 	config.Cluster.RookExternalCluster = &files.RookExternalClusterConfig{
 		Enabled: false,
 	}
-	config.Cluster.PgOperator = &files.PgOperatorConfig{
-		Enabled:           false,
-		ManagedExternally: true,
+	if config.Cluster.PgOperator == nil {
+		config.Cluster.PgOperator = &files.PgOperatorConfig{}
 	}
+
+	config.Cluster.PgOperator.Enabled = false
+	config.Cluster.PgOperator.ManagedExternally = true
 	config.Cluster.BarmanCloudPlugin = &files.BarmanCloudPluginConfig{
 		Enabled: false,
 	}
@@ -625,27 +611,16 @@ func (b *LocalBootstrapper) UpdateInstallConfig() (err error) {
 		return fmt.Errorf("failed to ensure GitHub access is configured: %w", err)
 	}
 
-	b.Env.InstallConfig.Postgres.Mode = "external"
-	b.Env.InstallConfig.Postgres.Database = cnpgDatabaseName
-	b.Env.InstallConfig.Postgres.CACertPem, err = b.ReadPostgresCA()
-	if err != nil {
-		return fmt.Errorf("failed to read PostgreSQL CA: %w", err)
-	}
-
-	b.Env.InstallConfig.Postgres.ServerAddress = "masterdata-rw.codesphere.svc.cluster.local"
-	b.Env.InstallConfig.Postgres.Port = 5432
+	b.Env.InstallConfig.Postgres.Mode = "k8s-managed"
+	b.Env.InstallConfig.Postgres.Database = postgres.DatabaseName
+	b.Env.InstallConfig.Postgres.ServerAddress = postgres.ServiceAddress
 	b.Env.InstallConfig.Postgres.Primary = nil
 	b.Env.InstallConfig.Postgres.Replica = nil
-	pgPassword, err := b.ReadPostgresSuperuserPassword()
-	if err != nil {
-		return fmt.Errorf("failed to read PostgreSQL superuser password: %w", err)
+	if b.Env.InstallConfig.Postgres.K8sManagedConfig == nil {
+		b.Env.InstallConfig.Postgres.K8sManagedConfig = &files.K8sManagedConfig{}
 	}
-	b.Env.Vault.SetSecret(files.SecretEntry{
-		Name: "postgresPassword",
-		Fields: &files.SecretFields{
-			Password: pgPassword,
-		},
-	})
+
+	b.Env.InstallConfig.Postgres.K8sManagedConfig.StorageClass = b.storageClassName()
 
 	// Store the active kubeconfig in the vault so that install-components.js
 	// can retrieve it via SecretManagerSops when deploying Helm charts.

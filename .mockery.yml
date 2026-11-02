@@ -33,5 +33,9 @@ packages:
       pkgname: argocd_test
     interfaces:
       Client:
-        config:
-          structname: MockClient
+        configs:
+          - structname: MockClient
+          - structname: MockClient
+            dir: internal/installer/postgres
+            filename: mock_client_test.go
+            pkgname: postgres_test

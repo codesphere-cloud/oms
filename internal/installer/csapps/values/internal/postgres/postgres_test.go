@@ -13,6 +13,14 @@ import (
 )
 
 var _ = Describe("Values", func() {
+	It("uses the CNPG read-write service and verifies its TLS identity", func() {
+		values, err := postgres.Values(files.PostgresConfig{Mode: "k8s-managed", CACertPem: "cluster-ca"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(values.Host).To(Equal(files.MasterdataServiceAddress))
+		Expect(values.Port).To(Equal(5432))
+		Expect(values.Database).To(Equal(files.MasterdataDatabaseName))
+		Expect(values.SSL).To(Equal(postgres.SSL{ServerName: files.MasterdataServiceAddress, CA: "cluster-ca"}))
+	})
 	It("install mode -> primary IP as host, hostname as server name", func() {
 		values, err := postgres.Values(files.PostgresConfig{
 			Mode:      "install",

@@ -167,9 +167,9 @@ func (g *InstallConfig) ValidateInstallConfig() []string {
 	}
 
 	if g.Config.Postgres.Mode == "" {
-		errors = append(errors, "postgres mode is required (install or external)")
-	} else if g.Config.Postgres.Mode != "install" && g.Config.Postgres.Mode != "external" {
-		errors = append(errors, fmt.Sprintf("invalid postgres mode: %s (must be 'install' or 'external')", g.Config.Postgres.Mode))
+		errors = append(errors, "postgres mode is required (install, external or k8s-managed)")
+	} else if g.Config.Postgres.Mode != "install" && g.Config.Postgres.Mode != "external" && g.Config.Postgres.Mode != "k8s-managed" {
+		errors = append(errors, fmt.Sprintf("invalid postgres mode: %s (must be 'install', 'external' or 'k8s-managed')", g.Config.Postgres.Mode))
 	}
 
 	switch g.Config.Postgres.Mode {
