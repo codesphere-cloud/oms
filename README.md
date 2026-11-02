@@ -98,6 +98,70 @@ With `--airgapped`, only the jumpbox can reach the internet. OMS runs a Squid pa
 
 The proxy only allows the hosts of the package repositories configured on the jumpbox, plus `download.docker.com` on RHEL. The jumpbox and the nodes must therefore boot the same OS image, which the bootstrap guarantees because `--os` applies to all VMs. A re-run without `--airgapped` removes the proxy setting from the nodes again so that they install directly.
 
+The jumpbox itself still needs internet access, and so does the machine you run OMS on. See [Dependencies and network requirements](#dependencies-and-network-requirements) for everything OMS downloads, and how to preinstall it.
+
+#### Dependencies and network requirements
+
+##### Jumpbox
+
+The Codesphere installation commands (`oms install codesphere`, `oms install k0s`, `oms download package`, `oms copy package`) run on the jumpbox. `oms beta bootstrap-gcp` prepares it over SSH and does the following, each only when the item is missing:
+
+| Item | How OMS provides it | Source | Preinstall to avoid the download |
+|---|---|---|---|
+| `oms` | Copied from the local machine when `--remote-oms-binary` is set; otherwise downloaded and moved to `/usr/local/bin/oms`. | `api.github.com` and the release assets of `codesphere-cloud/oms` | Install `oms` in the image, or pass `--remote-oms-binary`. |
+| `sops` | Downloaded as v3.11.0 to `/usr/local/bin/sops`. | `github.com/getsops/sops/releases` | Install `sops` in the image so `sops` is in `PATH`. |
+| `age`, `age-keygen` | Downloaded as the **latest** release and moved to `/usr/local/bin/`. The version is not pinned. | `dl.filippo.io/age` | Install `age` and `age-keygen` in the image so `age-keygen` is in `PATH`. |
+| `curl`, `jq`, `tar`, `sudo` | Not installed. The downloads above need them, and the readiness checks for the registry and package proxy need `curl`. RHEL cloud images ship `curl` rather than `wget`. | OS package repositories | Install them in the image. |
+| `podman` | Installed with the OS package manager when an air-gapped installation needs the local registry or the package proxy. | OS package repositories | Install `podman` in the image. |
+| `apache2-utils` (Ubuntu) or `httpd-tools` (RHEL), `openssl` | `htpasswd` and `openssl` create the registry credentials and its self-signed certificate. `httpd-tools` or `apache2-utils` is installed together with `podman` for the registry; `openssl` is used but not installed. | OS package repositories | Install them in the image. |
+
+The jumpbox also pulls container images with `podman` from `docker.io`: `docker.io/library/registry:3` for the local container registry (the default with `--airgapped`) and `docker.io/ubuntu/squid:6.6-24.04_beta` for the package proxy (`--airgapped` only). In an air-gapped environment, preload both images into the jumpbox's local container storage; OMS has no setting for a different source.
+
+Commands that run on the jumpbox download further artifacts:
+
+| Command | Downloads | Source |
+|---|---|---|
+| `oms download package` | The Codesphere installer package, with checksum verification. | The OMS portal (`OMS_PORTAL_API`, default `https://oms-portal.codesphere.com/api`), authenticated with `OMS_PORTAL_API_KEY`. |
+| `oms copy package` | The container images and Helm charts that the package references, copied into your registry. | The upstream registry for Codesphere images, authenticated with registry credentials. No Docker daemon is needed. |
+| `oms download k0s` | `k0s`, `k0sctl`, and with `--airgapped` the k0s airgap image bundle. When no k0s version is given, the current stable version is looked up first. | `github.com/k0sproject/k0s/releases`, `github.com/k0sproject/k0sctl/releases`, `api.github.com`, `docs.k0sproject.io/stable.txt` |
+| `oms install k0s --single` | Nothing; it installs the `k0s` binary from the cache and uses `systemctl`. | None |
+| `oms install codesphere` | Nothing from the internet apart from the registry pulls below. The installer Node.js runtime, `sops`, container runtime dependencies and the Argo CD chart come from the installer package. | The installer package |
+| `oms update oms` | A new `oms` release. | `github.com` and `api.github.com` |
+
+`oms install k0s` downloads `k0sctl` and, unless already cached, `k0s`. Downloads are cached in the user cache directory, `~/.cache/oms` on Linux, so running `oms download k0s --airgapped` first, or copying that directory to the jumpbox, avoids the GitHub downloads. The installer package and its extracted contents live in `OMS_WORKDIR` (default `./oms-workdir`).
+
+##### Nodes
+
+| Item | How OMS provides it | Source |
+|---|---|---|
+| Docker (RHEL only) | `oms beta bootstrap-gcp` installs `docker-ce` from Docker's RHEL 9 repository. On Ubuntu the Codesphere installer installs Docker itself. | `download.docker.com`, or the package proxy when air-gapped |
+| `lvm2`, `container-selinux` (RHEL only) | Installed by `oms beta bootstrap-gcp`. | OS package repositories |
+| k0s | `k0sctl` uploads the cached `k0s` binary to every node. With `--airgapped`, it also uploads the k0s airgap image bundle to the worker nodes, which provides the k0s system images. | Jumpbox cache |
+| Codesphere images and charts | Pulled by the nodes from the configured registry. With `--airgapped` this is the registry on the jumpbox. | Configured registry |
+
+The GCP-only k0s configuration script also applies the GCP cloud controller manager manifest from `raw.githubusercontent.com/kubernetes/cloud-provider-gcp`. In an air-gapped bootstrap the control plane node must therefore reach that host, or the script must be changed to apply a mirrored copy.
+
+##### Network access summary
+
+Hosts OMS contacts when it runs without `--airgapped`:
+
+| Host | Used by | Contacted from |
+|---|---|---|
+| `oms-portal.codesphere.com` (or your `OMS_PORTAL_API`) | `download package`, `list packages`, API key commands | Jumpbox or local machine |
+| `ghcr.io` | `copy package`, Codesphere image and chart pulls | Jumpbox, nodes |
+| `api.github.com`, `github.com` | `oms` and `sops` downloads, k0s and k0sctl downloads, `update oms` | Jumpbox, local machine |
+| `dl.filippo.io` | `age` download | Jumpbox |
+| `docs.k0sproject.io` | k0s version lookup | Jumpbox, local machine |
+| `raw.githubusercontent.com` | GCP cloud controller manager manifest | Control plane node |
+| `docker.io` | Registry and Squid images for `--airgapped` | Jumpbox |
+| `download.docker.com` | Docker on RHEL | Nodes (through the proxy when air-gapped) |
+| OS package repositories | Package installation | All hosts (through the proxy when air-gapped) |
+| `charts.rook.io`, `argoproj.github.io` | `bootstrap-local` Rook chart, and an explicit `--argo-version` override with `--argo-repo` | Machine that runs `bootstrap-local` |
+| `*.googleapis.com`, `storage.googleapis.com` | `bootstrap-gcp`, GCS object storage | Local machine, Codesphere cluster |
+| ACME server (`acme-v02.api.letsencrypt.org` by default) | Certificate issuance | Codesphere cluster |
+
+An installation that avoids these downloads needs, at a minimum, `oms`, `sops` and `age-keygen` preinstalled on the jumpbox, the installer package and the k0s artifacts copied or cached ahead of time, the registry and Squid images preloaded into `podman`, and a registry that holds the mirrored Codesphere images. `oms install codesphere --package <archive>` installs from a local package.
+
 ### How to Build?
 
 ```shell
