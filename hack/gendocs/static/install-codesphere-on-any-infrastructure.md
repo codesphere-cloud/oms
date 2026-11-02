@@ -569,7 +569,10 @@ Argo CD to be enabled; skipping `argocd` is rejected before deployment.
 Local bootstrap selects `k8s-managed` and uses the same dependency and platform phases.
 For local component migrations, the platform phase creates a temporary NodePort
 Service using the read-write Service selector and deletes it when installation
-finishes, fails, or is canceled. The installer must be able to reach the selected
+finishes, fails, or is canceled. Before each endpoint attempt, it removes leftover
+OMS migration NodePort Services for the same database, including those left by a
+killed process; cleanup failures abort creation. Run only one installer per
+database at a time. The installer must be able to reach the selected
 node IP and allocated node port. PostgreSQL TLS remains enabled, with certificate
 verification against the in-cluster Service name. This avoids a client-go
 port-forward issue where closing one PostgreSQL TLS session can reset the shared

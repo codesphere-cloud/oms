@@ -6,8 +6,15 @@ using the selector and PostgreSQL target port of CNPG's `masterdata-rw` Service.
 Kubernetes allocates the node port; OMS uses a node's internal IP, falling back
 to its external IP. The installer must be able to reach that address and port.
 The temporary Service is deleted when the platform phase returns, including
-on failure or cancellation. A process kill can leave it behind; these Services
-have names beginning with `oms-masterdata-nodeport-`.
+on failure or cancellation. Before each new endpoint attempt, OMS also deletes
+leftovers in the database namespace with the `oms-masterdata-nodeport-` prefix,
+NodePort type, and a selector for the same CNPG cluster. This recovers Services
+left behind by a killed installer, including Services created by older OMS runs.
+Cleanup happens before waiting for database readiness, and a cleanup failure
+aborts the attempt without creating another Service. Run only one installer per
+database at a time; startup cleanup replaces that database's previous migration
+endpoint. A killed process can leave its endpoint exposed until the next attempt
+or manual deletion.
 
 Only the temporary installation config receives this migration endpoint.
 Application connections continue to use the in-cluster read-write Service.

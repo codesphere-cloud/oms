@@ -239,6 +239,8 @@ var _ = Describe("Masterdata database readiness", func() {
 		Expect(pg.WaitForDatabaseReady()).To(Succeed())
 	})
 	It("waits before exposing migrations and respects cancellation while pods are missing", func() {
+		kube.EXPECT().List(mock.Anything, mock.AnythingOfType("*v1.ServiceList"), []client.ListOption{client.InNamespace("codesphere")}).Return(nil).Once()
+
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
@@ -261,16 +263,32 @@ var _ = Describe("Masterdata database readiness", func() {
 	})
 
 	Context("temporary migration NodePort", func() {
-		var created *corev1.Service
+		var (
+			created       *corev1.Service
+			staleServices []corev1.Service
+			listError     error
+		)
 
 		BeforeEach(func() {
+			staleServices = nil
+			listError = nil
+
+			kube.EXPECT().List(mock.Anything, mock.AnythingOfType("*v1.ServiceList"), []client.ListOption{client.InNamespace("codesphere")}).RunAndReturn(func(_ context.Context, obj client.ObjectList, _ ...client.ListOption) error {
+				obj.(*corev1.ServiceList).Items = staleServices
+				return listError
+			}).Once()
+		})
+
+		prepareDatabase := func() {
+			GinkgoHelper()
+
 			service.Spec.Ports = []corev1.ServicePort{{Port: 5432, TargetPort: intstr.FromString("postgresql")}}
 
 			expectCluster()
 			expectPods()
 			expectService()
 			expectService()
-		})
+		}
 
 		expectNodes := func(addressType corev1.NodeAddressType, address string) {
 			GinkgoHelper()
@@ -279,9 +297,10 @@ var _ = Describe("Masterdata database readiness", func() {
 				return nil
 			}).Once()
 		}
-		expectCreate := func() {
+		expectCreate := func() *mock.Call {
 			GinkgoHelper()
-			kube.EXPECT().Create(mock.Anything, mock.AnythingOfType("*v1.Service")).RunAndReturn(func(_ context.Context, obj client.Object, _ ...client.CreateOption) error {
+
+			return kube.EXPECT().Create(mock.Anything, mock.AnythingOfType("*v1.Service")).RunAndReturn(func(_ context.Context, obj client.Object, _ ...client.CreateOption) error {
 				created = obj.(*corev1.Service)
 				Expect(created.GenerateName).To(Equal("oms-masterdata-nodeport-"))
 				Expect(created.Namespace).To(Equal("codesphere"))
@@ -295,7 +314,71 @@ var _ = Describe("Masterdata database readiness", func() {
 			}).Once()
 		}
 
+		It("deletes leftover migration Services before creating a replacement and preserves other Services", func() {
+			staleServices = []corev1.Service{
+				{ObjectMeta: metav1.ObjectMeta{Name: "oms-masterdata-nodeport-old-1", Namespace: "codesphere"}, Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeNodePort, Selector: map[string]string{"cnpg.io/cluster": "masterdata"}}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "oms-masterdata-nodeport-old-2", Namespace: "codesphere"}, Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeNodePort, Selector: map[string]string{"cnpg.io/cluster": "masterdata"}}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "user-postgres", Namespace: "codesphere"}, Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeNodePort, Selector: map[string]string{"cnpg.io/cluster": "masterdata"}}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "oms-masterdata-nodeport-other-db", Namespace: "codesphere"}, Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeNodePort, Selector: map[string]string{"cnpg.io/cluster": "other"}}},
+				{ObjectMeta: metav1.ObjectMeta{Name: "oms-masterdata-nodeport-clusterip", Namespace: "codesphere"}, Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeClusterIP, Selector: map[string]string{"cnpg.io/cluster": "masterdata"}}},
+			}
+			firstDelete := kube.EXPECT().Delete(mock.Anything, &staleServices[0]).Return(nil).Once()
+			secondDelete := kube.EXPECT().Delete(mock.Anything, &staleServices[1]).Return(nil).Once()
+
+			prepareDatabase()
+			expectNodes(corev1.NodeInternalIP, "10.0.0.25")
+			expectCreate().NotBefore(firstDelete, secondDelete)
+
+			endpoint, err := pg.CreateMigrationEndpoint(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(endpoint.Port).To(Equal(32123))
+		})
+
+		It("cleans up leftovers even when the database readiness check then fails", func() {
+			staleServices = []corev1.Service{{ObjectMeta: metav1.ObjectMeta{Name: "oms-masterdata-nodeport-old", Namespace: "codesphere"}, Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeNodePort, Selector: map[string]string{"cnpg.io/cluster": "masterdata"}}}}
+			deleted := kube.EXPECT().Delete(mock.Anything, &staleServices[0]).Return(nil).Once()
+			failure := errors.New("database status unavailable")
+			kube.EXPECT().Get(mock.Anything, mock.Anything, mock.Anything).Return(failure).Once().NotBefore(deleted)
+
+			endpoint, err := pg.CreateMigrationEndpoint(context.Background())
+			Expect(endpoint).To(BeNil())
+			Expect(errors.Is(err, failure)).To(BeTrue())
+		})
+
+		It("continues when a leftover Service has already been deleted", func() {
+			staleServices = []corev1.Service{{ObjectMeta: metav1.ObjectMeta{Name: "oms-masterdata-nodeport-old", Namespace: "codesphere"}, Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeNodePort, Selector: map[string]string{"cnpg.io/cluster": "masterdata"}}}}
+			deleted := kube.EXPECT().Delete(mock.Anything, &staleServices[0]).Return(apierrors.NewNotFound(schema.GroupResource{Resource: "services"}, staleServices[0].Name)).Once()
+
+			prepareDatabase()
+			expectNodes(corev1.NodeInternalIP, "10.0.0.25")
+			expectCreate().NotBefore(deleted)
+
+			_, err := pg.CreateMigrationEndpoint(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("does not create a new endpoint when listing leftovers fails", func() {
+			listError = errors.New("cannot list services")
+
+			endpoint, err := pg.CreateMigrationEndpoint(context.Background())
+			Expect(endpoint).To(BeNil())
+			Expect(errors.Is(err, listError)).To(BeTrue())
+			Expect(err).To(MatchError(ContainSubstring("list temporary PostgreSQL NodePort services")))
+		})
+
+		It("does not create a new endpoint when deleting a leftover fails", func() {
+			staleServices = []corev1.Service{{ObjectMeta: metav1.ObjectMeta{Name: "oms-masterdata-nodeport-old", Namespace: "codesphere"}, Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeNodePort, Selector: map[string]string{"cnpg.io/cluster": "masterdata"}}}}
+			failure := errors.New("cannot delete service")
+			kube.EXPECT().Delete(mock.Anything, &staleServices[0]).Return(failure).Once()
+
+			endpoint, err := pg.CreateMigrationEndpoint(context.Background())
+			Expect(endpoint).To(BeNil())
+			Expect(errors.Is(err, failure)).To(BeTrue())
+			Expect(err).To(MatchError(ContainSubstring("delete stale PostgreSQL NodePort service codesphere/oms-masterdata-nodeport-old")))
+		})
+
 		It("exposes the primary through a node address and cleans up after cancellation", func() {
+			prepareDatabase()
 			expectNodes(corev1.NodeInternalIP, "10.0.0.25")
 			expectCreate()
 
@@ -318,6 +401,7 @@ var _ = Describe("Masterdata database readiness", func() {
 		})
 
 		It("falls back to an external node address and accepts an already deleted Service", func() {
+			prepareDatabase()
 			expectNodes(corev1.NodeExternalIP, "203.0.113.25")
 			expectCreate()
 
@@ -329,6 +413,7 @@ var _ = Describe("Masterdata database readiness", func() {
 		})
 
 		It("reports deletion failures", func() {
+			prepareDatabase()
 			expectNodes(corev1.NodeInternalIP, "10.0.0.25")
 			expectCreate()
 
@@ -341,6 +426,7 @@ var _ = Describe("Masterdata database readiness", func() {
 		})
 
 		It("does not create a Service when nodes have no usable address", func() {
+			prepareDatabase()
 			expectNodes(corev1.NodeHostName, "node-1")
 
 			endpoint, err := pg.CreateMigrationEndpoint(context.Background())
@@ -349,6 +435,7 @@ var _ = Describe("Masterdata database readiness", func() {
 		})
 
 		It("reports Service creation failures", func() {
+			prepareDatabase()
 			expectNodes(corev1.NodeInternalIP, "10.0.0.25")
 
 			failure := errors.New("nodePort range exhausted")
@@ -360,6 +447,7 @@ var _ = Describe("Masterdata database readiness", func() {
 		})
 
 		It("cleans up if the API response has no allocated NodePort", func() {
+			prepareDatabase()
 			expectNodes(corev1.NodeInternalIP, "10.0.0.25")
 			kube.EXPECT().Create(mock.Anything, mock.AnythingOfType("*v1.Service")).Return(nil).Once()
 			kube.EXPECT().Delete(mock.Anything, mock.AnythingOfType("*v1.Service")).Return(nil).Once()

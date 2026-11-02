@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -15,6 +16,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+const migrationServicePrefix = "oms-masterdata-nodeport-"
 
 // MigrationEndpoint exposes PostgreSQL for the lifetime of a local installation.
 type MigrationEndpoint struct {
@@ -40,6 +43,10 @@ func (e *MigrationEndpoint) Close() error {
 // cannot tear down the shared client-go port-forward. See README.md for the
 // upstream issues and why reconnecting a port-forward is insufficient.
 func (b *Installer) CreateMigrationEndpoint(ctx context.Context) (*MigrationEndpoint, error) {
+	if err := b.cleanupMigrationEndpoints(ctx); err != nil {
+		return nil, err
+	}
+
 	if _, err := b.waitForDatabaseReady(ctx); err != nil {
 		return nil, err
 	}
@@ -64,7 +71,7 @@ func (b *Installer) CreateMigrationEndpoint(ctx context.Context) (*MigrationEndp
 	}
 
 	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{GenerateName: "oms-masterdata-nodeport-", Namespace: b.namespace()},
+		ObjectMeta: metav1.ObjectMeta{GenerateName: migrationServicePrefix, Namespace: b.namespace()},
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeNodePort, Selector: source.Spec.Selector,
 			Ports: []corev1.ServicePort{{Name: "postgres", Protocol: corev1.ProtocolTCP, Port: port.Port, TargetPort: port.TargetPort}},
@@ -82,6 +89,28 @@ func (b *Installer) CreateMigrationEndpoint(ctx context.Context) (*MigrationEndp
 	endpoint.Port = int(service.Spec.Ports[0].NodePort)
 
 	return endpoint, nil
+}
+
+// Recover endpoints left behind when the installer process could not run its
+// deferred cleanup. The reserved prefix also covers Services from older OMS runs.
+func (b *Installer) cleanupMigrationEndpoints(ctx context.Context) error {
+	services := &corev1.ServiceList{}
+	if err := b.KubeClient.List(ctx, services, client.InNamespace(b.namespace())); err != nil {
+		return fmt.Errorf("list temporary PostgreSQL NodePort services: %w", err)
+	}
+
+	for i := range services.Items {
+		service := &services.Items[i]
+		if !strings.HasPrefix(service.Name, migrationServicePrefix) || service.Spec.Type != corev1.ServiceTypeNodePort || service.Spec.Selector["cnpg.io/cluster"] != b.clusterName() {
+			continue
+		}
+
+		if err := b.KubeClient.Delete(ctx, service); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("delete stale PostgreSQL NodePort service %s/%s: %w", service.Namespace, service.Name, err)
+		}
+	}
+
+	return nil
 }
 
 func postgresServicePort(service *corev1.Service) (corev1.ServicePort, error) {
