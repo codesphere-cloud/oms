@@ -285,3 +285,37 @@ func getAuthServiceRequests(config *files.RootConfig) map[string]string {
 	authService := MustMap[any](MustMap[any](MustMap[any](config.Codesphere.Override["global"])["services"])["auth_service"])
 	return MustMap[string](authService["requests"])
 }
+
+var _ = Describe("Kubernetes-managed PostgreSQL profile defaults", func() {
+	It("uses a single database instance for development", func() {
+		manager := newPlainInstallConfigManager()
+		Expect(manager.ApplyProfile(installer.PROFILE_DEV)).To(Succeed())
+		config := manager.GetInstallConfig().Postgres.K8sManagedConfig
+		Expect(config.Instances).To(HaveValue(Equal(1)))
+		Expect(config.SynchronousReplicas).To(HaveValue(Equal(0)))
+		Expect(config.Version).To(Equal("15.14"))
+		Expect(config.StorageSize).To(Equal("10Gi"))
+		Expect(config.PodAntiAffinityType).To(Equal("preferred"))
+		Expect(config.Requests).To(Equal(map[string]string{"cpu": "0", "memory": "0"}))
+	})
+	It("uses HA database defaults for production", func() {
+		manager := newPlainInstallConfigManager()
+		Expect(manager.ApplyProfile(installer.PROFILE_PROD)).To(Succeed())
+		config := manager.GetInstallConfig().Postgres.K8sManagedConfig
+		Expect(config.Instances).To(HaveValue(Equal(3)))
+		Expect(config.SynchronousReplicas).To(HaveValue(Equal(1)))
+		Expect(config.PodAntiAffinityType).To(Equal("required"))
+		Expect(config.Version).To(Equal("15.14"))
+		Expect(config.StorageSize).To(Equal("100Gi"))
+		Expect(config.Requests).To(Equal(map[string]string{"cpu": "1", "memory": "2Gi"}))
+	})
+	It("preserves explicit database settings", func() {
+		manager := newPlainInstallConfigManager()
+		n := 5
+		manager.GetInstallConfig().Postgres.K8sManagedConfig = &files.K8sManagedConfig{Instances: &n, StorageSize: "500Gi", Version: "16.1"}
+		Expect(manager.ApplyProfile(installer.PROFILE_PROD)).To(Succeed())
+		Expect(manager.GetInstallConfig().Postgres.K8sManagedConfig.Instances).To(HaveValue(Equal(5)))
+		Expect(manager.GetInstallConfig().Postgres.K8sManagedConfig.StorageSize).To(Equal("500Gi"))
+		Expect(manager.GetInstallConfig().Postgres.K8sManagedConfig.Version).To(Equal("16.1"))
+	})
+})

@@ -47,6 +47,11 @@ func Values(postgres files.PostgresConfig) (Postgres, error) {
 		values.Host = postgres.Primary.IP
 		values.Port = files.PostgresPort
 		values.SSL.ServerName = postgres.Primary.Hostname
+	case "k8s-managed":
+		values.Database = files.MasterdataDatabaseName
+		values.Host = files.MasterdataServiceAddress
+		values.Port = files.PostgresPort
+		values.SSL.ServerName = files.MasterdataServiceAddress
 	case "external":
 		values.Host = postgres.ServerAddress
 		values.Port = postgres.Port

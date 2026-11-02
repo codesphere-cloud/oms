@@ -60,7 +60,8 @@ func (g *InstallConfig) applyCommonProperties() {
 	if g.Config.Postgres.Mode == "" {
 		g.Config.Postgres.Mode = "install"
 	}
-	if g.Config.Postgres.Primary == nil {
+
+	if g.Config.Postgres.Mode == "install" && g.Config.Postgres.Primary == nil {
 		g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{
 			IP:       "127.0.0.1",
 			Hostname: "localhost",
@@ -241,6 +242,7 @@ func (g *InstallConfig) applyProfileDev() error {
 		g.Config.Datacenter.Name = "dev"
 	}
 
+	g.ensureK8sManagedPostgresDefaults(false)
 	g.ensureMonitoringDefaults("dev", false, false, false)
 
 	if err := ApplyResourceProfile(g.Config, ResourceProfileNoRequestsSingleReplica); err != nil {
@@ -254,6 +256,7 @@ func (g *InstallConfig) applyProfileMinimal() error {
 		g.Config.Datacenter.Name = "dev"
 	}
 
+	g.ensureK8sManagedPostgresDefaults(false)
 	g.ensureMonitoringDefaults("dev", true, true, true)
 	g.ensureWorkspacePlans("Standard Developer", 1)
 	if g.Config.Cluster.RgwLoadBalancer == nil {
@@ -269,6 +272,7 @@ func (g *InstallConfig) applyProfileMinimal() error {
 }
 
 func (g *InstallConfig) applyProfileProd() error {
+	g.ensureK8sManagedPostgresDefaults(true)
 	if g.Config.Datacenter.Name == "" {
 		g.Config.Datacenter.Name = "production"
 	}
@@ -286,4 +290,43 @@ func (g *InstallConfig) applyProfileProd() error {
 		GrafanaAlloy: &files.GrafanaAlloyConfig{Enabled: true},
 	}
 	return nil
+}
+
+func (g *InstallConfig) ensureK8sManagedPostgresDefaults(production bool) {
+	if g.Config.Postgres.K8sManagedConfig == nil {
+		g.Config.Postgres.K8sManagedConfig = &files.K8sManagedConfig{}
+	}
+
+	c := g.Config.Postgres.K8sManagedConfig
+	instances, synchronous, size, affinity := 1, 0, "10Gi", "preferred"
+	requests := map[string]string{"cpu": "0", "memory": "0"}
+
+	if production {
+		instances, synchronous, size, affinity = 3, 1, "100Gi", "required"
+		requests = map[string]string{"cpu": "1", "memory": "2Gi"}
+	}
+
+	if c.Version == "" {
+		c.Version = "15.14"
+	}
+
+	if c.Instances == nil {
+		c.Instances = &instances
+	}
+
+	if c.SynchronousReplicas == nil {
+		c.SynchronousReplicas = &synchronous
+	}
+
+	if c.StorageSize == "" {
+		c.StorageSize = size
+	}
+
+	if c.PodAntiAffinityType == "" {
+		c.PodAntiAffinityType = affinity
+	}
+
+	if c.Requests == nil {
+		c.Requests = requests
+	}
 }

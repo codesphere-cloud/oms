@@ -230,6 +230,7 @@ var _ = Describe("local bootstrap cluster components", func() {
 		setLocalClusterComponents(manager.GetInstallConfig())
 
 		Expect(manager.GetInstallConfig().Cluster.PgOperator.Enabled).To(BeFalse())
+		Expect(manager.GetInstallConfig().Cluster.PgOperator.ManagedExternally).To(BeTrue())
 		Expect(manager.ValidateInstallConfig()).NotTo(ContainElement(ContainSubstring("pgOperator")))
 	})
 })

@@ -274,15 +274,35 @@ type RegistryConfig struct {
 // PostgresPort is the port the Postgres installed by OMS listens on.
 const PostgresPort = 5432
 
+// Masterdata connection defaults for the Codesphere database.
+const (
+	MasterdataDatabaseName   = "masterdata"
+	MasterdataServiceAddress = "masterdata-rw.codesphere.svc.cluster.local"
+)
+
 type PostgresConfig struct {
-	Mode          string                 `yaml:"mode,omitempty"`
-	CACertPem     string                 `yaml:"caCertPem,omitempty"`
-	Primary       *PostgresPrimaryConfig `yaml:"primary,omitempty"`
-	Replica       *PostgresReplicaConfig `yaml:"replica,omitempty"`
-	ServerAddress string                 `yaml:"serverAddress,omitempty"`
-	AltName       string                 `yaml:"altName,omitempty"`
-	Port          int                    `yaml:"port,omitempty"`
-	Database      string                 `yaml:"database,omitempty"`
+	Mode             string                 `yaml:"mode,omitempty"`
+	K8sManagedConfig *K8sManagedConfig      `yaml:"k8sManagedConfig,omitempty"`
+	CACertPem        string                 `yaml:"caCertPem,omitempty"`
+	Primary          *PostgresPrimaryConfig `yaml:"primary,omitempty"`
+	Replica          *PostgresReplicaConfig `yaml:"replica,omitempty"`
+	ServerAddress    string                 `yaml:"serverAddress,omitempty"`
+	AltName          string                 `yaml:"altName,omitempty"`
+	Port             int                    `yaml:"port,omitempty"`
+	Database         string                 `yaml:"database,omitempty"`
+}
+
+// K8sManagedConfig controls the in-cluster Codesphere PostgreSQL deployment.
+// Profiles supply defaults; installation requires the deployment settings to be set.
+type K8sManagedConfig struct {
+	Instances           *int              `yaml:"instances,omitempty"`
+	Version             string            `yaml:"version,omitempty"`
+	StorageClass        string            `yaml:"storageClass,omitempty"`
+	StorageSize         string            `yaml:"storageSize,omitempty"`
+	SynchronousReplicas *int              `yaml:"synchronousReplicas,omitempty"`
+	PodAntiAffinityType string            `yaml:"podAntiAffinityType,omitempty"`
+	Requests            map[string]string `yaml:"requests,omitempty"`
+	Limits              map[string]string `yaml:"limits,omitempty"`
 }
 
 type PostgresPrimaryConfig struct {
@@ -463,7 +483,7 @@ type RookExternalClusterConfig struct {
 type PgOperatorConfig struct {
 	Enabled bool `yaml:"enabled"`
 	// ManagedExternally marks a disabled operator as installed by something other than the
-	// PC installer, such as bootstrap-local, so its CRDs exist even though Enabled is false.
+	// PC installer, such as the Argo CD dependency step, so its CRDs exist even though Enabled is false.
 	ManagedExternally bool          `yaml:"managedExternally,omitempty"`
 	Override          ChartOverride `yaml:"override,omitempty"`
 }

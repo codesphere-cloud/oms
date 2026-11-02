@@ -38,7 +38,8 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureSshWorkspaceProxyHostKey(vault); err != nil {
 		return fmt.Errorf("ensure ssh workspace proxy host key: %w", err)
 	}
-	if config.Postgres.Primary != nil {
+
+	if config.Postgres.Mode != "k8s-managed" && config.Postgres.Primary != nil {
 		if err := EnsurePostgresSecrets(vault, &config.Postgres); err != nil {
 			return fmt.Errorf("ensure postgres secrets: %w", err)
 		}

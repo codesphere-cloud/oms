@@ -4,7 +4,6 @@
 package local
 
 import (
-	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -25,19 +24,6 @@ func (b *LocalBootstrapper) RunInstallCodesphereCommand() (err error) {
 	if b.installerBundleDir == "" {
 		return fmt.Errorf("installer bundle is not prepared")
 	}
-
-	forward, err := b.postgresInstaller().StartPortForward(b.ctx, b.restConfig)
-	if err != nil {
-		return err
-	}
-	defer func() { err = errors.Join(err, forward.Close()) }()
-
-	restore, err := b.configurePostgresForMigration("127.0.0.1", int32(forward.Port))
-	if err != nil {
-		return err
-	}
-
-	defer func() { err = errors.Join(err, restore()) }()
 
 	configPath, err := filepath.Abs(b.Env.InstallConfigPath)
 	if err != nil {

@@ -12,7 +12,6 @@ import (
 
 	"github.com/codesphere-cloud/oms/internal/installer"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
-	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/portal"
 )
 
@@ -110,29 +109,4 @@ func (b *LocalBootstrapper) PrepareInstaller() error {
 	b.installerBOM = bomConfig
 
 	return nil
-}
-
-func (b *LocalBootstrapper) configurePostgresForMigration(host string, port int32) (func() error, error) {
-	previousMigration := b.Env.InstallConfig.Codesphere.Migration
-	b.Env.InstallConfig.Codesphere.Migration = &files.MigrationConfig{
-		Postgres: &files.MigrationPostgresConfig{
-			Host:     host,
-			Port:     int(port),
-			Database: b.Env.InstallConfig.Postgres.Database,
-			AltName:  b.Env.InstallConfig.Postgres.ServerAddress,
-		},
-	}
-
-	if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
-		b.Env.InstallConfig.Codesphere.Migration = previousMigration
-		return nil, fmt.Errorf("failed to write migration config to install config: %w", err)
-	}
-
-	return func() error {
-		b.Env.InstallConfig.Codesphere.Migration = previousMigration
-		if err := b.icg.WriteInstallConfig(b.Env.InstallConfigPath, true); err != nil {
-			return fmt.Errorf("failed to restore install config after installer run: %w", err)
-		}
-		return nil
-	}, nil
 }

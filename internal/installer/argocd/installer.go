@@ -35,7 +35,8 @@ const DefaultNamespace = "argocd"
 // DefaultRepoURL is used only for an explicit upstream version override.
 const DefaultRepoURL = "https://argoproj.github.io/argo-helm"
 
-const imagePullSecretName = "docker-regcred"
+// ImagePullSecretName is the name of Argo CD’s registry credential secret.
+const ImagePullSecretName = "docker-regcred"
 
 // PackagedChartName identifies the Codesphere wrapper chart and its BOM component.
 const PackagedChartName = "argocd"
@@ -359,7 +360,7 @@ func (a *Installer) imagePullSecret() (*corev1.Secret, error) {
 	}
 
 	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: imagePullSecretName, Namespace: DefaultNamespace},
+		ObjectMeta: metav1.ObjectMeta{Name: ImagePullSecretName, Namespace: DefaultNamespace},
 		Type:       corev1.SecretTypeDockerConfigJson,
 		Data:       map[string][]byte{corev1.DockerConfigJsonKey: config},
 	}, nil

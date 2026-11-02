@@ -101,9 +101,11 @@ func (g *InstallConfig) collectRegistryConfig(prompter prompt.Prompter) {
 
 func (g *InstallConfig) collectPostgresConfig(prompter prompt.Prompter) {
 	log.Println("\n=== PostgreSQL Configuration ===")
-	g.Config.Postgres.Mode = g.collectChoice(prompter, "PostgreSQL setup", []string{"install", "external"}, "install")
 
-	if g.Config.Postgres.Mode == "install" {
+	g.Config.Postgres.Mode = g.collectChoice(prompter, "PostgreSQL setup", []string{"install", "external", "k8s-managed"}, "install")
+
+	switch g.Config.Postgres.Mode {
+	case "install":
 		if g.Config.Postgres.Primary == nil {
 			g.Config.Postgres.Primary = &files.PostgresPrimaryConfig{}
 		}
@@ -128,7 +130,7 @@ func (g *InstallConfig) collectPostgresConfig(prompter prompt.Prompter) {
 		} else {
 			g.Config.Postgres.Replica = nil
 		}
-	} else {
+	case "external":
 		g.Config.Postgres.ServerAddress = g.collectString(prompter, "External PostgreSQL server address", "postgres.example.com:5432")
 	}
 }

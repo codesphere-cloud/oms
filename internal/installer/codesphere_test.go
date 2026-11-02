@@ -15,6 +15,12 @@ import (
 )
 
 var _ = Describe("Codesphere installer", func() {
+	It("defers CNPG database installation until the dependency phase", func() {
+		ci := &installer.CodesphereInstaller{AllowedSteps: installer.InfraSteps}
+		config := files.RootConfig{Postgres: files.PostgresConfig{Mode: "k8s-managed"}}
+		Expect(ci.ExecutableSteps(config)).NotTo(ContainElement("postgres"))
+		Expect(ci.ExecutableSteps(config)).To(ContainElement("kubernetes"))
+	})
 	It("passes verbose output through package extraction", func() {
 		packageDir := GinkgoT().TempDir()
 		for _, name := range []string{"deps.tar.gz", "private-cloud-installer.js", "node"} {

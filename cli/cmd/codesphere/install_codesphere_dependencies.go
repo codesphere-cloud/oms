@@ -18,6 +18,7 @@ import (
 	argocdinstaller "github.com/codesphere-cloud/oms/internal/installer/argocd"
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
+	"github.com/codesphere-cloud/oms/internal/installer/postgres"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
@@ -59,6 +60,19 @@ func (c *InstallCodesphereDepenciesCmd) RunE(cmd *cobra.Command, _ []string) err
 }
 
 func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
+	if err := validatePostgresDependencies(cfg, opts.SkipSteps); err != nil {
+		return err
+	}
+
+	if cfg.Postgres.Mode == "k8s-managed" {
+		if cfg.Cluster.PgOperator == nil {
+			cfg.Cluster.PgOperator = &files.PgOperatorConfig{}
+		}
+		// Argo CD owns the operator; the legacy dependency steps must not deploy it.
+		cfg.Cluster.PgOperator.Enabled = false
+		cfg.Cluster.PgOperator.ManagedExternally = true
+	}
+
 	workdir := env.GetOmsWorkdir()
 	pm := installer.NewPackage(workdir, opts.Package)
 	if opts.LocalComponents {
@@ -143,8 +157,17 @@ func installCodesphereDepencies(ctx context.Context, opts *InstallCodesphereOpts
 	return nil
 }
 
-// installArgoCDAndApps runs ArgoCD install, vault secret sync, and pc-apps install
-// before the main dependency steps.
+// validatePostgresDependencies rejects incompatible step selections before any deployment.
+func validatePostgresDependencies(cfg files.RootConfig, skipSteps []string) error {
+	if cfg.Postgres.Mode == "k8s-managed" && installer.IsStepSkipped(cfg, skipSteps, installer.ArgoCDStep) {
+		return fmt.Errorf("postgres.mode k8s-managed requires Argo CD; remove argocd from --skip-steps and operations.skip")
+	}
+
+	return nil
+}
+
+// installArgoCDAndApps installs Argo CD, syncs the vault, prepares the masterdata
+// database, and registers pc-apps before the main dependency steps.
 func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, pm installer.PackageManager, kubeClient ctrlclient.Client, stlog *bootstrap.StepLogger) error {
 	bomConfig, err := bom.Parse(pm.GetDependencyPath(bom.Filename))
 	if err != nil {
@@ -216,6 +239,8 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		if err != nil {
 			return fmt.Errorf("failed to initialize ArgoCD installer: %w", err)
 		}
+
+		registryURL = argoCDInstall.OciRegistryURL
 		install = argocdinstaller.NewAppInstaller(argocdinstaller.AppInstallerConfig{
 			Config:       cfg,
 			Vault:        installVault,
@@ -236,6 +261,22 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 	}); err != nil {
 		return err
 	}
+
+	if cfg.Postgres.Mode == "k8s-managed" {
+		if err := stlog.Substep("Install masterdata database", func() error {
+			return postgres.InstallMasterdataDB(ctx, &cfg, postgres.MasterdataDBOptions{
+				ConfigPath:  opts.ConfigPath,
+				VaultPath:   opts.Vault,
+				PrivKey:     opts.PrivKey,
+				VaultType:   opts.VaultType,
+				BOM:         bomConfig,
+				RegistryURL: registryURL,
+			})
+		}); err != nil {
+			return fmt.Errorf("install Kubernetes-managed PostgreSQL: %w", err)
+		}
+	}
+
 	if err := stlog.Substep("Install pc-apps", func() error {
 		return install.InstallPCApps(ctx, bomConfig)
 	}); err != nil {
@@ -251,9 +292,10 @@ func AddInstallCodesphereDepenciesCmd(codesphere *cobra.Command, opts *InstallCo
 			Use:   "dependencies",
 			Short: "Install Codesphere cluster dependencies (Phase 2)",
 			Long: io.Long(`Install cluster dependencies for a Codesphere instance (Phase 2).
-			Runs ArgoCD install, vault secret sync, and pc-apps deployment first, then steps: set-up-cluster, ms-backends.
+			Installs ArgoCD, syncs the vault, installs the masterdata database when postgres.mode is k8s-managed, then pc-apps, set-up-cluster, and ms-backends.
 			Requires the infrastructure phase to have completed successfully.
-			Pass --skip-steps argocd or add argocd to operations.skip to skip the ArgoCD pre-step.`),
+			Pass --skip-steps argocd or add argocd to operations.skip to skip the ArgoCD pre-step.
+			The k8s-managed PostgreSQL mode requires ArgoCD and cannot skip that pre-step.`),
 			Example: util.FormatExamples("install codesphere dependencies", []io.Example{
 				{
 					Cmd:  "-p codesphere-v1.2.3-installer-lite.tar.gz -k <path-to-private-key> -c config.yaml",

@@ -212,6 +212,15 @@ var _ = Describe("ConfigManager", func() {
 				Expect(errors).To(ContainElement(ContainSubstring("postgres mode is required")))
 			})
 
+			It("accepts Kubernetes-managed PostgreSQL mode", func() {
+				configManager.Config.Postgres.Mode = "k8s-managed"
+				Expect(configManager.ValidateInstallConfig()).NotTo(ContainElement(ContainSubstring("postgres mode")))
+			})
+			It("rejects the superseded cnpg mode name", func() {
+				configManager.Config.Postgres.Mode = "cnpg"
+				Expect(configManager.ValidateInstallConfig()).To(ContainElement(ContainSubstring("invalid postgres mode")))
+			})
+
 			It("should reject invalid postgres mode", func() {
 				configManager.Config.Postgres.Mode = "invalid"
 				errors := configManager.ValidateInstallConfig()

@@ -81,6 +81,12 @@ func (c *InstallCodesphereCmd) RunE(cmd *cobra.Command, _ []string) error {
 	}
 	defer cleanup()
 
+	if !c.Opts.CodesphereOnly {
+		if err := validatePostgresDependencies(cfg, c.Opts.SkipSteps); err != nil {
+			return err
+		}
+	}
+
 	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}

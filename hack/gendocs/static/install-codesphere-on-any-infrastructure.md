@@ -553,3 +553,78 @@ OCI repository, and `--argo-values` files use upstream settings at the root.
 A custom `--argo-repo` requires `--argo-version`; without a version override the
 packaged chart remains the default. Explicit upstream installs retain the
 upstream installer's downgrade protection.
+
+## Kubernetes-managed PostgreSQL
+
+Set `postgres.mode: k8s-managed` to install the operator and database during
+`oms install codesphere dependencies`, including when running the complete
+`oms install codesphere` workflow. The `install` mode continues to install
+PostgreSQL on dedicated hosts; `external` uses an existing database.
+The dependency phase installs Argo CD first, then deploys the operator as the
+`cnpg` Argo CD Application using the chart version from the installer BOM. It
+waits for the operator to sync before creating the masterdata database, then
+installs pc-apps. This mode requires
+Argo CD to be enabled; skipping `argocd` is rejected before deployment.
+
+Local bootstrap selects `k8s-managed` and uses the same dependency and platform phases.
+For local component migrations, the platform phase creates a temporary NodePort
+Service using the read-write Service selector and deletes it when installation
+finishes, fails, or is canceled. The installer must be able to reach the selected
+node IP and allocated node port. PostgreSQL TLS remains enabled, with certificate
+verification against the in-cluster Service name. This avoids a client-go
+port-forward issue where closing one PostgreSQL TLS session can reset the shared
+tunnel and make subsequent migration connections fail with `ECONNREFUSED`, even
+when the pod stays healthy. See the
+[PostgreSQL migration access notes](https://github.com/codesphere-cloud/oms/blob/main/internal/installer/postgres/README.md)
+for the upstream tickets, proposed fixes, and cleanup details.
+
+The dependency phase copies Argo CD's image pull credentials into an OMS-managed
+`oms-cnpg-regcred` secret in the database namespace and references it from the
+operator and database pods. Database
+readiness requires the Cluster status to match its desired instance count and
+all instance pods to be ready with the current image, resource settings, and pull
+secrets. The read-write service must select the ready primary. The platform
+phase repeats this check before exposing the migration endpoint and waits through restarts
+or reconciliation instead of failing immediately when no ready primary exists.
+
+```yaml
+postgres:
+  mode: k8s-managed
+  k8sManagedConfig:
+    instances: 3
+    storageClass: fast
+    storageSize: 100Gi
+    synchronousReplicas: 1
+    podAntiAffinityType: required
+    requests:
+      cpu: "1"
+      memory: 2Gi
+    version: "15.14"
+    # Optional resource limits:
+    # limits:
+    #   cpu: "2"
+    #   memory: 4Gi
+```
+
+The `prod`/`production` profiles default to three instances, 100 GiB per instance,
+CPU and memory requests of 1 CPU and 2 GiB, required anti-affinity across nodes,
+and one required synchronous standby. This needs at least three eligible nodes;
+writes wait when no synchronous standby is available. The `dev`/`development`
+and `minimal` profiles use one instance, 10 GiB, zero resource requests,
+preferred anti-affinity, and asynchronous replication. Explicit Kubernetes-managed PostgreSQL settings
+can override profile defaults. Without a profile, explicitly supply instances, synchronousReplicas, storageSize,
+podAntiAffinityType, requests, and version; the PostgreSQL installer does not
+fill in defaults.
+Omit `storageClass` to use the cluster's default StorageClass.
+
+The dependency phase reads the database's generated password and CA, persists the
+password in the configured vault, and supplies the TLS connection to subsequent
+installation steps. The platform phase only reads the existing CA for its temporary
+connection configuration; it does not deploy PostgreSQL or rewrite its vault credentials. The source
+configuration retains `mode: k8s-managed`; compatibility settings for installer bundles
+are written only to the temporary merged configuration. The operator is owned by
+Argo CD; `cluster.pgOperator.enabled: false` and `managedExternally: true` keep
+the legacy installer from deploying it again. These flags do not disable the
+Argo CD dependency step. The `postgres` skip
+step applies only to the legacy host-based installer; Kubernetes-managed
+PostgreSQL is always deployed during dependencies.
