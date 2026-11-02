@@ -34,7 +34,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/argoproj/argo-cd/v3 v3.5.7
 	github.com/cloudnative-pg/cloudnative-pg v1.30.0
-	github.com/codesphere-cloud/cs-go v1.59.0
+	github.com/codesphere-cloud/cs-go v1.61.0
 	github.com/creativeprojects/go-selfupdate v1.7.0
 	github.com/distribution/reference v0.6.0
 	github.com/getsops/sops/v3 v3.13.3
@@ -633,7 +633,7 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.28.0 // indirect
-	go.yaml.in/yaml/v2 v2.4.4 // indirect
+	go.yaml.in/yaml/v2 v2.4.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
 	gocloud.dev v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20260611194520-c48552f49976 // indirect
