@@ -20,6 +20,29 @@ var _ = Describe("Telemetry export", func() {
 		Expect(err).To(MatchError(ContainSubstring("traceEndpoint must be set")))
 	})
 
+	It("traces with a whitespace-only endpoint -> error", func() {
+		conf := files.CodesphereConfig{TelemetryExport: &files.TelemetryExport{Traces: true, TraceEndpoint: "  "}}
+
+		_, err := codesphere.Values(conf, defaultTestInputs())
+
+		Expect(err).To(MatchError(ContainSubstring("traceEndpoint must be set")))
+	})
+
+	It("traces with an endpoint -> traces exported to it", func() {
+		conf := files.CodesphereConfig{TelemetryExport: &files.TelemetryExport{
+			Traces:        true,
+			TraceEndpoint: "https://collector.example.com",
+		}}
+
+		values, err := codesphere.Values(conf, defaultTestInputs())
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.Otel.TelemetryExport.Traces).To(Equal(codesphere.Traces{
+			Enabled:  true,
+			Endpoint: "https://collector.example.com",
+		}))
+	})
+
 	It("no telemetry config -> disabled exports and default central collector", func() {
 		values, err := codesphere.Values(files.CodesphereConfig{}, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
