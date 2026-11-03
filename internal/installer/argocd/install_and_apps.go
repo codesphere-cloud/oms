@@ -24,7 +24,8 @@ import (
 const (
 	applicationReadyTimeout      = 30 * time.Minute
 	applicationReadyPollInterval = 5 * time.Second
-	// pcAppsName is the name of the pc-applications chart, its BOM component and its Application.
+	// pcAppsName is the name of the pc-applications chart, its BOM component, its Application and
+	// its Helm release.
 	pcAppsName = "pc-applications"
 )
 
@@ -134,6 +135,7 @@ func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config)
 	pcApps, err := installer.NewAppOfAppsFromBom(
 		i.cfg.KubeClient,
 		bomConfig,
+		pcAppsName,
 		pcAppsName,
 		pcAppsName,
 		DefaultNamespace,

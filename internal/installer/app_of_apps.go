@@ -15,6 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/distribution/reference"
+	chartutil "helm.sh/helm/v4/pkg/chart/v2/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,6 +44,7 @@ const (
 type AppOfApps struct {
 	name           string // name of the Application
 	chart          string
+	releaseName    string // Helm release name ArgoCD renders the chart with
 	version        string // chart version, used as the Application targetRevision (required)
 	namespace      string // destination namespace of the app-of-apps
 	valuesFiles    []string
@@ -51,16 +53,20 @@ type AppOfApps struct {
 }
 
 // NewAppOfAppsFromBom creates an installer for the chart in the BOM component, applied as the
-// Application name.
+// Application name and rendered as the Helm release.
 func NewAppOfAppsFromBom(
 	c client.Client,
 	bomConfig *bom.Config,
-	component, name, namespace string,
+	component, name, releaseName, namespace string,
 	valuesFiles []string,
 	valuesOverride map[string]interface{},
 ) (*AppOfApps, error) {
 	if name == "" {
 		return nil, errors.New("name is required")
+	}
+
+	if err := chartutil.ValidateReleaseName(releaseName); err != nil {
+		return nil, fmt.Errorf("release name %q: %w", releaseName, err)
 	}
 	if namespace == "" {
 		return nil, errors.New("namespace is required")
@@ -81,6 +87,7 @@ func NewAppOfAppsFromBom(
 	return &AppOfApps{
 		name:           name,
 		chart:          path.Base(reference.Path(chart)),
+		releaseName:    releaseName,
 		version:        chart.Tag(),
 		namespace:      namespace,
 		valuesFiles:    valuesFiles,
@@ -136,8 +143,7 @@ func (p *AppOfApps) resolveRepoURL(ctx context.Context) (string, error) {
 // and merged Helm values.
 func (p *AppOfApps) createApplication(repoURL string, vals map[string]interface{}) (*argov1alpha1.Application, error) {
 	helm := &argov1alpha1.ApplicationSourceHelm{
-		// Named after the chart: Application names can exceed Helm's 53 character limit.
-		ReleaseName: p.chart,
+		ReleaseName: p.releaseName,
 	}
 	if len(vals) > 0 {
 		raw, err := json.Marshal(vals)
