@@ -9,12 +9,7 @@ import (
 
 // SignUp restricts who can sign up.
 type SignUp struct {
-	Email SignUpEmail `yaml:"email"`
-}
-
-// SignUpEmail restricts sign-ups to email domains.
-type SignUpEmail struct {
-	AllowedDomains []string `yaml:"allowedDomains,omitempty"`
+	Email files.SignUpEmailConfig `yaml:"email"`
 }
 
 func signUpValues(signUp *files.SignUpConfig) SignUp {
@@ -22,5 +17,5 @@ func signUpValues(signUp *files.SignUpConfig) SignUp {
 		return SignUp{}
 	}
 
-	return SignUp{Email: SignUpEmail{AllowedDomains: signUp.Email.AllowedDomains}}
+	return SignUp{Email: *signUp.Email}
 }

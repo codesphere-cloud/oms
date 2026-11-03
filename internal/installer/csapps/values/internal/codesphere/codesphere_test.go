@@ -130,8 +130,8 @@ var _ = Describe("Values", func() {
 				AzureDevOps: codesphere.GitProvider{Enabled: false},
 				GitHub: codesphere.GitProvider{Enabled: true, GitProviderConnection: &codesphere.GitProviderConnection{
 					URL: "https://github.example.com",
-					API: codesphere.GitProviderAPI{BaseURL: "https://api.github.example.com"},
-					OAuth: codesphere.GitProviderOAuth{
+					API: files.APIConfig{BaseURL: "https://api.github.example.com"},
+					OAuth: files.OAuthConfig{
 						Issuer:                "https://github.example.com",
 						AuthorizationEndpoint: "https://github.example.com/login/oauth/authorize",
 						TokenEndpoint:         "https://github.example.com/login/oauth/access_token",
@@ -186,7 +186,7 @@ var _ = Describe("Values", func() {
 					},
 				},
 			},
-			SignUp: codesphere.SignUp{Email: codesphere.SignUpEmail{AllowedDomains: []string{"example.com"}}},
+			SignUp: codesphere.SignUp{Email: files.SignUpEmailConfig{AllowedDomains: []string{"example.com"}}},
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",

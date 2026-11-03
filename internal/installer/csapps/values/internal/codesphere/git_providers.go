@@ -24,25 +24,9 @@ type GitProvider struct {
 
 // GitProviderConnection is where Codesphere reaches a git provider and how it signs users in.
 type GitProviderConnection struct {
-	URL   string           `yaml:"url"`
-	API   GitProviderAPI   `yaml:"api"`
-	OAuth GitProviderOAuth `yaml:"oauth"`
-}
-
-// GitProviderAPI is a git provider's API.
-type GitProviderAPI struct {
-	BaseURL string `yaml:"baseUrl"`
-}
-
-// GitProviderOAuth is the OAuth flow of a git provider.
-type GitProviderOAuth struct {
-	Issuer                string `yaml:"issuer"`
-	AuthorizationEndpoint string `yaml:"authorizationEndpoint"`
-	TokenEndpoint         string `yaml:"tokenEndpoint"`
-	RedirectURI           string `yaml:"redirectUri,omitempty"`
-	InstallationURI       string `yaml:"installationUri,omitempty"`
-	ClientAuthMethod      string `yaml:"clientAuthMethod,omitempty"`
-	Scope                 string `yaml:"scope,omitempty"`
+	URL   string            `yaml:"url"`
+	API   files.APIConfig   `yaml:"api"`
+	OAuth files.OAuthConfig `yaml:"oauth"`
 }
 
 // SCMManager is the SCM-Manager integration; disabled, it has no connection.
@@ -82,17 +66,9 @@ func singleGitProviderValues(provider *files.GitProviderConfig) GitProvider {
 	}
 
 	return GitProvider{Enabled: true, GitProviderConnection: &GitProviderConnection{
-		URL: provider.URL,
-		API: GitProviderAPI{BaseURL: provider.API.BaseURL},
-		OAuth: GitProviderOAuth{
-			Issuer:                provider.OAuth.Issuer,
-			AuthorizationEndpoint: provider.OAuth.AuthorizationEndpoint,
-			TokenEndpoint:         provider.OAuth.TokenEndpoint,
-			RedirectURI:           provider.OAuth.RedirectURI,
-			InstallationURI:       provider.OAuth.InstallationURI,
-			ClientAuthMethod:      provider.OAuth.ClientAuthMethod,
-			Scope:                 provider.OAuth.Scope,
-		},
+		URL:   provider.URL,
+		API:   provider.API,
+		OAuth: provider.OAuth,
 	}}
 }
 
