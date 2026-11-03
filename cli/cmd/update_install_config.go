@@ -212,7 +212,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		log.Println("\nNo changes detected that require secret regeneration.")
 	}
 
-	changes, err := c.confirmAndSyncSecrets(config, vault)
+	added, err := c.confirmAndAddMissingSecrets(config, vault)
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func (c *UpdateInstallConfigCmd) UpdateInstallConfig(icg installer.InstallConfig
 		return fmt.Errorf("failed to write vault file: %w", err)
 	}
 
-	c.printSuccessMessage(tracker, changes)
+	c.printSuccessMessage(tracker, added)
 
 	return nil
 }
@@ -472,116 +472,69 @@ func (c *UpdateInstallConfigCmd) approve(question, intro string, items []string)
 	return c.Prompter.Bool(question, false)
 }
 
-// confirmAndSyncSecrets asks about the secrets the vault is missing or holds obsolete
-// values for and applies the changes if the operator agrees. Returns what was changed,
-// nothing if the operator declined.
-func (c *UpdateInstallConfigCmd) confirmAndSyncSecrets(config *files.RootConfig, vault *files.InstallVault) (secretChanges, error) {
-	pending, err := pendingSecretChanges(config, vault)
+// confirmAndAddMissingSecrets asks about the secrets the vault is missing and adds them if
+// the operator agrees. Returns the names of the ones that were added, none if the operator
+// declined.
+func (c *UpdateInstallConfigCmd) confirmAndAddMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+	missing, err := missingSecrets(config, vault)
 	if err != nil {
-		return secretChanges{}, fmt.Errorf("failed to determine secret changes: %w", err)
+		return nil, fmt.Errorf("failed to determine missing secrets: %w", err)
 	}
 
-	if pending.empty() {
-		return secretChanges{}, nil
+	if len(missing) == 0 {
+		return nil, nil
 	}
 
-	pendingItems := pending.describe()
-	if !c.approve("Apply them?", pending.intro(), pendingItems) {
-		log.Printf("\nSkipped %d secret change(s): %s\n", len(pendingItems), strings.Join(pendingItems, ", "))
+	if !c.approve("Generate them?", "The vault does not have these secrets yet:", missing) {
+		log.Printf("\nSkipped %d missing secret(s): %s\n", len(missing), strings.Join(missing, ", "))
 
-		return secretChanges{}, nil
+		return nil, nil
 	}
 
-	applied, err := syncSecrets(config, vault)
+	added, err := addMissingSecrets(config, vault)
 	if err != nil {
-		return secretChanges{}, fmt.Errorf("failed to apply secret changes: %w", err)
+		return nil, fmt.Errorf("failed to add missing secrets: %w", err)
 	}
 
-	appliedItems := applied.describe()
-	log.Printf("\nApplied %d secret change(s): %s\n", len(appliedItems), strings.Join(appliedItems, ", "))
+	log.Printf("\nAdded %d secret(s) missing from the vault: %s\n", len(added), strings.Join(added, ", "))
 
-	return applied, nil
+	return added, nil
 }
 
-// secretChanges are the names of the secrets EnsureSecrets adds to and removes from a vault.
-type secretChanges struct {
-	added   []string
-	removed []string
-}
-
-func (s secretChanges) empty() bool {
-	return len(s.added) == 0 && len(s.removed) == 0
-}
-
-func (s secretChanges) intro() string {
-	if len(s.removed) == 0 {
-		return "The vault needs these secret changes:"
-	}
-
-	return "The vault needs these secret changes. Removing a secret deletes its value from the vault; " +
-		"it is only removed when it holds a placeholder Codesphere no longer accepts:"
-}
-
-func (s secretChanges) describe() []string {
-	items := make([]string, 0, len(s.added)+len(s.removed))
-	for _, name := range s.added {
-		items = append(items, "add "+name)
-	}
-
-	for _, name := range s.removed {
-		items = append(items, "remove "+name)
-	}
-
-	return items
-}
-
-// pendingSecretChanges reports what syncSecrets would change, without changing anything:
+// missingSecrets reports what addMissingSecrets would generate, without changing anything:
 // it runs against copies, so only the names survive.
-func pendingSecretChanges(config *files.RootConfig, vault *files.InstallVault) (secretChanges, error) {
+func missingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
 	configCopy, err := config.Clone()
 	if err != nil {
-		return secretChanges{}, fmt.Errorf("copy config: %w", err)
+		return nil, fmt.Errorf("copy config: %w", err)
 	}
 
-	return syncSecrets(configCopy, vault.Clone())
+	return addMissingSecrets(configCopy, vault.Clone())
 }
 
-// syncSecrets runs EnsureSecrets and returns the names of the secrets it added or removed.
-// Values of secrets the vault keeps are never changed.
-func syncSecrets(config *files.RootConfig, vault *files.InstallVault) (secretChanges, error) {
-	before := secretNames(vault)
+// addMissingSecrets generates the secrets the vault does not have yet and returns their
+// names. EnsureSecrets keeps what is already there, so this only ever adds.
+func addMissingSecrets(config *files.RootConfig, vault *files.InstallVault) ([]string, error) {
+	existing := make(map[string]bool, len(vault.Secrets))
+	for _, secret := range vault.Secrets {
+		existing[secret.Name] = true
+	}
 
 	if err := secrets.EnsureSecrets(vault, config); err != nil {
-		return secretChanges{}, fmt.Errorf("ensure secrets: %w", err)
+		return nil, fmt.Errorf("ensure secrets: %w", err)
 	}
 
-	after := secretNames(vault)
+	added := []string{}
 
-	return secretChanges{added: namesMissingFrom(after, before), removed: namesMissingFrom(before, after)}, nil
-}
-
-func secretNames(vault *files.InstallVault) map[string]bool {
-	names := make(map[string]bool, len(vault.Secrets))
 	for _, secret := range vault.Secrets {
-		names[secret.Name] = true
-	}
-
-	return names
-}
-
-// namesMissingFrom returns the sorted names in names that other does not contain.
-func namesMissingFrom(names, other map[string]bool) []string {
-	missing := []string{}
-
-	for name := range names {
-		if !other[name] {
-			missing = append(missing, name)
+		if !existing[secret.Name] {
+			added = append(added, secret.Name)
 		}
 	}
 
-	sort.Strings(missing)
+	sort.Strings(added)
 
-	return missing
+	return added, nil
 }
 
 func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vault *files.InstallVault, tracker *SecretDependencyTracker) error {
@@ -626,7 +579,7 @@ func (c *UpdateInstallConfigCmd) regenerateSecrets(config *files.RootConfig, vau
 	return nil
 }
 
-func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTracker, changes secretChanges) {
+func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTracker, added []string) {
 	log.Println("\n" + strings.Repeat("=", 70))
 	log.Println("Configuration successfully updated!")
 	log.Println(strings.Repeat("=", 70))
@@ -639,18 +592,10 @@ func (c *UpdateInstallConfigCmd) printSuccessMessage(tracker *SecretDependencyTr
 		}
 	}
 
-	if len(changes.added) > 0 {
+	if len(added) > 0 {
 		log.Println("\nGenerated missing secrets:")
 
-		for _, name := range changes.added {
-			log.Printf("  ✓ %s\n", name)
-		}
-	}
-
-	if len(changes.removed) > 0 {
-		log.Println("\nRemoved obsolete secrets:")
-
-		for _, name := range changes.removed {
+		for _, name := range added {
 			log.Printf("  ✓ %s\n", name)
 		}
 	}

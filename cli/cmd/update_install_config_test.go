@@ -568,15 +568,15 @@ var _ = Describe("SecretDependencyTracker", func() {
 	})
 })
 
-var _ = Describe("pendingSecretChanges", func() {
+var _ = Describe("missingSecrets", func() {
 	It("reports what is missing without changing config or vault", func() {
 		config := &files.RootConfig{}
 		vault := &files.InstallVault{}
 
-		pending, err := pendingSecretChanges(config, vault)
+		missing, err := missingSecrets(config, vault)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(pending.added).To(ContainElement(files.SecretMounterHmacSecret))
+		Expect(missing).To(ContainElement(files.SecretMounterHmacSecret))
 		Expect(vault.Secrets).To(BeEmpty())
 		Expect(config.Cluster.Certificates.CA.CertPem).To(BeEmpty())
 	})
@@ -584,32 +584,14 @@ var _ = Describe("pendingSecretChanges", func() {
 	It("reports nothing once the secrets are there", func() {
 		config := &files.RootConfig{}
 		vault := &files.InstallVault{}
-		_, err := syncSecrets(config, vault)
+		_, err := addMissingSecrets(config, vault)
 		Expect(err).ToNot(HaveOccurred())
 
-		pending, err := pendingSecretChanges(config, vault)
-
-		Expect(err).ToNot(HaveOccurred())
-		Expect(pending.empty()).To(BeTrue())
-	})
-
-	It("reports a dummy SendGrid API key on an otherwise complete vault as removed", func() {
-		config := &files.RootConfig{}
-		vault := &files.InstallVault{}
-		_, err := syncSecrets(config, vault)
-		Expect(err).ToNot(HaveOccurred())
-		vault.SetSecret(files.SecretEntry{Name: files.SecretSendGridApiKey, Fields: &files.SecretFields{Password: "dummy"}})
-
-		pending, err := pendingSecretChanges(config, vault)
-
-		Expect(err).ToNot(HaveOccurred())
-		Expect(pending.added).To(BeEmpty())
-		Expect(pending.removed).To(ConsistOf(files.SecretSendGridApiKey))
-		Expect(vault.GetSecret(files.SecretSendGridApiKey)).ToNot(BeNil())
+		Expect(missingSecrets(config, vault)).To(BeEmpty())
 	})
 })
 
-var _ = Describe("syncSecrets", func() {
+var _ = Describe("addMissingSecrets", func() {
 	var config *files.RootConfig
 
 	BeforeEach(func() {
@@ -619,24 +601,24 @@ var _ = Describe("syncSecrets", func() {
 	It("adds a secret the vault does not have", func() {
 		vault := &files.InstallVault{}
 
-		changes, err := syncSecrets(config, vault)
+		added, err := addMissingSecrets(config, vault)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(changes.added).To(ContainElement(files.SecretMounterHmacSecret))
+		Expect(added).To(ContainElement(files.SecretMounterHmacSecret))
 		Expect(vault.GetSecret(files.SecretMounterHmacSecret)).ToNot(BeNil())
 	})
 
 	It("reports nothing on a second run and keeps the generated value", func() {
 		vault := &files.InstallVault{}
-		_, err := syncSecrets(config, vault)
+		_, err := addMissingSecrets(config, vault)
 		Expect(err).ToNot(HaveOccurred())
 
 		secret := vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password
 
-		changes, err := syncSecrets(config, vault)
+		added, err := addMissingSecrets(config, vault)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(changes.added).To(BeEmpty())
+		Expect(added).To(BeEmpty())
 		Expect(vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password).To(Equal(secret))
 	})
 
@@ -645,10 +627,10 @@ var _ = Describe("syncSecrets", func() {
 		config.Codesphere.OpenFga = &files.OpenFgaConfig{Deploy: &deploy, APIURL: "https://openfga.1.cs.example.com"}
 		vault := &files.InstallVault{}
 
-		changes, err := syncSecrets(config, vault)
+		added, err := addMissingSecrets(config, vault)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(changes.added).ToNot(ContainElement(files.SecretOpenFgaPresharedKey))
+		Expect(added).ToNot(ContainElement(files.SecretOpenFgaPresharedKey))
 		Expect(vault.GetSecret(files.SecretOpenFgaPresharedKey)).To(BeNil())
 	})
 
@@ -664,87 +646,12 @@ var _ = Describe("syncSecrets", func() {
 			Fields: &files.SecretFields{Password: "a-real-token"},
 		})
 
-		changes, err := syncSecrets(config, vault)
+		added, err := addMissingSecrets(config, vault)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(changes.added).ToNot(ContainElement(files.SecretMounterHmacSecret))
-		Expect(changes.added).ToNot(ContainElement(files.SecretDigitalOceanApiToken))
+		Expect(added).ToNot(ContainElement(files.SecretMounterHmacSecret))
+		Expect(added).ToNot(ContainElement(files.SecretDigitalOceanApiToken))
 		Expect(vault.GetSecret(files.SecretMounterHmacSecret).Fields.Password).To(Equal("operator-supplied-secret"))
 		Expect(vault.GetSecret(files.SecretDigitalOceanApiToken).Fields.Password).To(Equal("a-real-token"))
-	})
-
-	It("removes a dummy SendGrid API key and reports it", func() {
-		vault := &files.InstallVault{}
-		vault.SetSecret(files.SecretEntry{Name: files.SecretSendGridApiKey, Fields: &files.SecretFields{Password: "dummy"}})
-
-		changes, err := syncSecrets(config, vault)
-
-		Expect(err).ToNot(HaveOccurred())
-		Expect(changes.removed).To(ConsistOf(files.SecretSendGridApiKey))
-		Expect(vault.GetSecret(files.SecretSendGridApiKey)).To(BeNil())
-	})
-})
-
-var _ = Describe("confirmAndSyncSecrets", func() {
-	var (
-		config   *files.RootConfig
-		vault    *files.InstallVault
-		prompter *prompt.MockPrompter
-		cmd      *UpdateInstallConfigCmd
-	)
-
-	BeforeEach(func() {
-		config = &files.RootConfig{}
-		vault = &files.InstallVault{}
-		prompter = prompt.NewMockPrompter(GinkgoT())
-		cmd = &UpdateInstallConfigCmd{Opts: &UpdateInstallConfigOpts{GlobalOptions: &util.GlobalOptions{}}, Prompter: prompter}
-	})
-
-	completeVaultWithDummySendGridAPIKey := func() {
-		_, err := syncSecrets(config, vault)
-		Expect(err).ToNot(HaveOccurred())
-		vault.SetSecret(files.SecretEntry{Name: files.SecretSendGridApiKey, Fields: &files.SecretFields{Password: "dummy"}})
-	}
-
-	It("does not ask when nothing is pending", func() {
-		_, err := syncSecrets(config, vault)
-		Expect(err).ToNot(HaveOccurred())
-
-		changes, err := cmd.confirmAndSyncSecrets(config, vault)
-
-		Expect(err).ToNot(HaveOccurred())
-		Expect(changes.empty()).To(BeTrue())
-	})
-
-	It("applies the pending changes once approved", func() {
-		completeVaultWithDummySendGridAPIKey()
-		prompter.EXPECT().Bool("Apply them?", false).Return(true)
-
-		changes, err := cmd.confirmAndSyncSecrets(config, vault)
-
-		Expect(err).ToNot(HaveOccurred())
-		Expect(changes.removed).To(ConsistOf(files.SecretSendGridApiKey))
-		Expect(vault.GetSecret(files.SecretSendGridApiKey)).To(BeNil())
-	})
-
-	It("leaves the vault unchanged when declined", func() {
-		completeVaultWithDummySendGridAPIKey()
-		prompter.EXPECT().Bool("Apply them?", false).Return(false)
-
-		changes, err := cmd.confirmAndSyncSecrets(config, vault)
-
-		Expect(err).ToNot(HaveOccurred())
-		Expect(changes.empty()).To(BeTrue())
-		Expect(vault.GetSecret(files.SecretSendGridApiKey).Fields.Password).To(Equal("dummy"))
-	})
-
-	It("applies the pending changes without asking when --yes is set", func() {
-		cmd.Opts.Yes = true
-
-		changes, err := cmd.confirmAndSyncSecrets(config, vault)
-
-		Expect(err).ToNot(HaveOccurred())
-		Expect(changes.added).To(ContainElement(files.SecretMounterHmacSecret))
-		Expect(vault.GetSecret(files.SecretMounterHmacSecret)).ToNot(BeNil())
 	})
 })

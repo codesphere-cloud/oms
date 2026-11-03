@@ -60,8 +60,6 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureDefaultSecrets(vault); err != nil {
 		return fmt.Errorf("ensure default secrets: %w", err)
 	}
-
-	RemoveDummySendGridAPIKey(vault)
 	return nil
 }
 
@@ -286,18 +284,6 @@ func EnsureDefaultSecrets(vault *files.InstallVault) error {
 	}
 
 	return nil
-}
-
-// RemoveDummySendGridAPIKey removes a dummy sendGridApiKey, as Codesphere sends mail
-// through SendGrid whenever the key is set. A real key is kept.
-func RemoveDummySendGridAPIKey(vault *files.InstallVault) {
-	if isDummyPassword(vault.GetSecret(files.SecretSendGridApiKey)) {
-		vault.RemoveSecret(files.SecretSendGridApiKey)
-	}
-}
-
-func isDummyPassword(secret *files.SecretEntry) bool {
-	return secret != nil && secret.Fields != nil && secret.Fields.Password == dummyPassword
 }
 
 // optionalPasswordSecrets are set to "dummy" only when absent. They are not required for

@@ -347,36 +347,6 @@ var _ = Describe("EnsureDefaultSecrets", func() {
 	})
 })
 
-var _ = Describe("RemoveDummySendGridAPIKey", func() {
-	vaultWithSendGridAPIKey := func(password string) *files.InstallVault {
-		vault := newVault()
-		vault.SetSecret(files.SecretEntry{Name: "sendGridApiKey", Fields: &files.SecretFields{Password: password}})
-
-		return vault
-	}
-
-	It("removes a dummy key", func() {
-		vault := vaultWithSendGridAPIKey("dummy")
-		secrets.RemoveDummySendGridAPIKey(vault)
-
-		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
-	})
-
-	It("keeps a real key", func() {
-		vault := vaultWithSendGridAPIKey("real-api-key")
-		secrets.RemoveDummySendGridAPIKey(vault)
-
-		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("real-api-key"))
-	})
-
-	It("is applied by EnsureSecrets", func() {
-		vault := vaultWithSendGridAPIKey("dummy")
-
-		Expect(secrets.EnsureSecrets(vault, &files.RootConfig{})).To(Succeed())
-		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
-	})
-})
-
 var _ = Describe("EnsureIngressCA", func() {
 	It("writes CA private key to vault and cert PEM to cluster config", func() {
 		vault := newVault()
