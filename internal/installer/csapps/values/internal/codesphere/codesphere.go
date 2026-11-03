@@ -89,6 +89,11 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		return Codesphere{}, err
 	}
 
+	oauth, err := oauthValues(conf.OAuth)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
 	smtp, err := smtpValues(conf.Email)
 	if err != nil {
 		return Codesphere{}, err
@@ -106,7 +111,7 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		Experiments:                experimentsValues(conf, in.Gateways.Workspaces.Enabled),
 		Features:                   featuresValues(conf.Features),
 		CustomDomains:              customDomainsValues(conf.CustomDomains, in.Gateways.Workspaces.Use),
-		OAuth:                      oauthValues(conf.OAuth),
+		OAuth:                      oauth,
 		SignUp:                     signUpValues(conf.SignUp),
 		DeployConfig:               deployConfig,
 		WorkspaceImages:            workspaceImages,

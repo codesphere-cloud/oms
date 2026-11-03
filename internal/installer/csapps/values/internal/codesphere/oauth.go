@@ -4,11 +4,16 @@
 package codesphere
 
 import (
+	"errors"
+	"slices"
+
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
 // baseOAuthProviders are the built-in OAuth providers, all disabled in private clouds.
 var baseOAuthProviders = []string{"bitbucket", "github", "gitlab", "google"}
+
+var defaultOIDCScopes = []string{"openid", "email", "profile"}
 
 // OAuth are the providers users sign in with.
 type OAuth struct {
@@ -30,30 +35,34 @@ type OIDCProvider struct {
 	Scopes    []string `yaml:"scopes"`
 }
 
-func oauthValues(oauth *files.OAuthProvidersConfig) OAuth {
+func oauthValues(oauth *files.OAuthProvidersConfig) (OAuth, error) {
 	providers := map[string]OAuthProvider{}
 	for _, id := range baseOAuthProviders {
 		providers[id] = OAuthProvider{Enabled: false}
 	}
 
-	additional := map[string]OIDCProvider{}
-
-	if oauth != nil && oauth.Oidc != nil {
-		oidc := oauth.Oidc
-
-		scopes := oidc.Scopes
-		if scopes == nil {
-			scopes = []string{"openid", "email", "profile"}
-		}
-
-		additional[oidc.Name] = OIDCProvider{
-			Type:      oidc.Type,
-			Enabled:   oidc.Enabled,
-			Name:      oidc.Name,
-			IssuerURL: oidc.IssuerURL,
-			Scopes:    scopes,
-		}
+	values := OAuth{Providers: providers, AdditionalProviders: map[string]OIDCProvider{}}
+	if oauth == nil || oauth.Oidc == nil {
+		return values, nil
 	}
 
-	return OAuth{Providers: providers, AdditionalProviders: additional}
+	oidc := oauth.Oidc
+	if oidc.Name == "" {
+		return OAuth{}, errors.New("oauth.oidc.name is required")
+	}
+
+	scopes := oidc.Scopes
+	if scopes == nil {
+		scopes = slices.Clone(defaultOIDCScopes)
+	}
+
+	values.AdditionalProviders[oidc.Name] = OIDCProvider{
+		Type:      oidc.Type,
+		Enabled:   oidc.Enabled,
+		Name:      oidc.Name,
+		IssuerURL: oidc.IssuerURL,
+		Scopes:    scopes,
+	}
+
+	return values, nil
 }

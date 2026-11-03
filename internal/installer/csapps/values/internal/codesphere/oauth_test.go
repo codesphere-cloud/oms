@@ -34,4 +34,16 @@ var _ = Describe("OAuth", func() {
 	It("OIDC provider with an empty scope list -> kept empty", func() {
 		Expect(oidcScopes([]string{})).To(Equal([]string{}))
 	})
+
+	It("OIDC provider without a name -> error", func() {
+		conf := files.CodesphereConfig{OAuth: &files.OAuthProvidersConfig{Oidc: &files.OidcOAuthProvider{
+			Type:      "oidc",
+			Enabled:   true,
+			IssuerURL: "https://idp.example.com",
+		}}}
+
+		_, err := codesphere.Values(conf, defaultTestInputs())
+
+		Expect(err).To(MatchError("oauth.oidc.name is required"))
+	})
 })
