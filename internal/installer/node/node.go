@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -104,7 +105,7 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 	session.Stderr = &stderrBuf
 	if !r.Quiet {
 		session.Stdout = os.Stdout
-		session.Stderr = os.Stderr
+		session.Stderr = io.MultiWriter(os.Stderr, &stderrBuf)
 	}
 	// Start the command
 	if err := session.Start(command); err != nil {
@@ -112,8 +113,9 @@ func (r *SSHNodeClient) RunCommand(n *Node, username string, command string) err
 	}
 
 	if err := session.Wait(); err != nil {
-		// A non-zero exit status from the remote command is also considered an error
-		if r.Quiet && stderrBuf.Len() > 0 {
+		// Include stderr for callers that classify transient remote command failures,
+		// including when output is streamed to the user.
+		if stderrBuf.Len() > 0 {
 			return fmt.Errorf("command failed: %w\n%s", err, stderrBuf.String())
 		}
 		return fmt.Errorf("command failed: %w", err)
