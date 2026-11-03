@@ -207,6 +207,5 @@ var _ = Describe("Values", func() {
 
 		Expect(values.FrontendGateway.GatewayAPI.Enabled).To(BeFalse())
 		Expect(values.CustomDomains.GatewayAPI.UseGateway).To(BeFalse())
-		Expect(values.Experiments).NotTo(HaveKey("gateway-domains"))
 	})
 })

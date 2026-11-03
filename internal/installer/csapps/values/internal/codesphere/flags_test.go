@@ -33,4 +33,36 @@ var _ = Describe("Flags", func() {
 		Expect(features).To(HaveKeyWithValue("feature-on", []codesphere.FlagEnv{codesphere.FlagEnvProd}))
 		Expect(features).To(HaveKeyWithValue("feature-off", []codesphere.FlagEnv{}))
 	})
+
+	It("disabled workspaces Gateway API -> no gateway domains experiment", func() {
+		values, err := codesphere.Values(files.CodesphereConfig{}, codesphere.Inputs{Images: defaultTestImages()})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.Experiments).NotTo(HaveKey("gateway-domains"))
+	})
+
+	It("internal, experiments, enabled preview and features -> enabled", func() {
+		conf := files.CodesphereConfig{
+			Internal:    []string{"internal-flag"},
+			Experiments: []string{"legacy"}, //nolint:staticcheck
+			Preview:     map[string]bool{"preview-on": true},
+			Features:    map[string]bool{"feature-on": true},
+		}
+
+		Expect(codesphere.EnabledFlags(conf)).To(Equal(map[string]bool{
+			"internal-flag": true,
+			"legacy":        true,
+			"preview-on":    true,
+			"feature-on":    true,
+		}))
+	})
+
+	It("disabled preview and features -> absent", func() {
+		conf := files.CodesphereConfig{
+			Preview:  map[string]bool{"preview-off": false},
+			Features: map[string]bool{"feature-off": false},
+		}
+
+		Expect(codesphere.EnabledFlags(conf)).To(BeEmpty())
+	})
 })
