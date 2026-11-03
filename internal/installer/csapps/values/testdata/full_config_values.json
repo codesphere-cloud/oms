@@ -414,7 +414,7 @@
     "stripePriceId": "",
     "tlsCertificate": {
       "cert": "-----BEGIN CERTIFICATE-----\nMIIBljCCAT2gAwIBAgIUQ8xH74sH2Eh2pgtD0eL+phUzeqAwCgYIKoZIzj0EAwIw\nITEfMB0GA1UEAwwWY29kZXNwaGVyZS5leGFtcGxlLmNvbTAeFw0yNjEwMTkwODU5\nMzlaFw0zNjEwMTYwODU5MzlaMCExHzAdBgNVBAMMFmNvZGVzcGhlcmUuZXhhbXBs\nZS5jb20wWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAAQ4iBJbeRQd0xP5BfzvEmWv\n3hxbvjZ7gBeqyd4R33fwYttr3JC0n+AAsigTyPPSGZXib4Pfa3ydfarVQ2OoBxrQ\no1MwUTAdBgNVHQ4EFgQUYJXHA1p2sgSQO3pHIkovlAxwxU0wHwYDVR0jBBgwFoAU\nYJXHA1p2sgSQO3pHIkovlAxwxU0wDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQD\nAgNHADBEAiBHYmODgHrVQZUUTRX8f0xSQT49PBN8sTn2tCuXn+w7egIgTzT5DlLP\nM/7HYiKZtdZj3XZc1hLTng0UOlcbtiEJi8s=\n-----END CERTIFICATE-----\n",
-      "key": "-----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgMFKefHN1fKyIyEU1\napyCL9PEe1MHqJQnBsTYmgjtkd+hRANCAAQ4iBJbeRQd0xP5BfzvEmWv3hxbvjZ7\ngBeqyd4R33fwYttr3JC0n+AAsigTyPPSGZXib4Pfa3ydfarVQ2OoBxrQ\n-----END PRIVATE KEY-----\n"
+      "keyName": "customCertificateKey"
     },
     "underprovisionFactors": {
       "cpu": 0.5,

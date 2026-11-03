@@ -25,6 +25,7 @@ registry:
   replaceImagesInBom: false
   loadContainerImages: false
 postgres:
+  mode: external
   caCertPem: postgres-ca-pem
   serverAddress: postgres.example.com
   altName: postgres-rw.codesphere.svc
@@ -87,6 +88,7 @@ codesphere:
   certIssuer:
     type: acme
     acme:
+      enabled: true
       server: https://acme.example.com/directory
       email: ops@example.com
       eabKeyId: cluster-eab-key
@@ -164,11 +166,6 @@ codesphere:
               bomRef: workspace-agent-24.04.gpu
             pool:
               9: 1
-          minimal:
-            image:
-              bomRef: workspace-agent-24.04
-            pool:
-              8: 1
       ubuntu-22.04:
         name: Ubuntu 22.04
         supportedUntil: "2027-04-01"
@@ -286,16 +283,17 @@ codesphere:
             storage: 2048
     - name: redis
       schemaVersion: v0
+      resourceParameters:
+        ram:
+          pricedAs: ram-mib
+          schema:
+            type: integer
       plans:
         - id: 1
           name: small
           description: Small
           parameters:
-            ram:
-              pricedAs: ram-mib
-              schema:
-                type: integer
-                default: 512
+            ram: 512
     - name: s3
       schemaVersion: v1
   managedServiceWorkspacePlanId: 21
