@@ -251,17 +251,14 @@ func EnsureNixSigningKeys(vault *files.InstallVault, host string) error {
 	return nil
 }
 
-// dummyPassword is the placeholder for secrets the Helm chart requires but private cloud does not use.
-const dummyPassword = "dummy"
-
 // EnsureDefaultSecrets sets dummy defaults for all Helm chart secrets not managed by
 // the installer config. Idempotent: a value the vault already holds is kept.
 func EnsureDefaultSecrets(vault *files.InstallVault) error {
 	// Unused in private cloud, but the chart does not render without a value.
-	setPasswordIfEmpty(vault, files.SecretDigitalOceanApiToken, dummyPassword)
+	setPasswordIfEmpty(vault, files.SecretDigitalOceanApiToken, "dummy")
 
 	for _, name := range optionalPasswordSecrets {
-		setPasswordIfAbsent(vault, name, dummyPassword)
+		setPasswordIfAbsent(vault, name, "dummy")
 	}
 
 	// Requires a valid AES key: base64(hex(16 random bytes)).
