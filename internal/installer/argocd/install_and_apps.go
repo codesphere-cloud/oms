@@ -38,37 +38,71 @@ type LogFunc func(format string, args ...interface{})
 // WaitForApplicationHealthy waits until Argo CD has compared the requested target revision
 // and reports the Application as healthy and synced.
 func WaitForApplicationHealthy(ctx context.Context, kubeClient client.Client, name, targetRevision string, timeout time.Duration, logf LogFunc) error {
-	return waitForApplication(ctx, kubeClient, name, timeout, logf, func(app *argov1alpha1.Application) (bool, string, error) {
-		comparedRevision := app.Status.Sync.ComparedTo.Source.TargetRevision
-		ready := comparedRevision == targetRevision && app.Status.Health.Status == "Healthy" && app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced
-		state := fmt.Sprintf("target-revision=%q/%q, health=%q, sync=%q", comparedRevision, targetRevision, app.Status.Health.Status, app.Status.Sync.Status)
+	return waitForApplication(
+		ctx,
+		kubeClient,
+		name,
+		timeout,
+		logf,
+		func(app *argov1alpha1.Application) (bool, string, error) {
+			comparedRevision := app.Status.Sync.ComparedTo.Source.TargetRevision
+			ready := comparedRevision == targetRevision &&
+				app.Status.Health.Status == "Healthy" &&
+				app.Status.Sync.Status == argov1alpha1.SyncStatusCodeSynced
+			state := fmt.Sprintf(
+				"target-revision=%q/%q, health=%q, sync=%q",
+				comparedRevision,
+				targetRevision,
+				app.Status.Health.Status,
+				app.Status.Sync.Status,
+			)
 
-		return ready, state, nil
-	})
+			return ready, state, nil
+		},
+	)
 }
 
 // WaitForApplicationSynced waits until Argo CD has synced the Application's current source, values
 // included, and reports it as healthy. A sync of an earlier source does not count. Resources that
 // drift after a successful sync do not keep it waiting.
 func WaitForApplicationSynced(ctx context.Context, kubeClient client.Client, name string, logf LogFunc) error {
-	return waitForApplication(ctx, kubeClient, name, applicationReadyTimeout, logf, func(app *argov1alpha1.Application) (bool, string, error) {
-		synced, err := syncedCurrentSource(app)
-		if err != nil {
-			return false, "", fmt.Errorf("failed to compare the sources of ArgoCD Application %q: %w", name, err)
-		}
+	return waitForApplication(
+		ctx,
+		kubeClient,
+		name,
+		applicationReadyTimeout,
+		logf,
+		func(app *argov1alpha1.Application) (bool, string, error) {
+			synced, err := syncedCurrentSource(app)
+			if err != nil {
+				return false, "", fmt.Errorf("failed to compare the sources of ArgoCD Application %q: %w", name, err)
+			}
 
-		ready := synced && app.Status.Health.Status == "Healthy"
-		state := fmt.Sprintf("synced current source=%t, health=%q, sync=%q", synced, app.Status.Health.Status, app.Status.Sync.Status)
+			ready := synced && app.Status.Health.Status == "Healthy"
+			state := fmt.Sprintf(
+				"synced current source=%t, health=%q, sync=%q",
+				synced,
+				app.Status.Health.Status,
+				app.Status.Sync.Status,
+			)
 
-		return ready, state, nil
-	})
+			return ready, state, nil
+		},
+	)
 }
 
 // applicationReadiness reports whether the Application is ready and describes its state for the
 // logs.
 type applicationReadiness func(app *argov1alpha1.Application) (ready bool, state string, err error)
 
-func waitForApplication(ctx context.Context, kubeClient client.Client, name string, timeout time.Duration, logf LogFunc, readiness applicationReadiness) error {
+func waitForApplication(
+	ctx context.Context,
+	kubeClient client.Client,
+	name string,
+	timeout time.Duration,
+	logf LogFunc,
+	readiness applicationReadiness,
+) error {
 	if logf == nil {
 		logf = func(string, ...interface{}) {}
 	}
@@ -110,7 +144,12 @@ func waitForApplication(ctx context.Context, kubeClient client.Client, name stri
 		return false, nil
 	})
 	if err != nil {
-		return fmt.Errorf("timed out waiting for ArgoCD Application %q to become healthy and synced (%s): %w", name, lastState, err)
+		return fmt.Errorf(
+			"timed out waiting for ArgoCD Application %q to become healthy and synced (%s): %w",
+			name,
+			lastState,
+			err,
+		)
 	}
 
 	return nil

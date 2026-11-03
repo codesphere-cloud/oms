@@ -30,7 +30,11 @@ var _ = Describe("WaitForApplicationSynced", func() {
 		}
 	}
 
-	application := func(spec, compared argov1alpha1.ApplicationSource, healthStatus health.HealthStatusCode, syncStatus argov1alpha1.SyncStatusCode) *argov1alpha1.Application {
+	application := func(
+		spec, compared argov1alpha1.ApplicationSource,
+		healthStatus health.HealthStatusCode,
+		syncStatus argov1alpha1.SyncStatusCode,
+	) *argov1alpha1.Application {
 		return &argov1alpha1.Application{
 			ObjectMeta: metav1.ObjectMeta{Name: "pr-1-codesphere", Namespace: "argocd"},
 			Spec:       argov1alpha1.ApplicationSpec{Source: &spec},
@@ -53,25 +57,45 @@ var _ = Describe("WaitForApplicationSynced", func() {
 	}
 
 	It("healthy and synced to the current source -> done", func() {
-		app := application(source(`{"trigger":"b"}`), source(`{"trigger":"b"}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeSynced)
+		app := application(
+			source(`{"trigger":"b"}`),
+			source(`{"trigger":"b"}`),
+			health.HealthStatusHealthy,
+			argov1alpha1.SyncStatusCodeSynced,
+		)
 
 		Expect(wait(app)).To(Succeed())
 	})
 
 	It("synced to the values of an earlier source -> keeps waiting", func() {
-		app := application(source(`{"trigger":"b"}`), source(`{"trigger":"a"}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeSynced)
+		app := application(
+			source(`{"trigger":"b"}`),
+			source(`{"trigger":"a"}`),
+			health.HealthStatusHealthy,
+			argov1alpha1.SyncStatusCodeSynced,
+		)
 
 		Expect(wait(app)).To(MatchError(ContainSubstring(`timed out waiting for ArgoCD Application "pr-1-codesphere"`)))
 	})
 
 	It("synced to the current source but degraded -> keeps waiting", func() {
-		app := application(source(`{}`), source(`{}`), health.HealthStatusDegraded, argov1alpha1.SyncStatusCodeSynced)
+		app := application(
+			source(`{}`),
+			source(`{}`),
+			health.HealthStatusDegraded,
+			argov1alpha1.SyncStatusCodeSynced,
+		)
 
 		Expect(wait(app)).To(MatchError(ContainSubstring(`health="Degraded"`)))
 	})
 
 	It("healthy but out of sync -> keeps waiting", func() {
-		app := application(source(`{}`), source(`{}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeOutOfSync)
+		app := application(
+			source(`{}`),
+			source(`{}`),
+			health.HealthStatusHealthy,
+			argov1alpha1.SyncStatusCodeOutOfSync,
+		)
 
 		Expect(wait(app)).To(MatchError(ContainSubstring(`sync="OutOfSync"`)))
 	})
@@ -80,14 +104,20 @@ var _ = Describe("WaitForApplicationSynced", func() {
 		app := application(
 			source(`{"global":{"tlsSecret":null,"list":[{"a":null,"b":1}],"trigger":"b"}}`),
 			source(`{"global":{"list":[{"b":1}],"trigger":"b"}}`),
-			health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeSynced,
+			health.HealthStatusHealthy,
+			argov1alpha1.SyncStatusCodeSynced,
 		)
 
 		Expect(wait(app)).To(Succeed())
 	})
 
 	It("out of sync after the sync of the current source succeeded -> done, drift does not block", func() {
-		app := application(source(`{"trigger":"b"}`), source(`{"trigger":"b"}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeOutOfSync)
+		app := application(
+			source(`{"trigger":"b"}`),
+			source(`{"trigger":"b"}`),
+			health.HealthStatusHealthy,
+			argov1alpha1.SyncStatusCodeOutOfSync,
+		)
 		app.Status.OperationState = &argov1alpha1.OperationState{
 			Phase:      synccommon.OperationSucceeded,
 			SyncResult: &argov1alpha1.SyncOperationResult{Source: source(`{"trigger":"b"}`)},
@@ -97,7 +127,12 @@ var _ = Describe("WaitForApplicationSynced", func() {
 	})
 
 	It("out of sync, the last succeeded sync was of an earlier source -> keeps waiting", func() {
-		app := application(source(`{"trigger":"b"}`), source(`{"trigger":"b"}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeOutOfSync)
+		app := application(
+			source(`{"trigger":"b"}`),
+			source(`{"trigger":"b"}`),
+			health.HealthStatusHealthy,
+			argov1alpha1.SyncStatusCodeOutOfSync,
+		)
 		app.Status.OperationState = &argov1alpha1.OperationState{
 			Phase:      synccommon.OperationSucceeded,
 			SyncResult: &argov1alpha1.SyncOperationResult{Source: source(`{"trigger":"a"}`)},
@@ -107,7 +142,12 @@ var _ = Describe("WaitForApplicationSynced", func() {
 	})
 
 	It("out of sync while the sync of the current source runs -> keeps waiting", func() {
-		app := application(source(`{"trigger":"b"}`), source(`{"trigger":"b"}`), health.HealthStatusHealthy, argov1alpha1.SyncStatusCodeOutOfSync)
+		app := application(
+			source(`{"trigger":"b"}`),
+			source(`{"trigger":"b"}`),
+			health.HealthStatusHealthy,
+			argov1alpha1.SyncStatusCodeOutOfSync,
+		)
 		app.Status.OperationState = &argov1alpha1.OperationState{
 			Phase:      synccommon.OperationRunning,
 			SyncResult: &argov1alpha1.SyncOperationResult{Source: source(`{"trigger":"b"}`)},
