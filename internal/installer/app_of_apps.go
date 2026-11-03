@@ -15,6 +15,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/bom"
 	"github.com/codesphere-cloud/oms/internal/util"
 	"github.com/distribution/reference"
+	chartutil "helm.sh/helm/v4/pkg/chart/v2/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -49,6 +50,7 @@ const (
 type AppOfApps struct {
 	name           string // name of the Application
 	chart          string
+	releaseName    string
 	version        string // chart version, used as the Application targetRevision (required)
 	namespace      string // destination namespace of the app-of-apps
 	valuesFiles    []string
@@ -81,6 +83,7 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 	return &AppOfApps{
 		name:           pcAppsName,
 		chart:          pcAppsName,
+		releaseName:    pcAppsName,
 		version:        version,
 		namespace:      namespace,
 		valuesFiles:    valuesFiles,
@@ -92,7 +95,7 @@ func NewPCApps(c client.Client, version, namespace string, valuesFiles []string,
 
 // NewPcAppsFromBom creates a pc-applications installer from the pc-applications entry in a BOM.
 func NewPcAppsFromBom(c client.Client, bomConfig *bom.Config, namespace string, valuesFiles []string, valuesOverride map[string]interface{}) (*AppOfApps, error) {
-	pcApps, err := NewAppOfAppsFromBom(c, bomConfig, pcAppsName, pcAppsName, namespace, valuesOverride)
+	pcApps, err := NewAppOfAppsFromBom(c, bomConfig, pcAppsName, pcAppsName, pcAppsName, namespace, valuesOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -107,9 +110,12 @@ func NewPcAppsFromBom(c client.Client, bomConfig *bom.Config, namespace string, 
 func NewAppOfAppsFromBom(
 	c client.Client,
 	bomConfig *bom.Config,
-	component, name, namespace string,
+	component, name, releaseName, namespace string,
 	values map[string]interface{},
 ) (*AppOfApps, error) {
+	if err := chartutil.ValidateReleaseName(releaseName); err != nil {
+		return nil, fmt.Errorf("release name %q: %w", releaseName, err)
+	}
 	if err := checkArgoCDScheme(c); err != nil {
 		return nil, err
 	}
@@ -126,6 +132,7 @@ func NewAppOfAppsFromBom(
 	return &AppOfApps{
 		name:           name,
 		chart:          path.Base(reference.Path(chart)),
+		releaseName:    releaseName,
 		version:        chart.Tag(),
 		namespace:      namespace,
 		valuesOverride: values,
@@ -181,7 +188,7 @@ func ResolveChartsRegistry(ctx context.Context, c client.Client) (string, error)
 func (p *AppOfApps) createApplication(repoURL string, vals map[string]interface{}) (*argov1alpha1.Application, error) {
 	helm := &argov1alpha1.ApplicationSourceHelm{
 		// Named after the chart: Application names can exceed Helm's 53 character limit.
-		ReleaseName: p.chart,
+		ReleaseName: p.releaseName,
 	}
 	if len(vals) > 0 {
 		raw, err := json.Marshal(vals)
@@ -278,6 +285,7 @@ func NewPCAppsForTesting(c client.Client, version, namespace string, valuesFiles
 	return &AppOfApps{
 		name:           pcAppsName,
 		chart:          pcAppsName,
+		releaseName:    pcAppsName,
 		version:        version,
 		namespace:      namespace,
 		valuesFiles:    valuesFiles,

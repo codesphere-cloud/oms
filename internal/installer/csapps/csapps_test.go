@@ -82,7 +82,7 @@ var _ = Describe("Values", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(at(values, "chartsRegistry")).To(Equal(chartsRegistry))
-		Expect(at(values, "releaseName")).To(Equal("pr-1"))
+		Expect(values).NotTo(HaveKey("releaseName"))
 		Expect(at(values, "namespace")).To(Equal("codesphere"))
 		Expect(at(values, "applications", "codesphere", "enabled")).To(BeTrue())
 		Expect(at(values, "applications", "codesphere", "version")).To(Equal(codesphereVersion))
@@ -95,13 +95,6 @@ var _ = Describe("Values", func() {
 		expectedGlobal["externalSecretsSyncTrigger"] = "trigger-1"
 
 		Expect(at(values, "applications", "codesphere", "valuesObject")).To(Equal(expected))
-	})
-
-	It("no release name in the config -> the installer's default release", func() {
-		values, err := csapps.Values(fullConfig(""), bomWithCharts(), chartsRegistry, "trigger-1")
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(at(values, "releaseName")).To(Equal("codesphere"))
 	})
 
 	It("override disables external secrets -> still enabled, the values hold no secrets", func() {

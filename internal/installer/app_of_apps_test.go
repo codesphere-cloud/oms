@@ -293,7 +293,7 @@ var _ = Describe("AppOfApps.Install", func() {
 
 		It("applies the component's chart and version under the given Application name", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "pr-1-cs-applications", "codesphere", map[string]interface{}{"releaseName": "pr-1"})
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "pr-1-cs-applications", "pr-1", "codesphere", nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(apps.Install(context.Background())).To(Succeed())
 
@@ -301,15 +301,14 @@ var _ = Describe("AppOfApps.Install", func() {
 			Expect(fakeClient.Get(context.Background(), client.ObjectKey{Name: "pr-1-cs-applications", Namespace: "argocd"}, app)).To(Succeed())
 			Expect(app.Spec.Source.Chart).To(Equal("cs-applications"))
 			Expect(app.Spec.Source.TargetRevision).To(Equal("0.3.0"))
-			Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("cs-applications"))
+			Expect(app.Spec.Source.Helm.ReleaseName).To(Equal("pr-1"))
 			Expect(app.Spec.Destination.Namespace).To(Equal("codesphere"))
-			Expect(helmValues(app)).To(HaveKeyWithValue("releaseName", "pr-1"))
 		})
 
 		It("Application name longer than Helm allows for a release -> release named after the chart", func() {
 			name := "codesphere-nate-test-pre-7a1cd4d4-test-cs-applications"
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", name, "argocd", nil)
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", name, "cs-applications", "argocd", nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(apps.Install(context.Background())).To(Succeed())
 
@@ -320,7 +319,7 @@ var _ = Describe("AppOfApps.Install", func() {
 
 		It("takes the chart name from the reference, not the component", func() {
 			b := bomWithChart("apps", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "apps", "apps", "codesphere", nil)
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "apps", "apps", "apps", "codesphere", nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(apps.Install(context.Background())).To(Succeed())
 
@@ -331,12 +330,12 @@ var _ = Describe("AppOfApps.Install", func() {
 
 		It("fails when the BOM has no chart for the component", func() {
 			b := bomWithChart("pc-applications", "ghcr.io/codesphere-cloud/charts/pc-applications:1.0.0")
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "codesphere", nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "codesphere", "codesphere", nil)
 			Expect(err).To(MatchError(ContainSubstring("cs-applications chart not found in BOM")))
 		})
 
 		It("fails without a BOM", func() {
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, nil, "cs-applications", "cs-applications", "codesphere", nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, nil, "cs-applications", "cs-applications", "codesphere", "codesphere", nil)
 			Expect(err).To(MatchError(ContainSubstring("BOM is required")))
 		})
 	})

@@ -44,7 +44,7 @@ func Install(ctx context.Context, kubeClient client.Client, cfg *files.RootConfi
 	release := releaseName(cfg.Codesphere)
 	appName := release + csAppsAppNameSuffix
 
-	apps, err := installer.NewAppOfAppsFromBom(kubeClient, b, csAppsComponent, appName, argocd.DefaultNamespace, appValues)
+	apps, err := installer.NewAppOfAppsFromBom(kubeClient, b, csAppsComponent, appName, release, argocd.DefaultNamespace, appValues)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the cs-applications installer: %w", err)
 	}
@@ -90,7 +90,6 @@ func Values(cfg *files.RootConfig, b *bom.Config, chartsRegistry, syncTrigger st
 
 	return map[string]any{
 		"chartsRegistry": chartsRegistry,
-		"releaseName":    releaseName(cfg.Codesphere),
 		"namespace":      codesphereNamespace,
 		"applications": map[string]any{
 			codesphereComponent: map[string]any{
