@@ -683,6 +683,9 @@ type OAuthProvidersConfig struct {
 	Oidc *OidcOAuthProvider `yaml:"oidc,omitempty"`
 }
 
+// DefaultOidcProviderName names an OIDC provider the config leaves unnamed.
+const DefaultOidcProviderName = "OIDC"
+
 type OidcOAuthProvider struct {
 	Type      string   `yaml:"type"`
 	Enabled   bool     `yaml:"enabled"`

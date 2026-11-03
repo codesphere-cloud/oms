@@ -35,15 +35,16 @@ var _ = Describe("OAuth", func() {
 		Expect(oidcScopes([]string{})).To(Equal([]string{}))
 	})
 
-	It("OIDC provider without a name -> error", func() {
+	It("OIDC provider without a name -> named OIDC", func() {
 		conf := files.CodesphereConfig{OAuth: &files.OAuthProvidersConfig{Oidc: &files.OidcOAuthProvider{
 			Type:      "oidc",
 			Enabled:   true,
 			IssuerURL: "https://idp.example.com",
 		}}}
 
-		_, err := codesphere.Values(conf, defaultTestInputs())
+		values, err := codesphere.Values(conf, defaultTestInputs())
+		Expect(err).NotTo(HaveOccurred())
 
-		Expect(err).To(MatchError("oauth.oidc.name is required"))
+		Expect(values.OAuth.AdditionalProviders[files.DefaultOidcProviderName].Name).To(Equal(files.DefaultOidcProviderName))
 	})
 })

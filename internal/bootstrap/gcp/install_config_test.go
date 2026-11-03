@@ -775,7 +775,7 @@ var _ = Describe("Installconfig & Secrets", func() {
 					err := bs.UpdateInstallConfig()
 					Expect(err).NotTo(HaveOccurred())
 
-					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Name).To(Equal("OIDC"))
+					Expect(bs.Env.InstallConfig.Codesphere.OAuth.Oidc.Name).To(Equal(files.DefaultOidcProviderName))
 				})
 			})
 

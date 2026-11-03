@@ -4,7 +4,6 @@
 package codesphere
 
 import (
-	"errors"
 	"slices"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
@@ -35,7 +34,7 @@ type OIDCProvider struct {
 	Scopes    []string `yaml:"scopes"`
 }
 
-func oauthValues(oauth *files.OAuthProvidersConfig) (OAuth, error) {
+func oauthValues(oauth *files.OAuthProvidersConfig) OAuth {
 	providers := map[string]OAuthProvider{}
 	for _, id := range baseOAuthProviders {
 		providers[id] = OAuthProvider{Enabled: false}
@@ -43,12 +42,14 @@ func oauthValues(oauth *files.OAuthProvidersConfig) (OAuth, error) {
 
 	values := OAuth{Providers: providers, AdditionalProviders: map[string]OIDCProvider{}}
 	if oauth == nil || oauth.Oidc == nil {
-		return values, nil
+		return values
 	}
 
 	oidc := oauth.Oidc
-	if oidc.Name == "" {
-		return OAuth{}, errors.New("oauth.oidc.name is required")
+
+	name := oidc.Name
+	if name == "" {
+		name = files.DefaultOidcProviderName
 	}
 
 	scopes := oidc.Scopes
@@ -56,13 +57,13 @@ func oauthValues(oauth *files.OAuthProvidersConfig) (OAuth, error) {
 		scopes = slices.Clone(defaultOIDCScopes)
 	}
 
-	values.AdditionalProviders[oidc.Name] = OIDCProvider{
+	values.AdditionalProviders[name] = OIDCProvider{
 		Type:      oidc.Type,
 		Enabled:   oidc.Enabled,
-		Name:      oidc.Name,
+		Name:      name,
 		IssuerURL: oidc.IssuerURL,
 		Scopes:    scopes,
 	}
 
-	return values, nil
+	return values
 }
