@@ -53,6 +53,8 @@ func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 
 	values := mergeOverride(map[string]any{"global": global}, cfg.Codesphere.Override)
 
+	// The image tag wins over the override to match the old pc-installer. Likely reason: the installer
+	// only mirrors the BOM's images, so a tag from the override may not exist in the registry.
 	return loader.MergeMaps(values, map[string]any{
 		"global": map[string]any{"imageTag": imageTag},
 	}), nil
