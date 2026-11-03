@@ -20,7 +20,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/argocd"
 )
 
-var _ = Describe("WaitForApplicationSynced", func() {
+var _ = Describe("WaitForAppFreshlySyncedAndHealthy", func() {
 	source := func(values string) argov1alpha1.ApplicationSource {
 		return argov1alpha1.ApplicationSource{
 			RepoURL:        "ghcr.io/codesphere-cloud/charts",
@@ -53,7 +53,7 @@ var _ = Describe("WaitForApplicationSynced", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
-		return argocd.WaitForApplicationSynced(ctx, kubeClient, "pr-1-codesphere", nil)
+		return argocd.WaitForAppFreshlySyncedAndHealthy(ctx, kubeClient, "pr-1-codesphere", nil)
 	}
 
 	It("healthy and synced to the current source -> done", func() {
