@@ -112,6 +112,7 @@ type RootConfig struct {
 	Cluster                ClusterConfig                 `yaml:"cluster"`
 	Codesphere             CodesphereConfig              `yaml:"codesphere"`
 	PcApps                 ChartValues                   `yaml:"pcApps,omitempty"`
+	CsApps                 ChartValues                   `yaml:"csApps,omitempty"`
 	ManagedServiceBackends *ManagedServiceBackendsConfig `yaml:"managedServiceBackends,omitempty"`
 	Operations             *OperationsConfig             `yaml:"operations,omitempty"`
 }
@@ -529,6 +530,8 @@ type MetalLBBGPConfig struct {
 const WorkspacePVCStorageFlag = "workspace-pvc-storage"
 
 type CodesphereConfig struct {
+	// ReleaseName names the Codesphere Helm release. Dev clusters set it, as several releases share them.
+	ReleaseName                string                   `yaml:"releaseName,omitempty"`
 	Domain                     string                   `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                   `yaml:"workspaceHostingBaseDomain"`
 	PublicIP                   string                   `yaml:"publicIp"`
