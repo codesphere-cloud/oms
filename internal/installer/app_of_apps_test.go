@@ -84,7 +84,14 @@ var _ = Describe("AppOfApps.Install", func() {
 		GinkgoHelper()
 
 		b := bomWithChart("pc-applications", "ghcr.io/codesphere-cloud/charts/pc-applications:"+chartVersion)
-		apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "pc-applications", "pc-applications", "pc-applications", destination, valuesFiles, valuesOverride)
+		apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+			Component:      "pc-applications",
+			Name:           "pc-applications",
+			ReleaseName:    "pc-applications",
+			Namespace:      destination,
+			ValuesFiles:    valuesFiles,
+			ValuesOverride: valuesOverride,
+		})
 		Expect(err).ToNot(HaveOccurred())
 
 		return apps
@@ -155,7 +162,12 @@ var _ = Describe("AppOfApps.Install", func() {
 			bareClient := fake.NewClientBuilder().WithScheme(bareScheme).Build()
 
 			b := bomWithChart("pc-applications", "ghcr.io/codesphere-cloud/charts/pc-applications:"+version)
-			_, err := installer.NewAppOfAppsFromBom(bareClient, b, "pc-applications", "pc-applications", "pc-applications", namespace, nil, nil)
+			_, err := installer.NewAppOfAppsFromBom(bareClient, b, installer.AppOfAppsConfig{
+				Component:   "pc-applications",
+				Name:        "pc-applications",
+				ReleaseName: "pc-applications",
+				Namespace:   namespace,
+			})
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("does not recognize"))
 			Expect(err.Error()).To(ContainSubstring("Application"))
@@ -311,7 +323,12 @@ var _ = Describe("AppOfApps.Install", func() {
 
 		It("applies the component's chart and version under the given Application and release name", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "pr-1-cs-applications", "pr-1", "codesphere", nil, nil)
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+				Component:   "cs-applications",
+				Name:        "pr-1-cs-applications",
+				ReleaseName: "pr-1",
+				Namespace:   "codesphere",
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(apps.Install(context.Background())).To(Succeed())
 
@@ -325,25 +342,45 @@ var _ = Describe("AppOfApps.Install", func() {
 
 		It("release name longer than Helm allows -> error", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", strings.Repeat("a", 54), "codesphere", nil, nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+				Component:   "cs-applications",
+				Name:        "cs-applications",
+				ReleaseName: strings.Repeat("a", 54),
+				Namespace:   "codesphere",
+			})
 			Expect(err).To(MatchError(ContainSubstring("release name")))
 		})
 
 		It("release name Helm rejects -> error", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "PR_1", "codesphere", nil, nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+				Component:   "cs-applications",
+				Name:        "cs-applications",
+				ReleaseName: "PR_1",
+				Namespace:   "codesphere",
+			})
 			Expect(err).To(MatchError(ContainSubstring(`release name "PR_1"`)))
 		})
 
 		It("empty release name -> error", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "", "codesphere", nil, nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+				Component:   "cs-applications",
+				Name:        "cs-applications",
+				ReleaseName: "",
+				Namespace:   "codesphere",
+			})
 			Expect(err).To(MatchError(ContainSubstring("release name")))
 		})
 
 		It("takes the chart name from the reference, not the component", func() {
 			b := bomWithChart("apps", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "apps", "apps", "apps", "codesphere", nil, nil)
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+				Component:   "apps",
+				Name:        "apps",
+				ReleaseName: "apps",
+				Namespace:   "codesphere",
+			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(apps.Install(context.Background())).To(Succeed())
 
@@ -354,37 +391,67 @@ var _ = Describe("AppOfApps.Install", func() {
 
 		It("fails when the BOM has no chart for the component", func() {
 			b := bomWithChart("pc-applications", "ghcr.io/codesphere-cloud/charts/pc-applications:1.0.0")
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "codesphere", "codesphere", nil, nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+				Component:   "cs-applications",
+				Name:        "cs-applications",
+				ReleaseName: "codesphere",
+				Namespace:   "codesphere",
+			})
 			Expect(err).To(MatchError(ContainSubstring("cs-applications chart not found in BOM")))
 		})
 
 		It("fails without a BOM", func() {
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, nil, "cs-applications", "cs-applications", "codesphere", "codesphere", nil, nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, nil, installer.AppOfAppsConfig{
+				Component:   "cs-applications",
+				Name:        "cs-applications",
+				ReleaseName: "codesphere",
+				Namespace:   "codesphere",
+			})
 			Expect(err).To(MatchError(ContainSubstring("BOM is required")))
 		})
 
 		It("fails when the BOM chart has no version", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications")
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "codesphere", "codesphere", nil, nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+				Component:   "cs-applications",
+				Name:        "cs-applications",
+				ReleaseName: "codesphere",
+				Namespace:   "codesphere",
+			})
 			Expect(err).To(MatchError(ContainSubstring("cs-applications chart not found in BOM")))
 		})
 
 		It("fails without an Application name", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "", "codesphere", "codesphere", nil, nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+				Component:   "cs-applications",
+				Name:        "",
+				ReleaseName: "codesphere",
+				Namespace:   "codesphere",
+			})
 			Expect(err).To(MatchError(ContainSubstring("name is required")))
 		})
 
 		It("fails without a destination namespace", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "codesphere", "", nil, nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+				Component:   "cs-applications",
+				Name:        "cs-applications",
+				ReleaseName: "codesphere",
+				Namespace:   "",
+			})
 			Expect(err).To(MatchError(ContainSubstring("namespace is required")))
 		})
 
 		It("two Applications from the same chart -> each applied with its own name and release", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
 			for _, release := range []string{"pr-1", "pr-2"} {
-				apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", release+"-cs-applications", release, "codesphere", nil, nil)
+				apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, installer.AppOfAppsConfig{
+					Component:   "cs-applications",
+					Name:        release + "-cs-applications",
+					ReleaseName: release,
+					Namespace:   "codesphere",
+				})
 				Expect(err).ToNot(HaveOccurred())
 				Expect(apps.Install(context.Background())).To(Succeed())
 			}

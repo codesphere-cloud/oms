@@ -52,23 +52,27 @@ type AppOfApps struct {
 	client         client.Client
 }
 
-// NewAppOfAppsFromBom creates an installer for the chart in the BOM component, applied as the
-// Application name and rendered as the Helm release.
-func NewAppOfAppsFromBom(
-	c client.Client,
-	bomConfig *bom.Config,
-	component, name, releaseName, namespace string,
-	valuesFiles []string,
-	valuesOverride map[string]interface{},
-) (*AppOfApps, error) {
-	if name == "" {
+// AppOfAppsConfig names the app of apps chart to apply and how.
+type AppOfAppsConfig struct {
+	Component      string // BOM component holding the chart
+	Name           string // name of the Application
+	ReleaseName    string // Helm release name ArgoCD renders the chart with
+	Namespace      string // destination namespace of the app-of-apps
+	ValuesFiles    []string
+	ValuesOverride map[string]interface{}
+}
+
+// NewAppOfAppsFromBom creates an installer for the chart in the BOM component.
+func NewAppOfAppsFromBom(c client.Client, bomConfig *bom.Config, cfg AppOfAppsConfig) (*AppOfApps, error) {
+	if cfg.Name == "" {
 		return nil, errors.New("name is required")
 	}
 
-	if err := chartutil.ValidateReleaseName(releaseName); err != nil {
-		return nil, fmt.Errorf("release name %q: %w", releaseName, err)
+	if err := chartutil.ValidateReleaseName(cfg.ReleaseName); err != nil {
+		return nil, fmt.Errorf("release name %q: %w", cfg.ReleaseName, err)
 	}
-	if namespace == "" {
+
+	if cfg.Namespace == "" {
 		return nil, errors.New("namespace is required")
 	}
 	if err := checkArgoCDScheme(c); err != nil {
@@ -79,19 +83,19 @@ func NewAppOfAppsFromBom(
 		return nil, fmt.Errorf("BOM is required")
 	}
 
-	chart, ok := bomConfig.GetChart(component)
+	chart, ok := bomConfig.GetChart(cfg.Component)
 	if !ok {
-		return nil, fmt.Errorf("%s chart not found in BOM", component)
+		return nil, fmt.Errorf("%s chart not found in BOM", cfg.Component)
 	}
 
 	return &AppOfApps{
-		name:           name,
+		name:           cfg.Name,
 		chart:          path.Base(reference.Path(chart)),
-		releaseName:    releaseName,
+		releaseName:    cfg.ReleaseName,
 		version:        chart.Tag(),
-		namespace:      namespace,
-		valuesFiles:    valuesFiles,
-		valuesOverride: valuesOverride,
+		namespace:      cfg.Namespace,
+		valuesFiles:    cfg.ValuesFiles,
+		valuesOverride: cfg.ValuesOverride,
 		client:         c,
 	}, nil
 }
