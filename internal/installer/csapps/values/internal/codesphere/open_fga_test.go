@@ -13,6 +13,37 @@ import (
 )
 
 var _ = Describe("OpenFGA", func() {
+	It("no openFga block -> in-cluster API URL kept", func() {
+		values, err := codesphere.Values(files.CodesphereConfig{}, defaultTestInputs())
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.OpenFGA).To(BeNil())
+	})
+
+	It("OpenFGA of another data center -> its API URL", func() {
+		conf := files.CodesphereConfig{OpenFga: &files.OpenFgaConfig{
+			Deploy: ptr.To(false),
+			APIURL: "https://fga.example.com",
+		}}
+
+		values, err := codesphere.Values(conf, defaultTestInputs())
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.OpenFGA).To(Equal(&codesphere.OpenFGA{APIURL: "https://fga.example.com"}))
+	})
+
+	It("OpenFGA deployed with an explicit API URL -> that API URL", func() {
+		conf := files.CodesphereConfig{OpenFga: &files.OpenFgaConfig{
+			Deploy: ptr.To(true),
+			APIURL: "https://fga.internal.example.com",
+		}}
+
+		values, err := codesphere.Values(conf, defaultTestInputs())
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(values.OpenFGA).To(Equal(&codesphere.OpenFGA{APIURL: "https://fga.internal.example.com"}))
+	})
+
 	It("OpenFGA deployed and published for other data centers -> in-cluster API URL kept", func() {
 		conf := files.CodesphereConfig{OpenFga: &files.OpenFgaConfig{
 			Deploy: ptr.To(true),
