@@ -81,7 +81,7 @@ type GCPClient struct {
 
 // NewGCPClient detects the default credentials once and shares them across all API clients.
 func NewGCPClient(ctx context.Context, st *bootstrap.StepLogger, credentialsFile string) (*GCPClient, error) {
-	creds, err := detectCredentials(util.NewTime(), st.LogRetry)
+	creds, err := detectCredentials(st.LogRetry)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +244,7 @@ func getBillingAccountResourceName(billingAccount string) string {
 
 // GetBillingInfo retrieves the billing information for the given project.
 func (c *GCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectBillingInfo, error) {
-	billingService, err := cloudbilling.NewService(context.Background())
+	billingService, err := cloudbilling.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return nil, err
 	}

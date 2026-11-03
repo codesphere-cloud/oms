@@ -10,7 +10,6 @@ import (
 
 	"cloud.google.com/go/auth"
 	"cloud.google.com/go/auth/credentials"
-	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 const (
@@ -21,18 +20,18 @@ const (
 
 // detectCredentials resolves the default credentials once so every GCP client shares one
 // cached token instead of minting its own per call.
-func detectCredentials(t util.Time, onRetry func()) (*auth.Credentials, error) {
+func detectCredentials(onRetry func()) (*auth.Credentials, error) {
 	detected, err := credentials.DetectDefault(&credentials.DetectOptions{Scopes: []string{cloudPlatformScope}})
 	if err != nil {
 		return nil, fmt.Errorf("failed to detect GCP credentials: %w", err)
 	}
 
-	return withTokenFetchRetry(detected, t, onRetry), nil
+	return withTokenFetchRetry(detected, waitOrCancel, onRetry), nil
 }
 
-func withTokenFetchRetry(creds *auth.Credentials, t util.Time, onRetry func()) *auth.Credentials {
+func withTokenFetchRetry(creds *auth.Credentials, wait waitFunc, onRetry func()) *auth.Credentials {
 	return auth.NewCredentials(&auth.CredentialsOptions{
-		TokenProvider:          &retryingTokenProvider{provider: creds, time: t, onRetry: onRetry},
+		TokenProvider:          &retryingTokenProvider{provider: creds, wait: wait, onRetry: onRetry},
 		JSON:                   creds.JSON(),
 		ProjectIDProvider:      auth.CredentialsPropertyFunc(creds.ProjectID),
 		QuotaProjectIDProvider: auth.CredentialsPropertyFunc(creds.QuotaProjectID),
@@ -45,7 +44,7 @@ func withTokenFetchRetry(creds *auth.Credentials, t util.Time, onRetry func()) *
 // typed status, so transient 5xx cannot be told apart from permanent failures.
 type retryingTokenProvider struct {
 	provider auth.TokenProvider
-	time     util.Time
+	wait     waitFunc
 	onRetry  func()
 }
 
@@ -66,9 +65,26 @@ func (p *retryingTokenProvider) Token(ctx context.Context) (*auth.Token, error) 
 
 		if attempt < tokenFetchAttempts-1 {
 			p.onRetry()
-			p.time.Sleep(tokenFetchRetryDelay)
+
+			if waitErr := p.wait(ctx, tokenFetchRetryDelay); waitErr != nil {
+				return nil, fmt.Errorf("stopped retrying GCP access token fetch: %w (last error: %w)", waitErr, err)
+			}
 		}
 	}
 
 	return nil, fmt.Errorf("failed to fetch GCP access token after %d attempts: %w", tokenFetchAttempts, err)
+}
+
+type waitFunc func(ctx context.Context, d time.Duration) error
+
+func waitOrCancel(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("wait cancelled: %w", ctx.Err())
+	case <-timer.C:
+		return nil
+	}
 }
