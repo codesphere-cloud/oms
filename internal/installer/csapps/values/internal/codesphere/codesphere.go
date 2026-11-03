@@ -96,11 +96,6 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		return Codesphere{}, err
 	}
 
-	managedServices, err := managedServicesValues(conf.ManagedServices)
-	if err != nil {
-		return Codesphere{}, err
-	}
-
 	return Codesphere{
 		PublicIP:                      conf.PublicIP,
 		CertIssuer:                    certIssuer,
@@ -120,7 +115,7 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		WorkspaceImages:               workspaceImages,
 		FrontendGateway:               frontendGateway,
 		IPService:                     ipService,
-		ManagedServices:               managedServices,
+		ManagedServices:               managedServicesValues(conf.ManagedServices),
 		SSHWorkspaceProxy:             conf.SSHWorkspaceProxy,
 		Branding:                      conf.Branding,
 		TLSCertificate:                tlsCertificateValues(conf.CustomCertificate),
