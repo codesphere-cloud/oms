@@ -89,6 +89,11 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		return Codesphere{}, err
 	}
 
+	smtp, err := smtpValues(conf.Email)
+	if err != nil {
+		return Codesphere{}, err
+	}
+
 	return Codesphere{
 		PublicIP:                   conf.PublicIP,
 		CertIssuer:                 certIssuer,
@@ -112,7 +117,7 @@ func Values(conf files.CodesphereConfig, in Inputs) (Codesphere, error) {
 		TLSCertificate:             tlsCertificateValues(conf.CustomCertificate),
 		UnderprovisionFactors:      conf.UnderprovisionFactors,
 		ExtraWorkspaceFiles:        conf.ExtraWorkspaceFiles,
-		SMTP:                       smtpValues(conf.Email),
+		SMTP:                       smtp,
 		ExtraCAPem:                 conf.ExtraCAPem,
 		ExtraWorkspaceEnvVars:      conf.ExtraWorkspaceEnvVars,
 	}, nil
