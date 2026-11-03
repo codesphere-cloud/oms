@@ -270,6 +270,7 @@ var _ = Describe("Values", func() {
 				},
 				AdditionalProviders: map[string]codesphere.OIDCProvider{},
 			},
+			ManagedServiceWorkspacePlanID: 20,
 			DeployConfig: codesphere.DeployConfig{Images: map[string]codesphere.DeployImage{
 				"ubuntu-24.04": {
 					Name:           "Ubuntu 24.04",

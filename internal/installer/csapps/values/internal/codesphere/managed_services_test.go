@@ -29,7 +29,7 @@ var _ = Describe("Managed services", func() {
 	}
 
 	managedServices := func(plans []files.ServicePlan) []files.ManagedServiceConfig {
-		values, err := codesphere.Values(withPlans(plans), defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
+		values, err := codesphere.Values(withPlans(plans), defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		return values.ManagedServices
@@ -120,9 +120,7 @@ var _ = Describe("Managed services", func() {
 				Parameters: map[string]files.PlanParam{
 					"cpu": legacyParam("cpu-tenths", map[string]any{"type": "number", "readOnly": true}),
 				},
-			}}),
-			defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry,
-		)
+			}}), defaultTestInputs())
 
 		Expect(err).To(MatchError(ContainSubstring(`legacy plan "Small" parameter "cpu" is read-only`)))
 	})
@@ -167,8 +165,7 @@ var _ = Describe("Managed services", func() {
 
 	It("no managed service workspace plan ID -> 20", func() {
 		values, err := codesphere.Values(
-			files.CodesphereConfig{}, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry,
-		)
+			files.CodesphereConfig{}, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.ManagedServiceWorkspacePlanID).To(Equal(20))
@@ -182,7 +179,7 @@ var _ = Describe("Managed services", func() {
 			ResourceParameters: map[string]*files.ResourceParam{"storage": nil},
 		}}}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
+		values, err := codesphere.Values(conf, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		service := values.ManagedServices[0]
@@ -198,7 +195,7 @@ var _ = Describe("Managed services", func() {
 			Versions:      map[string]any{"1.0.0": map[string]any{"appVersion": "17.6"}},
 		}}}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
+		values, err := codesphere.Values(conf, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.ManagedServices[0].Versions).To(BeNil())
@@ -212,7 +209,7 @@ var _ = Describe("Managed services", func() {
 			Versions:      map[string]any{"1.0.0": map[string]any{"appVersion": "8.1"}},
 		}}}
 
-		values, err := codesphere.Values(conf, defaultTestImages(), defaultTestGateways(), noMetalLB, noRegistry)
+		values, err := codesphere.Values(conf, defaultTestInputs())
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(values.ManagedServices[0].Versions).To(
