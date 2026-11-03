@@ -242,6 +242,12 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 		return err
 	}
 
+	if err := stlog.Substep("Wait for Gateway CRDs", func() error {
+		return install.WaitForGatewayCRDs(ctx, stlog.Logf)
+	}); err != nil {
+		return fmt.Errorf("failed to wait for Gateway CRDs: %w", err)
+	}
+
 	return nil
 }
 
