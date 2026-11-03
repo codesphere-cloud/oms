@@ -221,6 +221,7 @@ func installArgoCDAndApps(ctx context.Context, opts *InstallCodesphereOpts, cfg 
 			Vault:        installVault,
 			RESTConfig:   restConfig,
 			KubeClient:   kubeClient,
+			HelmClient:   argoCDInstall.Helm,
 			Installer:    argoCDInstall,
 			PCAppsValues: opts.PCAppsValues,
 		})

@@ -6,13 +6,10 @@ package argocd
 import (
 	"context"
 	"fmt"
-
-	"github.com/codesphere-cloud/oms/internal/installer"
 )
 
-// WaitForGatewayCRDs waits for the API types consumed by cluster setup. The
-// gateway controller itself needs PriorityClasses installed by cluster setup,
-// so requiring its Deployment or Argo Application to be healthy here deadlocks.
+// WaitForGatewayCRDs waits for API definitions, rather than controllers whose
+// startup depends on PriorityClasses created later by cluster setup.
 func (i *AppInstaller) WaitForGatewayCRDs(ctx context.Context, logf LogFunc) error {
 	gateway := i.cfg.Config.Cluster.Gateway.GatewayAPI
 
@@ -21,14 +18,22 @@ func (i *AppInstaller) WaitForGatewayCRDs(ctx context.Context, logf LogFunc) err
 		return nil
 	}
 
-	requirements := []installer.CRDRequirement{
-		{Name: "gatewayclasses.gateway.networking.k8s.io", Version: "v1"},
-		{Name: "gateways.gateway.networking.k8s.io", Version: "v1"},
-		{Name: "httproutes.gateway.networking.k8s.io", Version: "v1"},
-		{Name: "envoyproxies.gateway.envoyproxy.io", Version: "v1alpha1"},
+	if i.cfg.HelmClient == nil {
+		return fmt.Errorf("helm client is required to wait for Gateway CRDs")
 	}
-	if err := installer.WaitForCRDs(ctx, i.cfg.KubeClient, requirements, applicationReadyTimeout, logf); err != nil {
-		return fmt.Errorf("waiting for Gateway APIs: %w", err)
+
+	names := []string{
+		"gatewayclasses.gateway.networking.k8s.io",
+		"gateways.gateway.networking.k8s.io",
+		"httproutes.gateway.networking.k8s.io",
+		"envoyproxies.gateway.envoyproxy.io",
+	}
+	if logf != nil {
+		logf("Waiting for Gateway CRDs to be ready: %v", names)
+	}
+
+	if err := i.cfg.HelmClient.WaitForResources(ctx, "apiextensions.k8s.io/v1", "CustomResourceDefinition", names, applicationReadyTimeout); err != nil {
+		return fmt.Errorf("waiting for Gateway CRDs: %w", err)
 	}
 
 	return nil
