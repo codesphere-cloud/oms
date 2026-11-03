@@ -324,4 +324,30 @@ var _ = Describe("Build", func() {
 		globalOverride := cfg.Codesphere.Override["global"].(map[string]any)
 		Expect(globalOverride["ceph"]).To(Equal(map[string]any{"storageClass": "rbd"}))
 	})
+
+	It("override with typed maps -> merged into the built map", func() {
+		cfg := testConfig()
+		cfg.Codesphere.ExtraWorkspaceEnvVars = map[string]string{"FOO": "foo", "BAR": "bar"}
+		cfg.Codesphere.Override = files.ChartOverride{"global": map[string]any{
+			"extraWorkspaceEnvVars": map[string]string{"FOO": "changed"},
+		}}
+		values := build(cfg, testBOM(nil))
+
+		Expect(at(values, "global.extraWorkspaceEnvVars")).To(Equal(map[string]any{
+			"FOO": "changed",
+			"BAR": "bar",
+		}))
+	})
+
+	It("override with typed maps -> config is not changed through the values", func() {
+		cfg := testConfig()
+		cfg.Codesphere.Override = files.ChartOverride{"global": map[string]any{
+			"frontendGateway": map[string]any{"requests": map[string]int{"cpu": 0}},
+		}}
+		values := build(cfg, testBOM(nil))
+		at(values, "global.frontendGateway.requests").(map[string]any)["cpu"] = 1
+
+		frontendGateway := cfg.Codesphere.Override["global"].(map[string]any)["frontendGateway"]
+		Expect(frontendGateway).To(Equal(map[string]any{"requests": map[string]int{"cpu": 0}}))
+	})
 })
