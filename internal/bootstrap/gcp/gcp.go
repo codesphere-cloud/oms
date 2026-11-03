@@ -25,6 +25,7 @@ import (
 	"github.com/codesphere-cloud/oms/internal/portal"
 	"github.com/codesphere-cloud/oms/internal/testuser"
 	"github.com/codesphere-cloud/oms/internal/util"
+	"golang.org/x/crypto/ssh"
 )
 
 // InstallerArchiveName is the package artifact bootstrapping downloads and installs.
@@ -1136,7 +1137,7 @@ func (b *GCPBootstrapper) EnsureHostsConfigured() error {
 			return fmt.Errorf("failed to ensure host packages: %w", err)
 		}
 
-		if err := ensureDocker(node, hostOSSettings); err != nil {
+		if err := b.ensureDocker(node, hostOSSettings); err != nil {
 			return fmt.Errorf("failed to ensure Docker: %w", err)
 		}
 
@@ -1200,7 +1201,7 @@ func ensureHostPackages(n *node.Node, hostOSSettings hostOSSettings) error {
 // The installer's docker step only checks that Docker runs, so it has to be there before the
 // installation starts. A node that already runs Docker is left alone, so a re-run neither needs the
 // Docker repository to be reachable nor touches healthy hosts.
-func ensureDocker(n *node.Node, hostOSSettings hostOSSettings) error {
+func (b *GCPBootstrapper) ensureDocker(n *node.Node, hostOSSettings hostOSSettings) error {
 	if len(hostOSSettings.dockerInstallCommands) == 0 {
 		return nil
 	}
@@ -1210,13 +1211,40 @@ func ensureDocker(n *node.Node, hostOSSettings hostOSSettings) error {
 	}
 
 	for _, cmd := range hostOSSettings.dockerInstallCommands {
-		err := n.RunSSHCommand("root", cmd)
+		err := b.runDockerInstallCommand(n, cmd)
 		if err != nil {
 			return fmt.Errorf("failed to install Docker on %s: %w", n.GetName(), err)
 		}
 	}
 
 	return nil
+}
+
+// runDockerInstallCommand retries RPM transaction lock contention caused by background
+// updates. Other package failures and SSH transport errors fail immediately.
+func (b *GCPBootstrapper) runDockerInstallCommand(n *node.Node, command string) error {
+	deadline := b.Time.Now().Add(5 * time.Minute)
+
+	for {
+		err := n.RunSSHCommand("root", command)
+		if err == nil {
+			return nil
+		}
+
+		var exitErr *ssh.ExitError
+		if !strings.HasPrefix(command, "dnf ") || !errors.As(err, &exitErr) ||
+			!strings.Contains(err.Error(), "can't create transaction lock on ") ||
+			!strings.Contains(err.Error(), "Resource temporarily unavailable") {
+			return fmt.Errorf("docker installation command failed: %w", err)
+		}
+
+		if !b.Time.Now().Before(deadline) {
+			return fmt.Errorf("RPM transaction lock remained busy for 5m: %w", err)
+		}
+
+		b.stlog.Logf("RPM transaction lock busy on %s; retrying Docker installation in 10s", n.GetName())
+		b.Time.Sleep(10 * time.Second)
+	}
 }
 
 // InstallK0sAndCodesphere installs k0s and Codesphere into every data center and then runs the
