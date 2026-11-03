@@ -100,7 +100,7 @@ func Install(ctx context.Context, kubeClient client.Client, cfg *files.RootConfi
 	// The cs-applications Application must sync first: that sync writes the new values into the
 	// Codesphere Application.
 	for _, name := range []string{appName, release + codesphereAppSuffix} {
-		if err := argocd.WaitForApplicationSynced(ctx, kubeClient, name, logf); err != nil {
+		if err := argocd.WaitForAppFreshlySyncedAndHealthy(ctx, kubeClient, name, logf); err != nil {
 			return fmt.Errorf("failed to wait for ArgoCD to deploy Codesphere: %w", err)
 		}
 	}
