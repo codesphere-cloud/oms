@@ -519,6 +519,9 @@ type MetalLBBGPConfig struct {
 	BFDProfile  string `yaml:"bfdProfile,omitempty"`
 }
 
+// WorkspacePVCStorageFlag stores workspaces on PVCs instead of CephFS.
+const WorkspacePVCStorageFlag = "workspace-pvc-storage"
+
 type CodesphereConfig struct {
 	Domain                     string                   `yaml:"domain"`
 	WorkspaceHostingBaseDomain string                   `yaml:"workspaceHostingBaseDomain"`

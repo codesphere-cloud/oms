@@ -9,9 +9,6 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-// WorkspacePVCStorageFlag stores workspaces on PVCs instead of CephFS.
-const WorkspacePVCStorageFlag = "workspace-pvc-storage"
-
 // FlagEnv is an environment an experiment or feature can be enabled in.
 type FlagEnv string
 
