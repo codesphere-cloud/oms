@@ -27,7 +27,7 @@ type Flags map[string][]FlagEnv
 func EnabledFlags(conf files.CodesphereConfig) map[string]bool {
 	flags := map[string]bool{}
 	// The installer still reads the deprecated experiments.
-	for _, flag := range slices.Concat(conf.Internal, conf.Experiments) { //nolint:staticcheck
+	for _, flag := range slices.Concat(conf.Experiments, conf.Internal) { //nolint:staticcheck
 		flags[flag] = true
 	}
 
