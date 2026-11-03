@@ -52,7 +52,7 @@ func testBOM(extraImages map[string]string) *bom.Config {
 func testConfig() *files.RootConfig {
 	config := files.NewRootConfig()
 	config.Datacenter = files.DatacenterConfig{ID: 1, Name: "main", City: "Karlsruhe", CountryCode: "DE"}
-	config.Postgres = files.PostgresConfig{ServerAddress: "postgres.example.com"}
+	config.Postgres = files.PostgresConfig{Mode: "external", ServerAddress: "postgres.example.com"}
 	config.Kubernetes = files.KubernetesConfig{PodCIDR: "10.1.0.0/16", ServiceCIDR: "10.2.0.0/16"}
 	config.Codesphere = files.CodesphereConfig{
 		Domain:                     "codesphere.example.com",

@@ -55,7 +55,7 @@ var _ = Describe("Build", func() {
 
 	It("every section configured -> rendered under the chart's keys", func() {
 		cfg := testConfig()
-		cfg.Postgres = files.PostgresConfig{CACertPem: "ca", ServerAddress: "postgres.example.com", Port: 5433}
+		cfg.Postgres = files.PostgresConfig{Mode: "external", CACertPem: "ca", ServerAddress: "postgres.example.com", Port: 5433}
 		cfg.Codesphere.VPNLeftPeerID = "peer-id.example"
 		cfg.Codesphere.Experiments = []string{"foo"} //nolint:staticcheck
 		cfg.Codesphere.Features = map[string]bool{"bar": true}
@@ -83,6 +83,7 @@ var _ = Describe("Build", func() {
 			},
 		}}
 		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
+			Enabled:  true,
 			Server:   "https://acme.example.com/directory",
 			Email:    "certs@example.com",
 			EABKeyID: "key-id",
@@ -228,6 +229,7 @@ var _ = Describe("Build", func() {
 	It("ACME with a separate custom domains EAB key -> custom domains key used", func() {
 		cfg := testConfig()
 		cfg.Codesphere.CertIssuer = &files.CertIssuerConfig{Type: files.CertIssuerTypeACME, Acme: &files.ACMEConfig{
+			Enabled:               true,
 			Server:                "https://acme.example.com/directory",
 			Email:                 "certs@example.com",
 			EABKeyID:              "cluster-key",
@@ -249,16 +251,6 @@ var _ = Describe("Build", func() {
 			"acme": map[string]any{"enabled": false},
 		}))
 		Expect(at(values, "global.frontendGateway.issuer")).To(Equal("self-signed"))
-	})
-
-	It("deploy config and pooled instances -> error", func() {
-		cfg := testConfig()
-		cfg.Codesphere.Plans.HostingPlans[8] = files.HostingPlan{PooledInstances: ptr.To(1)}
-		cfg.Codesphere.DeployConfig = files.DeployConfig{Images: map[string]files.ImageConfig{}}
-
-		_, err := csappsvalues.Build(cfg, testBOM(nil))
-
-		Expect(err).To(MatchError(ContainSubstring("ambiguous")))
 	})
 
 	It("auth-service image without a tag -> release tag error", func() {

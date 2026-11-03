@@ -79,13 +79,12 @@ type global struct {
 }
 
 func globalValues(cfg *files.RootConfig, imgs images.Images) (global, error) {
-	codesphereValues, err := codesphere.Values(
-		cfg.Codesphere,
-		imgs,
-		cluster.GatewayAPIs(cfg.Cluster),
-		cfg.Cluster.MetalLB,
-		cfg.Registry,
-	)
+	codesphereValues, err := codesphere.Values(cfg.Codesphere, codesphere.Inputs{
+		Images:   imgs,
+		Gateways: cluster.GatewayAPIs(cfg.Cluster),
+		MetalLB:  cfg.Cluster.MetalLB,
+		Registry: cfg.Registry,
+	})
 	if err != nil {
 		return global{}, fmt.Errorf("failed to build the codesphere values: %w", err)
 	}
@@ -95,7 +94,7 @@ func globalValues(cfg *files.RootConfig, imgs images.Images) (global, error) {
 		return global{}, fmt.Errorf("failed to build the platform image values: %w", err)
 	}
 
-	pvcStorage := codesphere.EnabledFlags(cfg.Codesphere)[codesphere.WorkspacePVCStorageFlag]
+	pvcStorage := codesphere.EnabledFlags(cfg.Codesphere)[files.WorkspacePVCStorageFlag]
 
 	cephValues, err := ceph.Values(cfg.Ceph, pvcStorage)
 	if err != nil {
@@ -107,10 +106,15 @@ func globalValues(cfg *files.RootConfig, imgs images.Images) (global, error) {
 		return global{}, fmt.Errorf("invalid data centers: %w", err)
 	}
 
+	postgresValues, err := postgres.Values(cfg.Postgres)
+	if err != nil {
+		return global{}, fmt.Errorf("failed to build the postgres values: %w", err)
+	}
+
 	return global{
 		Fixed:       fixedValues(),
 		DataCenters: dataCenterValues,
-		Postgres:    postgres.Values(cfg.Postgres),
+		Postgres:    postgresValues,
 		Ceph:        cephValues,
 		Kubernetes:  kubernetes.Values(cfg.Kubernetes),
 		Platform:    platformValues,
@@ -147,7 +151,7 @@ func fixedValues() fixed {
 		Env:                        "prod",
 		ShowPromotions:             false,
 		PriorityClass:              platform.PriorityClass,
-		Namespace:                  kubernetes.WorkspaceNamespace,
+		Namespace:                  files.WorkspacesNamespace,
 		WorkspacePriorityClass:     workspacePriorityClass{Free: platform.PriorityClass, Paid: "prod-paid-workspaces"},
 		CustomDomainIngressClass:   "workspace-proxy-ingress",
 		UseDedicatedWorkspaceNodes: false,
