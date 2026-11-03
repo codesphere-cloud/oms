@@ -519,8 +519,7 @@ func (s secretChanges) intro() string {
 	}
 
 	return "The vault needs these secret changes. Removing a secret deletes its value from the vault; " +
-		"it is only removed when it holds a placeholder the Codesphere version no longer accepts " +
-		"(without a configured version, the latest release is assumed):"
+		"it is only removed when it holds a placeholder Codesphere no longer accepts:"
 }
 
 func (s secretChanges) describe() []string {

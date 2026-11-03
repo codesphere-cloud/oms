@@ -347,100 +347,29 @@ var _ = Describe("EnsureDefaultSecrets", func() {
 	})
 })
 
-var _ = Describe("EnsureSendGridAPIKey", func() {
+var _ = Describe("RemoveDummySendGridAPIKey", func() {
 	vaultWithSendGridAPIKey := func(password string) *files.InstallVault {
 		vault := newVault()
 		vault.SetSecret(files.SecretEntry{Name: "sendGridApiKey", Fields: &files.SecretFields{Password: password}})
+
 		return vault
 	}
 
-	It("sets a dummy key for releases before v1.109.0", func() {
-		vault := newVault()
-		secrets.EnsureSendGridAPIKey(vault, "1.108.0")
-
-		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("dummy"))
-	})
-
-	It("accepts the portal tag format", func() {
-		vault := newVault()
-		secrets.EnsureSendGridAPIKey(vault, "codesphere-v1.108.0")
-
-		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("dummy"))
-	})
-
-	It("accepts v-prefixed releases", func() {
-		vault := newVault()
-		secrets.EnsureSendGridAPIKey(vault, "v1.108.0")
-
-		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("dummy"))
-	})
-
-	It("does not create a key for v1.109.0", func() {
-		vault := newVault()
-		secrets.EnsureSendGridAPIKey(vault, "1.109.0")
-
-		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
-	})
-
-	It("removes a dummy key for v1.109.0", func() {
+	It("removes a dummy key", func() {
 		vault := vaultWithSendGridAPIKey("dummy")
-		secrets.EnsureSendGridAPIKey(vault, "1.109.0")
+		secrets.RemoveDummySendGridAPIKey(vault)
 
 		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
 	})
 
-	It("sets a dummy key for v1.109.0 release candidates", func() {
-		vault := newVault()
-		secrets.EnsureSendGridAPIKey(vault, "1.109.0-rc.1")
-
-		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("dummy"))
-	})
-
-	It("removes a dummy key for release candidates after v1.109.0", func() {
-		vault := vaultWithSendGridAPIKey("dummy")
-		secrets.EnsureSendGridAPIKey(vault, "1.110.0-rc.1")
-
-		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
-	})
-
-	It("removes a dummy key for a branch build", func() {
-		vault := vaultWithSendGridAPIKey("dummy")
-		secrets.EnsureSendGridAPIKey(vault, "main")
-
-		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
-	})
-
-	It("removes a dummy key when no version is known", func() {
-		vault := vaultWithSendGridAPIKey("dummy")
-		secrets.EnsureSendGridAPIKey(vault, "")
-
-		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
-	})
-
-	It("keeps a real key for v1.109.0", func() {
+	It("keeps a real key", func() {
 		vault := vaultWithSendGridAPIKey("real-api-key")
-		secrets.EnsureSendGridAPIKey(vault, "1.109.0")
+		secrets.RemoveDummySendGridAPIKey(vault)
 
 		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("real-api-key"))
 	})
 
-	It("keeps a real key for releases before v1.109.0", func() {
-		vault := vaultWithSendGridAPIKey("real-api-key")
-		secrets.EnsureSendGridAPIKey(vault, "1.108.0")
-
-		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("real-api-key"))
-	})
-
-	It("is applied by EnsureSecrets with the configured Codesphere version", func() {
-		vault := newVault()
-		config := &files.RootConfig{}
-		config.SetCodespherePackage("1.108.0", "")
-
-		Expect(secrets.EnsureSecrets(vault, config)).To(Succeed())
-		Expect(vault.GetSecret("sendGridApiKey").Fields.Password).To(Equal("dummy"))
-	})
-
-	It("is applied by EnsureSecrets as current when no Codesphere package is configured", func() {
+	It("is applied by EnsureSecrets", func() {
 		vault := vaultWithSendGridAPIKey("dummy")
 
 		Expect(secrets.EnsureSecrets(vault, &files.RootConfig{})).To(Succeed())

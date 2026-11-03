@@ -17,11 +17,9 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"golang.org/x/mod/semver"
 
 	"github.com/codesphere-cloud/oms/internal/codesphere"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
-	"github.com/codesphere-cloud/oms/internal/util"
 )
 
 // EnsureSecrets generates all secrets required by the Helm chart that are not derived from
@@ -62,11 +60,8 @@ func EnsureSecrets(vault *files.InstallVault, config *files.RootConfig) error {
 	if err := EnsureDefaultSecrets(vault); err != nil {
 		return fmt.Errorf("ensure default secrets: %w", err)
 	}
-	codesphereVersion := ""
-	if config.Operations != nil {
-		codesphereVersion = config.Operations.Codesphere.Version
-	}
-	EnsureSendGridAPIKey(vault, codesphereVersion)
+
+	RemoveDummySendGridAPIKey(vault)
 	return nil
 }
 
@@ -293,28 +288,12 @@ func EnsureDefaultSecrets(vault *files.InstallVault) error {
 	return nil
 }
 
-// sendGridAPIKeyOptionalSince is the first Codesphere release whose chart renders without
-// sendGridApiKey.
-const sendGridAPIKeyOptionalSince = "v1.109.0"
-
-// EnsureSendGridAPIKey sets the dummy sendGridApiKey older Codesphere releases require and
-// removes it for newer ones, which send mail through SendGrid whenever the key is set.
-// A real key is always kept.
-func EnsureSendGridAPIKey(vault *files.InstallVault, codesphereVersion string) {
-	if requiresSendGridAPIKey(codesphereVersion) {
-		setPasswordIfAbsent(vault, files.SecretSendGridApiKey, dummyPassword)
-		return
-	}
-
+// RemoveDummySendGridAPIKey removes a dummy sendGridApiKey, as Codesphere sends mail
+// through SendGrid whenever the key is set. A real key is kept.
+func RemoveDummySendGridAPIKey(vault *files.InstallVault) {
 	if isDummyPassword(vault.GetSecret(files.SecretSendGridApiKey)) {
 		vault.RemoveSecret(files.SecretSendGridApiKey)
 	}
-}
-
-// requiresSendGridAPIKey treats versions that are no release, such as branch builds, as current.
-func requiresSendGridAPIKey(codesphereVersion string) bool {
-	release, ok := util.CodesphereRelease(codesphereVersion)
-	return ok && semver.Compare(release, sendGridAPIKeyOptionalSince) < 0
 }
 
 func isDummyPassword(secret *files.SecretEntry) bool {

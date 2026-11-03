@@ -10,8 +10,7 @@ import (
 	"strings"
 
 	"go.yaml.in/yaml/v3"
-
-	"github.com/codesphere-cloud/oms/internal/util"
+	"golang.org/x/mod/semver"
 )
 
 // Vault
@@ -152,7 +151,8 @@ func (c *CodespherePackageConfig) UnmarshalYAML(node *yaml.Node) error {
 
 // FormatVersionForPortal expands plain releases to the portal tag format and preserves branch names.
 func (c CodespherePackageConfig) FormatVersionForPortal() string {
-	if release, ok := util.CodesphereRelease(c.Version); ok {
+	release := "v" + strings.TrimPrefix(c.Version, "v")
+	if semver.IsValid(release) {
 		version := "codesphere-" + release
 		log.Printf("Using portal version %q for Codesphere version %q", version, c.Version)
 
