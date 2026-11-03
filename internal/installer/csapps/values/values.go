@@ -6,6 +6,7 @@
 package values
 
 import (
+	"errors"
 	"fmt"
 
 	"go.yaml.in/yaml/v3"
@@ -26,6 +27,10 @@ import (
 // Build returns the Codesphere chart values for the data center the config installs. They hold no
 // secrets as long as the config and its override hold none, which they should not.
 func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
+	if globalOverride, set := cfg.Codesphere.Override["global"]; set && globalOverride == nil {
+		return nil, errors.New("the override must not set global to null: it drops every installer value")
+	}
+
 	imgs, err := images.New(b)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read the BOM images: %w", err)

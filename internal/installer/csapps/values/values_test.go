@@ -350,4 +350,13 @@ var _ = Describe("Build", func() {
 		frontendGateway := cfg.Codesphere.Override["global"].(map[string]any)["frontendGateway"]
 		Expect(frontendGateway).To(Equal(map[string]any{"requests": map[string]int{"cpu": 0}}))
 	})
+
+	It("override sets global to null -> error", func() {
+		cfg := testConfig()
+		cfg.Codesphere.Override = files.ChartOverride{"global": nil}
+
+		_, err := csappsvalues.Build(cfg, testBOM(nil))
+
+		Expect(err).To(MatchError(ContainSubstring("global to null")))
+	})
 })
