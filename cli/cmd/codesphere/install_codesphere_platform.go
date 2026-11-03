@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"log"
 	"path/filepath"
 	"runtime"
 
@@ -14,11 +15,16 @@ import (
 	"github.com/codesphere-cloud/oms/cli/cmd/util"
 	"github.com/codesphere-cloud/oms/internal/env"
 	"github.com/codesphere-cloud/oms/internal/installer"
+	"github.com/codesphere-cloud/oms/internal/installer/bom"
+	"github.com/codesphere-cloud/oms/internal/installer/csapps"
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 	"github.com/codesphere-cloud/oms/internal/installer/vault"
 	"github.com/codesphere-cloud/oms/internal/system"
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+const codesphereStep = "codesphere"
 
 // InstallCodespherePlatformCmd runs only the Codesphere platform step (Phase 3).
 type InstallCodespherePlatformCmd struct {
@@ -41,11 +47,31 @@ func (c *InstallCodespherePlatformCmd) RunE(cmd *cobra.Command, _ []string) erro
 	}
 	defer cleanup()
 
+	if err := validateArgoCDConfig(effectiveOpts, cfg); err != nil {
+		return err
+	}
+
 	if err := ensureCodespherePackageForVersion(effectiveOpts, cfg, c.Env); err != nil {
 		return err
 	}
 
 	return installCodespherePlatform(cmd.Context(), effectiveOpts, cfg, c.Env)
+}
+
+func deploysViaArgoCD(opts *InstallCodesphereOpts, cfg files.RootConfig) bool {
+	return opts.CodesphereViaArgoCD && !installer.IsStepSkipped(cfg, opts.SkipSteps, codesphereStep)
+}
+
+func validateArgoCDConfig(opts *InstallCodesphereOpts, cfg files.RootConfig) error {
+	if !deploysViaArgoCD(opts, cfg) {
+		return nil
+	}
+
+	if err := csapps.ValidateConfig(&cfg); err != nil {
+		return fmt.Errorf("invalid config for deploying through ArgoCD: %w", err)
+	}
+
+	return nil
 }
 
 func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig, env env.Env) error {
@@ -62,6 +88,21 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 
 		if err := vault.WriteVaultValuesToConfig(opts.ConfigPath, opts.VaultSecretName, rand.Text()); err != nil {
 			return fmt.Errorf("failed to pass the vault Secret to the chart: %w", err)
+		}
+	}
+
+	viaArgoCD := deploysViaArgoCD(opts, cfg)
+
+	var kubeClient client.Client
+
+	installedVersion := ""
+
+	if viaArgoCD {
+		var err error
+
+		kubeClient, installedVersion, err = readArgoCDInstall(ctx, opts, cfg)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -88,11 +129,54 @@ func installCodespherePlatform(ctx context.Context, opts *InstallCodesphereOpts,
 		LocalComponents:   opts.LocalComponents,
 		LocalConfigDir:    opts.LocalConfigDir,
 		SkipImageBuilding: opts.LocalComponents,
+		SkipChartDeploy:   viaArgoCD,
+		InstalledVersion:  installedVersion,
 		Context:           ctx,
 	}
 	if err := ci.Install(pm, cm, im, runtime.GOOS, runtime.GOARCH); err != nil {
 		return fmt.Errorf("failed to install platform: %w", err)
 	}
+
+	if viaArgoCD {
+		if err := deployCodesphereViaArgoCD(ctx, kubeClient, cfg, pm); err != nil {
+			return fmt.Errorf("failed to deploy Codesphere through ArgoCD: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// readArgoCDInstall returns a client for the cluster and the Codesphere version ArgoCD has
+// installed there, which the installer migrates the database from.
+func readArgoCDInstall(ctx context.Context, opts *InstallCodesphereOpts, cfg files.RootConfig) (client.Client, string, error) {
+	_, restConfig, err := installer.VaultAndRESTConfig(opts.Vault, opts.PrivKey, opts.VaultType, cfg)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to load the Kubernetes config: %w", err)
+	}
+
+	kubeClient, err := installer.NewKubeClient(restConfig)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to create Kubernetes client: %w", err)
+	}
+
+	installedVersion, err := csapps.InstalledVersion(ctx, kubeClient, &cfg)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read the installed Codesphere version: %w", err)
+	}
+
+	return kubeClient, installedVersion, nil
+}
+
+func deployCodesphereViaArgoCD(ctx context.Context, kubeClient client.Client, cfg files.RootConfig, pm installer.PackageManager) error {
+	installerBOM, err := bom.Parse(pm.GetDependencyPath("bom.json"))
+	if err != nil {
+		return fmt.Errorf("failed to read the package BOM: %w", err)
+	}
+
+	if err := csapps.Install(ctx, kubeClient, &cfg, installerBOM, log.Printf); err != nil {
+		return fmt.Errorf("failed to deploy the cs-applications: %w", err)
+	}
+
 	return nil
 }
 
@@ -137,6 +221,13 @@ func AddInstallCodespherePlatformCmd(codesphere *cobra.Command, opts *InstallCod
 		Env:  env.NewEnv(),
 	}
 
+	addCodesphereViaArgoCDFlag(platform.cmd, opts)
+
 	util.AddCmd(codesphere, platform.cmd)
 	platform.cmd.RunE = platform.RunE
+}
+
+// addCodesphereViaArgoCDFlag adds the flag only to the commands that deploy Codesphere.
+func addCodesphereViaArgoCDFlag(cmd *cobra.Command, opts *InstallCodesphereOpts) {
+	cmd.Flags().BoolVar(&opts.CodesphereViaArgoCD, "codesphere-via-argocd", false, "Deploy Codesphere through the cs-applications ArgoCD app of apps instead of Helm. Requires the chart's external secrets")
 }
