@@ -106,12 +106,6 @@ codesphere:
       AgNHADBEAiBHYmODgHrVQZUUTRX8f0xSQT49PBN8sTn2tCuXn+w7egIgTzT5DlLP
       M/7HYiKZtdZj3XZc1hLTng0UOlcbtiEJi8s=
       -----END CERTIFICATE-----
-    key: |
-      -----BEGIN PRIVATE KEY-----
-      MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgMFKefHN1fKyIyEU1
-      apyCL9PEe1MHqJQnBsTYmgjtkd+hRANCAAQ4iBJbeRQd0xP5BfzvEmWv3hxbvjZ7
-      gBeqyd4R33fwYttr3JC0n+AAsigTyPPSGZXib4Pfa3ydfarVQ2OoBxrQ
-      -----END PRIVATE KEY-----
   sshWorkspaceProxy:
     baseDomain: ssh.example.com
   vpnLeftPeerId: vpn.example.com
