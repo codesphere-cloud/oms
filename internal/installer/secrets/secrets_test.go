@@ -273,7 +273,7 @@ var _ = Describe("EnsureDefaultSecrets", func() {
 		for _, name := range []string{
 			"githubAppsClientId", "githubAppsClientSecret",
 			"gitlabAppClientId", "gitlabAppClientSecret",
-			"stripeSecretKey", "sendGridApiKey", "openBaoPassword",
+			"stripeSecretKey", "openBaoPassword",
 			"openfgaDbBackupAccessKeyId", "openfgaDbBackupSecretAccessKey",
 		} {
 			secret := vault.GetSecret(name)
@@ -288,6 +288,13 @@ var _ = Describe("EnsureDefaultSecrets", func() {
 
 		Expect(secrets.EnsureDefaultSecrets(vault)).To(Succeed())
 		Expect(vault.GetSecret("stripeSecretKey").Fields.Password).To(Equal("real-stripe-key"))
+	})
+
+	It("does not create a sendGridApiKey", func() {
+		vault := newVault()
+		Expect(secrets.EnsureDefaultSecrets(vault)).To(Succeed())
+
+		Expect(vault.GetSecret("sendGridApiKey")).To(BeNil())
 	})
 
 	It("generates a valid base64-encoded AES key for mongoDbPasswordEncryptionKey", func() {

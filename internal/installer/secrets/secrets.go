@@ -315,7 +315,6 @@ var optionalPasswordSecrets = []string{
 	files.SecretStripeWebhookEndpointSecret,
 	files.SecretStripePublishableKey,
 	files.SecretStripeSecretKey,
-	files.SecretSendGridApiKey,
 	files.SecretOpenBaoPassword,
 	files.SecretOpenfgaDbBackupAccessKeyId,
 	files.SecretOpenfgaDbBackupSecretAccessKey,
