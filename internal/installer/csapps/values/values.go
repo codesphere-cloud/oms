@@ -23,8 +23,8 @@ import (
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-// Build returns the Codesphere chart values for the data center the config installs, with external
-// secrets enabled: the release Secret then comes from the vault, so the values hold no secrets.
+// Build returns the Codesphere chart values for the data center the config installs. They hold no
+// secrets as long as the config and its override hold none, which they should not.
 func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 	imgs, err := images.New(b)
 	if err != nil {
@@ -46,7 +46,6 @@ func Build(cfg *files.RootConfig, b *bom.Config) (map[string]any, error) {
 		return nil, fmt.Errorf("failed to read the release image tag: %w", err)
 	}
 
-	global["hostName"] = cfg.Codesphere.Domain
 	values := mergeOverride(map[string]any{"global": global}, cfg.Codesphere.Override)
 
 	return loader.MergeMaps(values, map[string]any{
@@ -69,6 +68,7 @@ func releaseImageTag(imgs images.Images) (string, error) {
 
 // global are the chart's global values the installer builds, before the override.
 type global struct {
+	HostName    string                  `yaml:"hostName"`
 	Fixed       fixed                   `yaml:",inline"`
 	DataCenters datacenters.DataCenters `yaml:",inline"`
 	Postgres    postgres.Postgres       `yaml:"postgres"`
@@ -103,7 +103,7 @@ func globalValues(cfg *files.RootConfig, imgs images.Images) (global, error) {
 
 	dataCenterValues, err := datacenters.Values(cfg)
 	if err != nil {
-		return global{}, fmt.Errorf("invalid data centers: %w", err)
+		return global{}, fmt.Errorf("failed to build the data center values: %w", err)
 	}
 
 	postgresValues, err := postgres.Values(cfg.Postgres)
@@ -112,6 +112,7 @@ func globalValues(cfg *files.RootConfig, imgs images.Images) (global, error) {
 	}
 
 	return global{
+		HostName:    cfg.Codesphere.Domain,
 		Fixed:       fixedValues(),
 		DataCenters: dataCenterValues,
 		Postgres:    postgresValues,
