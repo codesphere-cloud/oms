@@ -5,13 +5,18 @@ package codesphere
 
 import (
 	"cmp"
-	"fmt"
+	"errors"
 	"strings"
 
 	"github.com/codesphere-cloud/oms/internal/installer/files"
 )
 
-const defaultCentralOtelEndpoint = "https://otel.tools.codesphere.com"
+const (
+	// Codesphere's central OTel collector, used when telemetryExport.remoteEndpoint is unset.
+	defaultCentralOtelEndpoint = "https://otel.tools.codesphere.com"
+	// Created by the dc-otel-collector chart.
+	centralOtelCredsSecretName = "otel-collector-central-creds"
+)
 
 // Otel is where the services' telemetry goes.
 type Otel struct {
@@ -50,9 +55,7 @@ type Traces struct {
 
 func validateTelemetryExport(export *files.TelemetryExport) error {
 	if export != nil && export.Traces && strings.TrimSpace(export.TraceEndpoint) == "" {
-		return fmt.Errorf(
-			"telemetryExport.traceEndpoint must be set if telemetryExport.traces is true",
-		)
+		return errors.New("telemetryExport.traceEndpoint must be set if telemetryExport.traces is true")
 	}
 
 	return nil
@@ -66,7 +69,7 @@ func otelValues(export *files.TelemetryExport) Otel {
 	return Otel{
 		CentralOtelExport: CentralOtelExport{
 			Enabled:              export.RemoteExport,
-			TelemetryCredentials: TelemetryCredentials{SecretName: "otel-collector-central-creds"},
+			TelemetryCredentials: TelemetryCredentials{SecretName: centralOtelCredsSecretName},
 			OTLPHTTPEndpoint:     cmp.Or(export.RemoteEndpoint, defaultCentralOtelEndpoint),
 		},
 		TelemetryExport: TelemetryExport{
