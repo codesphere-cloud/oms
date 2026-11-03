@@ -73,6 +73,22 @@ var _ = Describe("AppOfApps.Install", func() {
 		return vals
 	}
 
+	bomWithChart := func(component, ociRef string) *bom.Config {
+		return &bom.Config{Components: map[string]bom.ComponentConfig{
+			component: {Files: map[string]bom.FileRef{"chart": {OciRef: ociRef}}},
+		}}
+	}
+
+	newPcApps := func(chartVersion, destination string, valuesFiles []string, valuesOverride map[string]interface{}) *installer.AppOfApps {
+		GinkgoHelper()
+
+		b := bomWithChart("pc-applications", "ghcr.io/codesphere-cloud/charts/pc-applications:"+chartVersion)
+		apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "pc-applications", "pc-applications", destination, valuesFiles, valuesOverride)
+		Expect(err).ToNot(HaveOccurred())
+
+		return apps
+	}
+
 	BeforeEach(func() {
 		scheme = runtime.NewScheme()
 		Expect(clientgoscheme.AddToScheme(scheme)).To(Succeed())
@@ -85,7 +101,7 @@ var _ = Describe("AppOfApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(newSecret()).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, false)
+			pcApps = newPcApps(version, namespace, nil, nil)
 		})
 
 		It("creates an app-of-apps Application referencing the chart from the secret's registry", func() {
@@ -112,7 +128,7 @@ var _ = Describe("AppOfApps.Install", func() {
 		})
 
 		It("deploys into a custom destination namespace", func() {
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, "platform", nil, nil, false)
+			pcApps = newPcApps(version, "platform", nil, nil)
 			Expect(pcApps.Install(context.Background())).To(Succeed())
 
 			app := getApp()
@@ -124,7 +140,7 @@ var _ = Describe("AppOfApps.Install", func() {
 		It("updates an existing Application to a new chart version", func() {
 			Expect(pcApps.Install(context.Background())).To(Succeed())
 
-			upgraded := installer.NewPCAppsForTesting(fakeClient, "2.0.0", namespace, nil, nil, false)
+			upgraded := newPcApps("2.0.0", namespace, nil, nil)
 			Expect(upgraded.Install(context.Background())).To(Succeed())
 
 			Expect(getApp().Spec.Source.TargetRevision).To(Equal("2.0.0"))
@@ -137,7 +153,8 @@ var _ = Describe("AppOfApps.Install", func() {
 			Expect(clientgoscheme.AddToScheme(bareScheme)).To(Succeed())
 			bareClient := fake.NewClientBuilder().WithScheme(bareScheme).Build()
 
-			_, err := installer.NewPCApps(bareClient, version, namespace, nil, nil, false)
+			b := bomWithChart("pc-applications", "ghcr.io/codesphere-cloud/charts/pc-applications:"+version)
+			_, err := installer.NewAppOfAppsFromBom(bareClient, b, "pc-applications", "pc-applications", namespace, nil, nil)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("does not recognize"))
 			Expect(err.Error()).To(ContainSubstring("Application"))
@@ -150,7 +167,7 @@ var _ = Describe("AppOfApps.Install", func() {
 			fakeClient = fake.NewClientBuilder().
 				WithScheme(scheme).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, false)
+			pcApps = newPcApps(version, namespace, nil, nil)
 		})
 
 		It("returns a clear error", func() {
@@ -178,7 +195,7 @@ var _ = Describe("AppOfApps.Install", func() {
 				WithScheme(scheme).
 				WithObjects(secret).
 				Build()
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, false)
+			pcApps = newPcApps(version, namespace, nil, nil)
 		})
 
 		It("returns an error about the missing field", func() {
@@ -213,7 +230,7 @@ var _ = Describe("AppOfApps.Install", func() {
 			overlay := filepath.Join(tmpDir, "overlay.yaml")
 			Expect(os.WriteFile(overlay, []byte("foo: overridden\nnested:\n  b: 99\n  c: 3\n"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, []string{base, overlay}, nil, false)
+			pcApps = newPcApps(version, namespace, []string{base, overlay}, nil)
 			Expect(pcApps.Install(context.Background())).To(Succeed())
 
 			vals := helmValues(getApp())
@@ -226,7 +243,7 @@ var _ = Describe("AppOfApps.Install", func() {
 		})
 
 		It("returns an error for non-existent values file", func() {
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, []string{"/nonexistent/values.yaml"}, nil, false)
+			pcApps = newPcApps(version, namespace, []string{"/nonexistent/values.yaml"}, nil)
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
@@ -237,7 +254,7 @@ var _ = Describe("AppOfApps.Install", func() {
 			badFile := filepath.Join(tmpDir, "bad.yaml")
 			Expect(os.WriteFile(badFile, []byte("{{invalid yaml"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, []string{badFile}, nil, false)
+			pcApps = newPcApps(version, namespace, []string{badFile}, nil)
 
 			err := pcApps.Install(context.Background())
 			Expect(err).To(HaveOccurred())
@@ -255,7 +272,7 @@ var _ = Describe("AppOfApps.Install", func() {
 			fileValues := filepath.Join(tmpDir, "values.yaml")
 			Expect(os.WriteFile(fileValues, []byte("foo: from-file\nnested:\n  shared: from-file\n  fileOnly: true\n"), 0644)).To(Succeed())
 
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, []string{fileValues}, override, false)
+			pcApps = newPcApps(version, namespace, []string{fileValues}, override)
 			Expect(pcApps.Install(context.Background())).To(Succeed())
 
 			vals := helmValues(getApp())
@@ -268,7 +285,7 @@ var _ = Describe("AppOfApps.Install", func() {
 		})
 
 		It("defaults child chart sources to the configured OCI repository", func() {
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, false)
+			pcApps = newPcApps(version, namespace, nil, nil)
 			Expect(pcApps.Install(context.Background())).To(Succeed())
 
 			app := getApp()
@@ -277,20 +294,13 @@ var _ = Describe("AppOfApps.Install", func() {
 		})
 
 		It("preserves an explicit child chart registry override", func() {
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil,
-				map[string]interface{}{"chartsRegistry": "other.example.com/charts"}, false)
+			pcApps = newPcApps(version, namespace, nil, map[string]interface{}{"chartsRegistry": "other.example.com/charts"})
 			Expect(pcApps.Install(context.Background())).To(Succeed())
 			Expect(helmValues(getApp())).To(HaveKeyWithValue("chartsRegistry", "other.example.com/charts"))
 		})
 	})
 
 	Context("chart from a BOM component", func() {
-		bomWithChart := func(component, ociRef string) *bom.Config {
-			return &bom.Config{Components: map[string]bom.ComponentConfig{
-				component: {Files: map[string]bom.FileRef{"chart": {OciRef: ociRef}}},
-			}}
-		}
-
 		BeforeEach(func() {
 			fakeClient = fake.NewClientBuilder().
 				WithScheme(scheme).
@@ -300,7 +310,7 @@ var _ = Describe("AppOfApps.Install", func() {
 
 		It("applies the component's chart and version under the given Application name", func() {
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "pr-1-cs-applications", "codesphere", map[string]interface{}{"releaseName": "pr-1"})
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "pr-1-cs-applications", "codesphere", nil, map[string]interface{}{"releaseName": "pr-1"})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(apps.Install(context.Background())).To(Succeed())
 
@@ -316,7 +326,7 @@ var _ = Describe("AppOfApps.Install", func() {
 		It("Application name longer than Helm allows for a release -> release named after the chart", func() {
 			name := "codesphere-nate-test-pre-7a1cd4d4-test-cs-applications"
 			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", name, "argocd", nil)
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", name, "argocd", nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(apps.Install(context.Background())).To(Succeed())
 
@@ -327,7 +337,7 @@ var _ = Describe("AppOfApps.Install", func() {
 
 		It("takes the chart name from the reference, not the component", func() {
 			b := bomWithChart("apps", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
-			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "apps", "apps", "codesphere", nil)
+			apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "apps", "apps", "codesphere", nil, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(apps.Install(context.Background())).To(Succeed())
 
@@ -338,28 +348,47 @@ var _ = Describe("AppOfApps.Install", func() {
 
 		It("fails when the BOM has no chart for the component", func() {
 			b := bomWithChart("pc-applications", "ghcr.io/codesphere-cloud/charts/pc-applications:1.0.0")
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "codesphere", nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "codesphere", nil, nil)
 			Expect(err).To(MatchError(ContainSubstring("cs-applications chart not found in BOM")))
 		})
 
 		It("fails without a BOM", func() {
-			_, err := installer.NewAppOfAppsFromBom(fakeClient, nil, "cs-applications", "cs-applications", "codesphere", nil)
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, nil, "cs-applications", "cs-applications", "codesphere", nil, nil)
 			Expect(err).To(MatchError(ContainSubstring("BOM is required")))
 		})
-	})
 
-	Context("ForceConflicts", func() {
-		BeforeEach(func() {
-			fakeClient = fake.NewClientBuilder().
-				WithScheme(scheme).
-				WithObjects(newSecret()).
-				Build()
+		It("fails when the BOM chart has no version", func() {
+			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications")
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "codesphere", nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("cs-applications chart not found in BOM")))
 		})
 
-		It("applies the Application with forced field ownership", func() {
-			pcApps = installer.NewPCAppsForTesting(fakeClient, version, namespace, nil, nil, true)
-			Expect(pcApps.Install(context.Background())).To(Succeed())
-			Expect(getApp().Name).To(Equal("pc-applications"))
+		It("fails without an Application name", func() {
+			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "", "codesphere", nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("name is required")))
+		})
+
+		It("fails without a destination namespace", func() {
+			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
+			_, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", "cs-applications", "", nil, nil)
+			Expect(err).To(MatchError(ContainSubstring("namespace is required")))
+		})
+
+		It("two Applications from the same chart -> each applied with its own name and releaseName", func() {
+			b := bomWithChart("cs-applications", "ghcr.io/codesphere-cloud/charts/cs-applications:0.3.0")
+			for _, release := range []string{"pr-1", "pr-2"} {
+				apps, err := installer.NewAppOfAppsFromBom(fakeClient, b, "cs-applications", release+"-cs-applications", "codesphere", nil,
+					map[string]interface{}{"releaseName": release})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(apps.Install(context.Background())).To(Succeed())
+			}
+
+			for _, release := range []string{"pr-1", "pr-2"} {
+				app := &argov1alpha1.Application{}
+				Expect(fakeClient.Get(context.Background(), client.ObjectKey{Name: release + "-cs-applications", Namespace: "argocd"}, app)).To(Succeed())
+				Expect(helmValues(app)).To(HaveKeyWithValue("releaseName", release))
+			}
 		})
 	})
 })

@@ -30,8 +30,6 @@ const (
 	// ociCredentialNamespace is the namespace where the credential secret lives.
 	// It is also the namespace ArgoCD watches for Application resources.
 	ociCredentialNamespace = "argocd"
-	// pcAppsName is the name of the pc-applications chart, its BOM component and its Application.
-	pcAppsName = "pc-applications"
 	// argoAppProject is the ArgoCD project the app-of-apps belongs to.
 	argoAppProject = "default"
 	// argoDestinationServer is the in-cluster API server address, matching the
@@ -49,46 +47,7 @@ type AppOfApps struct {
 	namespace      string // destination namespace of the app-of-apps
 	valuesFiles    []string
 	valuesOverride map[string]interface{}
-	forceConflicts bool
 	client         client.Client
-}
-
-// NewPCApps creates a new pc-applications installer. It validates that required fields
-// are non-empty but does not apply defaults — defaults live on the CLI flag
-// declarations only.
-func NewPCApps(c client.Client, version, namespace string, valuesFiles []string, valuesOverride map[string]interface{}, forceConflicts bool) (*AppOfApps, error) {
-	if version == "" {
-		return nil, errors.New("version is required")
-	}
-	if namespace == "" {
-		return nil, errors.New("namespace is required")
-	}
-	if err := checkArgoCDScheme(c); err != nil {
-		return nil, err
-	}
-
-	return &AppOfApps{
-		name:           pcAppsName,
-		chart:          pcAppsName,
-		version:        version,
-		namespace:      namespace,
-		valuesFiles:    valuesFiles,
-		valuesOverride: valuesOverride,
-		forceConflicts: forceConflicts,
-		client:         c,
-	}, nil
-}
-
-// NewPcAppsFromBom creates a pc-applications installer from the pc-applications entry in a BOM.
-func NewPcAppsFromBom(c client.Client, bomConfig *bom.Config, namespace string, valuesFiles []string, valuesOverride map[string]interface{}) (*AppOfApps, error) {
-	pcApps, err := NewAppOfAppsFromBom(c, bomConfig, pcAppsName, pcAppsName, namespace, valuesOverride)
-	if err != nil {
-		return nil, err
-	}
-
-	pcApps.valuesFiles = valuesFiles
-
-	return pcApps, nil
 }
 
 // NewAppOfAppsFromBom creates an installer for the chart in the BOM component, applied as the
@@ -97,8 +56,15 @@ func NewAppOfAppsFromBom(
 	c client.Client,
 	bomConfig *bom.Config,
 	component, name, namespace string,
-	values map[string]interface{},
+	valuesFiles []string,
+	valuesOverride map[string]interface{},
 ) (*AppOfApps, error) {
+	if name == "" {
+		return nil, errors.New("name is required")
+	}
+	if namespace == "" {
+		return nil, errors.New("namespace is required")
+	}
 	if err := checkArgoCDScheme(c); err != nil {
 		return nil, err
 	}
@@ -117,7 +83,8 @@ func NewAppOfAppsFromBom(
 		chart:          path.Base(reference.Path(chart)),
 		version:        chart.Tag(),
 		namespace:      namespace,
-		valuesOverride: values,
+		valuesFiles:    valuesFiles,
+		valuesOverride: valuesOverride,
 		client:         c,
 	}, nil
 }
@@ -236,7 +203,7 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 
 	app, err := p.createApplication(repoURL, vals)
 	if err != nil {
-		return fmt.Errorf("failed to create argo appliaction: %w", err)
+		return fmt.Errorf("failed to create argo application: %w", err)
 	}
 
 	log.Printf("Applying ArgoCD Application %q (chart %s, version %s) in namespace %s\n",
@@ -257,19 +224,4 @@ func (p *AppOfApps) Install(ctx context.Context) error {
 
 	log.Printf("Successfully applied ArgoCD Application %q; ArgoCD will sync the chart\n", p.name)
 	return nil
-}
-
-// NewPCAppsForTesting creates a pc-applications installer with injected dependencies for
-// use in tests. This avoids exporting struct fields solely for test access.
-func NewPCAppsForTesting(c client.Client, version, namespace string, valuesFiles []string, valuesOverride map[string]interface{}, forceConflicts bool) *AppOfApps {
-	return &AppOfApps{
-		name:           pcAppsName,
-		chart:          pcAppsName,
-		version:        version,
-		namespace:      namespace,
-		valuesFiles:    valuesFiles,
-		valuesOverride: valuesOverride,
-		forceConflicts: forceConflicts,
-		client:         c,
-	}
 }

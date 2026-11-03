@@ -24,6 +24,8 @@ import (
 const (
 	applicationReadyTimeout      = 30 * time.Minute
 	applicationReadyPollInterval = 5 * time.Second
+	// pcAppsName is the name of the pc-applications chart, its BOM component and its Application.
+	pcAppsName = "pc-applications"
 )
 
 // LogFunc records formatted application readiness messages.
@@ -129,9 +131,11 @@ func (i *AppInstaller) SyncVaultSecret(ctx context.Context) error {
 // InstallPCApps creates or updates the pc-applications app-of-apps ArgoCD
 // Application using the chart version from the supplied installer BOM.
 func (i *AppInstaller) InstallPCApps(ctx context.Context, bomConfig *bom.Config) error {
-	pcApps, err := installer.NewPcAppsFromBom(
+	pcApps, err := installer.NewAppOfAppsFromBom(
 		i.cfg.KubeClient,
 		bomConfig,
+		pcAppsName,
+		pcAppsName,
 		DefaultNamespace,
 		i.cfg.PCAppsValues,
 		i.getPcAppsValues(),
