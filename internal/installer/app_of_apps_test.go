@@ -60,8 +60,10 @@ var _ = Describe("AppOfApps.Install", func() {
 
 	getApp := func(name string) *argov1alpha1.Application {
 		GinkgoHelper()
+
 		app := &argov1alpha1.Application{}
 		Expect(fakeClient.Get(context.Background(), client.ObjectKey{Name: name, Namespace: "argocd"}, app)).To(Succeed())
+
 		return app
 	}
 
@@ -71,8 +73,10 @@ var _ = Describe("AppOfApps.Install", func() {
 		Expect(app.Spec.Source).ToNot(BeNil())
 		Expect(app.Spec.Source.Helm).ToNot(BeNil())
 		Expect(app.Spec.Source.Helm.ValuesObject).ToNot(BeNil())
+
 		vals := map[string]interface{}{}
 		Expect(json.Unmarshal(app.Spec.Source.Helm.ValuesObject.Raw, &vals)).To(Succeed())
+
 		return vals
 	}
 
@@ -124,7 +128,6 @@ var _ = Describe("AppOfApps.Install", func() {
 			Expect(apps.Install(context.Background())).To(Succeed())
 
 			app := getApp(appName)
-			Expect(app.Namespace).To(Equal("argocd"))
 			Expect(app.Spec.Project).To(Equal("default"))
 
 			Expect(app.Spec.Source).ToNot(BeNil())
@@ -134,12 +137,19 @@ var _ = Describe("AppOfApps.Install", func() {
 			Expect(app.Spec.Source.Helm.ReleaseName).To(Equal(releaseName))
 
 			Expect(app.Spec.Destination.Server).To(Equal("https://kubernetes.default.svc"))
-			Expect(app.Spec.Destination.Namespace).To(Equal(destination))
 
 			Expect(app.Spec.SyncPolicy).ToNot(BeNil())
 			Expect(app.Spec.SyncPolicy.Automated).ToNot(BeNil())
 			Expect(app.Spec.SyncPolicy.Automated.GetPrune()).To(BeTrue())
 			Expect([]string(app.Spec.SyncPolicy.SyncOptions)).To(ConsistOf("CreateNamespace=true", "ServerSideApply=true"))
+		})
+
+		It("deploys into the given destination namespace, the Application itself stays in argocd", func() {
+			Expect(apps.Install(context.Background())).To(Succeed())
+
+			app := getApp(appName)
+			Expect(app.Namespace).To(Equal("argocd"))
+			Expect(app.Spec.Destination.Namespace).To(Equal(destination))
 		})
 
 		It("updates an existing Application to a new chart version", func() {
