@@ -25,6 +25,7 @@ replace (
 
 require (
 	cloud.google.com/go/artifactregistry v1.28.1
+	cloud.google.com/go/auth v0.24.1-0.20261001053825-dbc26066f70a
 	cloud.google.com/go/compute v1.74.1
 	cloud.google.com/go/iam v1.15.1
 	cloud.google.com/go/resourcemanager v1.18.1
@@ -77,7 +78,6 @@ require (
 	cel.dev/expr v0.25.3 // indirect
 	charm.land/lipgloss/v2 v2.0.6 // indirect
 	cloud.google.com/go v0.123.0 // indirect
-	cloud.google.com/go/auth v0.24.1-0.20261001053825-dbc26066f70a // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.3.0 // indirect
 	cloud.google.com/go/compute/metadata v0.10.0 // indirect
 	cloud.google.com/go/kms v1.33.0 // indirect

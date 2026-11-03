@@ -139,7 +139,10 @@ func (c *BootstrapGcpCmd) BootstrapGcp() error {
 		return fmt.Errorf("failed to initialize conig manager: %w", err)
 	}
 
-	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	gcpClient, err := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	if err != nil {
+		return fmt.Errorf("failed to create GCP client: %w", err)
+	}
 	fw := intutil.NewFilesystemWriter()
 	portalClient := portal.NewPortalClient()
 

@@ -89,7 +89,10 @@ func (c *BootstrapGcpRestartVMsCmd) RunE(_ *cobra.Command, _ []string) error {
 
 	projectID, zone := csEnv.ProjectID, csEnv.Zone
 
-	gcpClient := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	gcpClient, err := gcp.NewGCPClient(ctx, stlog, os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+	if err != nil {
+		return fmt.Errorf("failed to create GCP client: %w", err)
+	}
 
 	bs, err := gcp.NewGCPBootstrapper(
 		ctx,

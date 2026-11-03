@@ -28,6 +28,7 @@ import (
 	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iam/v1"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 	publicca "google.golang.org/api/publicca/v1"
 	storage "google.golang.org/api/storage/v1"
 	"google.golang.org/grpc/codes"
@@ -75,19 +76,27 @@ type GCPClient struct {
 	ctx             context.Context
 	st              *bootstrap.StepLogger
 	CredentialsFile string
+	authOption      option.ClientOption
 }
 
-func NewGCPClient(ctx context.Context, st *bootstrap.StepLogger, credentialsFile string) *GCPClient {
+// NewGCPClient detects the default credentials once and shares them across all API clients.
+func NewGCPClient(ctx context.Context, st *bootstrap.StepLogger, credentialsFile string) (*GCPClient, error) {
+	creds, err := detectCredentials(util.NewTime(), st.LogRetry)
+	if err != nil {
+		return nil, err
+	}
+
 	return &GCPClient{
 		ctx:             ctx,
 		st:              st,
 		CredentialsFile: credentialsFile,
-	}
+		authOption:      option.WithAuthCredentials(creds),
+	}, nil
 }
 
 // GetProjectByName retrieves a GCP project by its display name within the specified folder.
 func (c *GCPClient) GetProjectByName(folderID string, displayName string) (*resourcemanagerpb.Project, error) {
-	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	client, err := resourcemanager.NewProjectsClient(c.ctx, c.authOption)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +137,7 @@ func (c *GCPClient) CreateProjectID(projectName string) string {
 // CreateProject creates a new GCP project under the specified parent (folder or organization).
 // It returns the project ID of the newly created project.
 func (c *GCPClient) CreateProject(parent, projectID, displayName string, labels map[string]string) (string, error) {
-	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	client, err := resourcemanager.NewProjectsClient(c.ctx, c.authOption)
 	if err != nil {
 		return "", err
 	}
@@ -157,7 +166,7 @@ func (c *GCPClient) CreateProject(parent, projectID, displayName string, labels 
 // UpdateProject updates the project's labels of an existing GCP project.
 // Returns an error if the update operation fails or if the project does not exist.
 func (c *GCPClient) UpdateProject(projectID string, labels map[string]string) error {
-	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	client, err := resourcemanager.NewProjectsClient(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -187,7 +196,7 @@ func (c *GCPClient) UpdateProject(projectID string, labels map[string]string) er
 
 // DeleteProject deletes the specified GCP project.
 func (c *GCPClient) DeleteProject(projectID string) error {
-	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	client, err := resourcemanager.NewProjectsClient(c.ctx, c.authOption)
 	if err != nil {
 		return fmt.Errorf("failed to create resource manager client: %w", err)
 	}
@@ -209,7 +218,7 @@ func (c *GCPClient) DeleteProject(projectID string) error {
 
 // IsOMSManagedProject checks if the given project was created by OMS by verifying the 'oms-managed' label.
 func (c *GCPClient) IsOMSManagedProject(projectID string) (bool, error) {
-	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	client, err := resourcemanager.NewProjectsClient(c.ctx, c.authOption)
 	if err != nil {
 		return false, fmt.Errorf("failed to create resource manager client: %w", err)
 	}
@@ -252,7 +261,7 @@ func (c *GCPClient) GetBillingInfo(projectID string) (*cloudbilling.ProjectBilli
 
 // EnableBilling enables billing for the given project using the specified billing account.
 func (c *GCPClient) EnableBilling(projectID, billingAccount string) error {
-	billingService, err := cloudbilling.NewService(c.ctx)
+	billingService, err := cloudbilling.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -268,7 +277,7 @@ func (c *GCPClient) EnableBilling(projectID, billingAccount string) error {
 
 // EnableAPIs enables the specified APIs for the given project.
 func (c *GCPClient) EnableAPIs(projectID string, apis []string) error {
-	client, err := serviceusage.NewClient(c.ctx)
+	client, err := serviceusage.NewClient(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -324,7 +333,7 @@ func (c *GCPClient) EnableAPIs(projectID string, apis []string) error {
 
 // CreateArtifactRegistry creates and returns an Artifact Registry repository by its name.
 func (c *GCPClient) CreateArtifactRegistry(projectID, region, repoName string) (*artifactpb.Repository, error) {
-	client, err := artifact.NewClient(c.ctx)
+	client, err := artifact.NewClient(c.ctx, c.authOption)
 	if err != nil {
 		return nil, err
 	}
@@ -365,7 +374,7 @@ func (c *GCPClient) CreateArtifactRegistry(projectID, region, repoName string) (
 
 // GetArtifactRegistry retrieves an existing Artifact Registry repository by its name.
 func (c *GCPClient) GetArtifactRegistry(projectID, region, repoName string) (*artifactpb.Repository, error) {
-	client, err := artifact.NewClient(c.ctx)
+	client, err := artifact.NewClient(c.ctx, c.authOption)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +398,7 @@ func (c *GCPClient) GetArtifactRegistry(projectID, region, repoName string) (*ar
 func (c *GCPClient) CreateServiceAccount(projectID, name, displayName string) (string, bool, error) {
 	saMail := fmt.Sprintf("%s@%s.iam.gserviceaccount.com", name, projectID)
 
-	iamService, err := iam.NewService(c.ctx)
+	iamService, err := iam.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return saMail, false, err
 	}
@@ -416,7 +425,7 @@ func (c *GCPClient) CreateServiceAccount(projectID, name, displayName string) (s
 // CreateServiceAccountKey creates a new key for the specified service account.
 // It returns the private key data in PEM format and an error if any occurred during the process.
 func (c *GCPClient) CreateServiceAccountKey(projectID, saEmail string) (string, error) {
-	iamService, err := iam.NewService(c.ctx)
+	iamService, err := iam.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return "", err
 	}
@@ -442,7 +451,7 @@ func (c *GCPClient) AssignIAMRole(projectID, saName string, saProjectID string, 
 }
 
 func (c *GCPClient) addRoleBindingToProject(member string, roles []string, resource string) error {
-	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	client, err := resourcemanager.NewProjectsClient(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -511,7 +520,7 @@ func (c *GCPClient) RemoveIAMRoleBinding(projectID, saName string, saProjectID s
 }
 
 func (c *GCPClient) removeRoleBindingFromProject(member string, roles []string, resource string) error {
-	client, err := resourcemanager.NewProjectsClient(c.ctx)
+	client, err := resourcemanager.NewProjectsClient(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -568,7 +577,7 @@ func (c *GCPClient) removeRoleBindingFromProject(member string, roles []string, 
 // CreateVPC creates a VPC network with the specified subnet, router, and NAT gateway.
 func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, routerName, natName string) error {
 	// Create Network
-	networksClient, err := compute.NewNetworksRESTClient(c.ctx)
+	networksClient, err := compute.NewNetworksRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -596,7 +605,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 	c.st.Logf("Network %s ensured", networkName)
 
 	// Create Subnet
-	subnetsClient, err := compute.NewSubnetworksRESTClient(c.ctx)
+	subnetsClient, err := compute.NewSubnetworksRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -627,7 +636,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 	c.st.Logf("Subnetwork %s ensured", subnetName)
 
 	// Create Router
-	routersClient, err := compute.NewRoutersRESTClient(c.ctx)
+	routersClient, err := compute.NewRoutersRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return fmt.Errorf("failed to create routers client: %w", err)
 	}
@@ -657,7 +666,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 	c.st.Logf("Router %s ensured", routerName)
 
 	// Create NAT Gateway
-	natsClient, err := compute.NewRoutersRESTClient(c.ctx)
+	natsClient, err := compute.NewRoutersRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return fmt.Errorf("failed to create routers client for NAT: %w", err)
 	}
@@ -693,7 +702,7 @@ func (c *GCPClient) CreateVPC(projectID, region, networkName, subnetName, router
 
 // CreateFirewallRule creates a firewall rule in the specified project.
 func (c *GCPClient) CreateFirewallRule(projectID string, rule *computepb.Firewall) error {
-	firewallsClient, err := compute.NewFirewallsRESTClient(c.ctx)
+	firewallsClient, err := compute.NewFirewallsRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -713,7 +722,7 @@ func (c *GCPClient) CreateFirewallRule(projectID string, rule *computepb.Firewal
 // DeleteFirewallRule deletes the named firewall rule from the specified project. A rule that does
 // not exist counts as deleted.
 func (c *GCPClient) DeleteFirewallRule(projectID, ruleName string) error {
-	firewallsClient, err := compute.NewFirewallsRESTClient(c.ctx)
+	firewallsClient, err := compute.NewFirewallsRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return fmt.Errorf("failed to create firewalls client: %w", err)
 	}
@@ -740,7 +749,7 @@ func (c *GCPClient) DeleteFirewallRule(projectID, ruleName string) error {
 
 // CreateInstance creates a new Compute Engine instance in the specified project and zone.
 func (c *GCPClient) CreateInstance(projectID, zone string, instance *computepb.Instance) error {
-	client, err := compute.NewInstancesRESTClient(c.ctx)
+	client, err := compute.NewInstancesRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -760,7 +769,7 @@ func (c *GCPClient) CreateInstance(projectID, zone string, instance *computepb.I
 
 // GetInstance retrieves a Compute Engine instance by its name in the specified project and zone.
 func (c *GCPClient) GetInstance(projectID, zone, instanceName string) (*computepb.Instance, error) {
-	client, err := compute.NewInstancesRESTClient(c.ctx)
+	client, err := compute.NewInstancesRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return nil, err
 	}
@@ -775,7 +784,7 @@ func (c *GCPClient) GetInstance(projectID, zone, instanceName string) (*computep
 
 // StartInstance starts a stopped Compute Engine instance in the specified project and zone.
 func (c *GCPClient) StartInstance(projectID, zone, instanceName string) error {
-	client, err := compute.NewInstancesRESTClient(c.ctx)
+	client, err := compute.NewInstancesRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return err
 	}
@@ -795,7 +804,7 @@ func (c *GCPClient) StartInstance(projectID, zone, instanceName string) error {
 
 // CreateAddress creates a new static IP address in the specified project and region.
 func (c *GCPClient) CreateAddress(projectID, region string, address *computepb.Address) (string, error) {
-	client, err := compute.NewAddressesRESTClient(c.ctx)
+	client, err := compute.NewAddressesRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return "", err
 	}
@@ -829,7 +838,7 @@ func (c *GCPClient) CreateAddress(projectID, region string, address *computepb.A
 
 // GetAddress retrieves a static IP address by its name in the specified project and region.
 func (c *GCPClient) GetAddress(projectID, region, addressName string) (*computepb.Address, error) {
-	client, err := compute.NewAddressesRESTClient(c.ctx)
+	client, err := compute.NewAddressesRESTClient(c.ctx, c.authOption)
 	if err != nil {
 		return nil, err
 	}
@@ -844,7 +853,7 @@ func (c *GCPClient) GetAddress(projectID, region, addressName string) (*computep
 
 // EnsureDNSManagedZone ensures that a DNS managed zone exists in the specified project.
 func (c *GCPClient) EnsureDNSManagedZone(projectID, zoneName, dnsName, description string) error {
-	service, err := dns.NewService(c.ctx)
+	service, err := dns.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return fmt.Errorf("failed to create DNS service: %w", err)
 	}
@@ -873,7 +882,7 @@ func (c *GCPClient) EnsureDNSManagedZone(projectID, zoneName, dnsName, descripti
 
 // EnsureDNSRecordSets ensures that the specified DNS record sets exist in the given managed zone.
 func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*dns.ResourceRecordSet) error {
-	service, err := dns.NewService(c.ctx)
+	service, err := dns.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return fmt.Errorf("failed to create DNS service: %w", err)
 	}
@@ -912,7 +921,7 @@ func (c *GCPClient) EnsureDNSRecordSets(projectID, zoneName string, records []*d
 
 // DeleteDNSRecordSets deletes the given DNS record sets, ignoring those that no longer exist.
 func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName string, records []DNSRecordName) error {
-	service, err := dns.NewService(c.ctx)
+	service, err := dns.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return fmt.Errorf("failed to create DNS service: %w", err)
 	}
@@ -948,7 +957,7 @@ func (c *GCPClient) DeleteDNSRecordSets(projectID, zoneName string, records []DN
 // https://dv.acme-v02.api.pki.goog/directory. The publicca.googleapis.com API
 // must be enabled on the project.
 func (c *GCPClient) CreatePublicCAExternalAccountKey(projectID string) (string, string, error) {
-	svc, err := publicca.NewService(c.ctx)
+	svc, err := publicca.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create publicca client: %w", err)
 	}
@@ -968,7 +977,7 @@ func (c *GCPClient) CreatePublicCAExternalAccountKey(projectID string) (string, 
 // treated as success. The bucket lives in the project so it is removed together
 // with the project on cleanup.
 func (c *GCPClient) EnsureStorageBucket(projectID, bucketName, location string) error {
-	svc, err := storage.NewService(c.ctx)
+	svc, err := storage.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return fmt.Errorf("failed to create storage client: %w", err)
 	}
@@ -996,7 +1005,7 @@ func (c *GCPClient) EnsureStorageBucket(projectID, bucketName, location string) 
 // time, so callers must persist it. HMAC keys are removed together with the
 // project on cleanup.
 func (c *GCPClient) CreateHMACKey(projectID, serviceAccountEmail string) (string, string, error) {
-	svc, err := storage.NewService(c.ctx)
+	svc, err := storage.NewService(c.ctx, c.authOption)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to create storage client: %w", err)
 	}
