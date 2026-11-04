@@ -75,16 +75,14 @@ func orphanExternalSecret(ctx context.Context, kubeClient ctrlclient.Client, nam
 
 	externalSecret := &unstructured.Unstructured{}
 	externalSecret.SetGroupVersionKind(externalSecretGVK)
+	externalSecret.SetNamespace(key.Namespace)
+	externalSecret.SetName(key.Name)
 
-	if err := kubeClient.Get(ctx, key, externalSecret); err != nil {
+	if err := kubeClient.Delete(ctx, externalSecret, ctrlclient.PropagationPolicy(metav1.DeletePropagationOrphan)); err != nil {
 		if apierrors.IsNotFound(err) || meta.IsNoMatchError(err) {
 			return nil
 		}
 
-		return fmt.Errorf("failed to get ExternalSecret %s: %w", key, err)
-	}
-
-	if err := kubeClient.Delete(ctx, externalSecret, ctrlclient.PropagationPolicy(metav1.DeletePropagationOrphan)); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("failed to delete ExternalSecret %s: %w", key, err)
 	}
 

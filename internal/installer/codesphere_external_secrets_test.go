@@ -135,7 +135,7 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 
 		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
 
-		Expect(calls).To(Equal([]string{"delete codesphere", "patch codesphere"}))
+		Expect(calls).To(Equal([]string{"delete codesphere", "patch codesphere", "delete cd-codesphere-eab-hmac-key"}))
 	})
 
 	It("orphans the EAB HMAC key ExternalSecret of the release", func() {
@@ -158,19 +158,20 @@ var _ = Describe("OrphanCodesphereExternalSecrets", func() {
 		Expect(externalSecretExists(kubeClient, "codesphere-openfga-token")).To(BeTrue())
 	})
 
-	It("succeeds without ExternalSecrets, e.g. when the release renders plain Secrets", func() {
+	It("leaves the Secret alone when the release renders plain Secrets", func() {
+		plainSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "codesphere", Namespace: "codesphere"}}
 		kubeClient := newExternalSecretsClient(interceptor.Funcs{
-			Delete: func(context.Context, ctrlclient.WithWatch, ctrlclient.Object, ...ctrlclient.DeleteOption) error {
-				return fmt.Errorf("nothing must be deleted")
+			Patch: func(context.Context, ctrlclient.WithWatch, ctrlclient.Object, ctrlclient.Patch, ...ctrlclient.PatchOption) error {
+				return fmt.Errorf("the plain Secret must not be patched")
 			},
-		})
+		}, plainSecret)
 
 		Expect(installer.OrphanCodesphereExternalSecretsWithClient(context.Background(), kubeClient)).To(Succeed())
 	})
 
 	It("succeeds when the ExternalSecret CRD is not installed", func() {
 		kubeClient := newExternalSecretsClient(interceptor.Funcs{
-			Get: func(context.Context, ctrlclient.WithWatch, ctrlclient.ObjectKey, ctrlclient.Object, ...ctrlclient.GetOption) error {
+			Delete: func(context.Context, ctrlclient.WithWatch, ctrlclient.Object, ...ctrlclient.DeleteOption) error {
 				return &meta.NoKindMatchError{GroupKind: externalSecretGVK.GroupKind()}
 			},
 		})
