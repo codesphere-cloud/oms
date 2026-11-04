@@ -62,6 +62,7 @@ k8s-workers:
 	}
 
 	expectConfigWritten := func() {
+		mockFileWriter.EXPECT().Exists(outputPath).Return(false)
 		mockFileWriter.EXPECT().WriteFile(outputPath, mock.Anything, os.FileMode(0644)).
 			Run(func(_ string, data []byte, _ os.FileMode) {
 				Expect(written.Unmarshal(data)).To(Succeed())
